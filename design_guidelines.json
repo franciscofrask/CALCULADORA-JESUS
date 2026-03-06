@@ -1,0 +1,145 @@
+{
+  "brand_identity": {
+    "name": "12EN12",
+    "archetype": "The Performance Pro (Health Hybrid)",
+    "emotional_tone": "Disciplined, Energetic, Professional, Progress-oriented",
+    "visual_mood": "High Contrast, Clean, Athletic, Data-Driven",
+    "target_audience": "Personal training clients (Spain), coaches, operational staff"
+  },
+  "typography": {
+    "font_family": {
+      "heading": "Barlow Condensed, sans-serif",
+      "body": "Inter, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scale": {
+      "h1": "text-4xl md:text-6xl font-black tracking-tight uppercase",
+      "h2": "text-3xl md:text-4xl font-bold tracking-tight uppercase",
+      "h3": "text-2xl font-bold tracking-tight",
+      "body_large": "text-lg leading-relaxed",
+      "body_base": "text-base leading-relaxed",
+      "caption": "text-sm text-muted-foreground uppercase tracking-widest"
+    },
+    "rules": [
+      "Headings MUST use Barlow Condensed (load from Google Fonts)",
+      "Body text uses Inter for maximum legibility",
+      "Use UPPERCASE for H1 and H2 to convey strength",
+      "Numbers (Reps, Sets, Weights) should be 20% larger than surrounding text"
+    ]
+  },
+  "colors": {
+    "theme_strategy": "Hybrid",
+    "palette": {
+      "primary": {
+        "DEFAULT": "#2563EB",
+        "foreground": "#FFFFFF",
+        "description": "Electric Royal Blue - Trust & Activity"
+      },
+      "secondary": {
+        "DEFAULT": "#84CC16",
+        "foreground": "#000000",
+        "description": "Volt Lime - Energy & Nutrition"
+      },
+      "accent": {
+        "DEFAULT": "#F59E0B",
+        "foreground": "#000000",
+        "description": "Signal Amber - Warnings/Alerts"
+      },
+      "background": {
+        "light": "#F8FAFC",
+        "dark": "#09090B"
+      },
+      "surface": {
+        "light": "#FFFFFF",
+        "dark": "#18181B"
+      }
+    },
+    "gradients": {
+      "gold": "bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-700 text-white",
+      "silver": "bg-gradient-to-br from-gray-300 via-gray-400 to-gray-600 text-white",
+      "bronze": "bg-gradient-to-br from-orange-300 via-orange-500 to-orange-700 text-white",
+      "elm": "bg-gradient-to-br from-green-400 to-emerald-600 text-white"
+    }
+  },
+  "layout": {
+    "spacing_system": "p-4, p-6, p-8, p-12 (Generous padding inside cards)",
+    "container_width": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "grid_strategies": {
+      "client_dashboard": "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 (Bento style)",
+      "ops_dashboard": "grid-cols-12 gap-4 (Dense data)",
+      "features": "grid-cols-1 md:grid-cols-3 gap-8"
+    },
+    "mobile_first": true,
+    "border_radius": "rounded-xl (Friendly but firm)"
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 rounded-full font-bold uppercase tracking-wider shadow-lg transition-transform active:scale-95",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-full font-bold uppercase",
+      "ghost": "hover:bg-accent hover:text-accent-foreground rounded-full"
+    },
+    "cards": {
+      "default": "bg-card text-card-foreground rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow",
+      "highlight": "bg-primary/5 border-primary/20"
+    },
+    "inputs": {
+      "default": "rounded-lg border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    },
+    "navigation": {
+      "mobile": "fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-lg border-t border-border z-50 flex justify-around py-3",
+      "sidebar": "hidden md:flex flex-col w-64 border-r border-border bg-card h-screen sticky top-0"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": "shadow-lg shadow-primary/5",
+    "glassmorphism": "bg-white/70 dark:bg-black/60 backdrop-blur-xl border border-white/20",
+    "badges": {
+      "gold": "bg-yellow-100 text-yellow-800 border-yellow-200",
+      "silver": "bg-gray-100 text-gray-800 border-gray-200",
+      "bronze": "bg-orange-100 text-orange-800 border-orange-200",
+      "elm": "bg-green-100 text-green-800 border-green-200"
+    }
+  },
+  "media": {
+    "images": {
+      "hero_trainer": "https://images.unsplash.com/photo-1738523686619-1b3b5d2405ee?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxwZXJzb25hbCUyMHRyYWluZXIlMjBjb2FjaGluZyUyMGNsaWVudCUyMGd5bSUyMHdvcmtvdXR8ZW58MHx8fHwxNzcyODE3NzAxfDA&ixlib=rb-4.1.0&q=85",
+      "hero_gym_bg": "https://images.unsplash.com/photo-1756314354803-be78f7fc5e35?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHw0fHxwZXJzb25hbCUyMHRyYWluZXIlMjBjb2FjaGluZyUyMGNsaWVudCUyMGd5bSUyMHdvcmtvdXR8ZW58MHx8fHwxNzcyODE3NzAxfDA&ixlib=rb-4.1.0&q=85",
+      "nutrition_bowl": "https://images.unsplash.com/photo-1636044992119-be0892f9de94?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHw0fHxmaXRuZXNzJTIwdHJhaW5lciUyMGd5bSUyMHdvcmtvdXQlMjBoZWFsdGh5JTIwZm9vZHxlbnwwfHx8fDE3NzI4MTc2OTF8MA&ixlib=rb-4.1.0&q=85",
+      "meal_prep": "https://images.unsplash.com/photo-1587996580981-bd03dde74843?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwzfHxmaXRuZXNzJTIwdHJhaW5lciUyMGd5bSUyMHdvcmtvdXQlMjBoZWFsdGh5JTIwZm9vZHxlbnwwfHx8fDE3NzI4MTc2OTF8MA&ixlib=rb-4.1.0&q=85",
+      "placeholder_avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+    },
+    "icons": "Use Lucide React (default). For specific fitness icons, stick to simple, bold strokes."
+  },
+  "motion": {
+    "page_transition": "initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}",
+    "card_hover": "hover:-translate-y-1 transition-transform duration-200",
+    "button_tap": "active:scale-95 transition-transform"
+  },
+  "accessibility": {
+    "contrast_check": "Ensure text-primary-foreground is readable on bg-primary. Use white text on blue buttons.",
+    "focus_states": "focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+    "interactive_targets": "Min 44x44px for touch targets on mobile"
+  },
+  "instructions_to_main_agent": [
+    "Install 'clsx' and 'tailwind-merge' for class handling if not present.",
+    "Use 'Barlow Condensed' from Google Fonts via simple <link> tag in index.html or import in CSS.",
+    "Implement the 'Client Dashboard' as a mobile-first Bento Grid.",
+    "Implement the 'Ops Dashboard' as a dense data table view.",
+    "Use the 'Badges' visual enhancers for the Gold/Silver/Bronze/ELM plans.",
+    "Ensure the 'Nutrition' section uses the provided food images.",
+    "Add 'data-testid' to all interactive elements."
+  ],
+  "universal_guidelines": {
+    "do_not": [
+      "Use generic centered layouts for dashboards",
+      "Use default shadcn radius (customize to rounded-xl)",
+      "Use 'Inter' for Headings",
+      "Forget dark mode support"
+    ],
+    "must_do": [
+      "Use 'sonner' for toasts",
+      "Use 'recharts' for progress charts (weight, macros)",
+      "Keep mobile navigation accessible at bottom for clients"
+    ]
+  }
+}
