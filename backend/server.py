@@ -640,10 +640,10 @@ Altura: {profile.get('height', 'No especificado')} cm
 Edad: {profile.get('age', 'No especificado')} años
 Sexo: {profile.get('sex', 'No especificado')}
 Días de entrenamiento: {profile.get('training_days', 4)}
-Equipamiento disponible: {', '.join(profile.get('equipment', ['Gimnasio completo']))}
-Lesiones/Limitaciones: {', '.join(profile.get('injuries', ['Ninguna']))}
+Equipamiento disponible: {', '.join(profile.get('equipment') or ['Gimnasio completo'])}
+Lesiones/Limitaciones: {', '.join(profile.get('injuries') or ['Ninguna'])}
 
-Macros actuales (entreno): P:{profile.get('macros_training', {}).get('protein', 'N/A')}g, H:{profile.get('macros_training', {}).get('carbs', 'N/A')}g, G:{profile.get('macros_training', {}).get('fat', 'N/A')}g
+Macros actuales (entreno): P:{(profile.get('macros_training') or {}).get('protein', 'N/A')}g, H:{(profile.get('macros_training') or {}).get('carbs', 'N/A')}g, G:{(profile.get('macros_training') or {}).get('fat', 'N/A')}g
 
 Últimos reportes: {len(reports)} disponibles
 Rutinas anteriores: {len(prev_routines)} disponibles
