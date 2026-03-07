@@ -80,11 +80,11 @@ const AuthPage = () => {
 
     return (
         <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Background Image */}
+            {/* Background Image - JG12 Neon Logo */}
             <div 
-                className="absolute inset-0 bg-cover bg-center opacity-20"
+                className="absolute inset-0 bg-cover bg-center opacity-30"
                 style={{
-                    backgroundImage: `url('https://customer-assets.emergentagent.com/job_language-12/artifacts/jo19y7tj_IMG_5755.jpg')`
+                    backgroundImage: `url('https://customer-assets.emergentagent.com/job_language-12/artifacts/ydioioe5_IMG_5755.jpeg')`
                 }}
             ></div>
             

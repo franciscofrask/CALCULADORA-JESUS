@@ -17,17 +17,15 @@ const MessagesPage = () => {
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
 
-    // Get trainer ID (for now, use a default if not assigned)
     const trainerId = profile?.trainer_id || 'support';
 
     useEffect(() => {
         fetchMessages();
-        const interval = setInterval(fetchMessages, 5000); // Poll every 5s
+        const interval = setInterval(fetchMessages, 5000);
         return () => clearInterval(interval);
     }, [trainerId]);
 
     useEffect(() => {
-        // Scroll to bottom when messages change
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
@@ -36,9 +34,8 @@ const MessagesPage = () => {
     const fetchMessages = async () => {
         try {
             const response = await api.get(`/messages?with_user=${trainerId}`);
-            setMessages(response.data.reverse()); // Oldest first
+            setMessages(response.data.reverse());
             
-            // Mark messages as read
             response.data.forEach(async (msg) => {
                 if (!msg.read && msg.receiver_id === user.id) {
                     await api.put(`/messages/${msg.id}/read`);
@@ -87,31 +84,28 @@ const MessagesPage = () => {
 
     if (loading) {
         return (
-            <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex items-center justify-center">
-                <div className="animate-pulse space-y-4 w-full p-4">
-                    <div className="h-12 bg-muted rounded"></div>
-                    <div className="h-48 bg-muted rounded"></div>
-                </div>
+            <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex items-center justify-center bg-[#0A0A0A]">
+                <div className="animate-spin w-8 h-8 border-2 border-[#FF671F] border-t-transparent rounded-full"></div>
             </div>
         );
     }
 
     return (
-        <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex flex-col animate-fade-in">
+        <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex flex-col animate-fade-in bg-[#0A0A0A]">
             {/* Header */}
-            <div className="p-4 border-b border-border flex items-center gap-3">
-                <Avatar>
+            <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-[#111111]">
+                <Avatar className="border-2 border-[#FF671F]">
                     <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${trainerId}`} />
-                    <AvatarFallback>
+                    <AvatarFallback className="bg-[#FF671F] text-white">
                         <User className="w-4 h-4" />
                     </AvatarFallback>
                 </Avatar>
                 <div>
-                    <h2 className="font-semibold">
-                        {profile?.trainer_id ? 'Tu Entrenador' : 'Soporte'}
+                    <h2 className="font-bold text-white uppercase tracking-wider">
+                        {profile?.trainer_id ? 'Tu Entrenador' : 'Soporte JG12'}
                     </h2>
-                    <p className="text-xs text-muted-foreground">
-                        {profile?.trainer_id ? 'Entrenador asignado' : 'Equipo de soporte 12EN12'}
+                    <p className="text-xs text-[#FF671F]">
+                        {profile?.trainer_id ? 'Entrenador asignado' : 'Equipo de soporte'}
                     </p>
                 </div>
             </div>
@@ -131,20 +125,20 @@ const MessagesPage = () => {
                                         <div
                                             className={`rounded-2xl px-4 py-2 ${
                                                 isOwn
-                                                    ? 'bg-primary text-primary-foreground rounded-br-sm'
-                                                    : 'bg-muted rounded-bl-sm'
+                                                    ? 'bg-[#FF671F] text-white rounded-br-sm'
+                                                    : 'bg-[#1A1A1A] text-white rounded-bl-sm'
                                             }`}
                                         >
                                             <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                                         </div>
                                         <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                                            <span className="text-xs text-muted-foreground">
+                                            <span className="text-xs text-white/40">
                                                 {formatTime(msg.created_at)}
                                             </span>
                                             {isOwn && (
                                                 msg.read 
-                                                    ? <CheckCheck className="w-3 h-3 text-primary" />
-                                                    : <Check className="w-3 h-3 text-muted-foreground" />
+                                                    ? <CheckCheck className="w-3 h-3 text-[#FF671F]" />
+                                                    : <Check className="w-3 h-3 text-white/40" />
                                             )}
                                         </div>
                                     </div>
@@ -154,24 +148,26 @@ const MessagesPage = () => {
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                        <MessageCircle className="w-12 h-12 text-muted-foreground mb-4" />
-                        <h3 className="font-semibold mb-2">Sin mensajes</h3>
-                        <p className="text-sm text-muted-foreground">
-                            Envía un mensaje a tu entrenador para empezar la conversación.
+                        <div className="w-20 h-20 bg-[#FF671F]/10 rounded-full flex items-center justify-center mb-4">
+                            <MessageCircle className="w-10 h-10 text-[#FF671F]" />
+                        </div>
+                        <h3 className="font-bold text-white uppercase tracking-wider mb-2">Sin mensajes</h3>
+                        <p className="text-sm text-white/50">
+                            Envía un mensaje a tu entrenador para empezar.
                         </p>
                     </div>
                 )}
             </ScrollArea>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-border">
+            <div className="p-4 border-t border-white/10 bg-[#111111]">
                 <form onSubmit={handleSend} className="flex items-center gap-2">
                     <Input
                         ref={inputRef}
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         placeholder="Escribe un mensaje..."
-                        className="flex-1"
+                        className="flex-1 bg-[#0A0A0A] border-[#333] text-white placeholder:text-white/30 focus:border-[#FF671F]"
                         disabled={sending}
                         data-testid="message-input"
                     />
@@ -179,6 +175,7 @@ const MessagesPage = () => {
                         type="submit" 
                         size="icon" 
                         disabled={sending || !newMessage.trim()}
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white"
                         data-testid="send-message-btn"
                     >
                         <Send className="w-4 h-4" />
