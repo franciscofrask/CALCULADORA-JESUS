@@ -1,9 +1,10 @@
-# 12EN12 - Plataforma Gallego Trainer Internacional
+# JG12↗ - Plataforma Jesús Gallego Trainer
 
 ## Documento de Requisitos del Producto (PRD)
 
 ### Fecha de creación: 6 de marzo de 2026
-### Estado: MVP Completado
+### Última actualización: 6 de marzo de 2026
+### Estado: MVP Completado + Branding Oficial
 
 ---
 
@@ -100,6 +101,13 @@
 - **Base de datos**: MongoDB
 - **IA**: Claude Sonnet 4.5 (emergentintegrations)
 - **Pagos**: Stripe (pendiente - actualmente mockeado)
+
+### Branding JG12
+- **Color Primario**: #FF671F (Naranja)
+- **Color Secundario**: #000000 (Negro)
+- **Fuente Principal**: Bebas Neue (headings)
+- **Fuente Secundaria**: Inter (body)
+- **Logo**: JG12↗ con flecha naranja
 
 ---
 

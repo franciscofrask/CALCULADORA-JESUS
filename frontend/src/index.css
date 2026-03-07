@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,55 +6,62 @@
 
 @layer base {
     :root {
-        --background: 210 40% 98%;
-        --foreground: 222 47% 11%;
-        --card: 0 0% 100%;
-        --card-foreground: 222 47% 11%;
+        /* JG12 Brand Colors - Light mode (minimal usage) */
+        --background: 0 0% 100%;
+        --foreground: 0 0% 0%;
+        --card: 0 0% 98%;
+        --card-foreground: 0 0% 0%;
         --popover: 0 0% 100%;
-        --popover-foreground: 222 47% 11%;
-        --primary: 217 91% 60%;
+        --popover-foreground: 0 0% 0%;
+        --primary: 22 100% 56%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 82 78% 44%;
-        --secondary-foreground: 0 0% 0%;
-        --muted: 210 40% 96%;
-        --muted-foreground: 215 16% 47%;
-        --accent: 38 92% 50%;
-        --accent-foreground: 0 0% 0%;
+        --secondary: 0 0% 10%;
+        --secondary-foreground: 0 0% 100%;
+        --muted: 0 0% 96%;
+        --muted-foreground: 0 0% 40%;
+        --accent: 22 100% 56%;
+        --accent-foreground: 0 0% 100%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
-        --border: 214 32% 91%;
-        --input: 214 32% 91%;
-        --ring: 217 91% 60%;
-        --radius: 0.75rem;
+        --border: 0 0% 90%;
+        --input: 0 0% 90%;
+        --ring: 22 100% 56%;
+        --radius: 0.5rem;
         
-        --chart-1: 217 91% 60%;
-        --chart-2: 82 78% 44%;
-        --chart-3: 38 92% 50%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
+        --chart-1: 22 100% 56%;
+        --chart-2: 0 0% 30%;
+        --chart-3: 45 93% 47%;
+        --chart-4: 142 76% 36%;
+        --chart-5: 199 89% 48%;
     }
 
     .dark {
-        --background: 240 10% 4%;
+        /* JG12 Brand Colors - Dark mode (PRIMARY) */
+        --background: 0 0% 4%;
         --foreground: 0 0% 98%;
-        --card: 240 10% 7%;
+        --card: 0 0% 7%;
         --card-foreground: 0 0% 98%;
-        --popover: 240 10% 7%;
+        --popover: 0 0% 7%;
         --popover-foreground: 0 0% 98%;
-        --primary: 217 91% 60%;
+        --primary: 22 100% 56%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 82 78% 44%;
-        --secondary-foreground: 0 0% 0%;
-        --muted: 240 4% 16%;
-        --muted-foreground: 240 5% 65%;
-        --accent: 38 92% 50%;
-        --accent-foreground: 0 0% 0%;
-        --destructive: 0 62% 30%;
+        --secondary: 0 0% 14%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 0 0% 14%;
+        --muted-foreground: 0 0% 60%;
+        --accent: 22 100% 56%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 62% 50%;
         --destructive-foreground: 0 0% 98%;
-        --border: 240 4% 16%;
-        --input: 240 4% 16%;
-        --ring: 217 91% 60%;
+        --border: 0 0% 18%;
+        --input: 0 0% 18%;
+        --ring: 22 100% 56%;
     }
+}
+
+/* Force dark mode */
+:root {
+    color-scheme: dark;
 }
 
 @layer base {
@@ -62,34 +69,78 @@
         @apply border-border;
     }
     
+    html {
+        @apply dark;
+    }
+    
     body {
         @apply bg-background text-foreground antialiased;
-        font-family: 'Inter', sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
     h1, h2, h3, h4, h5, h6 {
-        font-family: 'Barlow Condensed', sans-serif;
-    }
-    
-    code, pre {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'Bebas Neue', 'Impact', sans-serif;
+        letter-spacing: 0.02em;
     }
 }
 
+/* JG12 Brand Variables */
+:root {
+    --jg-orange: #FF671F;
+    --jg-orange-dark: #E85A15;
+    --jg-orange-light: #FF8A4C;
+    --jg-black: #000000;
+    --jg-dark: #0A0A0A;
+    --jg-gray-dark: #1A1A1A;
+    --jg-gray: #2D2D2D;
+    --jg-gray-light: #404040;
+    --jg-white: #FFFFFF;
+}
+
 @layer components {
+    /* JG12 Logo Text */
+    .jg-logo {
+        font-family: 'Bebas Neue', 'Impact', sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.02em;
+    }
+    
+    .jg-logo-text {
+        @apply text-white font-bold tracking-tight;
+        font-family: 'Bebas Neue', sans-serif;
+    }
+    
+    .jg-logo-accent {
+        color: var(--jg-orange);
+    }
+    
+    /* Arrow Icon (brand element) */
+    .jg-arrow {
+        display: inline-block;
+        color: var(--jg-orange);
+        transform: rotate(-45deg);
+        font-weight: bold;
+    }
+    
+    /* Heading Styles - Miedinger/Bebas style */
     .heading-1 {
-        @apply text-4xl md:text-5xl lg:text-6xl font-black tracking-tight uppercase;
-        font-family: 'Barlow Condensed', sans-serif;
+        @apply text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight uppercase;
+        font-family: 'Bebas Neue', sans-serif;
     }
     
     .heading-2 {
         @apply text-3xl md:text-4xl font-bold tracking-tight uppercase;
-        font-family: 'Barlow Condensed', sans-serif;
+        font-family: 'Bebas Neue', sans-serif;
     }
     
     .heading-3 {
-        @apply text-2xl font-bold tracking-tight;
-        font-family: 'Barlow Condensed', sans-serif;
+        @apply text-xl md:text-2xl font-bold tracking-tight uppercase;
+        font-family: 'Bebas Neue', sans-serif;
+    }
+    
+    .heading-4 {
+        @apply text-lg font-bold tracking-tight uppercase;
+        font-family: 'Bebas Neue', sans-serif;
     }
     
     .body-large {
@@ -100,64 +151,119 @@
         @apply text-sm text-muted-foreground uppercase tracking-widest;
     }
     
-    /* Plan Badges */
+    /* Plan Badges - JG12 Style */
     .badge-gold {
-        @apply bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-700 text-white font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider;
+        @apply bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-600 text-black font-bold px-3 py-1 rounded text-xs uppercase tracking-wider;
     }
     
     .badge-silver {
-        @apply bg-gradient-to-br from-gray-300 via-gray-400 to-gray-600 text-white font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider;
+        @apply bg-gradient-to-r from-gray-300 via-gray-200 to-gray-400 text-black font-bold px-3 py-1 rounded text-xs uppercase tracking-wider;
     }
     
     .badge-bronze {
-        @apply bg-gradient-to-br from-orange-300 via-orange-500 to-orange-700 text-white font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider;
+        @apply bg-gradient-to-r from-orange-700 via-orange-600 to-orange-800 text-white font-bold px-3 py-1 rounded text-xs uppercase tracking-wider;
     }
     
     .badge-elm {
-        @apply bg-gradient-to-br from-green-400 to-emerald-600 text-white font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider;
+        background: var(--jg-orange);
+        @apply text-white font-bold px-3 py-1 rounded text-xs uppercase tracking-wider;
     }
     
-    /* Cards */
+    /* Cards - Dark Style */
+    .card-dark {
+        @apply bg-[#111111] border-[#222222] rounded-lg;
+    }
+    
     .card-glass {
-        @apply bg-white/70 dark:bg-black/60 backdrop-blur-xl border border-white/20 rounded-xl;
+        @apply bg-black/60 backdrop-blur-xl border border-white/10 rounded-lg;
     }
     
-    /* Buttons */
+    /* JG12 Buttons */
     .btn-primary {
-        @apply bg-primary text-primary-foreground hover:bg-primary/90 rounded-full font-bold uppercase tracking-wider shadow-lg transition-all duration-200 active:scale-95 px-6 py-3;
+        background: var(--jg-orange);
+        @apply text-white font-bold uppercase tracking-wider px-6 py-3 rounded transition-all duration-200 hover:brightness-110 active:scale-95;
     }
     
     .btn-secondary {
-        @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-full font-bold uppercase tracking-wider px-6 py-3 transition-all duration-200 active:scale-95;
+        @apply bg-white/10 text-white font-bold uppercase tracking-wider px-6 py-3 rounded border border-white/20 transition-all duration-200 hover:bg-white/20 active:scale-95;
+    }
+    
+    .btn-outline {
+        @apply border-2 border-[#FF671F] text-[#FF671F] font-bold uppercase tracking-wider px-6 py-3 rounded transition-all duration-200 hover:bg-[#FF671F] hover:text-white active:scale-95;
     }
     
     /* Mobile Navigation */
     .mobile-nav {
-        @apply fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-lg border-t border-border z-50 flex justify-around py-3 md:hidden;
+        @apply fixed bottom-0 left-0 right-0 bg-[#0A0A0A]/95 backdrop-blur-lg border-t border-white/10 z-50 flex justify-around py-3 md:hidden;
     }
     
     .mobile-nav-item {
-        @apply flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors;
+        @apply flex flex-col items-center gap-1 text-white/60 hover:text-[#FF671F] transition-colors;
     }
     
     .mobile-nav-item.active {
-        @apply text-primary;
+        @apply text-[#FF671F];
     }
     
     /* Stats Numbers */
     .stat-number {
-        @apply text-4xl md:text-5xl font-black;
-        font-family: 'Barlow Condensed', sans-serif;
+        @apply text-4xl md:text-5xl font-bold;
+        font-family: 'Bebas Neue', sans-serif;
+        color: var(--jg-orange);
     }
     
     /* Exercise Card */
     .exercise-card {
-        @apply bg-card rounded-xl border border-border p-4 hover:shadow-md transition-shadow;
+        @apply bg-[#111111] rounded-lg border border-[#222222] p-4 hover:border-[#FF671F]/50 transition-all;
     }
     
     .exercise-reps {
-        @apply text-2xl font-bold text-primary;
-        font-family: 'Barlow Condensed', sans-serif;
+        @apply text-2xl font-bold;
+        font-family: 'Bebas Neue', sans-serif;
+        color: var(--jg-orange);
+    }
+    
+    /* Input Styles */
+    .input-dark {
+        @apply bg-[#111111] border-[#333333] text-white placeholder:text-white/40 focus:border-[#FF671F] focus:ring-[#FF671F]/20;
+    }
+    
+    /* Sidebar */
+    .sidebar-dark {
+        @apply bg-[#0A0A0A] border-r border-white/10;
+    }
+    
+    .sidebar-item {
+        @apply flex items-center gap-3 px-4 py-3 rounded-lg text-white/70 hover:text-white hover:bg-white/5 transition-all;
+    }
+    
+    .sidebar-item.active {
+        @apply bg-[#FF671F] text-white;
+    }
+    
+    /* Progress bars */
+    .progress-jg {
+        @apply bg-[#222222] rounded-full h-2;
+    }
+    
+    .progress-jg-fill {
+        background: var(--jg-orange);
+        @apply rounded-full h-full transition-all;
+    }
+    
+    /* Accent line (brand element) */
+    .accent-line {
+        @apply w-12 h-1 rounded-full;
+        background: var(--jg-orange);
+    }
+    
+    /* Tab styles */
+    .tab-jg {
+        @apply px-4 py-2 text-white/60 font-medium uppercase tracking-wider text-sm transition-all border-b-2 border-transparent;
+    }
+    
+    .tab-jg.active {
+        @apply text-[#FF671F] border-[#FF671F];
     }
 }
 
@@ -177,6 +283,18 @@
     .animate-scale-in {
         animation: scaleIn 0.2s ease-out;
     }
+    
+    .text-jg-orange {
+        color: var(--jg-orange);
+    }
+    
+    .bg-jg-orange {
+        background-color: var(--jg-orange);
+    }
+    
+    .border-jg-orange {
+        border-color: var(--jg-orange);
+    }
 }
 
 @keyframes fadeIn {
@@ -194,18 +312,30 @@
     to { opacity: 1; transform: scale(1); }
 }
 
-/* Scrollbar Styling */
+/* Scrollbar Styling - Dark */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-    @apply bg-muted rounded-full;
+    @apply bg-[#111111] rounded-full;
 }
 
 ::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full hover:bg-muted-foreground/50;
+    @apply bg-[#333333] rounded-full hover:bg-[#444444];
+}
+
+/* Selection color */
+::selection {
+    background: var(--jg-orange);
+    color: white;
+}
+
+/* Focus outline */
+*:focus-visible {
+    outline: 2px solid var(--jg-orange);
+    outline-offset: 2px;
 }
 
 /* Data wrapper fix */

@@ -5,17 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { 
-    Dumbbell, Crown, Star, Zap, Check, ChevronRight, 
-    ArrowRight, Loader2
-} from 'lucide-react';
+import { Check, ArrowRight, Loader2, Star, ArrowUpRight } from 'lucide-react';
 
 const PLANS = [
     {
         id: 'gold',
         name: 'Gold',
         price: 149,
-        badge: 'badge-gold',
+        badgeClass: 'bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-600 text-black',
         description: 'El plan más completo para resultados máximos',
         features: [
             'Rutina personalizada semanal',
@@ -32,7 +29,7 @@ const PLANS = [
         id: 'silver',
         name: 'Silver',
         price: 99,
-        badge: 'badge-silver',
+        badgeClass: 'bg-gradient-to-r from-gray-300 via-gray-200 to-gray-400 text-black',
         description: 'Balance perfecto entre servicio y precio',
         features: [
             'Rutina personalizada semanal',
@@ -46,7 +43,7 @@ const PLANS = [
         id: 'bronze',
         name: 'Bronze',
         price: 69,
-        badge: 'badge-bronze',
+        badgeClass: 'bg-gradient-to-r from-orange-700 via-orange-600 to-orange-800 text-white',
         description: 'Ideal para empezar tu transformación',
         features: [
             'Rutina básica mensual',
@@ -60,7 +57,7 @@ const PLANS = [
         id: 'elm',
         name: 'ELM',
         price: 39,
-        badge: 'badge-elm',
+        badgeClass: 'bg-[#FF671F] text-white',
         description: 'Solo macros, para quienes ya tienen rutina',
         features: [
             'Acceso a calculadora de macros',
@@ -87,7 +84,7 @@ const OnboardingPage = () => {
         try {
             await api.post('/clients/profile', { plan: selectedPlan });
             await refreshProfile();
-            toast.success('¡Bienvenido a 12EN12! Tu plan ha sido activado');
+            toast.success('¡Bienvenido a JG12! Tu plan ha sido activado');
             navigate('/dashboard');
         } catch (error) {
             toast.error(error.response?.data?.detail || 'Error al activar el plan');
@@ -97,15 +94,21 @@ const OnboardingPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4 md:p-8">
-            <div className="max-w-4xl mx-auto">
+        <div className="min-h-screen bg-[#0A0A0A] p-4 md:p-8 relative overflow-hidden">
+            {/* Background glow */}
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#FF671F]/10 rounded-full blur-[150px]"></div>
+            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#FF671F]/5 rounded-full blur-[120px]"></div>
+            
+            <div className="max-w-5xl mx-auto relative z-10">
                 {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4">
-                        <Dumbbell className="w-8 h-8 text-white" />
+                <div className="text-center mb-10">
+                    <div className="inline-flex items-center text-5xl mb-4" style={{ fontFamily: 'Bebas Neue' }}>
+                        <span className="text-white">JG</span>
+                        <span className="text-white">12</span>
+                        <ArrowUpRight className="text-[#FF671F] w-10 h-10 -ml-1" strokeWidth={3} />
                     </div>
-                    <h1 className="heading-1 text-white mb-2">Elige tu plan</h1>
-                    <p className="text-blue-200">
+                    <h1 className="heading-1 text-white mb-2">ELIGE TU PLAN</h1>
+                    <p className="text-white/60 uppercase tracking-wider text-sm">
                         Selecciona el plan que mejor se adapte a tus objetivos
                     </p>
                 </div>
@@ -115,42 +118,48 @@ const OnboardingPage = () => {
                     {PLANS.map((plan) => (
                         <Card 
                             key={plan.id}
-                            className={`cursor-pointer transition-all duration-300 ${
+                            className={`bg-[#111111] border-2 cursor-pointer transition-all duration-300 ${
                                 selectedPlan === plan.id 
-                                    ? 'ring-2 ring-primary scale-[1.02]' 
-                                    : 'hover:scale-[1.01]'
-                            } ${plan.recommended ? 'border-primary/50' : ''}`}
+                                    ? 'border-[#FF671F] scale-[1.02]' 
+                                    : 'border-[#222222] hover:border-white/30'
+                            } ${plan.recommended ? 'ring-1 ring-[#FF671F]/30' : ''}`}
                             onClick={() => setSelectedPlan(plan.id)}
                             data-testid={`plan-${plan.id}`}
                         >
-                            <CardHeader className="pb-2">
+                            <CardHeader className="pb-3">
                                 <div className="flex items-start justify-between">
                                     <div>
-                                        <span className={plan.badge}>{plan.name}</span>
+                                        <span className={`${plan.badgeClass} font-bold px-3 py-1 rounded text-sm uppercase tracking-wider`}>
+                                            {plan.name}
+                                        </span>
                                         {plan.recommended && (
-                                            <Badge variant="secondary" className="ml-2 text-xs">
-                                                <Star className="w-3 h-3 mr-1" />
+                                            <Badge className="ml-2 bg-[#FF671F]/20 text-[#FF671F] border-0 text-xs">
+                                                <Star className="w-3 h-3 mr-1 fill-[#FF671F]" />
                                                 Recomendado
                                             </Badge>
                                         )}
                                     </div>
                                     {selectedPlan === plan.id && (
-                                        <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                                        <div className="w-6 h-6 bg-[#FF671F] rounded flex items-center justify-center">
                                             <Check className="w-4 h-4 text-white" />
                                         </div>
                                     )}
                                 </div>
-                                <CardTitle className="mt-3">
-                                    <span className="text-4xl font-black">{plan.price}</span>
-                                    <span className="text-muted-foreground">€/ciclo</span>
+                                <CardTitle className="mt-4">
+                                    <span className="text-5xl font-bold text-white" style={{ fontFamily: 'Bebas Neue' }}>
+                                        {plan.price}
+                                    </span>
+                                    <span className="text-white/50 text-lg ml-1">€/ciclo</span>
                                 </CardTitle>
-                                <p className="text-sm text-muted-foreground">{plan.description}</p>
+                                <p className="text-sm text-white/50">{plan.description}</p>
                             </CardHeader>
                             <CardContent>
                                 <ul className="space-y-2">
                                     {plan.features.map((feature, index) => (
-                                        <li key={index} className="flex items-center gap-2 text-sm">
-                                            <Check className="w-4 h-4 text-secondary flex-shrink-0" />
+                                        <li key={index} className="flex items-center gap-2 text-sm text-white/80">
+                                            <div className="w-5 h-5 bg-[#FF671F]/20 rounded flex items-center justify-center flex-shrink-0">
+                                                <Check className="w-3 h-3 text-[#FF671F]" />
+                                            </div>
                                             {feature}
                                         </li>
                                     ))}
@@ -163,7 +172,7 @@ const OnboardingPage = () => {
                 {/* CTA */}
                 <div className="text-center">
                     <Button 
-                        className="btn-primary px-8 py-6 text-lg"
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold uppercase tracking-wider px-10 py-6 text-lg"
                         onClick={handleSelectPlan}
                         disabled={!selectedPlan || loading}
                         data-testid="confirm-plan-btn"
@@ -173,10 +182,10 @@ const OnboardingPage = () => {
                         ) : (
                             <ArrowRight className="w-5 h-5 mr-2" />
                         )}
-                        {loading ? 'Activando...' : 'Continuar con el plan'}
+                        {loading ? 'Activando...' : 'Continuar'}
                     </Button>
-                    <p className="text-blue-200/60 text-sm mt-4">
-                        Pago mockeado para demostración
+                    <p className="text-white/30 text-sm mt-4 uppercase tracking-wider">
+                        Pago simulado para demostración
                     </p>
                 </div>
             </div>
