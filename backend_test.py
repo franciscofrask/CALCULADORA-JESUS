@@ -351,7 +351,7 @@ class FitnessAPITester:
 
 def main():
     """Main test execution"""
-    base_url = "https://nutrition-hub-136.preview.emergentagent.com"
+    base_url = "https://macro-planner-7.preview.emergentagent.com"
     
     tester = FitnessAPITester(base_url)
     

@@ -49,6 +49,7 @@ async def create_indexes():
         await db.foods.create_index([("nombre", "text")])
         await db.foods.create_index("id", unique=True)
         await db.foods.create_index("categorias")
+        await db.diets.create_index([("user_id", 1), ("fecha", 1)], unique=True)
         logger.info("MongoDB indexes created successfully")
     except Exception as e:
         logger.warning(f"Index creation warning: {e}")
@@ -1394,6 +1395,161 @@ async def test_calculator():
     sys.stdout = old_stdout
     
     return {"all_passed": all_passed, "output": output}
+
+
+# ============================================================
+# ENDPOINTS DIETAS — Guardar, Cargar, Copiar, Calendario
+# ============================================================
+
+@api_router.post("/diets")
+async def save_diet(data: dict, user = Depends(get_current_user)):
+    """
+    Guarda la dieta completa de un día.
+    
+    Body:
+    {
+        "fecha": "2026-03-11",
+        "tipo_dia": "entrenamiento",
+        "num_comidas": 4,
+        "momento_entreno": 1,
+        "opcion_peri": "intra_post",
+        "comidas": {
+            "C1": {
+                "alimentos": [
+                    {"alimento_id": 2045, "nombre": "Pechuga de pollo", "cantidad_g": 200},
+                    ...
+                ]
+            },
+            ...
+        }
+    }
+    """
+    fecha = data.get("fecha")
+    if not fecha:
+        raise HTTPException(status_code=400, detail="Fecha requerida")
+    
+    diet_doc = {
+        "user_id": user["id"],
+        "fecha": fecha,
+        "tipo_dia": data.get("tipo_dia", "entrenamiento"),
+        "num_comidas": data.get("num_comidas", 4),
+        "momento_entreno": data.get("momento_entreno", 1),
+        "opcion_peri": data.get("opcion_peri", "intra_post"),
+        "comidas": data.get("comidas", {}),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "macros_snapshot": data.get("macros_snapshot", None)
+    }
+    
+    # Upsert: si ya existe dieta para ese día, reemplazar
+    await db.diets.update_one(
+        {"user_id": user["id"], "fecha": fecha},
+        {"$set": diet_doc},
+        upsert=True
+    )
+    
+    return {"message": "Dieta guardada", "fecha": fecha}
+
+
+@api_router.get("/diets/{fecha}")
+async def get_diet(fecha: str, user = Depends(get_current_user)):
+    """Obtiene la dieta guardada para una fecha."""
+    diet = await db.diets.find_one(
+        {"user_id": user["id"], "fecha": fecha},
+        {"_id": 0}
+    )
+    if not diet:
+        return {"fecha": fecha, "exists": False}
+    
+    diet["exists"] = True
+    return diet
+
+
+@api_router.post("/diets/copy")
+async def copy_diet(data: dict, user = Depends(get_current_user)):
+    """
+    Copia una dieta de una fecha a otra.
+    
+    Body:
+    {
+        "fecha_origen": "2026-03-11",
+        "fecha_destino": "2026-03-12"
+    }
+    """
+    fecha_origen = data.get("fecha_origen")
+    fecha_destino = data.get("fecha_destino")
+    
+    if not fecha_origen or not fecha_destino:
+        raise HTTPException(status_code=400, detail="Fechas requeridas")
+    
+    diet = await db.diets.find_one(
+        {"user_id": user["id"], "fecha": fecha_origen},
+        {"_id": 0}
+    )
+    
+    if not diet:
+        raise HTTPException(status_code=404, detail="No hay dieta en la fecha origen")
+    
+    diet["fecha"] = fecha_destino
+    diet["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.diets.update_one(
+        {"user_id": user["id"], "fecha": fecha_destino},
+        {"$set": diet},
+        upsert=True
+    )
+    
+    return {"message": f"Dieta copiada a {fecha_destino}"}
+
+
+@api_router.get("/diets/calendar/{year}/{month}")
+async def get_calendar(year: int, month: int, user = Depends(get_current_user)):
+    """
+    Obtiene el estado del calendario de un mes.
+    Devuelve qué días tienen dieta y si están cuadrados.
+    """
+    # Generar rango de fechas del mes
+    fecha_inicio = f"{year}-{month:02d}-01"
+    if month == 12:
+        fecha_fin = f"{year + 1}-01-01"
+    else:
+        fecha_fin = f"{year}-{month + 1:02d}-01"
+    
+    cursor = db.diets.find(
+        {
+            "user_id": user["id"],
+            "fecha": {"$gte": fecha_inicio, "$lt": fecha_fin}
+        },
+        {"_id": 0, "fecha": 1, "comidas": 1}
+    )
+    
+    diets = await cursor.to_list(length=31)
+    
+    days = {}
+    for diet in diets:
+        fecha = diet["fecha"]
+        comidas = diet.get("comidas", {})
+        has_alimentos = any(
+            len(c.get("alimentos", [])) > 0 
+            for c in comidas.values() 
+            if isinstance(c, dict)
+        )
+        days[fecha] = {
+            "has_diet": True,
+            "status": "guardada" if has_alimentos else "vacia"
+        }
+    
+    return {"days": days}
+
+
+@api_router.delete("/diets/{fecha}")
+async def delete_diet(fecha: str, user = Depends(get_current_user)):
+    """Elimina la dieta de una fecha."""
+    result = await db.diets.delete_one(
+        {"user_id": user["id"], "fecha": fecha}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="No hay dieta para esa fecha")
+    return {"message": "Dieta eliminada"}
 
 
 # Include the router
