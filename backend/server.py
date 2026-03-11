@@ -1153,6 +1153,77 @@ async def test_calma():
     }
 
 
+# ============================================================
+# ENDPOINT DISTRIBUCIÓN DE MACROS
+# ============================================================
+from macro_distribution import distribuir_macros as dist_macros, run_tests as dist_run_tests
+
+@api_router.post("/calculator/distribute")
+async def distribute_macros(data: dict, user = Depends(get_current_user)):
+    """
+    Distribuye los macros del usuario entre sus comidas del día.
+    
+    Body:
+    {
+        "tipo_dia": "entrenamiento",     // "entrenamiento" o "descanso"
+        "num_comidas": 4,                // 3 o 4
+        "momento_entreno": 1,            // 0, 1, 2, 3
+        "opcion_peri": "intra_post"      // "intra_post", "solo_post", "solo_intra", "sin_peri"
+    }
+    
+    Los macros se obtienen del perfil del usuario (no se pasan en el body).
+    """
+    # Obtener macros del perfil del cliente
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil de cliente no encontrado")
+    
+    training = profile.get("macros_training", {})
+    rest = profile.get("macros_rest", {})
+    peri = profile.get("macros_peri", {"protein": 40, "carbs": 30})
+    
+    if not training or not rest:
+        raise HTTPException(status_code=400, detail="No tienes macros asignados")
+    
+    tipo_dia = data.get("tipo_dia", "entrenamiento")
+    num_comidas = data.get("num_comidas", 4)
+    momento_entreno = data.get("momento_entreno", 1)
+    opcion_peri = data.get("opcion_peri", "intra_post")
+    
+    resultado = dist_macros(
+        p_entreno=float(training.get("protein", 0)),
+        h_entreno=float(training.get("carbs", 0)),
+        g_entreno=float(training.get("fat", 0)),
+        p_peri=float(peri.get("protein", 0)),
+        h_peri=float(peri.get("carbs", 0)),
+        p_descanso=float(rest.get("protein", 0)),
+        h_descanso=float(rest.get("carbs", 0)),
+        g_descanso=float(rest.get("fat", 0)),
+        tipo_dia=tipo_dia,
+        num_comidas=num_comidas,
+        momento_entreno=momento_entreno,
+        opcion_peri=opcion_peri
+    )
+    
+    return resultado
+
+
+@api_router.get("/calculator/test-distribution")
+async def test_distribution():
+    """Endpoint de verificación: ejecuta tests de distribución."""
+    import io
+    import sys
+    
+    old_stdout = sys.stdout
+    sys.stdout = buffer = io.StringIO()
+    all_passed = dist_run_tests()
+    output = buffer.getvalue()
+    sys.stdout = old_stdout
+    
+    return {"all_passed": all_passed, "output": output}
+
+
 # Include the router
 app.include_router(api_router)
 
