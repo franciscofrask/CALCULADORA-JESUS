@@ -57,12 +57,22 @@ const NutritionPage = () => {
 
     const consumed = calculateConsumed();
     const filteredFoods = foods.filter(f => 
-        f.name.toLowerCase().includes(searchQuery.toLowerCase())
+        f.nombre?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const addFood = (food) => {
-        setSelectedMeals([...selectedMeals, { ...food, quantity: 100 }]);
-        toast.success(`${food.name} añadido`);
+        // Adaptar estructura de datos de la BD a la estructura local
+        const adaptedFood = {
+            id: food.id,
+            name: food.nombre,
+            calories: (food.proteinas * 4) + (food.hidratos * 4) + (food.grasas * 9), // Calcular calorías
+            protein: food.proteinas,
+            carbs: food.hidratos,
+            fat: food.grasas,
+            racion: food.racion
+        };
+        setSelectedMeals([...selectedMeals, { ...adaptedFood, quantity: food.racion || 100 }]);
+        toast.success(`${food.nombre} añadido`);
     };
 
     const removeFood = (index) => {
@@ -308,16 +318,19 @@ const NutritionPage = () => {
                         {/* Food List */}
                         <ScrollArea className="h-[40vh]">
                             <div className="space-y-2">
-                                {filteredFoods.map((food) => (
+                                {filteredFoods.map((food) => {
+                                    const calories = (food.proteinas * 4) + (food.hidratos * 4) + (food.grasas * 9);
+                                    return (
                                     <Card key={food.id} className="bg-[#111111] border-[#222] hover:border-[#FF671F]/50 transition-colors">
                                         <CardContent className="p-3 flex items-center justify-between">
                                             <div>
-                                                <p className="font-medium text-white text-sm">{food.name}</p>
+                                                <p className="font-medium text-white text-sm">{food.nombre}</p>
                                                 <p className="text-xs text-white/50">
-                                                    <span className="text-orange-500">{food.calories}</span> kcal | 
-                                                    P:<span className="text-red-500">{food.protein}</span>g 
-                                                    C:<span className="text-amber-500">{food.carbs}</span>g 
-                                                    G:<span className="text-blue-500">{food.fat}</span>g
+                                                    <span className="text-orange-500">{Math.round(calories)}</span> kcal | 
+                                                    P:<span className="text-red-500">{food.proteinas}</span>g 
+                                                    C:<span className="text-amber-500">{food.hidratos}</span>g 
+                                                    G:<span className="text-blue-500">{food.grasas}</span>g
+                                                    {food.racion && <span className="text-white/30"> ({food.racion}g)</span>}
                                                 </p>
                                             </div>
                                             <Button 
@@ -331,7 +344,8 @@ const NutritionPage = () => {
                                             </Button>
                                         </CardContent>
                                     </Card>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </ScrollArea>
 
