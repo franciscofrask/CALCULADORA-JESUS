@@ -6,7 +6,7 @@ automáticamente cuántos gramos poner para cuadrar los macros.
 """
 
 from typing import Dict, List, Optional, Tuple
-from calma_engine import calcular_macros_efectivos, que_macros_cuentan
+from calma_engine import calcular_macros_efectivos_alimento as calcular_macros_efectivos, que_macros_cuentan
 import math
 
 
@@ -267,7 +267,7 @@ def calcular_cantidad_automatica(
 def _build_result(alimento: dict, cantidad_g: float, es_vegano: bool,
                   cabe: bool, advertencia: Optional[str]) -> Dict:
     """Construye el resultado del cálculo."""
-    from calma_engine import calcular_macros_efectivos, calcular_macros_brutos, que_macros_cuentan
+    from calma_engine import calcular_macros_efectivos_alimento as calcular_macros_efectivos, calcular_macros_brutos, que_macros_cuentan
 
     efectivos = calcular_macros_efectivos(alimento, cantidad_g, es_vegano)
     brutos = calcular_macros_brutos(alimento, cantidad_g)

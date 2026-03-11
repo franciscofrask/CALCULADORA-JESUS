@@ -1015,7 +1015,7 @@ async def get_plans():
 # ============================================================
 # ENDPOINTS CALMA v2 — Motor de conteo de macros
 # ============================================================
-from calma_engine import calcular_macros_efectivos, que_macros_cuentan, calcular_macros_brutos, run_tests as calma_run_tests
+from calma_engine import calcular_macros_efectivos_alimento as calcular_macros_efectivos, que_macros_cuentan, calcular_macros_brutos, run_tests as calma_run_tests
 
 @api_router.post("/calculator/macros-efectivos")
 async def get_macros_efectivos(data: dict, user = Depends(get_current_user)):
@@ -1149,22 +1149,8 @@ async def test_calma():
     Endpoint de verificación: ejecuta los tests del motor CALMA v2.
     Responde con el resultado de cada test.
     """
-    import io
-    import sys
-    
-    # Capturar output de los tests
-    old_stdout = sys.stdout
-    sys.stdout = buffer = io.StringIO()
-    
-    all_passed = calma_run_tests()
-    
-    output = buffer.getvalue()
-    sys.stdout = old_stdout
-    
-    return {
-        "all_passed": all_passed,
-        "output": output
-    }
+    results = calma_run_tests()
+    return results
 
 
 # ============================================================

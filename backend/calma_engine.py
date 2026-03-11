@@ -1,898 +1,1004 @@
 """
-CALMA v2 Engine — Motor de conteo de macros del Método Jesús Gallego
-====================================================================
-Este motor determina qué macronutrientes CUENTAN para cada alimento
-según su categoría. No todos los macros de un alimento cuentan para
-el balance de la dieta — depende de reglas específicas por categoría.
+CALMA v2 — Motor de cálculo de macros efectivos
+Método Jesús Gallego — 12en12
 
-Ejemplo: La pechuga de pollo tiene 21P, 0H, 1.5G por 100g.
-- P siempre cuenta (es proteína, cat 2.2)
-- H no cuenta (es 0, y además <2% para cat 2)
-- G no cuenta (1.5% < 3% para cat 2)
-Resultado: solo cuenta P=21. Los otros macros se IGNORAN en el balance.
-
-Ejemplo 2: Tomate frito tiene 0.8P, 6.5H, 4.2G (cat 13.8 + 16.2)
-- Cat 13: P nunca cuenta. H cuenta si >4% (6.5>4 → SÍ). G cuenta si >4% (4.2>4 → SÍ)
-- Cat 16: Cualquier macro ≥6% cuenta. P=0.8<6 → NO. H=6.5≥6 → SÍ. G=4.2<6 → NO
-- Doble categoría: regla MÁS PERMISIVA → P=NO, H=SÍ (ambas dicen sí), G=SÍ (cat 13 dice sí)
-Resultado: cuentan H=6.5 y G=4.2
+Cada alimento tiene macros brutos (P, H, G por 100g).
+Según su categoría, solo ciertos macros "cuentan".
+Este motor aplica las reglas por categoría y devuelve los macros efectivos.
 """
 
-from typing import Dict, List, Optional, Tuple
 
-
-def parse_categories(categorias_str: str) -> List[str]:
+def calcular_macros_efectivos(
+    proteina_100g: float,
+    hidratos_100g: float,
+    grasa_100g: float,
+    categoria: str,
+    cantidad_g: float,
+    categoria_secundaria: str = None,
+    es_vegano: bool = False
+) -> dict:
     """
-    Parsea el string de categorías de un alimento.
-    Input: "2.2.1 | FRE | TOP"
-    Output: ["2.2.1", "FRE", "TOP"]
+    Calcula los macros efectivos de un alimento según las reglas CALMA v2.
     
-    La PRIMERA categoría es la principal (numérica).
-    El resto pueden ser numéricas (doble categoría) o etiquetas (FRE, PRO, TOP, etc.)
-    """
-    if not categorias_str:
-        return []
-    parts = [c.strip() for c in categorias_str.split("|")]
-    return [p for p in parts if p]
-
-
-def get_numeric_categories(categorias: List[str]) -> List[str]:
-    """
-    Filtra solo las categorías numéricas (las que tienen reglas de conteo).
-    Input: ["2.2.1", "FRE", "TOP"]
-    Output: ["2.2.1"]
+    Args:
+        proteina_100g: gramos de proteína por 100g del alimento
+        hidratos_100g: gramos de hidratos por 100g del alimento
+        grasa_100g: gramos de grasa por 100g del alimento
+        categoria: categoría principal del alimento (string, ej: "2", "13", "17.2.1")
+        cantidad_g: cantidad servida en gramos
+        categoria_secundaria: segunda categoría si existe (para regla doble categoría)
+        es_vegano: si el usuario es vegano (activa reglas especiales)
     
-    Input: ["13.8", "16.2", "YA"]
-    Output: ["13.8", "16.2"]
+    Returns:
+        dict con:
+            proteina_efectiva: gramos de P que cuentan para la ración servida
+            hidratos_efectivos: gramos de H que cuentan para la ración servida
+            grasa_efectiva: gramos de G que cuentan para la ración servida
+            proteina_cuenta: bool - si P cuenta o no
+            hidratos_cuenta: bool - si H cuenta o no
+            grasa_cuenta: bool - si G cuenta o no
     """
-    numeric = []
-    for cat in categorias:
-        # Es numérica si empieza con dígito
-        if cat and cat[0].isdigit():
-            numeric.append(cat)
-    return numeric
+    
+    # Paso 1: calcular macros brutos de la ración servida
+    factor = cantidad_g / 100.0
+    p_bruta = proteina_100g * factor
+    h_bruta = hidratos_100g * factor
+    g_bruta = grasa_100g * factor
+    
+    # Paso 2: determinar qué cuenta según categoría principal
+    p_cuenta, h_cuenta, g_cuenta = _aplicar_reglas_categoria(
+        proteina_100g, hidratos_100g, grasa_100g, 
+        categoria, cantidad_g, es_vegano
+    )
+    
+    # Paso 3: si hay categoría secundaria, aplicar regla de doble categoría
+    # (la más permisiva: si CUALQUIERA dice que cuenta → cuenta)
+    if categoria_secundaria:
+        p2, h2, g2 = _aplicar_reglas_categoria(
+            proteina_100g, hidratos_100g, grasa_100g,
+            categoria_secundaria, cantidad_g, es_vegano
+        )
+        p_cuenta = p_cuenta or p2
+        h_cuenta = h_cuenta or h2
+        g_cuenta = g_cuenta or g2
+    
+    # Paso 4: calcular efectivos
+    return {
+        "proteina_efectiva": round(p_bruta, 1) if p_cuenta else 0.0,
+        "hidratos_efectivos": round(h_bruta, 1) if h_cuenta else 0.0,
+        "grasa_efectiva": round(g_bruta, 1) if g_cuenta else 0.0,
+        "proteina_cuenta": p_cuenta,
+        "hidratos_cuenta": h_cuenta,
+        "grasa_cuenta": g_cuenta
+    }
+
+
+def _aplicar_reglas_categoria(
+    p100: float, h100: float, g100: float,
+    cat: str, cantidad_g: float, es_vegano: bool
+) -> tuple:
+    """
+    Aplica las reglas de conteo según la categoría.
+    Retorna (p_cuenta, h_cuenta, g_cuenta) como booleans.
+    
+    TODOS los porcentajes y umbrales se calculan sobre valores por 100g
+    del alimento, NO sobre la ración servida (excepto calibraciones).
+    """
+    
+    cat = str(cat).strip()
+    
+    # Macro predominante (por 100g)
+    predominante = max(p100, h100, g100)
+    
+    # =====================================================
+    # CAT 1 — Huevos y derivados
+    # P: siempre | H: si >= 2% | G: si >= 3%
+    # =====================================================
+    if cat == "1":
+        return (
+            True,           # P siempre
+            h100 >= 2.0,    # H si >= 2g por 100g
+            g100 >= 3.0     # G si >= 3g por 100g
+        )
+    
+    # =====================================================
+    # CAT 2 — Carnes (aves, ternera, cerdo, otras)
+    # P: siempre | H: si >= 2% | G: si >= 3%
+    # =====================================================
+    if cat == "2":
+        return (
+            True,
+            h100 >= 2.0,
+            g100 >= 3.0
+        )
+    
+    # =====================================================
+    # CAT 3 — Pescados (excepto 3.9)
+    # P: siempre | H: si >= 2% | G: si >= 3%
+    # =====================================================
+    if cat == "3":
+        return (
+            True,
+            h100 >= 2.0,
+            g100 >= 3.0
+        )
+    
+    # =====================================================
+    # CAT 3.9 — Mariscos
+    # P: siempre | H: si > 3% (estricto >) | G: si >= 3%
+    # =====================================================
+    if cat == "3.9":
+        return (
+            True,
+            h100 > 3.0,     # OJO: > 3 (no >=), es "menor o igual a 3 NO cuenta"
+            g100 >= 3.0
+        )
+    
+    # =====================================================
+    # CAT 4 — Proteína en polvo y barritas proteicas
+    # P: siempre | H: si > 6% | G: regla general 25%
+    # =====================================================
+    if cat == "4" or cat.startswith("4."):
+        # Excluir 4.1 y 4.2 en modo vegano (whey, caseína)
+        g_cuenta = (predominante > 0 and g100 > 0.25 * predominante)
+        return (
+            True,
+            h100 > 6.0,
+            g_cuenta
+        )
+    
+    # =====================================================
+    # CAT 5 — Lácteos y derivados
+    # P: siempre | H: siempre | G: si >= 1%
+    # =====================================================
+    if cat == "5" or cat.startswith("5."):
+        return (
+            True,
+            True,
+            g100 >= 1.0
+        )
+    
+    # =====================================================
+    # CAT 7 — Cereales excepto arroz
+    # P: si > 1/3 del H (calibración: >100g servidos → P siempre)
+    # H: siempre
+    # G: si > 8% O si > 1/4 del H
+    # =====================================================
+    if cat == "7" or cat.startswith("7."):
+        # Proteína
+        if cantidad_g > 100:
+            # Calibración: por encima de 100g, P SIEMPRE cuenta
+            p_cuenta = True
+        else:
+            # Regla normal: P cuenta si > 1/3 del H
+            p_cuenta = (h100 > 0 and p100 > h100 / 3.0)
+        
+        # Grasa: cuenta si > 8% O si > 1/4 del H
+        g_cuenta = (g100 > 8.0) or (h100 > 0 and g100 > h100 / 4.0)
+        
+        return (p_cuenta, True, g_cuenta)
+    
+    # =====================================================
+    # CAT 8 — Panes y tortillas de trigo
+    # P: si > 1/3 del H (misma calibración que Cat 7)
+    # H: siempre
+    # G: si > 9% O si > 1/4 del H
+    # =====================================================
+    if cat == "8" or cat.startswith("8."):
+        if cantidad_g > 100:
+            p_cuenta = True
+        else:
+            p_cuenta = (h100 > 0 and p100 > h100 / 3.0)
+        
+        # Grasa: umbral 9% (no 8% como cereales)
+        g_cuenta = (g100 > 9.0) or (h100 > 0 and g100 > h100 / 4.0)
+        
+        return (p_cuenta, True, g_cuenta)
+    
+    # =====================================================
+    # CAT 9 — Tubérculos y derivados
+    # SOLO hidratos. Nada más.
+    # =====================================================
+    if cat == "9" or cat.startswith("9."):
+        return (False, True, False)
+    
+    # =====================================================
+    # CAT 10 — Legumbres
+    # P: siempre | H: siempre | G: si >= 8%
+    # =====================================================
+    if cat == "10" or cat.startswith("10."):
+        return (
+            True,
+            True,
+            g100 >= 8.0
+        )
+    
+    # =====================================================
+    # CAT 11 — Frutas, zumos, mermeladas
+    # SOLO hidratos. Nada más.
+    # =====================================================
+    if cat == "11" or cat.startswith("11."):
+        return (False, True, False)
+    
+    # =====================================================
+    # CAT 13 — Verduras y hortalizas (excepto 13.9)
+    # P: nunca | H: si > 4% por 100g | G: si > 4% por 100g
+    # EXCEPCIÓN: H y G cuentan si >4% AUNQUE no superen 25% del predominante
+    # =====================================================
+    if cat == "13.9":
+        # Cat 13.9 — Ensaladas preparadas (regla diferente)
+        return (
+            (h100 > 0 and p100 > h100 / 4.0),  # P si > 1/4 del H
+            True,                                 # H siempre (implícito)
+            g100 > 3.0                            # G si > 3%
+        )
+    
+    if cat == "13" or cat.startswith("13."):
+        return (
+            False,          # P nunca
+            h100 > 4.0,     # H si > 4g por 100g
+            g100 > 4.0      # G si > 4g por 100g
+        )
+    
+    # =====================================================
+    # CAT 16 — Salsas, siropes y konjac
+    # Cualquier macro < 6% NO cuenta (independiente de predominancia)
+    # =====================================================
+    if cat == "16" or cat.startswith("16."):
+        return (
+            p100 >= 6.0,
+            h100 >= 6.0,
+            g100 >= 6.0
+        )
+    
+    # =====================================================
+    # CAT 17.1, 17.4, 17.6, 17.10 — Aceites, mantequilla, aguacate, mayo
+    # SOLO grasa. Nada más.
+    # =====================================================
+    if cat in ("17.1", "17.4", "17.6", "17.10"):
+        return (False, False, True)
+    if cat.startswith("17.1.") or cat.startswith("17.4.") or \
+       cat.startswith("17.6.") or cat.startswith("17.10."):
+        return (False, False, True)
+    
+    # =====================================================
+    # CAT 17.2.6, 17.9 — Frutos secos en polvo y croquetas
+    # TODO cuenta sin reglas
+    # (Poner ANTES de 17.2.x para que no lo pille la regla de frutos secos)
+    # =====================================================
+    if cat in ("17.2.6", "17.9"):
+        return (True, True, True)
+    if cat.startswith("17.2.6.") or cat.startswith("17.9."):
+        return (True, True, True)
+    
+    # =====================================================
+    # CAT 17.2.1, 17.2.3, 17.2.4 — Frutos secos naturales y semillas
+    # G: siempre | P: si > 1/2 pred | H: si > 1/2 pred
+    # Calibración: > 50g servidos → P y H SIEMPRE cuentan
+    # =====================================================
+    if cat in ("17.2.1", "17.2.3", "17.2.4"):
+        if cantidad_g > 50:
+            # Calibración: P y H siempre cuentan
+            return (True, True, True)
+        else:
+            p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
+            h_cuenta = (predominante > 0 and h100 > predominante / 2.0)
+            return (p_cuenta, h_cuenta, True)
+    if cat.startswith("17.2.1.") or cat.startswith("17.2.3.") or \
+       cat.startswith("17.2.4."):
+        if cantidad_g > 50:
+            return (True, True, True)
+        else:
+            p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
+            h_cuenta = (predominante > 0 and h100 > predominante / 2.0)
+            return (p_cuenta, h_cuenta, True)
+    
+    # =====================================================
+    # CAT 17.2.2, 17.2.5, 17.5 (excepto 17.5.3) 
+    # H: siempre | G: siempre | P: si > 1/2 pred
+    # =====================================================
+    if cat == "17.5.3":
+        # Cat 17.5.3 — regla propia: P siempre, G siempre, H si > 1/2 pred
+        h_cuenta = (predominante > 0 and h100 > predominante / 2.0)
+        return (True, h_cuenta, True)
+    
+    if cat in ("17.2.2", "17.2.5", "17.5") or \
+       cat.startswith("17.2.2.") or cat.startswith("17.2.5.") or \
+       cat.startswith("17.5."):
+        p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
+        return (p_cuenta, True, True)
+    
+    # =====================================================
+    # CAT 17 — Cualquier otra subcategoría de 17 no cubierta
+    # Solo grasa (fallback seguro para grasas)
+    # =====================================================
+    if cat == "17" or cat.startswith("17."):
+        return (False, False, True)
+    
+    # =====================================================
+    # CAT 21 — Arroces y derivados
+    # P: nunca | H: siempre | G: si >= 6%
+    # =====================================================
+    if cat == "21" or cat.startswith("21."):
+        return (
+            False,
+            True,
+            g100 >= 6.0
+        )
+    
+    # =====================================================
+    # CAT 22.1.2.2, 22.6, 22.7 — Excepciones de pasta: TODO cuenta
+    # (Poner ANTES de 22 genérico)
+    # =====================================================
+    if cat in ("22.1.2.2", "22.6", "22.7"):
+        return (True, True, True)
+    if cat.startswith("22.1.2.2.") or cat.startswith("22.6.") or \
+       cat.startswith("22.7."):
+        return (True, True, True)
+    
+    # =====================================================
+    # CAT 22 — Pasta y quinoa (general)
+    # P: si > 1/3 del H | H: siempre | G: si > 9% O > 1/3 del H
+    # =====================================================
+    if cat == "22" or cat.startswith("22."):
+        p_cuenta = (h100 > 0 and p100 > h100 / 3.0)
+        g_cuenta = (g100 > 9.0) or (h100 > 0 and g100 > h100 / 3.0)
+        return (p_cuenta, True, g_cuenta)
+    
+    # =====================================================
+    # CAT 24 — Bebidas vegetales
+    # P: nunca | H: siempre | G: regla general 25%
+    # =====================================================
+    if cat == "24" or cat.startswith("24."):
+        g_cuenta = (predominante > 0 and g100 > 0.25 * predominante)
+        return (False, True, g_cuenta)
+    
+    # =====================================================
+    # CAT 28 — Proteína vegetal (modo vegano)
+    # Regla general 25%, pero H siempre si >= 4g/100g
+    # =====================================================
+    if cat == "28" or cat.startswith("28."):
+        p_cuenta = (predominante > 0 and p100 > 0.25 * predominante)
+        h_cuenta = (h100 >= 4.0) or (predominante > 0 and h100 > 0.25 * predominante)
+        g_cuenta = (predominante > 0 and g100 > 0.25 * predominante)
+        return (p_cuenta, h_cuenta, g_cuenta)
+    
+    # =====================================================
+    # CAT 37 — Cacao, azúcares, chucherías, miel
+    # H: siempre | P: si > 1/2 pred | G: si > 10%
+    # =====================================================
+    if cat == "37" or cat.startswith("37."):
+        p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
+        return (p_cuenta, True, g100 > 10.0)
+    
+    # =====================================================
+    # CAT 38.1 — Patatas fritas y derivados
+    # H: siempre | G: siempre | P: si > 1/2 pred
+    # =====================================================
+    if cat == "38.1" or cat.startswith("38.1."):
+        p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
+        return (p_cuenta, True, True)
+    
+    # =====================================================
+    # CAT 41 — Aminoácidos para entrenar
+    # P: siempre | H: nunca | G: nunca
+    # =====================================================
+    if cat == "41" or cat.startswith("41."):
+        return (True, False, False)
+    
+    # =====================================================
+    # CAT 48 — Sopas y caldos
+    # Todo cuenta si >= 2% (2g por 100g)
+    # =====================================================
+    if cat == "48" or cat.startswith("48."):
+        return (
+            p100 >= 2.0,
+            h100 >= 2.0,
+            g100 >= 2.0
+        )
+    
+    # =====================================================
+    # CAT 52 — Mundo vegano
+    # Todo cuenta si >= 2% (igual que sopas)
+    # =====================================================
+    if cat == "52" or cat.startswith("52."):
+        return (
+            p100 >= 2.0,
+            h100 >= 2.0,
+            g100 >= 2.0
+        )
+    
+    # =====================================================
+    # CAT 49, 50, 51, 53 — Comida rápida, asiática, preparada, superalimentos
+    # Regla general del 25%
+    # =====================================================
+    if cat in ("49", "50", "51", "53") or \
+       cat.startswith("49.") or cat.startswith("50.") or \
+       cat.startswith("51.") or cat.startswith("53."):
+        if predominante == 0:
+            return (False, False, False)
+        return (
+            p100 > 0.25 * predominante,
+            h100 > 0.25 * predominante,
+            g100 > 0.25 * predominante
+        )
+    
+    # =====================================================
+    # FALLBACK — Regla general del 25%
+    # Para cualquier categoría no listada arriba
+    # =====================================================
+    if predominante == 0:
+        return (False, False, False)
+    return (
+        p100 > 0.25 * predominante,
+        h100 > 0.25 * predominante,
+        g100 > 0.25 * predominante
+    )
+
+
+# =========================================================
+# FUNCIÓN AUXILIAR: Calcular cantidad automática
+# =========================================================
+
+def calcular_cantidad_automatica(
+    proteina_100g: float,
+    hidratos_100g: float,
+    grasa_100g: float,
+    categoria: str,
+    macros_restantes: dict,
+    categoria_secundaria: str = None,
+    es_vegano: bool = False
+) -> dict:
+    """
+    Calcula la cantidad óptima de un alimento para cubrir los macros restantes
+    sin pasarse en ninguno.
+    
+    Args:
+        macros_restantes: {"proteina": X, "hidratos": Y, "grasa": Z}
+    
+    Returns:
+        dict con cantidad_g, macros_efectivos
+    """
+    
+    p_rest = macros_restantes.get("proteina", 0)
+    h_rest = macros_restantes.get("hidratos", 0)
+    g_rest = macros_restantes.get("grasa", 0)
+    
+    # Calcular macros efectivos por 100g (con cantidad estimada de 100g)
+    ef_100 = calcular_macros_efectivos(
+        proteina_100g, hidratos_100g, grasa_100g,
+        categoria, 100.0, categoria_secundaria, es_vegano
+    )
+    
+    p_ef = ef_100["proteina_efectiva"]
+    h_ef = ef_100["hidratos_efectivos"]
+    g_ef = ef_100["grasa_efectiva"]
+    
+    # Calcular cantidad máxima por cada macro
+    cantidades = []
+    if p_ef > 0 and p_rest > 0:
+        cantidades.append(p_rest / p_ef * 100)
+    if h_ef > 0 and h_rest > 0:
+        cantidades.append(h_rest / h_ef * 100)
+    if g_ef > 0 and g_rest > 0:
+        cantidades.append(g_rest / g_ef * 100)
+    
+    if not cantidades:
+        # Ningún macro efectivo coincide con lo que necesitamos
+        return {
+            "cantidad_g": 0,
+            "macros_efectivos": {"proteina": 0, "hidratos": 0, "grasa": 0}
+        }
+    
+    # Elegir la cantidad MÍNIMA (macro más limitante)
+    cantidad = min(cantidades)
+    
+    # Redondear según categoría
+    cantidad = _redondear_cantidad(cantidad, categoria)
+    
+    # Asegurar mínimo de 5g
+    if cantidad < 5:
+        cantidad = 5
+    
+    # Recalcular macros efectivos con la cantidad redondeada
+    # NOTA: Recalcular porque la calibración puede cambiar con la nueva cantidad
+    resultado = calcular_macros_efectivos(
+        proteina_100g, hidratos_100g, grasa_100g,
+        categoria, cantidad, categoria_secundaria, es_vegano
+    )
+    
+    return {
+        "cantidad_g": cantidad,
+        "macros_efectivos": {
+            "proteina": resultado["proteina_efectiva"],
+            "hidratos": resultado["hidratos_efectivos"],
+            "grasa": resultado["grasa_efectiva"]
+        }
+    }
+
+
+def _redondear_cantidad(cantidad: float, categoria: str) -> float:
+    """Redondea la cantidad según el tipo de alimento."""
+    cat = str(categoria).strip()
+    
+    # Pan: múltiplos de 10g
+    if cat == "8" or cat.startswith("8."):
+        return round(cantidad / 10) * 10
+    
+    # Arroz, pasta, patata, carne, pescado, verduras: múltiplos de 25g
+    if cat in ("2", "3", "9", "13", "21", "22") or \
+       cat.startswith("2.") or cat.startswith("3.") or \
+       cat.startswith("9.") or cat.startswith("13.") or \
+       cat.startswith("21.") or cat.startswith("22."):
+        return round(cantidad / 25) * 25
+    
+    # Huevos: múltiplos de 55g (aprox 1 huevo)
+    if cat == "1" or cat.startswith("1."):
+        return round(cantidad / 55) * 55
+    
+    # Frutos secos, proteína polvo, cereales: múltiplos de 5g
+    if cat.startswith("17.2") or cat.startswith("4") or \
+       cat == "7" or cat.startswith("7."):
+        return round(cantidad / 5) * 5
+    
+    # Aceite: múltiplos de 5ml
+    if cat in ("17.1", "17.4", "17.6", "17.10") or \
+       cat.startswith("17.1.") or cat.startswith("17.4.") or \
+       cat.startswith("17.6.") or cat.startswith("17.10."):
+        return round(cantidad / 5) * 5
+    
+    # Fruta: múltiplos de 25g (aprox media pieza)
+    if cat == "11" or cat.startswith("11."):
+        return round(cantidad / 25) * 25
+    
+    # Lácteos: múltiplos de 25g
+    if cat == "5" or cat.startswith("5."):
+        return round(cantidad / 25) * 25
+    
+    # Default: múltiplos de 10g
+    return round(cantidad / 10) * 10
+
+
+# =========================================================
+# TESTS INTEGRADOS
+# =========================================================
+
+def run_tests():
+    """Ejecuta todos los tests de verificación. Retorna dict con resultados."""
+    
+    tests = []
+    
+    def test(nombre, resultado, esperado_p, esperado_h, esperado_g, tolerancia=0.5):
+        p_ok = abs(resultado["proteina_efectiva"] - esperado_p) <= tolerancia
+        h_ok = abs(resultado["hidratos_efectivos"] - esperado_h) <= tolerancia
+        g_ok = abs(resultado["grasa_efectiva"] - esperado_g) <= tolerancia
+        passed = p_ok and h_ok and g_ok
+        tests.append({
+            "nombre": nombre,
+            "passed": passed,
+            "resultado": {
+                "P": resultado["proteina_efectiva"],
+                "H": resultado["hidratos_efectivos"],
+                "G": resultado["grasa_efectiva"]
+            },
+            "esperado": {"P": esperado_p, "H": esperado_h, "G": esperado_g},
+            "detalle": f"P:{'✅' if p_ok else '❌'} H:{'✅' if h_ok else '❌'} G:{'✅' if g_ok else '❌'}"
+        })
+        return passed
+    
+    # ===== CAT 1: HUEVOS =====
+    # Huevo entero (13P, 0.7H, 10G /100g) - 120g (2 huevos)
+    r = calcular_macros_efectivos(13, 0.7, 10, "1", 120)
+    test("Cat1: Huevo entero 120g", r, 15.6, 0, 12.0)  # H=0 (0.7<2), G=12 (10>=3)
+    
+    # Claras (11P, 0.7H, 0.2G /100g) - 180g
+    r = calcular_macros_efectivos(11, 0.7, 0.2, "1", 180)
+    test("Cat1: Claras 180g", r, 19.8, 0, 0)  # H=0 (0.7<2), G=0 (0.2<3)
+    
+    # ===== CAT 2: CARNES =====
+    # Pechuga pollo (21P, 0H, 1.5G /100g) - 200g
+    r = calcular_macros_efectivos(21, 0, 1.5, "2", 200)
+    test("Cat2: Pechuga pollo 200g", r, 42.0, 0, 0)  # G=0 (1.5<3)
+    
+    # Contramuslo sin piel (24P, 0H, 4.5G /100g) - 175g
+    r = calcular_macros_efectivos(24, 0, 4.5, "2", 175)
+    test("Cat2: Contramuslo 175g", r, 42.0, 0, 7.9)  # G=7.9 (4.5>=3)
+    
+    # Pechuga pavo (24P, 0H, 1G /100g) - 200g
+    r = calcular_macros_efectivos(24, 0, 1, "2", 200)
+    test("Cat2: Pechuga pavo 200g", r, 48.0, 0, 0)  # G=0 (1<3)
+    
+    # ===== CAT 3: PESCADOS =====
+    # Merluza (17P, 0H, 0.8G /100g) - 200g
+    r = calcular_macros_efectivos(17, 0, 0.8, "3", 200)
+    test("Cat3: Merluza 200g", r, 34.0, 0, 0)  # G=0 (0.8<3)
+    
+    # Salmón (22P, 0H, 13G /100g) - 200g
+    r = calcular_macros_efectivos(22, 0, 13, "3", 200)
+    test("Cat3: Salmón 200g", r, 44.0, 0, 26.0)  # G=26 (13>=3)
+    
+    # ===== CAT 3.9: MARISCOS =====
+    # Gambas (20P, 1.5H, 1G /100g) - 150g
+    r = calcular_macros_efectivos(20, 1.5, 1, "3.9", 150)
+    test("Cat3.9: Gambas 150g", r, 30.0, 0, 0)  # H=0 (1.5<=3), G=0 (1<3)
+    
+    # Mejillones (12P, 3.5H, 2G /100g) - 200g
+    r = calcular_macros_efectivos(12, 3.5, 2, "3.9", 200)
+    test("Cat3.9: Mejillones 200g", r, 24.0, 7.0, 0)  # H=7 (3.5>3), G=0 (2<3)
+    
+    # ===== CAT 4: PROTEÍNA EN POLVO =====
+    # Whey Isolate (85P, 3H, 1G /100g) - 30g
+    r = calcular_macros_efectivos(85, 3, 1, "4", 30)
+    test("Cat4: Whey Isolate 30g", r, 25.5, 0, 0)  # H=0 (3<=6), G=0 (1/85=1.2%<25%)
+    
+    # Whey normal (75P, 8H, 6G /100g) - 35g
+    r = calcular_macros_efectivos(75, 8, 6, "4", 35)
+    test("Cat4: Whey normal 35g", r, 26.3, 2.8, 0)  # H=2.8 (8>6), G=0 (6/75=8%<25%)
+    
+    # Barrita proteica (35P, 30H, 10G /100g) - 60g
+    r = calcular_macros_efectivos(35, 30, 10, "4", 60)
+    test("Cat4: Barrita 60g", r, 21.0, 18.0, 6.0)  # H=18 (30>6), G=6 (10/35=29%>25%)
+    
+    # ===== CAT 5: LÁCTEOS =====
+    # Yogur griego (10P, 3.5H, 10G /100g) - 200g
+    r = calcular_macros_efectivos(10, 3.5, 10, "5", 200)
+    test("Cat5: Yogur griego 200g", r, 20.0, 7.0, 20.0)  # P+H siempre, G=20 (10>=1)
+    
+    # Queso batido 0% (8P, 3.5H, 0.1G /100g) - 250g
+    r = calcular_macros_efectivos(8, 3.5, 0.1, "5", 250)
+    test("Cat5: Queso batido 0% 250g", r, 20.0, 8.8, 0)  # G=0 (0.1<1)
+    
+    # Leche desnatada (3.4P, 4.8H, 0.3G /100g) - 250ml
+    r = calcular_macros_efectivos(3.4, 4.8, 0.3, "5", 250)
+    test("Cat5: Leche desnatada 250ml", r, 8.5, 12.0, 0)  # G=0 (0.3<1)
+    
+    # ===== CAT 7: CEREALES =====
+    # Avena (12P, 60H, 7G /100g) - 60g (<=100g)
+    r = calcular_macros_efectivos(12, 60, 7, "7", 60)
+    test("Cat7: Avena 60g", r, 0, 36.0, 0)  # P=0 (12/60=0.2<0.33), G=0 (7<8, 7/60=0.12<0.25)
+    
+    # Avena (12P, 60H, 7G /100g) - 120g (>100g, calibración)
+    r = calcular_macros_efectivos(12, 60, 7, "7", 120)
+    test("Cat7: Avena 120g CALIBRACIÓN", r, 14.4, 72.0, 0)  # P=14.4 (>100g → P siempre)
+    
+    # Granola grasa (8P, 55H, 15G /100g) - 60g
+    r = calcular_macros_efectivos(8, 55, 15, "7", 60)
+    test("Cat7: Granola grasa 60g", r, 0, 33.0, 9.0)  # P=0 (8/55=0.15<0.33), G=9 (15>8)
+    
+    # ===== CAT 8: PANES =====
+    # Pan de barra (9P, 50H, 1G /100g) - 60g
+    r = calcular_macros_efectivos(9, 50, 1, "8", 60)
+    test("Cat8: Pan barra 60g", r, 0, 30.0, 0)  # P=0 (9/50=0.18<0.33), G=0 (1<9, 1/50<0.25)
+    
+    # Pan integral (10P, 44H, 2G /100g) - 120g (>100g)
+    r = calcular_macros_efectivos(10, 44, 2, "8", 120)
+    test("Cat8: Pan integral 120g CALIBRACIÓN", r, 12.0, 52.8, 0)  # P=12 (>100g → P siempre)
+    
+    # ===== CAT 9: TUBÉRCULOS =====
+    # Patata (2P, 17H, 0.1G /100g) - 200g
+    r = calcular_macros_efectivos(2, 17, 0.1, "9", 200)
+    test("Cat9: Patata 200g", r, 0, 34.0, 0)  # SOLO H
+    
+    # Boniato (1.5P, 21H, 0.1G /100g) - 150g
+    r = calcular_macros_efectivos(1.5, 21, 0.1, "9", 150)
+    test("Cat9: Boniato 150g", r, 0, 31.5, 0)
+    
+    # ===== CAT 10: LEGUMBRES =====
+    # Lentejas cocidas (9P, 20H, 0.4G /100g) - 250g
+    r = calcular_macros_efectivos(9, 20, 0.4, "10", 250)
+    test("Cat10: Lentejas 250g", r, 22.5, 50.0, 0)  # P+H siempre, G=0 (0.4<8)
+    
+    # Garbanzos cocidos (9P, 27H, 2.6G /100g) - 200g
+    r = calcular_macros_efectivos(9, 27, 2.6, "10", 200)
+    test("Cat10: Garbanzos 200g", r, 18.0, 54.0, 0)  # G=0 (2.6<8)
+    
+    # ===== CAT 11: FRUTAS =====
+    # Plátano (1P, 23H, 0.3G /100g) - 120g
+    r = calcular_macros_efectivos(1, 23, 0.3, "11", 120)
+    test("Cat11: Plátano 120g", r, 0, 27.6, 0)  # SOLO H
+    
+    # Manzana (0.3P, 14H, 0.2G /100g) - 180g
+    r = calcular_macros_efectivos(0.3, 14, 0.2, "11", 180)
+    test("Cat11: Manzana 180g", r, 0, 25.2, 0)
+    
+    # ===== CAT 13: VERDURAS =====
+    # Lechuga (1.4P, 1.8H, 0.2G /100g) - 150g
+    r = calcular_macros_efectivos(1.4, 1.8, 0.2, "13", 150)
+    test("Cat13: Lechuga 150g", r, 0, 0, 0)  # H=0 (1.8<=4), G=0 (0.2<=4)
+    
+    # Brócoli (2.8P, 2.4H, 0.4G /100g) - 200g
+    r = calcular_macros_efectivos(2.8, 2.4, 0.4, "13", 200)
+    test("Cat13: Brócoli 200g", r, 0, 0, 0)  # H=0 (2.4<=4)
+    
+    # Zanahoria (0.9P, 7H, 0.2G /100g) - 200g
+    r = calcular_macros_efectivos(0.9, 7, 0.2, "13", 200)
+    test("Cat13: Zanahoria 200g", r, 0, 14.0, 0)  # H=14 (7>4), G=0 (0.2<=4)
+    
+    # Guisantes (5P, 14H, 0.4G /100g) - 150g
+    r = calcular_macros_efectivos(5, 14, 0.4, "13", 150)
+    test("Cat13: Guisantes 150g", r, 0, 21.0, 0)  # H sí (14>4), P nunca
+    
+    # ===== CAT 16: SALSAS =====
+    # Ketchup (1P, 25H, 0.1G /100g) - 30g
+    r = calcular_macros_efectivos(1, 25, 0.1, "16", 30)
+    test("Cat16: Ketchup 30g", r, 0, 7.5, 0)  # P=0 (1<6), H=7.5 (25>=6), G=0 (0.1<6)
+    
+    # Salsa de soja (8P, 5H, 0G /100g) - 15g
+    r = calcular_macros_efectivos(8, 5, 0, "16", 15)
+    test("Cat16: Salsa soja 15g", r, 1.2, 0, 0)  # P=1.2 (8>=6), H=0 (5<6)
+    
+    # ===== CAT 17.1: ACEITES =====
+    # Aceite oliva (0P, 0H, 100G /100g) - 10ml
+    r = calcular_macros_efectivos(0, 0, 100, "17.1", 10)
+    test("Cat17.1: Aceite oliva 10ml", r, 0, 0, 10.0)  # SOLO G
+    
+    # ===== CAT 17.6: AGUACATE =====
+    # Aguacate (2P, 2H, 15G /100g) - 50g
+    r = calcular_macros_efectivos(2, 2, 15, "17.6", 50)
+    test("Cat17.6: Aguacate 50g", r, 0, 0, 7.5)  # SOLO G
+    
+    # ===== CAT 17.2.1: FRUTOS SECOS =====
+    # Almendras (21P, 4H, 54G /100g) - 30g (<=50g)
+    r = calcular_macros_efectivos(21, 4, 54, "17.2.1", 30)
+    test("Cat17.2.1: Almendras 30g", r, 0, 0, 16.2)  # P=0 (21/54=0.39<0.5), H=0
+
+    # Almendras - 60g (>50g, calibración)
+    r = calcular_macros_efectivos(21, 4, 54, "17.2.1", 60)
+    test("Cat17.2.1: Almendras 60g CALIBRACIÓN", r, 12.6, 2.4, 32.4)  # TODO cuenta
+    
+    # Cacahuetes (26P, 16H, 49G /100g) - 30g (<=50g)
+    r = calcular_macros_efectivos(26, 16, 49, "17.2.1", 30)
+    test("Cat17.2.1: Cacahuetes 30g", r, 7.8, 0, 14.7)  # P=7.8 (26/49=0.53>0.5), H=0 (16/49=0.33<0.5)
+    
+    # Cacahuetes - 60g (>50g)
+    r = calcular_macros_efectivos(26, 16, 49, "17.2.1", 60)
+    test("Cat17.2.1: Cacahuetes 60g CALIBRACIÓN", r, 15.6, 9.6, 29.4)
+    
+    # Nueces (15P, 7H, 65G /100g) - 25g (<=50g)
+    r = calcular_macros_efectivos(15, 7, 65, "17.2.1", 25)
+    test("Cat17.2.1: Nueces 25g", r, 0, 0, 16.3)  # P=0 (15/65=0.23<0.5)
+    
+    # ===== CAT 17.2.6: FRUTOS SECOS POLVO =====
+    # Todo cuenta
+    r = calcular_macros_efectivos(20, 30, 40, "17.2.6", 50)
+    test("Cat17.2.6: F.secos polvo 50g", r, 10.0, 15.0, 20.0)
+    
+    # ===== CAT 21: ARROCES =====
+    # Arroz blanco (7P, 78H, 0.6G /100g) - 100g
+    r = calcular_macros_efectivos(7, 78, 0.6, "21", 100)
+    test("Cat21: Arroz blanco 100g", r, 0, 78.0, 0)  # P nunca, G=0 (0.6<6)
+    
+    # ===== CAT 22: PASTA =====
+    # Pasta normal (13P, 71H, 1.5G /100g) - 80g
+    r = calcular_macros_efectivos(13, 71, 1.5, "22", 80)
+    test("Cat22: Pasta normal 80g", r, 0, 56.8, 0)  # P=0 (13/71=0.18<0.33), G=0
+    
+    # ===== CAT 9: TUBÉRCULOS (solo H) =====
+    r = calcular_macros_efectivos(2, 17, 0.1, "9", 300)
+    test("Cat9: Patata 300g", r, 0, 51.0, 0)
+    
+    # ===== CAT 37: CACAO/AZÚCAR =====
+    # Chocolate 70% (8P, 33H, 42G /100g) - 25g
+    r = calcular_macros_efectivos(8, 33, 42, "37", 25)
+    test("Cat37: Chocolate 70% 25g", r, 0, 8.3, 10.5)  # P=0 (8/42=0.19<0.5), G=10.5 (42>10)
+    
+    # Miel (0.3P, 82H, 0G /100g) - 20g
+    r = calcular_macros_efectivos(0.3, 82, 0, "37", 20)
+    test("Cat37: Miel 20g", r, 0, 16.4, 0)  # P=0 (0.3/82<0.5), G=0 (0<=10)
+    
+    # ===== CAT 38.1: PATATAS FRITAS =====
+    # Patatas fritas (6P, 45H, 30G /100g) - 50g
+    r = calcular_macros_efectivos(6, 45, 30, "38.1", 50)
+    test("Cat38.1: Patatas fritas 50g", r, 0, 22.5, 15.0)  # P=0 (6/45=0.13<0.5), H+G siempre
+    
+    # ===== CAT 41: AMINOÁCIDOS =====
+    # EAA (80P, 5H, 0G /100g) - 15g
+    r = calcular_macros_efectivos(80, 5, 0, "41", 15)
+    test("Cat41: EAA 15g", r, 12.0, 0, 0)  # Solo P
+    
+    # ===== CAT 48: SOPAS =====
+    # Sopa verduras (1.5P, 4H, 1G /100g) - 300g
+    r = calcular_macros_efectivos(1.5, 4, 1, "48", 300)
+    test("Cat48: Sopa verduras 300g", r, 0, 12.0, 0)  # P=0 (1.5<2), H=12 (4>=2), G=0 (1<2)
+    
+    # ===== CAT 24: BEBIDAS VEGETALES =====
+    # Leche almendras (0.5P, 3H, 1.1G /100g) - 200ml
+    r = calcular_macros_efectivos(0.5, 3, 1.1, "24", 200)
+    test("Cat24: Leche almendras 200ml", r, 0, 6.0, 2.2)  # G SÍ cuenta (1.1>25% de 3)
+    
+    # ===== DOBLE CATEGORÍA =====
+    # Alimento con Cat 9 (solo H) + Cat 2 (P siempre, G si >=3%)
+    # Más permisiva: P cuenta (por Cat 2), H cuenta (por Cat 9)
+    r = calcular_macros_efectivos(5, 17, 0.5, "9", 200, categoria_secundaria="2")
+    test("DOBLE CAT: 9+2 200g", r, 10.0, 34.0, 0)  # P=10 (por Cat 2), H=34 (por Cat 9), G=0 (<3 en ambas)
+    
+    # ===== RESUMEN =====
+    total = len(tests)
+    passed = sum(1 for t in tests if t["passed"])
+    failed = [t for t in tests if not t["passed"]]
+    
+    return {
+        "total": total,
+        "passed": passed,
+        "failed_count": total - passed,
+        "all_passed": passed == total,
+        "tests": tests,
+        "failed_tests": failed
+    }
+
+
+# Ejecutar si se llama directamente
+if __name__ == "__main__":
+    results = run_tests()
+    print(f"\n{'='*60}")
+    print(f"CALMA v2 — Tests: {results['passed']}/{results['total']}")
+    print(f"{'='*60}")
+    if results["all_passed"]:
+        print("✅ TODOS LOS TESTS PASAN")
+    else:
+        print("❌ TESTS FALLIDOS:")
+        for t in results["failed_tests"]:
+            print(f"  - {t['nombre']}: {t['detalle']}")
+            print(f"    Resultado: {t['resultado']}")
+            print(f"    Esperado:  {t['esperado']}")
+
+
+
+# =========================================================
+# FUNCIONES WRAPPER para compatibilidad con server.py
+# Estas funciones reciben un objeto "alimento" de MongoDB
+# y llaman a las funciones principales con los parámetros correctos
+# =========================================================
+
+def calcular_macros_efectivos_alimento(alimento: dict, cantidad_g: float, es_vegano: bool = False) -> dict:
+    """
+    Wrapper que recibe un objeto alimento de MongoDB.
+    Extrae los valores necesarios y llama a calcular_macros_efectivos.
+    
+    Retorna dict con formato {"P": float, "H": float, "G": float, "kcal": float}
+    """
+    # Extraer macros por 100g del alimento
+    p100 = float(alimento.get("proteinas", 0) or 0)
+    h100 = float(alimento.get("hidratos", 0) or 0)
+    g100 = float(alimento.get("grasas", 0) or 0)
+    
+    # Extraer categorías usando parse_categories
+    categorias = parse_categories(alimento.get("categorias", []))
+    categoria = categorias[0] if categorias else "0"
+    
+    # Categoría secundaria si existe
+    categoria_secundaria = categorias[1] if len(categorias) > 1 else None
+    
+    # Llamar a la función principal
+    resultado = calcular_macros_efectivos(
+        p100, h100, g100, categoria, cantidad_g, categoria_secundaria, es_vegano
+    )
+    
+    # Convertir al formato esperado por server.py
+    p_ef = resultado["proteina_efectiva"]
+    h_ef = resultado["hidratos_efectivos"]
+    g_ef = resultado["grasa_efectiva"]
+    kcal = p_ef * 4 + h_ef * 4 + g_ef * 9
+    
+    return {
+        "P": round(p_ef, 1),
+        "H": round(h_ef, 1),
+        "G": round(g_ef, 1),
+        "kcal": round(kcal, 1)
+    }
+
+
+def calcular_macros_brutos(alimento: dict, cantidad_g: float) -> dict:
+    """
+    Calcula los macros BRUTOS (sin aplicar reglas) de un alimento.
+    Simplemente multiplica los valores por 100g por la cantidad.
+    
+    Retorna dict con formato {"P": float, "H": float, "G": float, "kcal": float}
+    """
+    factor = cantidad_g / 100.0
+    p = float(alimento.get("proteinas", 0) or 0) * factor
+    h = float(alimento.get("hidratos", 0) or 0) * factor
+    g = float(alimento.get("grasas", 0) or 0) * factor
+    kcal = p * 4 + h * 4 + g * 9
+    
+    return {
+        "P": round(p, 1),
+        "H": round(h, 1),
+        "G": round(g, 1),
+        "kcal": round(kcal, 1)
+    }
+
+
+def que_macros_cuentan(alimento: dict, cantidad_g: float, es_vegano: bool = False) -> dict:
+    """
+    Determina qué macros cuentan para un alimento dado.
+    
+    Retorna dict con formato {"P": bool, "H": bool, "G": bool}
+    """
+    # Extraer macros por 100g del alimento
+    p100 = float(alimento.get("proteinas", 0) or 0)
+    h100 = float(alimento.get("hidratos", 0) or 0)
+    g100 = float(alimento.get("grasas", 0) or 0)
+    
+    # Extraer categorías usando parse_categories
+    categorias = parse_categories(alimento.get("categorias", []))
+    categoria = categorias[0] if categorias else "0"
+    
+    # Categoría secundaria si existe
+    categoria_secundaria = categorias[1] if len(categorias) > 1 else None
+    
+    # Llamar a la función principal
+    resultado = calcular_macros_efectivos(
+        p100, h100, g100, categoria, cantidad_g, categoria_secundaria, es_vegano
+    )
+    
+    return {
+        "P": resultado["proteina_cuenta"],
+        "H": resultado["hidratos_cuenta"],
+        "G": resultado["grasa_cuenta"]
+    }
+
+# =========================================================
+# FUNCIONES AUXILIARES para manejo de categorías
+# Usadas por calculator.py para filtrado de alimentos
+# =========================================================
+
+def parse_categories(categorias) -> list:
+    """
+    Convierte el campo categorias (puede ser lista o string) a una lista de strings.
+    Maneja el separador '|' para categorías como "2.2.2 | HAM"
+    """
+    if isinstance(categorias, list):
+        result = []
+        for c in categorias:
+            if c:
+                # Manejar separador |
+                if "|" in str(c):
+                    parts = str(c).split("|")
+                    result.extend([p.strip() for p in parts if p.strip()])
+                else:
+                    result.append(str(c).strip())
+        return result
+    if isinstance(categorias, str):
+        # Primero separar por | y luego por ,
+        parts = categorias.replace("|", ",").split(",")
+        return [c.strip() for c in parts if c.strip()]
+    return []
+
+
+def get_numeric_categories(cats: list) -> list:
+    """
+    Devuelve la lista de categorías como strings (ya viene así normalmente).
+    """
+    return cats
 
 
 def cat_matches(cat: str, pattern: str) -> bool:
     """
     Verifica si una categoría coincide con un patrón.
-    cat_matches("2.2.1", "2") → True (2.2.1 está dentro de 2)
-    cat_matches("2.2.1", "2.2") → True
-    cat_matches("2.2.1", "2.2.1") → True
-    cat_matches("2.2.1", "2.3") → False
-    cat_matches("2.2.1", "3") → False
-    cat_matches("17.2.1", "17.2") → True
-    cat_matches("17.2.1", "17") → True
-    cat_matches("17.2.1", "17.1") → False
+    Ej: cat_matches("17.2.1", "17.2") → True
+    Ej: cat_matches("17.1", "17.2") → False
     """
-    if cat == pattern:
-        return True
-    # cat empieza con pattern seguido de "."
-    return cat.startswith(pattern + ".")
+    cat = str(cat).strip()
+    pattern = str(pattern).strip()
+    return cat == pattern or cat.startswith(pattern + ".")
 
 
-def cat_in_any(cat: str, patterns: List[str]) -> bool:
-    """Verifica si una categoría coincide con ALGUNO de los patrones."""
-    return any(cat_matches(cat, p) for p in patterns)
-
-
-def get_macro_predominante(proteinas: float, hidratos: float, grasas: float) -> float:
-    """Retorna el valor del macro predominante (el más alto)."""
-    return max(proteinas, hidratos, grasas)
-
-
-def _regla_categoria(
-    cat: str,
-    proteinas_100g: float,
-    hidratos_100g: float,
-    grasas_100g: float,
-    cantidad_g: float = 100.0,
-    es_vegano: bool = False
-) -> Dict[str, bool]:
+def cat_in_any(cat: str, patterns: list) -> bool:
     """
-    Aplica las reglas de conteo para UNA categoría específica.
-    
-    Retorna: {"P": True/False, "H": True/False, "G": True/False}
-    donde True = ese macro CUENTA para el balance.
-    
-    cantidad_g se usa para las reglas de calibración (cat 7, 8, 17.2)
+    Verifica si una categoría coincide con alguno de los patrones.
     """
-    P = proteinas_100g
-    H = hidratos_100g
-    G = grasas_100g
-    predominante = get_macro_predominante(P, H, G)
-    
-    cuenta_P = False
-    cuenta_H = False
-    cuenta_G = False
-    
-    # =====================================================
-    # CATEGORÍAS 1, 2, 3 (excepto 3.9) — Huevos, Carnes, Pescados
-    # P siempre cuenta. G no cuenta si <3%. H no cuenta si <2%.
-    # =====================================================
-    if cat_in_any(cat, ["1", "2", "3"]) and not cat_matches(cat, "3.9"):
-        cuenta_P = True  # P siempre cuenta
-        cuenta_G = G >= 3.0
-        cuenta_H = H >= 2.0
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 3.9 — Mariscos
-    # P siempre cuenta. G no cuenta si <3%. H no cuenta si ≤3%.
-    # =====================================================
-    if cat_matches(cat, "3.9"):
-        cuenta_P = True
-        cuenta_G = G >= 3.0
-        cuenta_H = H > 3.0  # ≤3% NO cuenta → solo cuenta si >3%
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 4 — Proteínas en polvo
-    # P siempre cuenta. H no cuenta si ≤6%. G regla general.
-    # =====================================================
-    if cat_matches(cat, "4"):
-        cuenta_P = True
-        cuenta_H = H > 6.0
-        # G: regla general (>25% del predominante)
-        cuenta_G = G > 0.25 * predominante if predominante > 0 else False
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 5 — Lácteos
-    # P y H cuentan (alimento mixto). G no cuenta si <1%.
-    # =====================================================
-    if cat_matches(cat, "5"):
-        cuenta_P = True
-        cuenta_H = True
-        cuenta_G = G >= 1.0
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 6 — Soja
-    # Regla general del 25%
-    # =====================================================
-    if cat_matches(cat, "6"):
-        if predominante > 0:
-            cuenta_P = P > 0.25 * predominante
-            cuenta_H = H > 0.25 * predominante
-            cuenta_G = G > 0.25 * predominante
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 7 — Cereales excepto arroz
-    # H siempre cuenta.
-    # P: solo si P > 1/3 de H. CALIBRACIÓN: si <100g servidos, P no cuenta si P < 1/3 predominante
-    # G: solo si G>8% O G > 1/4 de H
-    # =====================================================
-    if cat_matches(cat, "7"):
-        cuenta_H = True
-        # Proteínas
-        if H > 0 and P > H / 3.0:
-            cuenta_P = True
-        # Calibración: por debajo de 100g, P no cuenta si < 1/3 del predominante
-        if cantidad_g < 100 and predominante > 0 and P < predominante / 3.0:
-            cuenta_P = False
-        # Grasas
-        cuenta_G = G > 8.0 or (H > 0 and G > H / 4.0)
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 8 — Panes y tortillas de trigo
-    # H siempre cuenta.
-    # P: solo si P > 1/3 de H. CALIBRACIÓN: si <100g servidos, P no cuenta si P < 1/3 predominante
-    # G: solo si G>9% O G > 1/4 de H
-    # =====================================================
-    if cat_matches(cat, "8"):
-        cuenta_H = True
-        # Proteínas
-        if H > 0 and P > H / 3.0:
-            cuenta_P = True
-        # Calibración
-        if cantidad_g < 100 and predominante > 0 and P < predominante / 3.0:
-            cuenta_P = False
-        # Grasas (umbral 9% en vez de 8% para panes)
-        cuenta_G = G > 9.0 or (H > 0 and G > H / 4.0)
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 9 — Tubérculos
-    # SOLO cuentan H. P y G nunca cuentan.
-    # =====================================================
-    if cat_matches(cat, "9"):
-        return {"P": False, "H": True, "G": False}
-    
-    # =====================================================
-    # CATEGORÍA 10 — Legumbres
-    # P y H siempre cuentan (alimento mixto). G solo si ≥8%.
-    # =====================================================
-    if cat_matches(cat, "10"):
-        cuenta_P = True
-        cuenta_H = True
-        cuenta_G = G >= 8.0
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 11 — Fruta, zumo, potitos, mermeladas
-    # SOLO cuentan H.
-    # CORRECCIÓN: Los zumos (11.5) SÍ cuentan H (ya está cubierto porque H siempre cuenta en cat 11)
-    # =====================================================
-    if cat_matches(cat, "11"):
-        return {"P": False, "H": True, "G": False}
-    
-    # =====================================================
-    # CATEGORÍA 13 (excepto 13.9) — Verduras y hortalizas
-    # P: NUNCA cuenta.
-    # H: SOLO cuenta si >4% (excepción a regla general del 25%)
-    # G: SOLO cuenta si >4% (excepción a regla general del 25%)
-    # =====================================================
-    if cat_matches(cat, "13") and not cat_matches(cat, "13.9"):
-        cuenta_H = H > 4.0
-        cuenta_G = G > 4.0
-        return {"P": False, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 13.9 — Ensaladas preparadas
-    # P: solo si P > 1/4 de H
-    # G: solo si G > 3%
-    # H: regla general
-    # =====================================================
-    if cat_matches(cat, "13.9"):
-        cuenta_P = (H > 0 and P > H / 4.0)
-        cuenta_G = G > 3.0
-        cuenta_H = True  # ensaladas preparadas: H cuenta
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 14 — Hidratos en polvo
-    # Solo cuentan H
-    # =====================================================
-    if cat_matches(cat, "14"):
-        return {"P": False, "H": True, "G": False}
-    
-    # =====================================================
-    # CATEGORÍA 16 — Salsas, siropes y konjac
-    # Cualquier macro ≥6% cuenta. Cualquier macro <6% NO cuenta.
-    # (sin importar la relación de predominancia)
-    # =====================================================
-    if cat_matches(cat, "16"):
-        return {
-            "P": P >= 6.0,
-            "H": H >= 6.0,
-            "G": G >= 6.0
-        }
-    
-    # =====================================================
-    # CATEGORÍAS 17.1, 17.4, 17.6, 17.10 — Aceites, mantequilla, aguacate, mayonesa
-    # SOLO cuentan G
-    # =====================================================
-    if cat_in_any(cat, ["17.1", "17.4", "17.6", "17.10"]):
-        return {"P": False, "H": False, "G": True}
-    
-    # =====================================================
-    # CATEGORÍAS 17.2.1, 17.2.3, 17.2.4 — Frutos secos naturales, semillas, cremas naturales
-    # G siempre cuenta.
-    # P: solo si P > 1/2 del predominante
-    # H: solo si H > 1/2 del predominante
-    # CALIBRACIÓN: >50g servidos → P y H cuentan si > 1/4 del predominante (más permisivo)
-    # =====================================================
-    if cat_in_any(cat, ["17.2.1", "17.2.3", "17.2.4"]):
-        cuenta_G = True
-        if predominante > 0:
-            if cantidad_g <= 50:
-                cuenta_P = P > predominante / 2.0
-                cuenta_H = H > predominante / 2.0
-            else:
-                # Calibración: se relaja, cuentan si > 1/4 del predominante
-                cuenta_P = P > predominante / 4.0
-                cuenta_H = H > predominante / 4.0
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍAS 17.2.2, 17.2.5, 17.5 (excepto 17.5.3)
-    # Frutos secos con azúcar, cremas con azúcar, cremas de cacao
-    # H: siempre cuenta
-    # G: siempre cuenta
-    # P: solo si P > 1/2 del predominante
-    # =====================================================
-    if cat_in_any(cat, ["17.2.2", "17.2.5"]) or (cat_matches(cat, "17.5") and not cat_matches(cat, "17.5.3")):
-        cuenta_H = True
-        cuenta_G = True
-        cuenta_P = P > predominante / 2.0 if predominante > 0 else False
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 17.5.3 — Cremas proteicas
-    # P: siempre cuenta
-    # G: siempre cuenta
-    # H: solo si H > 1/2 del predominante
-    # =====================================================
-    if cat_matches(cat, "17.5.3"):
-        cuenta_P = True
-        cuenta_G = True
-        cuenta_H = H > predominante / 2.0 if predominante > 0 else False
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍAS 17.2.6, 17.9 — Frutos secos en polvo, Croquetas
-    # TODOS los macros cuentan sin ninguna regla
-    # =====================================================
-    if cat_in_any(cat, ["17.2.6", "17.9"]):
-        return {"P": True, "H": True, "G": True}
-    
-    # =====================================================
-    # CATEGORÍA 17.7 — Cremas vegetales
-    # Si no ha caído en ninguna sub de 17, regla general
-    # =====================================================
-    if cat_matches(cat, "17.7"):
-        if predominante > 0:
-            cuenta_P = P > 0.25 * predominante
-            cuenta_H = H > 0.25 * predominante
-            cuenta_G = G > 0.25 * predominante
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 17 (resto que no haya matcheado arriba)
-    # Regla general
-    # =====================================================
-    if cat_matches(cat, "17"):
-        if predominante > 0:
-            cuenta_P = P > 0.25 * predominante
-            cuenta_H = H > 0.25 * predominante
-            cuenta_G = G > 0.25 * predominante
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 21 — Arroces y derivados
-    # H siempre cuenta. P NO cuenta. G solo si ≥6%.
-    # =====================================================
-    if cat_matches(cat, "21"):
-        return {"P": False, "H": True, "G": G >= 6.0}
-    
-    # =====================================================
-    # CATEGORÍA 22 (excepto 22.1.2.2, 22.6, 22.7) — Pasta, quinoa
-    # H siempre cuenta.
-    # P: solo si P > 1/3 de H
-    # G: solo si G>9% O G > 1/3 de H
-    # =====================================================
-    if cat_matches(cat, "22"):
-        # Las excepciones 22.1.2.2, 22.6, 22.7 usan regla general
-        if cat_in_any(cat, ["22.1.2.2", "22.6", "22.7"]):
-            if predominante > 0:
-                cuenta_P = P > 0.25 * predominante
-                cuenta_H = H > 0.25 * predominante
-                cuenta_G = G > 0.25 * predominante
-            return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-        
-        cuenta_H = True
-        cuenta_P = P > H / 3.0 if H > 0 else False
-        cuenta_G = G > 9.0 or (H > 0 and G > H / 3.0)
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 24 — Bebidas vegetales
-    # P NO cuenta. H y G regla general.
-    # =====================================================
-    if cat_matches(cat, "24"):
-        cuenta_P = False
-        if predominante > 0:
-            cuenta_H = H > 0.25 * predominante
-            cuenta_G = G > 0.25 * predominante
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 28 — Proteína vegetal
-    # Regla general del 25%.
-    # EN MODO VEGANO: H siempre cuentan si ≥4g/100g
-    # =====================================================
-    if cat_matches(cat, "28"):
-        if predominante > 0:
-            cuenta_P = P > 0.25 * predominante
-            cuenta_H = H > 0.25 * predominante
-            cuenta_G = G > 0.25 * predominante
-        if es_vegano and H >= 4.0:
-            cuenta_H = True
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 37 — Cacao, azúcares, chucherías, miel
-    # H: siempre cuenta
-    # P: solo si P > 1/2 del predominante
-    # G: solo si G > 10%
-    # =====================================================
-    if cat_matches(cat, "37"):
-        cuenta_H = True
-        cuenta_P = P > predominante / 2.0 if predominante > 0 else False
-        cuenta_G = G > 10.0
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 38.1 — Patatas fritas y derivados
-    # H: siempre cuenta
-    # G: siempre cuenta
-    # P: solo si P > 1/2 del predominante
-    # =====================================================
-    if cat_matches(cat, "38.1"):
-        cuenta_H = True
-        cuenta_G = True
-        cuenta_P = P > predominante / 2.0 if predominante > 0 else False
-        return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # CATEGORÍA 41 — Aminoácidos para entrenar
-    # Solo cuentan P. H y G no cuentan.
-    # =====================================================
-    if cat_matches(cat, "41"):
-        return {"P": True, "H": False, "G": False}
-    
-    # =====================================================
-    # CATEGORÍA 48 — Sopas y caldos
-    # Todos los macros cuentan si su valor ≥ 2%
-    # =====================================================
-    if cat_matches(cat, "48"):
-        return {
-            "P": P >= 2.0,
-            "H": H >= 2.0,
-            "G": G >= 2.0
-        }
-    
-    # =====================================================
-    # CATEGORÍA 52 — Mundo vegano
-    # EN MODO VEGANO: todos los macros ≥2% cuentan (como cat 48)
-    # EN MODO NORMAL: regla general del 25%
-    # =====================================================
-    if cat_matches(cat, "52"):
-        if es_vegano:
-            return {
-                "P": P >= 2.0,
-                "H": H >= 2.0,
-                "G": G >= 2.0
-            }
-        else:
-            if predominante > 0:
-                cuenta_P = P > 0.25 * predominante
-                cuenta_H = H > 0.25 * predominante
-                cuenta_G = G > 0.25 * predominante
-            return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-    
-    # =====================================================
-    # REGLA GENERAL — Para todas las categorías no listadas arriba
-    # (cat 6, 18, 19, 25, 27, 29, 30, 31, 32, 34, 35, 36, 38.2, 38.3,
-    #  39, 40, 42, 43, 44, 45, 46, 47, 49, 50, 51, 53, etc.)
-    # Macro cuenta si > 25% del macro predominante
-    # =====================================================
-    if predominante > 0:
-        cuenta_P = P > 0.25 * predominante
-        cuenta_H = H > 0.25 * predominante
-        cuenta_G = G > 0.25 * predominante
-    
-    return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
+    for pattern in patterns:
+        if cat_matches(cat, pattern):
+            return True
+    return False
 
-
-def calcular_macros_efectivos(
-    alimento: dict,
-    cantidad_g: float = None,
-    es_vegano: bool = False
-) -> Dict[str, float]:
-    """
-    FUNCIÓN PRINCIPAL — Calcula los macros que CUENTAN de un alimento.
-    
-    Args:
-        alimento: dict con campos: proteinas, hidratos, grasas, racion, categorias, unidades
-        cantidad_g: gramos servidos (para calibración). Si None, usa racion.
-        es_vegano: si el usuario está en modo vegano
-    
-    Returns:
-        {"P": gramos_proteina, "H": gramos_hidratos, "G": gramos_grasa, "kcal": calorias}
-        Solo incluye los macros que CUENTAN según las reglas. Los que no cuentan = 0.
-    
-    Ejemplo:
-        alimento = {"proteinas": 21, "hidratos": 0, "grasas": 1.5, "racion": 100, "categorias": "2.2 | FRE", "unidades": False}
-        calcular_macros_efectivos(alimento, 150)
-        → {"P": 31.5, "H": 0, "G": 0, "kcal": 126}
-        (G no cuenta porque 1.5 < 3% para cat 2)
-    """
-    racion = alimento.get("racion", 100) or 100
-    es_unidades = alimento.get("unidades", False)
-    
-    # Macros por 100g (o por unidad si es de unidades)
-    P_base = float(alimento.get("proteinas", 0) or 0)
-    H_base = float(alimento.get("hidratos", 0) or 0)
-    G_base = float(alimento.get("grasas", 0) or 0)
-    
-    # Macros por 100g para las reglas de categoría
-    if es_unidades:
-        # Los macros en BD son POR UNIDAD (por ración)
-        # Convertir a por 100g para aplicar reglas
-        if racion > 0:
-            P_100g = P_base * 100.0 / racion
-            H_100g = H_base * 100.0 / racion
-            G_100g = G_base * 100.0 / racion
-        else:
-            P_100g = P_base
-            H_100g = H_base
-            G_100g = G_base
-    else:
-        # Los macros en BD son POR RACIÓN
-        # Convertir a por 100g
-        if racion > 0:
-            P_100g = P_base * 100.0 / racion
-            H_100g = H_base * 100.0 / racion
-            G_100g = G_base * 100.0 / racion
-        else:
-            P_100g = P_base
-            H_100g = H_base
-            G_100g = G_base
-    
-    # Cantidad servida
-    if cantidad_g is None:
-        cantidad_g = racion
-    
-    # Calcular macros reales servidos
-    if es_unidades:
-        # cantidad_g es en gramos, racion es gramos por unidad
-        factor = cantidad_g / racion if racion > 0 else 1
-        P_servido = P_base * factor
-        H_servido = H_base * factor
-        G_servido = G_base * factor
-    else:
-        # Macros base son por ración, calcular por cantidad servida
-        factor = cantidad_g / racion if racion > 0 else 1
-        P_servido = P_base * factor
-        H_servido = H_base * factor
-        G_servido = G_base * factor
-    
-    # Parsear categorías
-    categorias_raw = parse_categories(alimento.get("categorias", ""))
-    categorias_num = get_numeric_categories(categorias_raw)
-    
-    if not categorias_num:
-        # Sin categoría numérica → regla general: todo cuenta si >25% predominante
-        predominante = get_macro_predominante(P_100g, H_100g, G_100g)
-        if predominante > 0:
-            cuenta_P = P_100g > 0.25 * predominante
-            cuenta_H = H_100g > 0.25 * predominante
-            cuenta_G = G_100g > 0.25 * predominante
-        else:
-            cuenta_P = cuenta_H = cuenta_G = False
-    elif len(categorias_num) == 1:
-        # Una sola categoría → aplicar sus reglas
-        resultado = _regla_categoria(categorias_num[0], P_100g, H_100g, G_100g, cantidad_g, es_vegano)
-        cuenta_P = resultado["P"]
-        cuenta_H = resultado["H"]
-        cuenta_G = resultado["G"]
-    else:
-        # DOBLE CATEGORÍA → regla MÁS PERMISIVA
-        # Si ALGUNA categoría dice que el macro cuenta → CUENTA
-        cuenta_P = False
-        cuenta_H = False
-        cuenta_G = False
-        for cat in categorias_num:
-            resultado = _regla_categoria(cat, P_100g, H_100g, G_100g, cantidad_g, es_vegano)
-            if resultado["P"]:
-                cuenta_P = True
-            if resultado["H"]:
-                cuenta_H = True
-            if resultado["G"]:
-                cuenta_G = True
-    
-    # Aplicar: los macros que NO cuentan se ponen a 0
-    P_final = round(P_servido, 1) if cuenta_P else 0.0
-    H_final = round(H_servido, 1) if cuenta_H else 0.0
-    G_final = round(G_servido, 1) if cuenta_G else 0.0
-    
-    # Calorías solo de los macros que CUENTAN
-    kcal = round(P_final * 4 + H_final * 4 + G_final * 9, 1)
+    resultado = calcular_macros_efectivos(
+        p100, h100, g100, categoria, cantidad_g, categoria_secundaria, es_vegano
+    )
     
     return {
-        "P": P_final,
-        "H": H_final,
-        "G": G_final,
-        "kcal": kcal
+        "P": resultado["proteina_cuenta"],
+        "H": resultado["hidratos_cuenta"],
+        "G": resultado["grasa_cuenta"]
     }
-
-
-def calcular_macros_brutos(
-    alimento: dict,
-    cantidad_g: float = None
-) -> Dict[str, float]:
-    """
-    Calcula los macros REALES (sin aplicar reglas CALMA).
-    Útil para mostrar información nutricional completa.
-    """
-    racion = alimento.get("racion", 100) or 100
-    P_base = float(alimento.get("proteinas", 0) or 0)
-    H_base = float(alimento.get("hidratos", 0) or 0)
-    G_base = float(alimento.get("grasas", 0) or 0)
-    
-    if cantidad_g is None:
-        cantidad_g = racion
-    
-    factor = cantidad_g / racion if racion > 0 else 1
-    
-    P = round(P_base * factor, 1)
-    H = round(H_base * factor, 1)
-    G = round(G_base * factor, 1)
-    kcal = round(P * 4 + H * 4 + G * 9, 1)
-    
-    return {"P": P, "H": H, "G": G, "kcal": kcal}
-
-
-def que_macros_cuentan(
-    alimento: dict,
-    cantidad_g: float = None,
-    es_vegano: bool = False
-) -> Dict[str, bool]:
-    """
-    Función auxiliar: solo dice SÍ/NO para cada macro, sin calcular cantidades.
-    Útil para el frontend (mostrar qué macros están activos).
-    """
-    racion = alimento.get("racion", 100) or 100
-    es_unidades = alimento.get("unidades", False)
-    
-    P_base = float(alimento.get("proteinas", 0) or 0)
-    H_base = float(alimento.get("hidratos", 0) or 0)
-    G_base = float(alimento.get("grasas", 0) or 0)
-    
-    if es_unidades and racion > 0:
-        P_100g = P_base * 100.0 / racion
-        H_100g = H_base * 100.0 / racion
-        G_100g = G_base * 100.0 / racion
-    elif racion > 0:
-        P_100g = P_base * 100.0 / racion
-        H_100g = H_base * 100.0 / racion
-        G_100g = G_base * 100.0 / racion
-    else:
-        P_100g = P_base
-        H_100g = H_base
-        G_100g = G_base
-    
-    if cantidad_g is None:
-        cantidad_g = racion
-    
-    categorias_raw = parse_categories(alimento.get("categorias", ""))
-    categorias_num = get_numeric_categories(categorias_raw)
-    
-    if not categorias_num:
-        predominante = get_macro_predominante(P_100g, H_100g, G_100g)
-        if predominante > 0:
-            return {
-                "P": P_100g > 0.25 * predominante,
-                "H": H_100g > 0.25 * predominante,
-                "G": G_100g > 0.25 * predominante
-            }
-        return {"P": False, "H": False, "G": False}
-    
-    if len(categorias_num) == 1:
-        return _regla_categoria(categorias_num[0], P_100g, H_100g, G_100g, cantidad_g, es_vegano)
-    
-    # Doble categoría: más permisiva
-    cuenta_P = False
-    cuenta_H = False
-    cuenta_G = False
-    for cat in categorias_num:
-        r = _regla_categoria(cat, P_100g, H_100g, G_100g, cantidad_g, es_vegano)
-        cuenta_P = cuenta_P or r["P"]
-        cuenta_H = cuenta_H or r["H"]
-        cuenta_G = cuenta_G or r["G"]
-    
-    return {"P": cuenta_P, "H": cuenta_H, "G": cuenta_G}
-
-
-# =====================================================
-# TESTS DE VERIFICACIÓN
-# Ejecutar: python calma_engine.py
-# Todos deben pasar SIN errores
-# =====================================================
-
-def run_tests():
-    """Tests de verificación del motor CALMA v2."""
-    
-    print("=" * 60)
-    print("TESTS CALMA v2 ENGINE")
-    print("=" * 60)
-    
-    passed = 0
-    failed = 0
-    
-    def test(name, result, expected):
-        nonlocal passed, failed
-        if result == expected:
-            print(f"  ✅ {name}")
-            passed += 1
-        else:
-            print(f"  ❌ {name}")
-            print(f"     Esperado: {expected}")
-            print(f"     Obtenido: {result}")
-            failed += 1
-    
-    # --- TEST 1: Pechuga de pollo (cat 2.2) ---
-    print("\n--- Pechuga de pollo (cat 2.2) ---")
-    pollo = {"proteinas": 21, "hidratos": 0, "grasas": 1.5, "racion": 100, "categorias": "2.2 | FRE", "unidades": False}
-    r = que_macros_cuentan(pollo, 150)
-    test("P cuenta", r["P"], True)
-    test("H no cuenta (0 < 2%)", r["H"], False)
-    test("G no cuenta (1.5 < 3%)", r["G"], False)
-    
-    m = calcular_macros_efectivos(pollo, 150)
-    test("P servido = 31.5", m["P"], 31.5)
-    test("H servido = 0", m["H"], 0.0)
-    test("G servido = 0", m["G"], 0.0)
-    
-    # --- TEST 2: Salmón (cat 3.1) con grasa alta ---
-    print("\n--- Salmón (cat 3.1) con grasa ---")
-    salmon = {"proteinas": 20, "hidratos": 0, "grasas": 13, "racion": 100, "categorias": "3.1 | FRE", "unidades": False}
-    r = que_macros_cuentan(salmon, 200)
-    test("P cuenta", r["P"], True)
-    test("H no cuenta", r["H"], False)
-    test("G cuenta (13 >= 3%)", r["G"], True)
-    
-    # --- TEST 3: Arroz basmati (cat 21) ---
-    print("\n--- Arroz basmati (cat 21) ---")
-    arroz = {"proteinas": 7, "hidratos": 78, "grasas": 0.6, "racion": 100, "categorias": "21.1 | GEN", "unidades": False}
-    r = que_macros_cuentan(arroz, 80)
-    test("P no cuenta (cat 21)", r["P"], False)
-    test("H cuenta", r["H"], True)
-    test("G no cuenta (0.6 < 6%)", r["G"], False)
-    
-    # --- TEST 4: Aceite oliva (cat 17.1.1) ---
-    print("\n--- Aceite oliva (cat 17.1.1) ---")
-    aove = {"proteinas": 0, "hidratos": 0, "grasas": 99, "racion": 10, "categorias": "17.1.1 | GEN", "unidades": False}
-    r = que_macros_cuentan(aove, 15)
-    test("P no cuenta", r["P"], False)
-    test("H no cuenta", r["H"], False)
-    test("G cuenta", r["G"], True)
-    
-    m = calcular_macros_efectivos(aove, 15)
-    test("G servido = 148.5", m["G"], 148.5)  # 99 * 15/10 = 148.5
-    
-    # --- TEST 5: Verdura con H>4% (cat 13) ---
-    print("\n--- Zanahoria con H>4% (cat 13) ---")
-    zanahoria = {"proteinas": 0.9, "hidratos": 7, "grasas": 0.2, "racion": 100, "categorias": "13.1 | FRE", "unidades": False}
-    r = que_macros_cuentan(zanahoria, 100)
-    test("P no cuenta (cat 13 nunca)", r["P"], False)
-    test("H cuenta (7 > 4%)", r["H"], True)
-    test("G no cuenta (0.2 < 4%)", r["G"], False)
-    
-    # --- TEST 6: Verdura con H<4% (cat 13) ---
-    print("\n--- Lechuga H<4% (cat 13) ---")
-    lechuga = {"proteinas": 1.4, "hidratos": 2.9, "grasas": 0.2, "racion": 100, "categorias": "13.1 | FRE", "unidades": False}
-    r = que_macros_cuentan(lechuga, 100)
-    test("P no cuenta", r["P"], False)
-    test("H no cuenta (2.9 < 4%)", r["H"], False)
-    test("G no cuenta", r["G"], False)
-    
-    # --- TEST 7: Salsa con macros mixtos (cat 16) ---
-    print("\n--- Salsa tomate frito (cat 16) ---")
-    salsa = {"proteinas": 1.2, "hidratos": 8, "grasas": 4.5, "racion": 100, "categorias": "16.2 | YA", "unidades": False}
-    r = que_macros_cuentan(salsa, 50)
-    test("P no cuenta (1.2 < 6%)", r["P"], False)
-    test("H cuenta (8 >= 6%)", r["H"], True)
-    test("G no cuenta (4.5 < 6%)", r["G"], False)
-    
-    # --- TEST 8: DOBLE CATEGORÍA — Tomate frito (cat 13.8 + 16.2) ---
-    print("\n--- Tomate frito DOBLE CAT (13.8 + 16.2) ---")
-    tomate = {"proteinas": 0.8, "hidratos": 6.5, "grasas": 4.2, "racion": 100, "categorias": "13.8 | 16.2 | YA", "unidades": False}
-    r = que_macros_cuentan(tomate, 50)
-    test("P no cuenta (ambas dicen no)", r["P"], False)
-    test("H cuenta (cat13: 6.5>4 SÍ, cat16: 6.5>=6 SÍ)", r["H"], True)
-    test("G cuenta (cat13: 4.2>4 SÍ, cat16: 4.2<6 NO → SÍ por cat13)", r["G"], True)
-    
-    # --- TEST 9: Doble categoría permisiva con H entre 4 y 6 ---
-    print("\n--- Alimento doble cat con 5H (13 + 16) ---")
-    mixto = {"proteinas": 1, "hidratos": 5, "grasas": 3, "racion": 100, "categorias": "13.1 | 16.1", "unidades": False}
-    r = que_macros_cuentan(mixto, 100)
-    test("H cuenta (cat13: 5>4 SÍ, cat16: 5<6 NO → SÍ por cat13)", r["H"], True)
-    
-    # --- TEST 10: Proteína en polvo (cat 4) con H<=6 ---
-    print("\n--- Whey isolate (cat 4.1) con H bajo ---")
-    whey = {"proteinas": 90, "hidratos": 3, "grasas": 0.5, "racion": 100, "categorias": "4.1.1 | PRO", "unidades": False}
-    r = que_macros_cuentan(whey, 30)
-    test("P cuenta", r["P"], True)
-    test("H no cuenta (3 <= 6%)", r["H"], False)
-    test("G no cuenta (0.5 < 25% de 90)", r["G"], False)
-    
-    # --- TEST 11: Legumbres (cat 10) ---
-    print("\n--- Garbanzos (cat 10) ---")
-    garbanzos = {"proteinas": 19, "hidratos": 44, "grasas": 5, "racion": 100, "categorias": "10.2 | GEN", "unidades": False}
-    r = que_macros_cuentan(garbanzos, 80)
-    test("P cuenta (siempre en cat 10)", r["P"], True)
-    test("H cuenta (siempre en cat 10)", r["H"], True)
-    test("G no cuenta (5 < 8%)", r["G"], False)
-    
-    # --- TEST 12: Tubérculos (cat 9) ---
-    print("\n--- Patata (cat 9) ---")
-    patata = {"proteinas": 2, "hidratos": 17, "grasas": 0.1, "racion": 100, "categorias": "9 | FRE", "unidades": False}
-    r = que_macros_cuentan(patata, 200)
-    test("P no cuenta (cat 9 solo H)", r["P"], False)
-    test("H cuenta", r["H"], True)
-    test("G no cuenta (cat 9 solo H)", r["G"], False)
-    
-    # --- TEST 13: Aminoácidos (cat 41) ---
-    print("\n--- BCAAs (cat 41) ---")
-    bcaa = {"proteinas": 80, "hidratos": 5, "grasas": 0, "racion": 100, "categorias": "41 | PRO", "unidades": False}
-    r = que_macros_cuentan(bcaa, 10)
-    test("P cuenta", r["P"], True)
-    test("H no cuenta (cat 41)", r["H"], False)
-    test("G no cuenta (cat 41)", r["G"], False)
-    
-    # --- TEST 14: Sopas (cat 48) ---
-    print("\n--- Sopa (cat 48) ---")
-    sopa = {"proteinas": 2.5, "hidratos": 4, "grasas": 1.5, "racion": 100, "categorias": "48 | YA", "unidades": False}
-    r = que_macros_cuentan(sopa, 300)
-    test("P cuenta (2.5 >= 2%)", r["P"], True)
-    test("H cuenta (4 >= 2%)", r["H"], True)
-    test("G no cuenta (1.5 < 2%)", r["G"], False)
-    
-    # --- TEST 15: Frutos secos naturales (cat 17.2.1) <=50g ---
-    print("\n--- Almendras 30g (cat 17.2.1) ---")
-    almendras = {"proteinas": 21, "hidratos": 4, "grasas": 54, "racion": 100, "categorias": "17.2.1 | GEN", "unidades": False}
-    r = que_macros_cuentan(almendras, 30)
-    test("G cuenta (siempre)", r["G"], True)
-    test("P no cuenta (21 < 54/2=27)", r["P"], False)
-    test("H no cuenta (4 < 54/2=27)", r["H"], False)
-    
-    # --- TEST 16: Frutos secos naturales (cat 17.2.1) >50g ---
-    print("\n--- Almendras 60g (cat 17.2.1) calibración ---")
-    r = que_macros_cuentan(almendras, 60)
-    test("G cuenta (siempre)", r["G"], True)
-    test("P cuenta (21 > 54/4=13.5, calibración >50g)", r["P"], True)
-    test("H no cuenta (4 < 54/4=13.5)", r["H"], False)
-    
-    # --- TEST 17: Modo vegano — proteína vegetal (cat 28) ---
-    print("\n--- Tofu modo vegano (cat 28) ---")
-    tofu = {"proteinas": 15, "hidratos": 2, "grasas": 9, "racion": 100, "categorias": "28 | 6.2", "unidades": False}
-    r_normal = que_macros_cuentan(tofu, 100, es_vegano=False)
-    r_vegano = que_macros_cuentan(tofu, 100, es_vegano=True)
-    test("Normal: H no cuenta (2 < 25% de 15)", r_normal["H"], False)
-    test("Vegano: H no cuenta (2 < 4g)", r_vegano["H"], False)
-    
-    tempeh = {"proteinas": 20, "hidratos": 8, "grasas": 11, "racion": 100, "categorias": "28 | 6.2", "unidades": False}
-    r_vegano2 = que_macros_cuentan(tempeh, 100, es_vegano=True)
-    test("Vegano tempeh: H cuenta (8 >= 4g)", r_vegano2["H"], True)
-    
-    # --- TEST 18: Lácteos (cat 5) ---
-    print("\n--- Queso batido 0% (cat 5) ---")
-    queso = {"proteinas": 8, "hidratos": 4, "grasas": 0.2, "racion": 100, "categorias": "5.2.2 | GEN", "unidades": False}
-    r = que_macros_cuentan(queso, 200)
-    test("P cuenta (siempre en cat 5)", r["P"], True)
-    test("H cuenta (siempre en cat 5)", r["H"], True)
-    test("G no cuenta (0.2 < 1%)", r["G"], False)
-    
-    # --- TEST 19: Zumo (cat 11.5) ---
-    print("\n--- Zumo naranja (cat 11.5) ---")
-    zumo = {"proteinas": 0.7, "hidratos": 10, "grasas": 0.2, "racion": 100, "categorias": "11.5 | GEN", "unidades": False}
-    r = que_macros_cuentan(zumo, 200)
-    test("H cuenta (cat 11, H siempre)", r["H"], True)
-    test("P no cuenta (cat 11 solo H)", r["P"], False)
-    
-    # --- TEST 20: Croquetas (cat 17.9) ---
-    print("\n--- Croquetas (cat 17.9) ---")
-    croquetas = {"proteinas": 7, "hidratos": 20, "grasas": 12, "racion": 100, "categorias": "17.9 | YA", "unidades": False}
-    r = que_macros_cuentan(croquetas, 100)
-    test("P cuenta (cat 17.9 todo cuenta)", r["P"], True)
-    test("H cuenta (cat 17.9 todo cuenta)", r["H"], True)
-    test("G cuenta (cat 17.9 todo cuenta)", r["G"], True)
-    
-    # --- TEST 21: Bebida vegetal (cat 24) ---
-    print("\n--- Bebida avena (cat 24) ---")
-    beb_avena = {"proteinas": 0.3, "hidratos": 6, "grasas": 1.5, "racion": 100, "categorias": "24 | GEN", "unidades": False}
-    r = que_macros_cuentan(beb_avena, 200)
-    test("P no cuenta (cat 24 nunca)", r["P"], False)
-    test("H cuenta (6 > 25% de 6 = 1.5)", r["H"], True)
-    test("G cuenta (1.5 > 25% de 6 = 1.5? NO, 1.5 no es > 1.5)", r["G"], False)
-    
-    # --- RESUMEN ---
-    print("\n" + "=" * 60)
-    print(f"RESULTADO: {passed} pasados, {failed} fallidos de {passed + failed} tests")
-    print("=" * 60)
-    
-    if failed > 0:
-        print("\n⚠️  HAY TESTS FALLIDOS — REVISAR ANTES DE CONTINUAR")
-    else:
-        print("\n✅ TODOS LOS TESTS PASAN — Motor CALMA v2 OK")
-    
-    return failed == 0
-
-
-if __name__ == "__main__":
-    run_tests()
