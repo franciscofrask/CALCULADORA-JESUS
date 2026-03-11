@@ -997,6 +997,162 @@ async def root():
 async def get_plans():
     return PLAN_TYPES
 
+
+# ============================================================
+# ENDPOINTS CALMA v2 — Motor de conteo de macros
+# ============================================================
+from calma_engine import calcular_macros_efectivos, que_macros_cuentan, calcular_macros_brutos, run_tests as calma_run_tests
+
+@api_router.post("/calculator/macros-efectivos")
+async def get_macros_efectivos(data: dict, user = Depends(get_current_user)):
+    """
+    Calcula los macros que CUENTAN de un alimento para una cantidad dada.
+    
+    Body:
+    {
+        "alimento_id": 2045,
+        "cantidad_g": 150,
+        "es_vegano": false
+    }
+    
+    Response:
+    {
+        "efectivos": {"P": 31.5, "H": 0, "G": 0, "kcal": 126},
+        "brutos": {"P": 31.5, "H": 0, "G": 2.25, "kcal": 146.3},
+        "que_cuenta": {"P": true, "H": false, "G": false}
+    }
+    """
+    alimento_id = data.get("alimento_id")
+    cantidad_g = data.get("cantidad_g", 100)
+    es_vegano = data.get("es_vegano", False)
+    
+    # Buscar alimento en MongoDB (colección foods)
+    alimento = await db.foods.find_one({"id": alimento_id}, {"_id": 0})
+    if not alimento:
+        raise HTTPException(status_code=404, detail="Alimento no encontrado")
+    
+    efectivos = calcular_macros_efectivos(alimento, cantidad_g, es_vegano)
+    brutos = calcular_macros_brutos(alimento, cantidad_g)
+    cuenta = que_macros_cuentan(alimento, cantidad_g, es_vegano)
+    
+    return {
+        "alimento": {
+            "id": alimento.get("id"),
+            "nombre": alimento.get("nombre"),
+            "categorias": alimento.get("categorias"),
+            "racion": alimento.get("racion")
+        },
+        "cantidad_g": cantidad_g,
+        "efectivos": efectivos,
+        "brutos": brutos,
+        "que_cuenta": cuenta
+    }
+
+
+@api_router.post("/calculator/macros-comida")
+async def get_macros_comida(data: dict, user = Depends(get_current_user)):
+    """
+    Calcula los macros totales de una comida (múltiples alimentos).
+    
+    Body:
+    {
+        "alimentos": [
+            {"alimento_id": 2045, "cantidad_g": 150},
+            {"alimento_id": 1822, "cantidad_g": 80},
+            {"alimento_id": 15, "cantidad_g": 10}
+        ],
+        "es_vegano": false
+    }
+    
+    Response:
+    {
+        "total_efectivos": {"P": 45.2, "H": 62.4, "G": 10.1, "kcal": 521.7},
+        "total_brutos": {"P": 48.5, "H": 62.4, "G": 12.3, "kcal": 563.9},
+        "detalle": [
+            {"alimento_id": 2045, "nombre": "Pechuga pollo", "efectivos": {...}, "brutos": {...}, "que_cuenta": {...}},
+            ...
+        ]
+    }
+    """
+    alimentos_input = data.get("alimentos", [])
+    es_vegano = data.get("es_vegano", False)
+    
+    total_P = 0.0
+    total_H = 0.0
+    total_G = 0.0
+    total_P_bruto = 0.0
+    total_H_bruto = 0.0
+    total_G_bruto = 0.0
+    detalle = []
+    
+    for item in alimentos_input:
+        alimento = await db.foods.find_one({"id": item["alimento_id"]}, {"_id": 0})
+        if not alimento:
+            continue
+        
+        cantidad = item.get("cantidad_g", alimento.get("racion", 100))
+        
+        efectivos = calcular_macros_efectivos(alimento, cantidad, es_vegano)
+        brutos = calcular_macros_brutos(alimento, cantidad)
+        cuenta = que_macros_cuentan(alimento, cantidad, es_vegano)
+        
+        total_P += efectivos["P"]
+        total_H += efectivos["H"]
+        total_G += efectivos["G"]
+        total_P_bruto += brutos["P"]
+        total_H_bruto += brutos["H"]
+        total_G_bruto += brutos["G"]
+        
+        detalle.append({
+            "alimento_id": item["alimento_id"],
+            "nombre": alimento.get("nombre", ""),
+            "cantidad_g": cantidad,
+            "efectivos": efectivos,
+            "brutos": brutos,
+            "que_cuenta": cuenta
+        })
+    
+    return {
+        "total_efectivos": {
+            "P": round(total_P, 1),
+            "H": round(total_H, 1),
+            "G": round(total_G, 1),
+            "kcal": round(total_P * 4 + total_H * 4 + total_G * 9, 1)
+        },
+        "total_brutos": {
+            "P": round(total_P_bruto, 1),
+            "H": round(total_H_bruto, 1),
+            "G": round(total_G_bruto, 1),
+            "kcal": round(total_P_bruto * 4 + total_H_bruto * 4 + total_G_bruto * 9, 1)
+        },
+        "detalle": detalle
+    }
+
+
+@api_router.get("/calculator/test-calma")
+async def test_calma():
+    """
+    Endpoint de verificación: ejecuta los tests del motor CALMA v2.
+    Responde con el resultado de cada test.
+    """
+    import io
+    import sys
+    
+    # Capturar output de los tests
+    old_stdout = sys.stdout
+    sys.stdout = buffer = io.StringIO()
+    
+    all_passed = calma_run_tests()
+    
+    output = buffer.getvalue()
+    sys.stdout = old_stdout
+    
+    return {
+        "all_passed": all_passed,
+        "output": output
+    }
+
+
 # Include the router
 app.include_router(api_router)
 
