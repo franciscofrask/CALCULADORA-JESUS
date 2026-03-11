@@ -516,42 +516,44 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
 # ==================== MACRO CALCULATOR ROUTES ====================
 
 @api_router.get("/calculator/foods")
-async def get_foods(search: Optional[str] = None, user = Depends(get_current_user)):
-    # Common foods database
-    foods = [
-        {"id": "1", "name": "Pollo (pechuga)", "calories": 165, "protein": 31, "carbs": 0, "fat": 3.6},
-        {"id": "2", "name": "Arroz blanco", "calories": 130, "protein": 2.7, "carbs": 28, "fat": 0.3},
-        {"id": "3", "name": "Huevo entero", "calories": 155, "protein": 13, "carbs": 1.1, "fat": 11},
-        {"id": "4", "name": "Avena", "calories": 389, "protein": 17, "carbs": 66, "fat": 7},
-        {"id": "5", "name": "Plátano", "calories": 89, "protein": 1.1, "carbs": 23, "fat": 0.3},
-        {"id": "6", "name": "Atún (lata)", "calories": 116, "protein": 26, "carbs": 0, "fat": 1},
-        {"id": "7", "name": "Pasta", "calories": 131, "protein": 5, "carbs": 25, "fat": 1.1},
-        {"id": "8", "name": "Salmón", "calories": 208, "protein": 20, "carbs": 0, "fat": 13},
-        {"id": "9", "name": "Brócoli", "calories": 34, "protein": 2.8, "carbs": 7, "fat": 0.4},
-        {"id": "10", "name": "Patata", "calories": 77, "protein": 2, "carbs": 17, "fat": 0.1},
-        {"id": "11", "name": "Leche entera", "calories": 61, "protein": 3.2, "carbs": 4.8, "fat": 3.3},
-        {"id": "12", "name": "Yogur griego", "calories": 97, "protein": 9, "carbs": 3.6, "fat": 5},
-        {"id": "13", "name": "Almendras", "calories": 579, "protein": 21, "carbs": 22, "fat": 50},
-        {"id": "14", "name": "Aceite de oliva", "calories": 884, "protein": 0, "carbs": 0, "fat": 100},
-        {"id": "15", "name": "Aguacate", "calories": 160, "protein": 2, "carbs": 9, "fat": 15},
-    ]
-    
-    # Add client-suggested foods
-    suggested = await db.food_suggestions.find({"status": "approved"}, {"_id": 0}).to_list(100)
-    for s in suggested:
-        foods.append({
-            "id": s["id"],
-            "name": s["food"]["name"],
-            "calories": s["food"].get("calories_per_100g", 0),
-            "protein": s["food"].get("protein_per_100g", 0),
-            "carbs": s["food"].get("carbs_per_100g", 0),
-            "fat": s["food"].get("fat_per_100g", 0)
-        })
+async def get_foods(search: Optional[str] = None, category: Optional[str] = None, limit: int = 100, user = Depends(get_current_user)):
+    """Obtiene la lista de alimentos desde MongoDB con filtros opcionales"""
+    query = {}
     
     if search:
-        foods = [f for f in foods if search.lower() in f["name"].lower()]
+        # Búsqueda por nombre (case-insensitive)
+        query["nombre"] = {"$regex": search, "$options": "i"}
+    
+    if category:
+        # Búsqueda por categoría
+        query["categorias"] = {"$regex": category}
+    
+    foods_cursor = db.foods.find(query, {"_id": 0}).limit(limit)
+    foods = await foods_cursor.to_list(limit)
     
     return foods
+
+
+@api_router.get("/calculator/foods/count")
+async def get_foods_count(user = Depends(get_current_user)):
+    """Retorna el conteo total de alimentos en la base de datos"""
+    count = await db.foods.count_documents({})
+    return {"total": count}
+
+
+@api_router.get("/calculator/categories")
+async def get_food_categories(user = Depends(get_current_user)):
+    """Obtiene todas las categorías de alimentos desde MongoDB"""
+    categories_cursor = db.food_categories.find({}, {"_id": 0})
+    categories = await categories_cursor.to_list(500)
+    return categories
+
+
+@api_router.get("/calculator/categories/count")
+async def get_categories_count(user = Depends(get_current_user)):
+    """Retorna el conteo total de categorías en la base de datos"""
+    count = await db.food_categories.count_documents({})
+    return {"total": count}
 
 @api_router.post("/calculator/meal")
 async def calculate_meal(foods: List[Dict[str, Any]], user = Depends(get_current_user)):
