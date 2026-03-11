@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/ui/collapsible';
 import { toast } from 'sonner';
 import { 
@@ -778,6 +778,7 @@ const NutritionPage = () => {
                 <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
                     <DialogHeader>
                         <DialogTitle>Añadir alimento</DialogTitle>
+                        <DialogDescription className="sr-only">Busca y selecciona alimentos para añadir a tu comida</DialogDescription>
                     </DialogHeader>
                     
                     {/* Search input */}
@@ -858,6 +859,7 @@ const NutritionPage = () => {
                 <DialogContent className="max-w-sm">
                     <DialogHeader>
                         <DialogTitle>Copiar dieta</DialogTitle>
+                        <DialogDescription className="sr-only">Selecciona una fecha destino para copiar la dieta actual</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         <p className="text-sm text-gray-600">

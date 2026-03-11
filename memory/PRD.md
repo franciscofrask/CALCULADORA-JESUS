@@ -3,14 +3,14 @@
 ## Documento de Requisitos del Producto (PRD)
 
 ### Fecha de creación: 6 de marzo de 2026
-### Última actualización: 6 de marzo de 2026
-### Estado: MVP Completado + Branding Oficial
+### Última actualización: 11 de marzo de 2026
+### Estado: MVP Completado + CALMA v2 Implementado
 
 ---
 
 ## 1. Descripción General
 
-**12EN12** es una plataforma de gestión de entrenamiento personal online para Gallego Trainer Internacional. Permite la gestión integral de clientes, rutinas, nutrición, reportes y comunicación entre entrenadores y clientes.
+**JG12↗** es una plataforma de gestión de entrenamiento personal online para Jesús Gallego Personal Trainer. Permite la gestión integral de clientes, rutinas, nutrición avanzada (CALMA), reportes y comunicación entre entrenadores y clientes.
 
 ---
 
@@ -26,7 +26,7 @@
 - Acceso a dashboard de métricas y generador de rutinas con IA
 
 ### Entrenador
-- Profesionales que diseñan rutinas y nutición personalizada
+- Profesionales que diseñan rutinas y nutrición personalizada
 - Interactúan con clientes via chat
 
 ---
@@ -37,7 +37,7 @@
 - [x] Login/Registro con email y contraseña (JWT)
 - [x] Home Dashboard con progreso del ciclo
 - [x] Mi Rutina - Visualización de ejercicios por día
-- [x] Mi Nutrición - Calculadora de macros integrada
+- [x] **Mi Nutrición - Calculadora CALMA v2 completa**
 - [x] Mis Reportes - Formularios de seguimiento con evolución
 - [x] Mensajes - Chat con entrenador
 - [x] Mi Perfil - Datos personales y plan
@@ -51,56 +51,101 @@
 
 ---
 
-## 4. Implementación Completada
+## 4. CALMA v2 - Sistema de Nutrición Avanzado
+
+### Motor de Macros Efectivos (calma_engine.py)
+- Cálculo de "macros que cuentan" según categoría del alimento
+- Reglas específicas por tipo: carnes (solo P), cereales (solo H), etc.
+- Sistema de excepción para categoría 28 (YA) y 52 (vegano)
+- 3110 alimentos en base de datos con 232 categorías
+
+### Distribución de Macros (macro_distribution.py)
+- 16 escenarios de distribución según:
+  - Tipo de día (entrenamiento/descanso)
+  - Número de comidas (3/4)
+  - Momento de entreno (ayunas/después C1/C2/C3)
+  - Opción periworkout (intra+post/solo post/solo intra/sin peri)
+
+### Calculadora Interactiva (calculator.py)
+- Ajuste automático de cantidad de alimentos
+- Validación de comidas (cuadrada/falta/sobra)
+- Sugerencias de alimentos según macros restantes
+
+### Frontend NutritionPage.jsx
+- [x] Calendario con navegación por fechas
+- [x] Toggle tipo de día (Entreno/Descanso)
+- [x] Configuración de comidas y periworkout
+- [x] Acordeón de comidas con progress bars P/H/G
+- [x] Modal de búsqueda de alimentos con filtros
+- [x] Ajuste de cantidades (+/- 10g)
+- [x] Guardado y carga de dietas
+- [x] Copia de dietas entre fechas
+
+---
+
+## 5. Implementación Completada
 
 ### Backend (FastAPI + MongoDB)
 - Autenticación JWT completa
 - CRUD de usuarios, perfiles, rutinas, reportes
 - Sistema de mensajería
-- Calculadora de macros con base de datos de alimentos
+- **Motor CALMA v2 completo con endpoints:**
+  - `/api/calculator/search` - Búsqueda de alimentos
+  - `/api/calculator/distribute` - Distribución de macros
+  - `/api/calculator/adjust` - Ajuste automático
+  - `/api/calculator/macros-efectivos` - Cálculo individual
+  - `/api/calculator/validate-meal` - Validación de comidas
+  - `/api/diets` - CRUD de dietas diarias
 - Integración Claude Sonnet 4.5 para generación de rutinas
 - Pagos simulados (mockeados)
 
 ### Frontend (React + Tailwind + Shadcn)
-- 18 pantallas implementadas
+- 18+ pantallas implementadas
 - Diseño responsive mobile-first
+- **NutritionPage completamente funcional**
 - Badges de planes (Gold, Silver, Bronze, ELM)
 - Charts de evolución con Recharts
 - Sistema de notificaciones con Sonner
 
 ### Integraciones
-- Claude Sonnet 4.5 via emergentintegrations
+- Claude Sonnet 4.5 via emergentintegrations (Emergent LLM Key)
 
 ---
 
-## 5. Backlog Priorizado
+## 6. Backlog Priorizado
 
 ### P0 (Crítico)
 - [ ] Integración real de Stripe para pagos
 - [ ] Sistema de recordatorios automáticos (semana 3 = reporte)
-- [ ] Notificaciones push/email
 
 ### P1 (Alta prioridad)
+- [ ] Home Screen Redesign (Pantalla 10) con trackers circulares
+- [ ] Pantalla "Mi Rutina" (Pantalla 30) con estados de color
+- [ ] Módulo de Seguimiento (Pantalla 47) siluetas de evolución
+- [ ] Módulo de Suplementos (Pantallas 34-39)
 - [ ] Subida de fotos en reportes
 - [ ] Videos de ejercicios embebidos
-- [ ] Panel CEO con analytics avanzados
-- [ ] Exportación de rutinas a PDF
 
 ### P2 (Media prioridad)
+- [ ] Enhanced Onboarding (Pantallas 6, 8, 9)
+- [ ] Panel de Estadísticas (Pantalla 50)
+- [ ] Navegación inferior en portal cliente
+- [ ] Exportación de rutinas a PDF
+
+### P3 (Futuro)
 - [ ] App móvil nativa
-- [ ] Historial de macros con gráficos
-- [ ] Sistema de objetivos y metas
+- [ ] Notificaciones push/email
 - [ ] Gamificación (badges, streaks)
 
 ---
 
-## 6. Stack Técnico
+## 7. Stack Técnico
 
 - **Frontend**: React 18, Tailwind CSS, Shadcn UI, Recharts
 - **Backend**: FastAPI, Motor (MongoDB async)
 - **Base de datos**: MongoDB
 - **IA**: Claude Sonnet 4.5 (emergentintegrations)
-- **Pagos**: Stripe (pendiente - actualmente mockeado)
+- **Pagos**: Stripe (pendiente - actualmente MOCKEADO)
 
 ### Branding JG12
 - **Color Primario**: #FF671F (Naranja)
@@ -111,7 +156,7 @@
 
 ---
 
-## 7. URLs y Credenciales de Test
+## 8. URLs y Credenciales de Test
 
 ### Credenciales Admin
 - Email: admin@12en12.com
@@ -123,18 +168,20 @@
 
 ---
 
-## 8. Notas de Implementación
+## 9. Notas de Implementación
 
-- Pagos están MOCKEADOS - todos retornan success
+- Pagos están **MOCKEADOS** - todos retornan success
 - La generación de rutinas con IA puede tardar 5-10 segundos
 - El sistema usa ciclos de 4 semanas
 - Los planes Gold incluyen cardio personalizado
+- **CALMA v2 está 100% funcional** - motor backend y frontend completos
 
 ---
 
-## 9. Próximos Pasos Recomendados
+## 10. Archivos Clave
 
-1. Integrar Stripe real para pagos
-2. Implementar sistema de notificaciones por email
-3. Añadir Panel CEO con KPIs y OKRs
-4. Desarrollar app móvil con React Native
+- `/app/backend/calma_engine.py` - Motor de macros efectivos
+- `/app/backend/macro_distribution.py` - Distribución por comidas
+- `/app/backend/calculator.py` - Lógica de ajuste y validación
+- `/app/backend/server.py` - Todos los endpoints API
+- `/app/frontend/src/pages/NutritionPage.jsx` - UI de calculadora
