@@ -1231,7 +1231,7 @@ from calculator import (
     calcular_cantidad_automatica,
     validar_comida,
     sugerir_alimentos,
-    redondear_cantidad,
+    buscar_alimentos,
     run_tests as calc_run_tests
 )
 
@@ -1240,45 +1240,30 @@ from calculator import (
 async def search_foods(
     q: str = "",
     category: str = "",
+    tipo_comida: str = "normal",
     limit: int = 50,
     offset: int = 0,
     vegano: bool = False
 ):
     """
-    Búsqueda REAL en los 3110 alimentos de MongoDB.
-    Busca en el campo 'nombre' con regex case-insensitive.
-    Filtra por categoría si se especifica.
+    Búsqueda de alimentos con filtros.
     
     Query params:
         q: texto de búsqueda (busca en nombre)
         category: filtro de categoría (ej: "2" para carnes, "17.2" para frutos secos)
+        tipo_comida: "normal", "intra", "post" - filtra categorías permitidas
         limit: máximo resultados (default 50)
         offset: para paginación
         vegano: si true, oculta categorías animales
     """
-    filtro = {}
-    
-    if q:
-        filtro["nombre"] = {"$regex": q, "$options": "i"}
-    
-    if category:
-        filtro["categorias"] = {"$regex": f"(^|\\|)\\s*{category}(\\.|\\ |\\||$)", "$options": "i"}
-    
-    if vegano:
-        # Excluir categorías animales (excepto si también tienen 28 o 52)
-        filtro["$or"] = [
-            {"categorias": {"$regex": "(^|\\|)\\s*(28|52)", "$options": "i"}},
-            {"categorias": {"$not": {"$regex": "(^|\\|)\\s*(1|2|3|4\\.1|4\\.2|5)(\\.|\\ |\\||$)", "$options": "i"}}}
-        ]
-    
-    cursor = db.foods.find(filtro, {"_id": 0}).skip(offset).limit(limit)
-    alimentos = await cursor.to_list(length=limit)
-    
-    total = await db.foods.count_documents(filtro)
+    alimentos = await buscar_alimentos(
+        db, query=q, categoria=category,
+        tipo_comida=tipo_comida, es_vegano=vegano, limit=limit
+    )
     
     return {
         "alimentos": alimentos,
-        "total": total,
+        "total": len(alimentos),
         "limit": limit,
         "offset": offset
     }
@@ -1343,44 +1328,42 @@ async def validate_meal(data: dict, user = Depends(get_current_user)):
 
 
 @api_router.post("/calculator/suggest")
-async def suggest_foods(data: dict, user = Depends(get_current_user)):
+async def suggest_foods_endpoint(data: dict, user = Depends(get_current_user)):
     """
-    Sugiere alimentos que caben en los macros restantes.
+    Sugiere alimentos para completar una comida, ordenados por mayor aporte.
     
     Body:
     {
         "macros_restantes": {"P": 12, "H": 6, "G": 3},
-        "tipo_comida": "principal",
+        "tipo_comida": "normal",  // "normal", "intra", "post"
         "es_vegano": false,
-        "max_resultados": 10
+        "max_resultados": 20,
+        "excluir_ids": []
     }
     """
     macros_restantes = data.get("macros_restantes", {"P": 0, "H": 0, "G": 0})
-    tipo_comida = data.get("tipo_comida", "principal")
+    tipo_comida = data.get("tipo_comida", "normal")
     es_vegano = data.get("es_vegano", False)
-    max_resultados = data.get("max_resultados", 10)
+    max_resultados = data.get("max_resultados", 20)
+    excluir_ids = data.get("excluir_ids", [])
     
-    # Obtener todos los alimentos
-    cursor = db.foods.find({}, {"_id": 0})
-    todos = await cursor.to_list(length=5000)
+    # Cargar alimentos de MongoDB
+    cursor = db.foods.find({}, {"_id": 0}).limit(3200)
+    todos = await cursor.to_list(length=3200)
     
-    resultado = sugerir_alimentos(todos, macros_restantes, tipo_comida, es_vegano, max_resultados)
-    return {"sugerencias": resultado}
+    sugerencias = sugerir_alimentos(
+        todos, macros_restantes, tipo_comida, es_vegano,
+        max_resultados, excluir_ids
+    )
+    
+    return {"sugerencias": sugerencias, "count": len(sugerencias)}
 
 
 @api_router.get("/calculator/test-calculator")
 async def test_calculator():
     """Ejecuta tests de la calculadora."""
-    import io
-    import sys
-    
-    old_stdout = sys.stdout
-    sys.stdout = buffer = io.StringIO()
-    all_passed = calc_run_tests()
-    output = buffer.getvalue()
-    sys.stdout = old_stdout
-    
-    return {"all_passed": all_passed, "output": output}
+    results = calc_run_tests()
+    return results
 
 
 # ============================================================
