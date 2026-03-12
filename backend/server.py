@@ -1521,6 +1521,36 @@ async def delete_diet(fecha: str, user = Depends(get_current_user)):
     return {"message": "Dieta eliminada"}
 
 
+
+# ============================================================
+# ENDPOINTS PLANTILLAS DE MENÚ — Opciones A/B/C
+# ============================================================
+
+@api_router.get("/calculator/test-templates")
+async def test_templates():
+    """Ejecuta tests de las plantillas de menú."""
+    from meal_templates import run_tests
+    return run_tests()
+
+
+@api_router.post("/calculator/menu-options")
+async def get_menu_options(data: dict, user = Depends(get_current_user)):
+    """Genera 3 opciones de menú A/B/C para una comida."""
+    from meal_templates import generar_opciones_menu
+    
+    momento = data.get("momento", "comida")
+    macros_objetivo = data.get("macros_objetivo", {"P": 45, "H": 75, "G": 13})
+    es_vegano = data.get("es_vegano", False)
+    excluir_proteinas = data.get("excluir_proteinas", [])
+    
+    opciones = await generar_opciones_menu(
+        db, momento, macros_objetivo, es_vegano, excluir_proteinas
+    )
+    
+    return {"opciones": opciones, "count": len(opciones)}
+
+
+
 # Include the router
 app.include_router(api_router)
 
