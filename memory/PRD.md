@@ -3,8 +3,8 @@
 ## Documento de Requisitos del Producto (PRD)
 
 ### Fecha de creación: 6 de marzo de 2026
-### Última actualización: 11 de marzo de 2026
-### Estado: MVP Completado + CALMA v2 Implementado
+### Última actualización: 12 de marzo de 2026
+### Estado: MVP Completado + CALMA v2 + Buscador Mejorado (E12)
 
 ---
 
@@ -80,6 +80,12 @@
 - [x] Ajuste de cantidades (+/- 10g)
 - [x] Guardado y carga de dietas
 - [x] Copia de dietas entre fechas
+- [x] **TAREA E12: Buscador mejorado con:**
+  - Normalización de acentos (buscar "atun" → "Atún")
+  - Macros efectivos CALMA en resultados
+  - 23 categorías completas en chips
+  - Ración correcta por alimento
+  - Badges ocultos si macro = 0
 
 ---
 
@@ -90,11 +96,12 @@
 - CRUD de usuarios, perfiles, rutinas, reportes
 - Sistema de mensajería
 - **Motor CALMA v2 completo con endpoints:**
-  - `/api/calculator/search` - Búsqueda de alimentos
+  - `/api/calculator/search` - Búsqueda de alimentos (con normalización acentos, macros efectivos)
   - `/api/calculator/distribute` - Distribución de macros
   - `/api/calculator/adjust` - Ajuste automático
   - `/api/calculator/macros-efectivos` - Cálculo individual
   - `/api/calculator/validate-meal` - Validación de comidas
+  - `/api/calculator/menu-options` - Generación de menús A/B/C
   - `/api/diets` - CRUD de dietas diarias
 - Integración Claude Sonnet 4.5 para generación de rutinas
 - Pagos simulados (mockeados)
