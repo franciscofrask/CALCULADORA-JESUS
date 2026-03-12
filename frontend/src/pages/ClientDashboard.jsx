@@ -375,22 +375,42 @@ const ClientLayout = () => {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-auto">
+            <main className="flex-1 overflow-auto pb-16 md:pb-0">
                 <Outlet />
             </main>
 
-            {/* Mobile Bottom Navigation */}
-            <nav className="mobile-nav" data-testid="mobile-nav">
-                {navItems.map((item) => (
-                    <Link
-                        key={item.path}
-                        to={item.path}
-                        className={`mobile-nav-item ${isActive(item.path) ? 'active' : ''}`}
-                    >
-                        <item.icon className="w-5 h-5" />
-                        <span className="text-xs">{item.label}</span>
-                    </Link>
-                ))}
+            {/* Mobile Bottom Navigation - Redesigned */}
+            <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg md:hidden" data-testid="mobile-nav">
+                <div className="flex items-center justify-around h-16 px-2">
+                    {[
+                        { path: '/dashboard', icon: Home, label: 'Inicio' },
+                        { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
+                        { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
+                        { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat' },
+                        { path: '/dashboard/profile', icon: User, label: 'Más' },
+                    ].map((item) => {
+                        const active = isActive(item.path);
+                        return (
+                            <Link
+                                key={item.path}
+                                to={item.path}
+                                className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-200 ${
+                                    active ? 'text-[#FFA500]' : 'text-gray-400'
+                                }`}
+                            >
+                                <item.icon 
+                                    className={`w-5 h-5 mb-1 transition-all duration-200 ${
+                                        active ? 'text-[#FFA500] scale-110' : 'text-gray-400'
+                                    }`} 
+                                    strokeWidth={active ? 2.5 : 2}
+                                />
+                                <span className={`text-xs ${active ? 'font-bold' : 'font-medium'}`}>
+                                    {item.label}
+                                </span>
+                            </Link>
+                        );
+                    })}
+                </div>
             </nav>
         </div>
     );

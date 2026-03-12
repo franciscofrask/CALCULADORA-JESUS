@@ -13,6 +13,17 @@ module.exports = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			// JG12 Brand Colors
+  			'brand-orange': '#FFA500',
+  			'brand-orange-dark': '#FF8C00',
+  			'bg-dark': '#1A1A1A',
+  			'bg-input-dark': '#1E1E1E',
+  			'bg-card-dark': '#282828',
+  			'bg-page': '#FAFAFA',
+  			'protein-yellow': '#FFDA61',
+  			'carbs-green': '#4CAF50',
+  			'fat-red': '#EF5350',
+  			'text-secondary': '#9E9E9E',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
