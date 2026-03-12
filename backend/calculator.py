@@ -19,6 +19,25 @@ from calma_engine import (
     _redondear_cantidad
 )
 import re
+import unicodedata
+
+
+# =========================================================
+# FUNCIÓN: Normalizar texto (eliminar acentos)
+# =========================================================
+
+def normalize_text(text: str) -> str:
+    """
+    Normaliza texto eliminando acentos y diacríticos.
+    'pollo' coincide con 'Pollo', 'atún' coincide con 'atun', etc.
+    """
+    if not text:
+        return ""
+    # Descomponer caracteres (á -> a + acento)
+    normalized = unicodedata.normalize('NFD', text)
+    # Eliminar los caracteres de combinación (acentos)
+    without_accents = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+    return without_accents.lower()
 
 # =========================================================
 # CONSTANTES — CATEGORÍAS PERMITIDAS
@@ -587,7 +606,8 @@ async def buscar_alimentos(
     tipo_comida: str = "normal",
     es_vegano: bool = False,
     limit: int = 50,
-    excluir_categorias: list = None
+    excluir_categorias: list = None,
+    calcular_efectivos: bool = False
 ) -> list:
     """
     Busca alimentos en MongoDB con filtros.
@@ -600,12 +620,9 @@ async def buscar_alimentos(
         es_vegano: filtra alimentos de origen animal
         limit: máximo de resultados
         excluir_categorias: lista de categorías a excluir
+        calcular_efectivos: si True, calcula macros efectivos para cada alimento
     """
     filtro = {}
-    
-    # Filtro por texto
-    if query and len(query) >= 2:
-        filtro["nombre"] = {"$regex": query, "$options": "i"}
     
     # Filtro por categoría específica
     if categoria:
@@ -614,9 +631,24 @@ async def buscar_alimentos(
             {"categorias": {"$regex": f"^{re.escape(categoria)}\\."}}
         ]
     
-    # Buscar
-    cursor = db.foods.find(filtro, {"_id": 0}).limit(limit * 3)  # traer más para filtrar luego
-    alimentos = await cursor.to_list(length=limit * 3)
+    # Determinar límite de búsqueda en MongoDB
+    # Si hay query de texto, necesitamos traer más porque filtramos en Python
+    if query and len(query) >= 2:
+        # Traer todos los alimentos (o los filtrados por categoría) para buscar por texto
+        search_limit = 4000  # Suficiente para cubrir toda la BD
+    else:
+        search_limit = limit * 3
+    
+    cursor = db.foods.find(filtro, {"_id": 0}).limit(search_limit)
+    alimentos = await cursor.to_list(length=search_limit)
+    
+    # Filtrar por texto con normalización de acentos
+    if query and len(query) >= 2:
+        query_normalized = normalize_text(query)
+        alimentos = [
+            a for a in alimentos
+            if query_normalized in normalize_text(a.get("nombre", ""))
+        ]
     
     # Filtrar por tipo de comida (intra/post)
     if tipo_comida in ("intra", "post"):
@@ -637,7 +669,19 @@ async def buscar_alimentos(
             if not cat_in_list(get_categoria_principal(a), excluir_categorias)
         ]
     
-    return alimentos[:limit]
+    # Limitar resultados
+    alimentos = alimentos[:limit]
+    
+    # Calcular macros efectivos si se solicita
+    if calcular_efectivos:
+        for alimento in alimentos:
+            racion = float(alimento.get("racion", 100) or 100)
+            macros_ef = calcular_macros_efectivos_alimento(alimento, racion, es_vegano)
+            cuenta = que_macros_cuentan(alimento, racion, es_vegano)
+            alimento["macros_efectivos"] = macros_ef
+            alimento["que_cuenta"] = cuenta
+    
+    return alimentos
 
 
 # =========================================================

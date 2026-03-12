@@ -1246,19 +1246,22 @@ async def search_foods(
     vegano: bool = False
 ):
     """
-    Búsqueda de alimentos con filtros.
+    Búsqueda de alimentos con filtros y macros efectivos.
     
     Query params:
-        q: texto de búsqueda (busca en nombre)
+        q: texto de búsqueda (busca en nombre, ignora acentos)
         category: filtro de categoría (ej: "2" para carnes, "17.2" para frutos secos)
         tipo_comida: "normal", "intra", "post" - filtra categorías permitidas
         limit: máximo resultados (default 50)
         offset: para paginación
         vegano: si true, oculta categorías animales
+    
+    Response incluye macros_efectivos calculados por CALMA para cada alimento.
     """
     alimentos = await buscar_alimentos(
         db, query=q, categoria=category,
-        tipo_comida=tipo_comida, es_vegano=vegano, limit=limit
+        tipo_comida=tipo_comida, es_vegano=vegano, limit=limit,
+        calcular_efectivos=True
     )
     
     return {

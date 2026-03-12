@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { 
     ChevronLeft, ChevronRight, Settings, Plus, Trash2, 
     Minus, Save, Copy, Check, ChevronDown, ChevronUp,
-    Search, X, Zap, Wrench, RotateCcw, ArrowRight, ArrowUpRight, Calendar
+    Search, X, Zap, Wrench, RotateCcw, ArrowRight, ArrowUpRight, Calendar, RefreshCw
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -37,19 +37,31 @@ const getFoodEmoji = (categorias) => {
     return FOOD_EMOJIS[mainCat] || FOOD_EMOJIS.default;
 };
 
-// Category filter chips
+// Category filter chips - 23 categorías completas
 const CATEGORY_CHIPS = [
     { label: 'Todas', value: '', emoji: '🍽️' },
+    { label: 'Huevos', value: '1', emoji: '🥚' },
     { label: 'Carnes', value: '2', emoji: '🥩' },
     { label: 'Pescados', value: '3', emoji: '🐟' },
-    { label: 'Huevos', value: '1', emoji: '🥚' },
+    { label: 'Proteína', value: '4', emoji: '💪' },
     { label: 'Lácteos', value: '5', emoji: '🥛' },
     { label: 'Cereales', value: '7', emoji: '🌾' },
+    { label: 'Panes', value: '8', emoji: '🍞' },
+    { label: 'Tubérculos', value: '9', emoji: '🥔' },
+    { label: 'Legumbres', value: '10', emoji: '🫘' },
+    { label: 'Frutas', value: '11', emoji: '🍎' },
+    { label: 'Verduras', value: '13', emoji: '🥦' },
+    { label: 'Salsas', value: '16', emoji: '🥫' },
+    { label: 'Grasas', value: '17', emoji: '🫒' },
+    { label: 'F.Secos', value: '17.2', emoji: '🥜' },
     { label: 'Arroces', value: '21', emoji: '🍚' },
     { label: 'Pasta', value: '22', emoji: '🍝' },
-    { label: 'Verduras', value: '13', emoji: '🥦' },
-    { label: 'Fruta', value: '11', emoji: '🍎' },
-    { label: 'Grasas', value: '17', emoji: '🫒' },
+    { label: 'Beb.Veg', value: '24', emoji: '🥤' },
+    { label: 'Vegano', value: '28', emoji: '🌱' },
+    { label: 'Cacao', value: '37', emoji: '🍫' },
+    { label: 'Snacks', value: '38', emoji: '🍟' },
+    { label: 'Sopas', value: '48', emoji: '🍲' },
+    { label: 'Comida Prep', value: '51', emoji: '📦' },
 ];
 
 const NutritionPage = () => {
@@ -556,18 +568,25 @@ const NutritionPage = () => {
                                     <Button 
                                         variant="outline" 
                                         className="h-10 rounded-full border-gray-300"
-                                        onClick={() => { setAddFoodModal({ open: true, mealKey }); setSearchQuery(''); setSearchCategory(''); }}
+                                        onClick={() => { setAddFoodModal({ open: true, mealKey }); setSearchQuery(''); setSearchCategory('2'); }}
                                     >
                                         <Wrench className="w-4 h-4 mr-1" /> Construirlo
                                     </Button>
                                     <Button 
-                                        variant="ghost" 
-                                        className="h-10 rounded-full text-gray-600"
-                                        onClick={() => { setAddFoodModal({ open: true, mealKey }); setSearchQuery(''); setSearchCategory(''); }}
+                                        variant="outline" 
+                                        className="h-10 rounded-full border-gray-300"
+                                        onClick={() => toast.info('Próximamente: Repetir de otro día')}
                                     >
-                                        <Search className="w-4 h-4 mr-1" /> Buscar
+                                        <RefreshCw className="w-4 h-4 mr-1" /> Repetir
                                     </Button>
                                 </div>
+                                <Button 
+                                    variant="ghost" 
+                                    className="w-full h-10 rounded-full text-gray-600"
+                                    onClick={() => { setAddFoodModal({ open: true, mealKey }); setSearchQuery(''); setSearchCategory(''); }}
+                                >
+                                    <Search className="w-4 h-4 mr-1" /> Buscar alimento
+                                </Button>
                             </div>
                         )}
 
@@ -641,18 +660,19 @@ const NutritionPage = () => {
 
     return (
         <div 
-            className="min-h-screen pb-24 relative"
+            className="min-h-screen pb-32 relative"
             style={{
                 backgroundImage: `url('/gohan-light.png')`,
                 backgroundSize: 'contain',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
-                backgroundAttachment: 'fixed'
+                backgroundAttachment: 'fixed',
+                opacity: 1
             }}
             data-testid="nutrition-page"
         >
-            {/* Background overlay */}
-            <div className="absolute inset-0 bg-bg-page/[0.95]" />
+            {/* Background overlay - muy opaco para que gohan sea apenas visible */}
+            <div className="absolute inset-0 bg-bg-page/[0.97]" />
             
             {/* Content */}
             <div className="relative z-10">
@@ -789,20 +809,29 @@ const NutritionPage = () => {
 
             {/* Search Modal */}
             <Dialog open={addFoodModal.open} onOpenChange={(open) => !open && setAddFoodModal({ open: false, mealKey: null })}>
-                <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
-                    <DialogHeader className="bg-bg-dark p-4">
-                        <DialogTitle className="text-white flex items-center justify-between">
-                            <span>Buscador de alimentos</span>
-                            <span className="text-brand-orange text-sm">{addFoodModal.mealKey}</span>
-                        </DialogTitle>
-                        <DialogDescription className="sr-only">Busca alimentos</DialogDescription>
+                <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                    <DialogHeader className="bg-bg-dark p-4 flex-shrink-0">
+                        <div className="flex items-center justify-between">
+                            <DialogTitle className="text-white flex items-center gap-2">
+                                <span>Buscador de alimentos</span>
+                                <span className="text-brand-orange text-sm">({addFoodModal.mealKey})</span>
+                            </DialogTitle>
+                            <button 
+                                onClick={() => setAddFoodModal({ open: false, mealKey: null })}
+                                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                            >
+                                <X className="w-5 h-5 text-white" />
+                            </button>
+                        </div>
+                        <DialogDescription className="sr-only">Busca alimentos para añadir a tu comida</DialogDescription>
                     </DialogHeader>
                     
-                    <div className="p-4 bg-white">
+                    {/* Search input - fixed */}
+                    <div className="p-4 bg-white flex-shrink-0 border-b">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <Input 
-                                placeholder="Escribe un alimento"
+                                placeholder="Escribe un alimento..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="pl-10 h-12 rounded-xl bg-gray-100 border-0"
@@ -811,25 +840,27 @@ const NutritionPage = () => {
                         </div>
                     </div>
                     
-                    <ScrollArea className="w-full whitespace-nowrap border-b bg-white">
-                        <div className="flex gap-2 p-4 pt-0">
+                    {/* Category chips - fixed height, horizontal scroll */}
+                    <div className="flex-shrink-0 bg-white border-b">
+                        <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
                             {CATEGORY_CHIPS.map(chip => (
                                 <button 
                                     key={chip.value}
                                     onClick={() => setSearchCategory(chip.value)}
-                                    className={`flex-shrink-0 px-3 py-2 rounded-full text-sm font-medium transition-all ${
+                                    className={`flex-shrink-0 inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
                                         searchCategory === chip.value 
-                                            ? 'bg-brand-orange text-white' 
-                                            : 'bg-gray-800 text-white'
+                                            ? 'bg-brand-orange text-white shadow-md' 
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                     }`}
                                 >
-                                    {chip.emoji} {chip.label}
+                                    <span className="mr-1">{chip.emoji}</span> {chip.label}
                                 </button>
                             ))}
                         </div>
-                    </ScrollArea>
+                    </div>
                     
-                    <ScrollArea className="flex-1 bg-gray-50">
+                    {/* Results - scrollable */}
+                    <div className="flex-1 overflow-y-auto bg-gray-50">
                         {searchLoading ? (
                             <div className="flex items-center justify-center py-12">
                                 <div className="animate-spin rounded-full h-8 w-8 border-4 border-brand-orange border-t-transparent" />
@@ -837,32 +868,51 @@ const NutritionPage = () => {
                         ) : searchResults.length === 0 ? (
                             <div className="text-center py-12">
                                 <span className="text-4xl mb-3 block">🔍</span>
-                                <p className="text-gray-500">Busca un alimento</p>
+                                <p className="text-gray-500">{searchQuery ? 'No se encontraron resultados' : 'Escribe para buscar'}</p>
                             </div>
                         ) : (
                             <div className="p-4 space-y-2">
-                                {searchResults.map(food => (
-                                    <button
-                                        key={food.id}
-                                        className="w-full text-left p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-all"
-                                        onClick={() => handleAddFood(food)}
-                                    >
-                                        <div className="flex items-start gap-3">
-                                            <span className="text-2xl">{getFoodEmoji(food.categorias)}</span>
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-gray-900">{food.nombre}</p>
-                                                <p className="text-xs text-gray-500">{food.racion}g / 1 ración</p>
-                                                <div className="flex gap-2 mt-2">
-                                                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{food.proteinas}g proteínas</span>
-                                                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-fat-red text-white">{food.grasas}g grasas</span>
+                                {searchResults.map(food => {
+                                    // Usar macros efectivos si están disponibles, sino los brutos
+                                    const macrosEf = food.macros_efectivos || {};
+                                    const pEf = macrosEf.P ?? food.proteinas ?? 0;
+                                    const hEf = macrosEf.H ?? food.hidratos ?? 0;
+                                    const gEf = macrosEf.G ?? food.grasas ?? 0;
+                                    const racion = food.racion || 100;
+                                    
+                                    return (
+                                        <button
+                                            key={food.id}
+                                            className="w-full text-left p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
+                                            onClick={() => handleAddFood(food)}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-2xl">{getFoodEmoji(food.categorias)}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 truncate">{food.nombre}</p>
+                                                    <p className="text-xs text-gray-500">{racion}g / 1 ración</p>
+                                                    <div className="flex flex-wrap gap-1 mt-2">
+                                                        {pEf > 0 && (
+                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-protein-yellow text-gray-800">{pEf.toFixed(1)}g P</span>
+                                                        )}
+                                                        {hEf > 0 && (
+                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{hEf.toFixed(1)}g H</span>
+                                                        )}
+                                                        {gEf > 0 && (
+                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-fat-red text-white">{gEf.toFixed(1)}g G</span>
+                                                        )}
+                                                        {pEf === 0 && hEf === 0 && gEf === 0 && (
+                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600">Sin macros</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </button>
-                                ))}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
-                    </ScrollArea>
+                    </div>
                 </DialogContent>
             </Dialog>
 
