@@ -1,9 +1,10 @@
 <analysis>**original_problem_statement:**
-El usuario quiere crear una plataforma de entrenamiento personal llamada JG12. La plataforma debe incluir múltiples paneles para diferentes roles de usuario (Cliente, Operaciones, CEO, Entrenador) y funcionalidades avanzadas como generación de rutinas por IA. La característica principal y más compleja solicitada es una calculadora de macros y dietas altamente detallada llamada CALMA. Las prioridades recientes han sido poblar la base de datos de alimentos y luego construir el motor de backend y el frontend para CALMA.
+El usuario quiere crear una plataforma de entrenamiento personal llamada JG12. La plataforma debe incluir múltiples paneles para diferentes roles de usuario (Cliente, Operaciones, CEO, Entrenador) y funcionalidades avanzadas como generación de rutinas por IA. La característica principal y más compleja solicitada es una calculadora de macros y dietas altamente detallada llamada CALMA. Las prioridades recientes han sido reescribir por completo el motor de cálculo de macros ( y ) con un nuevo conjunto de reglas (v2) y añadir una nueva funcionalidad para generar plantillas de menú (Opción A/B/C).
 
 PRODUCT REQUIREMENTS:
 - 4 Paneles: Cliente, Operaciones, CEO y Entrenadores.
 - Calculadora de nutrición avanzada CALMA con lógica de macros efectivos, distribución por comidas y persistencia de datos.
+- Generación de 3 opciones de menú (A/B/C) para comidas vacías.
 - Integración de IA (Claude Sonnet 4.5) para generación de rutinas.
 - Integración de pagos (Stripe, actualmente simulada).
 - Múltiples diseños de pantalla específicos para implementar.
@@ -12,46 +13,50 @@ PRODUCT REQUIREMENTS:
 **User's preferred language**: Spanish
 
 **what currently exists?**
-Se ha construido una aplicación full-stack (React/FastAPI/MongoDB).
-- **Branding y Autenticación:** Se ha implementado la identidad visual JG12↗ y un sistema de login/registro JWT funcional.
+Se ha construido una aplicación full-stack (React/FastAPI/MongoDB) funcional.
+- **Branding y Autenticación:** Se ha implementado la identidad visual JG12↗ y un sistema de login/registro JWT.
 - **Portales Base:** Existen portales funcionales para Cliente y Administrador.
-- **Motor CALMA (Backend):** Se ha implementado el corazón lógico de la aplicación. Esto incluye:
-    - : Un motor complejo que calcula los macros efectivos (los que cuentan) de un alimento, basándose en un conjunto muy detallado de reglas por categoría.
-    - : Lógica para distribuir los macros totales de un usuario entre las comidas del día, utilizando 16 escenarios diferentes según la cantidad de carbohidratos y la hora de entrenamiento.
-    - : Módulo que permite el ajuste automático de la cantidad de alimentos para cuadrar macros, la validación de comidas y la sugerencia de alimentos.
-- **Persistencia de Dietas (Backend):** Se ha creado una colección  en MongoDB y se han añadido endpoints a  para guardar, cargar, copiar y eliminar las dietas diarias de los usuarios.
-- **Frontend CALMA (UI):** Se ha reescrito por completo la página , que ahora incluye una interfaz funcional con calendario, opciones de configuración, un resumen diario de macros y un acordeón para gestionar las comidas, utilizando todos los nuevos endpoints del backend.
+- **Motor CALMA v2 (Backend):** Se ha reescrito por completo la lógica de negocio.
+    - : Motor v2 que calcula macros efectivos con un nuevo set de 50 tests.
+    - : Lógica v2 para búsqueda, ajuste automático, sugerencias y restricciones de categorías por tipo de comida (intra/post-entreno).
+    - : Lógica para distribuir macros en las comidas (sin cambios).
+- **Plantillas de Menú (Backend):**
+    - : **NUEVO**. Contiene 60 plantillas base (15 por cada momento del día) para generar menús.
+- **Persistencia de Dietas (Backend):** Endpoints funcionales para guardar, cargar, copiar y eliminar dietas en MongoDB.
+- **Frontend CALMA (UI):** La página  es funcional, consume todos los endpoints del backend, y el bug de carga de macros reportado en el fork anterior ha sido verificado y resuelto.
 
 **Last working item**:
--   **Last item agent was working:** El agente completó la Tarea E4, que consistía en dos partes principales: A) crear los endpoints del backend para la persistencia de dietas en MongoDB (guardar, cargar, copiar, etc.) y B) reescribir completamente el frontend en  para integrar toda la lógica del backend de CALMA. Durante la verificación, el agente tomó una captura de pantalla e identificó un error: al cargar una dieta guardada, los alimentos aparecen en la comida pero sus macros efectivos se muestran como cero. El agente estaba a punto de corregir este error de visualización en el frontend.
+-   **Last item agent was working:** El agente estaba implementando la Tarea E6: PLANTILLAS DE MENÚ + ENDPOINT 3 OPCIONES A/B/C. Creó con éxito el archivo  con las 60 plantillas y la lógica para generar opciones. Sin embargo, se detuvo antes de completar el PASO 2: añadir los nuevos endpoints  y  al archivo .
 -   **Status:** IN PROGRESS
--   **Agent Testing Done:** Y
--   **Which testing method agent to use?** Frontend testing agent
+-   **Agent Testing Done:** N
+-   **Which testing method agent to use?** backend testing agent
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1 (P0):** Los macros efectivos de los alimentos no se muestran al cargar una dieta guardada.
-    -   **Attempted fixes:** Ninguno todavía. El agente acaba de identificar el problema.
+-   **Issue 1 (P0):** Los nuevos endpoints para las plantillas de menú no existen en la API.
+    -   **Attempted fixes:** Ninguno. El agente se detuvo antes de la implementación.
     -   **Next debug checklist:**
-        1.  Revisar la función que carga los datos de la dieta ( o similar) en .
-        2.  Al recibir los datos de , la lista de alimentos de cada comida debe ser procesada para mostrar sus macros efectivos.
-        3.  La solución más robusta es, después de cargar la dieta, llamar al endpoint  para cada comida. La respuesta de este endpoint contiene los macros efectivos calculados para cada alimento, que se pueden usar para actualizar correctamente el estado del frontend.
-        4.  Actualizar el estado  (o similar) con los datos completos, incluyendo los  devueltos por el backend.
-    -   **Why fix this issue and what will be achieved with the fix?** Es un error crítico que hace que la función de guardar/cargar dietas sea inútil, ya que el usuario no puede ver el desglose de macros de sus comidas guardadas.
-    -   **Status:** IN PROGRESS
+        1.  Abrir .
+        2.  Añadir los dos endpoints proporcionados en la Tarea E6:  y .
+        3.  Asegurarse de que los imports desde  sean correctos.
+        4.  Reiniciar el servidor backend.
+        5.  Verificar con  que ambos endpoints responden correctamente.
+    -   **Why fix this issue and what will be achieved with the fix?** Es necesario para que la nueva funcionalidad de generación de menús sea accesible desde el frontend.
+    -   **Status:** NOT STARTED
     -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** frontend
+    -   **Should Test frontend/backend/both after fix?** backend
     -   **Blocked on other issue:** None
 
 **In progress Task List**:
--   **Task 1 (P0):** Finalizar y depurar la calculadora de nutrición CALMA.
-    -   **Where to resume:** Corregir el error de carga de dietas (Issue 1). Después de eso, realizar una prueba completa de todas las funcionalidades de : búsqueda de alimentos, ajuste automático, adición/eliminación de alimentos, guardado, copia y eliminación de dietas.
-    -   **What will be achieved with this?** Una herramienta de planificación de dietas totalmente funcional y persistente, que es una característica central de la aplicación.
+-   **Task 1 (P0):** Finalizar Tarea E6: Plantillas de Menú.
+    -   **Where to resume:** En , para añadir los endpoints  y .
+    -   **What will be achieved with this?** Una API funcional que puede generar 3 opciones de menú (A/B/C) para una comida específica, basándose en los macros objetivo del usuario.
     -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** both
-    -   **Blocked on something:** Issue 1
+    -   **Should Test frontend/backend/both after fix?** backend
+    -   **Blocked on something:** None
 
 **Upcoming and Future Tasks**
+- **(P1) Frontend para Plantillas de Menú:** Implementar la UI en  para llamar al endpoint  y mostrar las 3 opciones (A/B/C) al usuario cuando una comida está vacía.
 - **(P1) Home Screen Redesign:** Implementar la pantalla de inicio (Pantalla 10) con seguidores de macros circulares.
 - **(P1) Routine Screen Redesign:** Implementar la pantalla Mi Rutina (Pantalla 30) con estados de color para los entrenamientos.
 - **(P1) Tracking Module:** Implementar la pantalla de Seguimiento (Pantalla 47) con las siluetas de evolución de grasa corporal.
@@ -62,11 +67,12 @@ Se ha construido una aplicación full-stack (React/FastAPI/MongoDB).
 - **(P2) Bottom Navigation:** Rediseñar la navegación del portal del cliente para usar una barra inferior.
 
 **Completed work in this session**
-- **Data Population:** Se cargaron 3110 alimentos y 232 categorías en MongoDB.
-- **Frontend Bug Fix:** Se corrigió un error crítico en  debido a un cambio en la estructura de datos de los alimentos.
-- **CALMA Backend Engine:** Se crearon los módulos ,  y , implementando toda la lógica de negocio para el cálculo y gestión de macros.
-- **Diet Persistence Backend:** Se añadieron endpoints a  para gestionar el ciclo de vida de las dietas (CRUD) en una nueva colección . Se crearon los índices necesarios en la base de datos.
-- **CALMA Frontend UI:** Se reescribió por completo  para crear una interfaz de usuario funcional que consume todos los nuevos endpoints del backend, permitiendo la configuración, planificación y visualización de dietas.
+- **Bug Fix Verification:** Se investigó y confirmó que el bug de macros efectivos a cero del handoff anterior ya estaba resuelto.
+- **Full CALMA Feature Test:** Se utilizó el  para realizar una prueba exhaustiva de la , pasando 15 de 15 tests y confirmando la funcionalidad completa.
+- **Accessibility Fix:** Se corrigió un warning de accesibilidad () en los modales de .
+- **Tarea E5-A (Backend Core Rewrite):** Se reescribió por completo  con las nuevas reglas CALMA v2, se añadieron 50 tests y se corrigieron los problemas de compatibilidad que esto generó en  y .
+- **Tarea E5-B (Calculator Logic Rewrite):** Se reescribió  con lógica avanzada (restricciones de categorías, ordenación por aporte, etc.) y se actualizaron los endpoints  y  en  para usarla.
+- **Tarea E6 (Backend, 50% completado):** Se creó el nuevo archivo  con 60 plantillas de menú y la lógica para generar opciones.
 
 **Earlier issues found/mentioned but not fixed**
 -   N/A
@@ -79,8 +85,8 @@ Se ha construido una aplicación full-stack (React/FastAPI/MongoDB).
 
 **Key Technical Concepts**
 -   **Frontend:** React, Tailwind CSS, Shadcn/UI, , .
--   **Backend:** FastAPI, Pydantic, Motor (MongoDB async). La lógica de negocio se ha modularizado en archivos Python separados (, etc.).
--   **Database:** MongoDB. Se ha añadido la colección  y se han creado índices en  y  para optimizar las consultas.
+-   **Backend:** FastAPI, Pydantic, Motor (MongoDB async). La lógica de negocio está modularizada en ,  y .
+-   **Database:** MongoDB.
 -   **Authentication:** JSON Web Tokens (JWT).
 
 **key DB schema**
@@ -88,70 +94,66 @@ Se ha construido una aplicación full-stack (React/FastAPI/MongoDB).
 -   : Información detallada del cliente.
 -   : Base de datos con 3110 alimentos.
 -   : Base de datos con 232 categorías de alimentos.
--   ** (NUEVO):** Almacena las dietas diarias por usuario y fecha, incluyendo la configuración y la lista de alimentos de cada comida.
-    - , , , , , , .
+-   : Almacena las dietas diarias por usuario y fecha.
 
 **changes in tech stack**
 -   N/A
 
 **All files of reference**
--   : Modificado extensamente para añadir todos los endpoints de CALMA, distribución, calculadora y persistencia de dietas.
--   : **NUEVO y CRÍTICO.** Contiene las reglas de negocio para el conteo de macros.
--   : **NUEVO y CRÍTICO.** Contiene la lógica de reparto de macros.
--   : **NUEVO y CRÍTICO.** Lógica para la interacción del usuario con la calculadora.
--   : **COMPLETAMENTE REESCRITO.** Es el centro de la interacción del usuario con la calculadora.
+-   : Modificado para compatibilidad con los nuevos motores. **Necesita añadir endpoints de plantillas.**
+-   : **COMPLETAMENTE REESCRITO.**
+-   : **COMPLETAMENTE REESCRITO.**
+-   : **NUEVO.**
+-   : Funcional, con pequeñas correcciones de accesibilidad.
 
 **Areas that need refactoring**
--   El archivo  ha crecido considerablemente. Sería beneficioso refactorizarlo en el futuro, moviendo los endpoints a diferentes  en archivos separados (ej. , ).
+-   El archivo  sigue creciendo. Se beneficiaría de ser refactorizado en s separados.
 -   El refactor de  sigue pendiente.
 
 **key api endpoints**
--   : Búsqueda de alimentos con filtros.
--   : Distribución de macros del día.
+-   : Búsqueda de alimentos (actualizado con ).
+-   : Sugerencia de alimentos (actualizado con nueva lógica de ordenación).
 -   : Ajuste automático de cantidad de un alimento.
--   : Validación de una comida completa.
--   : Sugerencia de alimentos.
--   : CRUD para guardar y gestionar dietas diarias.
--   : Copiar una dieta de una fecha a otra.
--   : Obtener estado de dietas de un mes.
--   : Endpoints para ejecutar las suites de tests del backend.
+-   : CRUD para dietas.
+-   ** (PENDIENTE DE AÑADIR)**
+-   : Suite de tests para .
+-   : Suite de tests para .
+-   ** (PENDIENTE DE AÑADIR)**
 
 **Critical Info for New Agent**
--   La lógica principal del proyecto reside en tres nuevos módulos de backend: ,  y . Estos archivos están completos, probados y **no deben ser modificados**.
--   La tarea inmediata es arreglar el error en  que impide que los macros se muestren al cargar una dieta guardada.
--   Todo el frontend de la calculadora debe interactuar exclusivamente a través de los endpoints de la API ya creados. No se deben realizar cálculos de macros en el lado del cliente.
--   El usuario proporciona instrucciones muy detalladas y espera que se sigan al pie de la letra.
+-   La tarea inmediata y de máxima prioridad (P0) es finalizar la Tarea E6 añadiendo los dos endpoints que faltan ( y ) a .
+-   Los módulos  y  han sido completamente reescritos y están validados por sus propias suites de tests. No deben ser modificados.
+-   El siguiente paso lógico tras finalizar la Tarea E6 será implementar el frontend correspondiente en  para mostrar las opciones de menú generadas.
 
 **documents and test reports created in this job**
--   N/A
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **Usuario:** Pide un resumen detallado del proyecto.
-2.  **Agente:** Proporciona el resumen.
-3.  **Usuario:** Pide detalles sobre la calculadora simple existente.
-4.  **Agente:** Proporciona los detalles.
-5.  **Usuario:** Pregunta por el historial de tareas que no existen en este proyecto.
-6.  **Agente:** Aclara que esas tareas no se han implementado.
-7.  **Usuario:** Proporciona el código completo para .
-8.  **Agente:** Implementa  y los endpoints de test.
-9.  **Usuario:** Proporciona el código completo para .
-10. **Agente:** Implementa  y los endpoints de test.
-11. **Usuario:** Proporciona el código para .
-12. **Agente:** Implementa  y los endpoints de test.
-13. **Usuario:** Proporciona instrucciones para la persistencia de dietas (backend) y la reescritura completa de  (frontend).
-14. **Agente:** Implementa ambas partes y verifica, encontrando un bug en el proceso.
+1.  **User:** Pide explicar en detalle cómo funciona .
+2.  **Agent:** Proporciona una explicación exhaustiva con wireframes.
+3.  **User:** Inicia Tarea E5-A, pide reescribir  por completo.
+4.  **Agent:** Reescribe el archivo y soluciona problemas de compatibilidad.
+5.  **User:** Inicia Tarea E5-B, pide reescribir  y actualizar .
+6.  **Agent:** Reescribe y actualiza los archivos, verificando que todos los tests pasan.
+7.  **User:** Inicia Tarea E6, pide crear  y añadir los endpoints a .
+8.  **Agent:** Crea  correctamente.
+9.  **User:** Interrumpe con una solicitud de verificación completa del estado del proyecto.
+10. **Agent:** Ejecuta la verificación y la reporta. (La Tarea E6 quedó a medias).
 
 **Project Health Check:**
--   **Broken:** La funcionalidad de cargar dietas guardadas está rota en el frontend (no muestra los macros).
+-   **Broken:** Ninguna funcionalidad principal está rota.
 -   **Mocked:** El sistema de pagos sigue siendo una simulación.
 
 **3rd Party Integrations**
 -   **Claude Sonnet 4.5** — usa Emergent LLM Key
 
 **Testing status**
--   **Testing agent used after significant changes:** NO
+-   **Testing agent used after significant changes:** YES (para )
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** Las suites de tests están integradas como funciones () dentro de los nuevos módulos de Python (, , ).
+-   **Test files created:** No, pero se han añadido/actualizado suites de tests integradas como funciones  en:
+    -    (50 tests)
+    -    (41 tests)
+    -    (+70 tests)
 -   **Known regressions:** Ninguna.
 
 **Credentials to test flow:**
@@ -159,4 +161,4 @@ Se ha construido una aplicación full-stack (React/FastAPI/MongoDB).
 -   **Client:**  / 
 
 **What agent forgot to execute**
--   El agente ha seguido todas las instrucciones del usuario meticulosamente. No ha olvidado nada, sino que ha identificado correctamente un bug durante su propio ciclo de verificación, que es el paso correcto antes de entregar el trabajo.</analysis>
+El agente estaba ejecutando la Tarea E6. Completó el Paso 1 (crear ) pero fue interrumpido por el usuario con una solicitud de verificación antes de poder ejecutar el Paso 2 (añadir los endpoints  y  a ). Esta es la acción pendiente inmediata.</analysis>
