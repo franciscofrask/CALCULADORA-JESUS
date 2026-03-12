@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { 
     ChevronLeft, ChevronRight, Calendar, Settings, Plus, Trash2, 
     Minus, Save, Copy, Check, AlertTriangle, ChevronDown, ChevronUp,
-    Search, X
+    Search, X, Sparkles, Utensils
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -66,6 +66,11 @@ const NutritionPage = () => {
     const [copyModalOpen, setCopyModalOpen] = useState(false);
     const [copyDate, setCopyDate] = useState('');
     const [loading, setLoading] = useState(true);
+    
+    // Menu options modal state
+    const [menuOptionsModal, setMenuOptionsModal] = useState({ open: false, mealKey: null });
+    const [menuOptions, setMenuOptions] = useState([]);
+    const [menuOptionsLoading, setMenuOptionsLoading] = useState(false);
 
     // API helper
     const api = useCallback(async (endpoint, options = {}) => {
@@ -385,6 +390,68 @@ const NutritionPage = () => {
         }));
     };
 
+    // Load menu options from backend
+    const loadMenuOptions = async (mealKey) => {
+        const target = getMealTarget(mealKey);
+        
+        // Determine momento based on mealKey
+        const momentoMap = {
+            'C1': 'desayuno',
+            'C2': 'comida',
+            'C3': numComidas === 3 ? 'cena' : 'merienda',
+            'C4': 'cena'
+        };
+        const momento = momentoMap[mealKey] || 'comida';
+        
+        setMenuOptionsLoading(true);
+        setMenuOptionsModal({ open: true, mealKey });
+        
+        try {
+            const result = await api('/api/calculator/menu-options', {
+                method: 'POST',
+                body: JSON.stringify({
+                    momento,
+                    macros_objetivo: { P: target.P, H: target.H, G: target.G },
+                    es_vegano: false,
+                    excluir_proteinas: []
+                })
+            });
+            setMenuOptions(result.opciones || []);
+        } catch (err) {
+            console.error('Error loading menu options:', err);
+            toast.error('Error cargando opciones de menú');
+            setMenuOptions([]);
+        }
+        setMenuOptionsLoading(false);
+    };
+
+    // Apply selected menu option
+    const applyMenuOption = async (option) => {
+        const mealKey = menuOptionsModal.mealKey;
+        
+        try {
+            // Convert option items to our food format
+            const foods = option.items.map(item => ({
+                alimento_id: item.alimento_id,
+                nombre: item.nombre,
+                cantidad_g: item.cantidad_g,
+                macros_efectivos: item.macros_efectivos,
+                macros_brutos: item.macros_efectivos,
+                que_cuenta: { P: true, H: true, G: true }
+            }));
+            
+            setMealsData(prev => ({
+                ...prev,
+                [mealKey]: { alimentos: foods }
+            }));
+            
+            setMenuOptionsModal({ open: false, mealKey: null });
+            toast.success(`Menú "${option.nombre}" aplicado`);
+        } catch (err) {
+            toast.error('Error aplicando menú');
+        }
+    };
+
     // Save diet
     const saveDiet = async () => {
         try {
@@ -558,14 +625,29 @@ const NutritionPage = () => {
                             </div>
                         )}
                         
-                        {/* Add food button */}
-                        <Button 
-                            variant="outline" 
-                            className="w-full border-dashed"
-                            onClick={() => setAddFoodModal({ open: true, mealKey })}
-                        >
-                            <Plus className="w-4 h-4 mr-1" /> Añadir alimento
-                        </Button>
+                        {/* Action buttons */}
+                        <div className="space-y-2">
+                            {/* Suggest menu button - only for main meals (C1-C4) when empty */}
+                            {!isPeri && foods.length === 0 && (
+                                <Button 
+                                    variant="default"
+                                    className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+                                    onClick={() => loadMenuOptions(mealKey)}
+                                    data-testid={`suggest-menu-${mealKey}`}
+                                >
+                                    <Sparkles className="w-4 h-4 mr-2" /> Sugerir menú
+                                </Button>
+                            )}
+                            
+                            {/* Add food button */}
+                            <Button 
+                                variant="outline" 
+                                className="w-full border-dashed"
+                                onClick={() => setAddFoodModal({ open: true, mealKey })}
+                            >
+                                <Plus className="w-4 h-4 mr-1" /> Añadir alimento
+                            </Button>
+                        </div>
                     </CardContent>
                 )}
             </Card>
@@ -879,6 +961,109 @@ const NutritionPage = () => {
                                 Copiar
                             </Button>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Menu Options Modal (A/B/C) */}
+            <Dialog open={menuOptionsModal.open} onOpenChange={(open) => !open && setMenuOptionsModal({ open: false, mealKey: null })}>
+                <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Utensils className="w-5 h-5 text-orange-500" />
+                            Elige tu menú
+                        </DialogTitle>
+                        <DialogDescription>
+                            3 opciones calculadas para tus macros objetivo
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <ScrollArea className="flex-1 -mx-6 px-6">
+                        {menuOptionsLoading ? (
+                            <div className="flex flex-col items-center justify-center py-12">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mb-3" />
+                                <p className="text-sm text-gray-500">Calculando opciones...</p>
+                            </div>
+                        ) : menuOptions.length === 0 ? (
+                            <p className="text-center text-gray-400 py-12">
+                                No se encontraron opciones para estos macros
+                            </p>
+                        ) : (
+                            <div className="space-y-4 py-2">
+                                {menuOptions.map((option, index) => {
+                                    const letra = ['A', 'B', 'C'][index] || `D${index - 2}`;
+                                    const bgColors = [
+                                        'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200',
+                                        'bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200',
+                                        'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'
+                                    ];
+                                    const badgeColors = [
+                                        'bg-orange-500',
+                                        'bg-blue-500',
+                                        'bg-green-500'
+                                    ];
+                                    
+                                    return (
+                                        <button
+                                            key={option.plantilla_id}
+                                            className={`w-full text-left p-4 rounded-xl border-2 transition-all hover:shadow-md hover:scale-[1.01] ${bgColors[index % 3]}`}
+                                            onClick={() => applyMenuOption(option)}
+                                            data-testid={`menu-option-${letra}`}
+                                        >
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`${badgeColors[index % 3]} text-white text-sm font-bold px-2.5 py-1 rounded-lg`}>
+                                                        {letra}
+                                                    </span>
+                                                    <h3 className="font-semibold text-gray-800">{option.nombre}</h3>
+                                                </div>
+                                                {option.cuadrada && (
+                                                    <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                        <Check className="w-3 h-3" /> Cuadrada
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Alimentos */}
+                                            <div className="space-y-1.5 mb-3">
+                                                {option.items.map((item, i) => (
+                                                    <div key={i} className="flex justify-between text-sm">
+                                                        <span className="text-gray-700">{item.nombre}</span>
+                                                        <span className="text-gray-500 font-medium">{item.cantidad_g}g</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            
+                                            {/* Macros totales */}
+                                            <div className="flex gap-3 text-xs pt-2 border-t border-gray-200">
+                                                <span className="text-green-600 font-semibold">
+                                                    {option.macros_totales?.P?.toFixed(0) || 0}P
+                                                </span>
+                                                <span className="text-blue-600 font-semibold">
+                                                    {option.macros_totales?.H?.toFixed(0) || 0}H
+                                                </span>
+                                                <span className="text-orange-600 font-semibold">
+                                                    {option.macros_totales?.G?.toFixed(0) || 0}G
+                                                </span>
+                                                <span className="text-gray-400 ml-auto">
+                                                    {option.macros_totales?.kcal?.toFixed(0) || 0} kcal
+                                                </span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </ScrollArea>
+                    
+                    <div className="pt-4 border-t">
+                        <Button 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={() => setMenuOptionsModal({ open: false, mealKey: null })}
+                        >
+                            Cancelar
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
