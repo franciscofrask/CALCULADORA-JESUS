@@ -8,9 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/ui/collapsible';
 import { toast } from 'sonner';
 import { 
-    ChevronLeft, ChevronRight, Settings, Plus, Trash2, 
+    ChevronLeft, ChevronRight, Plus, Trash2, 
     Minus, Save, Copy, Check, ChevronDown, ChevronUp,
-    Search, X, Zap, Wrench, RotateCcw, ArrowRight, ArrowUpRight, Calendar, RefreshCw
+    Search, X, Zap, Wrench, RefreshCw, ArrowUpRight, Calendar
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -64,6 +64,22 @@ const CATEGORY_CHIPS = [
     { label: 'Comida Prep', value: '51', emoji: '📦' },
 ];
 
+// Momento entreno options
+const MOMENTO_OPTIONS = [
+    { value: 0, label: 'En ayunas' },
+    { value: 1, label: 'Después de Comida 1' },
+    { value: 2, label: 'Después de Comida 2' },
+    { value: 3, label: 'Después de Comida 3' },
+];
+
+// Periworkout options
+const PERI_OPTIONS = [
+    { value: 'intra_post', label: 'Intra + Post' },
+    { value: 'solo_post', label: 'Solo Post' },
+    { value: 'solo_intra', label: 'Solo Intra' },
+    { value: 'sin_peri', label: 'Sin periworkout' },
+];
+
 const NutritionPage = () => {
     const { token } = useAuth();
     
@@ -73,7 +89,6 @@ const NutritionPage = () => {
     const [numComidas, setNumComidas] = useState(4);
     const [momentoEntreno, setMomentoEntreno] = useState(1);
     const [opcionPeri, setOpcionPeri] = useState('intra_post');
-    const [configOpen, setConfigOpen] = useState(false);
     
     // Data state
     const [distribution, setDistribution] = useState(null);
@@ -96,6 +111,9 @@ const NutritionPage = () => {
     // Menu options
     const [menuOptions, setMenuOptions] = useState([]);
     const [menuOptionsLoading, setMenuOptionsLoading] = useState(false);
+    
+    // Summary expanded state
+    const [summaryExpanded, setSummaryExpanded] = useState(false);
 
     // API helper
     const api = useCallback(async (endpoint, options = {}) => {
@@ -233,7 +251,7 @@ const NutritionPage = () => {
         return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
     };
 
-    // Meal order
+    // Meal order based on config
     const getMealOrder = () => {
         const baseMeals = numComidas === 3 ? ['C1', 'C2', 'C3'] : ['C1', 'C2', 'C3', 'C4'];
         if (tipoDia === 'descanso') return baseMeals;
@@ -284,6 +302,8 @@ const NutritionPage = () => {
     const getMealStatus = (mealKey) => {
         const target = getMealTarget(mealKey);
         const served = calculateMealMacros(mealKey);
+        const foods = mealsData[mealKey]?.alimentos || [];
+        if (foods.length === 0) return 'empty';
         const margin = 4;
         const pOk = Math.abs(target.P - served.P) <= margin;
         const hOk = Math.abs(target.H - served.H) <= margin;
@@ -424,74 +444,397 @@ const NutritionPage = () => {
     const dayMacros = calculateDayMacros();
     const dayTarget = distribution?.resumen || { P_total: 0, H_total: 0, G_total: 0, kcal_total: 0 };
     const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + dayMacros.G * 9;
+    const targetKcal = dayTarget.kcal_total || 0;
+    
+    // Periworkout totals from distribution
+    const periTarget = distribution?.periworkout || {};
+    const intraTarget = periTarget.Intra || { P: 0, H: 0 };
+    const postTarget = periTarget.Post || { P: 0, H: 0 };
+    const totalPeriP = intraTarget.P + postTarget.P;
+    const totalPeriH = intraTarget.H + postTarget.H;
+    const servedPeriP = (calculateMealMacros('Intra').P || 0) + (calculateMealMacros('Post').P || 0);
+    const servedPeriH = (calculateMealMacros('Intra').H || 0) + (calculateMealMacros('Post').H || 0);
 
-    // Macro Circle Component
-    const MacroCircle = ({ value, target, label, color }) => {
-        const pct = target > 0 ? Math.min((value / target) * 100, 100) : 0;
-        const colors = {
-            protein: { ring: '#FFDA61', bg: '#FFDA61' },
-            carbs: { ring: '#4CAF50', bg: '#4CAF50' },
-            fat: { ring: '#66BB6A', bg: '#66BB6A' }
-        };
-        const c = colors[color] || colors.protein;
+    // Day status calculation
+    const getDayStatus = () => {
+        const margin = 4;
+        const pDiff = dayMacros.P - (dayTarget.P_total || 0);
+        const hDiff = dayMacros.H - (dayTarget.H_total || 0);
+        const gDiff = dayMacros.G - (dayTarget.G_total || 0);
         
-        return (
-            <div className="flex flex-col items-center">
-                <div className="relative w-20 h-20">
-                    <svg className="w-20 h-20 transform -rotate-90">
-                        <circle cx="40" cy="40" r="34" fill="white" stroke="#E5E7EB" strokeWidth="6" />
-                        <circle 
-                            cx="40" cy="40" r="34" 
-                            fill="none" 
-                            stroke={c.ring} 
-                            strokeWidth="6"
-                            strokeDasharray={`${pct * 2.136} 213.6`}
-                            strokeLinecap="round"
-                            className="transition-all duration-500"
-                        />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-xs text-gray-500">{label}</span>
-                        <span className="text-lg font-bold text-gray-800">{target.toFixed(0)} g</span>
-                    </div>
-                </div>
-                <span className="text-xs text-gray-500 mt-1">{value.toFixed(0)}/{target.toFixed(0)}</span>
-            </div>
-        );
+        const pOver = pDiff > margin;
+        const hOver = hDiff > margin;
+        const gOver = gDiff > margin;
+        
+        if (pOver || hOver || gOver) return 'sobra';
+        
+        const pOk = Math.abs(pDiff) <= margin;
+        const hOk = Math.abs(hDiff) <= margin;
+        const gOk = Math.abs(gDiff) <= margin;
+        
+        if (pOk && hOk && gOk) return 'cuadrado';
+        return 'falta';
     };
 
     // Meal info
     const mealInfo = {
-        C1: { name: 'Comida 1', emoji: '🌅' },
-        C2: { name: 'Comida 2', emoji: '☀️' },
-        C3: { name: numComidas === 3 ? 'Comida 3' : 'Comida 3', emoji: numComidas === 3 ? '🌙' : '🌤️' },
-        C4: { name: 'Comida 4', emoji: '🌙' },
-        Intra: { name: 'Intra-entreno', emoji: '⚡' },
-        Post: { name: 'Post-entreno', emoji: '💪' }
+        C1: { name: 'Comida 1', shortName: 'C1', emoji: '🌅' },
+        C2: { name: 'Comida 2', shortName: 'C2', emoji: '☀️' },
+        C3: { name: numComidas === 3 ? 'Comida 3' : 'Comida 3', shortName: 'C3', emoji: numComidas === 3 ? '🌙' : '🌤️' },
+        C4: { name: 'Comida 4', shortName: 'C4', emoji: '🌙' },
+        Intra: { name: 'Intra-entreno', shortName: 'Intra', emoji: '⚡' },
+        Post: { name: 'Post-entreno', shortName: 'Post', emoji: '💪' }
     };
 
-    // Meal Card
+    // ===== COMPONENTS =====
+
+    // Progress Bar Component
+    const ProgressBar = ({ value, max, color, height = 6, showCheck = false }) => {
+        const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+        const isOver = value > max + 4;
+        const isOk = Math.abs(value - max) <= 4;
+        const actualColor = isOver ? '#EF4444' : color;
+        
+        return (
+            <div className="flex items-center gap-2 w-full">
+                <div className={`flex-1 bg-gray-200 rounded-full overflow-hidden`} style={{ height }}>
+                    <div 
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: actualColor }}
+                    />
+                </div>
+                {showCheck && isOk && value > 0 && <Check className="w-4 h-4 text-green-500 flex-shrink-0" />}
+            </div>
+        );
+    };
+
+    // Mini status dot for meals
+    const getMealStatusDot = (mealKey) => {
+        const status = getMealStatus(mealKey);
+        if (status === 'empty') return { color: 'bg-gray-300', symbol: '⚪' };
+        if (status === 'cuadrada') return { color: 'bg-green-500', symbol: '🟢' };
+        if (status === 'sobra') return { color: 'bg-red-500', symbol: '🔴' };
+        return { color: 'bg-yellow-500', symbol: '🟡' };
+    };
+
+    // ===== STICKY SUMMARY COMPONENT =====
+    const DaySummary = () => {
+        const dayStatus = getDayStatus();
+        const mealOrder = getMealOrder();
+        
+        return (
+            <div 
+                className="sticky top-[52px] z-30 bg-white shadow-md border-b cursor-pointer"
+                onClick={() => setSummaryExpanded(!summaryExpanded)}
+                data-testid="day-summary"
+            >
+                <div className="max-w-lg mx-auto px-4 py-3">
+                    {/* Title & Status Badge */}
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                            {tipoDia === 'entrenamiento' ? 'Día de Entrenamiento' : 'Día de Descanso'}
+                        </span>
+                        {dayStatus === 'cuadrado' && (
+                            <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">🟢 Cuadrado</span>
+                        )}
+                        {dayStatus === 'sobra' && (
+                            <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">🔴 Te pasas</span>
+                        )}
+                    </div>
+                    
+                    {/* Progress Bars */}
+                    <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 text-center">🟢</span>
+                            <span className="w-6 font-semibold">P:</span>
+                            <div className="flex-1">
+                                <ProgressBar value={dayMacros.P} max={dayTarget.P_total} color="#4CAF50" height={6} />
+                            </div>
+                            <span className={`w-20 text-right font-mono ${dayMacros.P > dayTarget.P_total + 4 ? 'text-red-500' : ''}`}>
+                                {dayMacros.P.toFixed(0)}/{dayTarget.P_total?.toFixed(0) || 0}g
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 text-center">🔵</span>
+                            <span className="w-6 font-semibold">H:</span>
+                            <div className="flex-1">
+                                <ProgressBar value={dayMacros.H} max={dayTarget.H_total} color="#2196F3" height={6} />
+                            </div>
+                            <span className={`w-20 text-right font-mono ${dayMacros.H > dayTarget.H_total + 4 ? 'text-red-500' : ''}`}>
+                                {dayMacros.H.toFixed(0)}/{dayTarget.H_total?.toFixed(0) || 0}g
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 text-center">🟠</span>
+                            <span className="w-6 font-semibold">G:</span>
+                            <div className="flex-1">
+                                <ProgressBar value={dayMacros.G} max={dayTarget.G_total} color="#FFA500" height={6} />
+                            </div>
+                            <span className={`w-20 text-right font-mono ${dayMacros.G > dayTarget.G_total + 4 ? 'text-red-500' : ''}`}>
+                                {dayMacros.G.toFixed(0)}/{dayTarget.G_total?.toFixed(0) || 0}g
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {/* Peri Line (only training days) */}
+                    {tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri' && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                            <span>Peri: {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H</span>
+                            <span className="font-mono">Kcal: {dayKcal.toFixed(0)} / {targetKcal.toFixed(0)}</span>
+                        </div>
+                    )}
+                    
+                    {tipoDia === 'descanso' && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-end text-xs text-gray-500">
+                            <span className="font-mono">Kcal: {dayKcal.toFixed(0)} / {targetKcal.toFixed(0)}</span>
+                        </div>
+                    )}
+                    
+                    {/* Mini meal status line */}
+                    <div className="mt-2 flex items-center justify-center gap-1 text-xs">
+                        {mealOrder.map((mealKey, idx) => (
+                            <span key={mealKey} className="flex items-center">
+                                {idx > 0 && <span className="text-gray-300 mx-1">|</span>}
+                                <span className="text-gray-500">{mealInfo[mealKey].shortName}</span>
+                                <span className="ml-0.5">{getMealStatusDot(mealKey).symbol}</span>
+                            </span>
+                        ))}
+                    </div>
+                    
+                    {/* Expanded details */}
+                    {summaryExpanded && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-gray-500">
+                                        <th className="text-left font-medium py-1"></th>
+                                        <th className="text-right font-medium py-1 w-16">P</th>
+                                        <th className="text-right font-medium py-1 w-16">H</th>
+                                        <th className="text-right font-medium py-1 w-16">G</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {mealOrder.map(mealKey => {
+                                        const served = calculateMealMacros(mealKey);
+                                        const isPeri = mealKey === 'Intra' || mealKey === 'Post';
+                                        return (
+                                            <tr key={mealKey} className="border-t border-gray-100">
+                                                <td className="py-1 text-gray-700">{mealInfo[mealKey].name}</td>
+                                                <td className="text-right font-mono">{served.P.toFixed(0)}g</td>
+                                                <td className="text-right font-mono">{served.H.toFixed(0)}g</td>
+                                                <td className="text-right font-mono">{isPeri ? '-' : `${served.G.toFixed(0)}g`}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="border-t-2 border-gray-300 font-bold">
+                                        <td className="py-1">TOTAL</td>
+                                        <td className="text-right font-mono">{dayMacros.P.toFixed(0)}g</td>
+                                        <td className="text-right font-mono">{dayMacros.H.toFixed(0)}g</td>
+                                        <td className="text-right font-mono">{dayMacros.G.toFixed(0)}g</td>
+                                    </tr>
+                                    <tr className="text-gray-500">
+                                        <td className="py-1">OBJETIVO</td>
+                                        <td className="text-right font-mono">{dayTarget.P_total?.toFixed(0) || 0}g</td>
+                                        <td className="text-right font-mono">{dayTarget.H_total?.toFixed(0) || 0}g</td>
+                                        <td className="text-right font-mono">{dayTarget.G_total?.toFixed(0) || 0}g</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    
+                    <div className="mt-2 flex justify-center">
+                        {summaryExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // ===== CONFIG SECTION COMPONENT =====
+    const ConfigSection = () => {
+        const momentoOptions = numComidas === 3 
+            ? MOMENTO_OPTIONS.filter(o => o.value < 3) 
+            : MOMENTO_OPTIONS;
+        
+        return (
+            <div className="bg-gray-100 rounded-xl p-3 mb-4" data-testid="config-section">
+                {/* Comidas selector */}
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-600 font-medium">Comidas:</span>
+                        <div className="flex gap-1">
+                            <button
+                                onClick={() => {
+                                    setNumComidas(3);
+                                    if (momentoEntreno > 2) setMomentoEntreno(2);
+                                }}
+                                className={`w-8 h-8 rounded-full text-sm font-bold transition-all ${
+                                    numComidas === 3 
+                                        ? 'bg-brand-orange text-white shadow' 
+                                        : 'bg-white text-gray-600 border border-gray-300'
+                                }`}
+                                data-testid="comidas-3-btn"
+                            >
+                                3
+                            </button>
+                            <button
+                                onClick={() => setNumComidas(4)}
+                                className={`w-8 h-8 rounded-full text-sm font-bold transition-all ${
+                                    numComidas === 4 
+                                        ? 'bg-brand-orange text-white shadow' 
+                                        : 'bg-white text-gray-600 border border-gray-300'
+                                }`}
+                                data-testid="comidas-4-btn"
+                            >
+                                4
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Momento entreno - only on training days */}
+                    {tipoDia === 'entrenamiento' && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600 font-medium">Entrenas:</span>
+                            <select
+                                value={momentoEntreno}
+                                onChange={(e) => setMomentoEntreno(Number(e.target.value))}
+                                className="text-xs bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
+                                data-testid="momento-entreno-select"
+                            >
+                                {momentoOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                    
+                    {/* Peri option - only on training days */}
+                    {tipoDia === 'entrenamiento' && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600 font-medium">Peri:</span>
+                            <select
+                                value={opcionPeri}
+                                onChange={(e) => setOpcionPeri(e.target.value)}
+                                className="text-xs bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
+                                data-testid="peri-select"
+                            >
+                                {PERI_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // ===== MEAL PROGRESS BARS COMPONENT =====
+    const MealProgressBars = ({ mealKey }) => {
+        const target = getMealTarget(mealKey);
+        const served = calculateMealMacros(mealKey);
+        const isPeri = mealKey === 'Intra' || mealKey === 'Post';
+        const status = getMealStatus(mealKey);
+        
+        const getMacroDiff = (servedVal, targetVal) => {
+            const diff = targetVal - servedVal;
+            if (Math.abs(diff) <= 4) return { ok: true, diff: 0 };
+            return { ok: false, diff };
+        };
+        
+        const pDiff = getMacroDiff(served.P, target.P);
+        const hDiff = getMacroDiff(served.H, target.H);
+        const gDiff = !isPeri ? getMacroDiff(served.G, target.G) : { ok: true, diff: 0 };
+        
+        const pOver = served.P > target.P + 4;
+        const hOver = served.H > target.H + 4;
+        const gOver = !isPeri && served.G > target.G + 4;
+        
+        // Build status message
+        let statusMessage = '';
+        let statusColor = '';
+        
+        if (status === 'cuadrada') {
+            statusMessage = '🟢 Cuadrada';
+            statusColor = 'text-green-600';
+        } else if (pOver || hOver || gOver) {
+            const parts = [];
+            if (pOver) parts.push(`${(served.P - target.P).toFixed(0)}g P`);
+            if (hOver) parts.push(`${(served.H - target.H).toFixed(0)}g H`);
+            if (gOver) parts.push(`${(served.G - target.G).toFixed(0)}g G`);
+            statusMessage = `🔴 Sobran ${parts.join(', ')}`;
+            statusColor = 'text-red-600';
+        } else if (status === 'falta') {
+            const parts = [];
+            if (!pDiff.ok && pDiff.diff > 0) parts.push(`${pDiff.diff.toFixed(0)}g P`);
+            if (!hDiff.ok && hDiff.diff > 0) parts.push(`${hDiff.diff.toFixed(0)}g H`);
+            if (!gDiff.ok && gDiff.diff > 0) parts.push(`${gDiff.diff.toFixed(0)}g G`);
+            if (parts.length > 0) {
+                statusMessage = `🟡 Faltan ${parts.join(', ')}`;
+                statusColor = 'text-yellow-600';
+            }
+        }
+        
+        return (
+            <div className="bg-gray-50 rounded-lg p-3 mb-3" data-testid={`meal-progress-${mealKey}`}>
+                {/* Protein bar */}
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="w-5 text-center text-sm">🟢</span>
+                    <span className="w-4 text-xs font-semibold text-gray-600">P</span>
+                    <div className="flex-1">
+                        <ProgressBar value={served.P} max={target.P} color="#4CAF50" height={8} showCheck />
+                    </div>
+                    <span className={`text-xs font-mono w-16 text-right ${pOver ? 'text-red-500 font-bold' : ''}`}>
+                        {served.P.toFixed(0)}/{target.P.toFixed(0)}g
+                    </span>
+                </div>
+                
+                {/* Carbs bar */}
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="w-5 text-center text-sm">🔵</span>
+                    <span className="w-4 text-xs font-semibold text-gray-600">H</span>
+                    <div className="flex-1">
+                        <ProgressBar value={served.H} max={target.H} color="#2196F3" height={8} showCheck />
+                    </div>
+                    <span className={`text-xs font-mono w-16 text-right ${hOver ? 'text-red-500 font-bold' : ''}`}>
+                        {served.H.toFixed(0)}/{target.H.toFixed(0)}g
+                    </span>
+                </div>
+                
+                {/* Fat bar (not for peri) */}
+                {!isPeri && (
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="w-5 text-center text-sm">🟠</span>
+                        <span className="w-4 text-xs font-semibold text-gray-600">G</span>
+                        <div className="flex-1">
+                            <ProgressBar value={served.G} max={target.G} color="#FFA500" height={8} showCheck />
+                        </div>
+                        <span className={`text-xs font-mono w-16 text-right ${gOver ? 'text-red-500 font-bold' : ''}`}>
+                            {served.G.toFixed(0)}/{target.G.toFixed(0)}g
+                        </span>
+                    </div>
+                )}
+                
+                {/* Status message */}
+                {statusMessage && (
+                    <div className={`text-xs font-semibold ${statusColor} mt-1`}>
+                        {statusMessage}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // ===== MEAL CARD COMPONENT =====
     const MealCard = ({ mealKey }) => {
         const isExpanded = expandedMeals[mealKey];
         const target = getMealTarget(mealKey);
-        const served = calculateMealMacros(mealKey);
-        const status = getMealStatus(mealKey);
         const foods = mealsData[mealKey]?.alimentos || [];
         const isPeri = mealKey === 'Intra' || mealKey === 'Post';
         const info = mealInfo[mealKey];
-
-        const statusConfig = {
-            cuadrada: { label: 'Cuadrado', bg: 'bg-carbs-green', text: 'text-white' },
-            falta: { label: 'Faltan', bg: 'bg-protein-yellow', text: 'text-gray-800' },
-            sobra: { label: 'Sobran', bg: 'bg-fat-red', text: 'text-white' }
-        };
-
-        const getMacroStatus = (macro, value, targetVal) => {
-            const diff = Math.abs(value - targetVal);
-            if (diff <= 4) return 'cuadrada';
-            if (value > targetVal + 4) return 'sobra';
-            return 'falta';
-        };
+        const status = getMealStatus(mealKey);
+        const statusDot = getMealStatusDot(mealKey);
 
         return (
             <Card className={`bg-white shadow-md rounded-2xl overflow-hidden transition-all duration-200 ${isPeri ? 'border-l-4 border-l-brand-orange' : ''}`}>
@@ -503,8 +846,16 @@ const NutritionPage = () => {
                     <div className="flex items-center gap-3">
                         <span className="text-2xl">{info.emoji}</span>
                         <div>
-                            <h3 className="font-bold text-gray-900">{info.name}</h3>
-                            <p className="text-xs text-gray-500">Macros para la comida</p>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-gray-900">{info.name}</h3>
+                                <span className="text-sm">{statusDot.symbol}</span>
+                            </div>
+                            <p className="text-xs text-gray-500">
+                                {isPeri 
+                                    ? `${target.P.toFixed(0)}P | ${target.H.toFixed(0)}H`
+                                    : `${target.P.toFixed(0)}P | ${target.H.toFixed(0)}H | ${target.G.toFixed(0)}G`
+                                }
+                            </p>
                         </div>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
@@ -512,47 +863,8 @@ const NutritionPage = () => {
 
                 {isExpanded && (
                     <CardContent className="pt-0 px-4 pb-4">
-                        {/* Macro badges */}
-                        <div className="space-y-2 mb-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">🥩</span>
-                                    <span className="text-sm text-gray-700">Proteínas:</span>
-                                    <span className="text-sm font-semibold">{served.P.toFixed(1)} de {target.P.toFixed(1)} g</span>
-                                </div>
-                                {foods.length > 0 && (
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusConfig[getMacroStatus('P', served.P, target.P)].bg} ${statusConfig[getMacroStatus('P', served.P, target.P)].text}`}>
-                                        {statusConfig[getMacroStatus('P', served.P, target.P)].label}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">🍞</span>
-                                    <span className="text-sm text-gray-700">Hidratos:</span>
-                                    <span className="text-sm font-semibold">{served.H.toFixed(1)} de {target.H.toFixed(1)} g</span>
-                                </div>
-                                {foods.length > 0 && (
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusConfig[getMacroStatus('H', served.H, target.H)].bg} ${statusConfig[getMacroStatus('H', served.H, target.H)].text}`}>
-                                        {statusConfig[getMacroStatus('H', served.H, target.H)].label}
-                                    </span>
-                                )}
-                            </div>
-                            {!isPeri && (
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-lg">🫒</span>
-                                        <span className="text-sm text-gray-700">Grasas:</span>
-                                        <span className="text-sm font-semibold">{served.G.toFixed(1)} de {target.G.toFixed(1)} g</span>
-                                    </div>
-                                    {foods.length > 0 && (
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusConfig[getMacroStatus('G', served.G, target.G)].bg} ${statusConfig[getMacroStatus('G', served.G, target.G)].text}`}>
-                                            {statusConfig[getMacroStatus('G', served.G, target.G)].label}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                        {/* Progress bars */}
+                        <MealProgressBars mealKey={mealKey} />
 
                         {/* Empty state */}
                         {foods.length === 0 && !isPeri && (
@@ -647,6 +959,7 @@ const NutritionPage = () => {
         );
     };
 
+    // ===== LOADING STATE =====
     if (loading) {
         return (
             <div className="min-h-screen bg-bg-page flex items-center justify-center">
@@ -658,6 +971,7 @@ const NutritionPage = () => {
         );
     }
 
+    // ===== MAIN RENDER =====
     return (
         <div 
             className="min-h-screen pb-32 relative"
@@ -671,13 +985,13 @@ const NutritionPage = () => {
             }}
             data-testid="nutrition-page"
         >
-            {/* Background overlay - muy opaco para que gohan sea apenas visible */}
+            {/* Background overlay */}
             <div className="absolute inset-0 bg-bg-page/[0.97]" />
             
             {/* Content */}
             <div className="relative z-10">
                 {/* Header */}
-                <div className="bg-bg-dark sticky top-0 z-20">
+                <div className="bg-bg-dark sticky top-0 z-40">
                     <div className="max-w-lg mx-auto px-4 py-3">
                         <div className="flex items-center justify-between">
                             <Logo12EN12 />
@@ -685,6 +999,9 @@ const NutritionPage = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Sticky Summary */}
+                <DaySummary />
 
                 <div className="max-w-lg mx-auto px-4 py-4">
                     {/* Date & Day type */}
@@ -705,7 +1022,7 @@ const NutritionPage = () => {
                             </div>
                             
                             {/* Day type toggle */}
-                            <div className="flex gap-2 mb-4">
+                            <div className="flex gap-2">
                                 <button 
                                     className={`flex-1 py-2 px-3 rounded-full text-sm font-semibold transition-all ${
                                         tipoDia === 'entrenamiento' 
@@ -713,6 +1030,7 @@ const NutritionPage = () => {
                                             : 'bg-gray-100 text-gray-600'
                                     }`}
                                     onClick={() => setTipoDia('entrenamiento')}
+                                    data-testid="tipo-dia-entrenamiento"
                                 >
                                     Día de entrenamiento
                                 </button>
@@ -723,69 +1041,16 @@ const NutritionPage = () => {
                                             : 'bg-gray-100 text-gray-600'
                                     }`}
                                     onClick={() => setTipoDia('descanso')}
+                                    data-testid="tipo-dia-descanso"
                                 >
                                     Día de descanso
                                 </button>
                             </div>
-
-                            {/* Macro circles */}
-                            <div className="flex justify-around">
-                                <MacroCircle value={dayMacros.P} target={dayTarget.P_total || 1} label="Proteínas" color="protein" />
-                                <MacroCircle value={dayMacros.H} target={dayTarget.H_total || 1} label="Hidratos" color="carbs" />
-                                <MacroCircle value={dayMacros.G} target={dayTarget.G_total || 1} label="Grasas" color="fat" />
-                            </div>
                         </CardContent>
                     </Card>
 
-                    {/* Config */}
-                    {tipoDia === 'entrenamiento' && (
-                        <Collapsible open={configOpen} onOpenChange={setConfigOpen} className="mb-4">
-                            <CollapsibleTrigger asChild>
-                                <Button variant="ghost" className="w-full justify-between text-gray-500">
-                                    <span className="flex items-center gap-2"><Settings className="w-4 h-4" /> Configuración</span>
-                                    {configOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                </Button>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent>
-                                <Card className="mt-2 bg-white rounded-2xl shadow-md">
-                                    <CardContent className="p-4 space-y-4">
-                                        <div>
-                                            <label className="text-sm font-semibold text-gray-700 mb-2 block">¿Cuándo entrenas?</label>
-                                            <div className="flex flex-wrap gap-2">
-                                                {[{ value: 0, label: 'Ayunas' }, { value: 1, label: 'Después C1' }, { value: 2, label: 'Después C2' }, ...(numComidas === 4 ? [{ value: 3, label: 'Después C3' }] : [])].map(opt => (
-                                                    <Button 
-                                                        key={opt.value}
-                                                        variant={momentoEntreno === opt.value ? 'default' : 'outline'}
-                                                        size="sm"
-                                                        onClick={() => setMomentoEntreno(opt.value)}
-                                                        className={`rounded-full ${momentoEntreno === opt.value ? 'bg-brand-orange hover:bg-brand-orange-dark' : ''}`}
-                                                    >
-                                                        {opt.label}
-                                                    </Button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Periworkout</label>
-                                            <div className="flex flex-wrap gap-2">
-                                                {[{ value: 'intra_post', label: 'Intra+Post' }, { value: 'solo_post', label: 'Solo Post' }, { value: 'solo_intra', label: 'Solo Intra' }, { value: 'sin_peri', label: 'Sin peri' }].map(opt => (
-                                                    <Button 
-                                                        key={opt.value}
-                                                        variant={opcionPeri === opt.value ? 'default' : 'outline'}
-                                                        size="sm"
-                                                        onClick={() => setOpcionPeri(opt.value)}
-                                                        className={`rounded-full ${opcionPeri === opt.value ? 'bg-brand-orange hover:bg-brand-orange-dark' : ''}`}
-                                                    >
-                                                        {opt.label}
-                                                    </Button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </CollapsibleContent>
-                        </Collapsible>
-                    )}
+                    {/* Config Section - always visible now */}
+                    <ConfigSection />
 
                     {/* Meals */}
                     <div className="space-y-3 mb-4">
@@ -797,6 +1062,7 @@ const NutritionPage = () => {
                         <Button 
                             className="flex-1 h-12 bg-black hover:bg-gray-900 text-white rounded-full font-bold"
                             onClick={saveDiet}
+                            data-testid="save-diet-btn"
                         >
                             <Save className="w-5 h-5 mr-2" /> Guardar día
                         </Button>
@@ -826,7 +1092,7 @@ const NutritionPage = () => {
                         <DialogDescription className="sr-only">Busca alimentos para añadir a tu comida</DialogDescription>
                     </DialogHeader>
                     
-                    {/* Search input - fixed */}
+                    {/* Search input */}
                     <div className="p-4 bg-white flex-shrink-0 border-b">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -840,7 +1106,7 @@ const NutritionPage = () => {
                         </div>
                     </div>
                     
-                    {/* Category chips - fixed height, horizontal scroll */}
+                    {/* Category chips */}
                     <div className="flex-shrink-0 bg-white border-b">
                         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
                             {CATEGORY_CHIPS.map(chip => (
@@ -859,7 +1125,7 @@ const NutritionPage = () => {
                         </div>
                     </div>
                     
-                    {/* Results - scrollable */}
+                    {/* Results */}
                     <div className="flex-1 overflow-y-auto bg-gray-50">
                         {searchLoading ? (
                             <div className="flex items-center justify-center py-12">
@@ -873,7 +1139,6 @@ const NutritionPage = () => {
                         ) : (
                             <div className="p-4 space-y-2">
                                 {searchResults.map(food => {
-                                    // Usar macros efectivos si están disponibles, sino los brutos
                                     const macrosEf = food.macros_efectivos || {};
                                     const pEf = macrosEf.P ?? food.proteinas ?? 0;
                                     const hEf = macrosEf.H ?? food.hidratos ?? 0;
