@@ -1426,6 +1426,42 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
     return {"message": "Dieta guardada", "fecha": fecha}
 
 
+@api_router.get("/diets/recent")
+async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
+    """
+    Lista los últimos días con dieta guardada.
+    Devuelve resumen de cada día para el modal "Repetir de otro día".
+    """
+    cursor = db.diets.find(
+        {"user_id": user["id"]},
+        {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "comidas": 1}
+    ).sort("fecha", -1).limit(limit)
+    
+    diets = await cursor.to_list(length=limit)
+    
+    result = []
+    for diet in diets:
+        # Crear resumen de comidas
+        comidas_resumen = {}
+        for key, meal_data in (diet.get("comidas") or {}).items():
+            alimentos = meal_data.get("alimentos") or []
+            if alimentos:
+                nombres = [a.get("nombre", "?")[:20] for a in alimentos[:3]]
+                comidas_resumen[key] = " + ".join(nombres)
+                if len(alimentos) > 3:
+                    comidas_resumen[key] += f" +{len(alimentos)-3}"
+        
+        result.append({
+            "fecha": diet.get("fecha"),
+            "tipo_dia": diet.get("tipo_dia", "entrenamiento"),
+            "num_comidas": diet.get("num_comidas", 4),
+            "comidas_resumen": comidas_resumen,
+            "comidas": diet.get("comidas", {})  # Include full meals for copying
+        })
+    
+    return {"diets": result, "count": len(result)}
+
+
 @api_router.get("/diets/{fecha}")
 async def get_diet(fecha: str, user = Depends(get_current_user)):
     """Obtiene la dieta guardada para una fecha."""

@@ -556,6 +556,10 @@ const NutritionPage = () => {
     const [copyModalOpen, setCopyModalOpen] = useState(false);
     const [copyDate, setCopyDate] = useState('');
     const [buildMealModal, setBuildMealModal] = useState({ open: false, mealKey: null });
+    const [repeatMealModal, setRepeatMealModal] = useState({ open: false, mealKey: null });
+    const [recentDiets, setRecentDiets] = useState([]);
+    const [selectedDietForRepeat, setSelectedDietForRepeat] = useState(null);
+    const [editingQuantity, setEditingQuantity] = useState({ mealKey: null, foodIndex: null });
     
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
@@ -768,6 +772,33 @@ const NutritionPage = () => {
         return 'falta';
     };
 
+    // Get quantity increment based on food category
+    const getQuantityIncrement = (food) => {
+        const cat = food.categorias?.split(' | ')[0]?.split('.')[0] || '';
+        const subCat = food.categorias?.split(' | ')[0] || '';
+        
+        // Cat 2 (carnes), 3 (pescados): ±25g
+        if (cat === '2' || cat === '3') return 25;
+        // Cat 21 (arroz), 22 (pasta), 9 (patata): ±25g
+        if (cat === '21' || cat === '22' || cat === '9') return 25;
+        // Cat 8 (pan): ±10g
+        if (cat === '8') return 10;
+        // Cat 1 (huevos): ±55g (1 huevo)
+        if (cat === '1') return 55;
+        // Cat 17.2 (frutos secos): ±5g
+        if (subCat.startsWith('17.2')) return 5;
+        // Cat 17.1 (aceites): ±1g
+        if (subCat.startsWith('17.1')) return 1;
+        // Cat 11.1 (fruta fresca): usar racion/2 o ±50g
+        if (subCat.startsWith('11.1') || subCat.startsWith('11.2')) {
+            return Math.round((food.racion || 100) / 2);
+        }
+        // Cat 4 (proteína polvo): ±5g
+        if (cat === '4') return 5;
+        // Default: ±10g
+        return 10;
+    };
+
     // Food operations
     const handleAddFood = async (food) => {
         const mealKey = addFoodModal.mealKey;
@@ -788,7 +819,8 @@ const NutritionPage = () => {
                 macros_efectivos: result.macros_efectivos,
                 macros_brutos: result.macros_brutos,
                 que_cuenta: result.que_cuenta,
-                categorias: food.categorias
+                categorias: food.categorias,
+                racion: food.racion
             };
             setMealsData(prev => ({
                 ...prev,
@@ -806,7 +838,8 @@ const NutritionPage = () => {
     const updateFoodQuantity = async (mealKey, foodIndex, delta) => {
         const foods = [...(mealsData[mealKey]?.alimentos || [])];
         const food = foods[foodIndex];
-        const newQuantity = Math.max(5, food.cantidad_g + delta);
+        const increment = delta !== null ? delta : getQuantityIncrement(food);
+        const newQuantity = Math.max(1, food.cantidad_g + (delta !== null ? delta : increment));
         try {
             const result = await api('/api/calculator/macros-efectivos', {
                 method: 'POST',
@@ -817,11 +850,123 @@ const NutritionPage = () => {
         } catch (err) { console.error('Error updating quantity:', err); }
     };
 
+    const updateFoodQuantityDirect = async (mealKey, foodIndex, newQuantity) => {
+        const foods = [...(mealsData[mealKey]?.alimentos || [])];
+        const food = foods[foodIndex];
+        const quantity = Math.max(1, parseInt(newQuantity) || 1);
+        try {
+            const result = await api('/api/calculator/macros-efectivos', {
+                method: 'POST',
+                body: JSON.stringify({ alimento_id: food.alimento_id, cantidad_g: quantity, es_vegano: false })
+            });
+            foods[foodIndex] = { ...food, cantidad_g: quantity, macros_efectivos: result.efectivos, macros_brutos: result.brutos, que_cuenta: result.que_cuenta };
+            setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
+        } catch (err) { console.error('Error updating quantity:', err); }
+        setEditingQuantity({ mealKey: null, foodIndex: null });
+    };
+
     const removeFood = (mealKey, foodIndex) => {
         setMealsData(prev => ({
             ...prev,
             [mealKey]: { alimentos: (prev[mealKey]?.alimentos || []).filter((_, i) => i !== foodIndex) }
         }));
+    };
+
+    const clearMeal = (mealKey) => {
+        if (window.confirm(`¿Vaciar todos los ingredientes de ${mealInfo[mealKey].name}?`)) {
+            setMealsData(prev => ({
+                ...prev,
+                [mealKey]: { alimentos: [] }
+            }));
+            toast.success('Comida vaciada');
+        }
+    };
+
+    // Repeat from another day
+    const loadRecentDiets = async () => {
+        try {
+            const result = await api('/api/diets/recent?limit=14');
+            setRecentDiets(result.diets || []);
+        } catch (err) {
+            console.error('Error loading recent diets:', err);
+            setRecentDiets([]);
+        }
+    };
+
+    const openRepeatModal = async (mealKey) => {
+        setRepeatMealModal({ open: true, mealKey });
+        setSelectedDietForRepeat(null);
+        await loadRecentDiets();
+    };
+
+    const copyMealFromDay = async (sourceMealKey) => {
+        const targetMealKey = repeatMealModal.mealKey;
+        const sourceDiet = selectedDietForRepeat;
+        
+        if (!sourceDiet || !sourceDiet.comidas || !sourceDiet.comidas[sourceMealKey]) {
+            toast.error('No hay alimentos en esa comida');
+            return;
+        }
+        
+        const sourceAlimentos = sourceDiet.comidas[sourceMealKey].alimentos || [];
+        if (sourceAlimentos.length === 0) {
+            toast.error('Esa comida está vacía');
+            return;
+        }
+        
+        // Get target macros and source total macros
+        const targetMacros = getMealTarget(targetMealKey);
+        const sourceMacros = sourceAlimentos.reduce((acc, a) => ({
+            P: acc.P + (a.macros_efectivos?.P || 0),
+            H: acc.H + (a.macros_efectivos?.H || 0),
+            G: acc.G + (a.macros_efectivos?.G || 0)
+        }), { P: 0, H: 0, G: 0 });
+        
+        // Calculate scaling factor based on protein (primary macro)
+        const scaleFactor = sourceMacros.P > 0 ? targetMacros.P / sourceMacros.P : 1;
+        
+        // Scale and recalculate each food
+        const scaledFoods = [];
+        for (const food of sourceAlimentos) {
+            const scaledQuantity = Math.round(food.cantidad_g * scaleFactor);
+            try {
+                const result = await api('/api/calculator/macros-efectivos', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        alimento_id: food.alimento_id,
+                        cantidad_g: scaledQuantity,
+                        es_vegano: false
+                    })
+                });
+                scaledFoods.push({
+                    ...food,
+                    cantidad_g: scaledQuantity,
+                    macros_efectivos: result.efectivos,
+                    macros_brutos: result.brutos,
+                    que_cuenta: result.que_cuenta
+                });
+            } catch (err) {
+                // If recalc fails, use original scaled estimate
+                scaledFoods.push({
+                    ...food,
+                    cantidad_g: scaledQuantity,
+                    macros_efectivos: {
+                        P: (food.macros_efectivos?.P || 0) * scaleFactor,
+                        H: (food.macros_efectivos?.H || 0) * scaleFactor,
+                        G: (food.macros_efectivos?.G || 0) * scaleFactor
+                    }
+                });
+            }
+        }
+        
+        setMealsData(prev => ({
+            ...prev,
+            [targetMealKey]: { alimentos: scaledFoods }
+        }));
+        
+        setRepeatMealModal({ open: false, mealKey: null });
+        setSelectedDietForRepeat(null);
+        toast.success(`Copiada ${mealInfo[sourceMealKey]?.name || sourceMealKey} del ${formatDate(sourceDiet.fecha)}`);
     };
 
     // Menu options
@@ -1343,7 +1488,8 @@ const NutritionPage = () => {
                                     <Button 
                                         variant="outline" 
                                         className="h-10 rounded-full border-gray-300"
-                                        onClick={() => toast.info('Próximamente: Repetir de otro día')}
+                                        onClick={() => openRepeatModal(mealKey)}
+                                        data-testid={`repeat-meal-${mealKey}`}
                                     >
                                         <RefreshCw className="w-4 h-4 mr-1" /> Repetir
                                     </Button>
@@ -1373,40 +1519,112 @@ const NutritionPage = () => {
                         {foods.length > 0 && (
                             <>
                                 <div className="border-t border-gray-100 pt-3 mb-3">
-                                    <p className="text-xs text-gray-500 mb-2">Ingredientes</p>
-                                    <div className="space-y-2">
-                                        {foods.map((food, idx) => (
-                                            <div 
-                                                key={idx} 
-                                                className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
-                                            >
-                                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                    <span className="text-lg">{getFoodEmoji(food.categorias)}</span>
-                                                    <span className="text-sm text-gray-800 truncate">{food.nombre}</span>
+                                    <p className="text-xs text-gray-500 mb-2 font-semibold">── INGREDIENTES ──</p>
+                                    <div className="space-y-3">
+                                        {foods.map((food, idx) => {
+                                            const macros = food.macros_efectivos || {};
+                                            const increment = getQuantityIncrement(food);
+                                            const isEditing = editingQuantity.mealKey === mealKey && editingQuantity.foodIndex === idx;
+                                            const hasMacros = (macros.P || 0) > 0 || (macros.H || 0) > 0 || (macros.G || 0) > 0;
+                                            
+                                            return (
+                                                <div 
+                                                    key={idx} 
+                                                    className="bg-gray-50 rounded-lg p-3"
+                                                >
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                            <span className="text-xl">{getFoodEmoji(food.categorias)}</span>
+                                                            <span className="text-sm font-semibold text-gray-800 truncate">{food.nombre}</span>
+                                                        </div>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-7 w-7 text-gray-400 hover:text-red-500" 
+                                                            onClick={() => removeFood(mealKey, idx)}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
+                                                    
+                                                    {/* Quantity controls */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-1">
+                                                            <Button 
+                                                                variant="outline" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 rounded-full"
+                                                                onClick={() => updateFoodQuantity(mealKey, idx, -increment)}
+                                                            >
+                                                                <Minus className="w-3 h-3" />
+                                                            </Button>
+                                                            {isEditing ? (
+                                                                <input
+                                                                    type="number"
+                                                                    defaultValue={food.cantidad_g}
+                                                                    className="w-16 h-8 text-center text-sm font-bold border rounded-lg"
+                                                                    autoFocus
+                                                                    onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value);
+                                                                        if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null });
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <button 
+                                                                    className="w-16 h-8 text-sm font-bold text-center bg-white border border-gray-200 rounded-lg hover:border-brand-orange"
+                                                                    onClick={() => setEditingQuantity({ mealKey, foodIndex: idx })}
+                                                                >
+                                                                    {food.cantidad_g}g
+                                                                </button>
+                                                            )}
+                                                            <Button 
+                                                                variant="outline" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 rounded-full"
+                                                                onClick={() => updateFoodQuantity(mealKey, idx, increment)}
+                                                            >
+                                                                <Plus className="w-3 h-3" />
+                                                            </Button>
+                                                        </div>
+                                                        
+                                                        {/* Macros display */}
+                                                        <div className="text-xs text-gray-500">
+                                                            {hasMacros ? (
+                                                                <span>
+                                                                    ({(macros.P || 0).toFixed(0)}P | {(macros.H || 0).toFixed(0)}H | {(macros.G || 0).toFixed(0)}G)
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-gray-400">(no aporta macros)</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-1">
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateFoodQuantity(mealKey, idx, -10)}>
-                                                        <Minus className="w-3 h-3" />
-                                                    </Button>
-                                                    <span className="text-sm font-bold w-14 text-center">{food.cantidad_g}g</span>
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateFoodQuantity(mealKey, idx, 10)}>
-                                                        <Plus className="w-3 h-3" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-fat-red hover:text-red-700" onClick={() => removeFood(mealKey, idx)}>
-                                                        <Trash2 className="w-3 h-3" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
-                                <Button 
-                                    variant="ghost" 
-                                    className="w-full text-brand-orange hover:text-brand-orange-dark"
-                                    onClick={() => { setAddFoodModal({ open: true, mealKey }); setSearchQuery(''); setSearchCategory(''); }}
+                                
+                                {/* Add more button */}
+                                {foods.length < (isPeri ? 3 : 5) ? (
+                                    <Button 
+                                        variant="ghost" 
+                                        className="w-full text-brand-orange hover:text-brand-orange-dark"
+                                        onClick={() => setBuildMealModal({ open: true, mealKey, startStep: 2 })}
+                                    >
+                                        <Plus className="w-4 h-4 mr-1" /> Añadir ingrediente
+                                    </Button>
+                                ) : (
+                                    <p className="text-xs text-gray-400 text-center">Máximo {isPeri ? 3 : 5} alimentos alcanzado</p>
+                                )}
+                                
+                                {/* Clear meal button */}
+                                <button 
+                                    className="w-full text-xs text-gray-400 hover:text-red-500 mt-2 py-1"
+                                    onClick={() => clearMeal(mealKey)}
                                 >
-                                    <Plus className="w-4 h-4 mr-1" /> Añadir ingrediente
-                                </Button>
+                                    🗑️ Vaciar comida
+                                </button>
                             </>
                         )}
                     </CardContent>
@@ -1719,6 +1937,107 @@ const NutritionPage = () => {
                 setMealsData={setMealsData}
                 getFoodEmoji={getFoodEmoji}
             />
+
+            {/* Repeat Meal Modal */}
+            <Dialog open={repeatMealModal.open} onOpenChange={(open) => !open && setRepeatMealModal({ open: false, mealKey: null })}>
+                <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+                    <DialogHeader className="bg-bg-dark p-4 flex-shrink-0">
+                        <DialogTitle className="text-white">Repetir de otro día</DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                            Copiar a {repeatMealModal.mealKey && mealInfo[repeatMealModal.mealKey]?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="flex-1 overflow-y-auto">
+                        {!selectedDietForRepeat ? (
+                            // Step 1: Select day
+                            <div className="p-4">
+                                {recentDiets.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500">
+                                        <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" />
+                                        <p>Cargando días recientes...</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {recentDiets.map(diet => (
+                                            <button
+                                                key={diet.fecha}
+                                                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all"
+                                                onClick={() => setSelectedDietForRepeat(diet)}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900">{formatDate(diet.fecha)}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {diet.tipo_dia === 'entrenamiento' ? '🟢 Entreno' : '⚪ Descanso'}, {diet.num_comidas} comidas
+                                                        </p>
+                                                    </div>
+                                                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            // Step 2: Select meal from day
+                            <div className="p-4">
+                                <button 
+                                    className="flex items-center gap-2 text-sm text-gray-500 mb-4"
+                                    onClick={() => setSelectedDietForRepeat(null)}
+                                >
+                                    <ChevronLeft className="w-4 h-4" /> Volver
+                                </button>
+                                
+                                <h3 className="font-bold text-gray-900 mb-3">
+                                    Comidas del {formatDate(selectedDietForRepeat.fecha)}
+                                </h3>
+                                
+                                <div className="space-y-2">
+                                    {Object.entries(selectedDietForRepeat.comidas_resumen || {}).map(([key, resumen]) => (
+                                        <button
+                                            key={key}
+                                            className="w-full text-left p-3 bg-gray-50 hover:bg-brand-orange/10 rounded-xl transition-all border-2 border-transparent hover:border-brand-orange"
+                                            onClick={() => copyMealFromDay(key)}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="font-semibold text-gray-900">
+                                                        {mealInfo[key]?.name || key}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 truncate max-w-[250px]">
+                                                        {resumen}
+                                                    </p>
+                                                </div>
+                                                <span className="text-brand-orange text-sm font-semibold">Copiar</span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    
+                                    {Object.keys(selectedDietForRepeat.comidas_resumen || {}).length === 0 && (
+                                        <p className="text-center text-gray-500 py-4">
+                                            No hay comidas guardadas este día
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="flex-shrink-0 p-4 border-t">
+                        <Button 
+                            variant="outline" 
+                            className="w-full rounded-full"
+                            onClick={() => {
+                                setRepeatMealModal({ open: false, mealKey: null });
+                                setSelectedDietForRepeat(null);
+                            }}
+                        >
+                            Cancelar
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Copy Modal */}
             <Dialog open={copyModalOpen} onOpenChange={setCopyModalOpen}>
