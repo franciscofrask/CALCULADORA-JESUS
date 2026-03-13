@@ -109,7 +109,7 @@ const PROTEIN_CATEGORIES = [
     { label: 'Legumbres', value: '10', emoji: '🫘' },
 ];
 
-// Categories for Build Meal Modal - Step 2 (Acompañamientos) - COMPLETO
+// Categories for Build Meal Modal - Step 2 (Acompañamientos) - AGRUPADO
 const SIDE_CATEGORIES = [
     { label: 'Arroces', value: '21', emoji: '🍚' },
     { label: 'Panes', value: '8', emoji: '🍞' },
@@ -120,22 +120,11 @@ const SIDE_CATEGORIES = [
     { label: 'Verduras', value: '13', emoji: '🥦' },
     { label: 'Legumbres', value: '10', emoji: '🫘' },
     { label: 'Lácteos', value: '5', emoji: '🥛' },
-    { label: 'Beb. vegetales', value: '24', emoji: '🥤' },
-    { label: 'Bebidas', value: '19', emoji: '☕' },
-    { label: 'Sustitutivos', value: '27', emoji: '🥤' },
-    { label: 'Pizza/Lasaña', value: '32', emoji: '🍕' },
-    { label: 'Bollería', value: '31', emoji: '🥐' },
-    { label: 'Barritas energ.', value: '47', emoji: '🍫' },
-    { label: 'Chocolate', value: '34', emoji: '🍫' },
-    { label: 'Helados', value: '35', emoji: '🍦' },
-    { label: 'Postres', value: '36', emoji: '🍮' },
-    { label: 'Cacao/Azúcar', value: '37', emoji: '🍯' },
-    { label: 'Aperitivos', value: '38', emoji: '🍟' },
-    { label: 'Cocina española', value: '39', emoji: '🥘' },
+    { label: 'Bebidas', value: '19,24', emoji: '🥤' },
     { label: 'Salsas', value: '16', emoji: '🥫' },
     { label: 'Grasas', value: '17', emoji: '🫒' },
-    { label: 'Comida rápida', value: '49', emoji: '🍔' },
-    { label: 'Sopas', value: '48', emoji: '🍲' },
+    { label: 'Dulces', value: '31,34,35,36,37', emoji: '🍫' },
+    { label: 'Comida prep.', value: '32,39,49,53', emoji: '🍕' },
     { label: 'Todas', value: '', emoji: '🍽️' },
 ];
 
@@ -294,8 +283,9 @@ const BuildMealModal = ({
             try {
                 const params = new URLSearchParams({ q: searchQuery, limit: '30' });
                 
-                // Add category filter
+                // Add category filter (supports multiple categories separated by comma)
                 if (selectedCategory && selectedCategory !== 'proteina') {
+                    // If multiple categories, pass as comma-separated
                     params.set('category', selectedCategory);
                 }
                 

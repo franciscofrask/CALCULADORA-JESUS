@@ -642,12 +642,23 @@ async def buscar_alimentos(
     """
     filtro = {}
     
-    # Filtro por categoría específica
+    # Filtro por categoría específica (soporta múltiples categorías separadas por coma)
     if categoria:
-        filtro["$or"] = [
-            {"categorias": categoria},
-            {"categorias": {"$regex": f"^{re.escape(categoria)}\\."}}
-        ]
+        categorias_list = [c.strip() for c in categoria.split(',') if c.strip()]
+        if len(categorias_list) == 1:
+            # Una sola categoría
+            cat = categorias_list[0]
+            filtro["$or"] = [
+                {"categorias": cat},
+                {"categorias": {"$regex": f"^{re.escape(cat)}\\."}}
+            ]
+        else:
+            # Múltiples categorías - crear OR de todas
+            or_conditions = []
+            for cat in categorias_list:
+                or_conditions.append({"categorias": cat})
+                or_conditions.append({"categorias": {"$regex": f"^{re.escape(cat)}\\."}})
+            filtro["$or"] = or_conditions
     
     # Determinar límite de búsqueda en MongoDB
     # Si hay query de texto, necesitamos traer más porque filtramos en Python
