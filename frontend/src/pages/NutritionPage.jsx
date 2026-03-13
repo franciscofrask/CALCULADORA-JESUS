@@ -37,14 +37,15 @@ const getFoodEmoji = (categorias) => {
     return FOOD_EMOJIS[mainCat] || FOOD_EMOJIS.default;
 };
 
-// Category filter chips - 23 categorías completas
+// Category filter chips - Categorías completas para buscador general
 const CATEGORY_CHIPS = [
     { label: 'Todas', value: '', emoji: '🍽️' },
     { label: 'Huevos', value: '1', emoji: '🥚' },
     { label: 'Carnes', value: '2', emoji: '🥩' },
     { label: 'Pescados', value: '3', emoji: '🐟' },
-    { label: 'Proteína', value: '4', emoji: '💪' },
+    { label: 'Prot. polvo', value: '4', emoji: '💪' },
     { label: 'Lácteos', value: '5', emoji: '🥛' },
+    { label: 'Soja', value: '6', emoji: '🫘' },
     { label: 'Cereales', value: '7', emoji: '🌾' },
     { label: 'Panes', value: '8', emoji: '🍞' },
     { label: 'Tubérculos', value: '9', emoji: '🥔' },
@@ -53,15 +54,28 @@ const CATEGORY_CHIPS = [
     { label: 'Verduras', value: '13', emoji: '🥦' },
     { label: 'Salsas', value: '16', emoji: '🥫' },
     { label: 'Grasas', value: '17', emoji: '🫒' },
-    { label: 'F.Secos', value: '17.2', emoji: '🥜' },
+    { label: 'Intraentreno', value: '18', emoji: '⚡' },
+    { label: 'Bebidas', value: '19', emoji: '☕' },
     { label: 'Arroces', value: '21', emoji: '🍚' },
     { label: 'Pasta', value: '22', emoji: '🍝' },
-    { label: 'Beb.Veg', value: '24', emoji: '🥤' },
-    { label: 'Vegano', value: '28', emoji: '🌱' },
-    { label: 'Cacao', value: '37', emoji: '🍫' },
-    { label: 'Snacks', value: '38', emoji: '🍟' },
+    { label: 'Beb. vegetales', value: '24', emoji: '🥤' },
+    { label: 'Sustitutivos', value: '27', emoji: '🥤' },
+    { label: 'Prot. vegetal', value: '28', emoji: '🌱' },
+    { label: 'Barritas prot.', value: '29', emoji: '🍫' },
+    { label: 'Bollería', value: '31', emoji: '🥐' },
+    { label: 'Pizza/Lasaña', value: '32', emoji: '🍕' },
+    { label: 'Chocolate', value: '34', emoji: '🍫' },
+    { label: 'Helados', value: '35', emoji: '🍦' },
+    { label: 'Postres', value: '36', emoji: '🍮' },
+    { label: 'Cacao/Azúcar', value: '37', emoji: '🍯' },
+    { label: 'Aperitivos', value: '38', emoji: '🍟' },
+    { label: 'Cocina española', value: '39', emoji: '🥘' },
+    { label: 'Aminoácidos', value: '41', emoji: '⚡' },
+    { label: 'Barritas energ.', value: '47', emoji: '🍫' },
     { label: 'Sopas', value: '48', emoji: '🍲' },
-    { label: 'Comida Prep', value: '51', emoji: '📦' },
+    { label: 'Comida rápida', value: '49', emoji: '🍔' },
+    { label: 'Comida asiática', value: '50', emoji: '🍜' },
+    { label: 'Comida prep.', value: '53', emoji: '📦' },
 ];
 
 // Momento entreno options
@@ -80,30 +94,48 @@ const PERI_OPTIONS = [
     { value: 'sin_peri', label: 'Sin periworkout' },
 ];
 
-// Categories for Build Meal Modal - Step 1 (Proteínas)
+// Categories for Build Meal Modal - Step 1 (Proteínas) - COMPLETO
 const PROTEIN_CATEGORIES = [
-    { label: 'Carnes', value: '2', emoji: '🥩' },
-    { label: 'Pescados', value: '3', emoji: '🐟' },
     { label: 'Huevos', value: '1', emoji: '🥚' },
+    { label: 'Embutidos', value: '2.1', emoji: '🥓' },
+    { label: 'Aves', value: '2.2', emoji: '🍗' },
+    { label: 'Vacuno', value: '2.3', emoji: '🥩' },
+    { label: 'Cerdo', value: '2.4', emoji: '🐷' },
+    { label: 'Otras carnes', value: '2.6', emoji: '🍖' },
+    { label: 'Pescados', value: '3', emoji: '🐟' },
     { label: 'Lácteos', value: '5', emoji: '🥛' },
-    { label: 'Proteína', value: '4', emoji: '💪' },
-    { label: 'Vegetal', value: '28', emoji: '🌱' },
-    { label: 'Soja', value: '6', emoji: '🫘' },
+    { label: 'Prot. polvo', value: '4', emoji: '💪' },
+    { label: 'Prot. vegetal', value: '28', emoji: '🌱' },
+    { label: 'Legumbres', value: '10', emoji: '🫘' },
 ];
 
-// Categories for Build Meal Modal - Step 2 (Acompañamientos)
+// Categories for Build Meal Modal - Step 2 (Acompañamientos) - COMPLETO
 const SIDE_CATEGORIES = [
-    { label: 'Arroz', value: '21', emoji: '🍚' },
-    { label: 'Pasta', value: '22', emoji: '🍝' },
-    { label: 'Patata', value: '9', emoji: '🥔' },
-    { label: 'Pan', value: '8', emoji: '🍞' },
+    { label: 'Arroces', value: '21', emoji: '🍚' },
+    { label: 'Panes', value: '8', emoji: '🍞' },
     { label: 'Cereales', value: '7', emoji: '🌾' },
+    { label: 'Pasta', value: '22', emoji: '🍝' },
+    { label: 'Tubérculos', value: '9', emoji: '🥔' },
+    { label: 'Frutas', value: '11', emoji: '🍎' },
+    { label: 'Verduras', value: '13', emoji: '🥦' },
     { label: 'Legumbres', value: '10', emoji: '🫘' },
-    { label: 'Fruta', value: '11', emoji: '🍎' },
-    { label: 'Verdura', value: '13', emoji: '🥦' },
+    { label: 'Lácteos', value: '5', emoji: '🥛' },
+    { label: 'Beb. vegetales', value: '24', emoji: '🥤' },
+    { label: 'Bebidas', value: '19', emoji: '☕' },
+    { label: 'Sustitutivos', value: '27', emoji: '🥤' },
+    { label: 'Pizza/Lasaña', value: '32', emoji: '🍕' },
+    { label: 'Bollería', value: '31', emoji: '🥐' },
+    { label: 'Barritas energ.', value: '47', emoji: '🍫' },
+    { label: 'Chocolate', value: '34', emoji: '🍫' },
+    { label: 'Helados', value: '35', emoji: '🍦' },
+    { label: 'Postres', value: '36', emoji: '🍮' },
+    { label: 'Cacao/Azúcar', value: '37', emoji: '🍯' },
+    { label: 'Aperitivos', value: '38', emoji: '🍟' },
+    { label: 'Cocina española', value: '39', emoji: '🥘' },
+    { label: 'Salsas', value: '16', emoji: '🥫' },
     { label: 'Grasas', value: '17', emoji: '🫒' },
-    { label: 'F.Secos', value: '17.2', emoji: '🥜' },
-    { label: '+ Proteína', value: 'proteina', emoji: '💪' },
+    { label: 'Comida rápida', value: '49', emoji: '🍔' },
+    { label: 'Sopas', value: '48', emoji: '🍲' },
     { label: 'Todas', value: '', emoji: '🍽️' },
 ];
 
