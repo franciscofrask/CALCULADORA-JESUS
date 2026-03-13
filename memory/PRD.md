@@ -3,8 +3,8 @@
 ## Documento de Requisitos del Producto (PRD)
 
 ### Fecha de creación: 6 de marzo de 2026
-### Última actualización: 12 de marzo de 2026
-### Estado: MVP Completado + CALMA v2 + Buscador Mejorado (E12)
+### Última actualización: 13 de marzo de 2026
+### Estado: MVP Completado + CALMA v2 + Buscador (E12) + Config Día + Resumen Sticky (F1)
 
 ---
 
@@ -74,7 +74,6 @@
 ### Frontend NutritionPage.jsx
 - [x] Calendario con navegación por fechas
 - [x] Toggle tipo de día (Entreno/Descanso)
-- [x] Configuración de comidas y periworkout
 - [x] Acordeón de comidas con progress bars P/H/G
 - [x] Modal de búsqueda de alimentos con filtros
 - [x] Ajuste de cantidades (+/- 10g)
@@ -86,6 +85,15 @@
   - 23 categorías completas en chips
   - Ración correcta por alimento
   - Badges ocultos si macro = 0
+- [x] **TAREA F1.1 + F1.2: Configuración del día y resumen sticky:**
+  - Selector de número de comidas [3] [4]
+  - Selector "¿Cuándo entrenas?" (En ayunas, Después de C1/C2/C3)
+  - Selector periworkout (Intra+Post, Solo Post, Solo Intra, Sin periworkout)
+  - Resumen sticky con barras de progreso P/H/G
+  - Mini-estado de comidas (⚪ vacía, 🟡 falta, 🟢 cuadrada, 🔴 sobra)
+  - Tabla expandible con desglose por comida
+  - Barras de progreso dentro de cada comida
+  - Estado dinámico de comidas (Cuadrada/Faltan/Sobran)
 
 ---
 
