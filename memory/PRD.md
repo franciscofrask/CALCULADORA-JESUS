@@ -4,7 +4,7 @@
 
 ### Fecha de creación: 6 de marzo de 2026
 ### Última actualización: 13 de marzo de 2026
-### Estado: MVP Completado + CALMA v2 + Buscador (E12) + Config Día + Resumen Sticky (F1)
+### Estado: MVP Completado + CALMA v2 + Buscador (E12) + Config Día (F1.1/F1.2) + Constructor "Lo hago yo" (F1.3)
 
 ---
 
@@ -94,6 +94,15 @@
   - Tabla expandible con desglose por comida
   - Barras de progreso dentro de cada comida
   - Estado dinámico de comidas (Cuadrada/Faltan/Sobran)
+- [x] **TAREA F1.3: Constructor "Lo hago yo" en 2 pasos:**
+  - Modal fullscreen con flujo guiado
+  - PASO 1: Elegir proteína (categorías Carnes/Pescados/Huevos/Lácteos/Proteína/Vegetal/Soja)
+  - PASO 2: Elegir acompañamiento (auto-avance cuando P>=80%)
+  - Sugerencias automáticas ordenadas por mejor encaje
+  - Buscador con filtro "Solo genéricos" (tag=GEN)
+  - Micro-sugerencia de grasas cuando solo faltan G
+  - Máximo 5 alimentos por comida
+  - Banner "¡COMIDA CUADRADA!" cuando ±4g en todos los macros
 
 ---
 
@@ -110,6 +119,7 @@
   - `/api/calculator/macros-efectivos` - Cálculo individual
   - `/api/calculator/validate-meal` - Validación de comidas
   - `/api/calculator/menu-options` - Generación de menús A/B/C
+  - `/api/calculator/suggest` - Sugerencias de alimentos con parámetro "paso"
   - `/api/diets` - CRUD de dietas diarias
 - Integración Claude Sonnet 4.5 para generación de rutinas
 - Pagos simulados (mockeados)
