@@ -1,221 +1,126 @@
-# JG12↗ - Plataforma Jesús Gallego Trainer
+# JG12 - Plataforma de Entrenamiento Personal
 
-## Documento de Requisitos del Producto (PRD)
+## Original Problem Statement
+El usuario quiere crear una plataforma de entrenamiento personal llamada "JG12". La plataforma incluye múltiples paneles y funcionalidades avanzadas como generación de rutinas por IA. La característica principal es una calculadora de macros y dietas altamente detallada llamada "CALMA".
 
-### Fecha de creación: 6 de marzo de 2026
-### Última actualización: 13 de marzo de 2026
-### Estado: MVP Completado + CALMA v2 + Config Día (F1.1/F1.2) + Constructor (F1.3) + Edición/Repetir (F1.4)
+## Product Requirements
+- 4 Paneles: Cliente, Operaciones, CEO y Entrenadores
+- Calculadora de nutrición avanzada "CALMA"
+- Generación de 3 opciones de menú (A/B/C)
+- Múltiples diseños de pantalla específicos
+- Branding "JG12" (modo oscuro, acentos naranjas)
+- Integración de IA (Claude Sonnet 4.5) para generación de rutinas (futuro)
+- Integración de pagos (Stripe, actualmente simulada)
 
----
+## Core Features Implemented
 
-## 1. Descripción General
+### Authentication & Users
+- JWT-based authentication
+- Client login/logout
+- User roles (client, trainer, admin)
 
-**JG12↗** es una plataforma de gestión de entrenamiento personal online para Jesús Gallego Personal Trainer. Permite la gestión integral de clientes, rutinas, nutrición avanzada (CALMA), reportes y comunicación entre entrenadores y clientes.
+### Nutrition Calculator (CALMA v2)
+- Macro distribution based on day type (training/rest)
+- Configurable meals (3 or 4)
+- Periworkout timing (before/after which meal)
+- Periworkout options (Intra+Post, Solo Post, Solo Intra, Sin peri)
 
----
+### Food Search & Management
+- Text search with accent normalization
+- Category filtering (23 categories)
+- Generic food tag filtering
+- Effective macros calculation
 
-## 2. User Personas
+### Meal Builder "Lo hago yo" (TAREA FIX-1 Complete)
+- **Normal Mode:** 2-step guided builder (Protein → Accompaniment)
+- **Intra Mode (FIX 5):** Single step, filtered to aminoacids/isotonic drinks, max 3 foods, yellow header
+- **Post Mode (FIX 6):** 2-step flow with post-specific categories (Whey/Casein → Fruit/Rice cream), green header
+- **Quantity Controls (FIX 8):** [-] [quantity] [+] buttons and separate AÑADIR button per suggestion
+- **Backend Filter (FIX 7):** paso="proteina" strictly filters to pure protein categories only
 
-### Cliente
-- Usuarios que contratan servicios de entrenamiento personal online
-- Acceden a su rutina, macros, reportes y chat con entrenador
-- Planes: Gold (149€), Silver (99€), Bronze (69€), ELM (39€)
+### Diet Management
+- Save daily diets to MongoDB
+- Load saved diets by date
+- Copy meals from previous days with macro scaling
+- Menu suggestions (A/B/C options)
 
-### Operaciones/Admin
-- Staff que gestiona clientes, pagos, rutinas y comunicaciones
-- Acceso a dashboard de métricas y generador de rutinas con IA
+### UI Components
+- Sticky daily summary with progress bars
+- Expandable meal cards
+- Inline ingredient editing
+- Day navigation
 
-### Entrenador
-- Profesionales que diseñan rutinas y nutrición personalizada
-- Interactúan con clientes via chat
+## Architecture
 
----
+```
+/app/
+├── backend/
+│   ├── server.py         # FastAPI main server
+│   ├── calculator.py     # CALMA calculation logic
+│   ├── calma_engine.py   # Core macro calculations
+│   └── meal_templates.py # Menu generation
+├── frontend/
+│   └── src/
+│       ├── pages/
+│       │   ├── AuthPage.jsx
+│       │   └── NutritionPage.jsx  # Main nutrition page
+│       └── components/
+└── memory/
+    └── PRD.md
+```
 
-## 3. Core Requirements
+## Database Collections
+- `users`: User credentials, roles, macros
+- `foods`: Food database with macros
+- `food_categories`: Category definitions
+- `diets`: Daily diet storage per user
 
-### Portal Cliente
-- [x] Login/Registro con email y contraseña (JWT)
-- [x] Home Dashboard con progreso del ciclo
-- [x] Mi Rutina - Visualización de ejercicios por día
-- [x] **Mi Nutrición - Calculadora CALMA v2 completa**
-- [x] Mis Reportes - Formularios de seguimiento con evolución
-- [x] Mensajes - Chat con entrenador
-- [x] Mi Perfil - Datos personales y plan
+## API Endpoints
+- `POST /api/auth/login` - User authentication
+- `GET /api/calculator/search` - Food search
+- `POST /api/calculator/suggest` - AI suggestions
+- `POST /api/calculator/adjust` - Calculate optimal quantity
+- `POST /api/calculator/distribute` - Macro distribution
+- `POST /api/calculator/menu-options` - Generate menu A/B/C
+- `POST /api/diets` - Save daily diet
+- `GET /api/diets/{fecha}` - Load diet by date
+- `GET /api/diets/recent` - Recent diets for repeat
 
-### Panel Operaciones
-- [x] Dashboard con métricas (MRR, clientes, pagos)
-- [x] Listado de clientes con filtros
-- [x] Ficha única de cliente (tabs múltiples)
-- [x] Generador de rutinas con IA (Claude Sonnet 4.5)
-- [x] Gestión de macros por cliente
+## Test Credentials
+- Client: `clientedemo@test.com` / `demo123`
 
----
+## Completed Tasks
+- [x] TAREA E12: Fixed food search (accents, effective macros)
+- [x] TAREA F1.1 & F1.2: Day configuration + sticky summary
+- [x] TAREA F1.3: "Lo hago yo" 2-step builder
+- [x] TAREA F1.4: Ingredient editing, save, repeat from day
+- [x] Full diagnostic (100 points)
+- [x] TAREA FIX-1: All 8 fixes completed
+  - FIX 1: Password show/hide toggle
+  - FIX 2: Copyright 2026
+  - FIX 3: Remove Kcal from sticky summary
+  - FIX 4: Remove extra "Buscar alimento" button
+  - FIX 5: Intra mode with filtered categories
+  - FIX 6: Post mode with 2-step post-specific flow
+  - FIX 7: Backend strict protein filter
+  - FIX 8: Quantity controls in suggestions
 
-## 4. CALMA v2 - Sistema de Nutrición Avanzado
+## Upcoming Tasks (P1)
+- [ ] Home Screen Redesign (Pantalla 10) with circular macro trackers
+- [ ] Routine Screen Redesign ("Mi Rutina")
+- [ ] Visual Calendar in NutritionPage
 
-### Motor de Macros Efectivos (calma_engine.py)
-- Cálculo de "macros que cuentan" según categoría del alimento
-- Reglas específicas por tipo: carnes (solo P), cereales (solo H), etc.
-- Sistema de excepción para categoría 28 (YA) y 52 (vegano)
-- 3110 alimentos en base de datos con 232 categorías
+## Backlog (P2)
+- [ ] Tracking Module (evolution silhouettes)
+- [ ] Real Stripe Integration
+- [ ] Refactor server.py into APIRouters
+- [ ] Refactor NutritionPage.jsx into sub-components
+- [ ] Fix "Made with Emergent" badge overlap on mobile
 
-### Distribución de Macros (macro_distribution.py)
-- 16 escenarios de distribución según:
-  - Tipo de día (entrenamiento/descanso)
-  - Número de comidas (3/4)
-  - Momento de entreno (ayunas/después C1/C2/C3)
-  - Opción periworkout (intra+post/solo post/solo intra/sin peri)
+## Known Issues
+- Badge "Made with Emergent" overlaps bottom nav on mobile (P2)
+- NutritionPage.jsx is monolithic (2000+ lines, needs refactoring)
 
-### Calculadora Interactiva (calculator.py)
-- Ajuste automático de cantidad de alimentos
-- Validación de comidas (cuadrada/falta/sobra)
-- Sugerencias de alimentos según macros restantes
-
-### Frontend NutritionPage.jsx
-- [x] Calendario con navegación por fechas
-- [x] Toggle tipo de día (Entreno/Descanso)
-- [x] Acordeón de comidas con progress bars P/H/G
-- [x] Modal de búsqueda de alimentos con filtros
-- [x] Ajuste de cantidades (+/- 10g)
-- [x] Guardado y carga de dietas
-- [x] Copia de dietas entre fechas
-- [x] **TAREA E12: Buscador mejorado con:**
-  - Normalización de acentos (buscar "atun" → "Atún")
-  - Macros efectivos CALMA en resultados
-  - 23 categorías completas en chips
-  - Ración correcta por alimento
-  - Badges ocultos si macro = 0
-- [x] **TAREA F1.1 + F1.2: Configuración del día y resumen sticky:**
-  - Selector de número de comidas [3] [4]
-  - Selector "¿Cuándo entrenas?" (En ayunas, Después de C1/C2/C3)
-  - Selector periworkout (Intra+Post, Solo Post, Solo Intra, Sin periworkout)
-  - Resumen sticky con barras de progreso P/H/G
-  - Mini-estado de comidas (⚪ vacía, 🟡 falta, 🟢 cuadrada, 🔴 sobra)
-  - Tabla expandible con desglose por comida
-  - Barras de progreso dentro de cada comida
-  - Estado dinámico de comidas (Cuadrada/Faltan/Sobran)
-- [x] **TAREA F1.3: Constructor "Lo hago yo" en 2 pasos:**
-  - Modal fullscreen con flujo guiado
-  - PASO 1: Elegir proteína (categorías Carnes/Pescados/Huevos/Lácteos/Proteína/Vegetal/Soja)
-  - PASO 2: Elegir acompañamiento (auto-avance cuando P>=80%)
-  - Sugerencias automáticas ordenadas por mejor encaje
-  - Buscador con filtro "Solo genéricos" (tag=GEN)
-  - Micro-sugerencia de grasas cuando solo faltan G
-  - Máximo 5 alimentos por comida
-  - Banner "¡COMIDA CUADRADA!" cuando ±4g en todos los macros
-- [x] **TAREA F1.4: Edición de ingredientes + Guardar día + Repetir:**
-  - Botones [-] [+] con incrementos por categoría (carne ±25g, aceite ±1g, huevos ±55g, etc.)
-  - Click en cantidad abre input editable para cantidad exacta
-  - Macros del ingrediente recalculados en tiempo real
-  - Botón "🗑️ Vaciar comida" con confirmación
-  - Máximo 5 alimentos por comida (3 para peri)
-  - Modal "Repetir de otro día" con lista de días recientes
-  - Copiar comidas con escalado proporcional (basado en P)
-  - Endpoint GET /api/diets/recent
-
----
-
-## 5. Implementación Completada
-
-### Backend (FastAPI + MongoDB)
-- Autenticación JWT completa
-- CRUD de usuarios, perfiles, rutinas, reportes
-- Sistema de mensajería
-- **Motor CALMA v2 completo con endpoints:**
-  - `/api/calculator/search` - Búsqueda de alimentos (con normalización acentos, macros efectivos)
-  - `/api/calculator/distribute` - Distribución de macros
-  - `/api/calculator/adjust` - Ajuste automático
-  - `/api/calculator/macros-efectivos` - Cálculo individual
-  - `/api/calculator/validate-meal` - Validación de comidas
-  - `/api/calculator/menu-options` - Generación de menús A/B/C
-  - `/api/calculator/suggest` - Sugerencias de alimentos con parámetro "paso"
-  - `/api/diets` - CRUD de dietas diarias
-- Integración Claude Sonnet 4.5 para generación de rutinas
-- Pagos simulados (mockeados)
-
-### Frontend (React + Tailwind + Shadcn)
-- 18+ pantallas implementadas
-- Diseño responsive mobile-first
-- **NutritionPage completamente funcional**
-- Badges de planes (Gold, Silver, Bronze, ELM)
-- Charts de evolución con Recharts
-- Sistema de notificaciones con Sonner
-
-### Integraciones
-- Claude Sonnet 4.5 via emergentintegrations (Emergent LLM Key)
-
----
-
-## 6. Backlog Priorizado
-
-### P0 (Crítico)
-- [ ] Integración real de Stripe para pagos
-- [ ] Sistema de recordatorios automáticos (semana 3 = reporte)
-
-### P1 (Alta prioridad)
-- [ ] Home Screen Redesign (Pantalla 10) con trackers circulares
-- [ ] Pantalla "Mi Rutina" (Pantalla 30) con estados de color
-- [ ] Módulo de Seguimiento (Pantalla 47) siluetas de evolución
-- [ ] Módulo de Suplementos (Pantallas 34-39)
-- [ ] Subida de fotos en reportes
-- [ ] Videos de ejercicios embebidos
-
-### P2 (Media prioridad)
-- [ ] Enhanced Onboarding (Pantallas 6, 8, 9)
-- [ ] Panel de Estadísticas (Pantalla 50)
-- [ ] Navegación inferior en portal cliente
-- [ ] Exportación de rutinas a PDF
-
-### P3 (Futuro)
-- [ ] App móvil nativa
-- [ ] Notificaciones push/email
-- [ ] Gamificación (badges, streaks)
-
----
-
-## 7. Stack Técnico
-
-- **Frontend**: React 18, Tailwind CSS, Shadcn UI, Recharts
-- **Backend**: FastAPI, Motor (MongoDB async)
-- **Base de datos**: MongoDB
-- **IA**: Claude Sonnet 4.5 (emergentintegrations)
-- **Pagos**: Stripe (pendiente - actualmente MOCKEADO)
-
-### Branding JG12
-- **Color Primario**: #FF671F (Naranja)
-- **Color Secundario**: #000000 (Negro)
-- **Fuente Principal**: Bebas Neue (headings)
-- **Fuente Secundaria**: Inter (body)
-- **Logo**: JG12↗ con flecha naranja
-
----
-
-## 8. URLs y Credenciales de Test
-
-### Credenciales Admin
-- Email: admin@12en12.com
-- Password: admin123
-
-### Credenciales Cliente Test
-- Email: clientedemo@test.com  
-- Password: demo123
-
----
-
-## 9. Notas de Implementación
-
-- Pagos están **MOCKEADOS** - todos retornan success
-- La generación de rutinas con IA puede tardar 5-10 segundos
-- El sistema usa ciclos de 4 semanas
-- Los planes Gold incluyen cardio personalizado
-- **CALMA v2 está 100% funcional** - motor backend y frontend completos
-
----
-
-## 10. Archivos Clave
-
-- `/app/backend/calma_engine.py` - Motor de macros efectivos
-- `/app/backend/macro_distribution.py` - Distribución por comidas
-- `/app/backend/calculator.py` - Lógica de ajuste y validación
-- `/app/backend/server.py` - Todos los endpoints API
-- `/app/frontend/src/pages/NutritionPage.jsx` - UI de calculadora
+## 3rd Party Integrations
+- Claude Sonnet 4.5 (planned for routine generation)
+- Stripe (mocked, real integration pending)
