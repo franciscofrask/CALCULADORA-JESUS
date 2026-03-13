@@ -1243,7 +1243,8 @@ async def search_foods(
     tipo_comida: str = "normal",
     limit: int = 50,
     offset: int = 0,
-    vegano: bool = False
+    vegano: bool = False,
+    tag: str = ""
 ):
     """
     Búsqueda de alimentos con filtros y macros efectivos.
@@ -1255,13 +1256,14 @@ async def search_foods(
         limit: máximo resultados (default 50)
         offset: para paginación
         vegano: si true, oculta categorías animales
+        tag: filtro por tag (ej: "GEN" para genéricos)
     
     Response incluye macros_efectivos calculados por CALMA para cada alimento.
     """
     alimentos = await buscar_alimentos(
         db, query=q, categoria=category,
         tipo_comida=tipo_comida, es_vegano=vegano, limit=limit,
-        calcular_efectivos=True
+        calcular_efectivos=True, tag_filter=tag
     )
     
     return {
@@ -1341,7 +1343,8 @@ async def suggest_foods_endpoint(data: dict, user = Depends(get_current_user)):
         "tipo_comida": "normal",  // "normal", "intra", "post"
         "es_vegano": false,
         "max_resultados": 20,
-        "excluir_ids": []
+        "excluir_ids": [],
+        "paso": "proteina" | "acompanamiento" | null
     }
     """
     macros_restantes = data.get("macros_restantes", {"P": 0, "H": 0, "G": 0})
@@ -1349,6 +1352,7 @@ async def suggest_foods_endpoint(data: dict, user = Depends(get_current_user)):
     es_vegano = data.get("es_vegano", False)
     max_resultados = data.get("max_resultados", 20)
     excluir_ids = data.get("excluir_ids", [])
+    paso = data.get("paso", None)  # "proteina", "acompanamiento", or None
     
     # Cargar alimentos de MongoDB
     cursor = db.foods.find({}, {"_id": 0}).limit(3200)
@@ -1356,7 +1360,7 @@ async def suggest_foods_endpoint(data: dict, user = Depends(get_current_user)):
     
     sugerencias = sugerir_alimentos(
         todos, macros_restantes, tipo_comida, es_vegano,
-        max_resultados, excluir_ids
+        max_resultados, excluir_ids, paso
     )
     
     return {"sugerencias": sugerencias, "count": len(sugerencias)}

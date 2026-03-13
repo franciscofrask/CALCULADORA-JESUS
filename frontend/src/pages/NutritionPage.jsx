@@ -80,6 +80,460 @@ const PERI_OPTIONS = [
     { value: 'sin_peri', label: 'Sin periworkout' },
 ];
 
+// Categories for Build Meal Modal - Step 1 (Proteínas)
+const PROTEIN_CATEGORIES = [
+    { label: 'Carnes', value: '2', emoji: '🥩' },
+    { label: 'Pescados', value: '3', emoji: '🐟' },
+    { label: 'Huevos', value: '1', emoji: '🥚' },
+    { label: 'Lácteos', value: '5', emoji: '🥛' },
+    { label: 'Proteína', value: '4', emoji: '💪' },
+    { label: 'Vegetal', value: '28', emoji: '🌱' },
+    { label: 'Soja', value: '6', emoji: '🫘' },
+];
+
+// Categories for Build Meal Modal - Step 2 (Acompañamientos)
+const SIDE_CATEGORIES = [
+    { label: 'Arroz', value: '21', emoji: '🍚' },
+    { label: 'Pasta', value: '22', emoji: '🍝' },
+    { label: 'Patata', value: '9', emoji: '🥔' },
+    { label: 'Pan', value: '8', emoji: '🍞' },
+    { label: 'Cereales', value: '7', emoji: '🌾' },
+    { label: 'Legumbres', value: '10', emoji: '🫘' },
+    { label: 'Fruta', value: '11', emoji: '🍎' },
+    { label: 'Verdura', value: '13', emoji: '🥦' },
+    { label: 'Grasas', value: '17', emoji: '🫒' },
+    { label: 'F.Secos', value: '17.2', emoji: '🥜' },
+    { label: '+ Proteína', value: 'proteina', emoji: '💪' },
+    { label: 'Todas', value: '', emoji: '🍽️' },
+];
+
+// Build Meal Modal Component - "Lo hago yo" constructor
+const BuildMealModal = ({ 
+    open, mealKey, onClose, getMealTarget, mealInfo, api, tipoDia, mealsData, setMealsData, getFoodEmoji 
+}) => {
+    const [paso, setPaso] = useState(1);
+    const [tempFoods, setTempFoods] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('2'); // Default carnes
+    const [soloGenericos, setSoloGenericos] = useState(false);
+    const [suggestions, setSuggestions] = useState([]);
+    const [searchResults, setSearchResults] = useState([]);
+    const [loading, setLoading] = useState(false);
+    
+    const MAX_FOODS = 5;
+    const isPeri = mealKey === 'Intra' || mealKey === 'Post';
+    
+    // Reset state when modal opens
+    useEffect(() => {
+        if (open && mealKey) {
+            setPaso(1);
+            setTempFoods([]);
+            setSearchQuery('');
+            setSelectedCategory('2');
+            setSoloGenericos(false);
+            setSuggestions([]);
+            setSearchResults([]);
+        }
+    }, [open, mealKey]);
+    
+    // Calculate served and remaining macros
+    const target = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0, G: 0 };
+    const served = tempFoods.reduce((acc, f) => ({
+        P: acc.P + (f.macros_efectivos?.P || 0),
+        H: acc.H + (f.macros_efectivos?.H || 0),
+        G: acc.G + (f.macros_efectivos?.G || 0)
+    }), { P: 0, H: 0, G: 0 });
+    const remaining = {
+        P: Math.max(0, target.P - served.P),
+        H: Math.max(0, target.H - served.H),
+        G: Math.max(0, target.G - served.G)
+    };
+    
+    // Check if meal is "cuadrada"
+    const isCuadrada = Math.abs(target.P - served.P) <= 4 && 
+                       Math.abs(target.H - served.H) <= 4 && 
+                       (isPeri || Math.abs(target.G - served.G) <= 4);
+    
+    // Check if should auto-advance to step 2
+    const proteinCovered = served.P >= target.P * 0.8;
+    
+    useEffect(() => {
+        if (paso === 1 && proteinCovered && tempFoods.length > 0 && !isPeri) {
+            setPaso(2);
+        }
+    }, [proteinCovered, paso, tempFoods.length, isPeri]);
+    
+    // Load suggestions based on paso
+    useEffect(() => {
+        if (!open || !mealKey) return;
+        
+        const loadSuggestions = async () => {
+            setLoading(true);
+            try {
+                const result = await api('/api/calculator/suggest', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        macros_restantes: { P: remaining.P, H: remaining.H, G: remaining.G },
+                        tipo_comida: isPeri ? mealKey.toLowerCase() : 'normal',
+                        es_vegano: false,
+                        max_resultados: 10,
+                        excluir_ids: tempFoods.map(f => f.alimento_id),
+                        paso: paso === 1 ? 'proteina' : 'acompanamiento'
+                    })
+                });
+                setSuggestions(result.sugerencias || []);
+            } catch (err) {
+                console.error('Error loading suggestions:', err);
+            }
+            setLoading(false);
+        };
+        
+        loadSuggestions();
+    }, [open, mealKey, paso, remaining.P, remaining.H, remaining.G, tempFoods.length, api, isPeri]); // eslint-disable-line
+    
+    // Search foods
+    useEffect(() => {
+        if (!searchQuery || searchQuery.length < 2) {
+            setSearchResults([]);
+            return;
+        }
+        
+        const timer = setTimeout(async () => {
+            setLoading(true);
+            try {
+                const params = new URLSearchParams({ q: searchQuery, limit: '30' });
+                if (selectedCategory && selectedCategory !== 'proteina') {
+                    params.set('category', selectedCategory);
+                }
+                if (soloGenericos) {
+                    params.set('tag', 'GEN');
+                }
+                const result = await api(`/api/calculator/search?${params}`);
+                setSearchResults(result.alimentos || []);
+            } catch (err) {
+                console.error('Search error:', err);
+            }
+            setLoading(false);
+        }, 300);
+        
+        return () => clearTimeout(timer);
+    }, [searchQuery, selectedCategory, soloGenericos, api]);
+    
+    // Add food to temp list
+    const handleAddFood = async (food, customQuantity = null, customMacros = null) => {
+        if (tempFoods.length >= MAX_FOODS) {
+            toast.error(`Máximo ${MAX_FOODS} alimentos por comida`);
+            return;
+        }
+        
+        try {
+            let quantity = customQuantity;
+            let macrosEf = customMacros || food.macros_efectivos;
+            
+            // If no custom quantity, calculate optimal
+            if (!quantity) {
+                const result = await api('/api/calculator/adjust', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        alimento_id: food.id || food.alimento_id,
+                        macros_restantes: remaining,
+                        es_vegano: false
+                    })
+                });
+                quantity = result.cantidad_g;
+                macrosEf = result.macros_efectivos;
+            }
+            
+            const newFood = {
+                alimento_id: food.id || food.alimento_id,
+                nombre: food.nombre,
+                cantidad_g: quantity,
+                macros_efectivos: macrosEf,
+                categorias: food.categorias
+            };
+            
+            setTempFoods(prev => [...prev, newFood]);
+            setSearchQuery('');
+            setSearchResults([]);
+        } catch (err) {
+            toast.error('Error añadiendo alimento');
+        }
+    };
+    
+    // Remove food from temp list
+    const handleRemoveFood = (index) => {
+        setTempFoods(prev => prev.filter((_, i) => i !== index));
+    };
+    
+    // Save and close
+    const handleSaveAndClose = () => {
+        if (tempFoods.length === 0) {
+            onClose();
+            return;
+        }
+        
+        setMealsData(prev => ({
+            ...prev,
+            [mealKey]: { alimentos: tempFoods }
+        }));
+        
+        toast.success('Comida guardada');
+        onClose();
+    };
+    
+    const categories = paso === 1 ? PROTEIN_CATEGORIES : SIDE_CATEGORIES;
+    const displayList = searchQuery.length >= 2 ? searchResults : suggestions;
+    
+    if (!open || !mealKey) return null;
+    
+    return (
+        <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+            <DialogContent className="max-w-lg h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
+                {/* Header */}
+                <div className="bg-bg-dark p-4 flex-shrink-0">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={onClose}
+                                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                            >
+                                <X className="w-4 h-4 text-white" />
+                            </button>
+                            <DialogTitle className="text-white text-lg">CONSTRUYE TU COMIDA</DialogTitle>
+                        </div>
+                    </div>
+                    <DialogDescription className="sr-only">Constructor de comida paso a paso</DialogDescription>
+                    
+                    {/* Meal info header */}
+                    <div className="text-white text-sm mb-2">
+                        <span className="font-bold">{mealInfo[mealKey]?.name}:</span>{' '}
+                        <span className="text-gray-300">
+                            {target.P.toFixed(0)}P | {target.H.toFixed(0)}H {!isPeri && `| ${target.G.toFixed(0)}G`}
+                        </span>
+                    </div>
+                    <div className="text-brand-orange text-sm font-semibold">
+                        Restante: {remaining.P.toFixed(0)}P | {remaining.H.toFixed(0)}H {!isPeri && `| ${remaining.G.toFixed(0)}G`}
+                    </div>
+                    
+                    {/* Progress bars */}
+                    <div className="mt-3 space-y-1">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-4">P</span>
+                            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-500 transition-all" style={{ width: `${Math.min((served.P / target.P) * 100, 100)}%` }} />
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-4">H</span>
+                            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.min((served.H / target.H) * 100, 100)}%` }} />
+                            </div>
+                        </div>
+                        {!isPeri && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400 w-4">G</span>
+                                <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-orange-500 transition-all" style={{ width: `${Math.min((served.G / target.G) * 100, 100)}%` }} />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                
+                {/* Ingredients added */}
+                {tempFoods.length > 0 && (
+                    <div className="bg-gray-100 px-4 py-3 flex-shrink-0 border-b">
+                        <p className="text-xs text-gray-500 font-semibold mb-2">INGREDIENTES ({tempFoods.length}/{MAX_FOODS})</p>
+                        <div className="space-y-1">
+                            {tempFoods.map((food, idx) => (
+                                <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <span>{getFoodEmoji(food.categorias)}</span>
+                                        <span className="font-medium truncate max-w-[150px]">{food.nombre}</span>
+                                        <span className="text-gray-500">{food.cantidad_g}g</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-500">
+                                            {food.macros_efectivos?.P?.toFixed(0)}P|{food.macros_efectivos?.H?.toFixed(0)}H|{food.macros_efectivos?.G?.toFixed(0)}G
+                                        </span>
+                                        <button 
+                                            onClick={() => handleRemoveFood(idx)}
+                                            className="text-red-500 hover:text-red-700"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                {/* Cuadrada state */}
+                {isCuadrada && tempFoods.length > 0 && (
+                    <div className="bg-green-500 text-white text-center py-3 font-bold flex-shrink-0">
+                        🎉 ¡COMIDA CUADRADA!
+                    </div>
+                )}
+                
+                {/* Step indicator & content */}
+                <div className="flex-1 overflow-y-auto bg-white">
+                    {/* Step title */}
+                    <div className="sticky top-0 bg-white border-b px-4 py-3 z-10">
+                        <h3 className="font-bold text-gray-900">
+                            {isPeri ? 'Elige tus alimentos' : paso === 1 ? 'PASO 1: Elige tu proteína' : 'PASO 2: Elige acompañamiento'}
+                        </h3>
+                        {paso === 1 && !proteinCovered && tempFoods.length > 0 && !isPeri && (
+                            <div className="flex items-center justify-between mt-1">
+                                <p className="text-xs text-yellow-600">Te faltan {remaining.P.toFixed(0)}g P. Elige otra proteína.</p>
+                                <button 
+                                    onClick={() => setPaso(2)}
+                                    className="text-xs text-brand-orange underline"
+                                >
+                                    Saltar al paso 2 →
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Category chips */}
+                    <div className="flex gap-2 px-4 py-3 overflow-x-auto border-b scrollbar-hide">
+                        {categories.map(cat => (
+                            <button
+                                key={cat.value}
+                                onClick={() => setSelectedCategory(cat.value)}
+                                className={`flex-shrink-0 inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                    selectedCategory === cat.value
+                                        ? 'bg-brand-orange text-white'
+                                        : 'bg-gray-200 text-gray-700'
+                                }`}
+                            >
+                                <span className="mr-1">{cat.emoji}</span> {cat.label}
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* Search bar */}
+                    <div className="px-4 py-3 border-b">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Input
+                                placeholder="Buscar cualquier alimento..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-9 h-10 rounded-lg bg-gray-100 border-0"
+                            />
+                        </div>
+                        <label className="flex items-center gap-2 mt-2 text-sm text-gray-600 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={soloGenericos}
+                                onChange={(e) => setSoloGenericos(e.target.checked)}
+                                className="rounded border-gray-300"
+                            />
+                            Solo genéricos
+                        </label>
+                    </div>
+                    
+                    {/* Micro-suggestion for fat balance */}
+                    {paso === 2 && remaining.P <= 10 && remaining.H <= 10 && remaining.G > 2 && !isPeri && (
+                        <div className="mx-4 mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                            <p className="text-sm font-medium text-orange-800 mb-2">
+                                Solo te faltan {remaining.G.toFixed(1)}g G
+                            </p>
+                            <button
+                                onClick={() => handleAddFood({
+                                    id: 1752, // Aceite de oliva
+                                    nombre: 'Aceite de oliva',
+                                    categorias: '17.1',
+                                    macros_efectivos: { P: 0, H: 0, G: remaining.G }
+                                }, Math.ceil(remaining.G * 1.1))}
+                                className="text-sm bg-brand-orange text-white px-3 py-1 rounded-full"
+                            >
+                                + Aceite de oliva {Math.ceil(remaining.G * 1.1)}g
+                            </button>
+                        </div>
+                    )}
+                    
+                    {/* Suggestions / Search Results */}
+                    <div className="px-4 py-3">
+                        <p className="text-xs text-gray-500 font-semibold mb-2">
+                            {searchQuery.length >= 2 ? 'RESULTADOS' : 'LO QUE MEJOR TE ENCAJA'}
+                        </p>
+                        
+                        {loading ? (
+                            <div className="flex justify-center py-8">
+                                <div className="animate-spin rounded-full h-8 w-8 border-4 border-brand-orange border-t-transparent" />
+                            </div>
+                        ) : displayList.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                                {searchQuery.length >= 2 ? 'No se encontraron resultados' : 'Cargando sugerencias...'}
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {displayList.map((item, idx) => {
+                                    const food = item.alimento || item;
+                                    const cantidad = item.cantidad_g || food.racion || 100;
+                                    const macros = item.macros_efectivos || food.macros_efectivos || {};
+                                    
+                                    return (
+                                        <button
+                                            key={food.id || idx}
+                                            className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all"
+                                            onClick={() => handleAddFood(food, cantidad, macros)}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xl">{getFoodEmoji(food.categorias)}</span>
+                                                    <div>
+                                                        <p className="font-medium text-gray-900">{food.nombre}</p>
+                                                        <p className="text-xs text-gray-500">{cantidad}g</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-semibold text-brand-orange">
+                                                        → {macros.P?.toFixed(0) || 0}P | {macros.H?.toFixed(0) || 0}H | {macros.G?.toFixed(0) || 0}G
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+                
+                {/* Footer */}
+                <div className="flex-shrink-0 bg-white border-t p-4">
+                    {tempFoods.length > 0 && (
+                        <Button
+                            onClick={handleSaveAndClose}
+                            className={`w-full h-12 rounded-full font-bold ${
+                                isCuadrada 
+                                    ? 'bg-green-500 hover:bg-green-600 text-white' 
+                                    : 'bg-black hover:bg-gray-900 text-white'
+                            }`}
+                            data-testid="save-build-meal"
+                        >
+                            {isCuadrada ? '🎉 GUARDAR COMIDA CUADRADA' : 'GUARDAR Y CERRAR'}
+                        </Button>
+                    )}
+                    {tempFoods.length === 0 && (
+                        <Button
+                            variant="outline"
+                            onClick={onClose}
+                            className="w-full h-12 rounded-full"
+                        >
+                            Cancelar
+                        </Button>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 const NutritionPage = () => {
     const { token } = useAuth();
     
@@ -101,6 +555,7 @@ const NutritionPage = () => {
     const [menuOptionsModal, setMenuOptionsModal] = useState({ open: false, mealKey: null });
     const [copyModalOpen, setCopyModalOpen] = useState(false);
     const [copyDate, setCopyDate] = useState('');
+    const [buildMealModal, setBuildMealModal] = useState({ open: false, mealKey: null });
     
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
@@ -880,9 +1335,10 @@ const NutritionPage = () => {
                                     <Button 
                                         variant="outline" 
                                         className="h-10 rounded-full border-gray-300"
-                                        onClick={() => { setAddFoodModal({ open: true, mealKey }); setSearchQuery(''); setSearchCategory('2'); }}
+                                        onClick={() => setBuildMealModal({ open: true, mealKey })}
+                                        data-testid={`build-meal-${mealKey}`}
                                     >
-                                        <Wrench className="w-4 h-4 mr-1" /> Construirlo
+                                        <Wrench className="w-4 h-4 mr-1" /> Lo hago yo
                                     </Button>
                                     <Button 
                                         variant="outline" 
@@ -1249,6 +1705,20 @@ const NutritionPage = () => {
                     </ScrollArea>
                 </DialogContent>
             </Dialog>
+
+            {/* Build Meal Modal - "Lo hago yo" Constructor */}
+            <BuildMealModal 
+                open={buildMealModal.open}
+                mealKey={buildMealModal.mealKey}
+                onClose={() => setBuildMealModal({ open: false, mealKey: null })}
+                getMealTarget={getMealTarget}
+                mealInfo={mealInfo}
+                api={api}
+                tipoDia={tipoDia}
+                mealsData={mealsData}
+                setMealsData={setMealsData}
+                getFoodEmoji={getFoodEmoji}
+            />
 
             {/* Copy Modal */}
             <Dialog open={copyModalOpen} onOpenChange={setCopyModalOpen}>

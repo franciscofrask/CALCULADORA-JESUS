@@ -465,13 +465,17 @@ def filtrar_por_tipo_comida(alimentos: list, tipo_comida: str) -> list:
 # FUNCIÓN: Sugerir alimentos para completar comida
 # =========================================================
 
+# Categorías para el paso de proteína en constructor "Lo hago yo"
+CATS_PROTEINA = ['1', '2', '3', '4', '5', '6', '28']
+
 def sugerir_alimentos(
     alimentos_disponibles: list,
     macros_restantes: Dict[str, float],
     tipo_comida: str = "normal",
     es_vegano: bool = False,
     max_resultados: int = 20,
-    excluir_ids: list = None
+    excluir_ids: list = None,
+    paso: str = None
 ) -> list:
     """
     Sugiere los mejores alimentos para completar una comida.
@@ -484,11 +488,21 @@ def sugerir_alimentos(
     EXCEPCIONES:
     1. Intra/Post: solo categorías permitidas
     2. Cuadrar grasas al final: solo aceites y grasas buenas
+    3. paso="proteina": solo categorías de fuente proteica (1,2,3,4,5,6,28)
+    4. paso="acompanamiento": todas las categorías
     """
     excluir = set(excluir_ids or [])
     
     # Paso 1: Filtrar por tipo de comida
     filtrados = filtrar_por_tipo_comida(alimentos_disponibles, tipo_comida)
+    
+    # Paso 1.5: Filtrar por paso del constructor (proteina/acompanamiento)
+    if paso == "proteina":
+        filtrados = [
+            a for a in filtrados
+            if cat_in_list(get_categoria_principal(a), CATS_PROTEINA)
+        ]
+    # paso="acompanamiento" o None -> no filtrar por categoría
     
     # Paso 2: Excluir alimentos ya en la comida
     filtrados = [a for a in filtrados if a.get("id") not in excluir]
@@ -607,7 +621,8 @@ async def buscar_alimentos(
     es_vegano: bool = False,
     limit: int = 50,
     excluir_categorias: list = None,
-    calcular_efectivos: bool = False
+    calcular_efectivos: bool = False,
+    tag_filter: str = ""
 ) -> list:
     """
     Busca alimentos en MongoDB con filtros.
@@ -621,6 +636,7 @@ async def buscar_alimentos(
         limit: máximo de resultados
         excluir_categorias: lista de categorías a excluir
         calcular_efectivos: si True, calcula macros efectivos para cada alimento
+        tag_filter: filtrar por tag (ej: "GEN" para genéricos)
     """
     filtro = {}
     
@@ -648,6 +664,14 @@ async def buscar_alimentos(
         alimentos = [
             a for a in alimentos
             if query_normalized in normalize_text(a.get("nombre", ""))
+        ]
+    
+    # Filtrar por tag (ej: "GEN" para genéricos)
+    if tag_filter:
+        tag_upper = tag_filter.upper()
+        alimentos = [
+            a for a in alimentos
+            if tag_upper in (a.get("tags", "") or "").upper()
         ]
     
     # Filtrar por tipo de comida (intra/post)
