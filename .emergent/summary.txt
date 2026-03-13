@@ -1,94 +1,97 @@
 <analysis>**original_problem_statement:**
-El usuario quiere crear una plataforma de entrenamiento personal llamada JG12. La plataforma debe incluir múltiples paneles para diferentes roles de usuario (Cliente, Operaciones, CEO, Entrenador) y funcionalidades avanzadas como generación de rutinas por IA. La característica principal y más compleja solicitada es una calculadora de macros y dietas altamente detallada llamada CALMA. Las prioridades recientes han sido reescribir por completo el motor de cálculo de macros, añadir la generación de plantillas de menú (Opción A/B/C) y, más recientemente, rediseñar por completo el frontend basándose en diseños profesionales proporcionados, y arreglar los bugs funcionales que surgieron de dicho rediseño.
+El usuario quiere crear una plataforma de entrenamiento personal llamada JG12. La plataforma debe incluir múltiples paneles y funcionalidades avanzadas como generación de rutinas por IA. La característica principal es una calculadora de macros y dietas altamente detallada llamada CALMA.
+
+Las tareas recientes se han centrado en implementar una interfaz de usuario compleja para la página de nutrición, basada en diseños profesionales. Esto incluye:
+- **TAREA E12:** Arreglar el buscador de alimentos.
+- **TAREA F1.1 + F1.2:** Añadir la configuración del día (nº de comidas, momento de entreno, tipo de periworkout) y un resumen diario sticky con barras de progreso.
+- **TAREA F1.3:** Implementar un constructor de comidas guiado en 2 pasos (Lo hago yo).
+- **TAREA F1.4:** Implementar la edición de ingredientes, el guardado del día y la funcionalidad de Repetir de otro día.
+- **TAREA de Diagnóstico:** Realizar un análisis exhaustivo de toda la funcionalidad implementada.
+- **TAREA FIX-1:** Arreglar los 8 problemas identificados en el diagnóstico.
 
 PRODUCT REQUIREMENTS:
 - 4 Paneles: Cliente, Operaciones, CEO y Entrenadores.
-- Calculadora de nutrición avanzada CALMA con lógica de macros efectivos.
-- Generación de 3 opciones de menú (A/B/C) para comidas vacías.
+- Calculadora de nutrición avanzada CALMA.
+- Generación de 3 opciones de menú (A/B/C).
 - Múltiples diseños de pantalla específicos para implementar.
 - Branding JG12 (modo oscuro, acentos naranjas).
-- Integración de IA (Claude Sonnet 4.5) para generación de rutinas.
+- Integración de IA (Claude Sonnet 4.5) para generación de rutinas (futuro).
 - Integración de pagos (Stripe, actualmente simulada).
 
 **User's preferred language**: Spanish
 
 **what currently exists?**
-Se ha construido una aplicación full-stack (React/FastAPI/MongoDB).
-- **Backend:** Se completó toda la lógica de negocio para la calculadora CALMA v2 (, ) y la generación de plantillas de menú (). Todos los endpoints correspondientes fueron añadidos a  y probados.
-- **Frontend:** Se ha rediseñado completamente la aplicación (, , ) para que coincida con 11 maquetas de diseño profesional proporcionadas por el usuario. Se han añadido los colores de la marca a  y se han guardado imágenes de fondo (, ) en .
-- **Estado Funcional:** A pesar del rediseño visual exitoso, la funcionalidad del frontend quedó con múltiples bugs (modales que no funcionan bien, elementos solapados, etc.). Se realizó un diagnóstico completo (Tarea E10) y un intento de arreglo (Tarea E10-FIX), pero persisten problemas, especialmente en la funcionalidad de búsqueda.
+Se ha construido una aplicación full-stack (React/FastAPI/MongoDB) muy avanzada.
+- **Backend:** Se ha completado toda la lógica de negocio para la calculadora CALMA v2, generación de menús, búsqueda de alimentos (con normalización de acentos y macros efectivos) y sugerencias de alimentos. Se han añadido endpoints para guardar y recuperar dietas diarias ().
+- **Frontend:** La  ha sido extensamente desarrollada para incluir:
+    - Configuración del día (nº de comidas, tipo de entreno, etc.) que recalcula dinámicamente los macros por comida.
+    - Un resumen diario sticky con barras de progreso generales y un desglose expandible.
+    - Un sistema de comidas en formato acordeón, con barras de progreso individuales.
+    - Tres flujos para rellenar comidas vacías: Sugiéreme un menú (opciones A/B/C), Lo hago yo (un modal constructor de 2 pasos) y Repetir de otro día (un modal para copiar comidas de días anteriores).
+    - Edición en línea de ingredientes (modificar cantidad con  y , editar directamente el número, eliminar).
+- **Estado Actual:** Tras un diagnóstico completo solicitado por el usuario, se identificaron 8 problemas. El agente ha comenzado a trabajar en la **TAREA FIX-1** para solucionarlos y ya ha completado 4 de los 8 arreglos.
 
 **Last working item**:
--   **Last item agent was working:** El agente estaba comenzando la TAREA E12: ARREGLAR EL BUSCADOR DE ALIMENTOS. El objetivo es corregir la funcionalidad de búsqueda tanto en el backend como en el frontend para que maneje acentos, muestre macros efectivos (calculados por CALMA), tenga una lista completa de categorías y muestre las raciones correctas. El agente acababa de ver el archivo  para planificar los cambios.
+-   **Last item agent was working:** El agente estaba trabajando en la **TAREA FIX-1**, específicamente en los **FIX 5 y 6**, que consisten en adaptar el modal  (Lo hago yo) para que tenga un comportamiento especial y categorías filtradas cuando se abre para las comidas de periworkout ( y ). El agente ya ha modificado  para pasar un prop  ( o ) al modal y estaba a punto de modificar la lógica interna del  para implementar los cambios requeridos.
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
 -   **Which testing method agent to use?** both
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1 (P0):** La funcionalidad de búsqueda de alimentos es incorrecta y necesita una revisión completa (TAREA E12).
-    -   **Attempted fixes:** Ninguno. La tarea acaba de empezar.
+-   **Issue 1 (P0):** Completar los arreglos restantes de la TAREA FIX-1.
+    -   **Attempted fixes:** El agente ya completó los FIX 1, 2, 3 y 4.
     -   **Next debug checklist:**
-        1.  Modificar  para añadir una función  que ignore acentos en la consulta de búsqueda.
-        2.  En el endpoint  de , procesar cada resultado con  y devolver los nuevos campos (, etc.).
-        3.  En , reemplazar la lista de  hardcodeada por la nueva lista de 23 categorías proporcionada.
-        4.  Actualizar la UI del buscador en  para mostrar los macros efectivos en los badges y no mostrar el badge si el valor es cero.
-        5.  Asegurarse de que la UI muestra la ración correcta ( en lugar de '100g').
-        6.  Verificar que el filtrado por categoría en el backend funciona con .
-        7.  Aumentar el límite de resultados de búsqueda de 30 a 50 en .
-    -   **Why fix this issue and what will be achieved with the fix?** El buscador es una herramienta fundamental y actualmente es impreciso, lo que degrada la experiencia del usuario. La corrección proporcionará resultados relevantes y datos nutricionales correctos.
+        1.  **FIX 5 (Intra-entreno):** Modificar  en . Si , debe saltarse el flujo de 2 pasos y mostrar solo un buscador con las categorías filtradas (41, 18.1.1, etc.) y un límite de 3 alimentos.
+        2.  **FIX 6 (Post-entreno):** Modificar . Si , debe usar el flujo de 2 pasos pero con listas de categorías específicas para proteínas (whey, caseína) y acompañamientos (fruta, crema de arroz).
+        3.  **FIX 7 (Backend ):** En , en la función , asegurar que si , el filtro de categorías () se aplique de forma estricta para no devolver alimentos como pan o cereales.
+        4.  **FIX 8 (Lo hago yo):** Modificar la lista de sugerencias en  para que cada alimento sugerido tenga controles  y un botón  separado, permitiendo al usuario ajustar la cantidad *antes* de añadir el alimento a la comida.
+    -   **Why fix this issue and what will be achieved with the fix?** Estos arreglos son cruciales para que la aplicación se alinee con los requisitos funcionales detallados del usuario, especialmente en la personalización del periworkout, que es una parte clave de la lógica de nutrición.
     -   **Status:** IN PROGRESS
     -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** both
     -   **Blocked on other issue:** None
 
--   **Issue 2 (P1):** Bugs funcionales y de UI del rediseño (identificados en Tarea E10). Un intento de arreglo (Tarea E10-FIX) se realizó, pero su efectividad no ha sido verificada.
-    -   **Attempted fixes:** Se realizaron cambios en  y  para solucionar estos problemas, pero es probable que no todos se hayan resuelto.
-    -   **Next debug checklist:**
-        1.  Verificar si los chips de filtro en el buscador siguen solapados (Problema #2 Tarea E10).
-        2.  Verificar que el bottom nav ya no está tapado por el badge de Emergent y es completamente funcional (Problemas #5, #7 Tarea E10).
-        3.  Confirmar que el flujo Construirlo yo y los modales tienen los botones de cierre y links correctos (Problemas #4, #8, #9 Tarea E10).
-        4.  Verificar que los alimentos se añaden a la comida correcta desde el buscador (Problema #3 Tarea E10).
-    -   **Why fix this issue and what will be achieved with the fix?** La usabilidad de la aplicación está comprometida. Arreglar estos bugs es crucial para que la app sea funcional.
-    -   **Status:** TESTING PENDING
+-   **Issue 2 (P2):** El badge Made with Emergent tapa parcialmente el menú de navegación inferior () en la vista móvil.
+    -   **Attempted fixes:** Ninguno. Identificado en el diagnóstico, pero no priorizado.
+    -   **Next debug checklist:** Investigar el CSS del badge y del  para ajustar el  o añadir un  al  en vista móvil.
+    -   **Why fix this issue and what will be achieved with the fix?** Mejora la usabilidad y la estética en dispositivos móviles.
+    -   **Status:** NOT STARTED
     -   **Is recurring issue?** Y
     -   **Should Test frontend/backend/both after fix?** frontend
-    -   **Blocked on other issue:** Issue 1
+    -   **Blocked on other issue:** None
 
 **In progress Task List**:
--   **Task 1 (P0):** TAREA E12: Arreglar el buscador de alimentos.
-    -   **Where to resume:** En , implementar la normalización de acentos y el cálculo de macros efectivos en el endpoint .
-    -   **What will be achieved with this?** Un buscador de alimentos preciso y funcional que muestra datos correctos al usuario.
+-   **Task 1 (P0):** Completar la TAREA FIX-1.
+    -   **Where to resume:** En , dentro del componente . Se debe implementar la lógica condicional basada en el   para manejar los casos  y , aplicando los filtros de categorías y cambios de UI correspondientes (FIX 5 y FIX 6).
+    -   **What will be achieved with this?** Una aplicación funcionalmente correcta según el último diagnóstico y los requisitos del usuario.
     -   **Status:** IN PROGRESS
     -   **Should Test frontend/backend/both after fix?** both
     -   **Blocked on something:** None
 
 **Upcoming and Future Tasks**
--   **(P1) Home Screen Redesign:** Implementar la pantalla de inicio (Pantalla 10) con seguidores de macros circulares y el nuevo layout.
+-   **(P1) FIX 8:** Permitir ajuste de cantidad ANTES de añadir un alimento en el modal Lo hago yo.
+-   **(P1) Home Screen Redesign:** Implementar la pantalla de inicio (Pantalla 10) con seguidores de macros circulares.
 -   **(P1) Routine Screen Redesign:** Implementar la pantalla Mi Rutina.
--   **(P1) Tracking Module:** Implementar la pantalla de Seguimiento con las siluetas de evolución de grasa corporal.
--   **(P1) Supplements Module:** Implementar la funcionalidad de seguimiento de suplementos.
--   **(P2) Stripe Integration:** Reemplazar el sistema de pago simulado por una integración real de Stripe.
--   **(P2) Enhanced Onboarding:** Mejorar el flujo de configuración del perfil.
--   **(P2) Statistics Module:** Implementar el panel de estadísticas.
--   **(P2) Refactor :** Dividir el archivo  en s más pequeños para mejorar la mantenibilidad.
+-   **(P1) Calendario Visual:** Añadir un calendario en  para navegar entre días y ver su estado (verde/amarillo/rojo).
+-   **(P2) Tracking Module:** Implementar la pantalla de Seguimiento con las siluetas de evolución.
+-   **(P2) Stripe Integration:** Reemplazar el sistema de pago simulado por una integración real.
+-   **(P2) Refactor :** Dividir el archivo en s más pequeños.
+-   **(P2) Refactor :** Descomponer el componente gigante en sub-componentes más pequeños y manejables (es crítico para la mantenibilidad).
 
 **Completed work in this session**
-- **Tarea E6 Finalizada:** Se añadieron y verificaron los endpoints  y  en .
-- **Análisis de Diseño:** Se analizaron en detalle 11 maquetas de diseño profesional proporcionadas por el usuario.
-- **Creación de Assets:** Se guardaron y optimizaron las imágenes  y  en .
-- **Tarea E8 - Rediseño Completo del Frontend:** Se rediseñaron  y , se creó el componente  y se actualizaron los estilos en  para que coincidieran con las maquetas.
-- **Troubleshooting:** Se diagnosticó y solucionó un problema de hot-reload reiniciando el servicio  de backend                          RUNNING   pid 46, uptime 0:00:03
-code-server                      STOPPED   Not started
-frontend                         STOPPED   Mar 12 03:19 PM
-mongodb                          RUNNING   pid 49, uptime 0:00:03
-nginx-code-proxy                 RUNNING   pid 45, uptime 0:00:03
-supervisor> .
-- **Tarea E10 - Diagnóstico Funcional:** Se realizó una prueba exhaustiva de la aplicación, identificando una lista de 9 bugs funcionales y de UI.
-- **Tarea E10-FIX - Intento de Arreglo:** Se aplicaron parches a ,  y  para intentar solucionar los 9 bugs identificados.
+- **Tarea E12:** Se arregló completamente el buscador de alimentos (acentos, macros efectivos, categorías, límite).
+- **Tarea F1.1 & F1.2:** Se implementó la configuración del día y el resumen diario sticky.
+- **Tarea F1.3:** Se implementó el constructor de comidas Lo hago yo en 2 pasos.
+- **Tarea F1.4:** Se implementó la edición de ingredientes, el guardado del día en la BD y la funcionalidad Repetir de otro día.
+- **Diagnóstico Completo:** Se realizó un análisis exhaustivo de 100 puntos sobre toda la aplicación, identificando 8 problemas clave.
+- **Tarea FIX-1 (Parcial):**
+    - **FIX 1 & 2:** Se añadió el botón de mostrar/ocultar contraseña y se actualizó el copyright a 2026 en la página de login.
+    - **FIX 3:** Se eliminó la línea de Kcal del resumen sticky.
+    - **FIX 4:** Se eliminó el botón extra Buscar alimento de las comidas vacías.
 
 **Earlier issues found/mentioned but not fixed**
--   La lista de 9 problemas identificada en la Tarea E10 (chips solapados, bottom nav tapado, etc.) fue abordada en la Tarea E10-FIX, pero dado que el usuario solicitó inmediatamente otra tarea de corrección (E12), es muy probable que estos problemas persistan y necesiten una nueva verificación y/o un arreglo más robusto.
+-   **Issue 1:** En la vista móvil, el badge Made with Emergent se superpone al menú de navegación inferior, dificultando su uso. Este problema fue identificado en el diagnóstico pero no se incluyó en la TAREA FIX-1.
 
 **Known issue recurrence from previous fork**
 -   N/A
@@ -97,74 +100,80 @@ supervisor> .
 
 
 **Key Technical Concepts**
--   **Frontend:** React, Tailwind CSS, Shadcn/UI, , . El diseño se basa en un sistema de diseño extraído de maquetas profesionales.
--   **Backend:** FastAPI, Pydantic, Motor (MongoDB async). La lógica de negocio está modularizada.
+-   **Frontend:** React, Tailwind CSS, Shadcn/UI. Gestión de estado compleja y centralizada en un único componente () mediante  y .
+-   **Backend:** FastAPI, Pydantic, Motor (MongoDB async).
 -   **Database:** MongoDB.
 -   **Authentication:** JSON Web Tokens (JWT).
 
 **key DB schema**
--   : Credenciales de usuario, roles y macros (training, rest, peri).
--   : Almacena las dietas diarias por usuario y fecha.
+-   : Credenciales de usuario, roles y macros.
 -   : Base de datos de alimentos.
 -   : Base de datos de categorías de alimentos.
+-   : **NUEVO/USADO**. Almacena las dietas diarias por usuario, incluyendo configuración y lista de alimentos por comida.
 
 **changes in tech stack**
 -   N/A
 
 **All files of reference**
--   : Modificado para añadir endpoints de menú. **Necesita modificación para Tarea E12.**
--   : Archivo principal de trabajo. Ha sido rediseñado dos veces y parcheado. **Necesita modificación para Tarea E12.**
--   : Rediseñado.
--   : Nuevo componente de navegación.
--   : Contiene las variables de color de la marca.
+-   : **Archivo principal de trabajo.** Contiene la lógica de la página, los estados y los componentes de todos los modales. Es extremadamente grande y necesita refactorización urgente.
+-   : Modificado para añadir los endpoints , , y .
+-   : Modificado para añadir los parámetros  (en ) y  (en ).
+-   : Modificado para arreglar problemas de la UI del login.
 
 **Areas that need refactoring**
--   El archivo  sigue creciendo y se beneficiaría de ser refactorizado en s separados.
--   El modal de búsqueda en  tiene una lógica compleja que podría simplificarse en componentes hijos.
+-   ** (CRÍTICO):** El componente supera las 2000 líneas de código y maneja la lógica de toda la página y múltiples modales complejos. Es insostenible y propenso a errores. Debe descomponerse en componentes hijos (ej: , , , , ). El estado debería elevarse a un contexto de React o una librería de gestión de estado.
+-   **:** Sigue creciendo y debería dividirse en s por funcionalidad (calculadora, dietas, usuarios).
 
 **key api endpoints**
--   : **Necesita arreglo** (acentos, macros efectivos, límite).
--   : Funcional.
--   : Funcional.
--   : Funcional, provee los macros del usuario.
--   : CRUD para dietas.
+-   : Guarda la dieta del día.
+-   : Carga la dieta de un día específico.
+-   : Obtiene un resumen de los últimos 14 días con dieta.
+-   : Sugiere alimentos. Acepta  (proteina, acompanamiento). **Necesita arreglo para **.
+-   : Busca alimentos. Acepta , , .
 
 **Critical Info for New Agent**
--   La tarea inmediata y de máxima prioridad (P0) es la **Tarea E12: Arreglar el Buscador de Alimentos**. Esto implica modificar tanto  como .
--   El frontend ha sido rediseñado visualmente para que coincida con las maquetas, pero es funcionalmente inestable. Después de arreglar el buscador, se debe realizar una verificación completa de los 9 bugs identificados en la Tarea E10.
--   El backend (, , ) es estable. No lo modifiques a menos que sea para la Tarea E12.
--   El diseño visual (colores, fuentes, layout) ya está definido y debe respetarse. Los colores están en .
+-   La prioridad absoluta es finalizar la **TAREA FIX-1**. Estás a mitad de camino. Concéntrate en modificar  para los modos  y  (FIX 5 y 6), luego arregla el endpoint  (FIX 7) y finalmente implementa el ajuste de cantidad en Lo hago yo (FIX 8).
+-   El archivo  es un monolito. Sé extremadamente cuidadoso al editarlo. Cualquier nueva funcionalidad debería considerar la refactorización como un paso previo.
+-   El periworkout (Intra/Post) tiene reglas de negocio y de UI muy específicas que fueron omitidas en la implementación inicial. La TAREA FIX-1 busca corregir esto. Presta mucha atención a los IDs de las categorías requeridas.
 
 **documents and test reports created in this job**
--   
+-   Se han actualizado los archivos  después de cada tarea principal.
+-   Se han generado múltiples reportes de  en , que han sido fundamentales para identificar y corregir bugs.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User (Tarea E9):** Solicita una verificación funcional completa de la app después del rediseño.
-2.  **Agent:** Realiza una verificación y concluye (incorrectamente) que todo funciona.
-3.  **User (Tarea E10):** Reporta que la app tiene MUCHOS fallos y solicita un diagnóstico real y detallado, sin arreglar nada todavía.
-4.  **Agent:** Realiza el diagnóstico exhaustivo, probando cada flujo en la UI.
-5.  **Agent:** Identifica y lista 9 problemas específicos (chips tapados, bottom nav no funciona, etc.).
-6.  **User (Tarea E10-FIX):** Pide arreglar los 9 problemas de golpe, dando instrucciones específicas para cada uno.
-7.  **Agent:** Intenta arreglar los 9 problemas modificando varios archivos del frontend.
-8.  **User (Tarea E12):** Inicia una nueva tarea para arreglar el buscador, ignorando el arreglo anterior, lo que implica que los problemas persisten o la nueva tarea es más prioritaria. Proporciona instrucciones detalladas para arreglar el buscador (acentos, macros efectivos, categorías, etc.).
-9.  **Agent:** Comienza la Tarea E12.
-10. **Agent:** Analiza el archivo  para prepararse para los cambios.
+1.  **User (F1.3):** Pide implementar el constructor Lo hago yo.
+2.  **Agent:** Implementa F1.3.
+3.  **User (F1.4):** Pide implementar la edición de ingredientes, guardado y repetición.
+4.  **Agent:** Implementa F1.4.
+5.  **User (Diagnóstico):** Pide un diagnóstico completo y exhaustivo de 100 puntos de toda la app, sin arreglar nada.
+6.  **Agent:** Ejecuta el diagnóstico en paralelo usando capturas de pantalla, curl y revisión de código.
+7.  **Agent:** Presenta un reporte detallado, número por número, con los 8 problemas clave identificados.
+8.  **User (FIX-1):** Pide arreglar los 8 problemas identificados en el diagnóstico, con instrucciones específicas para cada uno.
+9.  **Agent:** Comienza la TAREA FIX-1.
+10. **Agent:** Implementa los FIX 1, 2, 3 y 4 y comienza a trabajar en los FIX 5 y 6, modificando  para pasar el  al .
 
 **Project Health Check:**
--   **Broken:** La funcionalidad de búsqueda de alimentos es incorrecta y poco fiable. Varios componentes de la UI (modales, navegación) tienen bugs conocidos que dificultan su uso.
--   **Mocked:** El sistema de pagos sigue siendo una simulación. El botón Repetir de otro día es un placeholder.
+-   **Broken:**
+    -   El constructor de comidas para  y  no está filtrado y muestra el constructor genérico en lugar del especializado requerido.
+    -   La sugerencia de alimentos para el paso de proteína en el backend no filtra estrictamente por las categorías correctas.
+-   **Mocked:** La integración de pagos con Stripe sigue pendiente.
 
 **3rd Party Integrations**
--   **Claude Sonnet 4.5** — usa Emergent LLM Key (para una futura funcionalidad de generación de rutinas, no implementada aún).
+-   **Claude Sonnet 4.5** — usa Emergent LLM Key (planeado para una futura funcionalidad de generación de rutinas, aún no implementado).
 
 **Testing status**
--   **Testing agent used after significant changes:** NO (no se ha usado después del rediseño masivo).
+-   **Testing agent used after significant changes:** YES. Se ha utilizado después de cada tarea F1.x, demostrando ser muy efectivo para encontrar y corregir bugs.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
 -   **Test files created:** No.
--   **Known regressions:** El rediseño visual (Tarea E8) introdujo múltiples regresiones funcionales que aún se están solucionando.
+-   **Known regressions:** Ninguna nueva. Los problemas actuales son requisitos no implementados o bugs identificados en el diagnóstico.
 
 **Credentials to test flow:**
 -   **Client:**  / 
 
 **What agent forgot to execute**
-El agente estaba en medio de la **Tarea E12**. Ha analizado el archivo  pero aún no ha implementado ninguna de las correcciones requeridas: normalización de acentos, cálculo de macros efectivos, actualización del límite de resultados, etc. Tampoco ha modificado el frontend para usar la nueva lista de categorías o mostrar los datos correctos.</analysis>
+- El agente está a mitad de la **TAREA FIX-1**. No debe olvidar implementar los 4 arreglos restantes:
+    1.  Lógica de  en  (FIX 5).
+    2.  Lógica de  en  (FIX 6).
+    3.  Arreglo del filtro  en el backend (FIX 7).
+    4.  Ajuste de cantidad ANTES de añadir en Lo hago yo (FIX 8).
+- El problema de la superposición del badge de Emergent en el móvil no fue incluido en la TAREA FIX-1 y sigue pendiente.</analysis>

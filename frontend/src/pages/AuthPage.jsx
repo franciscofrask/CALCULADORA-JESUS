@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, ArrowUpRight } from 'lucide-react';
+import { Mail, Lock, Loader2, ArrowUpRight, Eye, EyeOff } from 'lucide-react';
 
 // 12EN12 Logo Component
 const Logo12EN12 = ({ size = 'lg' }) => {
@@ -39,6 +39,7 @@ const AuthPage = () => {
     const { login, register } = useAuth();
     const [loading, setLoading] = useState(false);
     const [isRegister, setIsRegister] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     
     const [formData, setFormData] = useState({ 
         email: '', 
@@ -142,15 +143,23 @@ const AuthPage = () => {
                             <Lock className="w-3 h-3 text-brand-orange" />
                         </div>
                         <Input
-                            type="password"
+                            type={showPassword ? "text" : "password"}
                             placeholder="Contraseña"
-                            className="pl-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand-orange"
+                            className="pl-12 pr-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand-orange"
                             value={formData.password}
                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                             required
                             minLength={6}
                             data-testid="login-password"
                         />
+                        <button
+                            type="button"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                            onClick={() => setShowPassword(!showPassword)}
+                            data-testid="toggle-password"
+                        >
+                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
                     </div>
                     
                     {!isRegister && (
@@ -192,7 +201,7 @@ const AuthPage = () => {
                 
                 {/* Footer */}
                 <p className="text-white/30 text-xs mt-10 text-center">
-                    © 2024 Jesús Gallego · 12EN12 Training System
+                    © 2026 Jesús Gallego · 12EN12 Training System
                 </p>
             </div>
         </div>

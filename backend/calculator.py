@@ -58,8 +58,8 @@ CATS_POST = [
 # Categorías para CUADRAR GRASAS AL FINAL
 CATS_CUADRAR_GRASAS = ['17.1.1', '17.1', '42']
 
-# Categorías de PROTEÍNA (para el flujo guiado paso 1)
-CATS_PROTEINA = [
+# Categorías de PROTEÍNA DETALLADAS (incluye subcategorías, usada para otras funciones)
+CATS_PROTEINA_DETALLADAS = [
     '1', '1.1', '1.2',           # Huevos
     '2', '2.1', '2.2', '2.3', '2.4', '2.6', '2.7',  # Carnes
     '3', '3.1', '3.2', '3.3', '3.4', '3.7', '3.8', '3.9',  # Pescados
@@ -466,7 +466,8 @@ def filtrar_por_tipo_comida(alimentos: list, tipo_comida: str) -> list:
 # =========================================================
 
 # Categorías para el paso de proteína en constructor "Lo hago yo"
-CATS_PROTEINA = ['1', '2', '3', '4', '5', '6', '28']
+# Solo fuentes de proteína pura (NO pan, cereales, etc.)
+CATS_PROTEINA_PURAS = ['1', '2', '3', '4', '5', '6', '28']
 
 def sugerir_alimentos(
     alimentos_disponibles: list,
@@ -488,21 +489,22 @@ def sugerir_alimentos(
     EXCEPCIONES:
     1. Intra/Post: solo categorías permitidas
     2. Cuadrar grasas al final: solo aceites y grasas buenas
-    3. paso="proteina": solo categorías de fuente proteica (1,2,3,4,5,6,28)
+    3. paso="proteina": ESTRICTAMENTE solo categorías de fuente proteica pura (1,2,3,4,5,6,28)
     4. paso="acompanamiento": todas las categorías
     """
     excluir = set(excluir_ids or [])
     
-    # Paso 1: Filtrar por tipo de comida
+    # Paso 1: Filtrar por tipo de comida (intra/post/normal)
     filtrados = filtrar_por_tipo_comida(alimentos_disponibles, tipo_comida)
     
     # Paso 1.5: Filtrar por paso del constructor (proteina/acompanamiento)
+    # FIX 7: Filtro ESTRICTO para paso="proteina" usando CATS_PROTEINA_PURAS
     if paso == "proteina":
         filtrados = [
             a for a in filtrados
-            if cat_in_list(get_categoria_principal(a), CATS_PROTEINA)
+            if cat_in_list(get_categoria_principal(a), CATS_PROTEINA_PURAS)
         ]
-    # paso="acompanamiento" o None -> no filtrar por categoría
+    # paso="acompanamiento" o None -> no filtrar por categoría adicional
     
     # Paso 2: Excluir alimentos ya en la comida
     filtrados = [a for a in filtrados if a.get("id") not in excluir]

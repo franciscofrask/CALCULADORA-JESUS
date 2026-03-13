@@ -107,21 +107,65 @@ const SIDE_CATEGORIES = [
     { label: 'Todas', value: '', emoji: '🍽️' },
 ];
 
+// INTRA categories - only aminoacids and isotonic
+const INTRA_CATEGORIES = [
+    { label: 'Aminoácidos', value: '41', emoji: '⚡' },
+    { label: 'Isotónicas', value: '18.1', emoji: '💧' },
+];
+
+// POST Step 1 categories - protein powders
+const POST_PROTEIN_CATEGORIES = [
+    { label: 'Whey', value: '4.1', emoji: '💪' },
+    { label: 'Caseína', value: '4.2', emoji: '🥛' },
+    { label: 'Vegetal', value: '4.3', emoji: '🌱' },
+    { label: 'Batido', value: '5.4', emoji: '🥤' },
+];
+
+// POST Step 2 categories - fast carbs
+const POST_CARB_CATEGORIES = [
+    { label: 'Fruta', value: '11', emoji: '🍎' },
+    { label: 'C. Arroz', value: '21.3', emoji: '🍚' },
+    { label: 'Cereales', value: '7.1', emoji: '🌾' },
+    { label: 'Bebida', value: '24', emoji: '🥤' },
+];
+
 // Build Meal Modal Component - "Lo hago yo" constructor
+// mode: 'normal' (2 pasos P+H), 'intra' (solo cats intra, max 3), 'post' (2 pasos con cats post)
 const BuildMealModal = ({ 
-    open, mealKey, onClose, getMealTarget, mealInfo, api, tipoDia, mealsData, setMealsData, getFoodEmoji 
+    open, mealKey, mode = 'normal', onClose, getMealTarget, mealInfo, api, tipoDia, mealsData, setMealsData, getFoodEmoji 
 }) => {
     const [paso, setPaso] = useState(1);
     const [tempFoods, setTempFoods] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('2'); // Default carnes
+    const [selectedCategory, setSelectedCategory] = useState('');
     const [soloGenericos, setSoloGenericos] = useState(false);
     const [suggestions, setSuggestions] = useState([]);
     const [searchResults, setSearchResults] = useState([]);
     const [loading, setLoading] = useState(false);
+    // FIX 8: State for adjustable quantities in suggestions
+    const [suggestionQuantities, setSuggestionQuantities] = useState({});
     
-    const MAX_FOODS = 5;
-    const isPeri = mealKey === 'Intra' || mealKey === 'Post';
+    // Mode-specific config
+    const isIntraMode = mode === 'intra';
+    const isPostMode = mode === 'post';
+    const isPeriMode = isIntraMode || isPostMode;
+    const MAX_FOODS = isIntraMode ? 3 : 5;
+    
+    // Determine categories based on mode
+    const getCategories = () => {
+        if (isIntraMode) return INTRA_CATEGORIES;
+        if (isPostMode) {
+            return paso === 1 ? POST_PROTEIN_CATEGORIES : POST_CARB_CATEGORIES;
+        }
+        return paso === 1 ? PROTEIN_CATEGORIES : SIDE_CATEGORIES;
+    };
+    
+    // Get default category for mode
+    const getDefaultCategory = () => {
+        if (isIntraMode) return '41'; // Aminoácidos
+        if (isPostMode) return paso === 1 ? '4.1' : '11'; // Whey / Fruta
+        return paso === 1 ? '2' : '21'; // Carnes / Arroz
+    };
     
     // Reset state when modal opens
     useEffect(() => {
@@ -129,12 +173,13 @@ const BuildMealModal = ({
             setPaso(1);
             setTempFoods([]);
             setSearchQuery('');
-            setSelectedCategory('2');
+            setSelectedCategory(getDefaultCategory());
             setSoloGenericos(false);
             setSuggestions([]);
             setSearchResults([]);
+            setSuggestionQuantities({});
         }
-    }, [open, mealKey]);
+    }, [open, mealKey, mode]); // eslint-disable-line
     
     // Calculate served and remaining macros
     const target = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0, G: 0 };
@@ -152,36 +197,50 @@ const BuildMealModal = ({
     // Check if meal is "cuadrada"
     const isCuadrada = Math.abs(target.P - served.P) <= 4 && 
                        Math.abs(target.H - served.H) <= 4 && 
-                       (isPeri || Math.abs(target.G - served.G) <= 4);
+                       (isPeriMode || Math.abs(target.G - served.G) <= 4);
     
-    // Check if should auto-advance to step 2
+    // Check if should auto-advance to step 2 (only for normal and post mode)
     const proteinCovered = served.P >= target.P * 0.8;
     
     useEffect(() => {
-        if (paso === 1 && proteinCovered && tempFoods.length > 0 && !isPeri) {
+        if (!isIntraMode && paso === 1 && proteinCovered && tempFoods.length > 0) {
             setPaso(2);
+            setSelectedCategory(getDefaultCategory());
         }
-    }, [proteinCovered, paso, tempFoods.length, isPeri]);
+    }, [proteinCovered, paso, tempFoods.length, isIntraMode]); // eslint-disable-line
     
-    // Load suggestions based on paso
+    // Load suggestions based on paso and mode
     useEffect(() => {
         if (!open || !mealKey) return;
         
         const loadSuggestions = async () => {
             setLoading(true);
             try {
+                // Determine tipo_comida for API
+                let tipoComida = 'normal';
+                if (isIntraMode) tipoComida = 'intra';
+                else if (isPostMode) tipoComida = 'post';
+                
+                // Determine paso for API
+                let pasoApi = null;
+                if (!isIntraMode) {
+                    pasoApi = paso === 1 ? 'proteina' : 'acompanamiento';
+                }
+                
                 const result = await api('/api/calculator/suggest', {
                     method: 'POST',
                     body: JSON.stringify({
                         macros_restantes: { P: remaining.P, H: remaining.H, G: remaining.G },
-                        tipo_comida: isPeri ? mealKey.toLowerCase() : 'normal',
+                        tipo_comida: tipoComida,
                         es_vegano: false,
                         max_resultados: 10,
                         excluir_ids: tempFoods.map(f => f.alimento_id),
-                        paso: paso === 1 ? 'proteina' : 'acompanamiento'
+                        paso: pasoApi
                     })
                 });
                 setSuggestions(result.sugerencias || []);
+                // Reset quantities for new suggestions
+                setSuggestionQuantities({});
             } catch (err) {
                 console.error('Error loading suggestions:', err);
             }
@@ -189,9 +248,9 @@ const BuildMealModal = ({
         };
         
         loadSuggestions();
-    }, [open, mealKey, paso, remaining.P, remaining.H, remaining.G, tempFoods.length, api, isPeri]); // eslint-disable-line
+    }, [open, mealKey, paso, remaining.P, remaining.H, remaining.G, tempFoods.length, api, mode]); // eslint-disable-line
     
-    // Search foods
+    // Search foods with mode-specific filtering
     useEffect(() => {
         if (!searchQuery || searchQuery.length < 2) {
             setSearchResults([]);
@@ -202,9 +261,19 @@ const BuildMealModal = ({
             setLoading(true);
             try {
                 const params = new URLSearchParams({ q: searchQuery, limit: '30' });
+                
+                // Add category filter
                 if (selectedCategory && selectedCategory !== 'proteina') {
                     params.set('category', selectedCategory);
                 }
+                
+                // Add tipo_comida filter for intra/post modes
+                if (isIntraMode) {
+                    params.set('tipo_comida', 'intra');
+                } else if (isPostMode) {
+                    params.set('tipo_comida', 'post');
+                }
+                
                 if (soloGenericos) {
                     params.set('tag', 'GEN');
                 }
@@ -217,7 +286,33 @@ const BuildMealModal = ({
         }, 300);
         
         return () => clearTimeout(timer);
-    }, [searchQuery, selectedCategory, soloGenericos, api]);
+    }, [searchQuery, selectedCategory, soloGenericos, api, isIntraMode, isPostMode]);
+    
+    // FIX 8: Update suggestion quantity
+    const updateSuggestionQuantity = async (foodId, delta, food, baseQuantity) => {
+        const currentQty = suggestionQuantities[foodId]?.cantidad || baseQuantity;
+        const newQty = Math.max(5, currentQty + delta);
+        
+        try {
+            const result = await api('/api/calculator/macros-efectivos', {
+                method: 'POST',
+                body: JSON.stringify({
+                    alimento_id: foodId,
+                    cantidad_g: newQty,
+                    es_vegano: false
+                })
+            });
+            setSuggestionQuantities(prev => ({
+                ...prev,
+                [foodId]: {
+                    cantidad: newQty,
+                    macros: result.efectivos
+                }
+            }));
+        } catch (err) {
+            console.error('Error updating quantity:', err);
+        }
+    };
     
     // Add food to temp list
     const handleAddFood = async (food, customQuantity = null, customMacros = null) => {
@@ -227,15 +322,22 @@ const BuildMealModal = ({
         }
         
         try {
+            const foodId = food.id || food.alimento_id;
             let quantity = customQuantity;
             let macrosEf = customMacros || food.macros_efectivos;
+            
+            // FIX 8: Check if user adjusted quantity in suggestions
+            if (suggestionQuantities[foodId]) {
+                quantity = suggestionQuantities[foodId].cantidad;
+                macrosEf = suggestionQuantities[foodId].macros;
+            }
             
             // If no custom quantity, calculate optimal
             if (!quantity) {
                 const result = await api('/api/calculator/adjust', {
                     method: 'POST',
                     body: JSON.stringify({
-                        alimento_id: food.id || food.alimento_id,
+                        alimento_id: foodId,
                         macros_restantes: remaining,
                         es_vegano: false
                     })
@@ -245,7 +347,7 @@ const BuildMealModal = ({
             }
             
             const newFood = {
-                alimento_id: food.id || food.alimento_id,
+                alimento_id: foodId,
                 nombre: food.nombre,
                 cantidad_g: quantity,
                 macros_efectivos: macrosEf,
@@ -255,6 +357,12 @@ const BuildMealModal = ({
             setTempFoods(prev => [...prev, newFood]);
             setSearchQuery('');
             setSearchResults([]);
+            // Clear the adjusted quantity for this food
+            setSuggestionQuantities(prev => {
+                const newState = { ...prev };
+                delete newState[foodId];
+                return newState;
+            });
         } catch (err) {
             toast.error('Error añadiendo alimento');
         }
@@ -281,8 +389,24 @@ const BuildMealModal = ({
         onClose();
     };
     
-    const categories = paso === 1 ? PROTEIN_CATEGORIES : SIDE_CATEGORIES;
+    const categories = getCategories();
     const displayList = searchQuery.length >= 2 ? searchResults : suggestions;
+    
+    // Get step title based on mode
+    const getStepTitle = () => {
+        if (isIntraMode) return 'Elige tus alimentos intra';
+        if (isPostMode) {
+            return paso === 1 ? 'PASO 1: Elige tu proteína post' : 'PASO 2: Elige carbohidrato rápido';
+        }
+        return paso === 1 ? 'PASO 1: Elige tu proteína' : 'PASO 2: Elige acompañamiento';
+    };
+    
+    // Get modal title based on mode
+    const getModalTitle = () => {
+        if (isIntraMode) return 'INTRA-ENTRENO';
+        if (isPostMode) return 'POST-ENTRENO';
+        return 'CONSTRUYE TU COMIDA';
+    };
     
     if (!open || !mealKey) return null;
     
@@ -290,7 +414,7 @@ const BuildMealModal = ({
         <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
             <DialogContent className="max-w-lg h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
                 {/* Header */}
-                <div className="bg-bg-dark p-4 flex-shrink-0">
+                <div className={`p-4 flex-shrink-0 ${isIntraMode ? 'bg-yellow-600' : isPostMode ? 'bg-green-600' : 'bg-bg-dark'}`}>
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                             <button 
@@ -299,41 +423,49 @@ const BuildMealModal = ({
                             >
                                 <X className="w-4 h-4 text-white" />
                             </button>
-                            <DialogTitle className="text-white text-lg">CONSTRUYE TU COMIDA</DialogTitle>
+                            <DialogTitle className="text-white text-lg">{getModalTitle()}</DialogTitle>
                         </div>
+                        {isIntraMode && <Zap className="w-6 h-6 text-white" />}
                     </div>
                     <DialogDescription className="sr-only">Constructor de comida paso a paso</DialogDescription>
                     
                     {/* Meal info header */}
                     <div className="text-white text-sm mb-2">
                         <span className="font-bold">{mealInfo[mealKey]?.name}:</span>{' '}
-                        <span className="text-gray-300">
-                            {target.P.toFixed(0)}P | {target.H.toFixed(0)}H {!isPeri && `| ${target.G.toFixed(0)}G`}
+                        <span className="text-white/80">
+                            {target.P.toFixed(0)}P | {target.H.toFixed(0)}H {!isPeriMode && `| ${target.G.toFixed(0)}G`}
                         </span>
                     </div>
-                    <div className="text-brand-orange text-sm font-semibold">
-                        Restante: {remaining.P.toFixed(0)}P | {remaining.H.toFixed(0)}H {!isPeri && `| ${remaining.G.toFixed(0)}G`}
+                    <div className="text-white/90 text-sm font-semibold">
+                        Restante: {remaining.P.toFixed(0)}P | {remaining.H.toFixed(0)}H {!isPeriMode && `| ${remaining.G.toFixed(0)}G`}
                     </div>
+                    
+                    {/* Max foods indicator for intra */}
+                    {isIntraMode && (
+                        <div className="mt-2 text-xs text-white/70">
+                            Máximo {MAX_FOODS} alimentos: aminoácidos y bebidas isotónicas
+                        </div>
+                    )}
                     
                     {/* Progress bars */}
                     <div className="mt-3 space-y-1">
                         <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-4">P</span>
-                            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-                                <div className="h-full bg-green-500 transition-all" style={{ width: `${Math.min((served.P / target.P) * 100, 100)}%` }} />
+                            <span className="text-xs text-white/70 w-4">P</span>
+                            <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-400 transition-all" style={{ width: `${Math.min((served.P / target.P) * 100, 100)}%` }} />
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-4">H</span>
-                            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.min((served.H / target.H) * 100, 100)}%` }} />
+                            <span className="text-xs text-white/70 w-4">H</span>
+                            <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-400 transition-all" style={{ width: `${Math.min((served.H / target.H) * 100, 100)}%` }} />
                             </div>
                         </div>
-                        {!isPeri && (
+                        {!isPeriMode && (
                             <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400 w-4">G</span>
-                                <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-                                    <div className="h-full bg-orange-500 transition-all" style={{ width: `${Math.min((served.G / target.G) * 100, 100)}%` }} />
+                                <span className="text-xs text-white/70 w-4">G</span>
+                                <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
+                                    <div className="h-full bg-orange-400 transition-all" style={{ width: `${Math.min((served.G / target.G) * 100, 100)}%` }} />
                                 </div>
                             </div>
                         )}
@@ -380,14 +512,16 @@ const BuildMealModal = ({
                 <div className="flex-1 overflow-y-auto bg-white">
                     {/* Step title */}
                     <div className="sticky top-0 bg-white border-b px-4 py-3 z-10">
-                        <h3 className="font-bold text-gray-900">
-                            {isPeri ? 'Elige tus alimentos' : paso === 1 ? 'PASO 1: Elige tu proteína' : 'PASO 2: Elige acompañamiento'}
-                        </h3>
-                        {paso === 1 && !proteinCovered && tempFoods.length > 0 && !isPeri && (
+                        <h3 className="font-bold text-gray-900">{getStepTitle()}</h3>
+                        {/* Show skip option only for normal and post mode in step 1 */}
+                        {!isIntraMode && paso === 1 && !proteinCovered && tempFoods.length > 0 && (
                             <div className="flex items-center justify-between mt-1">
                                 <p className="text-xs text-yellow-600">Te faltan {remaining.P.toFixed(0)}g P. Elige otra proteína.</p>
                                 <button 
-                                    onClick={() => setPaso(2)}
+                                    onClick={() => {
+                                        setPaso(2);
+                                        setSelectedCategory(isPostMode ? '11' : '21');
+                                    }}
                                     className="text-xs text-brand-orange underline"
                                 >
                                     Saltar al paso 2 →
@@ -404,7 +538,7 @@ const BuildMealModal = ({
                                 onClick={() => setSelectedCategory(cat.value)}
                                 className={`flex-shrink-0 inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                                     selectedCategory === cat.value
-                                        ? 'bg-brand-orange text-white'
+                                        ? isIntraMode ? 'bg-yellow-500 text-white' : isPostMode ? 'bg-green-500 text-white' : 'bg-brand-orange text-white'
                                         : 'bg-gray-200 text-gray-700'
                                 }`}
                             >
@@ -418,7 +552,7 @@ const BuildMealModal = ({
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <Input
-                                placeholder="Buscar cualquier alimento..."
+                                placeholder={isIntraMode ? "Buscar aminoácidos, isotónicas..." : "Buscar cualquier alimento..."}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="pl-9 h-10 rounded-lg bg-gray-100 border-0"
@@ -435,15 +569,15 @@ const BuildMealModal = ({
                         </label>
                     </div>
                     
-                    {/* Micro-suggestion for fat balance */}
-                    {paso === 2 && remaining.P <= 10 && remaining.H <= 10 && remaining.G > 2 && !isPeri && (
+                    {/* Micro-suggestion for fat balance - only in normal mode step 2 */}
+                    {mode === 'normal' && paso === 2 && remaining.P <= 10 && remaining.H <= 10 && remaining.G > 2 && (
                         <div className="mx-4 mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                             <p className="text-sm font-medium text-orange-800 mb-2">
                                 Solo te faltan {remaining.G.toFixed(1)}g G
                             </p>
                             <button
                                 onClick={() => handleAddFood({
-                                    id: 1752, // Aceite de oliva
+                                    id: 1752,
                                     nombre: 'Aceite de oliva',
                                     categorias: '17.1',
                                     macros_efectivos: { P: 0, H: 0, G: remaining.G }
@@ -455,7 +589,7 @@ const BuildMealModal = ({
                         </div>
                     )}
                     
-                    {/* Suggestions / Search Results */}
+                    {/* Suggestions / Search Results - FIX 8: With quantity controls */}
                     <div className="px-4 py-3">
                         <p className="text-xs text-gray-500 font-semibold mb-2">
                             {searchQuery.length >= 2 ? 'RESULTADOS' : 'LO QUE MEJOR TE ENCAJA'}
@@ -463,7 +597,7 @@ const BuildMealModal = ({
                         
                         {loading ? (
                             <div className="flex justify-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-4 border-brand-orange border-t-transparent" />
+                                <div className={`animate-spin rounded-full h-8 w-8 border-4 ${isIntraMode ? 'border-yellow-500' : isPostMode ? 'border-green-500' : 'border-brand-orange'} border-t-transparent`} />
                             </div>
                         ) : displayList.length === 0 ? (
                             <div className="text-center py-8 text-gray-500">
@@ -473,30 +607,72 @@ const BuildMealModal = ({
                             <div className="space-y-2">
                                 {displayList.map((item, idx) => {
                                     const food = item.alimento || item;
-                                    const cantidad = item.cantidad_g || food.racion || 100;
-                                    const macros = item.macros_efectivos || food.macros_efectivos || {};
+                                    const foodId = food.id || food.alimento_id;
+                                    const baseQuantity = item.cantidad_g || food.racion || 100;
+                                    const baseMacros = item.macros_efectivos || food.macros_efectivos || {};
+                                    
+                                    // FIX 8: Use adjusted quantity if available
+                                    const adjustedData = suggestionQuantities[foodId];
+                                    const displayQuantity = adjustedData?.cantidad || baseQuantity;
+                                    const displayMacros = adjustedData?.macros || baseMacros;
                                     
                                     return (
-                                        <button
-                                            key={food.id || idx}
-                                            className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all"
-                                            onClick={() => handleAddFood(food, cantidad, macros)}
+                                        <div
+                                            key={foodId || idx}
+                                            className="p-3 bg-gray-50 rounded-xl"
                                         >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xl">{getFoodEmoji(food.categorias)}</span>
-                                                    <div>
-                                                        <p className="font-medium text-gray-900">{food.nombre}</p>
-                                                        <p className="text-xs text-gray-500">{cantidad}g</p>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    <span className="text-xl flex-shrink-0">{getFoodEmoji(food.categorias)}</span>
+                                                    <div className="min-w-0">
+                                                        <p className="font-medium text-gray-900 truncate">{food.nombre}</p>
+                                                        <p className="text-sm font-semibold text-brand-orange">
+                                                            {displayMacros.P?.toFixed(0) || 0}P | {displayMacros.H?.toFixed(0) || 0}H | {displayMacros.G?.toFixed(0) || 0}G
+                                                        </p>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-sm font-semibold text-brand-orange">
-                                                        → {macros.P?.toFixed(0) || 0}P | {macros.H?.toFixed(0) || 0}H | {macros.G?.toFixed(0) || 0}G
-                                                    </p>
-                                                </div>
                                             </div>
-                                        </button>
+                                            
+                                            {/* FIX 8: Quantity controls and Add button */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-1 bg-white rounded-lg px-2 py-1 border">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            updateSuggestionQuantity(foodId, -10, food, baseQuantity);
+                                                        }}
+                                                        className="w-7 h-7 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold"
+                                                    >
+                                                        <Minus className="w-3 h-3" />
+                                                    </button>
+                                                    <span className="w-14 text-center font-mono text-sm font-semibold">
+                                                        {displayQuantity}g
+                                                    </span>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            updateSuggestionQuantity(foodId, 10, food, baseQuantity);
+                                                        }}
+                                                        className="w-7 h-7 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold"
+                                                    >
+                                                        <Plus className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                                
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => handleAddFood(food, displayQuantity, displayMacros)}
+                                                    className={`h-9 px-4 rounded-full font-semibold ${
+                                                        isIntraMode ? 'bg-yellow-500 hover:bg-yellow-600' : 
+                                                        isPostMode ? 'bg-green-500 hover:bg-green-600' : 
+                                                        'bg-brand-orange hover:bg-orange-600'
+                                                    } text-white`}
+                                                    data-testid={`add-food-${foodId}`}
+                                                >
+                                                    <Plus className="w-4 h-4 mr-1" /> AÑADIR
+                                                </Button>
+                                            </div>
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -1178,15 +1354,8 @@ const NutritionPage = () => {
                     
                     {/* Peri Line (only training days) */}
                     {tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri' && (
-                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                            <span>Peri: {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H</span>
-                            <span className="font-mono">Kcal: {dayKcal.toFixed(0)} / {targetKcal.toFixed(0)}</span>
-                        </div>
-                    )}
-                    
-                    {tipoDia === 'descanso' && (
-                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-end text-xs text-gray-500">
-                            <span className="font-mono">Kcal: {dayKcal.toFixed(0)} / {targetKcal.toFixed(0)}</span>
+                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-center text-xs text-gray-500">
+                            <span>Peri: {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H</span>
                         </div>
                     )}
                     
@@ -1474,13 +1643,13 @@ const NutritionPage = () => {
                                     onClick={() => loadMenuOptions(mealKey)}
                                     data-testid={`menu-options-${mealKey}`}
                                 >
-                                    <Zap className="w-5 h-5 mr-2" /> ELIGE TU MENÚ
+                                    <Zap className="w-5 h-5 mr-2" /> SUGIÉREME UN MENÚ
                                 </Button>
                                 <div className="grid grid-cols-2 gap-2">
                                     <Button 
                                         variant="outline" 
                                         className="h-10 rounded-full border-gray-300"
-                                        onClick={() => setBuildMealModal({ open: true, mealKey })}
+                                        onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'normal' })}
                                         data-testid={`build-meal-${mealKey}`}
                                     >
                                         <Wrench className="w-4 h-4 mr-1" /> Lo hago yo
@@ -1494,24 +1663,26 @@ const NutritionPage = () => {
                                         <RefreshCw className="w-4 h-4 mr-1" /> Repetir
                                     </Button>
                                 </div>
-                                <Button 
-                                    variant="ghost" 
-                                    className="w-full h-10 rounded-full text-gray-600"
-                                    onClick={() => { setAddFoodModal({ open: true, mealKey }); setSearchQuery(''); setSearchCategory(''); }}
-                                >
-                                    <Search className="w-4 h-4 mr-1" /> Buscar alimento
-                                </Button>
                             </div>
                         )}
 
-                        {/* Empty state for peri */}
-                        {foods.length === 0 && isPeri && (
+                        {/* Empty state for INTRA */}
+                        {foods.length === 0 && mealKey === 'Intra' && (
                             <Button 
-                                variant="outline" 
-                                className="w-full h-10 rounded-full border-dashed border-brand-orange text-brand-orange"
-                                onClick={() => { setAddFoodModal({ open: true, mealKey }); setSearchQuery(''); setSearchCategory(''); }}
+                                className="w-full h-10 rounded-full bg-brand-orange/10 border border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
+                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'intra' })}
                             >
-                                <Search className="w-4 h-4 mr-1" /> Buscar alimento peri
+                                <Zap className="w-4 h-4 mr-1" /> Construir Intra
+                            </Button>
+                        )}
+
+                        {/* Empty state for POST */}
+                        {foods.length === 0 && mealKey === 'Post' && (
+                            <Button 
+                                className="w-full h-10 rounded-full bg-brand-orange/10 border border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
+                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'post' })}
+                            >
+                                <Zap className="w-4 h-4 mr-1" /> Construir Post
                             </Button>
                         )}
 
@@ -1928,6 +2099,7 @@ const NutritionPage = () => {
             <BuildMealModal 
                 open={buildMealModal.open}
                 mealKey={buildMealModal.mealKey}
+                mode={buildMealModal.mode || 'normal'}
                 onClose={() => setBuildMealModal({ open: false, mealKey: null })}
                 getMealTarget={getMealTarget}
                 mealInfo={mealInfo}
