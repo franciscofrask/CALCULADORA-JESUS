@@ -4,7 +4,7 @@
 
 ### Fecha de creación: 6 de marzo de 2026
 ### Última actualización: 13 de marzo de 2026
-### Estado: MVP Completado + CALMA v2 + Buscador (E12) + Config Día (F1.1/F1.2) + Constructor "Lo hago yo" (F1.3)
+### Estado: MVP Completado + CALMA v2 + Config Día (F1.1/F1.2) + Constructor (F1.3) + Edición/Repetir (F1.4)
 
 ---
 
@@ -103,6 +103,15 @@
   - Micro-sugerencia de grasas cuando solo faltan G
   - Máximo 5 alimentos por comida
   - Banner "¡COMIDA CUADRADA!" cuando ±4g en todos los macros
+- [x] **TAREA F1.4: Edición de ingredientes + Guardar día + Repetir:**
+  - Botones [-] [+] con incrementos por categoría (carne ±25g, aceite ±1g, huevos ±55g, etc.)
+  - Click en cantidad abre input editable para cantidad exacta
+  - Macros del ingrediente recalculados en tiempo real
+  - Botón "🗑️ Vaciar comida" con confirmación
+  - Máximo 5 alimentos por comida (3 para peri)
+  - Modal "Repetir de otro día" con lista de días recientes
+  - Copiar comidas con escalado proporcional (basado en P)
+  - Endpoint GET /api/diets/recent
 
 ---
 
