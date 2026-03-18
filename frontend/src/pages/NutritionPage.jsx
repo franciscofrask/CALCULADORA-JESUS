@@ -12,6 +12,7 @@ import {
     Minus, Save, Copy, Check, ChevronDown, ChevronUp,
     Search, X, Zap, Wrench, RefreshCw, ArrowUpRight, Calendar
 } from 'lucide-react';
+import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -153,7 +154,7 @@ const POST_CARB_CATEGORIES = [
 // ==================== BUILD MEAL MODAL COMPONENT ====================
 // Reescrito según especificaciones: NO muestra alimentos hasta que se pinche una categoría
 const BuildMealModal = ({ 
-    open, mealKey, mode = 'normal', onClose, getMealTarget, mealInfo, api, tipoDia, mealsData, setMealsData, getFoodEmoji 
+    open, mealKey, mode = 'normal', onClose, getMealTarget, mealInfo, api, tipoDia, mealsData, setMealsData, getFoodEmoji, userPreferences = []
 }) => {
     // Estados principales
     const [paso, setPaso] = useState(1);
@@ -169,11 +170,15 @@ const BuildMealModal = ({
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     
+    // Selected food for quantity adjustment (BUG 4 fix)
+    const [selectedFood, setSelectedFood] = useState(null);
+    const [adjustedQuantity, setAdjustedQuantity] = useState(0);
+    const [adjustedMacros, setAdjustedMacros] = useState({ P: 0, H: 0, G: 0 });
+    
     // Mode-specific config
     const isIntraMode = mode === 'intra';
     const isPostMode = mode === 'post';
     const isPeriMode = isIntraMode || isPostMode;
-    const MAX_FOODS = isIntraMode ? 3 : 5;
     
     // Calculate served and remaining macros
     const target = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0, G: 0 };
@@ -193,13 +198,37 @@ const BuildMealModal = ({
                        Math.abs(target.H - served.H) <= 4 && 
                        (isPeriMode || Math.abs(target.G - served.G) <= 4);
     
+    // Emoji mapping for preferences
+    const preferenceEmojis = {
+        grasas_buenas: '🥑', grasas_todo: '🫒', aperitivos: '🍟', arroces: '🍚',
+        aves: '🍗', barritas: '🍫', bebidas: '☕', isotonicas: '⚡',
+        beb_vegetales: '🥤', bolleria: '🥐', cacao: '🍯', casqueria: '🥩',
+        cerdo: '🐷', cereales: '🌾', chocolates: '🍫', cocina_esp: '🥘',
+        comida_rapida: '🍔', embutidos: '🥓', fruta: '🍎', helados: '🍦',
+        huevos: '🥚', lacteos: '🧀', legumbres: '🫘', carnes_blancas: '🍖',
+        carnes_rojas: '🥩', panes: '🍞', pasta: '🍝', pescados: '🐟',
+        pizza: '🍕', proteina_polvo: '💪', proteina_vegetal: '🌱', salsas: '🥫',
+        sopas: '🍲', superalimentos: '✨', tuberculos: '🥔', vacuno: '🥩', verduras: '🥬'
+    };
+    
     // Determine categories based on mode and paso
     const getCurrentCategories = () => {
         if (isIntraMode) return INTRA_CATEGORIES;
         if (isPostMode) {
             return paso === 1 ? POST_PROTEIN_CATEGORIES : POST_CARB_CATEGORIES;
         }
-        return paso === 1 ? PROTEIN_CATEGORIES : SIDE_CATEGORIES;
+        if (paso === 1) return PROTEIN_CATEGORIES;
+        if (paso === 2) return SIDE_CATEGORIES;
+        // Paso 3 - Últimos toques: use user preferences
+        if (paso === 3 && userPreferences && userPreferences.length > 0) {
+            return PREFERENCE_CATEGORIES
+                .filter(cat => userPreferences.includes(cat.id))
+                .map(cat => ({
+                    ...cat,
+                    emoji: preferenceEmojis[cat.id] || '🍽️'
+                }));
+        }
+        return SIDE_CATEGORIES;
     };
     
     // Reset state when modal opens
@@ -212,6 +241,7 @@ const BuildMealModal = ({
             setSearchQuery('');
             setSearchResults([]);
             setIsSearching(false);
+            setSelectedFood(null);
         }
     }, [open, mealKey, mode]);
     
@@ -441,20 +471,205 @@ const BuildMealModal = ({
         return Math.round(val);
     };
     
-    // Food row component
+    // BUG 4: Handle food click - show adjustment panel
+    const handleFoodClick = (food) => {
+        const qty = food._cantidad_sugerida || food._config?.defecto || 100;
+        const config = food._config || { minimo: 10, incremento: 25 };
+        
+        // If quantity is 0, use minimum
+        const finalQty = qty === 0 ? config.minimo : qty;
+        
+        setSelectedFood(food);
+        setAdjustedQuantity(finalQty);
+        setAdjustedMacros(food._macros_sugeridos || { P: 0, H: 0, G: 0 });
+    };
+    
+    // BUG 4: Handle quantity change in adjustment panel
+    const handleQuantityChange = (delta) => {
+        if (!selectedFood) return;
+        
+        const config = selectedFood._config || { minimo: 10, incremento: 25 };
+        const nombre = (selectedFood.nombre || "").toLowerCase();
+        
+        // BUG 7: Hamburguesas con incremento de 0.5 unidades
+        let increment = config.incremento || 25;
+        if (nombre.includes("hamburguesa")) {
+            const racion = selectedFood.racion || 100;
+            increment = Math.round(racion * 0.5); // 0.5 unidades
+        }
+        
+        const newQty = Math.max(config.minimo || 10, adjustedQuantity + (delta * increment));
+        setAdjustedQuantity(newQty);
+        
+        // Recalcular macros localmente
+        const baseQty = selectedFood._cantidad_sugerida || 100;
+        const baseMacros = selectedFood._macros_sugeridos || { P: 0, H: 0, G: 0 };
+        if (baseQty > 0) {
+            const ratio = newQty / baseQty;
+            setAdjustedMacros({
+                P: Math.round((baseMacros.P || 0) * ratio * 10) / 10,
+                H: Math.round((baseMacros.H || 0) * ratio * 10) / 10,
+                G: Math.round((baseMacros.G || 0) * ratio * 10) / 10
+            });
+        }
+    };
+    
+    // BUG 4: Confirm add with adjusted quantity
+    const handleConfirmAdd = () => {
+        if (!selectedFood) return;
+        
+        // Verificar sobrepaso
+        const newServed = {
+            P: served.P + (adjustedMacros.P || 0),
+            H: served.H + (adjustedMacros.H || 0),
+            G: served.G + (adjustedMacros.G || 0)
+        };
+        
+        if (newServed.P > target.P + 4 || newServed.H > target.H + 4 || (!isPeriMode && newServed.G > target.G + 4)) {
+            const overParts = [];
+            if (newServed.P > target.P + 4) overParts.push('P +' + Math.round(newServed.P - target.P) + 'g');
+            if (newServed.H > target.H + 4) overParts.push('H +' + Math.round(newServed.H - target.H) + 'g');
+            if (!isPeriMode && newServed.G > target.G + 4) overParts.push('G +' + Math.round(newServed.G - target.G) + 'g');
+            toast.warning('⚠️ Te pasarías: ' + overParts.join(' | '));
+        }
+        
+        const newFood = {
+            alimento_id: selectedFood.id || selectedFood._id,
+            nombre: selectedFood.nombre,
+            cantidad_g: adjustedQuantity,
+            macros_efectivos: adjustedMacros,
+            categorias: selectedFood.categorias,
+            url: selectedFood.url || selectedFood.enlace || null,
+            _config: selectedFood._config || null
+        };
+        
+        setTempFoods(prev => [...prev, newFood]);
+        setSelectedFood(null);
+        toast.success(`${selectedFood.nombre.substring(0, 30)}... añadido`);
+        
+        // Return to categories
+        setSelectedCategory(null);
+        setCategoryFoods([]);
+    };
+    
+    // Food row component with adjustment panel (BUG 4)
     const FoodRow = ({ food }) => {
         const macros = food._macros_sugeridos || food.macros_efectivos || {};
         const quantity = food._formatted_qty || `${food._cantidad_sugerida || food.racion || 100}g`;
         const hasUrl = food.url || food.enlace;
+        const isSelected = selectedFood && (selectedFood.id || selectedFood._id) === (food.id || food._id);
         
         const macroParts = [];
         if (macros.P > 0) macroParts.push(<span key="p" className="text-green-600">{formatMacro(macros.P)}P</span>);
         if (macros.H > 0) macroParts.push(<span key="h" className="text-blue-600">{formatMacro(macros.H)}H</span>);
         if (macros.G > 0) macroParts.push(<span key="g" className="text-orange-500">{formatMacro(macros.G)}G</span>);
         
+        // If this food is selected, show adjustment panel
+        if (isSelected) {
+            const adjMacroParts = [];
+            if (adjustedMacros.P > 0) adjMacroParts.push(<span key="p" className="text-green-600">{formatMacro(adjustedMacros.P)}P</span>);
+            if (adjustedMacros.H > 0) adjMacroParts.push(<span key="h" className="text-blue-600">{formatMacro(adjustedMacros.H)}H</span>);
+            if (adjustedMacros.G > 0) adjMacroParts.push(<span key="g" className="text-orange-500">{formatMacro(adjustedMacros.G)}G</span>);
+            
+            const wouldExceed = (served.P + adjustedMacros.P > target.P + 4) || 
+                               (served.H + adjustedMacros.H > target.H + 4) || 
+                               (!isPeriMode && served.G + adjustedMacros.G > target.G + 4);
+            
+            return (
+                <div className={`p-4 rounded-xl border-2 ${isIntraMode ? 'border-yellow-400 bg-yellow-50' : isPostMode ? 'border-green-400 bg-green-50' : 'border-brand-orange bg-orange-50'}`}>
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xl">{getFoodEmoji(food.categorias)}</span>
+                        <p className="font-bold text-gray-900 truncate flex-1">{food.nombre}</p>
+                    </div>
+                    
+                    {/* Quantity adjuster */}
+                    <div className="flex items-center justify-center gap-3 mb-3">
+                        <button
+                            onClick={() => handleQuantityChange(-1)}
+                            className="w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center font-bold text-xl"
+                        >
+                            −
+                        </button>
+                        <input
+                            type="number"
+                            value={adjustedQuantity}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setAdjustedQuantity(val);
+                                // Recalculate macros
+                                const baseQty = selectedFood._cantidad_sugerida || 100;
+                                const baseMacros = selectedFood._macros_sugeridos || { P: 0, H: 0, G: 0 };
+                                if (baseQty > 0) {
+                                    const ratio = val / baseQty;
+                                    setAdjustedMacros({
+                                        P: Math.round((baseMacros.P || 0) * ratio * 10) / 10,
+                                        H: Math.round((baseMacros.H || 0) * ratio * 10) / 10,
+                                        G: Math.round((baseMacros.G || 0) * ratio * 10) / 10
+                                    });
+                                }
+                            }}
+                            className="w-24 h-12 text-center text-2xl font-bold border-2 border-brand-orange rounded-lg bg-white"
+                        />
+                        <span className="text-lg font-medium text-gray-600">g</span>
+                        <button
+                            onClick={() => handleQuantityChange(1)}
+                            className="w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center font-bold text-xl"
+                        >
+                            +
+                        </button>
+                    </div>
+                    
+                    {/* Macros display */}
+                    <div className="text-center mb-3">
+                        {adjMacroParts.length > 0 ? (
+                            <p className="text-lg font-semibold">
+                                {adjMacroParts.map((part, i) => (
+                                    <span key={i}>
+                                        {i > 0 && <span className="text-gray-300 mx-1">|</span>}
+                                        {part}
+                                    </span>
+                                ))}
+                            </p>
+                        ) : (
+                            <p className="text-gray-400">Sin macros efectivos</p>
+                        )}
+                    </div>
+                    
+                    {/* Warning if would exceed */}
+                    {wouldExceed && (
+                        <p className="text-center text-orange-600 text-sm mb-3">
+                            ⚠️ Te pasarías de macros si añades este alimento
+                        </p>
+                    )}
+                    
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setSelectedFood(null)}
+                            className="flex-1 py-2 px-4 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleConfirmAdd}
+                            className={`flex-1 py-2 px-4 rounded-full text-white font-bold ${
+                                isIntraMode ? 'bg-yellow-500 hover:bg-yellow-600' :
+                                isPostMode ? 'bg-green-500 hover:bg-green-600' :
+                                'bg-brand-orange hover:bg-orange-600'
+                            }`}
+                        >
+                            ✓ Añadir
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        
+        // Normal row view
         return (
             <div 
-                className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 border border-gray-100 transition-colors"
+                onClick={() => handleFoodClick(food)}
+                className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 border border-gray-100 transition-colors cursor-pointer"
                 data-testid={`food-row-${food.id || food._id}`}
             >
                 <span className="text-xl flex-shrink-0">{getFoodEmoji(food.categorias)}</span>
@@ -464,7 +679,8 @@ const BuildMealModal = ({
                             href={hasUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-blue-600 underline truncate block hover:text-blue-800"
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium text-[#FF5405] underline truncate block hover:text-orange-600"
                         >
                             {food.nombre}
                         </a>
@@ -482,17 +698,13 @@ const BuildMealModal = ({
                         ))}
                     </p>
                 </div>
-                <button
-                    onClick={() => handleSelectFood(food)}
-                    className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                        isIntraMode ? 'bg-yellow-500 hover:bg-yellow-600' :
-                        isPostMode ? 'bg-green-500 hover:bg-green-600' :
-                        'bg-brand-orange hover:bg-orange-600'
-                    }`}
-                    data-testid={`add-food-${food.id || food._id}`}
-                >
-                    <Plus className="w-5 h-5" />
-                </button>
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                    isIntraMode ? 'bg-yellow-100 text-yellow-600' :
+                    isPostMode ? 'bg-green-100 text-green-600' :
+                    'bg-orange-100 text-brand-orange'
+                }`}>
+                    <Plus className="w-4 h-4" />
+                </div>
             </div>
         );
     };
@@ -760,6 +972,11 @@ const BuildMealModal = ({
 const NutritionPage = () => {
     const { token } = useAuth();
     
+    // Preferences state - for checking if user has configured preferences
+    const [showPreferencesSetup, setShowPreferencesSetup] = useState(false);
+    const [userPreferences, setUserPreferences] = useState([]);
+    const [preferencesLoading, setPreferencesLoading] = useState(true);
+    
     // Date & Config state
     const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
     const [tipoDia, setTipoDia] = useState('entrenamiento');
@@ -813,6 +1030,31 @@ const NutritionPage = () => {
         }
         return res.json();
     }, [token]);
+    
+    // Check user preferences on load
+    useEffect(() => {
+        const checkPreferences = async () => {
+            try {
+                const res = await api('/api/user/preferences');
+                if (!res.has_preferences) {
+                    setShowPreferencesSetup(true);
+                } else {
+                    setUserPreferences(res.food_preferences);
+                }
+            } catch (err) {
+                console.error('Error checking preferences:', err);
+            } finally {
+                setPreferencesLoading(false);
+            }
+        };
+        checkPreferences();
+    }, [api]);
+    
+    // Handle preferences saved
+    const handlePreferencesSaved = (preferences) => {
+        setUserPreferences(preferences);
+        setShowPreferencesSetup(false);
+    };
 
     // Load distribution
     const loadDistribution = useCallback(async () => {
@@ -1863,6 +2105,26 @@ const NutritionPage = () => {
         );
     }
 
+    // ===== SHOW PREFERENCES SETUP IF NEEDED =====
+    if (preferencesLoading) {
+        return (
+            <div className="min-h-screen bg-bg-dark flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-orange border-t-transparent" />
+            </div>
+        );
+    }
+    
+    if (showPreferencesSetup) {
+        return (
+            <PreferencesSetup 
+                api={api}
+                initialPreferences={userPreferences}
+                onSave={handlePreferencesSaved}
+                isEditMode={userPreferences.length > 0}
+            />
+        );
+    }
+
     // ===== MAIN RENDER =====
     return (
         <div 
@@ -2155,6 +2417,7 @@ const NutritionPage = () => {
                 mealsData={mealsData}
                 setMealsData={setMealsData}
                 getFoodEmoji={getFoodEmoji}
+                userPreferences={userPreferences}
             />
 
             {/* Repeat Meal Modal */}

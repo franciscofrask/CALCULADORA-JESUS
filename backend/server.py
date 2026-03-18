@@ -392,6 +392,47 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
 
+
+# ==================== USER PREFERENCES ====================
+
+@api_router.get("/user/preferences")
+async def get_user_preferences(user = Depends(get_current_user)):
+    """
+    Devuelve las preferencias de alimentos del usuario.
+    Si nunca configuró preferencias: { "food_preferences": [], "has_preferences": false }
+    """
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        return {"food_preferences": [], "has_preferences": False}
+    
+    preferences = profile.get("food_preferences", [])
+    return {
+        "food_preferences": preferences,
+        "has_preferences": len(preferences) > 0
+    }
+
+
+@api_router.post("/user/preferences")
+async def save_user_preferences(data: dict, user = Depends(get_current_user)):
+    """
+    Guarda las preferencias de alimentos del usuario.
+    Recibe: { "food_preferences": ["aves", "lacteos", "fruta", "chocolates"] }
+    """
+    preferences = data.get("food_preferences", [])
+    
+    if len(preferences) < 3:
+        raise HTTPException(status_code=400, detail="Debes seleccionar al menos 3 categorías")
+    
+    # Update or create profile with preferences
+    result = await db.client_profiles.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"food_preferences": preferences}},
+        upsert=True
+    )
+    
+    return {"success": True, "food_preferences": preferences}
+
+
 # ==================== ADMIN CLIENT ROUTES ====================
 
 @api_router.get("/admin/clients", response_model=List[Dict[str, Any]])
@@ -1280,19 +1321,11 @@ async def get_foods_sorted_by_fit(data: dict):
     """
     Obtiene alimentos de una categoría ordenados por mejor ajuste a los macros restantes.
     
-    Body:
-    {
-        "category_prefixes": ["2.2"],  # Lista de prefijos de categoría
-        "macros_restantes": {"P": 45, "H": 75, "G": 13},
-        "limit": 100,
-        "offset": 0
-    }
-    
-    Returns alimentos con campos adicionales:
-    - _cantidad_sugerida: cantidad en gramos que mejor cuadra
-    - _macros_sugeridos: macros efectivos a esa cantidad
-    - _formatted_qty: cantidad formateada (ej: "200g" o "2 uds")
-    - _score: puntuación de ajuste (mayor = mejor)
+    BUGS CORREGIDOS:
+    - BUG 1: No muestra alimentos con 0g de macros (excepto verduras)
+    - BUG 2: Verduras muestran 100g por defecto
+    - BUG 3: Verifica categoría PRINCIPAL para evitar alimentos mal categorizados
+    - BUG 11: Aplica cantidades mínimas
     """
     prefixes = data.get("category_prefixes", [])
     macros_restantes = data.get("macros_restantes", {"P": 0, "H": 0, "G": 0})
@@ -1305,12 +1338,11 @@ async def get_foods_sorted_by_fit(data: dict):
     # Construir filtro de categorías con formato pipe-separated
     or_conditions = []
     for prefix in prefixes:
-        # Buscar categoría al inicio o después de " | ", seguida de punto, espacio, pipe o fin
         or_conditions.append({"categorias": {"$regex": f"(^|\\| ){re.escape(prefix)}(\\.|\\s|\\||$)"}})
     
     filtro = {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
     
-    # Obtener todos los alimentos de las categorías
+    # Obtener todos los alimentos que coinciden
     cursor = db.foods.find(filtro, {"_id": 0})
     alimentos_raw = await cursor.to_list(length=5000)
     
@@ -1319,26 +1351,99 @@ async def get_foods_sorted_by_fit(data: dict):
     h_rest = float(macros_restantes.get("H", 0) or 0)
     g_rest = float(macros_restantes.get("G", 0) or 0)
     
+    # Helper para obtener categoría principal
+    def get_primary_category(cats_str, nombre=""):
+        """
+        Devuelve la categoría principal.
+        Prioridad: comida preparada > proteínas > lácteos > primera
+        Excepción: si el nombre contiene "hamburguesa", es comida preparada
+        """
+        if not cats_str:
+            return ""
+        
+        # Si el nombre contiene hamburguesa, tratarlo como comida preparada
+        if "hamburguesa" in nombre.lower():
+            return "32"  # Pizza/lasaña/empanadas = comida preparada
+        
+        cats = [c.strip() for c in cats_str.split('|')]
+        # Si tiene categoría de comida preparada, esa es la principal
+        comida_prep_prefixes = ['32', '39', '49', '50', '51', '53', 'PRE', 'HAM']
+        for cat in cats:
+            for prep in comida_prep_prefixes:
+                if cat.startswith(prep) or cat == prep:
+                    return cat
+        # Si no, devolver la primera
+        return cats[0] if cats else ""
+    
+    # Helper para verificar si categoría principal coincide con prefixes
+    def primary_matches_prefixes(cats_str, prefixes, nombre=""):
+        primary = get_primary_category(cats_str, nombre)
+        for prefix in prefixes:
+            if primary.startswith(prefix):
+                return True
+        return False
+    
+    # Helper para verificar si es verdura
+    def is_verdura(cats_str, nombre=""):
+        primary = get_primary_category(cats_str, nombre)
+        return primary.startswith('13')
+    
     alimentos_scored = []
     for alimento in alimentos_raw:
+        cats_str = alimento.get("categorias", "")
+        nombre = alimento.get("nombre", "")
+        
+        # BUG 3: Verificar que la categoría PRINCIPAL coincide con los prefixes
+        if not primary_matches_prefixes(cats_str, prefixes, nombre):
+            continue  # Saltar este alimento, su categoría principal no es la que buscamos
+        
         try:
             resultado = calcular_cantidad_automatica(alimento, macros_restantes, es_vegano=False)
             cantidad = resultado.get("cantidad_g", 0)
             macros_ef = resultado.get("macros_efectivos", {"P": 0, "H": 0, "G": 0})
+            config = resultado.get("config", {})
             
-            # Score = suma de macros efectivos aportados (mayor = mejor)
+            # Score = suma de macros efectivos aportados
             score = (macros_ef.get("P", 0) or 0) + (macros_ef.get("H", 0) or 0) + (macros_ef.get("G", 0) or 0)
             
-            # Formatear cantidad
-            if alimento.get("unidades"):
-                racion = alimento.get("racion", 100)
-                if racion > 0:
-                    unidades = round(cantidad / racion, 1)
-                    if unidades == int(unidades):
-                        unidades = int(unidades)
-                    formatted = f"{unidades} ud{'s' if unidades != 1 else ''}"
+            # BUG 1 y BUG 2: Filtrar alimentos con score 0 EXCEPTO verduras
+            if score == 0:
+                if is_verdura(cats_str, nombre):
+                    # BUG 2: Verduras siempre con 100g por defecto
+                    cantidad = 100
+                    macros_ef = {"P": 0, "H": 0, "G": 0}
                 else:
-                    formatted = f"{round(cantidad)}g"
+                    # No es verdura y score 0 → no incluir
+                    continue
+            
+            # BUG 11: Aplicar cantidades mínimas
+            minimo = config.get("minimo", 10)
+            if cantidad < minimo:
+                cantidad = minimo
+                # Recalcular macros con la cantidad mínima
+                if cantidad > 0 and resultado.get("cantidad_g", 0) > 0:
+                    ratio = cantidad / resultado.get("cantidad_g", 1)
+                    macros_ef = {
+                        "P": round((resultado.get("macros_efectivos", {}).get("P", 0) or 0) * ratio, 1),
+                        "H": round((resultado.get("macros_efectivos", {}).get("H", 0) or 0) * ratio, 1),
+                        "G": round((resultado.get("macros_efectivos", {}).get("G", 0) or 0) * ratio, 1)
+                    }
+            
+            # Formatear cantidad (BUG 7: hamburguesas por unidades)
+            racion = alimento.get("racion", 100)
+            nombre_lower = alimento.get("nombre", "").lower()
+            
+            if "hamburguesa" in nombre_lower and racion > 0:
+                # BUG 7: Hamburguesas por unidades (0.5, 1, 1.5...)
+                unidades = round(cantidad / racion, 1)
+                if unidades == int(unidades):
+                    unidades = int(unidades)
+                formatted = f"{unidades} ud{'s' if unidades != 1 else ''} ({round(cantidad)}g)"
+            elif alimento.get("unidades") and racion > 0:
+                unidades = round(cantidad / racion, 1)
+                if unidades == int(unidades):
+                    unidades = int(unidades)
+                formatted = f"{unidades} ud{'s' if unidades != 1 else ''}"
             else:
                 formatted = f"{round(cantidad)}g"
             
@@ -1348,20 +1453,22 @@ async def get_foods_sorted_by_fit(data: dict):
                 "_macros_sugeridos": macros_ef,
                 "_formatted_qty": formatted,
                 "_score": round(score, 1),
-                "_config": resultado.get("config", {})
+                "_config": config
             }
             alimentos_scored.append(alimento_con_score)
+            
         except Exception as e:
-            # Si falla el cálculo, incluir con score 0
-            alimento_con_score = {
-                **alimento,
-                "_cantidad_sugerida": alimento.get("racion", 100),
-                "_macros_sugeridos": {"P": 0, "H": 0, "G": 0},
-                "_formatted_qty": f"{alimento.get('racion', 100)}g",
-                "_score": 0,
-                "_config": {}
-            }
-            alimentos_scored.append(alimento_con_score)
+            # Si falla el cálculo, incluir con cantidad por defecto si es verdura
+            if is_verdura(alimento.get("categorias", ""), alimento.get("nombre", "")):
+                alimento_con_score = {
+                    **alimento,
+                    "_cantidad_sugerida": 100,
+                    "_macros_sugeridos": {"P": 0, "H": 0, "G": 0},
+                    "_formatted_qty": "100g",
+                    "_score": 0,
+                    "_config": {}
+                }
+                alimentos_scored.append(alimento_con_score)
     
     # Ordenar por score descendente (mejor fit primero)
     alimentos_scored.sort(key=lambda x: x.get("_score", 0), reverse=True)
