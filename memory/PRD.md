@@ -27,16 +27,30 @@ El usuario quiere crear una plataforma de entrenamiento personal llamada "JG12".
 
 ### Food Search & Management
 - Text search with accent normalization
-- Category filtering (23 categories)
+- Category filtering (supports pipe-separated categories like "2.1 | YA | 2.4.3")
 - Generic food tag filtering
 - Effective macros calculation
 
-### Meal Builder "Lo hago yo" (TAREA FIX-1 Complete)
-- **Normal Mode:** 2-step guided builder (Protein → Accompaniment)
-- **Intra Mode (FIX 5):** Single step, filtered to aminoacids/isotonic drinks, max 3 foods, yellow header
-- **Post Mode (FIX 6):** 2-step flow with post-specific categories (Whey/Casein → Fruit/Rice cream), green header
-- **Quantity Controls (FIX 8):** [-] [quantity] [+] buttons and separate AÑADIR button per suggestion
-- **Backend Filter (FIX 7):** paso="proteina" strictly filters to pure protein categories only
+### Build Meal Modal "Lo hago yo" (REESCRITO - 18 Mar 2026)
+**Comportamiento correcto implementado:**
+1. **Estado inicial:** Solo botones de categoría, NO se muestra ningún alimento
+2. **Al pinchar categoría:** Se cargan alimentos de ESA categoría ordenados por mejor fit
+3. **"← Volver a categorías":** Limpia la lista y vuelve a mostrar botones
+4. **Añadir alimento:** Click en botón + naranja añade DIRECTO
+5. **Consistencia:** Vaciar y recargar = mismos alimentos, mismo orden
+6. **Scroll infinito:** Todos los alimentos accesibles (194 aves, 126 embutidos, etc.)
+7. **Hipervínculos:** Nombres con enlace aparecen en azul subrayado
+8. **Transición de pasos:** >80% P → paso 2, >80% H → paso 3
+9. **Búsqueda:** Funciona correctamente (salmón, lechuga, aguacate)
+
+**Modos especiales:**
+- **Intra-entreno:** Cabecera amarilla, categorías aminoácidos/isotónicas, máx 3 alimentos
+- **Post-entreno:** Cabecera verde, flujo 2 pasos (whey/caseína → fruta/crema arroz)
+
+### Backend Endpoints Añadidos
+- `POST /api/calculator/foods-sorted`: Devuelve alimentos de categorías ordenados por mejor ajuste
+  - Recibe: `{ category_prefixes: ["2.2"], macros_restantes: {P, H, G} }`
+  - Devuelve: Alimentos con `_cantidad_sugerida`, `_macros_sugeridos`, `_formatted_qty`, `_score`
 
 ### Diet Management
 - Save daily diets to MongoDB
@@ -44,26 +58,20 @@ El usuario quiere crear una plataforma de entrenamiento personal llamada "JG12".
 - Copy meals from previous days with macro scaling
 - Menu suggestions (A/B/C options)
 
-### UI Components
-- Sticky daily summary with progress bars
-- Expandable meal cards
-- Inline ingredient editing
-- Day navigation
-
 ## Architecture
 
 ```
 /app/
 ├── backend/
-│   ├── server.py         # FastAPI main server
-│   ├── calculator.py     # CALMA calculation logic
+│   ├── server.py         # FastAPI main server (añadido foods-sorted endpoint)
+│   ├── calculator.py     # CALMA calculation logic (arreglado filtro de categorías)
 │   ├── calma_engine.py   # Core macro calculations
 │   └── meal_templates.py # Menu generation
 ├── frontend/
 │   └── src/
 │       ├── pages/
 │       │   ├── AuthPage.jsx
-│       │   └── NutritionPage.jsx  # Main nutrition page
+│       │   └── NutritionPage.jsx  # BuildMealModal REESCRITO
 │       └── components/
 └── memory/
     └── PRD.md
@@ -71,13 +79,14 @@ El usuario quiere crear una plataforma de entrenamiento personal llamada "JG12".
 
 ## Database Collections
 - `users`: User credentials, roles, macros
-- `foods`: Food database with macros
-- `food_categories`: Category definitions
+- `foods`: Food database with macros (3,110 alimentos)
+- `food_categories`: Category definitions (232 categorías)
 - `diets`: Daily diet storage per user
 
 ## API Endpoints
 - `POST /api/auth/login` - User authentication
 - `GET /api/calculator/search` - Food search
+- `POST /api/calculator/foods-sorted` - **NUEVO** Foods sorted by fit
 - `POST /api/calculator/suggest` - AI suggestions
 - `POST /api/calculator/adjust` - Calculate optimal quantity
 - `POST /api/calculator/distribute` - Macro distribution
@@ -96,14 +105,13 @@ El usuario quiere crear una plataforma de entrenamiento personal llamada "JG12".
 - [x] TAREA F1.4: Ingredient editing, save, repeat from day
 - [x] Full diagnostic (100 points)
 - [x] TAREA FIX-1: All 8 fixes completed
-  - FIX 1: Password show/hide toggle
-  - FIX 2: Copyright 2026
-  - FIX 3: Remove Kcal from sticky summary
-  - FIX 4: Remove extra "Buscar alimento" button
-  - FIX 5: Intra mode with filtered categories
-  - FIX 6: Post mode with 2-step post-specific flow
-  - FIX 7: Backend strict protein filter
-  - FIX 8: Quantity controls in suggestions
+- [x] **REESCRITURA CRÍTICA BuildMealModal** (18 Mar 2026)
+  - Arreglado filtro de categorías (pipe-separated)
+  - Creado endpoint foods-sorted
+  - Estado inicial sin alimentos
+  - Click en categoría → carga alimentos filtrados
+  - Botón + para añadir
+  - 12/12 tests de verificación pasados
 
 ## Upcoming Tasks (P1)
 - [ ] Home Screen Redesign (Pantalla 10) with circular macro trackers
@@ -119,7 +127,7 @@ El usuario quiere crear una plataforma de entrenamiento personal llamada "JG12".
 
 ## Known Issues
 - Badge "Made with Emergent" overlaps bottom nav on mobile (P2)
-- NutritionPage.jsx is monolithic (2000+ lines, needs refactoring)
+- NutritionPage.jsx is still large (needs further refactoring)
 
 ## 3rd Party Integrations
 - Claude Sonnet 4.5 (planned for routine generation)

@@ -94,113 +94,86 @@ const PERI_OPTIONS = [
     { value: 'sin_peri', label: 'Sin periworkout' },
 ];
 
-// Categories for Build Meal Modal - Step 1 (Proteínas) - COMPLETO
+// Categories for Build Meal Modal - Step 1 (Proteínas) - Con prefixes para foods-sorted
 const PROTEIN_CATEGORIES = [
-    { label: 'Huevos', value: '1', emoji: '🥚' },
-    { label: 'Embutidos', value: '2.1', emoji: '🥓' },
-    { label: 'Aves', value: '2.2', emoji: '🍗' },
-    { label: 'Vacuno', value: '2.3', emoji: '🥩' },
-    { label: 'Cerdo', value: '2.4', emoji: '🐷' },
-    { label: 'Otras carnes', value: '2.6', emoji: '🍖' },
-    { label: 'Pescados', value: '3', emoji: '🐟' },
-    { label: 'Lácteos', value: '5', emoji: '🥛' },
-    { label: 'Prot. polvo', value: '4', emoji: '💪' },
-    { label: 'Prot. vegetal', value: '28', emoji: '🌱' },
-    { label: 'Legumbres', value: '10', emoji: '🫘' },
+    { id: 'huevos', label: 'Huevos', emoji: '🥚', prefixes: ['1'] },
+    { id: 'embutidos', label: 'Embutidos', emoji: '🥓', prefixes: ['2.1'] },
+    { id: 'aves', label: 'Aves', emoji: '🍗', prefixes: ['2.2'] },
+    { id: 'vacuno', label: 'Vacuno', emoji: '🥩', prefixes: ['2.3'] },
+    { id: 'cerdo', label: 'Cerdo', emoji: '🐷', prefixes: ['2.4'] },
+    { id: 'otras_carnes', label: 'Otras carnes', emoji: '🍖', prefixes: ['2.5', '2.6', '2.7', '40', '45'] },
+    { id: 'pescados', label: 'Pescados', emoji: '🐟', prefixes: ['3'] },
+    { id: 'lacteos', label: 'Lácteos', emoji: '🧀', prefixes: ['5'] },
+    { id: 'proteina_polvo', label: 'Proteína', emoji: '🥤', prefixes: ['4'] },
+    { id: 'legumbres', label: 'Legumbres', emoji: '🫘', prefixes: ['10'] },
+    { id: 'vegetal', label: 'Vegetal', emoji: '🌱', prefixes: ['28', '6'] },
 ];
 
-// Categories for Build Meal Modal - Step 2 (Acompañamientos) - AGRUPADO
+// Categories for Build Meal Modal - Step 2 (Acompañamientos)
 const SIDE_CATEGORIES = [
-    { label: 'Arroces', value: '21', emoji: '🍚' },
-    { label: 'Panes', value: '8', emoji: '🍞' },
-    { label: 'Cereales', value: '7', emoji: '🌾' },
-    { label: 'Pasta', value: '22', emoji: '🍝' },
-    { label: 'Tubérculos', value: '9', emoji: '🥔' },
-    { label: 'Frutas', value: '11', emoji: '🍎' },
-    { label: 'Verduras', value: '13', emoji: '🥦' },
-    { label: 'Legumbres', value: '10', emoji: '🫘' },
-    { label: 'Lácteos', value: '5', emoji: '🥛' },
-    { label: 'Bebidas', value: '19,24', emoji: '🥤' },
-    { label: 'Salsas', value: '16', emoji: '🥫' },
-    { label: 'Grasas', value: '17', emoji: '🫒' },
-    { label: 'Dulces', value: '31,34,35,36,37', emoji: '🍫' },
-    { label: 'Comida prep.', value: '32,39,49,53', emoji: '🍕' },
-    { label: 'Todas', value: '', emoji: '🍽️' },
+    { id: 'arroces', label: 'Arroces', emoji: '🍚', prefixes: ['21'] },
+    { id: 'panes', label: 'Panes', emoji: '🍞', prefixes: ['8'] },
+    { id: 'cereales', label: 'Cereales', emoji: '🌾', prefixes: ['7'] },
+    { id: 'pasta', label: 'Pasta', emoji: '🍝', prefixes: ['22'] },
+    { id: 'tuberculos', label: 'Tubérculos', emoji: '🥔', prefixes: ['9'] },
+    { id: 'fruta', label: 'Fruta', emoji: '🍎', prefixes: ['11'] },
+    { id: 'verduras', label: 'Verduras', emoji: '🥬', prefixes: ['13'] },
+    { id: 'legumbres', label: 'Legumbres', emoji: '🫘', prefixes: ['10'] },
+    { id: 'lacteos', label: 'Lácteos', emoji: '🧀', prefixes: ['5'] },
+    { id: 'bebidas', label: 'Bebidas', emoji: '🥤', prefixes: ['19', '24'] },
+    { id: 'comida_prep', label: 'Comida prep.', emoji: '🍕', prefixes: ['32', '39', '49', '50', '51', '53'] },
+    { id: 'dulces', label: 'Dulces', emoji: '🍫', prefixes: ['31', '34', '35', '36', '37', '43', '44', '47'] },
+    { id: 'salsas', label: 'Salsas', emoji: '🥫', prefixes: ['16'] },
+    { id: 'grasas', label: 'Grasas', emoji: '🫒', prefixes: ['17', '42'] },
+    { id: 'sopas', label: 'Sopas', emoji: '🍲', prefixes: ['48'] },
 ];
 
 // INTRA categories - only aminoacids and isotonic
 const INTRA_CATEGORIES = [
-    { label: 'Aminoácidos', value: '41', emoji: '⚡' },
-    { label: 'Isotónicas', value: '18.1', emoji: '💧' },
+    { id: 'aminoacidos', label: 'Aminoácidos', emoji: '⚡', prefixes: ['41'] },
+    { id: 'isotonicas', label: 'Isotónicas', emoji: '💧', prefixes: ['18.1'] },
 ];
 
 // POST Step 1 categories - protein powders
 const POST_PROTEIN_CATEGORIES = [
-    { label: 'Whey', value: '4.1', emoji: '💪' },
-    { label: 'Caseína', value: '4.2', emoji: '🥛' },
-    { label: 'Vegetal', value: '4.3', emoji: '🌱' },
-    { label: 'Batido', value: '5.4', emoji: '🥤' },
+    { id: 'whey', label: 'Whey', emoji: '💪', prefixes: ['4.1'] },
+    { id: 'caseina', label: 'Caseína', emoji: '🥛', prefixes: ['4.2'] },
+    { id: 'vegetal', label: 'Vegetal', emoji: '🌱', prefixes: ['4.3'] },
+    { id: 'batido', label: 'Batido', emoji: '🥤', prefixes: ['5.4'] },
 ];
 
 // POST Step 2 categories - fast carbs
 const POST_CARB_CATEGORIES = [
-    { label: 'Fruta', value: '11', emoji: '🍎' },
-    { label: 'C. Arroz', value: '21.3', emoji: '🍚' },
-    { label: 'Cereales', value: '7.1', emoji: '🌾' },
-    { label: 'Bebida', value: '24', emoji: '🥤' },
+    { id: 'fruta', label: 'Fruta', emoji: '🍎', prefixes: ['11'] },
+    { id: 'crema_arroz', label: 'C. Arroz', emoji: '🍚', prefixes: ['21.3'] },
+    { id: 'cereales', label: 'Cereales', emoji: '🌾', prefixes: ['7.1'] },
+    { id: 'bebida', label: 'Bebida', emoji: '🥤', prefixes: ['24'] },
 ];
 
-// Build Meal Modal Component - "Lo hago yo" constructor
-// mode: 'normal' (2 pasos P+H), 'intra' (solo cats intra, max 3), 'post' (2 pasos con cats post)
+// ==================== BUILD MEAL MODAL COMPONENT ====================
+// Reescrito según especificaciones: NO muestra alimentos hasta que se pinche una categoría
 const BuildMealModal = ({ 
     open, mealKey, mode = 'normal', onClose, getMealTarget, mealInfo, api, tipoDia, mealsData, setMealsData, getFoodEmoji 
 }) => {
+    // Estados principales
     const [paso, setPaso] = useState(1);
     const [tempFoods, setTempFoods] = useState([]);
+    
+    // Estado de categoría seleccionada - null = vista de botones de categoría
+    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [categoryFoods, setCategoryFoods] = useState([]);
+    const [loadingFoods, setLoadingFoods] = useState(false);
+    
+    // Búsqueda
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('');
-    const [soloGenericos, setSoloGenericos] = useState(false);
-    const [suggestions, setSuggestions] = useState([]);
     const [searchResults, setSearchResults] = useState([]);
-    const [loading, setLoading] = useState(false);
-    // FIX 8: State for adjustable quantities in suggestions
-    const [suggestionQuantities, setSuggestionQuantities] = useState({});
+    const [isSearching, setIsSearching] = useState(false);
     
     // Mode-specific config
     const isIntraMode = mode === 'intra';
     const isPostMode = mode === 'post';
     const isPeriMode = isIntraMode || isPostMode;
     const MAX_FOODS = isIntraMode ? 3 : 5;
-    
-    // Determine categories based on mode
-    const getCategories = () => {
-        if (isIntraMode) return INTRA_CATEGORIES;
-        if (isPostMode) {
-            return paso === 1 ? POST_PROTEIN_CATEGORIES : POST_CARB_CATEGORIES;
-        }
-        return paso === 1 ? PROTEIN_CATEGORIES : SIDE_CATEGORIES;
-    };
-    
-    // Get default category for mode
-    const getDefaultCategory = () => {
-        if (isIntraMode) return '41'; // Aminoácidos
-        if (isPostMode) return paso === 1 ? '4.1' : '11'; // Whey / Fruta
-        return paso === 1 ? '2' : '21'; // Carnes / Arroz
-    };
-    
-    // Reset state when modal opens
-    useEffect(() => {
-        if (open && mealKey) {
-            setPaso(1);
-            setTempFoods([]);
-            setSearchQuery('');
-            setSelectedCategory(getDefaultCategory());
-            setSoloGenericos(false);
-            setSuggestions([]);
-            setSearchResults([]);
-            setSuggestionQuantities({});
-        }
-    }, [open, mealKey, mode]); // eslint-disable-line
     
     // Calculate served and remaining macros
     const target = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0, G: 0 };
@@ -220,146 +193,149 @@ const BuildMealModal = ({
                        Math.abs(target.H - served.H) <= 4 && 
                        (isPeriMode || Math.abs(target.G - served.G) <= 4);
     
-    // Check if should auto-advance to step 2 (only for normal and post mode)
-    const proteinCovered = served.P >= target.P * 0.8;
-    
-    useEffect(() => {
-        if (!isIntraMode && paso === 1 && proteinCovered && tempFoods.length > 0) {
-            setPaso(2);
-            setSelectedCategory(getDefaultCategory());
+    // Determine categories based on mode and paso
+    const getCurrentCategories = () => {
+        if (isIntraMode) return INTRA_CATEGORIES;
+        if (isPostMode) {
+            return paso === 1 ? POST_PROTEIN_CATEGORIES : POST_CARB_CATEGORIES;
         }
-    }, [proteinCovered, paso, tempFoods.length, isIntraMode]); // eslint-disable-line
+        return paso === 1 ? PROTEIN_CATEGORIES : SIDE_CATEGORIES;
+    };
     
-    // Load suggestions based on paso and mode
+    // Reset state when modal opens
     useEffect(() => {
-        if (!open || !mealKey) return;
-        
-        const loadSuggestions = async () => {
-            setLoading(true);
-            try {
-                // Determine tipo_comida for API
-                let tipoComida = 'normal';
-                if (isIntraMode) tipoComida = 'intra';
-                else if (isPostMode) tipoComida = 'post';
-                
-                // Determine paso for API
-                let pasoApi = null;
-                if (!isIntraMode) {
-                    pasoApi = paso === 1 ? 'proteina' : 'acompanamiento';
-                }
-                
-                const result = await api('/api/calculator/suggest', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        macros_restantes: { P: remaining.P, H: remaining.H, G: remaining.G },
-                        tipo_comida: tipoComida,
-                        es_vegano: false,
-                        max_resultados: 10,
-                        excluir_ids: tempFoods.map(f => f.alimento_id),
-                        paso: pasoApi
-                    })
-                });
-                setSuggestions(result.sugerencias || []);
-                // Reset quantities for new suggestions
-                setSuggestionQuantities({});
-            } catch (err) {
-                console.error('Error loading suggestions:', err);
+        if (open && mealKey) {
+            setPaso(1);
+            setTempFoods([]);
+            setSelectedCategory(null);
+            setCategoryFoods([]);
+            setSearchQuery('');
+            setSearchResults([]);
+            setIsSearching(false);
+        }
+    }, [open, mealKey, mode]);
+    
+    // Auto-advance paso based on macros (single useEffect)
+    useEffect(() => {
+        if (tempFoods.length === 0) {
+            if (paso !== 1) {
+                setPaso(1);
+                setSelectedCategory(null);
+                setCategoryFoods([]);
             }
-            setLoading(false);
-        };
+            return;
+        }
         
-        loadSuggestions();
-    }, [open, mealKey, paso, remaining.P, remaining.H, remaining.G, tempFoods.length, api, mode]); // eslint-disable-line
+        if (isIntraMode) return; // Intra no tiene pasos
+        
+        const pPct = target.P > 0 ? (served.P / target.P) * 100 : 100;
+        const hPct = target.H > 0 ? (served.H / target.H) * 100 : 100;
+        
+        if (pPct < 80) {
+            // Proteínas NO llegan al 80% → SIEMPRE paso 1
+            if (paso !== 1) {
+                setPaso(1);
+                setSelectedCategory(null);
+                setCategoryFoods([]);
+            }
+        } else if (pPct >= 80 && hPct < 80) {
+            // Proteínas OK pero hidratos no → paso 2
+            if (paso !== 2) {
+                setPaso(2);
+                setSelectedCategory(null);
+                setCategoryFoods([]);
+                toast.info('✅ Proteínas cubiertas. Elige el acompañamiento.');
+            }
+        } else if (pPct >= 80 && hPct >= 80) {
+            // Ambos OK → paso 3
+            if (paso !== 3) {
+                setPaso(3);
+                setSelectedCategory(null);
+                setCategoryFoods([]);
+                toast.info('✨ ¡Macros cubiertos! Últimos toques.');
+            }
+        }
+    }, [served.P, served.H, target.P, target.H, tempFoods.length, paso, isIntraMode]);
     
-    // Search foods with mode-specific filtering
-    useEffect(() => {
-        if (!searchQuery || searchQuery.length < 2) {
+    // Handle category click - load foods from that category
+    const handleCategoryClick = async (category) => {
+        setSelectedCategory(category);
+        setLoadingFoods(true);
+        setCategoryFoods([]);
+        
+        try {
+            const result = await api('/api/calculator/foods-sorted', {
+                method: 'POST',
+                body: JSON.stringify({
+                    category_prefixes: category.prefixes,
+                    macros_restantes: { P: remaining.P, H: remaining.H, G: remaining.G },
+                    limit: 200
+                })
+            });
+            setCategoryFoods(result.alimentos || []);
+        } catch (err) {
+            console.error('Error cargando alimentos:', err);
+            toast.error('Error cargando alimentos');
+        } finally {
+            setLoadingFoods(false);
+        }
+    };
+    
+    // Handle back to categories
+    const handleBackToCategories = () => {
+        setSelectedCategory(null);
+        setCategoryFoods([]);
+    };
+    
+    // Handle search
+    const handleSearch = async (query) => {
+        setSearchQuery(query);
+        
+        if (query.length < 2) {
+            setIsSearching(false);
             setSearchResults([]);
             return;
         }
         
-        const timer = setTimeout(async () => {
-            setLoading(true);
-            try {
-                const params = new URLSearchParams({ q: searchQuery, limit: '30' });
-                
-                // Add category filter (supports multiple categories separated by comma)
-                if (selectedCategory && selectedCategory !== 'proteina') {
-                    // If multiple categories, pass as comma-separated
-                    params.set('category', selectedCategory);
-                }
-                
-                // Add tipo_comida filter for intra/post modes
-                if (isIntraMode) {
-                    params.set('tipo_comida', 'intra');
-                } else if (isPostMode) {
-                    params.set('tipo_comida', 'post');
-                }
-                
-                if (soloGenericos) {
-                    params.set('tag', 'GEN');
-                }
-                const result = await api(`/api/calculator/search?${params}`);
-                setSearchResults(result.alimentos || []);
-            } catch (err) {
-                console.error('Search error:', err);
-            }
-            setLoading(false);
-        }, 300);
-        
-        return () => clearTimeout(timer);
-    }, [searchQuery, selectedCategory, soloGenericos, api, isIntraMode, isPostMode]);
-    
-    // FIX 8: Update suggestion quantity
-    const updateSuggestionQuantity = async (foodId, delta, food, baseQuantity) => {
-        const currentQty = suggestionQuantities[foodId]?.cantidad || baseQuantity;
-        const newQty = Math.max(5, currentQty + delta);
+        setIsSearching(true);
+        setLoadingFoods(true);
         
         try {
-            const result = await api('/api/calculator/macros-efectivos', {
-                method: 'POST',
-                body: JSON.stringify({
-                    alimento_id: foodId,
-                    cantidad_g: newQty,
-                    es_vegano: false
-                })
+            const params = new URLSearchParams({ 
+                q: query, 
+                limit: '50' 
             });
-            setSuggestionQuantities(prev => ({
-                ...prev,
-                [foodId]: {
-                    cantidad: newQty,
-                    macros: result.efectivos
-                }
-            }));
+            
+            // Add tipo_comida filter for intra/post modes
+            if (isIntraMode) params.set('tipo_comida', 'intra');
+            else if (isPostMode) params.set('tipo_comida', 'post');
+            
+            const result = await api(`/api/calculator/search?${params}`);
+            setSearchResults(result.alimentos || []);
         } catch (err) {
-            console.error('Error updating quantity:', err);
+            console.error('Error buscando:', err);
+        } finally {
+            setLoadingFoods(false);
         }
     };
     
-    // Add food to temp list
-    const handleAddFood = async (food, customQuantity = null, customMacros = null) => {
+    // Handle select food - add directly
+    const handleSelectFood = async (food) => {
         if (tempFoods.length >= MAX_FOODS) {
-            toast.error(`Máximo ${MAX_FOODS} alimentos por comida`);
+            toast.warning(`Máximo ${MAX_FOODS} alimentos por comida`);
             return;
         }
         
         try {
-            const foodId = food.id || food.alimento_id;
-            let quantity = customQuantity;
-            let macrosEf = customMacros || food.macros_efectivos;
+            // Use pre-calculated values if available, otherwise calculate
+            let quantity = food._cantidad_sugerida;
+            let macrosEf = food._macros_sugeridos;
             
-            // FIX 8: Check if user adjusted quantity in suggestions
-            if (suggestionQuantities[foodId]) {
-                quantity = suggestionQuantities[foodId].cantidad;
-                macrosEf = suggestionQuantities[foodId].macros;
-            }
-            
-            // If no custom quantity, calculate optimal
-            if (!quantity) {
+            if (!quantity || !macrosEf) {
                 const result = await api('/api/calculator/adjust', {
                     method: 'POST',
                     body: JSON.stringify({
-                        alimento_id: foodId,
+                        alimento_id: food.id || food._id,
                         macros_restantes: remaining,
                         es_vegano: false
                     })
@@ -368,31 +344,64 @@ const BuildMealModal = ({
                 macrosEf = result.macros_efectivos;
             }
             
+            // Check if exceeds macros
+            const newServed = {
+                P: served.P + (macrosEf?.P || 0),
+                H: served.H + (macrosEf?.H || 0),
+                G: served.G + (macrosEf?.G || 0)
+            };
+            
+            const overP = newServed.P - target.P;
+            const overH = newServed.H - target.H;
+            const overG = newServed.G - target.G;
+            
+            if (overP > 4 || overH > 4 || (!isPeriMode && overG > 4)) {
+                const overMacros = [];
+                if (overP > 4) overMacros.push('P +' + Math.round(overP) + 'g');
+                if (overH > 4) overMacros.push('H +' + Math.round(overH) + 'g');
+                if (!isPeriMode && overG > 4) overMacros.push('G +' + Math.round(overG) + 'g');
+                toast.warning('⚠️ Te pasarías de: ' + overMacros.join(' | '));
+            }
+            
             const newFood = {
-                alimento_id: foodId,
+                alimento_id: food.id || food._id,
                 nombre: food.nombre,
                 cantidad_g: quantity,
                 macros_efectivos: macrosEf,
-                categorias: food.categorias
+                categorias: food.categorias,
+                racion: food.racion,
+                url: food.url || food.enlace || null
             };
             
             setTempFoods(prev => [...prev, newFood]);
+            toast.success(`${food.nombre.substring(0, 30)}... añadido`);
+            
+            // Return to categories
+            setSelectedCategory(null);
+            setCategoryFoods([]);
             setSearchQuery('');
             setSearchResults([]);
-            // Clear the adjusted quantity for this food
-            setSuggestionQuantities(prev => {
-                const newState = { ...prev };
-                delete newState[foodId];
-                return newState;
-            });
+            setIsSearching(false);
         } catch (err) {
             toast.error('Error añadiendo alimento');
+            console.error(err);
         }
     };
     
-    // Remove food from temp list
+    // Handle remove food
     const handleRemoveFood = (index) => {
         setTempFoods(prev => prev.filter((_, i) => i !== index));
+    };
+    
+    // Handle clear meal
+    const handleClearMeal = () => {
+        setTempFoods([]);
+        setPaso(1);
+        setSelectedCategory(null);
+        setCategoryFoods([]);
+        setSearchQuery('');
+        setSearchResults([]);
+        setIsSearching(false);
     };
     
     // Save and close
@@ -411,26 +420,87 @@ const BuildMealModal = ({
         onClose();
     };
     
-    const categories = getCategories();
-    const displayList = searchQuery.length >= 2 ? searchResults : suggestions;
-    
-    // Get step title based on mode
-    const getStepTitle = () => {
-        if (isIntraMode) return 'Elige tus alimentos intra';
-        if (isPostMode) {
-            return paso === 1 ? 'PASO 1: Elige tu proteína post' : 'PASO 2: Elige carbohidrato rápido';
-        }
-        return paso === 1 ? 'PASO 1: Elige tu proteína' : 'PASO 2: Elige acompañamiento';
-    };
-    
     // Get modal title based on mode
     const getModalTitle = () => {
         if (isIntraMode) return 'INTRA-ENTRENO';
         if (isPostMode) return 'POST-ENTRENO';
-        return 'CONSTRUYE TU COMIDA';
+        return 'LO HAGO YO';
+    };
+    
+    // Get step title
+    const getStepTitle = () => {
+        if (isIntraMode) return 'Elige tus alimentos intra';
+        if (paso === 1) return 'PASO 1: ELIGE TU PROTEÍNA';
+        if (paso === 2) return 'PASO 2: ELIGE ACOMPAÑAMIENTO';
+        return '✨ ÚLTIMOS TOQUES';
+    };
+    
+    // Format macro value
+    const formatMacro = (val) => {
+        if (!val || val === 0) return null;
+        return Math.round(val);
+    };
+    
+    // Food row component
+    const FoodRow = ({ food }) => {
+        const macros = food._macros_sugeridos || food.macros_efectivos || {};
+        const quantity = food._formatted_qty || `${food._cantidad_sugerida || food.racion || 100}g`;
+        const hasUrl = food.url || food.enlace;
+        
+        const macroParts = [];
+        if (macros.P > 0) macroParts.push(<span key="p" className="text-green-600">{formatMacro(macros.P)}P</span>);
+        if (macros.H > 0) macroParts.push(<span key="h" className="text-blue-600">{formatMacro(macros.H)}H</span>);
+        if (macros.G > 0) macroParts.push(<span key="g" className="text-orange-500">{formatMacro(macros.G)}G</span>);
+        
+        return (
+            <div 
+                className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 border border-gray-100 transition-colors"
+                data-testid={`food-row-${food.id || food._id}`}
+            >
+                <span className="text-xl flex-shrink-0">{getFoodEmoji(food.categorias)}</span>
+                <div className="flex-1 min-w-0">
+                    {hasUrl ? (
+                        <a 
+                            href={hasUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-blue-600 underline truncate block hover:text-blue-800"
+                        >
+                            {food.nombre}
+                        </a>
+                    ) : (
+                        <p className="font-medium text-gray-900 truncate">{food.nombre}</p>
+                    )}
+                    <p className="text-sm text-gray-500">
+                        <span className="font-medium">{quantity}</span>
+                        {macroParts.length > 0 && ' · '}
+                        {macroParts.map((part, i) => (
+                            <span key={i}>
+                                {i > 0 && <span className="text-gray-300"> | </span>}
+                                {part}
+                            </span>
+                        ))}
+                    </p>
+                </div>
+                <button
+                    onClick={() => handleSelectFood(food)}
+                    className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                        isIntraMode ? 'bg-yellow-500 hover:bg-yellow-600' :
+                        isPostMode ? 'bg-green-500 hover:bg-green-600' :
+                        'bg-brand-orange hover:bg-orange-600'
+                    }`}
+                    data-testid={`add-food-${food.id || food._id}`}
+                >
+                    <Plus className="w-5 h-5" />
+                </button>
+            </div>
+        );
     };
     
     if (!open || !mealKey) return null;
+    
+    const categories = getCurrentCategories();
+    const displayList = isSearching ? searchResults : categoryFoods;
     
     return (
         <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -449,9 +519,9 @@ const BuildMealModal = ({
                         </div>
                         {isIntraMode && <Zap className="w-6 h-6 text-white" />}
                     </div>
-                    <DialogDescription className="sr-only">Constructor de comida paso a paso</DialogDescription>
+                    <DialogDescription className="sr-only">Constructor de comida</DialogDescription>
                     
-                    {/* Meal info header */}
+                    {/* Meal info */}
                     <div className="text-white text-sm mb-2">
                         <span className="font-bold">{mealInfo[mealKey]?.name}:</span>{' '}
                         <span className="text-white/80">
@@ -459,15 +529,8 @@ const BuildMealModal = ({
                         </span>
                     </div>
                     <div className="text-white/90 text-sm font-semibold">
-                        Restante: {remaining.P.toFixed(0)}P | {remaining.H.toFixed(0)}H {!isPeriMode && `| ${remaining.G.toFixed(0)}G`}
+                        Te quedan: {remaining.P.toFixed(0)}P | {remaining.H.toFixed(0)}H {!isPeriMode && `| ${remaining.G.toFixed(0)}G`}
                     </div>
-                    
-                    {/* Max foods indicator for intra */}
-                    {isIntraMode && (
-                        <div className="mt-2 text-xs text-white/70">
-                            Máximo {MAX_FOODS} alimentos: aminoácidos y bebidas isotónicas
-                        </div>
-                    )}
                     
                     {/* Progress bars */}
                     <div className="mt-3 space-y-1">
@@ -476,12 +539,14 @@ const BuildMealModal = ({
                             <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
                                 <div className="h-full bg-green-400 transition-all" style={{ width: `${Math.min((served.P / target.P) * 100, 100)}%` }} />
                             </div>
+                            <span className="text-xs text-white/70 w-12 text-right">{Math.round(served.P)}/{Math.round(target.P)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-white/70 w-4">H</span>
                             <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-400 transition-all" style={{ width: `${Math.min((served.H / target.H) * 100, 100)}%` }} />
                             </div>
+                            <span className="text-xs text-white/70 w-12 text-right">{Math.round(served.H)}/{Math.round(target.H)}</span>
                         </div>
                         {!isPeriMode && (
                             <div className="flex items-center gap-2">
@@ -489,6 +554,7 @@ const BuildMealModal = ({
                                 <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
                                     <div className="h-full bg-orange-400 transition-all" style={{ width: `${Math.min((served.G / target.G) * 100, 100)}%` }} />
                                 </div>
+                                <span className="text-xs text-white/70 w-12 text-right">{Math.round(served.G)}/{Math.round(target.G)}</span>
                             </div>
                         )}
                     </div>
@@ -497,16 +563,24 @@ const BuildMealModal = ({
                 {/* Ingredients added */}
                 {tempFoods.length > 0 && (
                     <div className="bg-gray-100 px-4 py-3 flex-shrink-0 border-b">
-                        <p className="text-xs text-gray-500 font-semibold mb-2">INGREDIENTES ({tempFoods.length}/{MAX_FOODS})</p>
+                        <div className="flex justify-between items-center mb-2">
+                            <p className="text-xs text-gray-500 font-semibold">EN ESTA COMIDA ({tempFoods.length}/{MAX_FOODS})</p>
+                            <button 
+                                onClick={handleClearMeal}
+                                className="text-xs text-red-500 hover:text-red-700"
+                            >
+                                🗑️ Vaciar
+                            </button>
+                        </div>
                         <div className="space-y-1">
                             {tempFoods.map((food, idx) => (
                                 <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
                                         <span>{getFoodEmoji(food.categorias)}</span>
-                                        <span className="font-medium truncate max-w-[150px]">{food.nombre}</span>
-                                        <span className="text-gray-500">{food.cantidad_g}g</span>
+                                        <span className="font-medium truncate">{food.nombre}</span>
+                                        <span className="text-gray-500 flex-shrink-0">{food.cantidad_g}g</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-shrink-0">
                                         <span className="text-xs text-gray-500">
                                             {food.macros_efectivos?.P?.toFixed(0)}P|{food.macros_efectivos?.H?.toFixed(0)}H|{food.macros_efectivos?.G?.toFixed(0)}G
                                         </span>
@@ -530,181 +604,133 @@ const BuildMealModal = ({
                     </div>
                 )}
                 
-                {/* Step indicator & content */}
+                {/* Main content */}
                 <div className="flex-1 overflow-y-auto bg-white">
-                    {/* Step title */}
-                    <div className="sticky top-0 bg-white border-b px-4 py-3 z-10">
-                        <h3 className="font-bold text-gray-900">{getStepTitle()}</h3>
-                        {/* Show skip option only for normal and post mode in step 1 */}
-                        {!isIntraMode && paso === 1 && !proteinCovered && tempFoods.length > 0 && (
-                            <div className="flex items-center justify-between mt-1">
-                                <p className="text-xs text-yellow-600">Te faltan {remaining.P.toFixed(0)}g P. Elige otra proteína.</p>
-                                <button 
-                                    onClick={() => {
-                                        setPaso(2);
-                                        setSelectedCategory(isPostMode ? '11' : '21');
-                                    }}
-                                    className="text-xs text-brand-orange underline"
-                                >
-                                    Saltar al paso 2 →
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Category chips */}
-                    <div className="flex gap-2 px-4 py-3 overflow-x-auto border-b scrollbar-hide">
-                        {categories.map(cat => (
-                            <button
-                                key={cat.value}
-                                onClick={() => setSelectedCategory(cat.value)}
-                                className={`flex-shrink-0 inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                                    selectedCategory === cat.value
-                                        ? isIntraMode ? 'bg-yellow-500 text-white' : isPostMode ? 'bg-green-500 text-white' : 'bg-brand-orange text-white'
-                                        : 'bg-gray-200 text-gray-700'
-                                }`}
-                            >
-                                <span className="mr-1">{cat.emoji}</span> {cat.label}
-                            </button>
-                        ))}
-                    </div>
-                    
-                    {/* Search bar */}
-                    <div className="px-4 py-3 border-b">
+                    {/* Search bar - ALWAYS visible */}
+                    <div className="px-4 py-3 border-b sticky top-0 bg-white z-10">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <Input
-                                placeholder={isIntraMode ? "Buscar aminoácidos, isotónicas..." : "Buscar cualquier alimento..."}
+                                placeholder="🔍 Buscar alimento..."
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => handleSearch(e.target.value)}
                                 className="pl-9 h-10 rounded-lg bg-gray-100 border-0"
+                                data-testid="search-food-input"
                             />
+                            {searchQuery && (
+                                <button 
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setSearchResults([]);
+                                        setIsSearching(false);
+                                    }}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
                         </div>
-                        <label className="flex items-center gap-2 mt-2 text-sm text-gray-600 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={soloGenericos}
-                                onChange={(e) => setSoloGenericos(e.target.checked)}
-                                className="rounded border-gray-300"
-                            />
-                            Solo genéricos
-                        </label>
                     </div>
                     
-                    {/* Micro-suggestion for fat balance - only in normal mode step 2 */}
-                    {mode === 'normal' && paso === 2 && remaining.P <= 10 && remaining.H <= 10 && remaining.G > 2 && (
-                        <div className="mx-4 mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                            <p className="text-sm font-medium text-orange-800 mb-2">
-                                Solo te faltan {remaining.G.toFixed(1)}g G
+                    {/* Step title */}
+                    <div className="px-4 py-3 border-b">
+                        <h3 className="font-bold text-gray-900">{getStepTitle()}</h3>
+                    </div>
+                    
+                    {/* Content based on state */}
+                    {!isSearching && !selectedCategory && (
+                        /* CATEGORY BUTTONS - Initial state, no foods shown */
+                        <div className="px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
+                                {categories.map(cat => (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => handleCategoryClick(cat)}
+                                        className={`px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
+                                            isIntraMode ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800' :
+                                            isPostMode ? 'bg-green-100 hover:bg-green-200 text-green-800' :
+                                            'bg-gray-100 hover:bg-orange-100 hover:text-orange-600 text-gray-700'
+                                        }`}
+                                        data-testid={`category-${cat.id}`}
+                                    >
+                                        {cat.emoji} {cat.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-center text-gray-400 mt-8 text-sm">
+                                Pincha una categoría para ver los alimentos
                             </p>
-                            <button
-                                onClick={() => handleAddFood({
-                                    id: 1752,
-                                    nombre: 'Aceite de oliva',
-                                    categorias: '17.1',
-                                    macros_efectivos: { P: 0, H: 0, G: remaining.G }
-                                }, Math.ceil(remaining.G * 1.1))}
-                                className="text-sm bg-brand-orange text-white px-3 py-1 rounded-full"
-                            >
-                                + Aceite de oliva {Math.ceil(remaining.G * 1.1)}g
-                            </button>
                         </div>
                     )}
                     
-                    {/* Suggestions / Search Results - FIX 8: With quantity controls */}
-                    <div className="px-4 py-3">
-                        <p className="text-xs text-gray-500 font-semibold mb-2">
-                            {searchQuery.length >= 2 ? 'RESULTADOS' : 'LO QUE MEJOR TE ENCAJA'}
-                        </p>
-                        
-                        {loading ? (
-                            <div className="flex justify-center py-8">
-                                <div className={`animate-spin rounded-full h-8 w-8 border-4 ${isIntraMode ? 'border-yellow-500' : isPostMode ? 'border-green-500' : 'border-brand-orange'} border-t-transparent`} />
-                            </div>
-                        ) : displayList.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500">
-                                {searchQuery.length >= 2 ? 'No se encontraron resultados' : 'Cargando sugerencias...'}
-                            </div>
-                        ) : (
-                            <div className="space-y-2">
-                                {displayList.map((item, idx) => {
-                                    const food = item.alimento || item;
-                                    const foodId = food.id || food.alimento_id;
-                                    const baseQuantity = item.cantidad_g || food.racion || 100;
-                                    const baseMacros = item.macros_efectivos || food.macros_efectivos || {};
-                                    
-                                    // FIX 8: Use adjusted quantity if available
-                                    const adjustedData = suggestionQuantities[foodId];
-                                    const displayQuantity = adjustedData?.cantidad || baseQuantity;
-                                    const displayMacros = adjustedData?.macros || baseMacros;
-                                    
-                                    return (
-                                        <div
-                                            key={foodId || idx}
-                                            className="p-3 bg-gray-50 rounded-xl"
-                                        >
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                    <span className="text-xl flex-shrink-0">{getFoodEmoji(food.categorias)}</span>
-                                                    <div className="min-w-0">
-                                                        <p className="font-medium text-gray-900 truncate">{food.nombre}</p>
-                                                        <p className="text-sm font-semibold text-brand-orange">
-                                                            {displayMacros.P?.toFixed(0) || 0}P | {displayMacros.H?.toFixed(0) || 0}H | {displayMacros.G?.toFixed(0) || 0}G
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* FIX 8: Quantity controls and Add button */}
-                                            <div className="flex items-center justify-between gap-2">
-                                                <div className="flex items-center gap-1 bg-white rounded-lg px-2 py-1 border">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            updateSuggestionQuantity(foodId, -10, food, baseQuantity);
-                                                        }}
-                                                        className="w-7 h-7 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold"
-                                                    >
-                                                        <Minus className="w-3 h-3" />
-                                                    </button>
-                                                    <span className="w-14 text-center font-mono text-sm font-semibold">
-                                                        {displayQuantity}g
-                                                    </span>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            updateSuggestionQuantity(foodId, 10, food, baseQuantity);
-                                                        }}
-                                                        className="w-7 h-7 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold"
-                                                    >
-                                                        <Plus className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                                
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => handleAddFood(food, displayQuantity, displayMacros)}
-                                                    className={`h-9 px-4 rounded-full font-semibold ${
-                                                        isIntraMode ? 'bg-yellow-500 hover:bg-yellow-600' : 
-                                                        isPostMode ? 'bg-green-500 hover:bg-green-600' : 
-                                                        'bg-brand-orange hover:bg-orange-600'
-                                                    } text-white`}
-                                                    data-testid={`add-food-${foodId}`}
-                                                >
-                                                    <Plus className="w-4 h-4 mr-1" /> AÑADIR
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
+                    {!isSearching && selectedCategory && (
+                        /* FOODS FROM SELECTED CATEGORY */
+                        <div className="px-4 py-3">
+                            <button 
+                                onClick={handleBackToCategories}
+                                className="text-brand-orange text-sm mb-3 flex items-center gap-1 hover:underline"
+                                data-testid="back-to-categories"
+                            >
+                                ← Volver a categorías
+                            </button>
+                            
+                            <p className="text-sm text-gray-500 mb-3">
+                                {selectedCategory.emoji} <span className="font-medium">{selectedCategory.label}</span> · ordenados por mejor ajuste
+                            </p>
+                            
+                            {loadingFoods && (
+                                <div className="flex justify-center py-8">
+                                    <div className={`animate-spin rounded-full h-8 w-8 border-4 ${
+                                        isIntraMode ? 'border-yellow-500' : isPostMode ? 'border-green-500' : 'border-brand-orange'
+                                    } border-t-transparent`} />
+                                </div>
+                            )}
+                            
+                            {!loadingFoods && categoryFoods.length === 0 && (
+                                <p className="text-center py-8 text-gray-400">No hay alimentos en esta categoría</p>
+                            )}
+                            
+                            {!loadingFoods && categoryFoods.length > 0 && (
+                                <div className="space-y-1 max-h-[50vh] overflow-y-auto">
+                                    {categoryFoods.map(food => (
+                                        <FoodRow key={food.id || food._id} food={food} />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {isSearching && (
+                        /* SEARCH RESULTS */
+                        <div className="px-4 py-3">
+                            <p className="text-sm text-gray-500 mb-3">
+                                Resultados para "{searchQuery}"
+                            </p>
+                            
+                            {loadingFoods && (
+                                <div className="flex justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-brand-orange border-t-transparent" />
+                                </div>
+                            )}
+                            
+                            {!loadingFoods && searchResults.length === 0 && (
+                                <p className="text-center py-8 text-gray-400">No se encontraron resultados</p>
+                            )}
+                            
+                            {!loadingFoods && searchResults.length > 0 && (
+                                <div className="space-y-1 max-h-[50vh] overflow-y-auto">
+                                    {searchResults.map(food => (
+                                        <FoodRow key={food.id || food._id} food={food} />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
                 
                 {/* Footer */}
                 <div className="flex-shrink-0 bg-white border-t p-4">
-                    {tempFoods.length > 0 && (
+                    {tempFoods.length > 0 ? (
                         <Button
                             onClick={handleSaveAndClose}
                             className={`w-full h-12 rounded-full font-bold ${
@@ -716,8 +742,7 @@ const BuildMealModal = ({
                         >
                             {isCuadrada ? '🎉 GUARDAR COMIDA CUADRADA' : 'GUARDAR Y CERRAR'}
                         </Button>
-                    )}
-                    {tempFoods.length === 0 && (
+                    ) : (
                         <Button
                             variant="outline"
                             onClick={onClose}

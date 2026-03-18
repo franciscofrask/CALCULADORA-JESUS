@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
@@ -1269,6 +1270,109 @@ async def search_foods(
     return {
         "alimentos": alimentos,
         "total": len(alimentos),
+        "limit": limit,
+        "offset": offset
+    }
+
+
+@api_router.post("/calculator/foods-sorted")
+async def get_foods_sorted_by_fit(data: dict):
+    """
+    Obtiene alimentos de una categoría ordenados por mejor ajuste a los macros restantes.
+    
+    Body:
+    {
+        "category_prefixes": ["2.2"],  # Lista de prefijos de categoría
+        "macros_restantes": {"P": 45, "H": 75, "G": 13},
+        "limit": 100,
+        "offset": 0
+    }
+    
+    Returns alimentos con campos adicionales:
+    - _cantidad_sugerida: cantidad en gramos que mejor cuadra
+    - _macros_sugeridos: macros efectivos a esa cantidad
+    - _formatted_qty: cantidad formateada (ej: "200g" o "2 uds")
+    - _score: puntuación de ajuste (mayor = mejor)
+    """
+    prefixes = data.get("category_prefixes", [])
+    macros_restantes = data.get("macros_restantes", {"P": 0, "H": 0, "G": 0})
+    limit = data.get("limit", 200)
+    offset = data.get("offset", 0)
+    
+    if not prefixes:
+        return {"alimentos": [], "total": 0}
+    
+    # Construir filtro de categorías con formato pipe-separated
+    or_conditions = []
+    for prefix in prefixes:
+        # Buscar categoría al inicio o después de " | ", seguida de punto, espacio, pipe o fin
+        or_conditions.append({"categorias": {"$regex": f"(^|\\| ){re.escape(prefix)}(\\.|\\s|\\||$)"}})
+    
+    filtro = {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
+    
+    # Obtener todos los alimentos de las categorías
+    cursor = db.foods.find(filtro, {"_id": 0})
+    alimentos_raw = await cursor.to_list(length=5000)
+    
+    # Calcular cantidad sugerida y score para cada alimento
+    p_rest = float(macros_restantes.get("P", 0) or 0)
+    h_rest = float(macros_restantes.get("H", 0) or 0)
+    g_rest = float(macros_restantes.get("G", 0) or 0)
+    
+    alimentos_scored = []
+    for alimento in alimentos_raw:
+        try:
+            resultado = calcular_cantidad_automatica(alimento, macros_restantes, es_vegano=False)
+            cantidad = resultado.get("cantidad_g", 0)
+            macros_ef = resultado.get("macros_efectivos", {"P": 0, "H": 0, "G": 0})
+            
+            # Score = suma de macros efectivos aportados (mayor = mejor)
+            score = (macros_ef.get("P", 0) or 0) + (macros_ef.get("H", 0) or 0) + (macros_ef.get("G", 0) or 0)
+            
+            # Formatear cantidad
+            if alimento.get("unidades"):
+                racion = alimento.get("racion", 100)
+                if racion > 0:
+                    unidades = round(cantidad / racion, 1)
+                    if unidades == int(unidades):
+                        unidades = int(unidades)
+                    formatted = f"{unidades} ud{'s' if unidades != 1 else ''}"
+                else:
+                    formatted = f"{round(cantidad)}g"
+            else:
+                formatted = f"{round(cantidad)}g"
+            
+            alimento_con_score = {
+                **alimento,
+                "_cantidad_sugerida": round(cantidad),
+                "_macros_sugeridos": macros_ef,
+                "_formatted_qty": formatted,
+                "_score": round(score, 1),
+                "_config": resultado.get("config", {})
+            }
+            alimentos_scored.append(alimento_con_score)
+        except Exception as e:
+            # Si falla el cálculo, incluir con score 0
+            alimento_con_score = {
+                **alimento,
+                "_cantidad_sugerida": alimento.get("racion", 100),
+                "_macros_sugeridos": {"P": 0, "H": 0, "G": 0},
+                "_formatted_qty": f"{alimento.get('racion', 100)}g",
+                "_score": 0,
+                "_config": {}
+            }
+            alimentos_scored.append(alimento_con_score)
+    
+    # Ordenar por score descendente (mejor fit primero)
+    alimentos_scored.sort(key=lambda x: x.get("_score", 0), reverse=True)
+    
+    # Aplicar paginación
+    total = len(alimentos_scored)
+    alimentos_paginated = alimentos_scored[offset:offset + limit]
+    
+    return {
+        "alimentos": alimentos_paginated,
+        "total": total,
         "limit": limit,
         "offset": offset
     }

@@ -643,21 +643,19 @@ async def buscar_alimentos(
     filtro = {}
     
     # Filtro por categoría específica (soporta múltiples categorías separadas por coma)
+    # Las categorías en la BD tienen formato "2.1 | YA | 2.4.3" con pipes
     if categoria:
         categorias_list = [c.strip() for c in categoria.split(',') if c.strip()]
         if len(categorias_list) == 1:
-            # Una sola categoría
+            # Una sola categoría - buscar que CONTENGA la categoría (puede estar al inicio o después de " | ")
             cat = categorias_list[0]
-            filtro["$or"] = [
-                {"categorias": cat},
-                {"categorias": {"$regex": f"^{re.escape(cat)}\\."}}
-            ]
+            # Regex: categoría al inicio O después de " | ", seguida de fin, espacio, punto o " |"
+            filtro["categorias"] = {"$regex": f"(^|\\| ){re.escape(cat)}(\\.|\\s|\\||$)"}
         else:
             # Múltiples categorías - crear OR de todas
             or_conditions = []
             for cat in categorias_list:
-                or_conditions.append({"categorias": cat})
-                or_conditions.append({"categorias": {"$regex": f"^{re.escape(cat)}\\."}})
+                or_conditions.append({"categorias": {"$regex": f"(^|\\| ){re.escape(cat)}(\\.|\\s|\\||$)"}})
             filtro["$or"] = or_conditions
     
     # Determinar límite de búsqueda en MongoDB
