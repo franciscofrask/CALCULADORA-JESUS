@@ -207,6 +207,138 @@ def get_categorias(alimento: dict) -> list:
 
 
 # =========================================================
+# FUNCIÓN: Obtener configuración de unidades/incrementos
+# =========================================================
+
+def get_food_config(alimento: dict) -> dict:
+    """
+    Devuelve la configuración de unidades/incrementos para un alimento.
+    
+    REGLA CLAVE (del usuario):
+    - incremento: de cuánto en cuánto sube/baja con [-][+]
+      - TODO por peso: SIEMPRE ±1g (excepto excepciones)
+      - Por UNIDAD: ±1 unidad (o ±0.5 si permite media)
+      - Verduras (cat 13): ±50g
+      - Bebidas vegetales (cat 24): ±50g
+      - Salsas zero (cat 16.1): ±5g
+    
+    - minimo: la cantidad mínima que se puede poner (el suelo)
+      - Embutidos (cat 25): 25g
+      - Fiambres (cat 26): 25g
+      - Quesos (cat 5.3, 5.4): 15g
+      - Proteína polvo (cat 4): 10g
+      - Aceites (cat 17.1): 3g
+      - Frutos secos (cat 17.2): 5g
+      - Mantequillas (cat 17.4): 5g
+      - Verduras (cat 13): 50g
+      - Bebidas vegetales (cat 24): 100g
+      - Por unidad: peso_unidad / 2 (media unidad)
+      - Default: 10g
+    
+    Returns:
+        {
+            "minimo": int,      # cantidad mínima en gramos
+            "incremento": int,  # de cuánto en cuánto sube/baja
+            "defecto": int,     # cantidad por defecto
+            "por_unidad": bool  # si se mide por unidades
+        }
+    """
+    cat = get_categoria_principal(alimento)
+    cats_str = alimento.get("categorias", alimento.get("categoria", ""))
+    nombre = str(alimento.get("nombre", "")).lower()
+    racion = float(alimento.get("racion", 100) or 100)
+    peso_unidad = float(alimento.get("peso_unidad", racion) or racion)
+    
+    # Valores por defecto
+    minimo = 10
+    incremento = 1  # Por defecto, SIEMPRE 1g para alimentos por peso
+    defecto = 100
+    por_unidad = False
+    
+    # Detectar si es por unidad
+    if es_media_unidad(alimento) or "hamburguesa" in nombre:
+        por_unidad = True
+        # Media unidad como mínimo
+        minimo = int(peso_unidad / 2) if peso_unidad > 0 else 50
+        incremento = int(peso_unidad / 2) if peso_unidad > 0 else 50
+        defecto = int(peso_unidad)
+    
+    # Verduras (cat 13): incremento 50g, mínimo 50g
+    elif cat.startswith('13'):
+        minimo = 50
+        incremento = 50
+        defecto = 100
+    
+    # Bebidas vegetales (cat 24): incremento 50g, mínimo 100g
+    elif cat.startswith('24'):
+        minimo = 100
+        incremento = 50
+        defecto = 200
+    
+    # Salsas zero (cat 16.1): incremento 5g
+    elif cats_str.startswith('16.1') or cat == '16.1':
+        minimo = 5
+        incremento = 5
+        defecto = 20
+    
+    # Embutidos (cat 2.1 o 25) - mínimo 25g
+    elif cat.startswith('2.1') or cat.startswith('25'):
+        minimo = 25
+        incremento = 1
+        defecto = 50
+    
+    # Fiambres (cat 26) - mínimo 25g
+    elif cat.startswith('26'):
+        minimo = 25
+        incremento = 1
+        defecto = 50
+    
+    # Quesos (cat 5.3, 5.4)
+    elif cat.startswith('5.3') or cat.startswith('5.4'):
+        minimo = 15
+        incremento = 1
+        defecto = 30
+    
+    # Proteína polvo (cat 4)
+    elif cat.startswith('4'):
+        minimo = 10
+        incremento = 1
+        defecto = 30
+    
+    # Aceites (cat 17.1)
+    elif cat.startswith('17.1'):
+        minimo = 3
+        incremento = 1
+        defecto = 10
+    
+    # Frutos secos (cat 17.2)
+    elif cat.startswith('17.2'):
+        minimo = 5
+        incremento = 1
+        defecto = 20
+    
+    # Mantequillas (cat 17.4)
+    elif cat.startswith('17.4'):
+        minimo = 5
+        incremento = 1
+        defecto = 10
+    
+    # Huevos (cat 1) - por unidad (~55g)
+    elif cat == '1' or cat.startswith('1.'):
+        por_unidad = True
+        minimo = 55
+        incremento = 55
+        defecto = 55
+    
+    return {
+        "minimo": minimo,
+        "incremento": incremento,
+        "defecto": defecto,
+        "por_unidad": por_unidad
+    }
+
+
+# =========================================================
 # FUNCIÓN PRINCIPAL: Calcular cantidad automática
 # =========================================================
 
@@ -347,7 +479,8 @@ def calcular_cantidad_automatica(
             "H": efectivos_final["hidratos_cuenta"],
             "G": efectivos_final["grasa_cuenta"]
         },
-        "cabe": cabe
+        "cabe": cabe,
+        "config": get_food_config(alimento)
     }
 
 

@@ -351,10 +351,7 @@ const BuildMealModal = ({
     
     // Handle select food - add directly
     const handleSelectFood = async (food) => {
-        if (tempFoods.length >= MAX_FOODS) {
-            toast.warning(`Máximo ${MAX_FOODS} alimentos por comida`);
-            return;
-        }
+        // No food limit - removed MAX_FOODS restriction
         
         try {
             // Use pre-calculated values if available, otherwise calculate
@@ -474,7 +471,7 @@ const BuildMealModal = ({
     // BUG 4: Handle food click - show adjustment panel
     const handleFoodClick = (food) => {
         const qty = food._cantidad_sugerida || food._config?.defecto || 100;
-        const config = food._config || { minimo: 10, incremento: 25 };
+        const config = food._config || { minimo: 10, incremento: 1, defecto: 100 };
         
         // If quantity is 0, use minimum
         const finalQty = qty === 0 ? config.minimo : qty;
@@ -485,20 +482,22 @@ const BuildMealModal = ({
     };
     
     // BUG 4: Handle quantity change in adjustment panel
+    // BUG 3 FIX: El incremento viene del backend y es SIEMPRE 1g para peso, excepto:
+    //   - Por unidad: 1 unidad (o 0.5)
+    //   - Verduras (cat 13): 50g
+    //   - Bebidas vegetales (cat 24): 50g
+    //   - Salsas zero (cat 16.1): 5g
     const handleQuantityChange = (delta) => {
         if (!selectedFood) return;
         
-        const config = selectedFood._config || { minimo: 10, incremento: 25 };
-        const nombre = (selectedFood.nombre || "").toLowerCase();
+        // El config viene del backend con los valores correctos
+        const config = selectedFood._config || { minimo: 10, incremento: 1 };
         
-        // BUG 7: Hamburguesas con incremento de 0.5 unidades
-        let increment = config.incremento || 25;
-        if (nombre.includes("hamburguesa")) {
-            const racion = selectedFood.racion || 100;
-            increment = Math.round(racion * 0.5); // 0.5 unidades
-        }
+        // Usar el incremento del backend directamente (ya calculado correctamente)
+        const increment = config.incremento || 1;
+        const minimo = config.minimo || 10;
         
-        const newQty = Math.max(config.minimo || 10, adjustedQuantity + (delta * increment));
+        const newQty = Math.max(minimo, adjustedQuantity + (delta * increment));
         setAdjustedQuantity(newQty);
         
         // Recalcular macros localmente
@@ -776,7 +775,7 @@ const BuildMealModal = ({
                 {tempFoods.length > 0 && (
                     <div className="bg-gray-100 px-4 py-3 flex-shrink-0 border-b">
                         <div className="flex justify-between items-center mb-2">
-                            <p className="text-xs text-gray-500 font-semibold">EN ESTA COMIDA ({tempFoods.length}/{MAX_FOODS})</p>
+                            <p className="text-xs text-gray-500 font-semibold">EN ESTA COMIDA ({tempFoods.length})</p>
                             <button 
                                 onClick={handleClearMeal}
                                 className="text-xs text-red-500 hover:text-red-700"
@@ -1238,30 +1237,41 @@ const NutritionPage = () => {
     };
 
     // Get quantity increment based on food category
+    // REGLA: TODO por peso = ±1g, excepto:
+    //   - Por unidad (hamburguesas, huevos, fruta): peso_unidad/2
+    //   - Verduras (cat 13): ±50g
+    //   - Bebidas vegetales (cat 24): ±50g
+    //   - Salsas zero (cat 16.1): ±5g
     const getQuantityIncrement = (food) => {
         const cat = food.categorias?.split(' | ')[0]?.split('.')[0] || '';
         const subCat = food.categorias?.split(' | ')[0] || '';
+        const nombre = (food.nombre || '').toLowerCase();
+        const racion = food.racion || 100;
         
-        // Cat 2 (carnes), 3 (pescados): ±25g
-        if (cat === '2' || cat === '3') return 25;
-        // Cat 21 (arroz), 22 (pasta), 9 (patata): ±25g
-        if (cat === '21' || cat === '22' || cat === '9') return 25;
-        // Cat 8 (pan): ±10g
-        if (cat === '8') return 10;
-        // Cat 1 (huevos): ±55g (1 huevo)
+        // Verduras (cat 13): ±50g
+        if (cat === '13') return 50;
+        
+        // Bebidas vegetales (cat 24): ±50g
+        if (cat === '24') return 50;
+        
+        // Salsas zero (cat 16.1): ±5g
+        if (subCat.startsWith('16.1')) return 5;
+        
+        // Huevos (cat 1): ±55g (1 huevo)
         if (cat === '1') return 55;
-        // Cat 17.2 (frutos secos): ±5g
-        if (subCat.startsWith('17.2')) return 5;
-        // Cat 17.1 (aceites): ±1g
-        if (subCat.startsWith('17.1')) return 1;
-        // Cat 11.1 (fruta fresca): usar racion/2 o ±50g
-        if (subCat.startsWith('11.1') || subCat.startsWith('11.2')) {
-            return Math.round((food.racion || 100) / 2);
+        
+        // Hamburguesas: media unidad
+        if (nombre.includes('hamburguesa')) {
+            return Math.round(racion / 2);
         }
-        // Cat 4 (proteína polvo): ±5g
-        if (cat === '4') return 5;
-        // Default: ±10g
-        return 10;
+        
+        // Fruta fresca (cat 11.1): media unidad
+        if (subCat.startsWith('11.1')) {
+            return Math.round(racion / 2);
+        }
+        
+        // TODO lo demás: ±1g
+        return 1;
     };
 
     // Food operations

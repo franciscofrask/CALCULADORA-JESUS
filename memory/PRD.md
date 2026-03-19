@@ -1,134 +1,108 @@
 # JG12 - Plataforma de Entrenamiento Personal
 
-## Original Problem Statement
-El usuario quiere crear una plataforma de entrenamiento personal llamada "JG12". La plataforma incluye múltiples paneles y funcionalidades avanzadas como generación de rutinas por IA. La característica principal es una calculadora de macros y dietas altamente detallada llamada "CALMA".
+## Problema Original
+Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples paneles y funcionalidades avanzadas. La característica principal es una calculadora de macros y dietas altamente detallada llamada "CALMA".
 
-## Product Requirements
+## Requisitos del Producto
 - 4 Paneles: Cliente, Operaciones, CEO y Entrenadores
 - Calculadora de nutrición avanzada "CALMA"
 - Generación de 3 opciones de menú (A/B/C)
-- Múltiples diseños de pantalla específicos
 - Branding "JG12" (modo oscuro, acentos naranjas)
 - Integración de IA (Claude Sonnet 4.5) para generación de rutinas (futuro)
-- Integración de pagos (Stripe, actualmente simulada)
+- Integración de pagos con Stripe (actualmente simulada)
 
-## Core Features Implemented
-
-### Authentication & Users
-- JWT-based authentication
-- Client login/logout
-- User roles (client, trainer, admin)
-
-### Nutrition Calculator (CALMA v2)
-- Macro distribution based on day type (training/rest)
-- Configurable meals (3 or 4)
-- Periworkout timing (before/after which meal)
-- Periworkout options (Intra+Post, Solo Post, Solo Intra, Sin peri)
-
-### Food Search & Management
-- Text search with accent normalization
-- Category filtering (supports pipe-separated categories like "2.1 | YA | 2.4.3")
-- Generic food tag filtering
-- Effective macros calculation
-
-### Build Meal Modal "Lo hago yo" (REESCRITO - 18 Mar 2026)
-**Comportamiento correcto implementado:**
-1. **Estado inicial:** Solo botones de categoría, NO se muestra ningún alimento
-2. **Al pinchar categoría:** Se cargan alimentos de ESA categoría ordenados por mejor fit
-3. **"← Volver a categorías":** Limpia la lista y vuelve a mostrar botones
-4. **Añadir alimento:** Click en botón + naranja añade DIRECTO
-5. **Consistencia:** Vaciar y recargar = mismos alimentos, mismo orden
-6. **Scroll infinito:** Todos los alimentos accesibles (194 aves, 126 embutidos, etc.)
-7. **Hipervínculos:** Nombres con enlace aparecen en azul subrayado
-8. **Transición de pasos:** >80% P → paso 2, >80% H → paso 3
-9. **Búsqueda:** Funciona correctamente (salmón, lechuga, aguacate)
-
-**Modos especiales:**
-- **Intra-entreno:** Cabecera amarilla, categorías aminoácidos/isotónicas, máx 3 alimentos
-- **Post-entreno:** Cabecera verde, flujo 2 pasos (whey/caseína → fruta/crema arroz)
-
-### Backend Endpoints Añadidos
-- `POST /api/calculator/foods-sorted`: Devuelve alimentos de categorías ordenados por mejor ajuste
-  - Recibe: `{ category_prefixes: ["2.2"], macros_restantes: {P, H, G} }`
-  - Devuelve: Alimentos con `_cantidad_sugerida`, `_macros_sugeridos`, `_formatted_qty`, `_score`
-
-### Diet Management
-- Save daily diets to MongoDB
-- Load saved diets by date
-- Copy meals from previous days with macro scaling
-- Menu suggestions (A/B/C options)
-
-## Architecture
-
+## Arquitectura del Código
 ```
 /app/
 ├── backend/
-│   ├── server.py         # FastAPI main server (añadido foods-sorted endpoint)
-│   ├── calculator.py     # CALMA calculation logic (arreglado filtro de categorías)
-│   ├── calma_engine.py   # Core macro calculations
-│   └── meal_templates.py # Menu generation
+│   ├── server.py              # API principal FastAPI
+│   ├── calculator.py          # Lógica de búsqueda, sugerencias y get_food_config()
+│   ├── calma_engine.py        # Motor de cálculo de macros
+│   └── meal_templates.py      # Generación de opciones de menú
 ├── frontend/
-│   └── src/
-│       ├── pages/
-│       │   ├── AuthPage.jsx
-│       │   └── NutritionPage.jsx  # BuildMealModal REESCRITO
-│       └── components/
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── AuthPage.jsx   # Login con ojo y copyright
+│   │   │   └── NutritionPage.jsx # Página principal de nutrición (GRANDE - necesita refactor)
+│   │   ├── components/
+│   │   │   ├── nutrition/
+│   │   │   │   └── PreferencesSetup.jsx # Configuración de preferencias
+│   │   │   └── BottomNav.jsx
+│   │   └── layouts/
+│   │       └── ClientDashboard.jsx
+│   └── tailwind.config.js
 └── memory/
     └── PRD.md
 ```
 
-## Database Collections
-- `users`: User credentials, roles, macros
-- `foods`: Food database with macros (3,110 alimentos)
-- `food_categories`: Category definitions (232 categorías)
-- `diets`: Daily diet storage per user
+## Lo que está implementado
 
-## API Endpoints
-- `POST /api/auth/login` - User authentication
-- `GET /api/calculator/search` - Food search
-- `POST /api/calculator/foods-sorted` - **NUEVO** Foods sorted by fit
-- `POST /api/calculator/suggest` - AI suggestions
-- `POST /api/calculator/adjust` - Calculate optimal quantity
-- `POST /api/calculator/distribute` - Macro distribution
-- `POST /api/calculator/menu-options` - Generate menu A/B/C
-- `POST /api/diets` - Save daily diet
-- `GET /api/diets/{fecha}` - Load diet by date
-- `GET /api/diets/recent` - Recent diets for repeat
+### Backend (FastAPI + MongoDB)
+- ✅ Autenticación JWT
+- ✅ Calculadora CALMA v2 completa
+- ✅ Búsqueda de alimentos con normalización de acentos
+- ✅ Endpoints de dietas: save, load, recent
+- ✅ Endpoint `/api/user/preferences` para preferencias de alimentos
+- ✅ Endpoint `/api/calculator/foods-sorted` con lógica de categoría principal y config
+- ✅ Función `get_food_config()` con incrementos y mínimos correctos
 
-## Test Credentials
-- Client: `clientedemo@test.com` / `demo123`
+### Frontend (React + Tailwind + Shadcn)
+- ✅ Login con botón mostrar/ocultar contraseña
+- ✅ Dashboard del cliente
+- ✅ Página de Nutrición completa:
+  - Configuración del día (comidas, entreno, periworkout)
+  - Resumen diario sticky con barras de progreso
+  - Sistema de comidas en acordeón
+  - Modal "Sugiéreme un menú" (opciones A/B/C)
+  - Modal "Lo hago yo" (constructor de comidas en pasos)
+  - Modal "Repetir de otro día"
+  - Edición de ingredientes (+/- cantidad, eliminar)
+  - Guardado/carga de dietas por fecha
+- ✅ Pantalla de preferencias de alimentos obligatoria (primera vez)
 
-## Completed Tasks
-- [x] TAREA E12: Fixed food search (accents, effective macros)
-- [x] TAREA F1.1 & F1.2: Day configuration + sticky summary
-- [x] TAREA F1.3: "Lo hago yo" 2-step builder
-- [x] TAREA F1.4: Ingredient editing, save, repeat from day
-- [x] Full diagnostic (100 points)
-- [x] TAREA FIX-1: All 8 fixes completed
-- [x] **REESCRITURA CRÍTICA BuildMealModal** (18 Mar 2026)
-  - Arreglado filtro de categorías (pipe-separated)
-  - Creado endpoint foods-sorted
-  - Estado inicial sin alimentos
-  - Click en categoría → carga alimentos filtrados
-  - Botón + para añadir
-  - 12/12 tests de verificación pasados
+## Credenciales de Prueba
+- **Cliente:** `clientedemo@test.com` / `demo123`
 
-## Upcoming Tasks (P1)
-- [ ] Home Screen Redesign (Pantalla 10) with circular macro trackers
-- [ ] Routine Screen Redesign ("Mi Rutina")
-- [ ] Visual Calendar in NutritionPage
+## Última Sesión (Marzo 2026)
 
-## Backlog (P2)
-- [ ] Tracking Module (evolution silhouettes)
-- [ ] Real Stripe Integration
-- [ ] Refactor server.py into APIRouters
-- [ ] Refactor NutritionPage.jsx into sub-components
-- [ ] Fix "Made with Emergent" badge overlap on mobile
+### Bugs Corregidos
+1. **BUG 1 - MAX_FOODS not defined:** Eliminadas referencias a MAX_FOODS
+2. **BUG 2 - Preferencias no aparecen:** Pantalla de configuración funciona correctamente
+3. **BUG 3 - Incrementos incorrectos:** Creada `get_food_config()` con lógica correcta:
+   - Incremento = 1g para peso (excepto verduras 50g, bebidas vegetales 50g, salsas zero 5g)
+   - Mínimos según categoría (embutidos 25g, verduras 50g, etc.)
 
-## Known Issues
-- Badge "Made with Emergent" overlaps bottom nav on mobile (P2)
-- NutritionPage.jsx is still large (needs further refactoring)
+## Problemas Conocidos
+- 🔴 Badge "Made with Emergent" tapa BottomNav en móvil
 
-## 3rd Party Integrations
-- Claude Sonnet 4.5 (planned for routine generation)
-- Stripe (mocked, real integration pending)
+## Backlog Priorizado
+
+### P0 - Crítico
+- ✅ COMPLETADO - Bugs 1, 2 y 3 corregidos
+
+### P1 - Alta Prioridad
+- [ ] Arreglar badge de Emergent en móvil
+- [ ] Implementar pantalla de inicio (Home) con macros circulares
+- [ ] Implementar pantalla "Mi Rutina"
+- [ ] Añadir calendario visual en Nutrición
+
+### P2 - Media Prioridad
+- [ ] Refactorizar `NutritionPage.jsx` (>2300 líneas)
+- [ ] Refactorizar `server.py` en APIRouters
+- [ ] Módulo de Tracking/Seguimiento
+- [ ] Integración real con Stripe
+
+### P3 - Baja Prioridad
+- [ ] Integración Claude Sonnet 4.5 para rutinas
+- [ ] Panel de operaciones
+- [ ] Panel de CEO
+- [ ] Panel de entrenadores
+
+## Integraciones de Terceros
+- **Claude Sonnet 4.5** — Emergent LLM Key (planeado, no implementado)
+- **Stripe** — Simulado (pendiente integración real)
+
+## Notas Técnicas
+- El archivo `NutritionPage.jsx` es un monolito de >2300 líneas que necesita urgente refactorización
+- Las preferencias de usuario se guardan en `client_profiles.food_preferences`
+- El `_config` con `minimo`/`incremento` se calcula en el backend y se pasa al frontend
