@@ -97,7 +97,8 @@ const PERI_OPTIONS = [
 
 // Categories for Build Meal Modal - Step 1 (Proteínas) - Con prefixes para foods-sorted
 const PROTEIN_CATEGORIES = [
-    { id: 'huevos', label: 'Huevos', emoji: '🥚', prefixes: ['1'] },
+    { id: 'huevos', label: 'Huevos', emoji: '🥚', prefixes: ['1.2'] },
+    { id: 'claras', label: 'Claras', emoji: '🍳', prefixes: ['1.1'] },
     { id: 'embutidos', label: 'Embutidos', emoji: '🥓', prefixes: ['2.1'] },
     { id: 'aves', label: 'Aves', emoji: '🍗', prefixes: ['2.2'] },
     { id: 'vacuno', label: 'Vacuno', emoji: '🥩', prefixes: ['2.3'] },
@@ -220,13 +221,29 @@ const BuildMealModal = ({
         if (paso === 1) return PROTEIN_CATEGORIES;
         if (paso === 2) return SIDE_CATEGORIES;
         // Paso 3 - Últimos toques: use user preferences
-        if (paso === 3 && userPreferences && userPreferences.length > 0) {
-            return PREFERENCE_CATEGORIES
-                .filter(cat => userPreferences.includes(cat.id))
-                .map(cat => ({
-                    ...cat,
-                    emoji: preferenceEmojis[cat.id] || '🍽️'
-                }));
+        if (paso === 3) {
+            let cats = [];
+            if (userPreferences && userPreferences.length > 0) {
+                cats = PREFERENCE_CATEGORIES
+                    .filter(cat => userPreferences.includes(cat.id))
+                    .map(cat => ({
+                        ...cat,
+                        emoji: preferenceEmojis[cat.id] || '🍽️'
+                    }));
+            } else {
+                cats = [...SIDE_CATEGORIES];
+            }
+            
+            // BUG 5 FIX: SIEMPRE incluir grasas de buena calidad si queda grasa por cubrir
+            const grasaRestante = Math.max(0, target.G - served.G);
+            if (grasaRestante > 1) {
+                const grasaCat = { id: 'grasas_buenas', label: 'Grasas de buena calidad', emoji: '🫒', prefixes: ['42'] };
+                if (!cats.find(c => c.id === 'grasas_buenas')) {
+                    cats.unshift(grasaCat);  // Ponerla PRIMERA
+                }
+            }
+            
+            return cats;
         }
         return SIDE_CATEGORIES;
     };

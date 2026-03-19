@@ -1429,21 +1429,32 @@ async def get_foods_sorted_by_fit(data: dict):
                         "G": round((resultado.get("macros_efectivos", {}).get("G", 0) or 0) * ratio, 1)
                     }
             
-            # Formatear cantidad (BUG 7: hamburguesas por unidades)
+            # Formatear cantidad usando el config (BUG 2: huevos, hamburguesas como unidades enteras)
             racion = alimento.get("racion", 100)
             nombre_lower = alimento.get("nombre", "").lower()
             
-            if "hamburguesa" in nombre_lower and racion > 0:
-                # BUG 7: Hamburguesas por unidades (0.5, 1, 1.5...)
-                unidades = round(cantidad / racion, 1)
+            if config.get("por_unidad", False) and config.get("peso_unidad", 0) > 0:
+                # BUG 2 FIX: Formatear como unidades enteras o medias
+                peso_unidad = config["peso_unidad"]
+                permite_media = config.get("permite_media", False)
+                unidades = cantidad / peso_unidad
+                
+                if permite_media:
+                    # Redondear a 0.5
+                    unidades = round(unidades * 2) / 2
+                    if unidades < 0.5:
+                        unidades = 0.5
+                else:
+                    # Redondear a enteros SIEMPRE
+                    unidades = round(unidades)
+                    if unidades < 1:
+                        unidades = 1
+                
+                # Formatear: "2 ud (110g)" o "1.5 ud (150g)"
                 if unidades == int(unidades):
-                    unidades = int(unidades)
-                formatted = f"{unidades} ud{'s' if unidades != 1 else ''} ({round(cantidad)}g)"
-            elif alimento.get("unidades") and racion > 0:
-                unidades = round(cantidad / racion, 1)
-                if unidades == int(unidades):
-                    unidades = int(unidades)
-                formatted = f"{unidades} ud{'s' if unidades != 1 else ''}"
+                    formatted = f"{int(unidades)} ud ({round(cantidad)}g)"
+                else:
+                    formatted = f"{unidades} ud ({round(cantidad)}g)"
             else:
                 formatted = f"{round(cantidad)}g"
             

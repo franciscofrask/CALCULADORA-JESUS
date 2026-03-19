@@ -213,129 +213,256 @@ def get_categorias(alimento: dict) -> list:
 def get_food_config(alimento: dict) -> dict:
     """
     Devuelve la configuración de unidades/incrementos para un alimento.
-    
-    REGLA CLAVE (del usuario):
-    - incremento: de cuánto en cuánto sube/baja con [-][+]
-      - TODO por peso: SIEMPRE ±1g (excepto excepciones)
-      - Por UNIDAD: ±1 unidad (o ±0.5 si permite media)
-      - Verduras (cat 13): ±50g
-      - Bebidas vegetales (cat 24): ±50g
-      - Salsas zero (cat 16.1): ±5g
-    
-    - minimo: la cantidad mínima que se puede poner (el suelo)
-      - Embutidos (cat 25): 25g
-      - Fiambres (cat 26): 25g
-      - Quesos (cat 5.3, 5.4): 15g
-      - Proteína polvo (cat 4): 10g
-      - Aceites (cat 17.1): 3g
-      - Frutos secos (cat 17.2): 5g
-      - Mantequillas (cat 17.4): 5g
-      - Verduras (cat 13): 50g
-      - Bebidas vegetales (cat 24): 100g
-      - Por unidad: peso_unidad / 2 (media unidad)
-      - Default: 10g
+    Basado en las categorías REALES de la base de datos.
     
     Returns:
         {
-            "minimo": int,      # cantidad mínima en gramos
-            "incremento": int,  # de cuánto en cuánto sube/baja
-            "defecto": int,     # cantidad por defecto
-            "por_unidad": bool  # si se mide por unidades
+            "minimo": int,        # cantidad mínima en gramos
+            "incremento": int,    # de cuánto en cuánto sube/baja
+            "defecto": int,       # cantidad por defecto
+            "por_unidad": bool,   # si se mide por unidades
+            "permite_media": bool,# si permite media unidad
+            "peso_unidad": int    # gramos por unidad (si aplica)
         }
     """
-    cat = get_categoria_principal(alimento)
     cats_str = alimento.get("categorias", alimento.get("categoria", ""))
+    if isinstance(cats_str, str):
+        cats = [c.strip() for c in cats_str.split('|')]
+    else:
+        cats = cats_str if cats_str else []
+    
     nombre = str(alimento.get("nombre", "")).lower()
     racion = float(alimento.get("racion", 100) or 100)
-    peso_unidad = float(alimento.get("peso_unidad", racion) or racion)
     
-    # Valores por defecto
-    minimo = 10
-    incremento = 1  # Por defecto, SIEMPRE 1g para alimentos por peso
-    defecto = 100
-    por_unidad = False
+    # Helper para verificar si tiene una categoría
+    def has_cat(prefix):
+        return any(c.strip().startswith(prefix) for c in cats)
     
-    # Detectar si es por unidad
-    if es_media_unidad(alimento) or "hamburguesa" in nombre:
-        por_unidad = True
-        # Media unidad como mínimo
-        minimo = int(peso_unidad / 2) if peso_unidad > 0 else 50
-        incremento = int(peso_unidad / 2) if peso_unidad > 0 else 50
-        defecto = int(peso_unidad)
+    # ===========================================
+    # REGLAS TRANSVERSALES (por nombre, prioridad)
+    # ===========================================
     
-    # Verduras (cat 13): incremento 50g, mínimo 50g
-    elif cat.startswith('13'):
-        minimo = 50
-        incremento = 50
-        defecto = 100
+    if "hamburguesa" in nombre or "carne picada" in nombre:
+        peso = int(racion) if racion > 0 else 100
+        return {"minimo": peso//2, "incremento": peso//2, "defecto": peso, "por_unidad": True, "permite_media": True, "peso_unidad": peso}
     
-    # Bebidas vegetales (cat 24): incremento 50g, mínimo 100g
-    elif cat.startswith('24'):
-        minimo = 100
-        incremento = 50
-        defecto = 200
+    if ("lata" in nombre or "conserva" in nombre) and racion < 200:
+        peso = int(racion) if racion > 0 else 80
+        return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
     
-    # Salsas zero (cat 16.1): incremento 5g
-    elif cats_str.startswith('16.1') or cat == '16.1':
-        minimo = 5
-        incremento = 5
-        defecto = 20
+    if "arroz" in nombre and "minuto" in nombre:
+        peso = int(racion) if racion > 0 else 125
+        return {"minimo": peso//2, "incremento": peso//2, "defecto": peso, "por_unidad": True, "permite_media": True, "peso_unidad": peso}
     
-    # Embutidos (cat 2.1 o 25) - mínimo 25g
-    elif cat.startswith('2.1') or cat.startswith('25'):
-        minimo = 25
-        incremento = 1
-        defecto = 50
+    # ===========================================
+    # REGLAS POR CATEGORÍA
+    # ===========================================
     
-    # Fiambres (cat 26) - mínimo 25g
-    elif cat.startswith('26'):
-        minimo = 25
-        incremento = 1
-        defecto = 50
+    # Cat 1.1 — Claras de huevo (por peso)
+    if has_cat('1.1'):
+        return {"minimo": 25, "incremento": 1, "defecto": 100, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
-    # Quesos (cat 5.3, 5.4)
-    elif cat.startswith('5.3') or cat.startswith('5.4'):
-        minimo = 15
-        incremento = 1
-        defecto = 30
+    # Cat 1.2 — Huevos enteros (SIEMPRE por unidad entera, NUNCA decimales)
+    if has_cat('1.2'):
+        peso = int(racion) if 0 < racion < 100 else 55
+        return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
     
-    # Proteína polvo (cat 4)
-    elif cat.startswith('4'):
-        minimo = 10
-        incremento = 1
-        defecto = 30
+    # Cat 2.1 — Embutidos/Fiambres
+    if has_cat('2.1'):
+        return {"minimo": 25, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
-    # Aceites (cat 17.1)
-    elif cat.startswith('17.1'):
-        minimo = 3
-        incremento = 1
-        defecto = 10
+    # Cat 2.2, 2.3, 2.4, 2.6, 2.7 — Aves, Vacuno, Cerdo, otras carnes
+    if has_cat('2.'):
+        return {"minimo": 50, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
-    # Frutos secos (cat 17.2)
-    elif cat.startswith('17.2'):
-        minimo = 5
-        incremento = 1
-        defecto = 20
+    # Cat 3.8 — Conservas de pescado (por unidad/lata)
+    if has_cat('3.8'):
+        peso = int(racion) if 0 < racion < 200 else 80
+        return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
     
-    # Mantequillas (cat 17.4)
-    elif cat.startswith('17.4'):
-        minimo = 5
-        incremento = 1
-        defecto = 10
+    # Cat 3 — Pescado y marisco (por peso)
+    if has_cat('3'):
+        return {"minimo": 50, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
-    # Huevos (cat 1) - por unidad (~55g)
-    elif cat == '1' or cat.startswith('1.'):
-        por_unidad = True
-        minimo = 55
-        incremento = 55
-        defecto = 55
+    # Cat 4 — Proteína en polvo
+    if has_cat('4'):
+        return {"minimo": 5, "incremento": 1, "defecto": 30, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
-    return {
-        "minimo": minimo,
-        "incremento": incremento,
-        "defecto": defecto,
-        "por_unidad": por_unidad
-    }
+    # Cat 5.1 — Leche
+    if has_cat('5.1'):
+        return {"minimo": 20, "incremento": 1, "defecto": 200, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 5.2 — Yogures (por unidad si racion < 200)
+    if has_cat('5.2'):
+        if racion < 200:
+            peso = int(racion) if racion > 0 else 125
+            return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
+        return {"minimo": 50, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 5.3, 5.4 — Quesos, Batidos proteicos
+    if has_cat('5.3') or has_cat('5.4'):
+        return {"minimo": 20, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 7 — Cereales
+    if has_cat('7'):
+        return {"minimo": 10, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 8 — Panes (por unidad si racion < 100)
+    if has_cat('8'):
+        if racion < 100:
+            peso = int(racion) if racion > 0 else 60
+            return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
+        return {"minimo": 25, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 9 — Tubérculos
+    if has_cat('9'):
+        return {"minimo": 25, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 10 — Legumbres
+    if has_cat('10'):
+        return {"minimo": 25, "incremento": 1, "defecto": 100, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 11.1 — Fruta fresca (por unidad, permite media)
+    if has_cat('11.1'):
+        peso = int(racion) if 0 < racion < 500 else 150
+        return {"minimo": peso//2, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": True, "peso_unidad": peso}
+    
+    # Cat 11 — Resto de frutas
+    if has_cat('11'):
+        return {"minimo": 25, "incremento": 1, "defecto": 100, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 13 — Verduras (incremento 50g)
+    if has_cat('13'):
+        return {"minimo": 50, "incremento": 50, "defecto": 100, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 16.1 — Salsas zero (incremento 5g)
+    if has_cat('16.1'):
+        return {"minimo": 5, "incremento": 5, "defecto": 10, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 16 — Otras salsas
+    if has_cat('16'):
+        return {"minimo": 5, "incremento": 1, "defecto": 10, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 17.1 — Aceites
+    if has_cat('17.1'):
+        return {"minimo": 5, "incremento": 1, "defecto": 10, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 17.2 — Frutos secos
+    if has_cat('17.2'):
+        return {"minimo": 5, "incremento": 1, "defecto": 20, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 17.4, 17.5, 17.6, 17.7 — Mantequillas, cremas, aguacate
+    if has_cat('17.4') or has_cat('17.5') or has_cat('17.6') or has_cat('17.7'):
+        return {"minimo": 5, "incremento": 1, "defecto": 10, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 17.9 — Croquetas (por unidad)
+    if has_cat('17.9'):
+        peso = int(racion) if racion > 0 else 25
+        return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
+    
+    # Cat 18.3 — Hidratos en polvo
+    if has_cat('18.3'):
+        return {"minimo": 5, "incremento": 1, "defecto": 30, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 18, 41 — Suplementos
+    if has_cat('18') or has_cat('41'):
+        return {"minimo": 5, "incremento": 1, "defecto": 10, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 19 — Bebidas energéticas
+    if has_cat('19'):
+        return {"minimo": 100, "incremento": 1, "defecto": 330, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 21 — Arroces
+    if has_cat('21'):
+        return {"minimo": 25, "incremento": 1, "defecto": 75, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 22 — Pasta
+    if has_cat('22'):
+        return {"minimo": 25, "incremento": 1, "defecto": 75, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 24 — Bebidas vegetales (incremento 50g)
+    if has_cat('24'):
+        return {"minimo": 100, "incremento": 50, "defecto": 200, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 25 — Post-entreno (mezcla de alimentos)
+    if has_cat('25'):
+        return {"minimo": 25, "incremento": 1, "defecto": 100, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 28 — Proteína vegetal
+    if has_cat('28'):
+        return {"minimo": 50, "incremento": 1, "defecto": 100, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 29, 30, 31 — Barritas, bollería (por unidad)
+    if has_cat('29') or has_cat('30') or has_cat('31'):
+        peso = int(racion) if racion > 0 else 40
+        return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
+    
+    # Cat 32 — Pizza, lasaña
+    if has_cat('32'):
+        return {"minimo": 50, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 34 — Chocolates
+    if has_cat('34'):
+        return {"minimo": 20, "incremento": 1, "defecto": 30, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 35, 36 — Helados, postres (por unidad si racion < 200)
+    if has_cat('35') or has_cat('36'):
+        if racion < 200:
+            peso = int(racion) if racion > 0 else 100
+            return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
+        return {"minimo": 50, "incremento": 1, "defecto": 100, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 37 — Azúcar, miel
+    if has_cat('37'):
+        return {"minimo": 5, "incremento": 1, "defecto": 10, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 38 — Aperitivos
+    if has_cat('38'):
+        return {"minimo": 25, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # Cat 42 — Grasas buena calidad
+    if has_cat('42'):
+        return {"minimo": 5, "incremento": 1, "defecto": 10, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+    
+    # DEFAULT
+    return {"minimo": 10, "incremento": 1, "defecto": 100, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+
+
+# =========================================================
+# FUNCIÓN: Ajustar cantidad a unidades enteras o medias
+# =========================================================
+
+def ajustar_por_unidades(cantidad_g: float, config: dict) -> float:
+    """
+    Si el alimento es por unidad, redondea la cantidad a la unidad 
+    (o media unidad si permite) más cercana que QUEPA sin pasarse.
+    
+    BUG 2 FIX: Los huevos deben ser 1, 2, 3... NUNCA 3.1 unidades.
+    """
+    if not config.get('por_unidad', False):
+        return cantidad_g  # No es por unidad, devolver tal cual
+    
+    peso_unidad = config.get('peso_unidad', 0)
+    permite_media = config.get('permite_media', False)
+    
+    if peso_unidad <= 0:
+        return cantidad_g
+    
+    if permite_media:
+        # Redondear a la media unidad más cercana hacia ABAJO (no pasarse)
+        medias = int(cantidad_g / (peso_unidad / 2))
+        cantidad_ajustada = medias * (peso_unidad / 2)
+    else:
+        # Redondear a la unidad entera más cercana hacia ABAJO
+        unidades = int(cantidad_g / peso_unidad)
+        cantidad_ajustada = unidades * peso_unidad
+    
+    # Mínimo 1 unidad (o media si permite)
+    minimo = peso_unidad / 2 if permite_media else peso_unidad
+    if cantidad_ajustada < minimo:
+        cantidad_ajustada = minimo
+    
+    return cantidad_ajustada
 
 
 # =========================================================
@@ -426,8 +553,14 @@ def calcular_cantidad_automatica(
     # Elegir la cantidad MÍNIMA (macro más limitante)
     cantidad = max(0, min(cantidades))
     
-    # Manejar medias unidades
-    if es_media_unidad(alimento):
+    # Obtener config del alimento
+    config = get_food_config(alimento)
+    
+    # BUG 2 FIX: Si es por unidad, ajustar a unidades enteras (o medias)
+    if config.get('por_unidad', False):
+        cantidad = ajustar_por_unidades(cantidad, config)
+    elif es_media_unidad(alimento):
+        # Fallback para compatibilidad
         peso_unidad = float(alimento.get("peso_unidad", racion) or racion)
         media = peso_unidad / 2.0
         if media > 0:
@@ -438,9 +571,10 @@ def calcular_cantidad_automatica(
         # Redondear según categoría
         cantidad = _redondear_cantidad(cantidad, cat)
     
-    # Mínimo 5g (salvo que sea 0)
-    if 0 < cantidad < 5:
-        cantidad = 5
+    # Aplicar mínimo del config
+    minimo_config = config.get('minimo', 5)
+    if 0 < cantidad < minimo_config:
+        cantidad = minimo_config
     
     # Recalcular macros efectivos con la cantidad final
     # (la calibración puede cambiar con la nueva cantidad)
