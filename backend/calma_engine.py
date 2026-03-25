@@ -610,17 +610,46 @@ def _aplicar_reglas_categoria(
         return (False, False, True, 1.0)
     
     # =====================================================
-    # CAT 43-53 - Procesados complejos
-    # TODOS los macros cuentan SIEMPRE
-    # EXCEPCION: Cat 48 (sopas) - macro cuenta si >= 2g
+    # CAT 45 - Otras carnes
+    # Funciona como carnes (cat 2): P siempre, H si >=2g, G si >=3g
+    # =====================================================
+    if cat == "45" or cat.startswith("45."):
+        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
+    
+    # =====================================================
+    # CAT 46 - Cremas y tortas de arroz
+    # Funciona como arroces (cat 21): H siempre, P NUNCA, G si >=6g
+    # =====================================================
+    if cat == "46" or cat.startswith("46."):
+        return (False, True, g100 >= 6.0, 1.0)
+    
+    # =====================================================
+    # CAT 48 - Sopas y caldos
+    # Cualquier macro >= 2g cuenta
     # =====================================================
     if cat == "48" or cat.startswith("48."):
         return (p100 >= 2.0, h100 >= 2.0, g100 >= 2.0, 1.0)
     
-    if cat in ("43", "44", "45", "46", "47", "49", "50", "51", "52", "53") or \
-       cat.startswith("43.") or cat.startswith("44.") or cat.startswith("45.") or \
-       cat.startswith("46.") or cat.startswith("47.") or cat.startswith("49.") or \
-       cat.startswith("50.") or cat.startswith("51.") or cat.startswith("52.") or \
+    # =====================================================
+    # CAT 52 - Mundo vegano
+    # Regla general del 25%
+    # =====================================================
+    if cat == "52" or cat.startswith("52."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 43, 44, 47, 49, 50, 51, 53 - Procesados complejos
+    # TODOS los macros cuentan SIEMPRE
+    # =====================================================
+    if cat in ("43", "44", "47", "49", "50", "51", "53") or \
+       cat.startswith("43.") or cat.startswith("44.") or \
+       cat.startswith("47.") or cat.startswith("49.") or \
+       cat.startswith("50.") or cat.startswith("51.") or \
        cat.startswith("53."):
         return (True, True, True, 1.0)
     
