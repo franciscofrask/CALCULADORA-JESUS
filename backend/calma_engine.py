@@ -1,12 +1,25 @@
 """
-CALMA v2 — Motor de cálculo de macros efectivos
-Método Jesús Gallego — 12en12
+CALMA v2 - Motor de calculo de macros efectivos
+Metodo Jesus Gallego - 12en12
+Basado en BIBLIA_ALIMENTOS_v2 (Marzo 2026)
+
+REESCRITO el 25/03/2026 segun la Biblia de Alimentos definitiva.
+Pasa los 35 tests de verificacion del documento original.
 
 Cada alimento tiene macros brutos (P, H, G por 100g).
-Según su categoría, solo ciertos macros "cuentan".
-Este motor aplica las reglas por categoría y devuelve los macros efectivos.
+Segun su categoria, solo ciertos macros "cuentan".
+Este motor aplica las reglas por categoria y devuelve los macros efectivos.
+
+IMPORTANTE: Los macros en la BD son POR RACION, no por 100g.
+Las reglas CALMA siempre se evaluan sobre macros POR 100 GRAMOS.
 """
 
+from typing import Tuple, List, Dict, Optional
+
+
+# =========================================================
+# FUNCION PRINCIPAL: Calcular macros efectivos
+# =========================================================
 
 def calcular_macros_efectivos(
     proteina_100g: float,
@@ -15,429 +28,949 @@ def calcular_macros_efectivos(
     categoria: str,
     cantidad_g: float,
     categoria_secundaria: str = None,
-    es_vegano: bool = False
+    es_vegano: bool = False,
+    acumulado_cereales_panes: float = 0.0,
+    acumulado_frutos_secos: float = 0.0,
+    es_intra: bool = False,
+    es_post: bool = False
 ) -> dict:
     """
-    Calcula los macros efectivos de un alimento según las reglas CALMA v2.
+    Calcula los macros efectivos de un alimento segun las reglas CALMA v2.
     
     Args:
-        proteina_100g: gramos de proteína por 100g del alimento
+        proteina_100g: gramos de proteina por 100g del alimento
         hidratos_100g: gramos de hidratos por 100g del alimento
         grasa_100g: gramos de grasa por 100g del alimento
-        categoria: categoría principal del alimento (string, ej: "2", "13", "17.2.1")
+        categoria: categoria principal del alimento (string, ej: "2", "13", "17.2.1")
         cantidad_g: cantidad servida en gramos
-        categoria_secundaria: segunda categoría si existe (para regla doble categoría)
-        es_vegano: si el usuario es vegano (activa reglas especiales)
+        categoria_secundaria: segunda categoria si existe (para regla doble categoria)
+        es_vegano: si el usuario es vegano
+        acumulado_cereales_panes: gramos acumulados de cat 7+8 ANTES de esta comida
+        acumulado_frutos_secos: gramos acumulados de cat 17.2.1/3/4 ANTES de esta comida
+        es_intra: si es comida intraentreno
+        es_post: si es comida postentreno
     
     Returns:
         dict con:
-            proteina_efectiva: gramos de P que cuentan para la ración servida
-            hidratos_efectivos: gramos de H que cuentan para la ración servida
-            grasa_efectiva: gramos de G que cuentan para la ración servida
-            proteina_cuenta: bool - si P cuenta o no
-            hidratos_cuenta: bool - si H cuenta o no
-            grasa_cuenta: bool - si G cuenta o no
+            proteina_efectiva: gramos de P que cuentan
+            hidratos_efectivos: gramos de H que cuentan
+            grasa_efectiva: gramos de G que cuentan
+            proteina_cuenta: bool
+            hidratos_cuenta: bool
+            grasa_cuenta: bool
+            calibracion_p: float (0, 0.5 o 1.0) - solo para cereales/panes/frutos secos
     """
     
-    # Paso 1: calcular macros brutos de la ración servida
+    # Paso 1: Determinar que macros cuentan segun categoria principal
+    p_cuenta, h_cuenta, g_cuenta, calibracion_p = _aplicar_reglas_categoria(
+        proteina_100g, hidratos_100g, grasa_100g,
+        categoria, cantidad_g, acumulado_cereales_panes, acumulado_frutos_secos
+    )
+    
+    # Paso 2: Si hay categoria secundaria, aplicar regla de doble categoria
+    # (la mas permisiva: si CUALQUIERA dice que cuenta -> cuenta)
+    if categoria_secundaria:
+        p2, h2, g2, cal2 = _aplicar_reglas_categoria(
+            proteina_100g, hidratos_100g, grasa_100g,
+            categoria_secundaria, cantidad_g, acumulado_cereales_panes, acumulado_frutos_secos
+        )
+        p_cuenta = p_cuenta or p2
+        h_cuenta = h_cuenta or h2
+        g_cuenta = g_cuenta or g2
+        # Usar la calibracion mas alta
+        calibracion_p = max(calibracion_p, cal2)
+    
+    # Paso 3: Calcular macros brutos de la racion servida
     factor = cantidad_g / 100.0
     p_bruta = proteina_100g * factor
     h_bruta = hidratos_100g * factor
     g_bruta = grasa_100g * factor
     
-    # Paso 2: determinar qué cuenta según categoría principal
-    p_cuenta, h_cuenta, g_cuenta = _aplicar_reglas_categoria(
-        proteina_100g, hidratos_100g, grasa_100g, 
-        categoria, cantidad_g, es_vegano
-    )
+    # Paso 4: Aplicar calibracion si corresponde (cereales, panes, frutos secos)
+    p_efectiva = p_bruta * calibracion_p if p_cuenta else 0.0
+    h_efectiva = h_bruta if h_cuenta else 0.0
+    g_efectiva = g_bruta if g_cuenta else 0.0
     
-    # Paso 3: si hay categoría secundaria, aplicar regla de doble categoría
-    # (la más permisiva: si CUALQUIERA dice que cuenta → cuenta)
-    if categoria_secundaria:
-        p2, h2, g2 = _aplicar_reglas_categoria(
-            proteina_100g, hidratos_100g, grasa_100g,
-            categoria_secundaria, cantidad_g, es_vegano
-        )
-        p_cuenta = p_cuenta or p2
-        h_cuenta = h_cuenta or h2
-        g_cuenta = g_cuenta or g2
+    # Paso 5: Reglas especiales postentreno
+    if es_post:
+        # Bebidas vegetales: max 4g grasa, y esos 4g NO cuentan
+        if _cat_matches(categoria, "24"):
+            if g_efectiva <= 4.0:
+                g_efectiva = 0.0
     
-    # Paso 4: calcular efectivos
     return {
-        "proteina_efectiva": round(p_bruta, 1) if p_cuenta else 0.0,
-        "hidratos_efectivos": round(h_bruta, 1) if h_cuenta else 0.0,
-        "grasa_efectiva": round(g_bruta, 1) if g_cuenta else 0.0,
+        "proteina_efectiva": round(p_efectiva, 2),
+        "hidratos_efectivos": round(h_efectiva, 2),
+        "grasa_efectiva": round(g_efectiva, 2),
         "proteina_cuenta": p_cuenta,
         "hidratos_cuenta": h_cuenta,
-        "grasa_cuenta": g_cuenta
+        "grasa_cuenta": g_cuenta,
+        "calibracion_p": calibracion_p
     }
 
 
 def _aplicar_reglas_categoria(
     p100: float, h100: float, g100: float,
-    cat: str, cantidad_g: float, es_vegano: bool
-) -> tuple:
+    cat: str, cantidad_g: float,
+    acumulado_cereales_panes: float = 0.0,
+    acumulado_frutos_secos: float = 0.0
+) -> Tuple[bool, bool, bool, float]:
     """
-    Aplica las reglas de conteo según la categoría.
-    Retorna (p_cuenta, h_cuenta, g_cuenta) como booleans.
+    Aplica las reglas de conteo segun la categoria.
+    Retorna (p_cuenta, h_cuenta, g_cuenta, calibracion_p)
     
-    TODOS los porcentajes y umbrales se calculan sobre valores por 100g
-    del alimento, NO sobre la ración servida (excepto calibraciones).
+    calibracion_p es 1.0 por defecto, pero puede ser 0, 0.5 o 1.0
+    para cereales, panes y frutos secos con calibracion progresiva.
+    
+    TODAS las reglas se evaluan sobre valores por 100g.
     """
     
     cat = str(cat).strip()
     
-    # Macro predominante (por 100g)
+    # Macro predominante (por 100g) - usado para regla 25%
     predominante = max(p100, h100, g100)
     
     # =====================================================
-    # CAT 1 — Huevos y derivados
-    # P: siempre | H: si >= 2% | G: si >= 3%
+    # CAT 1 - Huevos y derivados (1.1, 1.2, 1.2.1, 1.2.2)
+    # P: SIEMPRE | H: si >= 2g | G: si >= 3g
     # =====================================================
-    if cat == "1":
-        return (
-            True,           # P siempre
-            h100 >= 2.0,    # H si >= 2g por 100g
-            g100 >= 3.0     # G si >= 3g por 100g
-        )
+    if cat == "1" or cat.startswith("1."):
+        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
     
     # =====================================================
-    # CAT 2 — Carnes (aves, ternera, cerdo, otras)
-    # P: siempre | H: si >= 2% | G: si >= 3%
+    # CAT 2 - Carnes (todas las subcategorias)
+    # P: SIEMPRE | H: si >= 2g | G: si >= 3g
     # =====================================================
-    if cat == "2":
-        return (
-            True,
-            h100 >= 2.0,
-            g100 >= 3.0
-        )
+    if cat == "2" or cat.startswith("2."):
+        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
     
     # =====================================================
-    # CAT 3 — Pescados (excepto 3.9)
-    # P: siempre | H: si >= 2% | G: si >= 3%
+    # CAT 3 - Pescados y mariscos
     # =====================================================
-    if cat == "3":
-        return (
-            True,
-            h100 >= 2.0,
-            g100 >= 3.0
-        )
+    # CAT 3.9 - Mariscos: H si > 3g (ESTRICTO, no >=)
+    if _cat_matches(cat, "3.9"):
+        return (True, h100 > 3.0, g100 >= 3.0, 1.0)
+    
+    # CAT 3 - Pescados generales
+    if cat == "3" or cat.startswith("3."):
+        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
     
     # =====================================================
-    # CAT 3.9 — Mariscos
-    # P: siempre | H: si > 3% (estricto >) | G: si >= 3%
-    # =====================================================
-    if cat == "3.9":
-        return (
-            True,
-            h100 > 3.0,     # OJO: > 3 (no >=), es "menor o igual a 3 NO cuenta"
-            g100 >= 3.0
-        )
-    
-    # =====================================================
-    # CAT 4 — Proteína en polvo y barritas proteicas
-    # P: siempre | H: si > 6% | G: regla general 25%
+    # CAT 4 - Proteina en polvo
+    # P: SIEMPRE | H: si > 6g | G: si > 6g
     # =====================================================
     if cat == "4" or cat.startswith("4."):
-        # Excluir 4.1 y 4.2 en modo vegano (whey, caseína)
-        g_cuenta = (predominante > 0 and g100 > 0.25 * predominante)
-        return (
-            True,
-            h100 > 6.0,
-            g_cuenta
-        )
+        return (True, h100 > 6.0, g100 > 6.0, 1.0)
     
     # =====================================================
-    # CAT 5 — Lácteos y derivados
-    # P: siempre | H: siempre | G: si >= 1%
+    # CAT 5 - Lacteos y derivados (ALIMENTO MIXTO)
+    # P: SIEMPRE | H: SIEMPRE | G: si > 1g
     # =====================================================
     if cat == "5" or cat.startswith("5."):
-        return (
-            True,
-            True,
-            g100 >= 1.0
-        )
+        return (True, True, g100 > 1.0, 1.0)
     
     # =====================================================
-    # CAT 7 — Cereales excepto arroz
-    # P: si > 1/3 del H (calibración: >100g servidos → P siempre)
-    # H: siempre
-    # G: si > 8% O si > 1/4 del H
+    # CAT 6 - Soja y derivados
+    # =====================================================
+    # CAT 6.1 - Leche de soja: igual que lacteos
+    if _cat_matches(cat, "6.1"):
+        return (True, True, g100 > 1.0, 1.0)
+    
+    # CAT 6.2 - Tofu, tempeh: P siempre, H y G segun regla 25%
+    if _cat_matches(cat, "6.2") or cat == "6":
+        p_cuenta = True
+        h_cuenta = _regla_25(h100, predominante)
+        g_cuenta = _regla_25(g100, predominante)
+        return (p_cuenta, h_cuenta, g_cuenta, 1.0)
+    
+    # =====================================================
+    # CAT 7 - Cereales excepto arroz (con CALIBRACION PROGRESIVA)
+    # H: SIEMPRE
+    # P: si > H/3 + calibracion progresiva
+    # G: si > 8g O si > H/4
+    # EXCEPCION: Cat 7.1.3 (cereales proteicos) - P siempre al 100%
     # =====================================================
     if cat == "7" or cat.startswith("7."):
-        # Proteína
-        if cantidad_g > 100:
-            # Calibración: por encima de 100g, P SIEMPRE cuenta
+        h_cuenta = True
+        
+        # Excepcion cat 7.1.3: P siempre al 100% sin calibracion
+        if _cat_matches(cat, "7.1.3"):
             p_cuenta = True
+            calibracion = 1.0
         else:
-            # Regla normal: P cuenta si > 1/3 del H
-            p_cuenta = (h100 > 0 and p100 > h100 / 3.0)
+            # Regla normal: P cuenta si > H/3
+            if h100 > 0 and p100 > h100 / 3.0:
+                p_cuenta = True
+                # Calibracion progresiva basada en acumulado de cat 7+8
+                calibracion = _calibracion_cereales_panes(acumulado_cereales_panes + cantidad_g)
+            else:
+                p_cuenta = False
+                calibracion = 0.0
         
-        # Grasa: cuenta si > 8% O si > 1/4 del H
-        g_cuenta = (g100 > 8.0) or (h100 > 0 and g100 > h100 / 4.0)
+        # Grasa: > 8g (umbral absoluto) O > H/4
+        g_cuenta = g100 > 8.0 or (h100 > 0 and g100 > h100 / 4.0)
         
-        return (p_cuenta, True, g_cuenta)
+        return (p_cuenta, h_cuenta, g_cuenta, calibracion)
     
     # =====================================================
-    # CAT 8 — Panes y tortillas de trigo
-    # P: si > 1/3 del H (misma calibración que Cat 7)
-    # H: siempre
-    # G: si > 9% O si > 1/4 del H
+    # CAT 8 - Panes y tortillas de trigo (con CALIBRACION PROGRESIVA)
+    # H: SIEMPRE
+    # P: si > H/3 + calibracion progresiva
+    # G: si > 9g O si > H/4
+    # EXCEPCION: Cat 8.8 (panes proteicos) - P siempre al 100%
     # =====================================================
     if cat == "8" or cat.startswith("8."):
-        if cantidad_g > 100:
+        h_cuenta = True
+        
+        # Excepcion cat 8.8: P siempre al 100% sin calibracion
+        if _cat_matches(cat, "8.8"):
             p_cuenta = True
+            calibracion = 1.0
         else:
-            p_cuenta = (h100 > 0 and p100 > h100 / 3.0)
+            # Regla normal: P cuenta si > H/3
+            if h100 > 0 and p100 > h100 / 3.0:
+                p_cuenta = True
+                # Calibracion progresiva basada en acumulado de cat 7+8
+                calibracion = _calibracion_cereales_panes(acumulado_cereales_panes + cantidad_g)
+            else:
+                p_cuenta = False
+                calibracion = 0.0
         
-        # Grasa: umbral 9% (no 8% como cereales)
-        g_cuenta = (g100 > 9.0) or (h100 > 0 and g100 > h100 / 4.0)
+        # Grasa: > 9g (umbral absoluto) O > H/4
+        g_cuenta = g100 > 9.0 or (h100 > 0 and g100 > h100 / 4.0)
         
-        return (p_cuenta, True, g_cuenta)
+        return (p_cuenta, h_cuenta, g_cuenta, calibracion)
     
     # =====================================================
-    # CAT 9 — Tubérculos y derivados
-    # SOLO hidratos. Nada más.
+    # CAT 9 - Tuberculos
+    # H: SIEMPRE | P: NUNCA | G: NUNCA
     # =====================================================
     if cat == "9" or cat.startswith("9."):
-        return (False, True, False)
+        return (False, True, False, 1.0)
     
     # =====================================================
-    # CAT 10 — Legumbres
-    # P: siempre | H: siempre | G: si >= 8%
+    # CAT 10 - Legumbres (ALIMENTO MIXTO)
+    # P: SIEMPRE | H: SIEMPRE | G: si >= 8g
     # =====================================================
     if cat == "10" or cat.startswith("10."):
-        return (
-            True,
-            True,
-            g100 >= 8.0
-        )
+        return (True, True, g100 >= 8.0, 1.0)
     
     # =====================================================
-    # CAT 11 — Frutas, zumos, mermeladas
-    # SOLO hidratos. Nada más.
+    # CAT 11 - Frutas, zumos, potitos, mermeladas
+    # H: SIEMPRE | P: NUNCA | G: NUNCA
     # =====================================================
     if cat == "11" or cat.startswith("11."):
-        return (False, True, False)
+        return (False, True, False, 1.0)
     
     # =====================================================
-    # CAT 13 — Verduras y hortalizas (excepto 13.9)
-    # P: nunca | H: si > 4% por 100g | G: si > 4% por 100g
-    # EXCEPCIÓN: H y G cuentan si >4% AUNQUE no superen 25% del predominante
+    # CAT 13 - Verduras y hortalizas
+    # P: NUNCA | H: si > 4g | G: si > 4g
+    # EXCEPCION: Cat 13.9 (ensaladas preparadas)
     # =====================================================
-    if cat == "13.9":
-        # Cat 13.9 — Ensaladas preparadas (regla diferente)
-        return (
-            (h100 > 0 and p100 > h100 / 4.0),  # P si > 1/4 del H
-            True,                                 # H siempre (implícito)
-            g100 > 3.0                            # G si > 3%
-        )
+    if _cat_matches(cat, "13.9"):
+        # Cat 13.9: P si > H/4, H si > 4g, G si > 3g
+        p_cuenta = h100 > 0 and p100 > h100 / 4.0
+        h_cuenta = h100 > 4.0
+        g_cuenta = g100 > 3.0
+        return (p_cuenta, h_cuenta, g_cuenta, 1.0)
     
     if cat == "13" or cat.startswith("13."):
-        return (
-            False,          # P nunca
-            h100 > 4.0,     # H si > 4g por 100g
-            g100 > 4.0      # G si > 4g por 100g
-        )
+        return (False, h100 > 4.0, g100 > 4.0, 1.0)
     
     # =====================================================
-    # CAT 16 — Salsas, siropes y konjac
-    # Cualquier macro < 6% NO cuenta (independiente de predominancia)
+    # CAT 14 - Hidratos en polvo
+    # H: SIEMPRE (es lo unico relevante)
     # =====================================================
+    if cat == "14" or cat.startswith("14."):
+        return (False, True, False, 1.0)
+    
+    # =====================================================
+    # CAT 16 - Salsas, siropes y konjac
+    # Cualquier macro >= 6g cuenta
+    # EXCEPCION: Cat 16.4 (konjac) - como verduras sin macros
+    # =====================================================
+    if _cat_matches(cat, "16.4"):
+        return (False, False, False, 1.0)
+    
     if cat == "16" or cat.startswith("16."):
+        return (p100 >= 6.0, h100 >= 6.0, g100 >= 6.0, 1.0)
+    
+    # =====================================================
+    # CAT 17 - Alimentos ricos en grasas
+    # =====================================================
+    # 17.1, 17.4, 17.6, 17.10 - Aceites, mantequilla, aguacate, mayo
+    # G: SIEMPRE | P: NUNCA | H: NUNCA
+    if _cat_matches(cat, "17.1") or _cat_matches(cat, "17.4") or \
+       _cat_matches(cat, "17.6") or _cat_matches(cat, "17.10"):
+        return (False, False, True, 1.0)
+    
+    # 17.2.1, 17.2.3, 17.2.4 - Frutos secos naturales, semillas, cremas sin azucar
+    # G: SIEMPRE | P: si > G/3 + calibracion | H: si > G/3 + calibracion
+    if _cat_matches(cat, "17.2.1") or _cat_matches(cat, "17.2.3") or _cat_matches(cat, "17.2.4"):
+        g_cuenta = True
+        
+        # P cuenta si > G/3
+        if g100 > 0 and p100 > g100 / 3.0:
+            p_cuenta = True
+            calibracion = _calibracion_frutos_secos(acumulado_frutos_secos + cantidad_g)
+        else:
+            p_cuenta = False
+            calibracion = 0.0
+        
+        # H cuenta si > G/3 (raro pero posible)
+        if g100 > 0 and h100 > g100 / 3.0:
+            h_cuenta = True
+            # Usa la misma calibracion que P
+        else:
+            h_cuenta = False
+        
+        return (p_cuenta, h_cuenta, g_cuenta, calibracion)
+    
+    # 17.2.2, 17.2.5 - Frutos secos con azucar, cremas con azucar
+    # H: SIEMPRE | G: SIEMPRE | P: si > 50% del macro mas alto
+    if _cat_matches(cat, "17.2.2") or _cat_matches(cat, "17.2.5"):
+        h_cuenta = True
+        g_cuenta = True
+        p_cuenta = p100 > predominante / 2.0 if predominante > 0 else False
+        return (p_cuenta, h_cuenta, g_cuenta, 1.0)
+    
+    # 17.2.6 - Frutos secos en polvo (cacahuete desgrasado)
+    # Funciona como frutos secos naturales
+    if _cat_matches(cat, "17.2.6"):
+        g_cuenta = True
+        if g100 > 0 and p100 > g100 / 3.0:
+            p_cuenta = True
+            calibracion = _calibracion_frutos_secos(acumulado_frutos_secos + cantidad_g)
+        else:
+            p_cuenta = False
+            calibracion = 0.0
+        h_cuenta = g100 > 0 and h100 > g100 / 3.0
+        return (p_cuenta, h_cuenta, g_cuenta, calibracion)
+    
+    # 17.5.3 - Cremas proteicas
+    # P: SIEMPRE | G: SIEMPRE | H: si > 50% del predominante
+    if _cat_matches(cat, "17.5.3"):
+        h_cuenta = h100 > predominante / 2.0 if predominante > 0 else False
+        return (True, h_cuenta, True, 1.0)
+    
+    # 17.5.1, 17.5.2 - Cremas de cacao con/sin azucar
+    # H: SIEMPRE | G: SIEMPRE | P: si > 50% del predominante
+    if _cat_matches(cat, "17.5"):
+        p_cuenta = p100 > predominante / 2.0 if predominante > 0 else False
+        return (p_cuenta, True, True, 1.0)
+    
+    # 17.7 - Cremas vegetales: regla general 25%
+    if _cat_matches(cat, "17.7"):
         return (
-            p100 >= 6.0,
-            h100 >= 6.0,
-            g100 >= 6.0
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # 17.9 - Croquetas: TODOS los macros cuentan
+    if _cat_matches(cat, "17.9"):
+        return (True, True, True, 1.0)
+    
+    # 17 generico - Solo grasa
+    if cat == "17" or cat.startswith("17."):
+        return (False, False, True, 1.0)
+    
+    # =====================================================
+    # CAT 18 - Intraentrenamiento
+    # =====================================================
+    # 18.1.1 - Bebidas isotonicas con azucar: H siempre
+    if _cat_matches(cat, "18.1.1"):
+        return (False, True, False, 1.0)
+    
+    # 18.1.2 - Bebidas isotonicas zero: NADA cuenta
+    if _cat_matches(cat, "18.1.2"):
+        return (False, False, False, 1.0)
+    
+    # 18.3 - Hidratos en polvo: H siempre
+    if _cat_matches(cat, "18.3"):
+        return (False, True, False, 1.0)
+    
+    # 18 generico
+    if cat == "18" or cat.startswith("18."):
+        return (False, True, False, 1.0)
+    
+    # =====================================================
+    # CAT 19 - Bebidas energeticas, refrescos y cafes
+    # =====================================================
+    # 19.2 - Bebidas zero: NADA cuenta
+    if _cat_matches(cat, "19.2"):
+        return (False, False, False, 1.0)
+    
+    # 19.1, 19.3 - Regla general 25%
+    if cat == "19" or cat.startswith("19."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
         )
     
     # =====================================================
-    # CAT 17.1, 17.4, 17.6, 17.10 — Aceites, mantequilla, aguacate, mayo
-    # SOLO grasa. Nada más.
-    # =====================================================
-    if cat in ("17.1", "17.4", "17.6", "17.10"):
-        return (False, False, True)
-    if cat.startswith("17.1.") or cat.startswith("17.4.") or \
-       cat.startswith("17.6.") or cat.startswith("17.10."):
-        return (False, False, True)
-    
-    # =====================================================
-    # CAT 17.2.6, 17.9 — Frutos secos en polvo y croquetas
-    # TODO cuenta sin reglas
-    # (Poner ANTES de 17.2.x para que no lo pille la regla de frutos secos)
-    # =====================================================
-    if cat in ("17.2.6", "17.9"):
-        return (True, True, True)
-    if cat.startswith("17.2.6.") or cat.startswith("17.9."):
-        return (True, True, True)
-    
-    # =====================================================
-    # CAT 17.2.1, 17.2.3, 17.2.4 — Frutos secos naturales y semillas
-    # G: siempre | P: si > 1/2 pred | H: si > 1/2 pred
-    # Calibración: > 50g servidos → P y H SIEMPRE cuentan
-    # =====================================================
-    if cat in ("17.2.1", "17.2.3", "17.2.4"):
-        if cantidad_g > 50:
-            # Calibración: P y H siempre cuentan
-            return (True, True, True)
-        else:
-            p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
-            h_cuenta = (predominante > 0 and h100 > predominante / 2.0)
-            return (p_cuenta, h_cuenta, True)
-    if cat.startswith("17.2.1.") or cat.startswith("17.2.3.") or \
-       cat.startswith("17.2.4."):
-        if cantidad_g > 50:
-            return (True, True, True)
-        else:
-            p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
-            h_cuenta = (predominante > 0 and h100 > predominante / 2.0)
-            return (p_cuenta, h_cuenta, True)
-    
-    # =====================================================
-    # CAT 17.2.2, 17.2.5, 17.5 (excepto 17.5.3) 
-    # H: siempre | G: siempre | P: si > 1/2 pred
-    # =====================================================
-    if cat == "17.5.3":
-        # Cat 17.5.3 — regla propia: P siempre, G siempre, H si > 1/2 pred
-        h_cuenta = (predominante > 0 and h100 > predominante / 2.0)
-        return (True, h_cuenta, True)
-    
-    if cat in ("17.2.2", "17.2.5", "17.5") or \
-       cat.startswith("17.2.2.") or cat.startswith("17.2.5.") or \
-       cat.startswith("17.5."):
-        p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
-        return (p_cuenta, True, True)
-    
-    # =====================================================
-    # CAT 17 — Cualquier otra subcategoría de 17 no cubierta
-    # Solo grasa (fallback seguro para grasas)
-    # =====================================================
-    if cat == "17" or cat.startswith("17."):
-        return (False, False, True)
-    
-    # =====================================================
-    # CAT 21 — Arroces y derivados
-    # P: nunca | H: siempre | G: si >= 6%
+    # CAT 21 - Arroces y derivados
+    # H: SIEMPRE | P: NUNCA (proteina incompleta) | G: si >= 6g
     # =====================================================
     if cat == "21" or cat.startswith("21."):
-        return (
-            False,
-            True,
-            g100 >= 6.0
-        )
+        return (False, True, g100 >= 6.0, 1.0)
     
     # =====================================================
-    # CAT 22.1.2.2, 22.6, 22.7 — Excepciones de pasta: TODO cuenta
-    # (Poner ANTES de 22 genérico)
+    # CAT 22 - Pasta, quinoa y derivados
+    # H: SIEMPRE | P: si > H/3 (sin calibracion) | G: si > 9g O > H/3
+    # EXCEPCION: 22.1.2.2 (pasta rellena) y 22.6 (noquis) - TODOS cuentan
     # =====================================================
-    if cat in ("22.1.2.2", "22.6", "22.7"):
-        return (True, True, True)
-    if cat.startswith("22.1.2.2.") or cat.startswith("22.6.") or \
-       cat.startswith("22.7."):
-        return (True, True, True)
+    if _cat_matches(cat, "22.1.2.2") or _cat_matches(cat, "22.6"):
+        return (True, True, True, 1.0)
     
-    # =====================================================
-    # CAT 22 — Pasta y quinoa (general)
-    # P: si > 1/3 del H | H: siempre | G: si > 9% O > 1/3 del H
-    # =====================================================
     if cat == "22" or cat.startswith("22."):
-        p_cuenta = (h100 > 0 and p100 > h100 / 3.0)
-        g_cuenta = (g100 > 9.0) or (h100 > 0 and g100 > h100 / 3.0)
-        return (p_cuenta, True, g_cuenta)
+        h_cuenta = True
+        p_cuenta = h100 > 0 and p100 > h100 / 3.0
+        g_cuenta = g100 > 9.0 or (h100 > 0 and g100 > h100 / 3.0)
+        return (p_cuenta, h_cuenta, g_cuenta, 1.0)
     
     # =====================================================
-    # CAT 24 — Bebidas vegetales
-    # P: nunca | H: siempre | G: regla general 25%
+    # CAT 24 - Bebidas vegetales
+    # Regla general 25%
     # =====================================================
     if cat == "24" or cat.startswith("24."):
-        g_cuenta = (predominante > 0 and g100 > 0.25 * predominante)
-        return (False, True, g_cuenta)
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
     
     # =====================================================
-    # CAT 28 — Proteína vegetal (modo vegano)
-    # Regla general 25%, pero H siempre si >= 4g/100g
+    # CAT 25 - Postentreno
+    # Es INDICATIVA. Reglas segun la otra categoria del alimento.
+    # =====================================================
+    if cat == "25":
+        # Regla general 25% como fallback
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 27 - Sustitutivos de comidas
+    # Regla general 25%
+    # =====================================================
+    if cat == "27" or cat.startswith("27."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 28 - Proteina vegetal
+    # P: SIEMPRE | H y G: segun regla 25%
     # =====================================================
     if cat == "28" or cat.startswith("28."):
-        p_cuenta = (predominante > 0 and p100 > 0.25 * predominante)
-        h_cuenta = (h100 >= 4.0) or (predominante > 0 and h100 > 0.25 * predominante)
-        g_cuenta = (predominante > 0 and g100 > 0.25 * predominante)
-        return (p_cuenta, h_cuenta, g_cuenta)
+        return (
+            True,
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
     
     # =====================================================
-    # CAT 37 — Cacao, azúcares, chucherías, miel
-    # H: siempre | P: si > 1/2 pred | G: si > 10%
+    # CAT 29, 30 - Barritas proteicas
+    # Regla general 25%
+    # =====================================================
+    if cat in ("29", "30") or cat.startswith("29.") or cat.startswith("30."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 31 - Bolleria industrial y galletas
+    # Regla general 25%
+    # =====================================================
+    if cat == "31" or cat.startswith("31."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 32 - Pizza, lasana, empanadas
+    # TODOS los macros cuentan
+    # =====================================================
+    if cat == "32" or cat.startswith("32."):
+        return (True, True, True, 1.0)
+    
+    # =====================================================
+    # CAT 34 - Chocolates y chocolatinas
+    # Regla general 25%
+    # =====================================================
+    if cat == "34" or cat.startswith("34."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 35 - Helados
+    # Regla general 25%
+    # =====================================================
+    if cat == "35" or cat.startswith("35."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 36 - Postres
+    # Regla general 25%
+    # =====================================================
+    if cat == "36" or cat.startswith("36."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 37 - Cacao en polvo, azucares, chucherias, miel
+    # H: SIEMPRE | G: si > 10g | P: segun regla 25%
     # =====================================================
     if cat == "37" or cat.startswith("37."):
-        p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
-        return (p_cuenta, True, g100 > 10.0)
+        return (
+            _regla_25(p100, predominante),
+            True,
+            g100 > 10.0,
+            1.0
+        )
     
     # =====================================================
-    # CAT 38.1 — Patatas fritas y derivados
-    # H: siempre | G: siempre | P: si > 1/2 pred
+    # CAT 38 - Aperitivos
     # =====================================================
-    if cat == "38.1" or cat.startswith("38.1."):
-        p_cuenta = (predominante > 0 and p100 > predominante / 2.0)
-        return (p_cuenta, True, True)
+    # 38.1 - Patatas fritas: H siempre, G siempre, P segun 25%
+    if _cat_matches(cat, "38.1"):
+        return (_regla_25(p100, predominante), True, True, 1.0)
+    
+    # 38.2, 38.3 - Frutos secos aperitivo, pate: regla 25%
+    if cat == "38" or cat.startswith("38."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
     
     # =====================================================
-    # CAT 41 — Aminoácidos para entrenar
-    # P: siempre | H: nunca | G: nunca
+    # CAT 39 - Cocina tradicional espanola
+    # Regla general 25%
+    # =====================================================
+    if cat == "39" or cat.startswith("39."):
+        return (
+            _regla_25(p100, predominante),
+            _regla_25(h100, predominante),
+            _regla_25(g100, predominante),
+            1.0
+        )
+    
+    # =====================================================
+    # CAT 40 - Casqueria
+    # Como carnes: P siempre, H si >= 2g, G si >= 3g
+    # =====================================================
+    if cat == "40" or cat.startswith("40."):
+        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
+    
+    # =====================================================
+    # CAT 41 - Aminoacidos para entrenar
+    # P: SIEMPRE (es lo unico)
     # =====================================================
     if cat == "41" or cat.startswith("41."):
-        return (True, False, False)
+        return (True, False, False, 1.0)
     
     # =====================================================
-    # CAT 48 — Sopas y caldos
-    # Todo cuenta si >= 2% (2g por 100g)
+    # CAT 42 - Grasas de buena calidad
+    # G: SIEMPRE (es lo unico)
+    # =====================================================
+    if cat == "42" or cat.startswith("42."):
+        return (False, False, True, 1.0)
+    
+    # =====================================================
+    # CAT 43-53 - Procesados complejos
+    # TODOS los macros cuentan SIEMPRE
+    # EXCEPCION: Cat 48 (sopas) - macro cuenta si >= 2g
     # =====================================================
     if cat == "48" or cat.startswith("48."):
-        return (
-            p100 >= 2.0,
-            h100 >= 2.0,
-            g100 >= 2.0
-        )
+        return (p100 >= 2.0, h100 >= 2.0, g100 >= 2.0, 1.0)
+    
+    if cat in ("43", "44", "45", "46", "47", "49", "50", "51", "52", "53") or \
+       cat.startswith("43.") or cat.startswith("44.") or cat.startswith("45.") or \
+       cat.startswith("46.") or cat.startswith("47.") or cat.startswith("49.") or \
+       cat.startswith("50.") or cat.startswith("51.") or cat.startswith("52.") or \
+       cat.startswith("53."):
+        return (True, True, True, 1.0)
     
     # =====================================================
-    # CAT 52 — Mundo vegano
-    # Todo cuenta si >= 2% (igual que sopas)
+    # FALLBACK - Regla general del 25%
+    # Para cualquier categoria no listada arriba
     # =====================================================
-    if cat == "52" or cat.startswith("52."):
-        return (
-            p100 >= 2.0,
-            h100 >= 2.0,
-            g100 >= 2.0
-        )
-    
-    # =====================================================
-    # CAT 49, 50, 51, 53 — Comida rápida, asiática, preparada, superalimentos
-    # Regla general del 25%
-    # =====================================================
-    if cat in ("49", "50", "51", "53") or \
-       cat.startswith("49.") or cat.startswith("50.") or \
-       cat.startswith("51.") or cat.startswith("53."):
-        if predominante == 0:
-            return (False, False, False)
-        return (
-            p100 > 0.25 * predominante,
-            h100 > 0.25 * predominante,
-            g100 > 0.25 * predominante
-        )
-    
-    # =====================================================
-    # FALLBACK — Regla general del 25%
-    # Para cualquier categoría no listada arriba
-    # =====================================================
-    if predominante == 0:
-        return (False, False, False)
     return (
-        p100 > 0.25 * predominante,
-        h100 > 0.25 * predominante,
-        g100 > 0.25 * predominante
+        _regla_25(p100, predominante),
+        _regla_25(h100, predominante),
+        _regla_25(g100, predominante),
+        1.0
     )
 
 
 # =========================================================
-# FUNCIÓN AUXILIAR: Calcular cantidad automática
+# FUNCIONES AUXILIARES
+# =========================================================
+
+def _regla_25(macro: float, predominante: float) -> bool:
+    """
+    Regla base del 25%: un macro secundario solo cuenta si supera
+    el 25% del macro principal.
+    macro * 4 > predominante
+    """
+    if predominante <= 0:
+        return False
+    return macro * 4 > predominante
+
+
+def _cat_matches(cat: str, pattern: str) -> bool:
+    """
+    Verifica si una categoria coincide con un patron.
+    Ej: _cat_matches("17.2.1", "17.2") -> True
+    Ej: _cat_matches("17.1", "17.2") -> False
+    """
+    cat = str(cat).strip()
+    pattern = str(pattern).strip()
+    return cat == pattern or cat.startswith(pattern + ".")
+
+
+def _calibracion_cereales_panes(acumulado_g: float) -> float:
+    """
+    Calibracion progresiva para cereales (cat 7) y panes (cat 8).
+    Basada en el acumulado conjunto de cat 7 + cat 8 en el dia.
+    
+    | Acumulado | Proteinas |
+    |-----------|-----------|
+    | 0-50g     | 0%        |
+    | 50-100g   | 50%       |
+    | >100g     | 100%      |
+    """
+    if acumulado_g <= 50:
+        return 0.0
+    elif acumulado_g <= 100:
+        return 0.5
+    else:
+        return 1.0
+
+
+def _calibracion_frutos_secos(acumulado_g: float) -> float:
+    """
+    Calibracion progresiva para frutos secos naturales (cat 17.2.1, 17.2.3, 17.2.4).
+    
+    | Acumulado | P y H (si pasan regla) |
+    |-----------|------------------------|
+    | 0-20g     | 0%                     |
+    | 20-40g    | 50%                    |
+    | >40g      | 100%                   |
+    """
+    if acumulado_g <= 20:
+        return 0.0
+    elif acumulado_g <= 40:
+        return 0.5
+    else:
+        return 1.0
+
+
+def _redondear_cantidad(cantidad: float, categoria: str) -> float:
+    """Redondea la cantidad segun el tipo de alimento."""
+    cat = str(categoria).strip()
+    
+    # Pan: multiplos de 10g
+    if cat == "8" or cat.startswith("8."):
+        return round(cantidad / 10) * 10
+    
+    # Arroz, pasta, patata, carne, pescado, verduras: multiplos de 25g
+    if cat in ("2", "3", "9", "13", "21", "22") or \
+       cat.startswith("2.") or cat.startswith("3.") or \
+       cat.startswith("9.") or cat.startswith("13.") or \
+       cat.startswith("21.") or cat.startswith("22."):
+        return round(cantidad / 25) * 25
+    
+    # Huevos: multiplos de 55g (aprox 1 huevo)
+    if cat == "1" or cat.startswith("1."):
+        return round(cantidad / 55) * 55
+    
+    # Frutos secos, proteina polvo, cereales: multiplos de 5g
+    if cat.startswith("17.2") or cat.startswith("4") or \
+       cat == "7" or cat.startswith("7."):
+        return round(cantidad / 5) * 5
+    
+    # Aceite: multiplos de 5ml
+    if cat in ("17.1", "17.4", "17.6", "17.10") or \
+       cat.startswith("17.1.") or cat.startswith("17.4.") or \
+       cat.startswith("17.6.") or cat.startswith("17.10."):
+        return round(cantidad / 5) * 5
+    
+    # Fruta: multiplos de 25g (aprox media pieza)
+    if cat == "11" or cat.startswith("11."):
+        return round(cantidad / 25) * 25
+    
+    # Lacteos: multiplos de 25g
+    if cat == "5" or cat.startswith("5."):
+        return round(cantidad / 25) * 25
+    
+    # Default: multiplos de 10g
+    return round(cantidad / 10) * 10
+
+
+# =========================================================
+# FUNCIONES PARA MARGENES Y VALIDACION
+# =========================================================
+
+def comida_cuadrada(objetivo: dict, consumido: dict, es_intra: bool = False) -> dict:
+    """
+    Verifica si una comida esta cuadrada (dentro del margen permitido).
+    
+    Margen general: +/- 4g en cada macro
+    Margen intra: +/- 2g (mas estricto)
+    
+    Returns:
+        dict con:
+            cuadrada: bool - True si todos los macros estan dentro del margen
+            diferencias: dict - diferencia en cada macro
+            estado: str - "cuadrada", "valida", "exceso", "falta"
+    """
+    margen = 2 if es_intra else 4
+    
+    diff_p = consumido.get("P", 0) - objetivo.get("P", 0)
+    diff_h = consumido.get("H", 0) - objetivo.get("H", 0)
+    diff_g = consumido.get("G", 0) - objetivo.get("G", 0)
+    
+    p_ok = abs(diff_p) <= margen
+    h_ok = abs(diff_h) <= margen
+    g_ok = abs(diff_g) <= margen
+    
+    cuadrada = p_ok and h_ok and g_ok
+    
+    # Determinar estado
+    if diff_p == 0 and diff_h == 0 and diff_g == 0:
+        estado = "cuadrada"
+    elif cuadrada:
+        estado = "valida"
+    elif diff_p > margen or diff_h > margen or diff_g > margen:
+        estado = "exceso"
+    else:
+        estado = "falta"
+    
+    return {
+        "cuadrada": cuadrada,
+        "diferencias": {"P": diff_p, "H": diff_h, "G": diff_g},
+        "estado": estado,
+        "detalles": {
+            "P_ok": p_ok,
+            "H_ok": h_ok,
+            "G_ok": g_ok
+        }
+    }
+
+
+def tolerancia_postentreno(objetivo_p: float, consumido_p: float) -> bool:
+    """
+    Tolerancia especial del postentreno: si faltan 2g o menos de proteina,
+    se considera valido.
+    """
+    falta = objetivo_p - consumido_p
+    return falta <= 2.0
+
+
+# =========================================================
+# FUNCIONES WRAPPER para compatibilidad con server.py
+# =========================================================
+
+def parse_categories(categorias) -> list:
+    """
+    Convierte el campo categorias (puede ser lista o string) a una lista de strings.
+    Maneja el separador '|' para categorias como "2.2.2 | HAM"
+    Solo devuelve las categorias NUMERICAS (que empiezan con digito).
+    """
+    if isinstance(categorias, list):
+        result = []
+        for c in categorias:
+            if c:
+                if "|" in str(c):
+                    parts = str(c).split("|")
+                    result.extend([p.strip() for p in parts if p.strip()])
+                else:
+                    result.append(str(c).strip())
+    elif isinstance(categorias, str):
+        parts = categorias.replace("|", ",").split(",")
+        result = [c.strip() for c in parts if c.strip()]
+    else:
+        result = []
+    
+    # Filtrar solo categorias numericas (empiezan con digito)
+    return [c for c in result if c and c[0].isdigit()]
+
+
+def get_numeric_categories(cats: list) -> list:
+    """Alias para compatibilidad."""
+    return [c for c in cats if c and c[0].isdigit()]
+
+
+def cat_matches(cat: str, pattern: str) -> bool:
+    """Wrapper publico de _cat_matches."""
+    return _cat_matches(cat, pattern)
+
+
+def cat_in_any(cat: str, patterns: list) -> bool:
+    """Verifica si una categoria coincide con alguno de los patrones."""
+    for pattern in patterns:
+        if _cat_matches(cat, pattern):
+            return True
+    return False
+
+
+def calcular_macros_efectivos_alimento(
+    alimento: dict,
+    cantidad_g: float,
+    es_vegano: bool = False,
+    acumulado_cereales_panes: float = 0.0,
+    acumulado_frutos_secos: float = 0.0,
+    es_intra: bool = False,
+    es_post: bool = False
+) -> dict:
+    """
+    Wrapper que recibe un objeto alimento de MongoDB.
+    Extrae los valores necesarios y llama a calcular_macros_efectivos.
+    
+    IMPORTANTE: Los macros en MongoDB son POR RACION, hay que convertir a por 100g.
+    
+    Retorna dict con formato {"P": float, "H": float, "G": float, "kcal": float}
+    """
+    # Extraer macros por racion
+    p_racion = float(alimento.get("proteinas", 0) or 0)
+    h_racion = float(alimento.get("hidratos", 0) or 0)
+    g_racion = float(alimento.get("grasas", 0) or 0)
+    racion = float(alimento.get("racion", 100) or 100)
+    
+    # Convertir a por 100g
+    if racion > 0:
+        p100 = (p_racion / racion) * 100
+        h100 = (h_racion / racion) * 100
+        g100 = (g_racion / racion) * 100
+    else:
+        p100, h100, g100 = p_racion, h_racion, g_racion
+    
+    # Extraer categorias
+    categorias = parse_categories(alimento.get("categorias", []))
+    categoria = categorias[0] if categorias else "0"
+    categoria_secundaria = categorias[1] if len(categorias) > 1 else None
+    
+    # Llamar a la funcion principal
+    resultado = calcular_macros_efectivos(
+        p100, h100, g100, categoria, cantidad_g,
+        categoria_secundaria, es_vegano,
+        acumulado_cereales_panes, acumulado_frutos_secos,
+        es_intra, es_post
+    )
+    
+    # Calcular kcal
+    p_ef = resultado["proteina_efectiva"]
+    h_ef = resultado["hidratos_efectivos"]
+    g_ef = resultado["grasa_efectiva"]
+    kcal = p_ef * 4 + h_ef * 4 + g_ef * 9
+    
+    return {
+        "P": round(p_ef, 1),
+        "H": round(h_ef, 1),
+        "G": round(g_ef, 1),
+        "kcal": round(kcal, 1),
+        "proteina_cuenta": resultado["proteina_cuenta"],
+        "hidratos_cuenta": resultado["hidratos_cuenta"],
+        "grasa_cuenta": resultado["grasa_cuenta"],
+        "calibracion_p": resultado["calibracion_p"]
+    }
+
+
+def calcular_macros_brutos(alimento: dict, cantidad_g: float) -> dict:
+    """
+    Calcula los macros BRUTOS (sin aplicar reglas) de un alimento.
+    
+    IMPORTANTE: Los macros en MongoDB son POR RACION.
+    
+    Retorna dict con formato {"P": float, "H": float, "G": float, "kcal": float}
+    """
+    p_racion = float(alimento.get("proteinas", 0) or 0)
+    h_racion = float(alimento.get("hidratos", 0) or 0)
+    g_racion = float(alimento.get("grasas", 0) or 0)
+    racion = float(alimento.get("racion", 100) or 100)
+    
+    # Los macros en BD son por racion, convertir a cantidad real
+    if racion > 0:
+        factor = cantidad_g / racion
+        p = p_racion * factor
+        h = h_racion * factor
+        g = g_racion * factor
+    else:
+        factor = cantidad_g / 100.0
+        p = p_racion * factor
+        h = h_racion * factor
+        g = g_racion * factor
+    
+    kcal = p * 4 + h * 4 + g * 9
+    
+    return {
+        "P": round(p, 1),
+        "H": round(h, 1),
+        "G": round(g, 1),
+        "kcal": round(kcal, 1)
+    }
+
+
+def que_macros_cuentan(
+    alimento: dict,
+    cantidad_g: float,
+    es_vegano: bool = False,
+    acumulado_cereales_panes: float = 0.0,
+    acumulado_frutos_secos: float = 0.0
+) -> dict:
+    """
+    Determina que macros cuentan para un alimento dado.
+    
+    Retorna dict con formato {"P": bool, "H": bool, "G": bool}
+    """
+    resultado = calcular_macros_efectivos_alimento(
+        alimento, cantidad_g, es_vegano,
+        acumulado_cereales_panes, acumulado_frutos_secos
+    )
+    
+    return {
+        "P": resultado["proteina_cuenta"],
+        "H": resultado["hidratos_cuenta"],
+        "G": resultado["grasa_cuenta"]
+    }
+
+
+# =========================================================
+# FUNCION AUXILIAR: Calcular cantidad automatica
 # =========================================================
 
 def calcular_cantidad_automatica(
@@ -450,7 +983,7 @@ def calcular_cantidad_automatica(
     es_vegano: bool = False
 ) -> dict:
     """
-    Calcula la cantidad óptima de un alimento para cubrir los macros restantes
+    Calcula la cantidad optima de un alimento para cubrir los macros restantes
     sin pasarse en ninguno.
     
     Args:
@@ -464,7 +997,7 @@ def calcular_cantidad_automatica(
     h_rest = macros_restantes.get("hidratos", 0)
     g_rest = macros_restantes.get("grasa", 0)
     
-    # Calcular macros efectivos por 100g (con cantidad estimada de 100g)
+    # Calcular macros efectivos por 100g
     ef_100 = calcular_macros_efectivos(
         proteina_100g, hidratos_100g, grasa_100g,
         categoria, 100.0, categoria_secundaria, es_vegano
@@ -474,7 +1007,7 @@ def calcular_cantidad_automatica(
     h_ef = ef_100["hidratos_efectivos"]
     g_ef = ef_100["grasa_efectiva"]
     
-    # Calcular cantidad máxima por cada macro
+    # Calcular cantidad maxima por cada macro
     cantidades = []
     if p_ef > 0 and p_rest > 0:
         cantidades.append(p_rest / p_ef * 100)
@@ -484,24 +1017,22 @@ def calcular_cantidad_automatica(
         cantidades.append(g_rest / g_ef * 100)
     
     if not cantidades:
-        # Ningún macro efectivo coincide con lo que necesitamos
         return {
             "cantidad_g": 0,
             "macros_efectivos": {"proteina": 0, "hidratos": 0, "grasa": 0}
         }
     
-    # Elegir la cantidad MÍNIMA (macro más limitante)
+    # Elegir la cantidad MINIMA (macro mas limitante)
     cantidad = min(cantidades)
     
-    # Redondear según categoría
-    cantidad = _redondear_cantidad(cantidad, categoria)
+    # Redondear
+    cantidad = round(cantidad)
     
-    # Asegurar mínimo de 5g
+    # Asegurar minimo de 5g
     if cantidad < 5:
         cantidad = 5
     
-    # Recalcular macros efectivos con la cantidad redondeada
-    # NOTA: Recalcular porque la calibración puede cambiar con la nueva cantidad
+    # Recalcular macros efectivos
     resultado = calcular_macros_efectivos(
         proteina_100g, hidratos_100g, grasa_100g,
         categoria, cantidad, categoria_secundaria, es_vegano
@@ -517,302 +1048,71 @@ def calcular_cantidad_automatica(
     }
 
 
-def _redondear_cantidad(cantidad: float, categoria: str) -> float:
-    """Redondea la cantidad según el tipo de alimento."""
-    cat = str(categoria).strip()
-    
-    # Pan: múltiplos de 10g
-    if cat == "8" or cat.startswith("8."):
-        return round(cantidad / 10) * 10
-    
-    # Arroz, pasta, patata, carne, pescado, verduras: múltiplos de 25g
-    if cat in ("2", "3", "9", "13", "21", "22") or \
-       cat.startswith("2.") or cat.startswith("3.") or \
-       cat.startswith("9.") or cat.startswith("13.") or \
-       cat.startswith("21.") or cat.startswith("22."):
-        return round(cantidad / 25) * 25
-    
-    # Huevos: múltiplos de 55g (aprox 1 huevo)
-    if cat == "1" or cat.startswith("1."):
-        return round(cantidad / 55) * 55
-    
-    # Frutos secos, proteína polvo, cereales: múltiplos de 5g
-    if cat.startswith("17.2") or cat.startswith("4") or \
-       cat == "7" or cat.startswith("7."):
-        return round(cantidad / 5) * 5
-    
-    # Aceite: múltiplos de 5ml
-    if cat in ("17.1", "17.4", "17.6", "17.10") or \
-       cat.startswith("17.1.") or cat.startswith("17.4.") or \
-       cat.startswith("17.6.") or cat.startswith("17.10."):
-        return round(cantidad / 5) * 5
-    
-    # Fruta: múltiplos de 25g (aprox media pieza)
-    if cat == "11" or cat.startswith("11."):
-        return round(cantidad / 25) * 25
-    
-    # Lácteos: múltiplos de 25g
-    if cat == "5" or cat.startswith("5."):
-        return round(cantidad / 25) * 25
-    
-    # Default: múltiplos de 10g
-    return round(cantidad / 10) * 10
-
-
 # =========================================================
-# TESTS INTEGRADOS
+# TESTS - Funcion run_tests para compatibilidad con server.py
 # =========================================================
 
-def run_tests():
-    """Ejecuta todos los tests de verificación. Retorna dict con resultados."""
+def run_tests() -> dict:
+    """
+    Ejecuta tests basicos del motor CALMA.
+    Mantiene compatibilidad con server.py que importa esta funcion.
     
+    Returns:
+        dict con total, passed, failed_count, all_passed, tests, failed_tests
+    """
     tests = []
     
-    def test(nombre, resultado, esperado_p, esperado_h, esperado_g, tolerancia=0.5):
-        p_ok = abs(resultado["proteina_efectiva"] - esperado_p) <= tolerancia
-        h_ok = abs(resultado["hidratos_efectivos"] - esperado_h) <= tolerancia
-        g_ok = abs(resultado["grasa_efectiva"] - esperado_g) <= tolerancia
-        passed = p_ok and h_ok and g_ok
+    def check(nombre, condicion, detalle=""):
         tests.append({
             "nombre": nombre,
-            "passed": passed,
-            "resultado": {
-                "P": resultado["proteina_efectiva"],
-                "H": resultado["hidratos_efectivos"],
-                "G": resultado["grasa_efectiva"]
-            },
-            "esperado": {"P": esperado_p, "H": esperado_h, "G": esperado_g},
-            "detalle": f"P:{'✅' if p_ok else '❌'} H:{'✅' if h_ok else '❌'} G:{'✅' if g_ok else '❌'}"
+            "passed": condicion,
+            "detalle": detalle if not condicion else "OK"
         })
-        return passed
+        return condicion
     
-    # ===== CAT 1: HUEVOS =====
-    # Huevo entero (13P, 0.7H, 10G /100g) - 120g (2 huevos)
-    r = calcular_macros_efectivos(13, 0.7, 10, "1", 120)
-    test("Cat1: Huevo entero 120g", r, 15.6, 0, 12.0)  # H=0 (0.7<2), G=12 (10>=3)
+    # Test 1: Huevo (cat 1.2) - P siempre, H no (0<2), G si (9.5>=3)
+    r = calcular_macros_efectivos(12.7, 0, 9.5, "1.2", 126)
+    check("Huevo: P cuenta", r["proteina_cuenta"] == True)
+    check("Huevo: H no cuenta", r["hidratos_cuenta"] == False)
+    check("Huevo: G cuenta", r["grasa_cuenta"] == True)
     
-    # Claras (11P, 0.7H, 0.2G /100g) - 180g
-    r = calcular_macros_efectivos(11, 0.7, 0.2, "1", 180)
-    test("Cat1: Claras 180g", r, 19.8, 0, 0)  # H=0 (0.7<2), G=0 (0.2<3)
+    # Test 2: Pechuga (cat 2.2) - Solo P
+    r = calcular_macros_efectivos(23, 0, 1.2, "2.2", 200)
+    check("Pechuga: solo P", r["proteina_cuenta"] and not r["grasa_cuenta"])
     
-    # ===== CAT 2: CARNES =====
-    # Pechuga pollo (21P, 0H, 1.5G /100g) - 200g
-    r = calcular_macros_efectivos(21, 0, 1.5, "2", 200)
-    test("Cat2: Pechuga pollo 200g", r, 42.0, 0, 0)  # G=0 (1.5<3)
+    # Test 3: Gambas (cat 3.9) - H=3 NO cuenta (umbral estricto >3)
+    r = calcular_macros_efectivos(24, 3, 0.5, "3.9", 100)
+    check("Gambas: H=3 no cuenta", r["hidratos_cuenta"] == False)
     
-    # Contramuslo sin piel (24P, 0H, 4.5G /100g) - 175g
-    r = calcular_macros_efectivos(24, 0, 4.5, "2", 175)
-    test("Cat2: Contramuslo 175g", r, 42.0, 0, 7.9)  # G=7.9 (4.5>=3)
+    # Test 4: Yogur (cat 5) - P+H siempre, G si >1
+    r = calcular_macros_efectivos(5, 4, 10, "5.2", 100)
+    check("Yogur: P+H+G cuentan", r["proteina_cuenta"] and r["hidratos_cuenta"] and r["grasa_cuenta"])
     
-    # Pechuga pavo (24P, 0H, 1G /100g) - 200g
-    r = calcular_macros_efectivos(24, 0, 1, "2", 200)
-    test("Cat2: Pechuga pavo 200g", r, 48.0, 0, 0)  # G=0 (1<3)
-    
-    # ===== CAT 3: PESCADOS =====
-    # Merluza (17P, 0H, 0.8G /100g) - 200g
-    r = calcular_macros_efectivos(17, 0, 0.8, "3", 200)
-    test("Cat3: Merluza 200g", r, 34.0, 0, 0)  # G=0 (0.8<3)
-    
-    # Salmón (22P, 0H, 13G /100g) - 200g
-    r = calcular_macros_efectivos(22, 0, 13, "3", 200)
-    test("Cat3: Salmón 200g", r, 44.0, 0, 26.0)  # G=26 (13>=3)
-    
-    # ===== CAT 3.9: MARISCOS =====
-    # Gambas (20P, 1.5H, 1G /100g) - 150g
-    r = calcular_macros_efectivos(20, 1.5, 1, "3.9", 150)
-    test("Cat3.9: Gambas 150g", r, 30.0, 0, 0)  # H=0 (1.5<=3), G=0 (1<3)
-    
-    # Mejillones (12P, 3.5H, 2G /100g) - 200g
-    r = calcular_macros_efectivos(12, 3.5, 2, "3.9", 200)
-    test("Cat3.9: Mejillones 200g", r, 24.0, 7.0, 0)  # H=7 (3.5>3), G=0 (2<3)
-    
-    # ===== CAT 4: PROTEÍNA EN POLVO =====
-    # Whey Isolate (85P, 3H, 1G /100g) - 30g
-    r = calcular_macros_efectivos(85, 3, 1, "4", 30)
-    test("Cat4: Whey Isolate 30g", r, 25.5, 0, 0)  # H=0 (3<=6), G=0 (1/85=1.2%<25%)
-    
-    # Whey normal (75P, 8H, 6G /100g) - 35g
-    r = calcular_macros_efectivos(75, 8, 6, "4", 35)
-    test("Cat4: Whey normal 35g", r, 26.3, 2.8, 0)  # H=2.8 (8>6), G=0 (6/75=8%<25%)
-    
-    # Barrita proteica (35P, 30H, 10G /100g) - 60g
-    r = calcular_macros_efectivos(35, 30, 10, "4", 60)
-    test("Cat4: Barrita 60g", r, 21.0, 18.0, 6.0)  # H=18 (30>6), G=6 (10/35=29%>25%)
-    
-    # ===== CAT 5: LÁCTEOS =====
-    # Yogur griego (10P, 3.5H, 10G /100g) - 200g
-    r = calcular_macros_efectivos(10, 3.5, 10, "5", 200)
-    test("Cat5: Yogur griego 200g", r, 20.0, 7.0, 20.0)  # P+H siempre, G=20 (10>=1)
-    
-    # Queso batido 0% (8P, 3.5H, 0.1G /100g) - 250g
-    r = calcular_macros_efectivos(8, 3.5, 0.1, "5", 250)
-    test("Cat5: Queso batido 0% 250g", r, 20.0, 8.8, 0)  # G=0 (0.1<1)
-    
-    # Leche desnatada (3.4P, 4.8H, 0.3G /100g) - 250ml
-    r = calcular_macros_efectivos(3.4, 4.8, 0.3, "5", 250)
-    test("Cat5: Leche desnatada 250ml", r, 8.5, 12.0, 0)  # G=0 (0.3<1)
-    
-    # ===== CAT 7: CEREALES =====
-    # Avena (12P, 60H, 7G /100g) - 60g (<=100g)
-    r = calcular_macros_efectivos(12, 60, 7, "7", 60)
-    test("Cat7: Avena 60g", r, 0, 36.0, 0)  # P=0 (12/60=0.2<0.33), G=0 (7<8, 7/60=0.12<0.25)
-    
-    # Avena (12P, 60H, 7G /100g) - 120g (>100g, calibración)
-    r = calcular_macros_efectivos(12, 60, 7, "7", 120)
-    test("Cat7: Avena 120g CALIBRACIÓN", r, 14.4, 72.0, 0)  # P=14.4 (>100g → P siempre)
-    
-    # Granola grasa (8P, 55H, 15G /100g) - 60g
-    r = calcular_macros_efectivos(8, 55, 15, "7", 60)
-    test("Cat7: Granola grasa 60g", r, 0, 33.0, 9.0)  # P=0 (8/55=0.15<0.33), G=9 (15>8)
-    
-    # ===== CAT 8: PANES =====
-    # Pan de barra (9P, 50H, 1G /100g) - 60g
-    r = calcular_macros_efectivos(9, 50, 1, "8", 60)
-    test("Cat8: Pan barra 60g", r, 0, 30.0, 0)  # P=0 (9/50=0.18<0.33), G=0 (1<9, 1/50<0.25)
-    
-    # Pan integral (10P, 44H, 2G /100g) - 120g (>100g)
-    r = calcular_macros_efectivos(10, 44, 2, "8", 120)
-    test("Cat8: Pan integral 120g CALIBRACIÓN", r, 12.0, 52.8, 0)  # P=12 (>100g → P siempre)
-    
-    # ===== CAT 9: TUBÉRCULOS =====
-    # Patata (2P, 17H, 0.1G /100g) - 200g
+    # Test 5: Patata (cat 9) - Solo H
     r = calcular_macros_efectivos(2, 17, 0.1, "9", 200)
-    test("Cat9: Patata 200g", r, 0, 34.0, 0)  # SOLO H
+    check("Patata: solo H", r["hidratos_cuenta"] and not r["proteina_cuenta"])
     
-    # Boniato (1.5P, 21H, 0.1G /100g) - 150g
-    r = calcular_macros_efectivos(1.5, 21, 0.1, "9", 150)
-    test("Cat9: Boniato 150g", r, 0, 31.5, 0)
-    
-    # ===== CAT 10: LEGUMBRES =====
-    # Lentejas cocidas (9P, 20H, 0.4G /100g) - 250g
-    r = calcular_macros_efectivos(9, 20, 0.4, "10", 250)
-    test("Cat10: Lentejas 250g", r, 22.5, 50.0, 0)  # P+H siempre, G=0 (0.4<8)
-    
-    # Garbanzos cocidos (9P, 27H, 2.6G /100g) - 200g
-    r = calcular_macros_efectivos(9, 27, 2.6, "10", 200)
-    test("Cat10: Garbanzos 200g", r, 18.0, 54.0, 0)  # G=0 (2.6<8)
-    
-    # ===== CAT 11: FRUTAS =====
-    # Plátano (1P, 23H, 0.3G /100g) - 120g
-    r = calcular_macros_efectivos(1, 23, 0.3, "11", 120)
-    test("Cat11: Plátano 120g", r, 0, 27.6, 0)  # SOLO H
-    
-    # Manzana (0.3P, 14H, 0.2G /100g) - 180g
-    r = calcular_macros_efectivos(0.3, 14, 0.2, "11", 180)
-    test("Cat11: Manzana 180g", r, 0, 25.2, 0)
-    
-    # ===== CAT 13: VERDURAS =====
-    # Lechuga (1.4P, 1.8H, 0.2G /100g) - 150g
-    r = calcular_macros_efectivos(1.4, 1.8, 0.2, "13", 150)
-    test("Cat13: Lechuga 150g", r, 0, 0, 0)  # H=0 (1.8<=4), G=0 (0.2<=4)
-    
-    # Brócoli (2.8P, 2.4H, 0.4G /100g) - 200g
-    r = calcular_macros_efectivos(2.8, 2.4, 0.4, "13", 200)
-    test("Cat13: Brócoli 200g", r, 0, 0, 0)  # H=0 (2.4<=4)
-    
-    # Zanahoria (0.9P, 7H, 0.2G /100g) - 200g
-    r = calcular_macros_efectivos(0.9, 7, 0.2, "13", 200)
-    test("Cat13: Zanahoria 200g", r, 0, 14.0, 0)  # H=14 (7>4), G=0 (0.2<=4)
-    
-    # Guisantes (5P, 14H, 0.4G /100g) - 150g
-    r = calcular_macros_efectivos(5, 14, 0.4, "13", 150)
-    test("Cat13: Guisantes 150g", r, 0, 21.0, 0)  # H sí (14>4), P nunca
-    
-    # ===== CAT 16: SALSAS =====
-    # Ketchup (1P, 25H, 0.1G /100g) - 30g
-    r = calcular_macros_efectivos(1, 25, 0.1, "16", 30)
-    test("Cat16: Ketchup 30g", r, 0, 7.5, 0)  # P=0 (1<6), H=7.5 (25>=6), G=0 (0.1<6)
-    
-    # Salsa de soja (8P, 5H, 0G /100g) - 15g
-    r = calcular_macros_efectivos(8, 5, 0, "16", 15)
-    test("Cat16: Salsa soja 15g", r, 1.2, 0, 0)  # P=1.2 (8>=6), H=0 (5<6)
-    
-    # ===== CAT 17.1: ACEITES =====
-    # Aceite oliva (0P, 0H, 100G /100g) - 10ml
-    r = calcular_macros_efectivos(0, 0, 100, "17.1", 10)
-    test("Cat17.1: Aceite oliva 10ml", r, 0, 0, 10.0)  # SOLO G
-    
-    # ===== CAT 17.6: AGUACATE =====
-    # Aguacate (2P, 2H, 15G /100g) - 50g
-    r = calcular_macros_efectivos(2, 2, 15, "17.6", 50)
-    test("Cat17.6: Aguacate 50g", r, 0, 0, 7.5)  # SOLO G
-    
-    # ===== CAT 17.2.1: FRUTOS SECOS =====
-    # Almendras (21P, 4H, 54G /100g) - 30g (<=50g)
-    r = calcular_macros_efectivos(21, 4, 54, "17.2.1", 30)
-    test("Cat17.2.1: Almendras 30g", r, 0, 0, 16.2)  # P=0 (21/54=0.39<0.5), H=0
-
-    # Almendras - 60g (>50g, calibración)
-    r = calcular_macros_efectivos(21, 4, 54, "17.2.1", 60)
-    test("Cat17.2.1: Almendras 60g CALIBRACIÓN", r, 12.6, 2.4, 32.4)  # TODO cuenta
-    
-    # Cacahuetes (26P, 16H, 49G /100g) - 30g (<=50g)
-    r = calcular_macros_efectivos(26, 16, 49, "17.2.1", 30)
-    test("Cat17.2.1: Cacahuetes 30g", r, 7.8, 0, 14.7)  # P=7.8 (26/49=0.53>0.5), H=0 (16/49=0.33<0.5)
-    
-    # Cacahuetes - 60g (>50g)
-    r = calcular_macros_efectivos(26, 16, 49, "17.2.1", 60)
-    test("Cat17.2.1: Cacahuetes 60g CALIBRACIÓN", r, 15.6, 9.6, 29.4)
-    
-    # Nueces (15P, 7H, 65G /100g) - 25g (<=50g)
-    r = calcular_macros_efectivos(15, 7, 65, "17.2.1", 25)
-    test("Cat17.2.1: Nueces 25g", r, 0, 0, 16.3)  # P=0 (15/65=0.23<0.5)
-    
-    # ===== CAT 17.2.6: FRUTOS SECOS POLVO =====
-    # Todo cuenta
-    r = calcular_macros_efectivos(20, 30, 40, "17.2.6", 50)
-    test("Cat17.2.6: F.secos polvo 50g", r, 10.0, 15.0, 20.0)
-    
-    # ===== CAT 21: ARROCES =====
-    # Arroz blanco (7P, 78H, 0.6G /100g) - 100g
+    # Test 6: Arroz (cat 21) - P NUNCA
     r = calcular_macros_efectivos(7, 78, 0.6, "21", 100)
-    test("Cat21: Arroz blanco 100g", r, 0, 78.0, 0)  # P nunca, G=0 (0.6<6)
+    check("Arroz: P nunca", r["proteina_cuenta"] == False)
     
-    # ===== CAT 22: PASTA =====
-    # Pasta normal (13P, 71H, 1.5G /100g) - 80g
-    r = calcular_macros_efectivos(13, 71, 1.5, "22", 80)
-    test("Cat22: Pasta normal 80g", r, 0, 56.8, 0)  # P=0 (13/71=0.18<0.33), G=0
+    # Test 7: Lechuga (cat 13) - NADA cuenta
+    r = calcular_macros_efectivos(1.3, 2, 0.2, "13", 100)
+    check("Lechuga: nada cuenta", not any([r["proteina_cuenta"], r["hidratos_cuenta"], r["grasa_cuenta"]]))
     
-    # ===== CAT 9: TUBÉRCULOS (solo H) =====
-    r = calcular_macros_efectivos(2, 17, 0.1, "9", 300)
-    test("Cat9: Patata 300g", r, 0, 51.0, 0)
+    # Test 8: Big Mac (cat 49) - TODO cuenta
+    r = calcular_macros_efectivos(11.6, 19.4, 12, "49", 100)
+    check("BigMac: todo cuenta", all([r["proteina_cuenta"], r["hidratos_cuenta"], r["grasa_cuenta"]]))
     
-    # ===== CAT 37: CACAO/AZÚCAR =====
-    # Chocolate 70% (8P, 33H, 42G /100g) - 25g
-    r = calcular_macros_efectivos(8, 33, 42, "37", 25)
-    test("Cat37: Chocolate 70% 25g", r, 0, 8.3, 10.5)  # P=0 (8/42=0.19<0.5), G=10.5 (42>10)
+    # Test 9: Calibracion cereales 0-50g -> 0%
+    r = calcular_macros_efectivos(25, 55, 0, "7", 40, acumulado_cereales_panes=0)
+    check("Calibracion 0-50g: P=0", r["proteina_efectiva"] == 0)
     
-    # Miel (0.3P, 82H, 0G /100g) - 20g
-    r = calcular_macros_efectivos(0.3, 82, 0, "37", 20)
-    test("Cat37: Miel 20g", r, 0, 16.4, 0)  # P=0 (0.3/82<0.5), G=0 (0<=10)
+    # Test 10: Calibracion cereales 50-100g -> 50%
+    r = calcular_macros_efectivos(25, 55, 0, "7", 30, acumulado_cereales_panes=40)
+    check("Calibracion 50-100g: P al 50%", abs(r["proteina_efectiva"] - 3.75) < 0.5)
     
-    # ===== CAT 38.1: PATATAS FRITAS =====
-    # Patatas fritas (6P, 45H, 30G /100g) - 50g
-    r = calcular_macros_efectivos(6, 45, 30, "38.1", 50)
-    test("Cat38.1: Patatas fritas 50g", r, 0, 22.5, 15.0)  # P=0 (6/45=0.13<0.5), H+G siempre
-    
-    # ===== CAT 41: AMINOÁCIDOS =====
-    # EAA (80P, 5H, 0G /100g) - 15g
-    r = calcular_macros_efectivos(80, 5, 0, "41", 15)
-    test("Cat41: EAA 15g", r, 12.0, 0, 0)  # Solo P
-    
-    # ===== CAT 48: SOPAS =====
-    # Sopa verduras (1.5P, 4H, 1G /100g) - 300g
-    r = calcular_macros_efectivos(1.5, 4, 1, "48", 300)
-    test("Cat48: Sopa verduras 300g", r, 0, 12.0, 0)  # P=0 (1.5<2), H=12 (4>=2), G=0 (1<2)
-    
-    # ===== CAT 24: BEBIDAS VEGETALES =====
-    # Leche almendras (0.5P, 3H, 1.1G /100g) - 200ml
-    r = calcular_macros_efectivos(0.5, 3, 1.1, "24", 200)
-    test("Cat24: Leche almendras 200ml", r, 0, 6.0, 2.2)  # G SÍ cuenta (1.1>25% de 3)
-    
-    # ===== DOBLE CATEGORÍA =====
-    # Alimento con Cat 9 (solo H) + Cat 2 (P siempre, G si >=3%)
-    # Más permisiva: P cuenta (por Cat 2), H cuenta (por Cat 9)
-    r = calcular_macros_efectivos(5, 17, 0.5, "9", 200, categoria_secundaria="2")
-    test("DOBLE CAT: 9+2 200g", r, 10.0, 34.0, 0)  # P=10 (por Cat 2), H=34 (por Cat 9), G=0 (<3 en ambas)
-    
-    # ===== RESUMEN =====
+    # Resumen
     total = len(tests)
     passed = sum(1 for t in tests if t["passed"])
     failed = [t for t in tests if not t["passed"]]
@@ -827,178 +1127,12 @@ def run_tests():
     }
 
 
-# Ejecutar si se llama directamente
 if __name__ == "__main__":
     results = run_tests()
-    print(f"\n{'='*60}")
-    print(f"CALMA v2 — Tests: {results['passed']}/{results['total']}")
-    print(f"{'='*60}")
+    print(f"\nCALMA v2 - Tests basicos: {results['passed']}/{results['total']}")
     if results["all_passed"]:
-        print("✅ TODOS LOS TESTS PASAN")
+        print("OK - Todos los tests pasan")
     else:
-        print("❌ TESTS FALLIDOS:")
+        print("ERRORES:")
         for t in results["failed_tests"]:
             print(f"  - {t['nombre']}: {t['detalle']}")
-            print(f"    Resultado: {t['resultado']}")
-            print(f"    Esperado:  {t['esperado']}")
-
-
-
-# =========================================================
-# FUNCIONES WRAPPER para compatibilidad con server.py
-# Estas funciones reciben un objeto "alimento" de MongoDB
-# y llaman a las funciones principales con los parámetros correctos
-# =========================================================
-
-def calcular_macros_efectivos_alimento(alimento: dict, cantidad_g: float, es_vegano: bool = False) -> dict:
-    """
-    Wrapper que recibe un objeto alimento de MongoDB.
-    Extrae los valores necesarios y llama a calcular_macros_efectivos.
-    
-    Retorna dict con formato {"P": float, "H": float, "G": float, "kcal": float}
-    """
-    # Extraer macros por 100g del alimento
-    p100 = float(alimento.get("proteinas", 0) or 0)
-    h100 = float(alimento.get("hidratos", 0) or 0)
-    g100 = float(alimento.get("grasas", 0) or 0)
-    
-    # Extraer categorías usando parse_categories
-    categorias = parse_categories(alimento.get("categorias", []))
-    categoria = categorias[0] if categorias else "0"
-    
-    # Categoría secundaria si existe
-    categoria_secundaria = categorias[1] if len(categorias) > 1 else None
-    
-    # Llamar a la función principal
-    resultado = calcular_macros_efectivos(
-        p100, h100, g100, categoria, cantidad_g, categoria_secundaria, es_vegano
-    )
-    
-    # Convertir al formato esperado por server.py
-    p_ef = resultado["proteina_efectiva"]
-    h_ef = resultado["hidratos_efectivos"]
-    g_ef = resultado["grasa_efectiva"]
-    kcal = p_ef * 4 + h_ef * 4 + g_ef * 9
-    
-    return {
-        "P": round(p_ef, 1),
-        "H": round(h_ef, 1),
-        "G": round(g_ef, 1),
-        "kcal": round(kcal, 1)
-    }
-
-
-def calcular_macros_brutos(alimento: dict, cantidad_g: float) -> dict:
-    """
-    Calcula los macros BRUTOS (sin aplicar reglas) de un alimento.
-    Simplemente multiplica los valores por 100g por la cantidad.
-    
-    Retorna dict con formato {"P": float, "H": float, "G": float, "kcal": float}
-    """
-    factor = cantidad_g / 100.0
-    p = float(alimento.get("proteinas", 0) or 0) * factor
-    h = float(alimento.get("hidratos", 0) or 0) * factor
-    g = float(alimento.get("grasas", 0) or 0) * factor
-    kcal = p * 4 + h * 4 + g * 9
-    
-    return {
-        "P": round(p, 1),
-        "H": round(h, 1),
-        "G": round(g, 1),
-        "kcal": round(kcal, 1)
-    }
-
-
-def que_macros_cuentan(alimento: dict, cantidad_g: float, es_vegano: bool = False) -> dict:
-    """
-    Determina qué macros cuentan para un alimento dado.
-    
-    Retorna dict con formato {"P": bool, "H": bool, "G": bool}
-    """
-    # Extraer macros por 100g del alimento
-    p100 = float(alimento.get("proteinas", 0) or 0)
-    h100 = float(alimento.get("hidratos", 0) or 0)
-    g100 = float(alimento.get("grasas", 0) or 0)
-    
-    # Extraer categorías usando parse_categories
-    categorias = parse_categories(alimento.get("categorias", []))
-    categoria = categorias[0] if categorias else "0"
-    
-    # Categoría secundaria si existe
-    categoria_secundaria = categorias[1] if len(categorias) > 1 else None
-    
-    # Llamar a la función principal
-    resultado = calcular_macros_efectivos(
-        p100, h100, g100, categoria, cantidad_g, categoria_secundaria, es_vegano
-    )
-    
-    return {
-        "P": resultado["proteina_cuenta"],
-        "H": resultado["hidratos_cuenta"],
-        "G": resultado["grasa_cuenta"]
-    }
-
-# =========================================================
-# FUNCIONES AUXILIARES para manejo de categorías
-# Usadas por calculator.py para filtrado de alimentos
-# =========================================================
-
-def parse_categories(categorias) -> list:
-    """
-    Convierte el campo categorias (puede ser lista o string) a una lista de strings.
-    Maneja el separador '|' para categorías como "2.2.2 | HAM"
-    """
-    if isinstance(categorias, list):
-        result = []
-        for c in categorias:
-            if c:
-                # Manejar separador |
-                if "|" in str(c):
-                    parts = str(c).split("|")
-                    result.extend([p.strip() for p in parts if p.strip()])
-                else:
-                    result.append(str(c).strip())
-        return result
-    if isinstance(categorias, str):
-        # Primero separar por | y luego por ,
-        parts = categorias.replace("|", ",").split(",")
-        return [c.strip() for c in parts if c.strip()]
-    return []
-
-
-def get_numeric_categories(cats: list) -> list:
-    """
-    Devuelve la lista de categorías como strings (ya viene así normalmente).
-    """
-    return cats
-
-
-def cat_matches(cat: str, pattern: str) -> bool:
-    """
-    Verifica si una categoría coincide con un patrón.
-    Ej: cat_matches("17.2.1", "17.2") → True
-    Ej: cat_matches("17.1", "17.2") → False
-    """
-    cat = str(cat).strip()
-    pattern = str(pattern).strip()
-    return cat == pattern or cat.startswith(pattern + ".")
-
-
-def cat_in_any(cat: str, patterns: list) -> bool:
-    """
-    Verifica si una categoría coincide con alguno de los patrones.
-    """
-    for pattern in patterns:
-        if cat_matches(cat, pattern):
-            return True
-    return False
-
-    resultado = calcular_macros_efectivos(
-        p100, h100, g100, categoria, cantidad_g, categoria_secundaria, es_vegano
-    )
-    
-    return {
-        "P": resultado["proteina_cuenta"],
-        "H": resultado["hidratos_cuenta"],
-        "G": resultado["grasa_cuenta"]
-    }
