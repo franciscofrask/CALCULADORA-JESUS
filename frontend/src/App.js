@@ -14,6 +14,7 @@ import MessagesPage from "./pages/MessagesPage";
 import ProfilePage from "./pages/ProfilePage";
 import { AdminDashboard, AdminClientsList, AdminLayout } from "./pages/AdminDashboard";
 import ClientDetailPage from "./pages/ClientDetailPage";
+import ChatbotPage from "./pages/ChatbotPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -99,6 +100,7 @@ function AppRoutes() {
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="messages" element={<MessagesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
+                <Route path="chatbot" element={<ChatbotPage />} />
             </Route>
 
             {/* Admin Routes */}

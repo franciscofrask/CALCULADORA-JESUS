@@ -1817,6 +1817,179 @@ async def get_menu_options(data: dict, user = Depends(get_current_user)):
 
 
 # Include the router
+# ==================== CHATBOT ENDPOINTS ====================
+
+from chatbot import get_or_create_chatbot, clear_session, NutritionChatbot
+
+class ChatMessageRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+class ChatConfigRequest(BaseModel):
+    tipo_dia: str  # "entrenamiento" o "descanso"
+    num_comidas: int = 4
+    momento_entreno: int = 1
+    opcion_peri: str = "intra_post"
+
+class CompleteMealRequest(BaseModel):
+    pass
+
+@api_router.post("/chatbot/start")
+async def chatbot_start(current_user: dict = Depends(get_current_user)):
+    """Inicia una nueva sesión de chatbot."""
+    user_id = current_user.get('id') or current_user.get('user_id')
+    session_id = f"chat_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    
+    # Obtener macros del usuario desde su perfil
+    profile = await db.client_profiles.find_one(
+        {"user_id": user_id},
+        {"_id": 0}
+    )
+    
+    user_macros = {}
+    if profile:
+        mt = profile.get("macros_training", {})
+        mr = profile.get("macros_rest", {})
+        mp = profile.get("macros_periworkout", {})
+        
+        user_macros = {
+            "p_entreno": mt.get("proteinas", 160),
+            "h_entreno": mt.get("hidratos", 50),
+            "g_entreno": mt.get("grasas", 40),
+            "p_peri": mp.get("proteinas", 35),
+            "h_peri": mp.get("hidratos", 15),
+            "p_descanso": mr.get("proteinas", 140),
+            "h_descanso": mr.get("hidratos", 40),
+            "g_descanso": mr.get("grasas", 40)
+        }
+    else:
+        # Macros de prueba por defecto
+        user_macros = {
+            "p_entreno": 160,
+            "h_entreno": 50,
+            "g_entreno": 40,
+            "p_peri": 35,
+            "h_peri": 15,
+            "p_descanso": 140,
+            "h_descanso": 40,
+            "g_descanso": 40
+        }
+    
+    chatbot = await get_or_create_chatbot(session_id, db, user_macros)
+    
+    return {
+        "session_id": session_id,
+        "macros": user_macros,
+        "message": "¡Hola! Soy tu asistente de nutrición. ¿Hoy es día de entrenamiento o descanso?"
+    }
+
+@api_router.post("/chatbot/configure")
+async def chatbot_configure(
+    config: ChatConfigRequest,
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Configura el día (tipo, comidas, momento entreno)."""
+    chatbot = await get_or_create_chatbot(session_id, db)
+    
+    distribucion = chatbot.configure_day(
+        tipo_dia=config.tipo_dia,
+        num_comidas=config.num_comidas,
+        momento_entreno=config.momento_entreno,
+        opcion_peri=config.opcion_peri
+    )
+    
+    # Construir mensaje de respuesta
+    comida_1 = distribucion["comidas"]["C1"]
+    mensaje = f"Perfecto, día de {config.tipo_dia} con {config.num_comidas} comidas."
+    mensaje += f"\n\nVamos con la Comida 1. Tu objetivo es: P={comida_1['P']}g, H={comida_1['H']}g, G={comida_1['G']}g."
+    mensaje += "\n\n¿Qué te apetece desayunar?"
+    
+    return {
+        "session_id": session_id,
+        "distribucion": distribucion,
+        "comida_actual": 1,
+        "mensaje": mensaje
+    }
+
+@api_router.post("/chatbot/message")
+async def chatbot_message(
+    request: ChatMessageRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Envía un mensaje al chatbot."""
+    session_id = request.session_id
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id requerido")
+    
+    chatbot = await get_or_create_chatbot(session_id, db)
+    
+    response = await chatbot.process_message(request.message)
+    
+    return {
+        "session_id": session_id,
+        "response": response,
+        "state": {
+            "step": chatbot.state["step"],
+            "comida_actual": chatbot.state["comida_actual"],
+            "restante": chatbot.get_remaining_macros()
+        }
+    }
+
+@api_router.post("/chatbot/complete-meal")
+async def chatbot_complete_meal(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Marca la comida actual como completa."""
+    chatbot = await get_or_create_chatbot(session_id, db)
+    
+    resultado = chatbot.complete_current_meal()
+    
+    if chatbot.state["step"] == "complete":
+        # Día completo
+        summary = chatbot.get_day_summary()
+        return {
+            "session_id": session_id,
+            "comida_completada": resultado,
+            "dia_completo": True,
+            "resumen": summary,
+            "mensaje": "¡Día completo! Aquí tienes el resumen de tu dieta."
+        }
+    else:
+        # Siguiente comida
+        siguiente = chatbot.state["comida_actual"]
+        objetivo = chatbot.get_current_meal_macros()
+        return {
+            "session_id": session_id,
+            "comida_completada": resultado,
+            "dia_completo": False,
+            "comida_actual": siguiente,
+            "objetivo": objetivo,
+            "mensaje": f"Comida {siguiente-1} guardada. Vamos con la Comida {siguiente}. Objetivo: P={objetivo['P']}g, H={objetivo['H']}g, G={objetivo['G']}g. ¿Qué quieres comer?"
+        }
+
+@api_router.get("/chatbot/summary")
+async def chatbot_summary(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Obtiene el resumen del día."""
+    chatbot = await get_or_create_chatbot(session_id, db)
+    return chatbot.get_day_summary()
+
+@api_router.post("/chatbot/reset")
+async def chatbot_reset(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Reinicia la sesión de chatbot."""
+    clear_session(session_id)
+    return {"message": "Sesión reiniciada", "session_id": session_id}
+
+# ==================== END CHATBOT ====================
+
+
 app.include_router(api_router)
 
 app.add_middleware(

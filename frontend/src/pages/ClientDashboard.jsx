@@ -8,7 +8,7 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { toast } from 'sonner';
 import { 
     Home, Dumbbell, Apple, FileText, MessageCircle, User, 
-    LogOut, Bell, ChevronRight, CreditCard, Target, ArrowUpRight
+    LogOut, Bell, ChevronRight, CreditCard, Target, ArrowUpRight, Bot
 } from 'lucide-react';
 
 // JG12 Logo Component
@@ -296,6 +296,7 @@ const ClientLayout = () => {
         { path: '/dashboard', icon: Home, label: 'Inicio' },
         { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
         { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
+        { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
         { path: '/dashboard/reports', icon: FileText, label: 'Reportes' },
         { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat' },
     ];
