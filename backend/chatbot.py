@@ -207,9 +207,9 @@ class NutritionChatbot:
             )
         
         query_norm = normalize(query.strip())
-        query_words = query_norm.split()
         
         # Mapeo de términos comunes a búsquedas específicas
+        # Incluye variantes con y sin acento
         query_mappings = {
             "huevos": "huevos enteros",
             "huevo": "huevos enteros",
@@ -224,32 +224,49 @@ class NutritionChatbot:
             "yogur": "yogur griego",
             "yogurt": "yogur griego",
             "garbanzos": "garbanzos cocidos",
+            "garbanzo": "garbanzos cocidos",
             "aguacate": "aguacate",
             "calabacin": "calabacin",
             "salmon": "salmon",
             "atun": "atun",
+            "patata": "patata",
+            "patatas": "patata",
+            "brocoli": "brocoli",
+            "espinacas": "espinacas",
+            "tomate": "tomate",
+            "lechuga": "lechuga",
+            "platano": "platano",
+            "banana": "platano",
+            "manzana": "manzana",
+            "naranja": "naranja",
+            "leche": "leche",
+            "queso": "queso",
         }
         
         # Usar mapeo si existe
         search_term = query_mappings.get(query_norm, query_norm)
         search_norm = normalize(search_term)
         
-        # Buscar en MongoDB con regex
-        regex_pattern = f".*{search_norm.replace(' ', '.*')}.*"
-        cursor = self.db.foods.find(
-            {"nombre": {"$regex": regex_pattern, "$options": "i"}},
-            {"_id": 0}
-        ).limit(100)
+        # Buscar en MongoDB usando la función normalizada de calculator.py
+        # que maneja correctamente acentos y diacríticos
+        from calculator import buscar_alimentos as calc_buscar
         
-        candidates = await cursor.to_list(length=100)
+        # La función de calculator.py normaliza bien y trae candidatos
+        candidates = await calc_buscar(
+            self.db, 
+            query=search_term, 
+            limit=100,
+            calcular_efectivos=False
+        )
         
-        # Si no hay resultados, intentar búsqueda más amplia
-        if not candidates:
-            cursor = self.db.foods.find(
-                {"nombre": {"$regex": f".*{query_norm}.*", "$options": "i"}},
-                {"_id": 0}
-            ).limit(50)
-            candidates = await cursor.to_list(length=50)
+        # Si no hay resultados con el mapeo, intentar búsqueda directa
+        if not candidates and search_term != query_norm:
+            candidates = await calc_buscar(
+                self.db, 
+                query=query_norm, 
+                limit=100,
+                calcular_efectivos=False
+            )
         
         # Puntuar candidatos por relevancia
         scored = []
@@ -305,6 +322,9 @@ class NutritionChatbot:
     def calculate_food_amount(self, alimento: dict, macros_restantes: dict) -> dict:
         """
         Calcula la cantidad óptima de un alimento sin pasarse de los macros restantes.
+        
+        IMPORTANTE: Aplica límites máximos RAZONABLES por categoría para que
+        las cantidades tengan sentido humano (no sugerir 266g de claras).
         
         Returns:
             dict con cantidad_g, macros_efectivos, cabe, config
@@ -374,6 +394,14 @@ class NutritionChatbot:
             cantidad = max(0, min(cantidades))
             cabe = cantidad > 0
         
+        # =====================================================
+        # LÍMITES MÁXIMOS RAZONABLES POR CATEGORÍA
+        # Para que el chatbot sugiera cantidades humanas
+        # =====================================================
+        max_cantidad = self._get_max_cantidad_razonable(cat, config, racion)
+        if cantidad > max_cantidad:
+            cantidad = max_cantidad
+        
         # Aplicar mínimo del config
         minimo = config.get("minimo", 5)
         if cantidad < minimo:
@@ -381,8 +409,10 @@ class NutritionChatbot:
             cabe = False
             cantidad = minimo  # Para mostrar la cantidad mínima
         
-        # Ajustar por unidades si aplica
-        if config.get("tipo") == "unidad" and cabe:
+        # =====================================================
+        # AJUSTE POR UNIDADES (fix: usar 'por_unidad' no 'tipo')
+        # =====================================================
+        if config.get("por_unidad", False) and cabe:
             cantidad = ajustar_por_unidades(cantidad, config)
         
         # Recalcular macros efectivos con la cantidad final
@@ -413,6 +443,61 @@ class NutritionChatbot:
             "unidades": alimento.get("unidades", False),
             "racion": racion
         }
+    
+    def _get_max_cantidad_razonable(self, cat: str, config: dict, racion: float) -> float:
+        """
+        Devuelve la cantidad máxima razonable para un alimento según su categoría.
+        Esto evita que el bot sugiera cantidades absurdas como 266g de claras.
+        
+        REGLA: El chatbot debe sugerir cantidades que un humano usaría en una comida real.
+        """
+        # Si es por unidad, máximo 3-4 unidades
+        if config.get("por_unidad", False):
+            peso_unidad = config.get("peso_unidad", racion)
+            # Máximo 3 unidades para la mayoría, 4 para panes pequeños
+            if cat.startswith("8"):  # Panes
+                return peso_unidad * 4
+            elif cat.startswith("1.2"):  # Huevos enteros
+                return peso_unidad * 3  # Máximo 3 huevos
+            elif cat.startswith("5.2"):  # Yogures
+                return peso_unidad * 2  # Máximo 2 yogures
+            else:
+                return peso_unidad * 3
+        
+        # Límites por categoría (en gramos)
+        limites = {
+            "1.1": 150,   # Claras: máximo 150g (es más razonable)
+            "1.2": 165,   # Huevos enteros: máximo 3 (55g * 3)
+            "2.1": 100,   # Embutidos/Fiambres: máximo 100g
+            "2.2": 200,   # Aves: máximo 200g
+            "2.3": 200,   # Vacuno: máximo 200g
+            "2.4": 200,   # Cerdo: máximo 200g
+            "2.6": 200,   # Otras carnes: máximo 200g
+            "3": 200,     # Pescado: máximo 200g
+            "4": 50,      # Proteína en polvo: máximo 50g
+            "5.1": 300,   # Leche: máximo 300ml
+            "5.2": 250,   # Yogures: máximo 250g
+            "5.3": 100,   # Quesos: máximo 100g
+            "7": 100,     # Cereales: máximo 100g
+            "8": 120,     # Panes: máximo 120g
+            "9": 300,     # Tubérculos: máximo 300g
+            "10": 200,    # Legumbres: máximo 200g
+            "11": 300,    # Frutas: máximo 300g
+            "13": 400,    # Verduras: máximo 400g
+            "17.1": 30,   # Aceites: máximo 30g
+            "17.2": 50,   # Frutos secos: máximo 50g
+            "17.6": 100,  # Aguacate: máximo 100g
+            "21": 150,    # Arroces: máximo 150g (en seco)
+            "22": 150,    # Pasta: máximo 150g (en seco)
+        }
+        
+        # Buscar límite para la categoría (soporta subcategorías)
+        for cat_prefix, max_g in limites.items():
+            if cat.startswith(cat_prefix):
+                return max_g
+        
+        # Default: máximo 300g
+        return 300
     
     def add_food_to_meal(self, alimento: dict, cantidad_g: float) -> dict:
         """
@@ -470,13 +555,30 @@ class NutritionChatbot:
     
     def _format_cantidad(self, cantidad_g: float, alimento: dict, config: dict) -> str:
         """Formatea la cantidad para mostrar al usuario."""
-        if config.get("tipo") == "unidad":
-            racion = float(alimento.get("racion", 100) or 100)
-            unidades = cantidad_g / racion
-            if unidades == int(unidades):
-                return f"{int(unidades)} ud"
+        # FIX: usar 'por_unidad' no 'tipo'
+        if config.get("por_unidad", False):
+            peso_unidad = config.get("peso_unidad", 0)
+            if peso_unidad > 0:
+                unidades = cantidad_g / peso_unidad
+                if abs(unidades - round(unidades)) < 0.01:
+                    return f"{int(round(unidades))} ud"
+                elif config.get("permite_media", False):
+                    # Mostrar medias unidades si aplica
+                    medias = round(unidades * 2) / 2
+                    if medias == int(medias):
+                        return f"{int(medias)} ud"
+                    else:
+                        return f"{medias:.1f} ud"
+                else:
+                    return f"{int(round(unidades))} ud"
             else:
-                return f"{unidades:.1f} ud"
+                # Fallback a racion
+                racion = float(alimento.get("racion", 100) or 100)
+                unidades = cantidad_g / racion
+                if abs(unidades - round(unidades)) < 0.01:
+                    return f"{int(round(unidades))} ud"
+                else:
+                    return f"{unidades:.1f} ud"
         else:
             return f"{int(cantidad_g)}g"
     

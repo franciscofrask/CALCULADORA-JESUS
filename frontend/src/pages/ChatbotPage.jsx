@@ -380,12 +380,13 @@ export default function ChatbotPage() {
 
       {/* Input */}
       {step === 'building' && (
-        <div className="border-t border-zinc-700 p-4 bg-zinc-800">
+        <div className="border-t border-zinc-700 p-4 bg-zinc-800 mb-12 relative z-50">
           <div className="flex gap-2">
             <button
               onClick={completeMeal}
               disabled={loading}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+              data-testid="save-meal-btn"
             >
               <Check size={20} />
               Guardar
@@ -399,11 +400,13 @@ export default function ChatbotPage() {
               placeholder="Escribe lo que quieres comer..."
               className="flex-1 bg-zinc-700 border border-zinc-600 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
               disabled={loading}
+              data-testid="chat-input"
             />
             <button
               onClick={sendMessage}
               disabled={loading || !input.trim()}
               className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl transition-colors disabled:opacity-50"
+              data-testid="send-message-btn"
             >
               <Send size={20} />
             </button>
