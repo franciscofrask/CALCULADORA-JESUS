@@ -8,7 +8,7 @@ export default function ChatbotPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState('init'); // init, config, building, complete
+  const [step, setStep] = useState('init'); // init, config, building_meal, complete
   const [currentMeal, setCurrentMeal] = useState(1);
   const [macrosRestantes, setMacrosRestantes] = useState({ P: 0, H: 0, G: 0 });
   const [distribucion, setDistribucion] = useState(null);
@@ -78,7 +78,7 @@ export default function ChatbotPage() {
         setDistribucion(data.distribucion);
         setCurrentMeal(data.comida_actual);
         setMacrosRestantes(data.distribucion.comidas.C1);
-        setStep('building');
+        setStep('building_meal');
         addMessage(`Día de ${tipoDia}`, true);
         addMessage(data.mensaje, false);
       }
@@ -295,7 +295,7 @@ export default function ChatbotPage() {
           <div>
             <h1 className="font-bold">Asistente de Nutrición</h1>
             <p className="text-xs text-zinc-400">
-              {step === 'building' && `Comida ${currentMeal} • Restante: P=${macrosRestantes.P}g H=${macrosRestantes.H}g G=${macrosRestantes.G}g`}
+              {step === 'building_meal' && `Comida ${currentMeal} • Restante: P=${macrosRestantes.P}g H=${macrosRestantes.H}g G=${macrosRestantes.G}g`}
               {step === 'complete' && '¡Día completo!'}
               {step === 'init' && 'Listo para empezar'}
               {step === 'config' && 'Configurando día...'}
@@ -359,7 +359,7 @@ export default function ChatbotPage() {
         )}
 
         {/* Mensajes del chat */}
-        {(step === 'building' || step === 'complete') && (
+        {(step === 'building_meal' || step === 'complete') && (
           <>
             {messages.map(renderMessage)}
             {step === 'complete' && renderDaySummary()}
@@ -379,7 +379,7 @@ export default function ChatbotPage() {
       </div>
 
       {/* Input */}
-      {step === 'building' && (
+      {step === 'building_meal' && (
         <div className="border-t border-zinc-700 p-4 bg-zinc-800 mb-12 relative z-50">
           <div className="flex gap-2">
             <button
