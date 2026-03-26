@@ -199,7 +199,6 @@ class NutritionChatbot:
         Returns:
             Lista de alimentos encontrados, ordenados por relevancia
         """
-        # Normalizar query (quitar acentos)
         import unicodedata
         def normalize(text):
             return ''.join(
@@ -210,14 +209,47 @@ class NutritionChatbot:
         query_norm = normalize(query.strip())
         query_words = query_norm.split()
         
+        # Mapeo de términos comunes a búsquedas específicas
+        query_mappings = {
+            "huevos": "huevos enteros",
+            "huevo": "huevos enteros",
+            "claras": "claras de huevo pasteurizadas",
+            "clara": "claras de huevo pasteurizadas",
+            "pavo": "fiambre pechuga pavo",
+            "pan": "pan de barra",
+            "avena": "copos de avena",
+            "arroz": "arroz blanco",
+            "pollo": "pechuga pollo",
+            "pechuga": "pechuga pollo",
+            "yogur": "yogur griego",
+            "yogurt": "yogur griego",
+            "garbanzos": "garbanzos cocidos",
+            "aguacate": "aguacate",
+            "calabacin": "calabacin",
+            "salmon": "salmon",
+            "atun": "atun",
+        }
+        
+        # Usar mapeo si existe
+        search_term = query_mappings.get(query_norm, query_norm)
+        search_norm = normalize(search_term)
+        
         # Buscar en MongoDB con regex
-        regex_pattern = f".*{query_norm}.*"
+        regex_pattern = f".*{search_norm.replace(' ', '.*')}.*"
         cursor = self.db.foods.find(
             {"nombre": {"$regex": regex_pattern, "$options": "i"}},
             {"_id": 0}
-        ).limit(50)
+        ).limit(100)
         
-        candidates = await cursor.to_list(length=50)
+        candidates = await cursor.to_list(length=100)
+        
+        # Si no hay resultados, intentar búsqueda más amplia
+        if not candidates:
+            cursor = self.db.foods.find(
+                {"nombre": {"$regex": f".*{query_norm}.*", "$options": "i"}},
+                {"_id": 0}
+            ).limit(50)
+            candidates = await cursor.to_list(length=50)
         
         # Puntuar candidatos por relevancia
         scored = []
@@ -226,38 +258,48 @@ class NutritionChatbot:
             nombre_norm = normalize(nombre)
             score = 0
             
-            # Coincidencia exacta al inicio = máxima prioridad
-            if nombre_norm.startswith(query_norm):
+            # Coincidencia exacta del nombre simplificado
+            nombre_simple = nombre_norm.split("(")[0].strip()  # Quitar marca
+            
+            # Máxima prioridad: nombre empieza exactamente con la búsqueda
+            if nombre_simple.startswith(search_norm):
+                score += 200
+            elif nombre_norm.startswith(search_norm):
+                score += 150
+            # Alta prioridad: todas las palabras de búsqueda están en el nombre
+            elif all(w in nombre_norm for w in search_norm.split()):
                 score += 100
-            # Palabra completa al inicio
-            elif any(nombre_norm.startswith(w) for w in query_words):
+            # Media prioridad: palabra principal al inicio
+            elif any(nombre_simple.startswith(w) for w in search_norm.split()):
                 score += 80
-            # Coincidencia como palabra completa
-            elif query_norm in nombre_norm.split():
-                score += 60
-            # Coincidencia parcial
-            elif query_norm in nombre_norm:
+            # Baja prioridad: coincidencia parcial
+            elif search_norm in nombre_norm:
                 score += 40
+            else:
+                continue  # No incluir si no hay buena coincidencia
             
-            # Penalizar productos de marca que no son lo buscado
-            # Ej: buscar "pan" no debería devolver "Donut (Panrico)"
-            if "(" in nombre and query_norm not in normalize(nombre.split("(")[0]):
-                score -= 30
+            # Bonificar genéricos (sin marca)
+            if "(" not in nombre:
+                score += 30
             
-            # Bonificar genéricos
+            # Bonificar alimentos con etiqueta GEN (genérico)
             if "GEN" in str(food.get("categorias", "")):
-                score += 10
+                score += 25
             
-            # Bonificar si tiene la etiqueta TOP (alimentos frecuentes)
+            # Bonificar alimentos frecuentes (TOP)
             if "TOP" in str(food.get("categorias", "")):
-                score += 15
+                score += 20
+            
+            # Penalizar productos procesados/complejos para búsquedas simples
+            cats = str(food.get("categorias", ""))
+            if any(c in cats for c in ["43", "44", "49"]) and len(query_norm) < 10:
+                score -= 50
             
             scored.append((score, food))
         
         # Ordenar por score descendente
         scored.sort(key=lambda x: x[0], reverse=True)
         
-        # Devolver los mejores
         return [food for score, food in scored[:limit]]
     
     def calculate_food_amount(self, alimento: dict, macros_restantes: dict) -> dict:
