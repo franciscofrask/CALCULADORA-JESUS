@@ -85,7 +85,7 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
 ## Credenciales de Test
 - **Cliente:** `clientedemo@test.com` / `demo123`
 
-## Tareas Completadas Esta Sesión (26/03/2026)
+## Tareas Completadas Esta Sesión (26-27/03/2026)
 - Arreglado: Chatbot mostraba pantalla en blanco (error de estados frontend)
 - Arreglado: Chatbot asignaba cantidades absurdas (266g de claras)
 - Arreglado: Huevos no se mostraban en unidades
@@ -97,12 +97,29 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
   - Considera P secundaria de alimentos mixtos (legumbres)
   - Compensación automática cuando una fuente tiene límite
 
+### Sesión 27/03/2026 - REGLA CALMA de Mínimos
+- **ARREGLADO: Algoritmo de macros respeta regla fundamental CALMA**
+  - NUNCA se reduce cantidad por debajo del mínimo de un alimento
+  - Si el mínimo excede los macros restantes (+4g margen), el alimento SE RECHAZA
+  - Se muestra mensaje explicativo: "La cantidad mínima (Xg) excede los macros: mín Xg = Yg H, pero solo quedan Zg H"
+  - Se sugieren alternativas cuando un alimento no cabe
+  
+- **TEST COMPLETO DE 4 COMIDAS PASADO ✅:**
+  - C1: huevos, pan, claras y pavo → P=40g, H=15g, G=6g ✅
+  - C2: pechuga de pollo, garbanzos, tomate, cebolla, aguacate y calabacín → P=40g, H=18.9g, G=8g ✅
+  - C3: lomo embuchado bajo en grasa, queso havarti light, tomate rallado, pan tostado y aceite de oliva → P=32g, H=6.6g, G=15.7g ✅
+  - C4: huevos, sepia, tomate frito, pan tostado y berenjena → P=48g, H=11.6g, G=12g ✅
+  - Todas dentro del margen de ±4g
+
+- **Resumen del día implementado:**
+  - Cuando se completan todas las comidas, se muestra resumen total de P/H/G vs objetivos
+
 ## Tareas Pendientes
 
 ### P1 - Próximas
-- Resumen del día cuando todas las comidas estén montadas
 - Refactor de NutritionPage.jsx en componentes pequeños
 - Refactor de server.py en APIRouters
+- Refactor de chatbot.py (_process_build_meal tiene muchos patches)
 
 ### P2 - Futuras
 - Implementar pantalla Home con trackers circulares

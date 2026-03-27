@@ -739,11 +739,9 @@ Responde en formato JSON según las instrucciones del sistema."""
         """
         Procesa la construcción de una comida con DISTRIBUCIÓN INTELIGENTE de macros.
         
-        ESTRATEGIA SIMPLIFICADA:
-        1. Buscar todos los alimentos
-        2. Separar por macro PRINCIPAL (P, H, G, otros)
-        3. Las fuentes de cada macro se reparten el objetivo de ese macro equitativamente
-        4. Aplicar límites min/max
+        REGLA FUNDAMENTAL CALMA: NUNCA reducir por debajo del mínimo.
+        Si un alimento no cabe porque su mínimo excede los macros restantes (+4g margen),
+        se RECHAZA y se sugiere alternativa.
         
         Args:
             foods_requested: Lista de nombres de alimentos solicitados
@@ -754,17 +752,19 @@ Responde en formato JSON según las instrucciones del sistema."""
         """
         from calma_engine import parse_categories, calcular_macros_efectivos
         
+        MARGEN = 4.0  # Margen permitido en CALMA
+        
         objetivo = self.get_current_meal_macros()
         p_objetivo = float(objetivo.get("P", 0))
         h_objetivo = float(objetivo.get("H", 0))
         g_objetivo = float(objetivo.get("G", 0))
         
-        # Paso 1: Buscar todos los alimentos
+        # Paso 1: Buscar todos los alimentos y calcular sus macros efectivos
         alimentos_info = []
         not_found = []
         
         for food_name in foods_requested:
-            matches = await self.search_foods(food_name, limit=3)
+            matches = await self.search_foods(food_name, limit=5)
             
             if matches:
                 alimento = matches[0]
@@ -784,7 +784,6 @@ Responde en formato JSON según las instrucciones del sistema."""
                 g_ef = ef_100["grasa_efectiva"]
                 
                 # Determinar macro principal (el que más aporta)
-                # IMPORTANTE: Verduras con H efectivos > 0 son fuente de H, no "otros"
                 max_ef = max(p_ef, h_ef, g_ef)
                 if max_ef == 0:
                     macro_principal = "otros"
@@ -807,7 +806,8 @@ Responde en formato JSON según las instrucciones del sistema."""
                     "p_ef_100": p_ef,
                     "h_ef_100": h_ef,
                     "g_ef_100": g_ef,
-                    "alternativas": [m.get("nombre") for m in matches[1:3]]
+                    "alternativas": [m.get("nombre") for m in matches[1:5]],
+                    "buscado": food_name
                 })
             else:
                 not_found.append({
@@ -825,19 +825,48 @@ Responde en formato JSON según las instrucciones del sistema."""
         found_foods = []
         restantes = {"P": p_objetivo, "H": h_objetivo, "G": g_objetivo}
         
-        # ESTRATEGIA MEJORADA:
-        # 1. Procesar OTROS (verduras sin macros efectivos) primero - cantidad fija
-        # 2. Procesar fuentes de H - usando H_objetivo
-        # 3. Procesar fuentes de P - usando P_objetivo MENOS la P de fuentes de H
-        # 4. Procesar fuentes de G - con lo que quede
-        # 5. Verificación final y ajuste
+        def verificar_cabe_minimo(fuente, restantes_actuales, macro_tipo):
+            """
+            Verifica si el mínimo del alimento cabe dentro del margen de ±4g.
+            Retorna (cabe: bool, razon: str, macros_minimo: dict)
+            """
+            config = fuente["config"]
+            minimo = config.get("minimo", 5)
+            
+            # Calcular macros efectivos con el mínimo
+            p_min = (minimo / 100) * fuente["p_ef_100"]
+            h_min = (minimo / 100) * fuente["h_ef_100"]
+            g_min = (minimo / 100) * fuente["g_ef_100"]
+            
+            # Verificar si algún macro se pasa del margen permitido
+            excede_p = p_min > restantes_actuales["P"] + MARGEN
+            excede_h = h_min > restantes_actuales["H"] + MARGEN
+            excede_g = g_min > restantes_actuales["G"] + MARGEN
+            
+            if excede_p or excede_h or excede_g:
+                # Construir mensaje de razón
+                nombre = fuente["alimento"].get("nombre", "")
+                razones = []
+                if excede_h:
+                    razones.append(f"mín {minimo}g = {h_min:.0f}g H, pero solo quedan {restantes_actuales['H']:.0f}g H")
+                if excede_p:
+                    razones.append(f"mín {minimo}g = {p_min:.0f}g P, pero solo quedan {restantes_actuales['P']:.0f}g P")
+                if excede_g:
+                    razones.append(f"mín {minimo}g = {g_min:.0f}g G, pero solo quedan {restantes_actuales['G']:.0f}g G")
+                
+                razon = f"La cantidad mínima ({minimo}g) excede los macros: {'; '.join(razones)}"
+                return False, razon, {"P": p_min, "H": h_min, "G": g_min}
+            
+            return True, "", {"P": p_min, "H": h_min, "G": g_min}
         
-        # Paso 1: Añadir "otros" primero (verduras sin macros efectivos)
+        # Paso 3: Procesar "otros" primero (verduras sin macros efectivos)
         for fuente in fuentes_otros:
             alimento = fuente["alimento"]
             config = fuente["config"]
             
             cantidad_g = config.get("defecto", 100)
+            minimo = config.get("minimo", 50)
+            cantidad_g = max(cantidad_g, minimo)
             
             if config.get("por_unidad", False):
                 cantidad_g = ajustar_por_unidades(cantidad_g, config)
@@ -856,61 +885,53 @@ Responde en formato JSON según las instrucciones del sistema."""
             restantes["H"] -= efectivos.get("H", 0)
             restantes["G"] -= efectivos.get("G", 0)
         
-        # Paso 2: Procesar fuentes de H - calcular cantidades para cubrir H restante
-        p_from_H_sources = 0
-        if fuentes_H and restantes["H"] > 0:
+        # Paso 4: Procesar fuentes de H
+        if fuentes_H:
             h_restante = restantes["H"]
             num_fuentes_H = len(fuentes_H)
             
-            print(f"DEBUG H: h_restante={h_restante}, num_fuentes={num_fuentes_H}")
-            
             for i, fuente in enumerate(fuentes_H):
-                if fuente["h_ef_100"] <= 0 or h_restante <= -4:  # Ya se pasó del margen
-                    continue
-                
                 alimento = fuente["alimento"]
                 config = fuente["config"]
                 minimo = config.get("minimo", 5)
                 
-                # Calcular H que le toca a esta fuente
-                fuentes_restantes = num_fuentes_H - i
-                h_por_fuente = max(h_restante, 0) / fuentes_restantes if fuentes_restantes > 0 else max(h_restante, 0)
+                # VERIFICAR SI CABE EL MÍNIMO ANTES DE PROCESAR
+                cabe, razon, macros_minimo = verificar_cabe_minimo(fuente, restantes, "H")
                 
-                print(f"DEBUG {alimento.get('nombre')}: h_ef_100={fuente['h_ef_100']}, h_por_fuente={h_por_fuente}, minimo={minimo}")
-                
-                # Calcular gramos para conseguir esa H
-                if h_por_fuente > 0 and fuente["h_ef_100"] > 0:
-                    cantidad_g = (h_por_fuente / fuente["h_ef_100"]) * 100
-                else:
-                    # Si ya no queda H por cubrir, no añadir este alimento
+                if not cabe:
+                    # NO CABE - Rechazar y añadir a not_found con sugerencia
+                    not_found.append({
+                        "buscado": fuente.get("buscado", alimento.get("nombre")),
+                        "encontrado": alimento.get("nombre"),
+                        "razon": razon,
+                        "alternativas": fuente["alternativas"],
+                        "sugerencia": f"¿Quieres sustituirlo por: {', '.join(fuente['alternativas'][:3])}?" if fuente["alternativas"] else None
+                    })
                     continue
                 
-                print(f"DEBUG cantidad_g calculada: {cantidad_g}")
+                # El alimento cabe - calcular cantidad óptima
+                if fuente["h_ef_100"] <= 0:
+                    continue
+                
+                fuentes_restantes_h = num_fuentes_H - i
+                h_por_fuente = max(h_restante, 0) / fuentes_restantes_h if fuentes_restantes_h > 0 else max(h_restante, 0)
+                
+                if h_por_fuente <= 0:
+                    continue
+                
+                cantidad_g = (h_por_fuente / fuente["h_ef_100"]) * 100
                 
                 max_cant = self._get_max_cantidad_razonable(fuente["cat"], config, float(alimento.get("racion", 100)))
                 cantidad_g = min(cantidad_g, max_cant)
                 
-                # Aplicar mínimo solo si no nos pasa demasiado del objetivo
+                # REGLA CALMA: Nunca por debajo del mínimo
                 if cantidad_g < minimo:
-                    h_con_minimo = (minimo / 100) * fuente["h_ef_100"]
-                    print(f"DEBUG h_con_minimo={h_con_minimo}, h_restante+4={h_restante+4}")
-                    if h_con_minimo <= h_restante + 4:  # Dentro del margen
-                        cantidad_g = minimo
-                        print(f"DEBUG usando minimo {minimo}")
-                    else:
-                        # El mínimo nos pasa del margen, usar cantidad calculada
-                        # pero solo si es >= 5g (mínimo absoluto)
-                        if cantidad_g < 5:
-                            cantidad_g = 5
-                        print(f"DEBUG usando cantidad_g={cantidad_g} (sin minimo)")
-                
-                print(f"DEBUG cantidad_g final: {cantidad_g}")
+                    cantidad_g = minimo
                 
                 if config.get("por_unidad", False):
                     cantidad_g = ajustar_por_unidades(cantidad_g, config)
                 
                 efectivos = self.add_food_to_meal(alimento, cantidad_g)
-                p_from_H_sources += efectivos.get("P", 0)
                 
                 found_foods.append({
                     "nombre": alimento.get("nombre"),
@@ -925,45 +946,44 @@ Responde en formato JSON según las instrucciones del sistema."""
                 restantes["G"] -= efectivos.get("G", 0)
                 h_restante = restantes["H"]
         
-        # Paso 3: Procesar fuentes de P - usando P_restante (ya descontada la P de fuentes de H)
-        if fuentes_P and restantes["P"] > 0:
-            # Calcular cuánto puede dar cada fuente como máximo
-            capacidades = []
-            for fuente in fuentes_P:
-                if fuente["p_ef_100"] <= 0:
-                    capacidades.append({"fuente": fuente, "max_p": 0})
+        # Paso 5: Procesar fuentes de P
+        if fuentes_P:
+            p_restante = restantes["P"]
+            num_fuentes_P = len(fuentes_P)
+            
+            for i, fuente in enumerate(fuentes_P):
+                alimento = fuente["alimento"]
+                config = fuente["config"]
+                minimo = config.get("minimo", 5)
+                
+                # VERIFICAR SI CABE EL MÍNIMO ANTES DE PROCESAR
+                cabe, razon, macros_minimo = verificar_cabe_minimo(fuente, restantes, "P")
+                
+                if not cabe:
+                    not_found.append({
+                        "buscado": fuente.get("buscado", alimento.get("nombre")),
+                        "encontrado": alimento.get("nombre"),
+                        "razon": razon,
+                        "alternativas": fuente["alternativas"],
+                        "sugerencia": f"¿Quieres sustituirlo por: {', '.join(fuente['alternativas'][:3])}?" if fuente["alternativas"] else None
+                    })
                     continue
                 
-                config = fuente["config"]
-                alimento = fuente["alimento"]
+                if fuente["p_ef_100"] <= 0:
+                    continue
+                
+                fuentes_restantes_p = num_fuentes_P - i
+                p_por_fuente = max(p_restante, 0) / fuentes_restantes_p if fuentes_restantes_p > 0 else max(p_restante, 0)
+                
+                if p_por_fuente <= 0:
+                    continue
+                
+                cantidad_g = (p_por_fuente / fuente["p_ef_100"]) * 100
+                
                 max_cant = self._get_max_cantidad_razonable(fuente["cat"], config, float(alimento.get("racion", 100)))
-                
-                if config.get("por_unidad", False):
-                    max_cant = ajustar_por_unidades(max_cant, config)
-                
-                max_p = (max_cant / 100) * fuente["p_ef_100"]
-                capacidades.append({"fuente": fuente, "max_p": max_p, "max_cant": max_cant})
-            
-            p_restante = restantes["P"]  # Ya tiene descontada la P de fuentes de H
-            fuentes_restantes = [c for c in capacidades if c["max_p"] > 0]
-            fuentes_restantes.sort(key=lambda x: x["max_p"])
-            
-            for i, cap in enumerate(fuentes_restantes):
-                fuente = cap["fuente"]
-                n_restantes = len(fuentes_restantes) - i
-                
-                p_por_fuente = p_restante / n_restantes if n_restantes > 0 else 0
-                p_dar = min(p_por_fuente, cap["max_p"])
-                
-                cantidad_g = (p_dar / fuente["p_ef_100"]) * 100 if fuente["p_ef_100"] > 0 else 0
-                
-                max_cant = cap.get("max_cant", 200)
                 cantidad_g = min(cantidad_g, max_cant)
                 
-                config = fuente["config"]
-                alimento = fuente["alimento"]
-                
-                minimo = config.get("minimo", 5)
+                # REGLA CALMA: Nunca por debajo del mínimo
                 if cantidad_g < minimo:
                     cantidad_g = minimo
                 
@@ -985,23 +1005,44 @@ Responde en formato JSON según las instrucciones del sistema."""
                 restantes["G"] -= efectivos.get("G", 0)
                 p_restante -= efectivos.get("P", 0)
         
-        # Paso 4: Distribuir G entre fuentes de G
-        if fuentes_G and restantes["G"] > 0:
-            g_por_fuente = restantes["G"] / len(fuentes_G)
+        # Paso 6: Distribuir G entre fuentes de G
+        if fuentes_G:
+            g_restante = restantes["G"]
+            num_fuentes_G = len(fuentes_G)
             
-            for fuente in fuentes_G:
+            for i, fuente in enumerate(fuentes_G):
+                alimento = fuente["alimento"]
+                config = fuente["config"]
+                minimo = config.get("minimo", 5)
+                
+                # VERIFICAR SI CABE EL MÍNIMO
+                cabe, razon, macros_minimo = verificar_cabe_minimo(fuente, restantes, "G")
+                
+                if not cabe:
+                    not_found.append({
+                        "buscado": fuente.get("buscado", alimento.get("nombre")),
+                        "encontrado": alimento.get("nombre"),
+                        "razon": razon,
+                        "alternativas": fuente["alternativas"],
+                        "sugerencia": f"¿Quieres sustituirlo por: {', '.join(fuente['alternativas'][:3])}?" if fuente["alternativas"] else None
+                    })
+                    continue
+                
                 if fuente["g_ef_100"] <= 0:
                     continue
                 
-                alimento = fuente["alimento"]
-                config = fuente["config"]
+                fuentes_restantes_g = num_fuentes_G - i
+                g_por_fuente = max(g_restante, 0) / fuentes_restantes_g if fuentes_restantes_g > 0 else max(g_restante, 0)
+                
+                if g_por_fuente <= 0:
+                    continue
                 
                 cantidad_g = (g_por_fuente / fuente["g_ef_100"]) * 100
                 
                 max_cant = self._get_max_cantidad_razonable(fuente["cat"], config, float(alimento.get("racion", 100)))
                 cantidad_g = min(cantidad_g, max_cant)
                 
-                minimo = config.get("minimo", 5)
+                # REGLA CALMA: Nunca por debajo del mínimo
                 if cantidad_g < minimo:
                     cantidad_g = minimo
                 
@@ -1021,84 +1062,30 @@ Responde en formato JSON según las instrucciones del sistema."""
                 restantes["P"] -= efectivos.get("P", 0)
                 restantes["H"] -= efectivos.get("H", 0)
                 restantes["G"] -= efectivos.get("G", 0)
+                g_restante -= efectivos.get("G", 0)
         
         # Construir respuesta
         comida_actual = self.state["comidas_completadas"].get(self.state["comida_actual"], {})
         macros_actuales = comida_actual.get("macros", {"P": 0, "H": 0, "G": 0})
         restantes_final = self.get_remaining_macros()
         
-        # VERIFICACIÓN FINAL: Si nos pasamos de algún macro más de 4g, ajustar
-        margen = 4.0
-        necesita_ajuste = (
-            restantes_final["P"] < -margen or 
-            restantes_final["H"] < -margen or 
-            restantes_final["G"] < -margen
-        )
-        
-        if necesita_ajuste and found_foods:
-            # Limpiar la comida actual y recalcular con cantidades reducidas
-            self.state["comidas_completadas"][self.state["comida_actual"]] = {
-                "alimentos": [],
-                "macros": {"P": 0, "H": 0, "G": 0}
-            }
-            self.state["acumulado_cereales_panes"] = 0
-            self.state["acumulado_frutos_secos"] = 0
-            
-            found_foods_ajustados = []
-            
-            # Calcular factor de reducción basado en el macro más excedido
-            exceso_p = max(0, -restantes_final["P"]) / p_objetivo if p_objetivo > 0 else 0
-            exceso_h = max(0, -restantes_final["H"]) / h_objetivo if h_objetivo > 0 else 0
-            exceso_g = max(0, -restantes_final["G"]) / g_objetivo if g_objetivo > 0 else 0
-            
-            factor_reduccion = 1 - max(exceso_p, exceso_h, exceso_g)
-            factor_reduccion = max(0.5, factor_reduccion)  # No reducir más del 50%
-            
-            for food_info in found_foods:
-                # Buscar el alimento original
-                alimento_encontrado = None
-                for a in alimentos_info:
-                    if a["alimento"].get("nombre") == food_info["nombre"]:
-                        alimento_encontrado = a
-                        break
-                
-                if not alimento_encontrado:
-                    continue
-                
-                alimento = alimento_encontrado["alimento"]
-                config = alimento_encontrado["config"]
-                
-                # Reducir cantidad
-                cantidad_nueva = food_info["cantidad"] * factor_reduccion
-                
-                # Aplicar mínimos
-                minimo = config.get("minimo", 5)
-                if cantidad_nueva < minimo:
-                    cantidad_nueva = minimo
-                
-                # Ajustar por unidades
-                if config.get("por_unidad", False):
-                    cantidad_nueva = ajustar_por_unidades(cantidad_nueva, config)
-                
-                efectivos = self.add_food_to_meal(alimento, cantidad_nueva)
-                
-                found_foods_ajustados.append({
-                    "nombre": alimento.get("nombre"),
-                    "cantidad": cantidad_nueva,
-                    "cantidad_display": self._format_cantidad(cantidad_nueva, alimento, config),
-                    "macros": efectivos,
-                    "alternativas": food_info.get("alternativas", [])
-                })
-            
-            found_foods = found_foods_ajustados
-            comida_actual = self.state["comidas_completadas"].get(self.state["comida_actual"], {})
-            macros_actuales = comida_actual.get("macros", {"P": 0, "H": 0, "G": 0})
-            restantes_final = self.get_remaining_macros()
-        
         # Sugerencia si faltan grasas
         sugerencia = None
-        if restantes_final["G"] > 2 and abs(restantes_final["P"]) <= 4 and abs(restantes_final["H"]) <= 4:
+        if restantes_final["G"] > 2 and abs(restantes_final["P"]) <= MARGEN and abs(restantes_final["H"]) <= MARGEN:
             sugerencia = f"Faltan {restantes_final['G']:.0f}g de grasa. Añade aceite de oliva ({restantes_final['G']:.0f}ml) para cuadrar."
+        
+        # Verificar desviación final
+        desviacion = {
+            "P": round(macros_actuales.get("P", 0) - p_objetivo, 1),
+            "H": round(macros_actuales.get("H", 0) - h_objetivo, 1),
+            "G": round(macros_actuales.get("G", 0) - g_objetivo, 1)
+        }
+        
+        cuadrado = (
+            abs(desviacion["P"]) <= MARGEN and
+            abs(desviacion["H"]) <= MARGEN and
+            abs(desviacion["G"]) <= MARGEN
+        )
         
         return {
             "action": "meal_updated",
@@ -1109,7 +1096,9 @@ Responde en formato JSON según las instrucciones del sistema."""
                 "objetivo": objetivo,
                 "actual": macros_actuales,
                 "restante": restantes_final,
-                "alimentos": comida_actual.get("alimentos", [])
+                "alimentos": comida_actual.get("alimentos", []),
+                "desviacion": desviacion,
+                "cuadrado": cuadrado
             },
             "sugerencia": sugerencia,
             "message": claude_message
