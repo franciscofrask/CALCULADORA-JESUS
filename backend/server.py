@@ -1946,6 +1946,16 @@ async def chatbot_complete_meal(
     
     resultado = chatbot.complete_current_meal()
     
+    # Si la comida está vacía, no guardar
+    if resultado.get("vacia"):
+        return {
+            "session_id": session_id,
+            "error": resultado.get("error"),
+            "comida_actual": resultado.get("comida"),
+            "objetivo": chatbot.get_current_meal_macros(),
+            "mensaje": resultado.get("error")
+        }
+    
     if chatbot.state["step"] == "complete":
         # Día completo
         summary = chatbot.get_day_summary()

@@ -148,6 +148,13 @@ export default function ChatbotPage() {
       });
       const data = await res.json();
       
+      // Si la comida está vacía, mostrar error
+      if (data.error) {
+        addMessage(data.error, false);
+        setLoading(false);
+        return;
+      }
+      
       if (data.dia_completo) {
         setStep('complete');
         setDaySummary(data.resumen);
