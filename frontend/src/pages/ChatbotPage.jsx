@@ -184,9 +184,12 @@ export default function ChatbotPage() {
     }
     
     if (response.foods_not_found?.length > 0) {
-      msg += '\n**No encontrados:**\n';
+      msg += '\n**No encontrados/No caben:**\n';
       response.foods_not_found.forEach(f => {
         msg += `• "${f.buscado}": ${f.razon}\n`;
+        if (f.sugerencia) {
+          msg += `  ${f.sugerencia}\n`;
+        }
       });
     }
     
@@ -196,6 +199,16 @@ export default function ChatbotPage() {
       msg += `Actual: P=${ms.actual?.P || 0}g, H=${ms.actual?.H || 0}g, G=${ms.actual?.G || 0}g\n`;
       msg += `Objetivo: P=${ms.objetivo?.P || 0}g, H=${ms.objetivo?.H || 0}g, G=${ms.objetivo?.G || 0}g\n`;
       msg += `Restante: P=${ms.restante?.P || 0}g, H=${ms.restante?.H || 0}g, G=${ms.restante?.G || 0}g`;
+      
+      // Si está cuadrado, indicarlo
+      if (ms.cuadrado) {
+        msg += '\n\n✅ **¡Comida cuadrada!** Puedes guardarla.';
+      }
+    }
+    
+    // Mostrar sugerencia de lo que falta
+    if (response.sugerencia) {
+      msg += `\n\n💡 ${response.sugerencia}`;
     }
     
     return msg;

@@ -281,11 +281,13 @@ def get_food_config(alimento: dict) -> dict:
         return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
     
     # Cat 3 — Pescado y marisco (por peso)
-    if has_cat('3'):
+    # IMPORTANTE: usar '3.' para no matchear con 38.x (otras categorías)
+    if has_cat('3.'):
         return {"minimo": 50, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
     # Cat 4 — Proteína en polvo
-    if has_cat('4'):
+    # IMPORTANTE: usar '4.' para no matchear con 42.x (otras categorías)
+    if has_cat('4.'):
         return {"minimo": 5, "incremento": 1, "defecto": 30, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
     # Cat 5.1 — Leche
@@ -304,18 +306,21 @@ def get_food_config(alimento: dict) -> dict:
         return {"minimo": 20, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
     # Cat 7 — Cereales
-    if has_cat('7'):
+    # IMPORTANTE: usar '7.' para no matchear con otras categorías
+    if has_cat('7.'):
         return {"minimo": 10, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
     # Cat 8 — Panes (por unidad si racion < 100)
-    if has_cat('8'):
+    # IMPORTANTE: usar '8.' para no matchear con otras categorías
+    if has_cat('8.'):
         if racion < 100:
             peso = int(racion) if racion > 0 else 60
             return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
         return {"minimo": 25, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
     # Cat 9 — Tubérculos
-    if has_cat('9'):
+    # IMPORTANTE: usar '9.' para no matchear con otras categorías
+    if has_cat('9.'):
         return {"minimo": 25, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
     # Cat 10 — Legumbres

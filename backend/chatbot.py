@@ -190,10 +190,11 @@ class NutritionChatbot:
     async def search_foods(self, query: str, limit: int = 5) -> list:
         """
         Busca alimentos en la base de datos.
-        Prioriza coincidencias exactas y al inicio del nombre.
+        Usa MongoDB text search para búsquedas de múltiples palabras.
+        Prioriza coincidencias exactas y genéricos.
         
         Args:
-            query: Texto de búsqueda
+            query: Texto de búsqueda (ej: "queso batido", "nueces")
             limit: Máximo de resultados
         
         Returns:
@@ -209,7 +210,6 @@ class NutritionChatbot:
         query_norm = normalize(query.strip())
         
         # Mapeo de términos comunes a búsquedas específicas
-        # Incluye variantes con y sin acento
         query_mappings = {
             "huevos": "huevos enteros",
             "huevo": "huevos enteros",
@@ -241,38 +241,85 @@ class NutritionChatbot:
             "naranja": "naranja",
             "leche": "leche",
             "queso": "queso",
+            # Mapeos específicos para búsquedas compuestas
+            "queso batido": "queso fresco batido",
+            "nueces": "nueces",
+            "nuez": "nueces",
+            "almendras": "almendras",
+            "almendra": "almendras",
         }
         
-        # Usar mapeo si existe
-        search_term = query_mappings.get(query_norm, query_norm)
+        # Usar mapeo si existe (buscar primero el query completo, luego palabras individuales)
+        search_term = query_mappings.get(query_norm, None)
+        if not search_term:
+            # Intentar con palabras individuales
+            words = query_norm.split()
+            for w in words:
+                if w in query_mappings:
+                    search_term = query_mappings[w]
+                    break
+        if not search_term:
+            search_term = query_norm
+        
         search_norm = normalize(search_term)
         
-        # Buscar en MongoDB usando la función normalizada de calculator.py
-        # que maneja correctamente acentos y diacríticos
-        from calculator import buscar_alimentos as calc_buscar
+        # ESTRATEGIA DE BÚSQUEDA MEJORADA:
+        # 1. Primero usar MongoDB text search (funciona bien con múltiples palabras)
+        # 2. Si no hay resultados, usar regex
         
-        # La función de calculator.py normaliza bien y trae candidatos
-        candidates = await calc_buscar(
-            self.db, 
-            query=search_term, 
-            limit=100,
-            calcular_efectivos=False
-        )
+        candidates = []
         
-        # Si no hay resultados con el mapeo, intentar búsqueda directa
-        if not candidates and search_term != query_norm:
-            candidates = await calc_buscar(
-                self.db, 
-                query=query_norm, 
-                limit=100,
-                calcular_efectivos=False
-            )
+        # Paso 1: MongoDB text search
+        try:
+            text_results = await self.db.foods.find(
+                {"$text": {"$search": search_term}},
+                {"_id": 0, "score": {"$meta": "textScore"}}
+            ).sort([("score", {"$meta": "textScore"})]).limit(50).to_list(50)
+            candidates.extend(text_results)
+        except Exception:
+            pass
+        
+        # Paso 2: Si text search no encontró suficientes, usar regex
+        if len(candidates) < 10:
+            # Crear regex para cada palabra
+            words = search_norm.split()
+            regex_pattern = ".*".join(words)  # "queso.*batido" para "queso batido"
+            
+            try:
+                regex_results = await self.db.foods.find(
+                    {"nombre": {"$regex": regex_pattern, "$options": "i"}},
+                    {"_id": 0}
+                ).limit(50).to_list(50)
+                
+                # Añadir solo los que no están ya
+                existing_ids = {c.get("id") for c in candidates}
+                for r in regex_results:
+                    if r.get("id") not in existing_ids:
+                        candidates.append(r)
+            except Exception:
+                pass
+        
+        # Paso 3: Si aún no hay resultados, buscar palabra por palabra
+        if not candidates:
+            for word in search_norm.split():
+                if len(word) >= 3:
+                    try:
+                        word_results = await self.db.foods.find(
+                            {"nombre": {"$regex": word, "$options": "i"}},
+                            {"_id": 0}
+                        ).limit(30).to_list(30)
+                        candidates.extend(word_results)
+                    except Exception:
+                        pass
         
         # Puntuar candidatos por relevancia
         scored = []
+        query_words = set(search_norm.split())
+        
         for food in candidates:
             nombre = food.get("nombre", "")
             nombre_norm = normalize(nombre)
+            nombre_words = set(nombre_norm.split())
             score = 0
             
             # Coincidencia exacta del nombre simplificado
@@ -283,41 +330,59 @@ class NutritionChatbot:
                 score += 200
             elif nombre_norm.startswith(search_norm):
                 score += 150
-            # Alta prioridad: todas las palabras de búsqueda están en el nombre
-            elif all(w in nombre_norm for w in search_norm.split()):
+            # Alta prioridad: TODAS las palabras de búsqueda están en el nombre
+            elif all(w in nombre_norm for w in query_words):
+                score += 120
+            # Media-alta: la mayoría de palabras coinciden
+            elif len(query_words & nombre_words) >= len(query_words) - 1:
                 score += 100
             # Media prioridad: palabra principal al inicio
-            elif any(nombre_simple.startswith(w) for w in search_norm.split()):
+            elif any(nombre_simple.startswith(w) for w in query_words):
                 score += 80
             # Baja prioridad: coincidencia parcial
-            elif search_norm in nombre_norm:
+            elif any(w in nombre_norm for w in query_words):
                 score += 40
             else:
-                continue  # No incluir si no hay buena coincidencia
+                continue  # No incluir si no hay coincidencia
             
             # Bonificar genéricos (sin marca)
             if "(" not in nombre:
                 score += 30
             
             # Bonificar alimentos con etiqueta GEN (genérico)
-            if "GEN" in str(food.get("categorias", "")):
+            cats_str = str(food.get("categorias", ""))
+            if "GEN" in cats_str:
                 score += 25
             
             # Bonificar alimentos frecuentes (TOP)
-            if "TOP" in str(food.get("categorias", "")):
+            if "TOP" in cats_str:
                 score += 20
             
+            # Bonificar si es de una categoría "buena" (no procesados)
+            if "5.2.3" in cats_str:  # Queso batido
+                score += 15
+            if "17.2" in cats_str:  # Frutos secos
+                score += 15
+            
             # Penalizar productos procesados/complejos para búsquedas simples
-            cats = str(food.get("categorias", ""))
-            if any(c in cats for c in ["43", "44", "49"]) and len(query_norm) < 10:
+            if any(c in cats_str for c in ["43", "44", "49"]) and len(query_norm) < 15:
                 score -= 50
             
             scored.append((score, food))
         
-        # Ordenar por score descendente
-        scored.sort(key=lambda x: x[0], reverse=True)
+        # Eliminar duplicados (por id)
+        seen_ids = set()
+        unique_scored = []
+        for score, food in scored:
+            fid = food.get("id")
+            if fid not in seen_ids:
+                seen_ids.add(fid)
+                unique_scored.append((score, food))
         
-        return [food for score, food in scored[:limit]]
+        # Ordenar por score descendente
+        unique_scored.sort(key=lambda x: x[0], reverse=True)
+        
+        return [food for score, food in unique_scored[:limit]]
     
     def calculate_food_amount(self, alimento: dict, macros_restantes: dict) -> dict:
         """
@@ -1069,11 +1134,6 @@ Responde en formato JSON según las instrucciones del sistema."""
         macros_actuales = comida_actual.get("macros", {"P": 0, "H": 0, "G": 0})
         restantes_final = self.get_remaining_macros()
         
-        # Sugerencia si faltan grasas
-        sugerencia = None
-        if restantes_final["G"] > 2 and abs(restantes_final["P"]) <= MARGEN and abs(restantes_final["H"]) <= MARGEN:
-            sugerencia = f"Faltan {restantes_final['G']:.0f}g de grasa. Añade aceite de oliva ({restantes_final['G']:.0f}ml) para cuadrar."
-        
         # Verificar desviación final
         desviacion = {
             "P": round(macros_actuales.get("P", 0) - p_objetivo, 1),
@@ -1086,6 +1146,27 @@ Responde en formato JSON según las instrucciones del sistema."""
             abs(desviacion["H"]) <= MARGEN and
             abs(desviacion["G"]) <= MARGEN
         )
+        
+        # GENERAR SUGERENCIA DE LO QUE FALTA
+        sugerencia = None
+        faltantes = []
+        ejemplos = []
+        
+        # Si faltan macros (más de 4g por debajo), sugerir alimentos
+        if restantes_final["P"] > MARGEN:
+            faltantes.append(f"{restantes_final['P']:.0f}g de proteína")
+            ejemplos.append("claras de huevo o pechuga de pollo para la proteína")
+        
+        if restantes_final["H"] > MARGEN:
+            faltantes.append(f"{restantes_final['H']:.0f}g de hidratos")
+            ejemplos.append("pan, avena o arroz para los hidratos")
+        
+        if restantes_final["G"] > MARGEN:
+            faltantes.append(f"{restantes_final['G']:.0f}g de grasa")
+            ejemplos.append(f"aceite de oliva ({restantes_final['G']:.0f}ml) para la grasa")
+        
+        if faltantes:
+            sugerencia = f"Te faltan {' y '.join(faltantes)}. ¿Quieres añadir algún alimento más? Por ejemplo: {' o '.join(ejemplos)}."
         
         return {
             "action": "meal_updated",

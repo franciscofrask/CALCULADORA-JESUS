@@ -114,6 +114,21 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
 - **Resumen del día implementado:**
   - Cuando se completan todas las comidas, se muestra resumen total de P/H/G vs objetivos
 
+### Sesión 29/03/2026 - Mejoras de Búsqueda y Mínimos
+- **ARREGLADO: Búsqueda parcial funciona correctamente**
+  - "queso batido" → encuentra "Queso fresco batido 0%"
+  - Mejorado el algoritmo de búsqueda con text search de MongoDB
+  - Búsqueda de múltiples palabras funciona correctamente
+
+- **ARREGLADO: Mínimos de frutos secos (cat 17.2)**
+  - Nueces ahora tienen mínimo=5g (antes incorrectamente 50g)
+  - Corregido bug en `get_food_config()` donde categorías como "38.2" matcheaban con "3."
+  - Cambiado `has_cat('3')` a `has_cat('3.')`, `has_cat('4')` a `has_cat('4.')`, etc.
+
+- **IMPLEMENTADO: Mensaje de macros faltantes**
+  - Cuando quedan macros sin cubrir, el chatbot sugiere qué añadir
+  - Ejemplo: "Te faltan 20g de proteína y 8g de grasa. ¿Quieres añadir algún alimento más? Por ejemplo: claras de huevo o pechuga de pollo para la proteína o aceite de oliva (8ml) para la grasa."
+
 ## Tareas Pendientes
 
 ### P1 - Próximas
