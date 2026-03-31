@@ -215,6 +215,8 @@ def get_food_config(alimento: dict) -> dict:
     Devuelve la configuración de unidades/incrementos para un alimento.
     Basado en las categorías REALES de la base de datos.
     
+    IMPORTANTE: Si el alimento tiene unidades=True en la BD, se usa ración como peso por unidad.
+    
     Returns:
         {
             "minimo": int,        # cantidad mínima en gramos
@@ -237,6 +239,22 @@ def get_food_config(alimento: dict) -> dict:
     # Helper para verificar si tiene una categoría
     def has_cat(prefix):
         return any(c.strip().startswith(prefix) for c in cats)
+    
+    # ===========================================
+    # REGLA PRIORITARIA: Campo 'unidades' de la BD
+    # ===========================================
+    # Si el alimento tiene unidades=True en la BD, es por unidad
+    # y la ración indica el peso de 1 unidad
+    if alimento.get("unidades") == True:
+        peso = int(racion) if racion > 0 else 30
+        return {
+            "minimo": peso,           # 1 unidad mínimo
+            "incremento": peso,       # de 1 en 1 unidad
+            "defecto": peso * 2,      # 2 unidades por defecto
+            "por_unidad": True,
+            "permite_media": False,
+            "peso_unidad": peso
+        }
     
     # ===========================================
     # REGLAS TRANSVERSALES (por nombre, prioridad)

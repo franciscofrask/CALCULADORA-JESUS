@@ -129,6 +129,17 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
   - Cuando quedan macros sin cubrir, el chatbot sugiere qué añadir
   - Ejemplo: "Te faltan 20g de proteína y 8g de grasa. ¿Quieres añadir algún alimento más? Por ejemplo: claras de huevo o pechuga de pollo para la proteína o aceite de oliva (8ml) para la grasa."
 
+### Sesión 31/03/2026 - Búsqueda "tortas" y alimentos por unidad
+- **ARREGLADO: Búsqueda "tortas" → "Tortita de arroz"**
+  - Añadido mapeo: "tortas", "torta", "tortitas", "tortita" → "tortita de arroz"
+  - Antes encontraba "Tortilla de maíz" incorrectamente
+
+- **ARREGLADO: Alimentos con unidades=True en BD usan config correcta**
+  - Modificado `get_food_config()` para verificar PRIMERO el campo `unidades` de la BD
+  - Si `unidades=True`, el mínimo es 1 unidad (peso = racion)
+  - Tortitas de arroz ahora: mínimo=8g (1 ud), incremento=8g, por_unidad=True
+  - Antes incorrectamente: mínimo=25g, por_unidad=False
+
 ## Tareas Pendientes
 
 ### P1 - Próximas

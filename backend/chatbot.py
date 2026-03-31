@@ -247,6 +247,12 @@ class NutritionChatbot:
             "nuez": "nueces",
             "almendras": "almendras",
             "almendra": "almendras",
+            # Tortitas de arroz
+            "tortas": "tortita de arroz",
+            "torta": "tortita de arroz",
+            "tortitas": "tortita de arroz",
+            "tortita": "tortita de arroz",
+            "tortitas de arroz": "tortita de arroz",
         }
         
         # Usar mapeo si existe (buscar primero el query completo, luego palabras individuales)
