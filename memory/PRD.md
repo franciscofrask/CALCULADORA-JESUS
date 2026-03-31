@@ -140,6 +140,31 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
   - Tortitas de arroz ahora: mínimo=8g (1 ud), incremento=8g, por_unidad=True
   - Antes incorrectamente: mínimo=25g, por_unidad=False
 
+### Sesión 31/03/2026 - REESCRITURA COMPLETA del algoritmo de macros
+- **CREADO: `/app/backend/meal_builder.py`** - Nuevo módulo con algoritmo de distribución de macros
+- **REGLAS IMPLEMENTADAS:**
+  1. **MÍNIMOS:** Nunca poner un alimento por debajo de su mínimo (carnes 50g, embutidos 25g, huevos 1 ud, whey 5g, cereales 10g, frutos secos 5g, aceites 5g)
+  2. **MÁXIMOS:** Claras 200g, huevos 3 ud, carnes 250g, queso batido 300g, frutos secos 25g, aceite 10g (1 cucharada)
+  3. **DISTRIBUCIÓN INTELIGENTE:**
+     - Primero alimentos PG (huevos) - limitar si hay otras fuentes de P
+     - Luego H mixtos (lácteos PH)
+     - Luego H fijos (frutas por unidad)
+     - Luego H por peso (cereales, tubérculos) - ajustar para cubrir resto
+     - Luego P puras (carnes, claras)
+     - Finalmente G puras (aceites, frutos secos) - SOLO si faltan >2g
+  4. **CALMA:** Usa macros EFECTIVOS según categoría
+
+- **4 CASOS DE PRUEBA PASAN ✅:**
+  - C1: huevos, claras, avena, frambuesas → P=32.5, H=32.5, G=12 ✅
+  - C2: pechuga, boniato, calabacín, aceite, almendras → P=35.7, H=10, G=17.5 ✅
+  - C3: whey, queso batido, crema cacahuete, nueces → P=35.1, H=8, G=15 ✅
+  - C4: dorada, patata, lechuga, pepino, aceite → P=32.5, H=32.5, G=11.4 ✅
+  
+- **MEJORAS EN BÚSQUEDA:**
+  - "queso batido" → "Queso fresco batido 0%"
+  - "crema de cacahuete" → "Crema de cacahuete natural"
+  - Priorización de regex para términos específicos (>2 palabras)
+
 ## Tareas Pendientes
 
 ### P1 - Próximas

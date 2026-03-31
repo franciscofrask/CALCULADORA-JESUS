@@ -211,42 +211,80 @@ class NutritionChatbot:
         
         # Mapeo de términos comunes a búsquedas específicas
         query_mappings = {
-            "huevos": "huevos enteros",
-            "huevo": "huevos enteros",
+            # Proteínas
+            "huevos": "huevos enteros L",
+            "huevo": "huevos enteros L",
             "claras": "claras de huevo pasteurizadas",
             "clara": "claras de huevo pasteurizadas",
             "pavo": "fiambre pechuga pavo",
-            "pan": "pan de barra",
-            "avena": "copos de avena",
-            "arroz": "arroz blanco",
-            "pollo": "pechuga pollo",
-            "pechuga": "pechuga pollo",
-            "yogur": "yogur griego",
-            "yogurt": "yogur griego",
-            "garbanzos": "garbanzos cocidos",
-            "garbanzo": "garbanzos cocidos",
-            "aguacate": "aguacate",
-            "calabacin": "calabacin",
+            "pollo": "pechuga de pollo",
+            "pechuga": "pechuga de pollo",
+            "pechuga de pollo": "pechuga de pollo",
             "salmon": "salmon",
             "atun": "atun",
-            "patata": "patata",
-            "patatas": "patata",
-            "brocoli": "brocoli",
-            "espinacas": "espinacas",
-            "tomate": "tomate",
-            "lechuga": "lechuga",
+            "dorada": "dorada",
+            "merluza": "merluza",
+            "sepia": "sepia",
+            "gambas": "gambas",
+            "whey": "whey concentrate",
+            "proteina": "whey concentrate",
+            
+            # Hidratos
+            "avena": "copos de avena",
+            "copos de avena": "copos de avena",
+            "arroz": "arroz blanco",
+            "pan": "pan de barra",
+            "pan tostado": "pan tostado",
+            "patata": "patata cocida",
+            "patatas": "patata cocida",
+            "boniato": "boniato",
+            "batata": "boniato",
+            
+            # Frutas
             "platano": "platano",
             "banana": "platano",
             "manzana": "manzana",
             "naranja": "naranja",
-            "leche": "leche",
-            "queso": "queso",
-            # Mapeos específicos para búsquedas compuestas
-            "queso batido": "queso fresco batido",
-            "nueces": "nueces",
-            "nuez": "nueces",
+            "frambuesas": "frambuesas",
+            "frambuesa": "frambuesas",
+            "fresas": "fresas",
+            "fresa": "fresas",
+            "arandanos": "arandanos",
+            
+            # Verduras
+            "calabacin": "calabacin",
+            "lechuga": "lechuga",
+            "pepino": "pepino",
+            "tomate": "tomate",
+            "brocoli": "brocoli",
+            "espinacas": "espinacas",
+            
+            # Grasas
+            "aceite": "aceite de oliva virgen extra",
+            "aceite de oliva": "aceite de oliva virgen extra",
             "almendras": "almendras",
             "almendra": "almendras",
+            "nueces": "nueces peladas",
+            "nuez": "nueces peladas",
+            "cacahuete": "crema de cacahuete",
+            "crema de cacahuete": "crema de cacahuete natural",
+            "mantequilla de cacahuete": "crema de cacahuete natural",
+            "aguacate": "aguacate",
+            
+            # Lácteos
+            "yogur": "yogur griego",
+            "yogurt": "yogur griego",
+            "leche": "leche",
+            "queso": "queso",
+            "queso batido": "queso fresco batido 0%",
+            "queso fresco batido": "queso fresco batido 0%",
+            
+            # Legumbres
+            "garbanzos": "garbanzos cocidos",
+            "garbanzo": "garbanzos cocidos",
+            "lentejas": "lentejas cocidas",
+            "alubias": "alubias cocidas",
+            
             # Tortitas de arroz
             "tortas": "tortita de arroz",
             "torta": "tortita de arroz",
@@ -270,26 +308,45 @@ class NutritionChatbot:
         search_norm = normalize(search_term)
         
         # ESTRATEGIA DE BÚSQUEDA MEJORADA:
-        # 1. Primero usar MongoDB text search (funciona bien con múltiples palabras)
-        # 2. Si no hay resultados, usar regex
+        # 1. Si es un término específico (>2 palabras), usar regex PRIMERO
+        # 2. Si no, usar text search
+        # 3. Fallback a búsqueda por palabras
         
         candidates = []
         
-        # Paso 1: MongoDB text search
-        try:
-            text_results = await self.db.foods.find(
-                {"$text": {"$search": search_term}},
-                {"_id": 0, "score": {"$meta": "textScore"}}
-            ).sort([("score", {"$meta": "textScore"})]).limit(50).to_list(50)
-            candidates.extend(text_results)
-        except Exception:
-            pass
+        # Paso 1: Para términos específicos (queso fresco batido, crema de cacahuete), regex primero
+        words = search_norm.split()
+        if len(words) >= 2:
+            regex_pattern = ".*".join(words)  # "queso.*fresco.*batido" para "queso fresco batido"
+            
+            try:
+                regex_results = await self.db.foods.find(
+                    {"nombre": {"$regex": regex_pattern, "$options": "i"}},
+                    {"_id": 0}
+                ).limit(50).to_list(50)
+                candidates.extend(regex_results)
+            except Exception:
+                pass
         
-        # Paso 2: Si text search no encontró suficientes, usar regex
+        # Paso 2: MongoDB text search
         if len(candidates) < 10:
-            # Crear regex para cada palabra
-            words = search_norm.split()
-            regex_pattern = ".*".join(words)  # "queso.*batido" para "queso batido"
+            try:
+                text_results = await self.db.foods.find(
+                    {"$text": {"$search": search_term}},
+                    {"_id": 0, "score": {"$meta": "textScore"}}
+                ).sort([("score", {"$meta": "textScore"})]).limit(50).to_list(50)
+                
+                # Añadir solo los que no están ya
+                existing_nombres = {c.get("nombre") for c in candidates}
+                for r in text_results:
+                    if r.get("nombre") not in existing_nombres:
+                        candidates.append(r)
+            except Exception:
+                pass
+        
+        # Paso 3: Si aún no hay suficientes, regex más simple
+        if len(candidates) < 10:
+            regex_pattern = ".*".join(words)
             
             try:
                 regex_results = await self.db.foods.find(
@@ -297,10 +354,9 @@ class NutritionChatbot:
                     {"_id": 0}
                 ).limit(50).to_list(50)
                 
-                # Añadir solo los que no están ya
-                existing_ids = {c.get("id") for c in candidates}
+                existing_nombres = {c.get("nombre") for c in candidates}
                 for r in regex_results:
-                    if r.get("id") not in existing_ids:
+                    if r.get("nombre") not in existing_nombres:
                         candidates.append(r)
             except Exception:
                 pass
@@ -331,14 +387,21 @@ class NutritionChatbot:
             # Coincidencia exacta del nombre simplificado
             nombre_simple = nombre_norm.split("(")[0].strip()  # Quitar marca
             
+            # Normalizar espacios en porcentajes (0 % -> 0%)
+            nombre_simple_clean = nombre_simple.replace(" %", "%").replace("  ", " ")
+            search_clean = search_norm.replace(" %", "%").replace("  ", " ")
+            
             # Máxima prioridad: nombre empieza exactamente con la búsqueda
-            if nombre_simple.startswith(search_norm):
+            if nombre_simple_clean.startswith(search_clean):
                 score += 200
             elif nombre_norm.startswith(search_norm):
                 score += 150
             # Alta prioridad: TODAS las palabras de búsqueda están en el nombre
             elif all(w in nombre_norm for w in query_words):
                 score += 120
+            # Bonificar si tiene "batido" cuando buscamos "batido"
+            elif "batido" in search_norm and "batido" in nombre_norm:
+                score += 110
             # Media-alta: la mayoría de palabras coinciden
             elif len(query_words & nombre_words) >= len(query_words) - 1:
                 score += 100
@@ -808,386 +871,73 @@ Responde en formato JSON según las instrucciones del sistema."""
     
     async def _process_build_meal(self, foods_requested: list, claude_message: str) -> dict:
         """
-        Procesa la construcción de una comida con DISTRIBUCIÓN INTELIGENTE de macros.
+        Procesa la construcción de una comida usando el nuevo meal_builder.
         
-        REGLA FUNDAMENTAL CALMA: NUNCA reducir por debajo del mínimo.
-        Si un alimento no cabe porque su mínimo excede los macros restantes (+4g margen),
-        se RECHAZA y se sugiere alternativa.
-        
-        Args:
-            foods_requested: Lista de nombres de alimentos solicitados
-            claude_message: Mensaje original de Claude
-        
-        Returns:
-            dict con los alimentos encontrados y cantidades calculadas
+        REGLAS FUNDAMENTALES:
+        1. NUNCA reducir por debajo del mínimo
+        2. NUNCA exceder máximos razonables
+        3. Distribuir macros inteligentemente entre todos los alimentos
+        4. Usar macros EFECTIVOS según CALMA
         """
-        from calma_engine import parse_categories, calcular_macros_efectivos
-        
-        MARGEN = 4.0  # Margen permitido en CALMA
+        from meal_builder import build_meal
         
         objetivo = self.get_current_meal_macros()
-        p_objetivo = float(objetivo.get("P", 0))
-        h_objetivo = float(objetivo.get("H", 0))
-        g_objetivo = float(objetivo.get("G", 0))
         
-        # Paso 1: Buscar todos los alimentos y calcular sus macros efectivos
-        alimentos_info = []
-        not_found = []
+        # Usar el nuevo meal_builder
+        result = await build_meal(
+            db=self.db,
+            foods_requested=foods_requested,
+            objetivo=objetivo,
+            search_func=self.search_foods
+        )
         
-        for food_name in foods_requested:
-            matches = await self.search_foods(food_name, limit=5)
+        # Añadir los alimentos a la comida actual
+        # Usar los macros ya calculados por meal_builder
+        for food in result["foods_added"]:
+            # Añadir directamente a la comida actual con los macros calculados
+            comida_key = self.state["comida_actual"]
+            if comida_key not in self.state["comidas_completadas"]:
+                self.state["comidas_completadas"][comida_key] = {
+                    "alimentos": [],
+                    "macros": {"P": 0, "H": 0, "G": 0}
+                }
             
-            if matches:
-                alimento = matches[0]
-                config = get_food_config(alimento)
-                
-                cats = parse_categories(alimento.get("categorias", []))
-                cat = cats[0] if cats else "0"
-                
-                racion = float(alimento.get("racion", 100) or 100)
-                P_100 = float(alimento.get("proteinas", 0) or 0) * 100.0 / racion
-                H_100 = float(alimento.get("hidratos", 0) or 0) * 100.0 / racion
-                G_100 = float(alimento.get("grasas", 0) or 0) * 100.0 / racion
-                
-                ef_100 = calcular_macros_efectivos(P_100, H_100, G_100, cat, 100.0)
-                p_ef = ef_100["proteina_efectiva"]
-                h_ef = ef_100["hidratos_efectivos"]
-                g_ef = ef_100["grasa_efectiva"]
-                
-                # Determinar macro principal (el que más aporta)
-                max_ef = max(p_ef, h_ef, g_ef)
-                if max_ef == 0:
-                    macro_principal = "otros"
-                elif p_ef == max_ef:
-                    macro_principal = "P"
-                elif h_ef == max_ef:
-                    macro_principal = "H"
-                else:
-                    macro_principal = "G"
-                
-                # Caso especial: verduras (cat 13) con H efectivos > 0 son fuente de H
-                if cat.startswith("13") and h_ef > 0 and macro_principal == "otros":
-                    macro_principal = "H"
-                
-                alimentos_info.append({
-                    "alimento": alimento,
-                    "config": config,
-                    "cat": cat,
-                    "macro_principal": macro_principal,
-                    "p_ef_100": p_ef,
-                    "h_ef_100": h_ef,
-                    "g_ef_100": g_ef,
-                    "alternativas": [m.get("nombre") for m in matches[1:5]],
-                    "buscado": food_name
-                })
-            else:
-                not_found.append({
-                    "buscado": food_name,
-                    "encontrado": None,
-                    "razon": "No encontrado en la base de datos"
-                })
-        
-        # Paso 2: Agrupar por macro principal
-        fuentes_P = [a for a in alimentos_info if a["macro_principal"] == "P"]
-        fuentes_H = [a for a in alimentos_info if a["macro_principal"] == "H"]
-        fuentes_G = [a for a in alimentos_info if a["macro_principal"] == "G"]
-        fuentes_otros = [a for a in alimentos_info if a["macro_principal"] == "otros"]
-        
-        found_foods = []
-        restantes = {"P": p_objetivo, "H": h_objetivo, "G": g_objetivo}
-        
-        def verificar_cabe_minimo(fuente, restantes_actuales, macro_tipo):
-            """
-            Verifica si el mínimo del alimento cabe dentro del margen de ±4g.
-            Retorna (cabe: bool, razon: str, macros_minimo: dict)
-            """
-            config = fuente["config"]
-            minimo = config.get("minimo", 5)
+            # Buscar el alimento para obtener datos adicionales
+            matches = await self.search_foods(food["nombre"], limit=1)
+            alimento_data = matches[0] if matches else {"nombre": food["nombre"]}
             
-            # Calcular macros efectivos con el mínimo
-            p_min = (minimo / 100) * fuente["p_ef_100"]
-            h_min = (minimo / 100) * fuente["h_ef_100"]
-            g_min = (minimo / 100) * fuente["g_ef_100"]
-            
-            # Verificar si algún macro se pasa del margen permitido
-            excede_p = p_min > restantes_actuales["P"] + MARGEN
-            excede_h = h_min > restantes_actuales["H"] + MARGEN
-            excede_g = g_min > restantes_actuales["G"] + MARGEN
-            
-            if excede_p or excede_h or excede_g:
-                # Construir mensaje de razón
-                nombre = fuente["alimento"].get("nombre", "")
-                razones = []
-                if excede_h:
-                    razones.append(f"mín {minimo}g = {h_min:.0f}g H, pero solo quedan {restantes_actuales['H']:.0f}g H")
-                if excede_p:
-                    razones.append(f"mín {minimo}g = {p_min:.0f}g P, pero solo quedan {restantes_actuales['P']:.0f}g P")
-                if excede_g:
-                    razones.append(f"mín {minimo}g = {g_min:.0f}g G, pero solo quedan {restantes_actuales['G']:.0f}g G")
-                
-                razon = f"La cantidad mínima ({minimo}g) excede los macros: {'; '.join(razones)}"
-                return False, razon, {"P": p_min, "H": h_min, "G": g_min}
-            
-            return True, "", {"P": p_min, "H": h_min, "G": g_min}
-        
-        # Paso 3: Procesar "otros" primero (verduras sin macros efectivos)
-        for fuente in fuentes_otros:
-            alimento = fuente["alimento"]
-            config = fuente["config"]
-            
-            cantidad_g = config.get("defecto", 100)
-            minimo = config.get("minimo", 50)
-            cantidad_g = max(cantidad_g, minimo)
-            
-            if config.get("por_unidad", False):
-                cantidad_g = ajustar_por_unidades(cantidad_g, config)
-            
-            efectivos = self.add_food_to_meal(alimento, cantidad_g)
-            
-            found_foods.append({
-                "nombre": alimento.get("nombre"),
-                "cantidad": cantidad_g,
-                "cantidad_display": self._format_cantidad(cantidad_g, alimento, config),
-                "macros": efectivos,
-                "alternativas": fuente["alternativas"]
+            self.state["comidas_completadas"][comida_key]["alimentos"].append({
+                "nombre": food["nombre"],
+                "cantidad": food["cantidad"],
+                "cantidad_display": food["cantidad_display"],
+                "macros": food["macros"],
+                "alimento": alimento_data
             })
             
-            restantes["P"] -= efectivos.get("P", 0)
-            restantes["H"] -= efectivos.get("H", 0)
-            restantes["G"] -= efectivos.get("G", 0)
+            # Actualizar macros de la comida
+            self.state["comidas_completadas"][comida_key]["macros"]["P"] += food["macros"]["P"]
+            self.state["comidas_completadas"][comida_key]["macros"]["H"] += food["macros"]["H"]
+            self.state["comidas_completadas"][comida_key]["macros"]["G"] += food["macros"]["G"]
         
-        # Paso 4: Procesar fuentes de H
-        if fuentes_H:
-            h_restante = restantes["H"]
-            num_fuentes_H = len(fuentes_H)
-            
-            for i, fuente in enumerate(fuentes_H):
-                alimento = fuente["alimento"]
-                config = fuente["config"]
-                minimo = config.get("minimo", 5)
-                
-                # VERIFICAR SI CABE EL MÍNIMO ANTES DE PROCESAR
-                cabe, razon, macros_minimo = verificar_cabe_minimo(fuente, restantes, "H")
-                
-                if not cabe:
-                    # NO CABE - Rechazar y añadir a not_found con sugerencia
-                    not_found.append({
-                        "buscado": fuente.get("buscado", alimento.get("nombre")),
-                        "encontrado": alimento.get("nombre"),
-                        "razon": razon,
-                        "alternativas": fuente["alternativas"],
-                        "sugerencia": f"¿Quieres sustituirlo por: {', '.join(fuente['alternativas'][:3])}?" if fuente["alternativas"] else None
-                    })
-                    continue
-                
-                # El alimento cabe - calcular cantidad óptima
-                if fuente["h_ef_100"] <= 0:
-                    continue
-                
-                fuentes_restantes_h = num_fuentes_H - i
-                h_por_fuente = max(h_restante, 0) / fuentes_restantes_h if fuentes_restantes_h > 0 else max(h_restante, 0)
-                
-                if h_por_fuente <= 0:
-                    continue
-                
-                cantidad_g = (h_por_fuente / fuente["h_ef_100"]) * 100
-                
-                max_cant = self._get_max_cantidad_razonable(fuente["cat"], config, float(alimento.get("racion", 100)))
-                cantidad_g = min(cantidad_g, max_cant)
-                
-                # REGLA CALMA: Nunca por debajo del mínimo
-                if cantidad_g < minimo:
-                    cantidad_g = minimo
-                
-                if config.get("por_unidad", False):
-                    cantidad_g = ajustar_por_unidades(cantidad_g, config)
-                
-                efectivos = self.add_food_to_meal(alimento, cantidad_g)
-                
-                found_foods.append({
-                    "nombre": alimento.get("nombre"),
-                    "cantidad": cantidad_g,
-                    "cantidad_display": self._format_cantidad(cantidad_g, alimento, config),
-                    "macros": efectivos,
-                    "alternativas": fuente["alternativas"]
-                })
-                
-                restantes["P"] -= efectivos.get("P", 0)
-                restantes["H"] -= efectivos.get("H", 0)
-                restantes["G"] -= efectivos.get("G", 0)
-                h_restante = restantes["H"]
-        
-        # Paso 5: Procesar fuentes de P
-        if fuentes_P:
-            p_restante = restantes["P"]
-            num_fuentes_P = len(fuentes_P)
-            
-            for i, fuente in enumerate(fuentes_P):
-                alimento = fuente["alimento"]
-                config = fuente["config"]
-                minimo = config.get("minimo", 5)
-                
-                # VERIFICAR SI CABE EL MÍNIMO ANTES DE PROCESAR
-                cabe, razon, macros_minimo = verificar_cabe_minimo(fuente, restantes, "P")
-                
-                if not cabe:
-                    not_found.append({
-                        "buscado": fuente.get("buscado", alimento.get("nombre")),
-                        "encontrado": alimento.get("nombre"),
-                        "razon": razon,
-                        "alternativas": fuente["alternativas"],
-                        "sugerencia": f"¿Quieres sustituirlo por: {', '.join(fuente['alternativas'][:3])}?" if fuente["alternativas"] else None
-                    })
-                    continue
-                
-                if fuente["p_ef_100"] <= 0:
-                    continue
-                
-                fuentes_restantes_p = num_fuentes_P - i
-                p_por_fuente = max(p_restante, 0) / fuentes_restantes_p if fuentes_restantes_p > 0 else max(p_restante, 0)
-                
-                if p_por_fuente <= 0:
-                    continue
-                
-                cantidad_g = (p_por_fuente / fuente["p_ef_100"]) * 100
-                
-                max_cant = self._get_max_cantidad_razonable(fuente["cat"], config, float(alimento.get("racion", 100)))
-                cantidad_g = min(cantidad_g, max_cant)
-                
-                # REGLA CALMA: Nunca por debajo del mínimo
-                if cantidad_g < minimo:
-                    cantidad_g = minimo
-                
-                if config.get("por_unidad", False):
-                    cantidad_g = ajustar_por_unidades(cantidad_g, config)
-                
-                efectivos = self.add_food_to_meal(alimento, cantidad_g)
-                
-                found_foods.append({
-                    "nombre": alimento.get("nombre"),
-                    "cantidad": cantidad_g,
-                    "cantidad_display": self._format_cantidad(cantidad_g, alimento, config),
-                    "macros": efectivos,
-                    "alternativas": fuente["alternativas"]
-                })
-                
-                restantes["P"] -= efectivos.get("P", 0)
-                restantes["H"] -= efectivos.get("H", 0)
-                restantes["G"] -= efectivos.get("G", 0)
-                p_restante -= efectivos.get("P", 0)
-        
-        # Paso 6: Distribuir G entre fuentes de G
-        if fuentes_G:
-            g_restante = restantes["G"]
-            num_fuentes_G = len(fuentes_G)
-            
-            for i, fuente in enumerate(fuentes_G):
-                alimento = fuente["alimento"]
-                config = fuente["config"]
-                minimo = config.get("minimo", 5)
-                
-                # VERIFICAR SI CABE EL MÍNIMO
-                cabe, razon, macros_minimo = verificar_cabe_minimo(fuente, restantes, "G")
-                
-                if not cabe:
-                    not_found.append({
-                        "buscado": fuente.get("buscado", alimento.get("nombre")),
-                        "encontrado": alimento.get("nombre"),
-                        "razon": razon,
-                        "alternativas": fuente["alternativas"],
-                        "sugerencia": f"¿Quieres sustituirlo por: {', '.join(fuente['alternativas'][:3])}?" if fuente["alternativas"] else None
-                    })
-                    continue
-                
-                if fuente["g_ef_100"] <= 0:
-                    continue
-                
-                fuentes_restantes_g = num_fuentes_G - i
-                g_por_fuente = max(g_restante, 0) / fuentes_restantes_g if fuentes_restantes_g > 0 else max(g_restante, 0)
-                
-                if g_por_fuente <= 0:
-                    continue
-                
-                cantidad_g = (g_por_fuente / fuente["g_ef_100"]) * 100
-                
-                max_cant = self._get_max_cantidad_razonable(fuente["cat"], config, float(alimento.get("racion", 100)))
-                cantidad_g = min(cantidad_g, max_cant)
-                
-                # REGLA CALMA: Nunca por debajo del mínimo
-                if cantidad_g < minimo:
-                    cantidad_g = minimo
-                
-                if config.get("por_unidad", False):
-                    cantidad_g = ajustar_por_unidades(cantidad_g, config)
-                
-                efectivos = self.add_food_to_meal(alimento, cantidad_g)
-                
-                found_foods.append({
-                    "nombre": alimento.get("nombre"),
-                    "cantidad": cantidad_g,
-                    "cantidad_display": self._format_cantidad(cantidad_g, alimento, config),
-                    "macros": efectivos,
-                    "alternativas": fuente["alternativas"]
-                })
-                
-                restantes["P"] -= efectivos.get("P", 0)
-                restantes["H"] -= efectivos.get("H", 0)
-                restantes["G"] -= efectivos.get("G", 0)
-                g_restante -= efectivos.get("G", 0)
-        
-        # Construir respuesta
+        # Obtener estado actualizado
         comida_actual = self.state["comidas_completadas"].get(self.state["comida_actual"], {})
         macros_actuales = comida_actual.get("macros", {"P": 0, "H": 0, "G": 0})
         restantes_final = self.get_remaining_macros()
         
-        # Verificar desviación final
-        desviacion = {
-            "P": round(macros_actuales.get("P", 0) - p_objetivo, 1),
-            "H": round(macros_actuales.get("H", 0) - h_objetivo, 1),
-            "G": round(macros_actuales.get("G", 0) - g_objetivo, 1)
-        }
-        
-        cuadrado = (
-            abs(desviacion["P"]) <= MARGEN and
-            abs(desviacion["H"]) <= MARGEN and
-            abs(desviacion["G"]) <= MARGEN
-        )
-        
-        # GENERAR SUGERENCIA DE LO QUE FALTA
-        sugerencia = None
-        faltantes = []
-        ejemplos = []
-        
-        # Si faltan macros (más de 4g por debajo), sugerir alimentos
-        if restantes_final["P"] > MARGEN:
-            faltantes.append(f"{restantes_final['P']:.0f}g de proteína")
-            ejemplos.append("claras de huevo o pechuga de pollo para la proteína")
-        
-        if restantes_final["H"] > MARGEN:
-            faltantes.append(f"{restantes_final['H']:.0f}g de hidratos")
-            ejemplos.append("pan, avena o arroz para los hidratos")
-        
-        if restantes_final["G"] > MARGEN:
-            faltantes.append(f"{restantes_final['G']:.0f}g de grasa")
-            ejemplos.append(f"aceite de oliva ({restantes_final['G']:.0f}ml) para la grasa")
-        
-        if faltantes:
-            sugerencia = f"Te faltan {' y '.join(faltantes)}. ¿Quieres añadir algún alimento más? Por ejemplo: {' o '.join(ejemplos)}."
-        
         return {
             "action": "meal_updated",
-            "foods_added": found_foods,
-            "foods_not_found": not_found,
+            "foods_added": result["foods_added"],
+            "foods_not_found": result["foods_not_found"],
             "meal_status": {
                 "comida": self.state["comida_actual"],
                 "objetivo": objetivo,
                 "actual": macros_actuales,
                 "restante": restantes_final,
                 "alimentos": comida_actual.get("alimentos", []),
-                "desviacion": desviacion,
-                "cuadrado": cuadrado
+                "desviacion": result["desviacion"],
+                "cuadrado": result["cuadrado"]
             },
-            "sugerencia": sugerencia,
+            "sugerencia": result["sugerencia"],
             "message": claude_message
         }
 
