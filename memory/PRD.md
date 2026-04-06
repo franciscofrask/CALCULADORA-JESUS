@@ -20,6 +20,8 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
 │   ├── calculator.py          # Lógica de búsqueda, get_food_config()
 │   ├── calma_engine.py        # Motor de cálculo de macros (57 tests)
 │   ├── macro_distribution.py  # Distribución de macros (16 escenarios)
+│   ├── meal_builder.py        # Algoritmo de distribución de macros
+│   ├── pdf_generator.py       # Generación de PDFs de dietas (NUEVO)
 │   ├── tests/
 │   │   └── test_calma_engine.py  # 57 tests de verificación
 │   └── meal_templates.py      # Generación de opciones de menú
@@ -27,7 +29,7 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
 │   ├── src/
 │   │   ├── pages/
 │   │   │   ├── NutritionPage.jsx   # Página manual de nutrición
-│   │   │   ├── ChatbotPage.jsx     # UI del chatbot
+│   │   │   ├── ChatbotPage.jsx     # UI del chatbot + Exportar PDF
 │   │   │   └── AuthPage.jsx        # Login
 │   │   ├── components/
 │   │   │   └── BottomNav.jsx
@@ -167,6 +169,17 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
 
 ## Tareas Pendientes
 
+### P0 - COMPLETADO (06/04/2026)
+- ✅ **Bug de Login:** Usuario `alvaro@test.com` no podía autenticarse
+  - **Causa:** Usuario creado manualmente sin campos requeridos (name, created_at)
+  - **Solución:** Recrear usuario con todos los campos en la BD correcta (test_database)
+  
+- ✅ **Exportación de PDF:** Implementada funcionalidad completa
+  - Nuevo módulo: `/app/backend/pdf_generator.py`
+  - Nuevo endpoint: `GET /api/chatbot/export-pdf`
+  - Botón "Exportar PDF" en el resumen del día (ChatbotPage.jsx)
+  - PDF profesional con branding JG12, tabla de macros y detalle de comidas
+
 ### P1 - Próximas
 - Refactor de NutritionPage.jsx en componentes pequeños
 - Refactor de server.py en APIRouters
@@ -178,6 +191,11 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
 - Calendario visual de días
 - Integración real de Stripe (actualmente MOCKED)
 
+## Credenciales de Test
+- **Cliente:** `clientedemo@test.com` / `demo123`
+- **Admin:** `alvaro@test.com` / `Alvaro123`
+
 ## Integraciones de Terceros
 - **Claude Sonnet 4.5** — Usa Emergent LLM Key (implementado en chatbot.py)
 - **Stripe** — MOCKED (pendiente integración real)
+- **ReportLab** — Para generación de PDFs (nuevo)

@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -15,6 +16,7 @@ import jwt
 import bcrypt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import asyncio
+from pdf_generator import generate_diet_pdf
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1996,6 +1998,45 @@ async def chatbot_reset(
     """Reinicia la sesión de chatbot."""
     clear_session(session_id)
     return {"message": "Sesión reiniciada", "session_id": session_id}
+
+# ==================== PDF EXPORT ENDPOINTS ====================
+
+@api_router.get("/chatbot/export-pdf")
+async def export_diet_pdf(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Genera y descarga un PDF con el resumen de la dieta del día.
+    """
+    chatbot = await get_or_create_chatbot(session_id, db)
+    
+    # Verificar que haya una sesión configurada
+    if chatbot.state.get("distribucion") is None:
+        raise HTTPException(
+            status_code=400, 
+            detail="No hay dieta configurada para exportar. Primero configura tu día y añade alimentos."
+        )
+    
+    summary = chatbot.get_day_summary()
+    
+    # Obtener nombre del usuario
+    user_name = current_user.get("name", "Cliente")
+    fecha = datetime.now().strftime("%d/%m/%Y")
+    
+    # Generar PDF
+    pdf_buffer = generate_diet_pdf(summary, user_name, fecha)
+    
+    # Nombre del archivo
+    filename = f"dieta_jg12_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
 
 # ==================== END CHATBOT ====================
 

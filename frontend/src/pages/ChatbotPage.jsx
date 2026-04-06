@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight } from 'lucide-react';
+import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -261,12 +261,53 @@ export default function ChatbotPage() {
   };
 
   // Renderizar resumen del día
+  // Exportar a PDF
+  const exportToPDF = async () => {
+    if (!sessionId) return;
+    
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/chatbot/export-pdf?session_id=${sessionId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
+      });
+      
+      if (!res.ok) throw new Error('Error al generar PDF');
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dieta_jg12_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      addMessage('Error al exportar el PDF. Inténtalo de nuevo.', false);
+    }
+    setLoading(false);
+  };
+
   const renderDaySummary = () => {
     if (!daySummary) return null;
     
     return (
       <div className="bg-zinc-800 rounded-xl p-4 mt-4">
-        <h3 className="text-lg font-bold text-orange-500 mb-4">Resumen del Día</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-orange-500">Resumen del Día</h3>
+          <button
+            onClick={exportToPDF}
+            disabled={loading}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+            data-testid="export-pdf-btn"
+          >
+            <Download size={18} />
+            Exportar PDF
+          </button>
+        </div>
         
         {daySummary.comidas?.map((comida, idx) => (
           <div key={idx} className="mb-4 pb-4 border-b border-zinc-700 last:border-0">
