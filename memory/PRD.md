@@ -15,26 +15,41 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
 ```
 /app/
 ├── backend/
-│   ├── server.py              # API principal FastAPI
-│   ├── chatbot.py             # Chatbot con Claude Sonnet 4.5 + distribución inteligente
-│   ├── calculator.py          # Lógica de búsqueda, get_food_config()
-│   ├── calma_engine.py        # Motor de cálculo de macros (57 tests)
-│   ├── macro_distribution.py  # Distribución de macros (16 escenarios)
-│   ├── meal_builder.py        # Algoritmo de distribución de macros
-│   ├── pdf_generator.py       # Generación de PDFs de dietas (NUEVO)
-│   ├── tests/
-│   │   └── test_calma_engine.py  # 57 tests de verificación
-│   └── meal_templates.py      # Generación de opciones de menú
+│   ├── server.py              # API principal (~90 líneas, refactorizado)
+│   ├── core/                  # Módulos base
+│   │   ├── config.py          # Configuración
+│   │   ├── database.py        # MongoDB
+│   │   └── security.py        # JWT, auth
+│   ├── models/                # Pydantic models
+│   │   ├── user.py
+│   │   ├── diet.py
+│   │   └── common.py
+│   ├── routes/                # API routers (~10 archivos)
+│   │   ├── auth.py, users.py, admin.py
+│   │   ├── calculator.py, diets.py, chatbot.py
+│   │   └── routines.py, reports.py, messages.py, payments.py
+│   ├── chatbot.py             # Lógica del chatbot
+│   ├── calculator.py          # Lógica de búsqueda
+│   ├── calma_engine.py        # Motor de cálculo de macros
+│   ├── meal_builder.py        # Algoritmo de distribución
+│   ├── pdf_generator.py       # Generación de PDFs
+│   └── tests/
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── NutritionPage.jsx   # Página manual de nutrición
-│   │   │   ├── ChatbotPage.jsx     # UI del chatbot + Exportar PDF
+│   │   │   ├── NutritionPage.jsx   # Página de nutrición (aún grande)
+│   │   │   ├── ChatbotPage.jsx     # UI del chatbot + PDF
 │   │   │   └── AuthPage.jsx        # Login
 │   │   ├── components/
-│   │   │   └── BottomNav.jsx
-│   │   └── layouts/
-│   │       └── ClientDashboard.jsx
+│   │   │   ├── nutrition/          # NUEVOS componentes
+│   │   │   │   ├── constants.js
+│   │   │   │   ├── MacroProgressBar.jsx
+│   │   │   │   ├── DayNavigation.jsx
+│   │   │   │   ├── FoodItem.jsx
+│   │   │   │   ├── MealCard.jsx
+│   │   │   │   └── DaySummary.jsx
+│   │   │   └── ui/
+│   │   └── context/
 │   └── tailwind.config.js
 └── memory/
     └── PRD.md
@@ -169,27 +184,56 @@ Crear una plataforma de entrenamiento personal llamada "JG12" con múltiples pan
 
 ## Tareas Pendientes
 
-### P0 - COMPLETADO (06/04/2026)
-- ✅ **Bug de Login:** Usuario `alvaro@test.com` no podía autenticarse
-  - **Causa:** Usuario creado manualmente sin campos requeridos (name, created_at)
-  - **Solución:** Recrear usuario con todos los campos en la BD correcta (test_database)
-  
-- ✅ **Exportación de PDF:** Implementada funcionalidad completa
-  - Nuevo módulo: `/app/backend/pdf_generator.py`
-  - Nuevo endpoint: `GET /api/chatbot/export-pdf`
-  - Botón "Exportar PDF" en el resumen del día (ChatbotPage.jsx)
-  - PDF profesional con branding JG12, tabla de macros y detalle de comidas
+### P0 - COMPLETADO (09/04/2026)
+- ✅ **Bug de Login:** Usuario `alvaro@test.com` creado correctamente
+- ✅ **Exportación de PDF:** Endpoint `/api/chatbot/export-pdf` funcionando
+- ✅ **Refactorización Backend:** `server.py` dividido en módulos
+
+### REFACTORIZACIÓN BACKEND - COMPLETADO (09/04/2026)
+Estructura nueva:
+```
+/app/backend/
+├── server.py              # ~90 líneas (antes 2,056)
+├── core/
+│   ├── config.py          # Configuración centralizada
+│   ├── database.py        # MongoDB connection
+│   └── security.py        # JWT, auth
+├── models/
+│   ├── user.py            # Modelos de usuario
+│   ├── diet.py            # Modelos de dietas
+│   └── common.py          # Modelos compartidos
+└── routes/
+    ├── auth.py            # Login, registro
+    ├── users.py           # Perfiles
+    ├── admin.py           # Admin endpoints
+    ├── calculator.py      # CALMA, búsqueda
+    ├── diets.py           # CRUD dietas
+    ├── chatbot.py         # Chatbot + PDF
+    ├── routines.py        # Rutinas
+    ├── reports.py         # Reportes
+    ├── messages.py        # Mensajes
+    └── payments.py        # Pagos (MOCKED)
+```
+
+### REFACTORIZACIÓN FRONTEND - EN PROGRESO (09/04/2026)
+Componentes creados en `/app/frontend/src/components/nutrition/`:
+- ✅ `constants.js` - Constantes y utilities
+- ✅ `MacroProgressBar.jsx` - Barra de progreso
+- ✅ `DayNavigation.jsx` - Navegación de días
+- ✅ `FoodItem.jsx` - Ítem de alimento
+- ✅ `MealCard.jsx` - Tarjeta de comida
+- ✅ `DaySummary.jsx` - Resumen sticky
+- ❌ `BuildMealModal.jsx` - Pendiente extraer
+- ❌ `RepeatDayModal.jsx` - Pendiente extraer
 
 ### P1 - Próximas
-- Refactor de NutritionPage.jsx en componentes pequeños
-- Refactor de server.py en APIRouters
-- Refactor de chatbot.py (_process_build_meal tiene muchos patches)
-
-### P2 - Futuras
+- Extraer modales grandes de NutritionPage.jsx
 - Implementar pantalla Home con trackers circulares
 - Implementar pantalla "Mi Rutina"
-- Calendario visual de días
+
+### P2 - Futuras
 - Integración real de Stripe (actualmente MOCKED)
+- Tracking Module con siluetas
 
 ## Credenciales de Test
 - **Cliente:** `clientedemo@test.com` / `demo123`

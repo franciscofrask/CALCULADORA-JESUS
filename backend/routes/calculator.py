@@ -1,0 +1,285 @@
+"""
+Rutas del calculador de macros y búsqueda de alimentos.
+"""
+from fastapi import APIRouter, HTTPException, Depends
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional
+import uuid
+
+from core.database import db
+from core.security import get_current_user
+from models.common import FoodSuggestion, FoodSuggestionResponse
+
+# Import calculator functions
+from calma_engine import (
+    calcular_macros_efectivos_alimento as calcular_macros_efectivos, 
+    que_macros_cuentan, 
+    calcular_macros_brutos, 
+    run_tests as calma_run_tests
+)
+from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config
+
+router = APIRouter(prefix="/calculator", tags=["calculator"])
+
+# ==================== FOODS ====================
+
+@router.get("/foods")
+async def get_foods(
+    search: Optional[str] = None, 
+    category: Optional[str] = None, 
+    limit: int = 100, 
+    user = Depends(get_current_user)
+):
+    """Obtiene la lista de alimentos desde MongoDB con filtros opcionales."""
+    query = {}
+    
+    if search:
+        query["nombre"] = {"$regex": search, "$options": "i"}
+    
+    if category:
+        query["categorias"] = {"$regex": category}
+    
+    foods_cursor = db.foods.find(query, {"_id": 0}).limit(limit)
+    foods = await foods_cursor.to_list(limit)
+    return foods
+
+@router.get("/foods/count")
+async def get_foods_count(user = Depends(get_current_user)):
+    """Retorna el conteo total de alimentos."""
+    count = await db.foods.count_documents({})
+    return {"total": count}
+
+# ==================== CATEGORIES ====================
+
+@router.get("/categories")
+async def get_food_categories(user = Depends(get_current_user)):
+    """Obtiene todas las categorías de alimentos."""
+    categories_cursor = db.food_categories.find({}, {"_id": 0})
+    categories = await categories_cursor.to_list(500)
+    return categories
+
+@router.get("/categories/count")
+async def get_categories_count(user = Depends(get_current_user)):
+    """Retorna el conteo total de categorías."""
+    count = await db.food_categories.count_documents({})
+    return {"total": count}
+
+# ==================== MEAL CALCULATIONS ====================
+
+@router.post("/meal")
+async def calculate_meal(foods: List[Dict[str, Any]], user = Depends(get_current_user)):
+    """Calcula macros totales de una comida."""
+    total = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+    
+    for item in foods:
+        quantity = item.get("quantity", 100) / 100
+        total["calories"] += item.get("calories", 0) * quantity
+        total["protein"] += item.get("protein", 0) * quantity
+        total["carbs"] += item.get("carbs", 0) * quantity
+        total["fat"] += item.get("fat", 0) * quantity
+    
+    return {k: round(v, 1) for k, v in total.items()}
+
+# ==================== CALMA ENGINE ====================
+
+@router.post("/macros-efectivos")
+async def get_macros_efectivos(data: dict, user = Depends(get_current_user)):
+    """Calcula los macros efectivos de un alimento."""
+    alimento_id = data.get("alimento_id")
+    cantidad_g = data.get("cantidad_g", 100)
+    es_vegano = data.get("es_vegano", False)
+    
+    alimento = await db.foods.find_one({"id": alimento_id}, {"_id": 0})
+    if not alimento:
+        raise HTTPException(status_code=404, detail="Alimento no encontrado")
+    
+    efectivos = calcular_macros_efectivos(alimento, cantidad_g, es_vegano)
+    brutos = calcular_macros_brutos(alimento, cantidad_g)
+    cuenta = que_macros_cuentan(alimento, cantidad_g, es_vegano)
+    
+    return {
+        "alimento": {
+            "id": alimento.get("id"),
+            "nombre": alimento.get("nombre"),
+            "categorias": alimento.get("categorias"),
+            "racion": alimento.get("racion")
+        },
+        "cantidad_g": cantidad_g,
+        "efectivos": efectivos,
+        "brutos": brutos,
+        "que_cuenta": cuenta
+    }
+
+@router.post("/macros-comida")
+async def get_macros_comida(data: dict, user = Depends(get_current_user)):
+    """Calcula los macros totales de una comida completa."""
+    alimentos_input = data.get("alimentos", [])
+    es_vegano = data.get("es_vegano", False)
+    
+    total_P = total_H = total_G = 0.0
+    total_P_bruto = total_H_bruto = total_G_bruto = 0.0
+    detalle = []
+    
+    for item in alimentos_input:
+        alimento = await db.foods.find_one({"id": item["alimento_id"]}, {"_id": 0})
+        if not alimento:
+            continue
+        
+        cantidad = item.get("cantidad_g", alimento.get("racion", 100))
+        
+        efectivos = calcular_macros_efectivos(alimento, cantidad, es_vegano)
+        brutos = calcular_macros_brutos(alimento, cantidad)
+        cuenta = que_macros_cuentan(alimento, cantidad, es_vegano)
+        
+        total_P += efectivos["P"]
+        total_H += efectivos["H"]
+        total_G += efectivos["G"]
+        total_P_bruto += brutos["P"]
+        total_H_bruto += brutos["H"]
+        total_G_bruto += brutos["G"]
+        
+        detalle.append({
+            "alimento_id": item["alimento_id"],
+            "nombre": alimento.get("nombre", ""),
+            "cantidad_g": cantidad,
+            "efectivos": efectivos,
+            "brutos": brutos,
+            "que_cuenta": cuenta
+        })
+    
+    return {
+        "total_efectivos": {
+            "P": round(total_P, 1),
+            "H": round(total_H, 1),
+            "G": round(total_G, 1),
+            "kcal": round(total_P * 4 + total_H * 4 + total_G * 9, 1)
+        },
+        "total_brutos": {
+            "P": round(total_P_bruto, 1),
+            "H": round(total_H_bruto, 1),
+            "G": round(total_G_bruto, 1),
+            "kcal": round(total_P_bruto * 4 + total_H_bruto * 4 + total_G_bruto * 9, 1)
+        },
+        "detalle": detalle
+    }
+
+@router.get("/test-calma")
+async def test_calma():
+    """Ejecuta los tests del motor CALMA v2."""
+    results = calma_run_tests()
+    return results
+
+# ==================== SEARCH & SUGGEST ====================
+
+@router.get("/search")
+async def search_foods_endpoint(
+    q: str,
+    category: Optional[str] = None,
+    tag: Optional[str] = None,
+    limit: int = 20,
+    user = Depends(get_current_user)
+):
+    """Búsqueda de alimentos para el chatbot."""
+    resultados = await buscar_alimentos_async(
+        db=db,
+        query=q,
+        categoria=category or "",
+        limit=limit,
+        tag_filter=tag or ""
+    )
+    
+    return {"results": resultados, "count": len(resultados)}
+
+@router.post("/suggest")
+async def suggest_foods_endpoint(
+    data: dict,
+    user = Depends(get_current_user)
+):
+    """Sugerir alimentos para completar macros."""
+    objetivo = data.get("objetivo", {"P": 40, "H": 15, "G": 8})
+    restante = data.get("restante", objetivo)
+    paso = data.get("paso")
+    limit = data.get("limit", 5)
+    
+    foods_list = await db.foods.find({}, {"_id": 0}).to_list(3000)
+    
+    sugerencias = sugerir_alimentos(
+        alimentos_disponibles=foods_list,
+        macros_restantes=restante,
+        max_resultados=limit,
+        paso=paso
+    )
+    
+    return {"suggestions": sugerencias, "count": len(sugerencias)}
+
+# ==================== FOOD SUGGESTIONS (user submitted) ====================
+
+@router.post("/suggest-food", response_model=FoodSuggestionResponse)
+async def suggest_new_food(food: FoodSuggestion, user = Depends(get_current_user)):
+    """Usuario sugiere añadir un nuevo alimento."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    
+    suggestion = {
+        "id": str(uuid.uuid4()),
+        "client_id": profile["id"],
+        "food": food.model_dump(),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.food_suggestions.insert_one(suggestion)
+    
+    return FoodSuggestionResponse(**suggestion)
+
+# ==================== MENU TEMPLATES ====================
+
+@router.get("/menu-options")
+async def get_menu_options(
+    tipo_dia: str,
+    num_comida: int,
+    macros: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Genera opciones de menú A/B/C para una comida."""
+    from meal_templates import generar_opciones_menu
+    
+    target_macros = {"P": 40, "H": 15, "G": 8}
+    if macros:
+        parts = macros.split(",")
+        if len(parts) == 3:
+            target_macros = {"P": float(parts[0]), "H": float(parts[1]), "G": float(parts[2])}
+    
+    foods_list = await db.foods.find({}, {"_id": 0}).to_list(3000)
+    options = generar_opciones_menu(tipo_dia, num_comida, target_macros, foods_list)
+    
+    return options
+
+@router.get("/test-templates")
+async def test_templates():
+    """Test endpoint para verificar templates de menú."""
+    from meal_templates import generar_opciones_menu
+    
+    foods_list = await db.foods.find({}, {"_id": 0}).to_list(3000)
+    target = {"P": 40, "H": 15, "G": 8}
+    
+    return {
+        "entrenamiento_c1": generar_opciones_menu("entrenamiento", 1, target, foods_list),
+        "descanso_c1": generar_opciones_menu("descanso", 1, target, foods_list)
+    }
+
+# ==================== CONFIG ====================
+
+@router.get("/food-config/{food_id}")
+async def get_food_config_endpoint(food_id: int, user = Depends(get_current_user)):
+    """Obtiene la configuración (min/max) de un alimento."""
+    food = await db.foods.find_one({"id": food_id}, {"_id": 0})
+    if not food:
+        raise HTTPException(status_code=404, detail="Alimento no encontrado")
+    
+    config = get_food_config(food)
+    return {
+        "food_id": food_id,
+        "nombre": food.get("nombre"),
+        "config": config
+    }
