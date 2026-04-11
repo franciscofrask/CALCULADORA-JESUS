@@ -247,15 +247,14 @@ const BuildMealModal = ({
         setCategoryFoods([]);
         
         try {
-            const result = await api('/api/calculator/foods-sorted', {
-                method: 'POST',
-                body: JSON.stringify({
-                    category_prefixes: category.prefixes,
-                    macros_restantes: { P: remaining.P, H: remaining.H, G: remaining.G },
-                    limit: 200
-                })
+            // Usar el endpoint de búsqueda con filtro de categoría
+            const params = new URLSearchParams({ 
+                q: '', 
+                category: category.prefixes[0],
+                limit: '100' 
             });
-            setCategoryFoods(result.alimentos || []);
+            const result = await api(`/api/calculator/search?${params}`);
+            setCategoryFoods(result.results || []);
         } catch (err) {
             console.error('Error cargando alimentos:', err);
             toast.error('Error cargando alimentos');
@@ -285,11 +284,9 @@ const BuildMealModal = ({
         
         try {
             const params = new URLSearchParams({ q: query, limit: '50' });
-            if (isIntraMode) params.set('tipo_comida', 'intra');
-            else if (isPostMode) params.set('tipo_comida', 'post');
             
             const result = await api(`/api/calculator/search?${params}`);
-            setSearchResults(result.alimentos || []);
+            setSearchResults(result.results || []);
         } catch (err) {
             console.error('Error buscando:', err);
         } finally {
@@ -300,26 +297,19 @@ const BuildMealModal = ({
     // Handle select food
     const handleSelectFood = async (food) => {
         try {
-            let quantity = food._cantidad_sugerida;
-            let macrosEf = food._macros_sugeridos;
-            
-            if (!quantity || !macrosEf) {
-                const result = await api('/api/calculator/adjust', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        alimento_id: food.id || food._id,
-                        macros_restantes: remaining,
-                        es_vegano: false
-                    })
-                });
-                quantity = result.cantidad_g;
-                macrosEf = result.macros_efectivos;
-            }
+            // Calcular cantidad sugerida basada en ración o 100g
+            const quantity = food.racion || 100;
+            const factor = quantity / 100;
+            const macrosEf = {
+                P: Math.round((food.proteinas || 0) * factor * 10) / 10,
+                H: Math.round((food.hidratos || 0) * factor * 10) / 10,
+                G: Math.round((food.grasas || 0) * factor * 10) / 10
+            };
             
             const newServed = {
-                P: served.P + (macrosEf?.P || 0),
-                H: served.H + (macrosEf?.H || 0),
-                G: served.G + (macrosEf?.G || 0)
+                P: served.P + macrosEf.P,
+                H: served.H + macrosEf.H,
+                G: served.G + macrosEf.G
             };
             
             const overP = newServed.P - target.P;
