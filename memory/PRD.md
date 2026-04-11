@@ -215,19 +215,23 @@ Estructura nueva:
     └── payments.py        # Pagos (MOCKED)
 ```
 
-### REFACTORIZACIÓN FRONTEND - EN PROGRESO (09/04/2026)
+### REFACTORIZACIÓN FRONTEND - COMPLETADO (11/04/2026)
 Componentes creados en `/app/frontend/src/components/nutrition/`:
-- ✅ `constants.js` - Constantes y utilities
-- ✅ `MacroProgressBar.jsx` - Barra de progreso
+- ✅ `constants.js` - Constantes y utilities (160 líneas)
+- ✅ `MacroProgressBar.jsx` - Barra de progreso reutilizable
 - ✅ `DayNavigation.jsx` - Navegación de días
-- ✅ `FoodItem.jsx` - Ítem de alimento
-- ✅ `MealCard.jsx` - Tarjeta de comida
-- ✅ `DaySummary.jsx` - Resumen sticky
-- ❌ `BuildMealModal.jsx` - Pendiente extraer
-- ❌ `RepeatDayModal.jsx` - Pendiente extraer
+- ✅ `FoodItem.jsx` - Ítem de alimento con controles +/-
+- ✅ `MealCard.jsx` - Tarjeta de comida con acordeón
+- ✅ `DaySummary.jsx` - Resumen sticky del día
+- ✅ `BuildMealModal.jsx` - Modal "Lo hago yo" extraído (674 líneas)
+
+**Resultado:**
+- `NutritionPage.jsx`: De 2,573 → **1,740 líneas** (32% reducción)
+- `BuildMealModal.jsx`: Componente independiente reutilizable
 
 ### P1 - Próximas
-- Extraer modales grandes de NutritionPage.jsx
+- Extraer `RepeatDayModal` a componente separado
+- Integrar componentes nuevos (MacroProgressBar, MealCard, etc.) en NutritionPage.jsx
 - Implementar pantalla Home con trackers circulares
 - Implementar pantalla "Mi Rutina"
 
