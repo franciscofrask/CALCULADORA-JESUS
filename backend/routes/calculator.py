@@ -19,6 +19,7 @@ from calma_engine import (
 )
 from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config
 from target_calculator import calcular_targets, targets_to_profile_macros, run_tests as target_run_tests
+from macro_distribution import distribuir_macros as dist_macros
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
@@ -169,6 +170,44 @@ async def test_calma():
     """Ejecuta los tests del motor CALMA v2."""
     results = calma_run_tests()
     return results
+
+
+# ==================== DISTRIBUTE MACROS ====================
+
+@router.post("/distribute")
+async def distribute_macros(data: dict, user = Depends(get_current_user)):
+    """
+    Distribuye los macros del usuario entre sus comidas del día.
+    Los macros se obtienen del perfil del usuario.
+    """
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil de cliente no encontrado")
+
+    training = profile.get("macros_training", {})
+    rest = profile.get("macros_rest", {})
+    peri = profile.get("macros_periworkout") or profile.get("macros_peri") or {}
+
+    if not training:
+        raise HTTPException(status_code=400, detail="No tienes macros asignados")
+
+    resultado = dist_macros(
+        p_entreno=float(training.get("protein") or training.get("proteinas") or 0),
+        h_entreno=float(training.get("carbs") or training.get("hidratos") or 0),
+        g_entreno=float(training.get("fat") or training.get("grasas") or 0),
+        p_peri=float(peri.get("protein") or peri.get("proteinas") or 35),
+        h_peri=float(peri.get("carbs") or peri.get("hidratos") or 15),
+        p_descanso=float(rest.get("protein") or rest.get("proteinas") or 0),
+        h_descanso=float(rest.get("carbs") or rest.get("hidratos") or 0),
+        g_descanso=float(rest.get("fat") or rest.get("grasas") or 0),
+        tipo_dia=data.get("tipo_dia", "entrenamiento"),
+        num_comidas=data.get("num_comidas", 4),
+        momento_entreno=data.get("momento_entreno", 1),
+        opcion_peri=data.get("opcion_peri", "intra_post")
+    )
+
+    return resultado
+
 
 # ==================== SEARCH & SUGGEST ====================
 
