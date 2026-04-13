@@ -18,6 +18,7 @@ from calma_engine import (
     run_tests as calma_run_tests
 )
 from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config
+from target_calculator import calcular_targets, targets_to_profile_macros, run_tests as target_run_tests
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
@@ -283,3 +284,94 @@ async def get_food_config_endpoint(food_id: int, user = Depends(get_current_user
         "nombre": food.get("nombre"),
         "config": config
     }
+
+
+# ==================== TARGET CALCULATOR ====================
+
+@router.post("/targets")
+async def calculate_client_targets(data: dict, user = Depends(get_current_user)):
+    """
+    Calcula los macros objetivo del cliente basado en peso, sexo, %graso y objetivo.
+    Usa las tablas de Jesús Gallego (macros_tables.json).
+    
+    Body: {"peso": 80, "sexo": "hombre", "porcentaje_graso": 20, "objetivo": "volumen"}
+    """
+    peso = data.get("peso")
+    sexo = data.get("sexo")
+    bf = data.get("porcentaje_graso")
+    objetivo = data.get("objetivo")
+
+    if not all([peso, sexo, bf is not None, objetivo]):
+        raise HTTPException(status_code=400, detail="Faltan campos: peso, sexo, porcentaje_graso, objetivo")
+
+    try:
+        targets = calcular_targets(
+            peso=float(peso),
+            sexo=sexo,
+            porcentaje_graso=float(bf),
+            objetivo=objetivo
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return targets
+
+
+@router.post("/targets/apply")
+async def calculate_and_apply_targets(data: dict, user = Depends(get_current_user)):
+    """
+    Calcula targets Y los aplica al perfil del cliente automáticamente.
+    Guarda macros_training, macros_rest y macros_periworkout en el perfil.
+    
+    Body: {"peso": 80, "sexo": "hombre", "porcentaje_graso": 20, "objetivo": "volumen"}
+    """
+    peso = data.get("peso")
+    sexo = data.get("sexo")
+    bf = data.get("porcentaje_graso")
+    objetivo = data.get("objetivo")
+
+    if not all([peso, sexo, bf is not None, objetivo]):
+        raise HTTPException(status_code=400, detail="Faltan campos: peso, sexo, porcentaje_graso, objetivo")
+
+    try:
+        targets = calcular_targets(
+            peso=float(peso),
+            sexo=sexo,
+            porcentaje_graso=float(bf),
+            objetivo=objetivo
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    profile_macros = targets_to_profile_macros(targets)
+
+    # Actualizar perfil del cliente
+    update_data = {
+        "weight": float(peso),
+        "sex": sexo,
+        "body_fat": float(bf),
+        "goal": objetivo,
+        "macros_training": profile_macros["macros_training"],
+        "macros_rest": profile_macros["macros_rest"],
+        "macros_periworkout": profile_macros["macros_periworkout"],
+        "macros_source": "auto",
+        "macros_multiplicadores": targets["multiplicadores"],
+    }
+
+    result = await db.client_profiles.update_one(
+        {"user_id": user["id"]},
+        {"$set": update_data},
+        upsert=True
+    )
+
+    return {
+        "applied": True,
+        "targets": targets,
+        "profile_macros": profile_macros,
+    }
+
+
+@router.get("/test-targets")
+async def test_targets():
+    """Ejecuta los tests del motor de targets."""
+    return target_run_tests()

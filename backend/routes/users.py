@@ -12,6 +12,7 @@ from models.user import (
     ClientProfile, ClientProfileCreate, ClientProfileUpdate,
     MacrosUpdate, PLAN_TYPES
 )
+from target_calculator import calcular_targets, targets_to_profile_macros
 
 router = APIRouter(tags=["users"])
 
@@ -78,12 +79,36 @@ async def get_client_profile(user = Depends(get_current_user)):
 
 @router.put("/clients/profile", response_model=ClientProfile)
 async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_current_user)):
-    """Actualizar perfil del cliente."""
+    """Actualizar perfil del cliente. Si peso/sexo/bf/objetivo cambian, recalcula macros."""
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    # Auto-calculate macros if body data is provided and macros_source is not 'manual'
+    body_fields = {"weight", "sex", "goal", "body_fat"}
+    if body_fields & set(update_data.keys()):
+        # Merge with existing profile data
+        peso = update_data.get("weight") or profile.get("weight")
+        sexo = update_data.get("sex") or profile.get("sex")
+        bf = update_data.get("body_fat") or profile.get("body_fat")
+        objetivo = update_data.get("goal") or profile.get("goal")
+
+        if all([peso, sexo, bf, objetivo]):
+            try:
+                targets = calcular_targets(float(peso), sexo, float(bf), objetivo)
+                profile_macros = targets_to_profile_macros(targets)
+                # Only auto-set if macros haven't been manually overridden
+                if profile.get("macros_source") != "manual":
+                    update_data["macros_training"] = profile_macros["macros_training"]
+                    update_data["macros_rest"] = profile_macros["macros_rest"]
+                    update_data["macros_periworkout"] = profile_macros["macros_periworkout"]
+                    update_data["macros_source"] = "auto"
+                    update_data["macros_multiplicadores"] = targets["multiplicadores"]
+            except (ValueError, KeyError):
+                pass  # Si los datos no son válidos, no recalcular
+
     if update_data:
         await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update_data})
     
@@ -130,23 +155,37 @@ async def get_macros(user = Depends(get_current_user)):
     if not profile:
         return {
             "training": {"protein": 160, "carbs": 50, "fat": 40},
-            "rest": {"protein": 140, "carbs": 40, "fat": 40}
+            "rest": {"protein": 140, "carbs": 40, "fat": 40},
+            "periworkout": {"protein": 35, "carbs": 15},
+            "source": "default"
         }
     return {
         "training": profile.get("macros_training") or {"protein": 160, "carbs": 50, "fat": 40},
-        "rest": profile.get("macros_rest") or {"protein": 140, "carbs": 40, "fat": 40}
+        "rest": profile.get("macros_rest") or {"protein": 140, "carbs": 40, "fat": 40},
+        "periworkout": profile.get("macros_periworkout") or {"protein": 35, "carbs": 15},
+        "source": profile.get("macros_source", "default")
     }
 
 @router.put("/macros", response_model=Dict[str, Any])
 async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
-    """Actualizar macros del usuario."""
+    """Actualizar macros del usuario (manual override)."""
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
     
+    training = data.training.model_dump()
+    rest = data.rest.model_dump()
+    training["proteinas"] = training["protein"]
+    training["hidratos"] = training["carbs"]
+    training["grasas"] = training["fat"]
+    rest["proteinas"] = rest["protein"]
+    rest["hidratos"] = rest["carbs"]
+    rest["grasas"] = rest["fat"]
+
     update = {
-        "macros_training": data.training.model_dump(),
-        "macros_rest": data.rest.model_dump()
+        "macros_training": training,
+        "macros_rest": rest,
+        "macros_source": "manual",
     }
     
     await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})

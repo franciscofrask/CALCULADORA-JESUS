@@ -81,7 +81,7 @@ async def update_client_admin(client_id: str, data: ClientProfileUpdate, user = 
 
 @router.put("/clients/{client_id}/macros")
 async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depends(get_admin_user)):
-    """Actualizar macros de un cliente (admin)."""
+    """Actualizar macros de un cliente (admin). Marca como override manual."""
     profile = await db.client_profiles.find_one({"id": client_id})
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -91,9 +91,21 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     training["calories"] = training["protein"] * 4 + training["carbs"] * 4 + training["fat"] * 9
     rest["calories"] = rest["protein"] * 4 + rest["carbs"] * 4 + rest["fat"] * 9
     
+    # Also store in alternative format for chatbot compatibility
+    training["proteinas"] = training["protein"]
+    training["hidratos"] = training["carbs"]
+    training["grasas"] = training["fat"]
+    rest["proteinas"] = rest["protein"]
+    rest["hidratos"] = rest["carbs"]
+    rest["grasas"] = rest["fat"]
+    
     await db.client_profiles.update_one(
         {"id": client_id},
-        {"$set": {"macros_training": training, "macros_rest": rest}}
+        {"$set": {
+            "macros_training": training,
+            "macros_rest": rest,
+            "macros_source": "manual",
+        }}
     )
     
     macro_log = {

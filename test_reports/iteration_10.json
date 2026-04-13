@@ -1,0 +1,64 @@
+{
+  "summary": "Target Calculator (Capa de Targets) - All 18 API tests passed + 22 internal engine tests passed. Feature fully functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ POST /api/calculator/targets - Canonical case H80 BF20 volumen: P_e=190, H_e=170, G_e=60, P_pe=45, H_pe=50, P_d=225, H_d=170, G_d=60",
+    "✅ POST /api/calculator/targets - Mujer 60kg 25%BF definición returns valid macros",
+    "✅ POST /api/calculator/targets - Peso intermedio 82kg snaps to 80",
+    "✅ POST /api/calculator/targets - BF intermedio 22% snaps to 20%",
+    "✅ POST /api/calculator/targets - Peso fuera de rango alto 130kg clamps to 120",
+    "✅ POST /api/calculator/targets - Peso fuera de rango bajo 55kg (hombre) clamps to 60",
+    "✅ POST /api/calculator/targets - Mujer peso bajo 45kg clamps to 50",
+    "✅ POST /api/calculator/targets - BF fuera de rango bajo 8% (hombre) clamps to 10%",
+    "✅ POST /api/calculator/targets/apply - Applies macros to profile successfully",
+    "✅ GET /api/macros - Returns applied macros with source='auto'",
+    "✅ POST /api/chatbot/start - Chatbot reads auto-calculated macros correctly (p_entreno=190, h_entreno=170, g_entreno=60)",
+    "✅ GET /api/calculator/test-targets - Internal engine passes all 22 tests",
+    "✅ Invariant: P and G same for volumen/definición, only H changes",
+    "✅ Validation: Missing fields returns 400",
+    "✅ Validation: Invalid sexo returns 400",
+    "✅ Validation: Invalid objetivo returns 400",
+    "✅ Validation: 'definición' with accent accepted",
+    "✅ Derivation: masa_grasa=16, masa_magra=64, masa_trabajo≈75.29 calculated correctly"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_target_calculator.py",
+    "/app/test_reports/pytest/pytest_target_calculator.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "target_calculator.py: Well-structured with clear separation of concerns - _load_tables(), _snap_to_nearest(), calcular_targets(), targets_to_profile_macros()",
+    "target_calculator.py: Proper handling of accent normalization in _normalize_obj() for 'definición'",
+    "target_calculator.py: Correct snapping logic - rounds to nearest step, clamps to extremes when out of range",
+    "routes/calculator.py: /targets and /targets/apply endpoints properly validate required fields",
+    "routes/users.py: Profile update auto-calculates macros when body data changes (unless macros_source='manual')",
+    "routes/chatbot.py: chatbot_start correctly reads macros from profile (proteinas/hidratos/grasas format)",
+    "macros_tables.json: Contains 404 records (208 hombre + 196 mujer) as expected"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_target_calculator.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 API tests + 22/22 internal engine tests)"
+  },
+  "test_credentials": {
+    "client_user": "clientedemo@test.com / demo123",
+    "admin_user": "alvaro@test.com / Alvaro123"
+  },
+  "seed_data_creation": "Used existing test accounts",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Target Calculator (Capa de Targets) fully tested. Endpoints: POST /api/calculator/targets (calculate), POST /api/calculator/targets/apply (calculate and apply to profile), GET /api/calculator/test-targets (internal tests). Uses macros_tables.json with 404 combinations. Snapping: Hombre pesos [60-120 step 5], BFs [10-45 step 5]. Mujer pesos [50-115 step 5], BFs [20-50 step 5]. Invariant: P and G same for volumen/definición, only H changes. Chatbot reads macros from profile correctly.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
