@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 import BuildMealModal from '../components/nutrition/BuildMealModal';
+import RepeatMealModal from '../components/nutrition/RepeatMealModal';
+import CopyDietModal from '../components/nutrition/CopyDietModal';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -1616,123 +1618,31 @@ const NutritionPage = () => {
             />
 
             {/* Repeat Meal Modal */}
-            <Dialog open={repeatMealModal.open} onOpenChange={(open) => !open && setRepeatMealModal({ open: false, mealKey: null })}>
-                <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
-                    <DialogHeader className="bg-bg-dark p-4 flex-shrink-0">
-                        <DialogTitle className="text-white">Repetir de otro día</DialogTitle>
-                        <DialogDescription className="text-gray-400">
-                            Copiar a {repeatMealModal.mealKey && mealInfo[repeatMealModal.mealKey]?.name}
-                        </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="flex-1 overflow-y-auto">
-                        {!selectedDietForRepeat ? (
-                            // Step 1: Select day
-                            <div className="p-4">
-                                {recentDiets.length === 0 ? (
-                                    <div className="text-center py-8 text-gray-500">
-                                        <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" />
-                                        <p>Cargando días recientes...</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {recentDiets.map(diet => (
-                                            <button
-                                                key={diet.fecha}
-                                                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all"
-                                                onClick={() => setSelectedDietForRepeat(diet)}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900">{formatDate(diet.fecha)}</p>
-                                                        <p className="text-xs text-gray-500">
-                                                            {diet.tipo_dia === 'entrenamiento' ? '🟢 Entreno' : '⚪ Descanso'}, {diet.num_comidas} comidas
-                                                        </p>
-                                                    </div>
-                                                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            // Step 2: Select meal from day
-                            <div className="p-4">
-                                <button 
-                                    className="flex items-center gap-2 text-sm text-gray-500 mb-4"
-                                    onClick={() => setSelectedDietForRepeat(null)}
-                                >
-                                    <ChevronLeft className="w-4 h-4" /> Volver
-                                </button>
-                                
-                                <h3 className="font-bold text-gray-900 mb-3">
-                                    Comidas del {formatDate(selectedDietForRepeat.fecha)}
-                                </h3>
-                                
-                                <div className="space-y-2">
-                                    {Object.entries(selectedDietForRepeat.comidas_resumen || {}).map(([key, resumen]) => (
-                                        <button
-                                            key={key}
-                                            className="w-full text-left p-3 bg-gray-50 hover:bg-brand-orange/10 rounded-xl transition-all border-2 border-transparent hover:border-brand-orange"
-                                            onClick={() => copyMealFromDay(key)}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-semibold text-gray-900">
-                                                        {mealInfo[key]?.name || key}
-                                                    </p>
-                                                    <p className="text-xs text-gray-500 truncate max-w-[250px]">
-                                                        {resumen}
-                                                    </p>
-                                                </div>
-                                                <span className="text-brand-orange text-sm font-semibold">Copiar</span>
-                                            </div>
-                                        </button>
-                                    ))}
-                                    
-                                    {Object.keys(selectedDietForRepeat.comidas_resumen || {}).length === 0 && (
-                                        <p className="text-center text-gray-500 py-4">
-                                            No hay comidas guardadas este día
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    
-                    <div className="flex-shrink-0 p-4 border-t">
-                        <Button 
-                            variant="outline" 
-                            className="w-full rounded-full"
-                            onClick={() => {
-                                setRepeatMealModal({ open: false, mealKey: null });
-                                setSelectedDietForRepeat(null);
-                            }}
-                        >
-                            Cancelar
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <RepeatMealModal
+                open={repeatMealModal.open}
+                mealKey={repeatMealModal.mealKey}
+                onClose={() => {
+                    setRepeatMealModal({ open: false, mealKey: null });
+                    setSelectedDietForRepeat(null);
+                }}
+                recentDiets={recentDiets}
+                mealInfo={mealInfo}
+                formatDate={formatDate}
+                onCopyMeal={(sourceMealKey, sourceDiet) => {
+                    setSelectedDietForRepeat(sourceDiet);
+                    copyMealFromDay(sourceMealKey);
+                }}
+            />
 
-            {/* Copy Modal */}
-            <Dialog open={copyModalOpen} onOpenChange={setCopyModalOpen}>
-                <DialogContent className="max-w-sm rounded-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Copiar dieta</DialogTitle>
-                        <DialogDescription className="sr-only">Copia esta dieta a otro día</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <p className="text-sm text-gray-600">Copiar dieta del <span className="font-semibold">{formatDate(currentDate)}</span> a:</p>
-                        <Input type="date" value={copyDate} onChange={(e) => setCopyDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="h-12 rounded-xl" />
-                        <div className="flex gap-2">
-                            <Button variant="outline" className="flex-1 h-12 rounded-full" onClick={() => setCopyModalOpen(false)}>Cancelar</Button>
-                            <Button className="flex-1 h-12 rounded-full bg-black hover:bg-gray-900" onClick={copyDiet}>Copiar</Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            {/* Copy Diet Modal */}
+            <CopyDietModal
+                open={copyModalOpen}
+                onClose={() => setCopyModalOpen(false)}
+                copyDate={copyDate}
+                setCopyDate={setCopyDate}
+                onCopy={copyDiet}
+                currentDateFormatted={formatDate(currentDate)}
+            />
         </div>
     );
 };
