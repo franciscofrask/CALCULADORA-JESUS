@@ -1,153 +1,130 @@
-/**
- * DaySummary - Resumen sticky del día con macros
- */
 import React from 'react';
-import { Save, ChevronDown, ChevronUp } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import MacroProgressBar from './MacroProgressBar';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 
-export const DaySummary = ({
-    totals = { P: 0, H: 0, G: 0 },
-    targets = { P: 0, H: 0, G: 0 },
-    isExpanded,
-    onToggle,
-    onSave,
-    isSaving = false,
-    hasChanges = false
-}) => {
-    // Calculate overall progress
-    const pProgress = targets.P > 0 ? (totals.P / targets.P) * 100 : 0;
-    const hProgress = targets.H > 0 ? (totals.H / targets.H) * 100 : 0;
-    const gProgress = targets.G > 0 ? (totals.G / targets.G) * 100 : 0;
-    
+// Progress Bar Component
+export const ProgressBar = ({ value, max, color, height = 6, showCheck = false }) => {
+    const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+    const isOver = value > max + 4;
+    const isOk = Math.abs(value - max) <= 4;
+    const actualColor = isOver ? '#EF4444' : color;
+
     return (
-        <div className="bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-40">
-            <Collapsible open={isExpanded} onOpenChange={onToggle}>
-                <div className="p-4">
-                    {/* Header row */}
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
-                            Resumen del día
-                        </h3>
-                        <div className="flex items-center gap-2">
-                            {hasChanges && (
-                                <Button
-                                    size="sm"
-                                    onClick={onSave}
-                                    disabled={isSaving}
-                                    className="bg-green-600 hover:bg-green-700 h-8"
-                                    data-testid="save-day-btn"
-                                >
-                                    <Save size={14} className="mr-1" />
-                                    {isSaving ? 'Guardando...' : 'Guardar'}
-                                </Button>
-                            )}
-                            <CollapsibleTrigger asChild>
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="h-8 w-8 p-0"
-                                    data-testid="toggle-summary-btn"
-                                >
-                                    {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                                </Button>
-                            </CollapsibleTrigger>
-                        </div>
-                    </div>
-                    
-                    {/* Compact macro display */}
-                    <div className="grid grid-cols-3 gap-4">
-                        <MacroCircle 
-                            label="P" 
-                            current={totals.P} 
-                            target={targets.P}
-                            progress={pProgress}
-                            color="text-orange-500"
-                        />
-                        <MacroCircle 
-                            label="H" 
-                            current={totals.H} 
-                            target={targets.H}
-                            progress={hProgress}
-                            color="text-blue-500"
-                        />
-                        <MacroCircle 
-                            label="G" 
-                            current={totals.G} 
-                            target={targets.G}
-                            progress={gProgress}
-                            color="text-yellow-500"
-                        />
-                    </div>
-                </div>
-                
-                <CollapsibleContent>
-                    <div className="px-4 pb-4 space-y-3 border-t border-zinc-800 pt-3">
-                        <MacroProgressBar 
-                            label="Proteínas" 
-                            current={totals.P} 
-                            target={targets.P}
-                            color="bg-orange-500"
-                        />
-                        <MacroProgressBar 
-                            label="Hidratos" 
-                            current={totals.H} 
-                            target={targets.H}
-                            color="bg-blue-500"
-                        />
-                        <MacroProgressBar 
-                            label="Grasas" 
-                            current={totals.G} 
-                            target={targets.G}
-                            color="bg-yellow-500"
-                        />
-                    </div>
-                </CollapsibleContent>
-            </Collapsible>
+        <div className="flex items-center gap-2 w-full">
+            <div className="flex-1 bg-gray-200 rounded-full overflow-hidden" style={{ height }}>
+                <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: actualColor }}
+                />
+            </div>
+            {showCheck && isOk && value > 0 && <Check className="w-4 h-4 text-green-500 flex-shrink-0" />}
         </div>
     );
 };
 
-// Small circular progress indicator
-const MacroCircle = ({ label, current, target, progress, color }) => {
-    const isOver = current > target;
-    const clampedProgress = Math.min(progress, 100);
-    
+// Day Summary (sticky top bar)
+const DaySummary = ({
+    tipoDia, summaryExpanded, setSummaryExpanded,
+    dayMacros, dayTarget, servedPeriP, servedPeriH, totalPeriP, totalPeriH,
+    opcionPeri, mealOrder, mealInfo, calculateMealMacros, getMealStatus, getDayStatus,
+}) => {
+    const dayStatus = getDayStatus();
+
+    const getMealStatusDot = (mealKey) => {
+        const status = getMealStatus(mealKey);
+        if (status === 'empty') return '⚪';
+        if (status === 'cuadrada') return '🟢';
+        if (status === 'sobra') return '🔴';
+        return '🟡';
+    };
+
     return (
-        <div className="flex flex-col items-center">
-            <div className="relative w-12 h-12">
-                {/* Background circle */}
-                <svg className="w-12 h-12 transform -rotate-90">
-                    <circle
-                        cx="24"
-                        cy="24"
-                        r="20"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        className="text-zinc-700"
-                    />
-                    <circle
-                        cx="24"
-                        cy="24"
-                        r="20"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        strokeDasharray={`${clampedProgress * 1.256} 125.6`}
-                        className={isOver ? 'text-red-500' : color}
-                    />
-                </svg>
-                <span className={`absolute inset-0 flex items-center justify-center text-xs font-bold ${color}`}>
-                    {label}
-                </span>
-            </div>
-            <div className="text-center mt-1">
-                <span className={`text-sm font-medium ${isOver ? 'text-red-400' : 'text-white'}`}>
-                    {current.toFixed(0)}
-                </span>
-                <span className="text-xs text-zinc-500">/{target}</span>
+        <div
+            className="sticky top-[52px] z-30 bg-white shadow-md border-b cursor-pointer"
+            onClick={() => setSummaryExpanded(!summaryExpanded)}
+            data-testid="day-summary"
+        >
+            <div className="max-w-lg mx-auto px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                        {tipoDia === 'entrenamiento' ? 'Día de Entrenamiento' : 'Día de Descanso'}
+                    </span>
+                    {dayStatus === 'cuadrado' && <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">Cuadrado</span>}
+                    {dayStatus === 'sobra' && <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">Te pasas</span>}
+                </div>
+
+                {[
+                    { emoji: '🟢', label: 'P', val: dayMacros.P, tgt: dayTarget.P_total, color: '#4CAF50' },
+                    { emoji: '🔵', label: 'H', val: dayMacros.H, tgt: dayTarget.H_total, color: '#2196F3' },
+                    { emoji: '🟠', label: 'G', val: dayMacros.G, tgt: dayTarget.G_total, color: '#FFA500' },
+                ].map(({ emoji, label, val, tgt, color }) => (
+                    <div key={label} className="flex items-center gap-2 text-xs mb-1.5">
+                        <span className="w-4 text-center">{emoji}</span>
+                        <span className="w-6 font-semibold">{label}:</span>
+                        <div className="flex-1"><ProgressBar value={val} max={tgt || 0} color={color} height={6} /></div>
+                        <span className={`w-20 text-right font-mono ${val > (tgt || 0) + 4 ? 'text-red-500' : ''}`}>
+                            {val.toFixed(0)}/{(tgt || 0).toFixed(0)}g
+                        </span>
+                    </div>
+                ))}
+
+                {tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri' && (
+                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-center text-xs text-gray-500">
+                        Peri: {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
+                    </div>
+                )}
+
+                <div className="mt-2 flex items-center justify-center gap-1 text-xs">
+                    {mealOrder.map((mealKey, idx) => (
+                        <span key={mealKey} className="flex items-center">
+                            {idx > 0 && <span className="text-gray-300 mx-1">|</span>}
+                            <span className="text-gray-500">{mealInfo[mealKey].shortName}</span>
+                            <span className="ml-0.5">{getMealStatusDot(mealKey)}</span>
+                        </span>
+                    ))}
+                </div>
+
+                {summaryExpanded && (
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                        <table className="w-full text-xs">
+                            <thead><tr className="text-gray-500">
+                                <th className="text-left font-medium py-1"></th>
+                                <th className="text-right font-medium py-1 w-16">P</th>
+                                <th className="text-right font-medium py-1 w-16">H</th>
+                                <th className="text-right font-medium py-1 w-16">G</th>
+                            </tr></thead>
+                            <tbody>
+                                {mealOrder.map(mealKey => {
+                                    const served = calculateMealMacros(mealKey);
+                                    const isPeri = mealKey === 'Intra' || mealKey === 'Post';
+                                    return (
+                                        <tr key={mealKey} className="border-t border-gray-100">
+                                            <td className="py-1 text-gray-700">{mealInfo[mealKey].name}</td>
+                                            <td className="text-right font-mono">{served.P.toFixed(0)}g</td>
+                                            <td className="text-right font-mono">{served.H.toFixed(0)}g</td>
+                                            <td className="text-right font-mono">{isPeri ? '-' : `${served.G.toFixed(0)}g`}</td>
+                                        </tr>
+                                    );
+                                })}
+                                <tr className="border-t-2 border-gray-300 font-bold">
+                                    <td className="py-1">TOTAL</td>
+                                    <td className="text-right font-mono">{dayMacros.P.toFixed(0)}g</td>
+                                    <td className="text-right font-mono">{dayMacros.H.toFixed(0)}g</td>
+                                    <td className="text-right font-mono">{dayMacros.G.toFixed(0)}g</td>
+                                </tr>
+                                <tr className="text-gray-500">
+                                    <td className="py-1">OBJETIVO</td>
+                                    <td className="text-right font-mono">{(dayTarget.P_total || 0).toFixed(0)}g</td>
+                                    <td className="text-right font-mono">{(dayTarget.H_total || 0).toFixed(0)}g</td>
+                                    <td className="text-right font-mono">{(dayTarget.G_total || 0).toFixed(0)}g</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                <div className="mt-2 flex justify-center">
+                    {summaryExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                </div>
             </div>
         </div>
     );

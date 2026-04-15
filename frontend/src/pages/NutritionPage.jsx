@@ -2,20 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { ScrollArea } from '../components/ui/scroll-area';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/ui/collapsible';
 import { toast } from 'sonner';
 import { 
-    ChevronLeft, ChevronRight, Plus, Trash2, 
-    Minus, Save, Copy, Check, ChevronDown, ChevronUp,
-    Search, X, Zap, Wrench, RefreshCw, ArrowUpRight, Calendar
+    ChevronLeft, ChevronRight,
+    Save, Copy, ArrowUpRight, Calendar
 } from 'lucide-react';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 import BuildMealModal from '../components/nutrition/BuildMealModal';
 import RepeatMealModal from '../components/nutrition/RepeatMealModal';
 import CopyDietModal from '../components/nutrition/CopyDietModal';
+import DaySummary from '../components/nutrition/DaySummary';
+import ConfigSection from '../components/nutrition/ConfigSection';
+import MealCard from '../components/nutrition/MealCard';
+import { SearchFoodModal, MenuOptionsModal } from '../components/nutrition/SearchFoodModal';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -41,62 +40,6 @@ const getFoodEmoji = (categorias) => {
     return FOOD_EMOJIS[mainCat] || FOOD_EMOJIS.default;
 };
 
-// Category filter chips - Categorías completas para buscador general
-const CATEGORY_CHIPS = [
-    { label: 'Todas', value: '', emoji: '🍽️' },
-    { label: 'Huevos', value: '1', emoji: '🥚' },
-    { label: 'Carnes', value: '2', emoji: '🥩' },
-    { label: 'Pescados', value: '3', emoji: '🐟' },
-    { label: 'Prot. polvo', value: '4', emoji: '💪' },
-    { label: 'Lácteos', value: '5', emoji: '🥛' },
-    { label: 'Soja', value: '6', emoji: '🫘' },
-    { label: 'Cereales', value: '7', emoji: '🌾' },
-    { label: 'Panes', value: '8', emoji: '🍞' },
-    { label: 'Tubérculos', value: '9', emoji: '🥔' },
-    { label: 'Legumbres', value: '10', emoji: '🫘' },
-    { label: 'Frutas', value: '11', emoji: '🍎' },
-    { label: 'Verduras', value: '13', emoji: '🥦' },
-    { label: 'Salsas', value: '16', emoji: '🥫' },
-    { label: 'Grasas', value: '17', emoji: '🫒' },
-    { label: 'Intraentreno', value: '18', emoji: '⚡' },
-    { label: 'Bebidas', value: '19', emoji: '☕' },
-    { label: 'Arroces', value: '21', emoji: '🍚' },
-    { label: 'Pasta', value: '22', emoji: '🍝' },
-    { label: 'Beb. vegetales', value: '24', emoji: '🥤' },
-    { label: 'Sustitutivos', value: '27', emoji: '🥤' },
-    { label: 'Prot. vegetal', value: '28', emoji: '🌱' },
-    { label: 'Barritas prot.', value: '29', emoji: '🍫' },
-    { label: 'Bollería', value: '31', emoji: '🥐' },
-    { label: 'Pizza/Lasaña', value: '32', emoji: '🍕' },
-    { label: 'Chocolate', value: '34', emoji: '🍫' },
-    { label: 'Helados', value: '35', emoji: '🍦' },
-    { label: 'Postres', value: '36', emoji: '🍮' },
-    { label: 'Cacao/Azúcar', value: '37', emoji: '🍯' },
-    { label: 'Aperitivos', value: '38', emoji: '🍟' },
-    { label: 'Cocina española', value: '39', emoji: '🥘' },
-    { label: 'Aminoácidos', value: '41', emoji: '⚡' },
-    { label: 'Barritas energ.', value: '47', emoji: '🍫' },
-    { label: 'Sopas', value: '48', emoji: '🍲' },
-    { label: 'Comida rápida', value: '49', emoji: '🍔' },
-    { label: 'Comida asiática', value: '50', emoji: '🍜' },
-    { label: 'Comida prep.', value: '53', emoji: '📦' },
-];
-
-// Momento entreno options
-const MOMENTO_OPTIONS = [
-    { value: 0, label: 'En ayunas' },
-    { value: 1, label: 'Después de Comida 1' },
-    { value: 2, label: 'Después de Comida 2' },
-    { value: 3, label: 'Después de Comida 3' },
-];
-
-// Periworkout options
-const PERI_OPTIONS = [
-    { value: 'intra_post', label: 'Intra + Post' },
-    { value: 'solo_post', label: 'Solo Post' },
-    { value: 'solo_intra', label: 'Solo Intra' },
-    { value: 'sin_peri', label: 'Sin periworkout' },
-];
 
 // Categories for Build Meal Modal - Step 1 (Proteínas) - Con prefixes para foods-sorted
 const PROTEIN_CATEGORIES = [
@@ -751,545 +694,6 @@ const NutritionPage = () => {
     // ===== COMPONENTS =====
 
     // Progress Bar Component
-    const ProgressBar = ({ value, max, color, height = 6, showCheck = false }) => {
-        const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-        const isOver = value > max + 4;
-        const isOk = Math.abs(value - max) <= 4;
-        const actualColor = isOver ? '#EF4444' : color;
-        
-        return (
-            <div className="flex items-center gap-2 w-full">
-                <div className={`flex-1 bg-gray-200 rounded-full overflow-hidden`} style={{ height }}>
-                    <div 
-                        className="h-full rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: actualColor }}
-                    />
-                </div>
-                {showCheck && isOk && value > 0 && <Check className="w-4 h-4 text-green-500 flex-shrink-0" />}
-            </div>
-        );
-    };
-
-    // Mini status dot for meals
-    const getMealStatusDot = (mealKey) => {
-        const status = getMealStatus(mealKey);
-        if (status === 'empty') return { color: 'bg-gray-300', symbol: '⚪' };
-        if (status === 'cuadrada') return { color: 'bg-green-500', symbol: '🟢' };
-        if (status === 'sobra') return { color: 'bg-red-500', symbol: '🔴' };
-        return { color: 'bg-yellow-500', symbol: '🟡' };
-    };
-
-    // ===== STICKY SUMMARY COMPONENT =====
-    const DaySummary = () => {
-        const dayStatus = getDayStatus();
-        const mealOrder = getMealOrder();
-        
-        return (
-            <div 
-                className="sticky top-[52px] z-30 bg-white shadow-md border-b cursor-pointer"
-                onClick={() => setSummaryExpanded(!summaryExpanded)}
-                data-testid="day-summary"
-            >
-                <div className="max-w-lg mx-auto px-4 py-3">
-                    {/* Title & Status Badge */}
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                            {tipoDia === 'entrenamiento' ? 'Día de Entrenamiento' : 'Día de Descanso'}
-                        </span>
-                        {dayStatus === 'cuadrado' && (
-                            <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">🟢 Cuadrado</span>
-                        )}
-                        {dayStatus === 'sobra' && (
-                            <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">🔴 Te pasas</span>
-                        )}
-                    </div>
-                    
-                    {/* Progress Bars */}
-                    <div className="space-y-1.5">
-                        <div className="flex items-center gap-2 text-xs">
-                            <span className="w-4 text-center">🟢</span>
-                            <span className="w-6 font-semibold">P:</span>
-                            <div className="flex-1">
-                                <ProgressBar value={dayMacros.P} max={dayTarget.P_total} color="#4CAF50" height={6} />
-                            </div>
-                            <span className={`w-20 text-right font-mono ${dayMacros.P > dayTarget.P_total + 4 ? 'text-red-500' : ''}`}>
-                                {dayMacros.P.toFixed(0)}/{dayTarget.P_total?.toFixed(0) || 0}g
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                            <span className="w-4 text-center">🔵</span>
-                            <span className="w-6 font-semibold">H:</span>
-                            <div className="flex-1">
-                                <ProgressBar value={dayMacros.H} max={dayTarget.H_total} color="#2196F3" height={6} />
-                            </div>
-                            <span className={`w-20 text-right font-mono ${dayMacros.H > dayTarget.H_total + 4 ? 'text-red-500' : ''}`}>
-                                {dayMacros.H.toFixed(0)}/{dayTarget.H_total?.toFixed(0) || 0}g
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                            <span className="w-4 text-center">🟠</span>
-                            <span className="w-6 font-semibold">G:</span>
-                            <div className="flex-1">
-                                <ProgressBar value={dayMacros.G} max={dayTarget.G_total} color="#FFA500" height={6} />
-                            </div>
-                            <span className={`w-20 text-right font-mono ${dayMacros.G > dayTarget.G_total + 4 ? 'text-red-500' : ''}`}>
-                                {dayMacros.G.toFixed(0)}/{dayTarget.G_total?.toFixed(0) || 0}g
-                            </span>
-                        </div>
-                    </div>
-                    
-                    {/* Peri Line (only training days) */}
-                    {tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri' && (
-                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-center text-xs text-gray-500">
-                            <span>Peri: {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H</span>
-                        </div>
-                    )}
-                    
-                    {/* Mini meal status line */}
-                    <div className="mt-2 flex items-center justify-center gap-1 text-xs">
-                        {mealOrder.map((mealKey, idx) => (
-                            <span key={mealKey} className="flex items-center">
-                                {idx > 0 && <span className="text-gray-300 mx-1">|</span>}
-                                <span className="text-gray-500">{mealInfo[mealKey].shortName}</span>
-                                <span className="ml-0.5">{getMealStatusDot(mealKey).symbol}</span>
-                            </span>
-                        ))}
-                    </div>
-                    
-                    {/* Expanded details */}
-                    {summaryExpanded && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                            <table className="w-full text-xs">
-                                <thead>
-                                    <tr className="text-gray-500">
-                                        <th className="text-left font-medium py-1"></th>
-                                        <th className="text-right font-medium py-1 w-16">P</th>
-                                        <th className="text-right font-medium py-1 w-16">H</th>
-                                        <th className="text-right font-medium py-1 w-16">G</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {mealOrder.map(mealKey => {
-                                        const served = calculateMealMacros(mealKey);
-                                        const isPeri = mealKey === 'Intra' || mealKey === 'Post';
-                                        return (
-                                            <tr key={mealKey} className="border-t border-gray-100">
-                                                <td className="py-1 text-gray-700">{mealInfo[mealKey].name}</td>
-                                                <td className="text-right font-mono">{served.P.toFixed(0)}g</td>
-                                                <td className="text-right font-mono">{served.H.toFixed(0)}g</td>
-                                                <td className="text-right font-mono">{isPeri ? '-' : `${served.G.toFixed(0)}g`}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                    <tr className="border-t-2 border-gray-300 font-bold">
-                                        <td className="py-1">TOTAL</td>
-                                        <td className="text-right font-mono">{dayMacros.P.toFixed(0)}g</td>
-                                        <td className="text-right font-mono">{dayMacros.H.toFixed(0)}g</td>
-                                        <td className="text-right font-mono">{dayMacros.G.toFixed(0)}g</td>
-                                    </tr>
-                                    <tr className="text-gray-500">
-                                        <td className="py-1">OBJETIVO</td>
-                                        <td className="text-right font-mono">{dayTarget.P_total?.toFixed(0) || 0}g</td>
-                                        <td className="text-right font-mono">{dayTarget.H_total?.toFixed(0) || 0}g</td>
-                                        <td className="text-right font-mono">{dayTarget.G_total?.toFixed(0) || 0}g</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                    
-                    <div className="mt-2 flex justify-center">
-                        {summaryExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    // ===== CONFIG SECTION COMPONENT =====
-    const ConfigSection = () => {
-        const momentoOptions = numComidas === 3 
-            ? MOMENTO_OPTIONS.filter(o => o.value < 3) 
-            : MOMENTO_OPTIONS;
-        
-        return (
-            <div className="bg-gray-100 rounded-xl p-3 mb-4" data-testid="config-section">
-                {/* Comidas selector */}
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600 font-medium">Comidas:</span>
-                        <div className="flex gap-1">
-                            <button
-                                onClick={() => {
-                                    setNumComidas(3);
-                                    if (momentoEntreno > 2) setMomentoEntreno(2);
-                                }}
-                                className={`w-8 h-8 rounded-full text-sm font-bold transition-all ${
-                                    numComidas === 3 
-                                        ? 'bg-brand-orange text-white shadow' 
-                                        : 'bg-white text-gray-600 border border-gray-300'
-                                }`}
-                                data-testid="comidas-3-btn"
-                            >
-                                3
-                            </button>
-                            <button
-                                onClick={() => setNumComidas(4)}
-                                className={`w-8 h-8 rounded-full text-sm font-bold transition-all ${
-                                    numComidas === 4 
-                                        ? 'bg-brand-orange text-white shadow' 
-                                        : 'bg-white text-gray-600 border border-gray-300'
-                                }`}
-                                data-testid="comidas-4-btn"
-                            >
-                                4
-                            </button>
-                        </div>
-                    </div>
-                    
-                    {/* Momento entreno - only on training days */}
-                    {tipoDia === 'entrenamiento' && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600 font-medium">Entrenas:</span>
-                            <select
-                                value={momentoEntreno}
-                                onChange={(e) => setMomentoEntreno(Number(e.target.value))}
-                                className="text-xs bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
-                                data-testid="momento-entreno-select"
-                            >
-                                {momentoOptions.map(opt => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-                    
-                    {/* Peri option - only on training days */}
-                    {tipoDia === 'entrenamiento' && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600 font-medium">Peri:</span>
-                            <select
-                                value={opcionPeri}
-                                onChange={(e) => setOpcionPeri(e.target.value)}
-                                className="text-xs bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
-                                data-testid="peri-select"
-                            >
-                                {PERI_OPTIONS.map(opt => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
-    // ===== MEAL PROGRESS BARS COMPONENT =====
-    const MealProgressBars = ({ mealKey }) => {
-        const target = getMealTarget(mealKey);
-        const served = calculateMealMacros(mealKey);
-        const isPeri = mealKey === 'Intra' || mealKey === 'Post';
-        const status = getMealStatus(mealKey);
-        
-        const getMacroDiff = (servedVal, targetVal) => {
-            const diff = targetVal - servedVal;
-            if (Math.abs(diff) <= 4) return { ok: true, diff: 0 };
-            return { ok: false, diff };
-        };
-        
-        const pDiff = getMacroDiff(served.P, target.P);
-        const hDiff = getMacroDiff(served.H, target.H);
-        const gDiff = !isPeri ? getMacroDiff(served.G, target.G) : { ok: true, diff: 0 };
-        
-        const pOver = served.P > target.P + 4;
-        const hOver = served.H > target.H + 4;
-        const gOver = !isPeri && served.G > target.G + 4;
-        
-        // Build status message
-        let statusMessage = '';
-        let statusColor = '';
-        
-        if (status === 'cuadrada') {
-            statusMessage = '🟢 Cuadrada';
-            statusColor = 'text-green-600';
-        } else if (pOver || hOver || gOver) {
-            const parts = [];
-            if (pOver) parts.push(`${(served.P - target.P).toFixed(0)}g P`);
-            if (hOver) parts.push(`${(served.H - target.H).toFixed(0)}g H`);
-            if (gOver) parts.push(`${(served.G - target.G).toFixed(0)}g G`);
-            statusMessage = `🔴 Sobran ${parts.join(', ')}`;
-            statusColor = 'text-red-600';
-        } else if (status === 'falta') {
-            const parts = [];
-            if (!pDiff.ok && pDiff.diff > 0) parts.push(`${pDiff.diff.toFixed(0)}g P`);
-            if (!hDiff.ok && hDiff.diff > 0) parts.push(`${hDiff.diff.toFixed(0)}g H`);
-            if (!gDiff.ok && gDiff.diff > 0) parts.push(`${gDiff.diff.toFixed(0)}g G`);
-            if (parts.length > 0) {
-                statusMessage = `🟡 Faltan ${parts.join(', ')}`;
-                statusColor = 'text-yellow-600';
-            }
-        }
-        
-        return (
-            <div className="bg-gray-50 rounded-lg p-3 mb-3" data-testid={`meal-progress-${mealKey}`}>
-                {/* Protein bar */}
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-5 text-center text-sm">🟢</span>
-                    <span className="w-4 text-xs font-semibold text-gray-600">P</span>
-                    <div className="flex-1">
-                        <ProgressBar value={served.P} max={target.P} color="#4CAF50" height={8} showCheck />
-                    </div>
-                    <span className={`text-xs font-mono w-16 text-right ${pOver ? 'text-red-500 font-bold' : ''}`}>
-                        {served.P.toFixed(0)}/{target.P.toFixed(0)}g
-                    </span>
-                </div>
-                
-                {/* Carbs bar */}
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-5 text-center text-sm">🔵</span>
-                    <span className="w-4 text-xs font-semibold text-gray-600">H</span>
-                    <div className="flex-1">
-                        <ProgressBar value={served.H} max={target.H} color="#2196F3" height={8} showCheck />
-                    </div>
-                    <span className={`text-xs font-mono w-16 text-right ${hOver ? 'text-red-500 font-bold' : ''}`}>
-                        {served.H.toFixed(0)}/{target.H.toFixed(0)}g
-                    </span>
-                </div>
-                
-                {/* Fat bar (not for peri) */}
-                {!isPeri && (
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="w-5 text-center text-sm">🟠</span>
-                        <span className="w-4 text-xs font-semibold text-gray-600">G</span>
-                        <div className="flex-1">
-                            <ProgressBar value={served.G} max={target.G} color="#FFA500" height={8} showCheck />
-                        </div>
-                        <span className={`text-xs font-mono w-16 text-right ${gOver ? 'text-red-500 font-bold' : ''}`}>
-                            {served.G.toFixed(0)}/{target.G.toFixed(0)}g
-                        </span>
-                    </div>
-                )}
-                
-                {/* Status message */}
-                {statusMessage && (
-                    <div className={`text-xs font-semibold ${statusColor} mt-1`}>
-                        {statusMessage}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    // ===== MEAL CARD COMPONENT =====
-    const MealCard = ({ mealKey }) => {
-        const isExpanded = expandedMeals[mealKey];
-        const target = getMealTarget(mealKey);
-        const foods = mealsData[mealKey]?.alimentos || [];
-        const isPeri = mealKey === 'Intra' || mealKey === 'Post';
-        const info = mealInfo[mealKey];
-        const status = getMealStatus(mealKey);
-        const statusDot = getMealStatusDot(mealKey);
-
-        return (
-            <Card className={`bg-white shadow-md rounded-2xl overflow-hidden transition-all duration-200 ${isPeri ? 'border-l-4 border-l-brand-orange' : ''}`}>
-                <button 
-                    className="w-full text-left p-4 flex items-center justify-between"
-                    onClick={() => setExpandedMeals(prev => ({ ...prev, [mealKey]: !isExpanded }))}
-                    data-testid={`meal-card-${mealKey}`}
-                >
-                    <div className="flex items-center gap-3">
-                        <span className="text-2xl">{info.emoji}</span>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h3 className="font-bold text-gray-900">{info.name}</h3>
-                                <span className="text-sm">{statusDot.symbol}</span>
-                            </div>
-                            <p className="text-xs text-gray-500">
-                                {isPeri 
-                                    ? `${target.P.toFixed(0)}P | ${target.H.toFixed(0)}H`
-                                    : `${target.P.toFixed(0)}P | ${target.H.toFixed(0)}H | ${target.G.toFixed(0)}G`
-                                }
-                            </p>
-                        </div>
-                    </div>
-                    {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-                </button>
-
-                {isExpanded && (
-                    <CardContent className="pt-0 px-4 pb-4">
-                        {/* Progress bars */}
-                        <MealProgressBars mealKey={mealKey} />
-
-                        {/* Empty state */}
-                        {foods.length === 0 && !isPeri && (
-                            <div className="space-y-2">
-                                <Button 
-                                    className="w-full h-12 bg-brand-orange hover:bg-brand-orange-dark text-white font-bold rounded-full shadow-lg shadow-brand-orange/30"
-                                    onClick={() => loadMenuOptions(mealKey)}
-                                    data-testid={`menu-options-${mealKey}`}
-                                >
-                                    <Zap className="w-5 h-5 mr-2" /> SUGIÉREME UN MENÚ
-                                </Button>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Button 
-                                        variant="outline" 
-                                        className="h-10 rounded-full border-gray-300"
-                                        onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'normal' })}
-                                        data-testid={`build-meal-${mealKey}`}
-                                    >
-                                        <Wrench className="w-4 h-4 mr-1" /> Lo hago yo
-                                    </Button>
-                                    <Button 
-                                        variant="outline" 
-                                        className="h-10 rounded-full border-gray-300"
-                                        onClick={() => openRepeatModal(mealKey)}
-                                        data-testid={`repeat-meal-${mealKey}`}
-                                    >
-                                        <RefreshCw className="w-4 h-4 mr-1" /> Repetir
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Empty state for INTRA */}
-                        {foods.length === 0 && mealKey === 'Intra' && (
-                            <Button 
-                                className="w-full h-10 rounded-full bg-brand-orange/10 border border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
-                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'intra' })}
-                            >
-                                <Zap className="w-4 h-4 mr-1" /> Construir Intra
-                            </Button>
-                        )}
-
-                        {/* Empty state for POST */}
-                        {foods.length === 0 && mealKey === 'Post' && (
-                            <Button 
-                                className="w-full h-10 rounded-full bg-brand-orange/10 border border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
-                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'post' })}
-                            >
-                                <Zap className="w-4 h-4 mr-1" /> Construir Post
-                            </Button>
-                        )}
-
-                        {/* Foods list */}
-                        {foods.length > 0 && (
-                            <>
-                                <div className="border-t border-gray-100 pt-3 mb-3">
-                                    <p className="text-xs text-gray-500 mb-2 font-semibold">── INGREDIENTES ──</p>
-                                    <div className="space-y-3">
-                                        {foods.map((food, idx) => {
-                                            const macros = food.macros_efectivos || {};
-                                            const increment = getQuantityIncrement(food);
-                                            const isEditing = editingQuantity.mealKey === mealKey && editingQuantity.foodIndex === idx;
-                                            const hasMacros = (macros.P || 0) > 0 || (macros.H || 0) > 0 || (macros.G || 0) > 0;
-                                            
-                                            return (
-                                                <div 
-                                                    key={idx} 
-                                                    className="bg-gray-50 rounded-lg p-3"
-                                                >
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                            <span className="text-xl">{getFoodEmoji(food.categorias)}</span>
-                                                            <span className="text-sm font-semibold text-gray-800 truncate">{food.nombre}</span>
-                                                        </div>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-7 w-7 text-gray-400 hover:text-red-500" 
-                                                            onClick={() => removeFood(mealKey, idx)}
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </Button>
-                                                    </div>
-                                                    
-                                                    {/* Quantity controls */}
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-1">
-                                                            <Button 
-                                                                variant="outline" 
-                                                                size="icon" 
-                                                                className="h-8 w-8 rounded-full"
-                                                                onClick={() => updateFoodQuantity(mealKey, idx, -increment)}
-                                                            >
-                                                                <Minus className="w-3 h-3" />
-                                                            </Button>
-                                                            {isEditing ? (
-                                                                <input
-                                                                    type="number"
-                                                                    defaultValue={food.cantidad_g}
-                                                                    className="w-16 h-8 text-center text-sm font-bold border rounded-lg"
-                                                                    autoFocus
-                                                                    onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
-                                                                    onKeyDown={(e) => {
-                                                                        if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value);
-                                                                        if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null });
-                                                                    }}
-                                                                />
-                                                            ) : (
-                                                                <button 
-                                                                    className="w-16 h-8 text-sm font-bold text-center bg-white border border-gray-200 rounded-lg hover:border-brand-orange"
-                                                                    onClick={() => setEditingQuantity({ mealKey, foodIndex: idx })}
-                                                                >
-                                                                    {food.cantidad_g}g
-                                                                </button>
-                                                            )}
-                                                            <Button 
-                                                                variant="outline" 
-                                                                size="icon" 
-                                                                className="h-8 w-8 rounded-full"
-                                                                onClick={() => updateFoodQuantity(mealKey, idx, increment)}
-                                                            >
-                                                                <Plus className="w-3 h-3" />
-                                                            </Button>
-                                                        </div>
-                                                        
-                                                        {/* Macros display */}
-                                                        <div className="text-xs text-gray-500">
-                                                            {hasMacros ? (
-                                                                <span>
-                                                                    ({(macros.P || 0).toFixed(0)}P | {(macros.H || 0).toFixed(0)}H | {(macros.G || 0).toFixed(0)}G)
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-gray-400">(no aporta macros)</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                                
-                                {/* Add more button */}
-                                {foods.length < (isPeri ? 3 : 5) ? (
-                                    <Button 
-                                        variant="ghost" 
-                                        className="w-full text-brand-orange hover:text-brand-orange-dark"
-                                        onClick={() => setBuildMealModal({ open: true, mealKey, startStep: 2 })}
-                                    >
-                                        <Plus className="w-4 h-4 mr-1" /> Añadir ingrediente
-                                    </Button>
-                                ) : (
-                                    <p className="text-xs text-gray-400 text-center">Máximo {isPeri ? 3 : 5} alimentos alcanzado</p>
-                                )}
-                                
-                                {/* Clear meal button */}
-                                <button 
-                                    className="w-full text-xs text-gray-400 hover:text-red-500 mt-2 py-1"
-                                    onClick={() => clearMeal(mealKey)}
-                                >
-                                    🗑️ Vaciar comida
-                                </button>
-                            </>
-                        )}
-                    </CardContent>
-                )}
-            </Card>
-        );
-    };
-
     // ===== LOADING STATE =====
     if (loading) {
         return (
@@ -1352,7 +756,23 @@ const NutritionPage = () => {
                 </div>
 
                 {/* Sticky Summary */}
-                <DaySummary />
+                <DaySummary
+                    tipoDia={tipoDia}
+                    summaryExpanded={summaryExpanded}
+                    setSummaryExpanded={setSummaryExpanded}
+                    dayMacros={dayMacros}
+                    dayTarget={dayTarget}
+                    servedPeriP={servedPeriP}
+                    servedPeriH={servedPeriH}
+                    totalPeriP={totalPeriP}
+                    totalPeriH={totalPeriH}
+                    opcionPeri={opcionPeri}
+                    mealOrder={getMealOrder()}
+                    mealInfo={mealInfo}
+                    calculateMealMacros={calculateMealMacros}
+                    getMealStatus={getMealStatus}
+                    getDayStatus={getDayStatus}
+                />
 
                 <div className="max-w-lg mx-auto px-4 py-4">
                     {/* Date & Day type */}
@@ -1400,12 +820,43 @@ const NutritionPage = () => {
                         </CardContent>
                     </Card>
 
-                    {/* Config Section - always visible now */}
-                    <ConfigSection />
+                    {/* Config Section */}
+                    <ConfigSection
+                        tipoDia={tipoDia}
+                        numComidas={numComidas}
+                        setNumComidas={setNumComidas}
+                        momentoEntreno={momentoEntreno}
+                        setMomentoEntreno={setMomentoEntreno}
+                        opcionPeri={opcionPeri}
+                        setOpcionPeri={setOpcionPeri}
+                    />
 
                     {/* Meals */}
                     <div className="space-y-3 mb-4">
-                        {getMealOrder().map(mealKey => <MealCard key={mealKey} mealKey={mealKey} />)}
+                        {getMealOrder().map(mealKey => (
+                            <MealCard
+                                key={mealKey}
+                                mealKey={mealKey}
+                                mealInfo={mealInfo}
+                                mealsData={mealsData}
+                                expandedMeals={expandedMeals}
+                                setExpandedMeals={setExpandedMeals}
+                                getMealTarget={getMealTarget}
+                                calculateMealMacros={calculateMealMacros}
+                                getMealStatus={getMealStatus}
+                                loadMenuOptions={loadMenuOptions}
+                                setBuildMealModal={setBuildMealModal}
+                                openRepeatModal={openRepeatModal}
+                                removeFood={removeFood}
+                                updateFoodQuantity={updateFoodQuantity}
+                                updateFoodQuantityDirect={updateFoodQuantityDirect}
+                                editingQuantity={editingQuantity}
+                                setEditingQuantity={setEditingQuantity}
+                                getQuantityIncrement={getQuantityIncrement}
+                                clearMeal={clearMeal}
+                                getFoodEmoji={getFoodEmoji}
+                            />
+                        ))}
                     </div>
 
                     {/* Action buttons */}
@@ -1424,184 +875,33 @@ const NutritionPage = () => {
                 </div>
             </div>
 
-            {/* Search Modal */}
-            <Dialog open={addFoodModal.open} onOpenChange={(open) => !open && setAddFoodModal({ open: false, mealKey: null })}>
-                <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-                    <DialogHeader className="bg-bg-dark p-4 flex-shrink-0">
-                        <div className="flex items-center justify-between">
-                            <DialogTitle className="text-white flex items-center gap-2">
-                                <span>Buscador de alimentos</span>
-                                <span className="text-brand-orange text-sm">({addFoodModal.mealKey})</span>
-                            </DialogTitle>
-                            <button 
-                                onClick={() => setAddFoodModal({ open: false, mealKey: null })}
-                                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                            >
-                                <X className="w-5 h-5 text-white" />
-                            </button>
-                        </div>
-                        <DialogDescription className="sr-only">Busca alimentos para añadir a tu comida</DialogDescription>
-                    </DialogHeader>
-                    
-                    {/* Search input */}
-                    <div className="p-4 bg-white flex-shrink-0 border-b">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <Input 
-                                placeholder="Escribe un alimento..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10 h-12 rounded-xl bg-gray-100 border-0"
-                                data-testid="search-food-input"
-                            />
-                        </div>
-                    </div>
-                    
-                    {/* Category chips */}
-                    <div className="flex-shrink-0 bg-white border-b">
-                        <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
-                            {CATEGORY_CHIPS.map(chip => (
-                                <button 
-                                    key={chip.value}
-                                    onClick={() => setSearchCategory(chip.value)}
-                                    className={`flex-shrink-0 inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
-                                        searchCategory === chip.value 
-                                            ? 'bg-brand-orange text-white shadow-md' 
-                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                    }`}
-                                >
-                                    <span className="mr-1">{chip.emoji}</span> {chip.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    
-                    {/* Results */}
-                    <div className="flex-1 overflow-y-auto bg-gray-50">
-                        {searchLoading ? (
-                            <div className="flex items-center justify-center py-12">
-                                <div className="animate-spin rounded-full h-8 w-8 border-4 border-brand-orange border-t-transparent" />
-                            </div>
-                        ) : searchResults.length === 0 ? (
-                            <div className="text-center py-12">
-                                <span className="text-4xl mb-3 block">🔍</span>
-                                <p className="text-gray-500">{searchQuery ? 'No se encontraron resultados' : 'Escribe para buscar'}</p>
-                            </div>
-                        ) : (
-                            <div className="p-4 space-y-2">
-                                {searchResults.map(food => {
-                                    const macrosEf = food.macros_efectivos || {};
-                                    const pEf = macrosEf.P ?? food.proteinas ?? 0;
-                                    const hEf = macrosEf.H ?? food.hidratos ?? 0;
-                                    const gEf = macrosEf.G ?? food.grasas ?? 0;
-                                    const racion = food.racion || 100;
-                                    
-                                    return (
-                                        <button
-                                            key={food.id}
-                                            className="w-full text-left p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
-                                            onClick={() => handleAddFood(food)}
-                                        >
-                                            <div className="flex items-start gap-3">
-                                                <span className="text-2xl">{getFoodEmoji(food.categorias)}</span>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-900 truncate">{food.nombre}</p>
-                                                    <p className="text-xs text-gray-500">{racion}g / 1 ración</p>
-                                                    <div className="flex flex-wrap gap-1 mt-2">
-                                                        {pEf > 0 && (
-                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-protein-yellow text-gray-800">{pEf.toFixed(1)}g P</span>
-                                                        )}
-                                                        {hEf > 0 && (
-                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{hEf.toFixed(1)}g H</span>
-                                                        )}
-                                                        {gEf > 0 && (
-                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-fat-red text-white">{gEf.toFixed(1)}g G</span>
-                                                        )}
-                                                        {pEf === 0 && hEf === 0 && gEf === 0 && (
-                                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600">Sin macros</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+            {/* Search Food Modal */}
+            <SearchFoodModal
+                open={addFoodModal.open}
+                mealKey={addFoodModal.mealKey}
+                onClose={() => setAddFoodModal({ open: false, mealKey: null })}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                searchCategory={searchCategory}
+                setSearchCategory={setSearchCategory}
+                searchLoading={searchLoading}
+                searchResults={searchResults}
+                onAddFood={handleAddFood}
+                getFoodEmoji={getFoodEmoji}
+            />
 
             {/* Menu Options Modal */}
-            <Dialog open={menuOptionsModal.open} onOpenChange={(open) => !open && setMenuOptionsModal({ open: false, mealKey: null })}>
-                <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
-                    <DialogHeader className="bg-bg-dark p-4">
-                        <DialogTitle className="text-white">Elige tu menú</DialogTitle>
-                        <DialogDescription className="text-gray-400">
-                            {menuOptionsModal.mealKey && mealInfo[menuOptionsModal.mealKey]?.name}
-                        </DialogDescription>
-                    </DialogHeader>
-                    
-                    <ScrollArea className="flex-1 bg-gray-50">
-                        {menuOptionsLoading ? (
-                            <div className="flex flex-col items-center justify-center py-16">
-                                <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent mb-4" />
-                                <p className="text-gray-500">Calculando opciones...</p>
-                            </div>
-                        ) : menuOptions.length === 0 ? (
-                            <div className="text-center py-16">
-                                <span className="text-4xl mb-3 block">🤷</span>
-                                <p className="text-gray-500">No hay opciones disponibles</p>
-                            </div>
-                        ) : (
-                            <div className="p-4 space-y-4">
-                                {menuOptions.map((option, index) => {
-                                    const letra = ['A', 'B', 'C'][index];
-                                    return (
-                                        <button
-                                            key={option.plantilla_id}
-                                            className="w-full text-left p-4 bg-white rounded-2xl shadow-md hover:shadow-lg transition-all"
-                                            onClick={() => applyMenuOption(option)}
-                                            data-testid={`menu-option-${letra}`}
-                                        >
-                                            <div className="flex items-start gap-4">
-                                                <div className="w-12 h-12 rounded-full bg-brand-orange flex items-center justify-center text-white text-xl font-bold">
-                                                    {letra}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <h3 className="font-bold text-gray-900">{option.nombre}</h3>
-                                                        {option.cuadrada && (
-                                                            <span className="bg-carbs-green text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
-                                                                <Check className="w-3 h-3" /> Cuadrada
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="space-y-1 mb-3">
-                                                        {option.items.map((item, i) => (
-                                                            <div key={i} className="flex justify-between text-sm">
-                                                                <span className="text-gray-700">{item.nombre}</span>
-                                                                <span className="text-gray-500 font-mono">{item.cantidad_g}g</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{option.macros_totales?.P?.toFixed(0)}P</span>
-                                                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500 text-white">{option.macros_totales?.H?.toFixed(0)}H</span>
-                                                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-brand-orange text-white">{option.macros_totales?.G?.toFixed(0)}G</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </ScrollArea>
-                </DialogContent>
-            </Dialog>
+            <MenuOptionsModal
+                open={menuOptionsModal.open}
+                mealKey={menuOptionsModal.mealKey}
+                onClose={() => setMenuOptionsModal({ open: false, mealKey: null })}
+                mealInfo={mealInfo}
+                menuOptionsLoading={menuOptionsLoading}
+                menuOptions={menuOptions}
+                onApplyOption={applyMenuOption}
+            />
 
-            {/* Build Meal Modal - "Lo hago yo" Constructor */}
+            {/* Build Meal Modal */}
             <BuildMealModal 
                 open={buildMealModal.open}
                 mealKey={buildMealModal.mealKey}
