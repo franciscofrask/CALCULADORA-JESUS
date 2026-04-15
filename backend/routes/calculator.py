@@ -213,22 +213,27 @@ async def distribute_macros(data: dict, user = Depends(get_current_user)):
 
 @router.get("/search")
 async def search_foods_endpoint(
-    q: str,
+    q: str = "",
     category: Optional[str] = None,
+    tipo_comida: str = "normal",
     tag: Optional[str] = None,
-    limit: int = 20,
+    limit: int = 50,
+    vegano: bool = False,
     user = Depends(get_current_user)
 ):
-    """Búsqueda de alimentos para el chatbot."""
-    resultados = await buscar_alimentos_async(
+    """Búsqueda de alimentos con macros efectivos (CALMA)."""
+    alimentos = await buscar_alimentos_async(
         db=db,
         query=q,
         categoria=category or "",
+        tipo_comida=tipo_comida,
+        es_vegano=vegano,
         limit=limit,
+        calcular_efectivos=True,
         tag_filter=tag or ""
     )
     
-    return {"results": resultados, "count": len(resultados)}
+    return {"alimentos": alimentos, "total": len(alimentos)}
 
 @router.post("/suggest")
 async def suggest_foods_endpoint(

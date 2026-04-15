@@ -1,0 +1,71 @@
+{
+  "summary": "JG12 Iteration 14 - Critical bug fix verified. /api/calculator/search now returns 'alimentos' key with macros_efectivos calculated. Fixed frontend BuildMealModal.jsx to use 'alimentos' instead of 'results'. Dashboard shows correct consumed macros (P=72, H=54, G=6, kcal=558) from saved diet. All E2E flows working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ Backend: GET /api/calculator/search?q=pechuga returns 'alimentos' key (not 'results')",
+    "✅ Backend: GET /api/calculator/search returns macros_efectivos with P, H, G, kcal calculated",
+    "✅ Backend: GET /api/calculator/search?q=arroz+blanco returns foods with H>0 macros_efectivos",
+    "✅ Backend: GET /api/calculator/search supports category filter (category=2.2)",
+    "✅ Backend: GET /api/calculator/search supports tipo_comida=intra filter",
+    "✅ Backend: POST /api/diets saves diet with comidas and alimentos correctly",
+    "✅ Backend: GET /api/diets/2026-04-15 returns saved diet with exists:true",
+    "✅ Backend: Diet has correct macros (C1: pollo 200g P=42, arroz 70g H=53.9; C2: pollo 150g P=30 G=6)",
+    "✅ Backend: Total consumed macros calculated correctly (P=72, H=53.9, G=6, kcal=558)",
+    "✅ Backend: GET /api/macros returns rest day targets (P=225, H=170, G=60, 2120kcal)",
+    "✅ Frontend: Dashboard shows 558/2120 kcal consumed (correct!)",
+    "✅ Frontend: Dashboard circular trackers show P=72/225, H=54/170, G=6/60",
+    "✅ Frontend: Dashboard shows 'HOY · DESCANSO' (Wednesday is rest day)",
+    "✅ Frontend: Dashboard shows 'AUTO' badge for auto-calculated macros",
+    "✅ Frontend: NutritionPage loads with saved diet foods displayed",
+    "✅ Frontend: NutritionPage COMIDA 1 shows Carne picada pechuga pollo 200g (42P|0H|0G)",
+    "✅ Frontend: NutritionPage COMIDA 1 shows Arroz blanco (SOS) 70g (0P|54H|0G)",
+    "✅ Frontend: NutritionPage search modal now returns foods with macros (FIXED)",
+    "✅ Frontend: NutritionPage search for 'pollo' shows foods with P=17g, P=21g, P=20g etc",
+    "✅ Frontend: NutritionPage 'Guardar día' button visible and functional"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14.py",
+    "/app/test_reports/pytest/pytest_iteration14.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BuildMealModal.jsx: Fixed bug - was using 'result.results' instead of 'result.alimentos' (lines 257, 289)",
+    "Backend /api/calculator/search: Correctly returns 'alimentos' key with macros_efectivos calculated via CALMA engine",
+    "ClientDashboard.jsx: Correctly fetches /api/diets/{today} and sums macros_efectivos from all meals",
+    "NutritionPage.jsx: Correctly uses 'result.alimentos' in line 283 for search results"
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/nutrition/BuildMealModal.jsx - Fixed 'results' to 'alimentos' (2 occurrences)",
+    "/app/backend/tests/test_iteration14.py - Created comprehensive test suite"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (10/10 features verified)"
+  },
+  "test_credentials": {
+    "client_user": "clientedemo@test.com / demo123",
+    "admin_user": "alvaro@test.com / Alvaro123"
+  },
+  "seed_data_creation": "Used existing saved diet for 2026-04-15 with C1 (pollo 200g, arroz 70g) and C2 (pollo 150g)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 14 verified the critical bug fix in /api/calculator/search. The endpoint now returns 'alimentos' key with macros_efectivos calculated. Fixed BuildMealModal.jsx to use 'alimentos' instead of 'results'. Dashboard correctly shows consumed macros from saved diet (P=72, H=54, G=6, kcal=558). Today (2026-04-15) is Wednesday which is a rest day, so targets are P=225, H=170, G=60, 2120kcal. All data-testids working: kcal-consumed, tracker-proteína, tracker-hidratos, tracker-grasa, save-diet-btn.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Stripe payments"]
+  },
+  "bug_fix_summary": {
+    "issue": "/api/calculator/search was returning {results: [...]} without macros_efectivos",
+    "fix_backend": "Changed to return {alimentos: [...]} with macros_efectivos calculated via calcular_efectivos=True",
+    "fix_frontend": "BuildMealModal.jsx was using 'result.results', changed to 'result.alimentos'",
+    "verification": "Search modal now shows foods with protein values (P=17g, P=21g, etc.)"
+  }
+}

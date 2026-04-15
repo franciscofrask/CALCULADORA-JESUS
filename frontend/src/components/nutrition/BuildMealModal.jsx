@@ -254,7 +254,7 @@ const BuildMealModal = ({
                 limit: '100' 
             });
             const result = await api(`/api/calculator/search?${params}`);
-            setCategoryFoods(result.results || []);
+            setCategoryFoods(result.alimentos || []);
         } catch (err) {
             console.error('Error cargando alimentos:', err);
             toast.error('Error cargando alimentos');
@@ -286,7 +286,7 @@ const BuildMealModal = ({
             const params = new URLSearchParams({ q: query, limit: '50' });
             
             const result = await api(`/api/calculator/search?${params}`);
-            setSearchResults(result.results || []);
+            setSearchResults(result.alimentos || []);
         } catch (err) {
             console.error('Error buscando:', err);
         } finally {
