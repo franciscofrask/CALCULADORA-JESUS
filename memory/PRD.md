@@ -1,43 +1,36 @@
 # JG12 - Plataforma de Entrenamiento Personal
 
 ## Problema Original
-Plataforma de entrenamiento personal "JG12" con calculadora de macros CALMA, chatbot con IA, capa de targets automática y paneles multirol.
+Plataforma "JG12" con calculadora CALMA, chatbot IA, capa de targets, paneles multirol.
 
 ## Arquitectura
 ```
-/app/
-├── backend/
-│   ├── server.py, core/, models/, routes/
-│   ├── target_calculator.py + macros_tables.json  (Capa A: Targets)
-│   ├── calma_engine.py                            (Capa B: Macros efectivos)
-│   ├── macro_distribution.py                      (Distribución por comidas)
-│   ├── meal_builder.py, chatbot.py, pdf_generator.py
-│   └── tests/
-├── frontend/src/
-│   ├── pages/ (ClientDashboard, ProfilePage, NutritionPage, RoutinePage, ChatbotPage, ...)
-│   ├── components/nutrition/ (BuildMealModal, RepeatMealModal, CopyDietModal, ...)
-│   └── context/AuthContext.jsx
+/app/backend/
+  server.py, core/, models/, routes/ (auth, admin, calculator, chatbot, diets, messages, payments, reports, routines, users)
+  target_calculator.py + macros_tables.json (Capa A)
+  calma_engine.py (Capa B), macro_distribution.py, meal_builder.py, chatbot.py, pdf_generator.py
+/app/frontend/src/
+  pages/ (ClientDashboard, ProfilePage, NutritionPage[950 lines], RoutinePage, ChatbotPage, AuthPage, ...)
+  components/nutrition/ (BuildMealModal, MealCard, DaySummary, ConfigSection, SearchFoodModal, MenuOptionsModal, RepeatMealModal, CopyDietModal, PreferencesSetup)
+  components/ui/ (shadcn), context/AuthContext.jsx
 ```
 
 ## Implementado
-- Capa A Targets: 404 combinaciones Excel Jesús, auto-cálculo, override manual
-- Capa B CALMA v2: Macros efectivos por categoría, calibraciones
-- Distribución por comidas: 16 escenarios E1-E4
-- Chatbot IA con Claude Sonnet 4.5
-- Dashboard con trackers circulares SVG (consumido real vs objetivo)
-- ProfilePage con formulario datos corporales → targets/apply
-- RoutinePage rediseñada (grid días, stats, ejercicios expandibles)
-- NutritionPage modularizada (RepeatMealModal, CopyDietModal extraídos)
-- PDF export, búsqueda alimentos, auth JWT
+- Capa A Targets: 404 combinaciones, auto-cálculo, override manual
+- Capa B CALMA v2: Macros efectivos, calibraciones
+- 16 escenarios distribución, PDF export, chatbot Claude 4.5
+- Dashboard: trackers circulares SVG consumido vs objetivo, detección día entreno/descanso
+- ProfilePage: formulario datos corporales → auto-targets
+- RoutinePage: grid 7 días, stats, ejercicios expandibles, cardio, historial
+- NutritionPage: refactorizado a 950 líneas (7 componentes extraídos)
 
 ## Credenciales
-- Cliente: `clientedemo@test.com` / `demo123`
+- Cliente: `clientedemo@test.com` / `demo123` (hombre 80kg 20%BF volumen, rutina 5 días)
 - Admin: `alvaro@test.com` / `Alvaro123`
 
 ## Pendiente
 ### P1
-- Seguir reduciendo NutritionPage (~1650 líneas)
-- Asignar rutina demo para probar RoutinePage con datos
+- Probar flujo E2E completo: añadir alimentos → guardar dieta → ver progreso en dashboard
 
 ### P2
 - Integración real Stripe
@@ -46,6 +39,4 @@ Plataforma de entrenamiento personal "JG12" con calculadora de macros CALMA, cha
 - Ciclo de semanas automático
 
 ## Integraciones
-- Claude Sonnet 4.5 (Emergent LLM Key)
-- Stripe (MOCKED)
-- ReportLab (PDFs)
+- Claude Sonnet 4.5 (Emergent LLM Key) | Stripe (MOCKED) | ReportLab (PDFs)
