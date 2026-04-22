@@ -14,7 +14,7 @@ import {
     LayoutDashboard, Users, CreditCard, Dumbbell, 
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText, ArrowUpRight,
-    AlertTriangle, UserCheck, UserMinus
+    AlertTriangle, UserCheck, UserMinus, UserPlus
 } from 'lucide-react';
 
 // Admin Dashboard Home
@@ -372,6 +372,7 @@ const AdminLayout = () => {
     const navItems = [
         { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
+        { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
         { path: '/admin/routines', icon: Dumbbell, label: 'Rutinas' },
         { path: '/admin/payments', icon: CreditCard, label: 'Pagos' },
     ];

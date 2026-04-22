@@ -23,6 +23,7 @@ from routes import (
     messages_router,
     payments_router
 )
+from routes.leads import router as leads_router
 from models.user import PLAN_TYPES
 
 # Configure logging
@@ -86,6 +87,7 @@ api_router.include_router(routines_admin_router)
 api_router.include_router(reports_router)
 api_router.include_router(messages_router)
 api_router.include_router(payments_router)
+api_router.include_router(leads_router)
 
 # Mount API router
 app.include_router(api_router)

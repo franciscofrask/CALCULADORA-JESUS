@@ -14,6 +14,7 @@ import MessagesPage from "./pages/MessagesPage";
 import ProfilePage from "./pages/ProfilePage";
 import { AdminDashboard, AdminClientsList, AdminLayout } from "./pages/AdminDashboard";
 import ClientDetailPage from "./pages/ClientDetailPage";
+import LeadsPage from "./pages/LeadsPage";
 import ChatbotPage from "./pages/ChatbotPage";
 
 // Protected Route Component
@@ -115,6 +116,7 @@ function AppRoutes() {
                 <Route index element={<AdminDashboard />} />
                 <Route path="clients" element={<AdminClientsList />} />
                 <Route path="clients/:clientId" element={<ClientDetailPage />} />
+                <Route path="leads" element={<LeadsPage />} />
                 <Route path="routines" element={<AdminClientsList />} />
                 <Route path="payments" element={<AdminDashboard />} />
             </Route>
