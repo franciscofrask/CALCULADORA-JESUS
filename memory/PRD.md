@@ -1,15 +1,13 @@
 # JG12 - Plataforma de Entrenamiento Personal
 
 ## Implementado
-- Capa A Targets: 404 combinaciones, auto-cálculo, override manual
-- Capa B CALMA v2: Macros efectivos, calibraciones, 16 escenarios
-- Dashboard: trackers circulares consumido vs objetivo, detección entreno/descanso
-- ProfilePage: formulario datos corporales → auto-targets
-- RoutinePage: grid 7 días, stats, ejercicios expandibles, cardio, historial
-- NutritionPage: calendario visual, PDF export, auto-detección día, búsqueda frecuencia+favoritos
-- BuildMealModal: flujo guiado (P→H→G), bloqueo macro cubierto, favoritos con estrella
-- SearchFoodModal: favoritos con estrella, ordenación favoritos>frecuencia>alfabético
-- Chatbot Claude 4.5, auth JWT, PDF export, 3110 alimentos
+- Capa A Targets + Capa B CALMA v2 + 16 escenarios distribución
+- Dashboard cliente: trackers circulares consumido vs objetivo
+- ProfilePage: datos corporales → auto-targets
+- RoutinePage: grid 7 días, stats, ejercicios expandibles
+- NutritionPage: calendario, PDF export, auto-detección, favoritos, bloqueo macros, flujo guiado
+- AdminDashboard: 5 KPIs (total, activos, riesgo, bajas, MRR), distribución plan, próximos cobros
+- Chatbot Claude 4.5, auth JWT, 3110 alimentos, 11 colecciones MongoDB
 
 ## Credenciales
 - Cliente: `clientedemo@test.com` / `demo123`
@@ -18,15 +16,7 @@
 - Admin: `agutierrezp95@gmail.com` / `agutierrezp95@gmail.com`
 
 ## Pendiente
-### P2
-- Integración real Stripe
-- Tracking Module
-- Simulador visual peso/BF
+- Integración real Stripe | Tracking Module | Simulador peso/BF
 
 ## Integraciones
 - Claude Sonnet 4.5 (Emergent LLM Key) | Stripe (MOCKED) | ReportLab (PDFs)
-
-## Colecciones MongoDB (11)
-- foods (3110), food_categories (232), users (11), diets (6), payments (6)
-- client_profiles (4), macro_history (2), messages (2), reports (2), routines (1)
-- food_favorites (NEW)
