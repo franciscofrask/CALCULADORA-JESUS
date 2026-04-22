@@ -137,6 +137,38 @@ const BuildMealModal = ({
     const isCuadrada = Math.abs(target.P - served.P) <= 4 && 
                        Math.abs(target.H - served.H) <= 4 && 
                        (isPeriMode || Math.abs(target.G - served.G) <= 4);
+
+    // Check if a food should be blocked (macro already covered)
+    const getBlockReason = (macrosEf) => {
+        if (isPeriMode) return null;
+        const margin = 4;
+        const overP = served.P >= target.P + margin && macrosEf.P > 2;
+        const overH = served.H >= target.H + margin && macrosEf.H > 2;
+        const overG = served.G >= target.G + margin && macrosEf.G > 2;
+        
+        if (overP && macrosEf.P > macrosEf.H && macrosEf.P > macrosEf.G) {
+            return 'No se puede añadir: ya has cubierto la proteína de esta comida.';
+        }
+        if (overH && macrosEf.H > macrosEf.P && macrosEf.H > macrosEf.G) {
+            return 'No se puede añadir: ya has cubierto los hidratos de esta comida.';
+        }
+        if (overG && macrosEf.G > macrosEf.P && macrosEf.G > macrosEf.H) {
+            return 'No se puede añadir: ya has cubierto las grasas de esta comida.';
+        }
+        return null;
+    };
+
+    // Check block for a food item in the list
+    const getFoodBlockReason = (food) => {
+        const qty = food.racion || 100;
+        const factor = qty / 100;
+        const macrosEf = {
+            P: Math.round((food.proteinas || 0) * factor * 10) / 10,
+            H: Math.round((food.hidratos || 0) * factor * 10) / 10,
+            G: Math.round((food.grasas || 0) * factor * 10) / 10,
+        };
+        return getBlockReason(macrosEf);
+    };
     
     // Emoji mapping for preferences
     const preferenceEmojis = {
@@ -306,18 +338,11 @@ const BuildMealModal = ({
                 G: Math.round((food.grasas || 0) * factor * 10) / 10
             };
             
-            const newServed = {
-                P: served.P + macrosEf.P,
-                H: served.H + macrosEf.H,
-                G: served.G + macrosEf.G
-            };
-            
-            const overP = newServed.P - target.P;
-            const overH = newServed.H - target.H;
-            const overG = newServed.G - target.G;
-            
-            if (!isPeriMode && (overP > 10 || overH > 10 || overG > 10)) {
-                toast.warning(`⚠️ Este alimento te pasa de macros. Considera ajustar la cantidad.`);
+            // Check if adding this food would exceed macros significantly
+            const blockReason = getBlockReason(macrosEf);
+            if (blockReason) {
+                toast.error(blockReason);
+                return;
             }
             
             const foodToAdd = {
@@ -371,6 +396,12 @@ const BuildMealModal = ({
     // Confirm add adjusted food
     const handleConfirmAddFood = () => {
         if (!selectedFood) return;
+        
+        const blockReason = getBlockReason(adjustedMacros);
+        if (blockReason) {
+            toast.error(blockReason);
+            return;
+        }
         
         const foodToAdd = {
             ...selectedFood,
@@ -569,23 +600,38 @@ const BuildMealModal = ({
                                         </div>
                                     ) : (
                                         <div className="space-y-1">
-                                            {displayFoods.map((food, idx) => (
-                                                <button
-                                                    key={food.id || idx}
-                                                    onClick={() => handleFoodPreview(food)}
-                                                    className="w-full flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg text-left"
-                                                >
-                                                    <span className="text-lg">{getEmoji(food.categorias)}</span>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-sm text-black truncate">{food.nombre}</div>
-                                                        <div className="text-xs text-gray-500">
-                                                            {food._cantidad_sugerida ? `${food._cantidad_sugerida}${food.unidades ? ' ud' : 'g'} → ` : ''}
-                                                            P={food._macros_sugeridos?.P || Math.round(food.proteinas)}g
+                                            {displayFoods.map((food, idx) => {
+                                                const blockReason = getFoodBlockReason(food);
+                                                const isBlocked = !!blockReason;
+                                                return (
+                                                    <button
+                                                        key={food.id || idx}
+                                                        onClick={() => !isBlocked && handleFoodPreview(food)}
+                                                        disabled={isBlocked}
+                                                        className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${
+                                                            isBlocked
+                                                                ? 'opacity-40 cursor-not-allowed bg-gray-50'
+                                                                : 'hover:bg-gray-100'
+                                                        }`}
+                                                        title={blockReason || ''}
+                                                        data-testid={`food-item-${food.id || idx}`}
+                                                    >
+                                                        <span className="text-lg">{getEmoji(food.categorias)}</span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-sm text-black truncate">{food.nombre}</div>
+                                                            <div className="text-xs text-gray-500">
+                                                                {food._cantidad_sugerida ? `${food._cantidad_sugerida}${food.unidades ? ' ud' : 'g'} → ` : ''}
+                                                                P={food._macros_sugeridos?.P || Math.round(food.proteinas)}g
+                                                                {isBlocked && <span className="ml-1 text-red-400 font-semibold">· Macro cubierto</span>}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <Plus className="w-4 h-4 text-gray-400" />
-                                                </button>
-                                            ))}
+                                                        {isBlocked
+                                                            ? <span className="text-xs text-red-400 font-semibold flex-shrink-0">Bloqueado</span>
+                                                            : <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                        }
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </>

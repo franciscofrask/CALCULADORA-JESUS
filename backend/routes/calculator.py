@@ -221,7 +221,7 @@ async def search_foods_endpoint(
     vegano: bool = False,
     user = Depends(get_current_user)
 ):
-    """Búsqueda de alimentos con macros efectivos (CALMA)."""
+    """Búsqueda de alimentos con macros efectivos (CALMA), ordenados por frecuencia de uso."""
     alimentos = await buscar_alimentos_async(
         db=db,
         query=q,
@@ -232,8 +232,35 @@ async def search_foods_endpoint(
         calcular_efectivos=True,
         tag_filter=tag or ""
     )
-    
+
+    # Sort by client's usage frequency
+    food_freq = await _get_food_frequency(user["id"])
+    if food_freq:
+        alimentos.sort(key=lambda f: -food_freq.get(str(f.get("id", "")), 0))
+    else:
+        alimentos.sort(key=lambda f: f.get("nombre", ""))
+
     return {"alimentos": alimentos, "total": len(alimentos)}
+
+
+async def _get_food_frequency(user_id: str) -> dict:
+    """Count how many times each food appears in user's saved diets."""
+    diets = await db.diets.find(
+        {"user_id": user_id},
+        {"_id": 0, "comidas": 1}
+    ).to_list(100)
+
+    if not diets:
+        return {}
+
+    freq = {}
+    for diet in diets:
+        for meal_data in (diet.get("comidas") or {}).values():
+            for alimento in (meal_data.get("alimentos") or []):
+                fid = str(alimento.get("id", alimento.get("alimento_id", "")))
+                if fid:
+                    freq[fid] = freq.get(fid, 0) + 1
+    return freq
 
 @router.post("/suggest")
 async def suggest_foods_endpoint(

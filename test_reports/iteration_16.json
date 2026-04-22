@@ -1,0 +1,71 @@
+{
+  "summary": "JG12 Iteration 16 - All 4 nutrition calculator improvements verified. Backend: 3110 foods count, search with macros_efectivos, frequency ordering for users with diets, alphabetical for users without. Frontend: BuildMealModal shows protein categories in Paso 1, auto-advances to Paso 2 at 80% P, Paso 3 at 80% H, blocked foods show 'Macro cubierto' + 'Bloqueado' text with opacity-40.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ Backend: GET /api/calculator/foods/count returns 3110",
+    "✅ Backend: GET /api/calculator/search?q=pollo returns foods with macros",
+    "✅ Backend: GET /api/calculator/search?q=arroz returns carb foods (H>0)",
+    "✅ Backend: GET /api/calculator/search?q=whey returns protein powders (P>0)",
+    "✅ Backend: GET /api/calculator/search?q=&category=2.2 for clientedemo returns foods (frequency ordering)",
+    "✅ Backend: GET /api/calculator/search?q=&category=2.2 for cliente@test.com returns alphabetical order",
+    "✅ Backend: Search with category filter returns correct category foods",
+    "✅ Backend: Search response has required fields (alimentos, total, id, nombre, proteinas, hidratos, grasas)",
+    "✅ Frontend: NutritionPage loads with 4 meal cards (C1-C4) for rest day",
+    "✅ Frontend: Day type shows 'Día de descanso' (auto-detected from routine)",
+    "✅ Frontend: BuildMealModal opens when clicking 'Lo hago yo' on C1",
+    "✅ Frontend: BuildMealModal Paso 1 shows all 10 protein categories (Huevos, Claras, Aves, Vacuno, Cerdo, Pescados, Lácteos, Proteína, Legumbres, Vegetal)",
+    "✅ Frontend: Category click (Aves) loads 100 foods from that category",
+    "✅ Frontend: Foods show protein values (P=21g, P=20g, etc.)",
+    "✅ Frontend: Adding food updates macros display",
+    "✅ Frontend: Auto-advance to Paso 2 (Acompañamiento) when P reaches 80% (41/47.5g = 86%)",
+    "✅ Frontend: Toast notification '✅ Proteínas cubiertas. Elige el acompañamiento.'",
+    "✅ Frontend: Paso 2 shows SIDE_CATEGORIES (Arroces, Panes, Cereales, Pasta, Tubérculos, Fruta, Verduras, Legumbres, Lácteos, Bebidas, Comida prep., Dulces, Salsas, Grasas, Sopas)",
+    "✅ Frontend: Auto-advance to Paso 3 (Últimos toques) when H reaches 80% (78/51g = 153%)",
+    "✅ Frontend: Toast notification '✨ ¡Macros cubiertos! Últimos toques.'",
+    "✅ Frontend: Paso 3 shows user preference categories or all categories",
+    "✅ Frontend: Blocked foods show 'Macro cubierto' text in red",
+    "✅ Frontend: Blocked foods show 'Bloqueado' text",
+    "✅ Frontend: Blocked foods have opacity-40 class (grayed out)",
+    "✅ Frontend: Blocked foods are disabled (not clickable)",
+    "✅ Frontend: Blocking logic correct - H-dominant foods blocked when H covered, P-dominant foods NOT blocked when P not covered"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration16.py",
+    "/app/test_reports/pytest/pytest_iteration16.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BuildMealModal.jsx: getBlockReason() correctly checks if served >= target + 4g margin before blocking",
+    "BuildMealModal.jsx: getFoodBlockReason() correctly calculates macros at ración and checks dominant macro",
+    "BuildMealModal.jsx: Auto-advance useEffect correctly triggers at 80% P (Paso 1→2) and 80% H (Paso 2→3)",
+    "calculator.py: _get_food_frequency() correctly counts food usage from saved diets",
+    "calculator.py: search endpoint correctly sorts by frequency for users with diets, alphabetical for users without"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration16.py - Created comprehensive test suite for new features"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% (18/18 features verified)"
+  },
+  "test_credentials": {
+    "client_with_diets": "clientedemo@test.com / demo123",
+    "client_without_diets": "cliente@test.com / Cliente123"
+  },
+  "seed_data_creation": "Used existing saved diets for clientedemo (2026-04-12 and 2026-04-15 with pollo and arroz)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 16 verified all 4 nutrition calculator improvements: 1) 3110 foods loaded in search, 2) Search results ordered by frequency for users with diets (clientedemo), alphabetical for users without (cliente@test.com), 3) Blocked foods show disabled+opacity-40+'Bloqueado' when macro covered (served >= target + 4g), 4) Guided flow works: Paso 1 (protein categories) → Paso 2 (side categories at 80% P) → Paso 3 (user preferences at 80% H). Key data-testids: meal-card-C1, build-meal-C1, food-item-{id}, save-build-meal. Today is Wednesday April 22, 2026 (rest day for clientedemo).",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Stripe payments"]
+  }
+}
