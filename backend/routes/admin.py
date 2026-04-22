@@ -42,27 +42,50 @@ async def get_all_clients(
 
 @router.get("/clients/{client_id}")
 async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
-    """Obtener detalle completo de un cliente."""
+    """Obtener detalle completo de un cliente (8 pestañas)."""
     profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     
     user_data = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
     routines = await db.routines.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(10)
-    reports = await db.reports.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(10)
-    payments = await db.payments.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(10)
+    reports = await db.reports.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    payments = await db.payments.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
     messages = await db.messages.find(
         {"$or": [{"sender_id": profile["user_id"]}, {"receiver_id": profile["user_id"]}]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
-    
+    macro_history = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+
+    # Nutrition stats: recent diets + top foods
+    diets = await db.diets.find(
+        {"user_id": profile["user_id"]},
+        {"_id": 0, "fecha": 1, "comidas": 1, "tipo_dia": 1}
+    ).sort("fecha", -1).to_list(30)
+
+    food_counts = {}
+    for diet in diets:
+        for meal_data in (diet.get("comidas") or {}).values():
+            for a in (meal_data.get("alimentos") or []):
+                name = a.get("nombre", "?")
+                food_counts[name] = food_counts.get(name, 0) + 1
+    top_foods = sorted(food_counts.items(), key=lambda x: -x[1])[:5]
+
+    nutrition_stats = {
+        "total_diets": len(diets),
+        "recent_diets": [{"fecha": d["fecha"], "tipo_dia": d.get("tipo_dia", "?")} for d in diets[:7]],
+        "top_foods": [{"nombre": n, "count": c} for n, c in top_foods],
+    }
+
     return {
         "profile": profile,
         "user": user_data,
         "routines": routines,
         "reports": reports,
         "payments": payments,
-        "messages": messages
+        "messages": messages,
+        "macro_history": macro_history,
+        "nutrition_stats": nutrition_stats,
     }
 
 @router.put("/clients/{client_id}", response_model=ClientProfile)
@@ -111,9 +134,15 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     macro_log = {
         "id": str(uuid.uuid4()),
         "client_id": client_id,
+        "previous_training": profile.get("macros_training"),
+        "previous_rest": profile.get("macros_rest"),
+        "new_training": training,
+        "new_rest": rest,
         "training": training,
         "rest": rest,
         "note": data.note,
+        "changed_by": user.get("name", user.get("email", "admin")),
+        "client_weight": profile.get("weight"),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.macro_history.insert_one(macro_log)
