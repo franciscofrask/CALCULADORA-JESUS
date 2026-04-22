@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { 
     ChevronLeft, ChevronRight,
-    Save, Copy, ArrowUpRight, Calendar
+    Save, Copy, ArrowUpRight, Calendar, FileDown
 } from 'lucide-react';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 import BuildMealModal from '../components/nutrition/BuildMealModal';
@@ -15,6 +15,7 @@ import DaySummary from '../components/nutrition/DaySummary';
 import ConfigSection from '../components/nutrition/ConfigSection';
 import MealCard from '../components/nutrition/MealCard';
 import { SearchFoodModal, MenuOptionsModal } from '../components/nutrition/SearchFoodModal';
+import DietCalendar from '../components/nutrition/DietCalendar';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -142,6 +143,12 @@ const NutritionPage = () => {
     
     // Summary expanded state
     const [summaryExpanded, setSummaryExpanded] = useState(false);
+    
+    // Calendar state
+    const [calendarOpen, setCalendarOpen] = useState(false);
+    
+    // PDF export state
+    const [exportingPdf, setExportingPdf] = useState(false);
 
     // API helper
     const api = useCallback(async (endpoint, options = {}) => {
@@ -183,6 +190,51 @@ const NutritionPage = () => {
     const handlePreferencesSaved = (preferences) => {
         setUserPreferences(preferences);
         setShowPreferencesSetup(false);
+    };
+
+    // Auto-detect day type from routine
+    useEffect(() => {
+        const detectDayType = async () => {
+            try {
+                const routine = await api('/api/routines/current');
+                if (routine && routine.days) {
+                    const dateObj = new Date(currentDate + 'T12:00:00');
+                    const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase();
+                    const dayData = routine.days.find(d => d.day.toLowerCase() === dayName);
+                    if (dayData) {
+                        setTipoDia(dayData.is_rest ? 'descanso' : 'entrenamiento');
+                    }
+                }
+            } catch (err) {
+                // No routine assigned, keep default
+            }
+        };
+        detectDayType();
+    }, [currentDate]); // eslint-disable-line
+
+    // Export diet to PDF
+    const exportPdf = async () => {
+        setExportingPdf(true);
+        try {
+            const res = await fetch(`${API_URL}/api/diets/${currentDate}/pdf`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Error generando PDF');
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `dieta_jg12_${currentDate}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success('PDF descargado');
+        } catch (err) {
+            toast.error(err.message || 'Error exportando PDF');
+        }
+        setExportingPdf(false);
     };
 
     // Load distribution
@@ -783,10 +835,14 @@ const NutritionPage = () => {
                                 <Button variant="ghost" size="icon" onClick={() => changeDate(-1)}>
                                     <ChevronLeft className="w-5 h-5" />
                                 </Button>
-                                <div className="flex items-center gap-2">
+                                <button
+                                    className="flex items-center gap-2 hover:text-brand-orange transition-colors"
+                                    onClick={() => setCalendarOpen(true)}
+                                    data-testid="open-calendar-btn"
+                                >
                                     <Calendar className="w-4 h-4 text-brand-orange" />
                                     <span className="font-bold text-gray-900">{formatDate(currentDate)}</span>
-                                </div>
+                                </button>
                                 <Button variant="ghost" size="icon" onClick={() => changeDate(1)}>
                                     <ChevronRight className="w-5 h-5" />
                                 </Button>
@@ -868,6 +924,19 @@ const NutritionPage = () => {
                         >
                             <Save className="w-5 h-5 mr-2" /> Guardar día
                         </Button>
+                        <Button
+                            variant="outline"
+                            className="h-12 w-12 rounded-full"
+                            onClick={exportPdf}
+                            disabled={exportingPdf}
+                            data-testid="export-pdf-btn"
+                            title="Exportar PDF"
+                        >
+                            {exportingPdf
+                                ? <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                                : <FileDown className="w-5 h-5" />
+                            }
+                        </Button>
                         <Button variant="outline" className="h-12 w-12 rounded-full" onClick={() => setCopyModalOpen(true)}>
                             <Copy className="w-5 h-5" />
                         </Button>
@@ -942,6 +1011,14 @@ const NutritionPage = () => {
                 setCopyDate={setCopyDate}
                 onCopy={copyDiet}
                 currentDateFormatted={formatDate(currentDate)}
+            />
+
+            {/* Diet Calendar Modal */}
+            <DietCalendar
+                open={calendarOpen}
+                onClose={() => setCalendarOpen(false)}
+                onSelectDate={(date) => setCurrentDate(date)}
+                api={api}
             />
         </div>
     );

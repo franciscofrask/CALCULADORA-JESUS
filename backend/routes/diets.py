@@ -2,12 +2,14 @@
 Rutas de dietas: CRUD, calendario, copiar.
 """
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
 from typing import Optional
 import calendar
 
 from core.database import db
 from core.security import get_current_user
+from pdf_generator import generate_diet_pdf
 
 router = APIRouter(prefix="/diets", tags=["diets"])
 
@@ -168,3 +170,75 @@ async def delete_diet(fecha: str, user = Depends(get_current_user)):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Dieta no encontrada")
     return {"message": "Dieta eliminada", "fecha": fecha}
+
+
+@router.get("/{fecha}/pdf")
+async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
+    """Genera PDF de la dieta de un día desde NutritionPage."""
+    diet = await db.diets.find_one(
+        {"user_id": user["id"], "fecha": fecha},
+        {"_id": 0}
+    )
+    if not diet:
+        raise HTTPException(status_code=404, detail="No hay dieta guardada para este día")
+
+    comidas_raw = diet.get("comidas", {})
+    if not comidas_raw:
+        raise HTTPException(status_code=400, detail="La dieta está vacía")
+
+    meal_names = {
+        "C1": "Comida 1", "C2": "Comida 2", "C3": "Comida 3", "C4": "Comida 4",
+        "Intra": "Intra-entreno", "Post": "Post-entreno"
+    }
+
+    # Build comidas list in the format pdf_generator expects
+    comidas_list = []
+    total_p, total_h, total_g = 0, 0, 0
+
+    for key in ["C1", "Intra", "Post", "C2", "C3", "C4"]:
+        meal_data = comidas_raw.get(key)
+        if not meal_data:
+            continue
+        alimentos_raw = meal_data.get("alimentos", [])
+        if not alimentos_raw:
+            continue
+
+        alimentos_pdf = []
+        mp, mh, mg = 0, 0, 0
+        for a in alimentos_raw:
+            me = a.get("macros_efectivos", {})
+            p = round(me.get("P", 0), 1)
+            h = round(me.get("H", 0), 1)
+            g = round(me.get("G", 0), 1)
+            mp += p; mh += h; mg += g
+            alimentos_pdf.append({
+                "nombre": a.get("nombre", "?"),
+                "cantidad": a.get("cantidad_g", 0),
+                "unidad": "g",
+                "macros": {"P": p, "H": h, "G": g},
+            })
+
+        total_p += mp; total_h += mh; total_g += mg
+        comidas_list.append({
+            "numero": meal_names.get(key, key),
+            "alimentos": alimentos_pdf,
+            "macros": {"P": round(mp, 1), "H": round(mh, 1), "G": round(mg, 1)},
+            "objetivo": {},
+        })
+
+    summary = {
+        "objetivo_total": {},
+        "totales": {"P": round(total_p, 1), "H": round(total_h, 1), "G": round(total_g, 1)},
+        "diferencia": {},
+        "comidas": comidas_list,
+    }
+
+    user_name = user.get("name", "Cliente")
+    pdf_buffer = generate_diet_pdf(summary, user_name, fecha)
+    filename = f"dieta_jg12_{fecha}.pdf"
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
