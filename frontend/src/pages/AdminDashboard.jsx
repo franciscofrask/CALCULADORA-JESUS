@@ -13,7 +13,8 @@ import { PlanBadge, JG12Logo } from './ClientDashboard';
 import { 
     LayoutDashboard, Users, CreditCard, Dumbbell, 
     MessageCircle, LogOut, Search, Bell,
-    ChevronRight, DollarSign, FileText, ArrowUpRight
+    ChevronRight, DollarSign, FileText, ArrowUpRight,
+    AlertTriangle, UserCheck, UserMinus
 } from 'lucide-react';
 
 // Admin Dashboard Home
@@ -21,213 +22,211 @@ const AdminDashboard = () => {
     const { api } = useAuth();
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
+    const [upcoming, setUpcoming] = useState([]);
+    const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchStats();
-    }, []);
-
-    const fetchStats = async () => {
-        try {
-            const response = await api.get('/admin/dashboard');
-            setStats(response.data);
-        } catch (error) {
-            console.error('Error fetching stats:', error);
-            toast.error('Error al cargar estadísticas');
-        } finally {
-            setLoading(false);
-        }
-    };
+        const fetchAll = async () => {
+            try {
+                const [statsRes, upcomingRes, clientsRes] = await Promise.all([
+                    api.get('/admin/dashboard-stats'),
+                    api.get('/admin/upcoming-payments'),
+                    api.get('/admin/clients'),
+                ]);
+                setStats(statsRes.data);
+                setUpcoming(upcomingRes.data.upcoming || []);
+                setClients(clientsRes.data || []);
+            } catch (error) {
+                console.error('Error fetching dashboard:', error);
+                toast.error('Error al cargar dashboard');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAll();
+    }, [api]);
 
     if (loading) {
         return (
             <div className="p-6 bg-[#0A0A0A] min-h-screen">
                 <div className="animate-pulse space-y-4">
-                    <div className="h-8 bg-[#222] rounded w-1/4"></div>
-                    <div className="grid grid-cols-4 gap-4">
-                        {[1, 2, 3, 4].map(i => (
-                            <div key={i} className="h-32 bg-[#111] rounded"></div>
-                        ))}
+                    <div className="h-8 bg-[#222] rounded w-1/4" />
+                    <div className="grid grid-cols-5 gap-4">
+                        {[1,2,3,4,5].map(i => <div key={i} className="h-28 bg-[#111] rounded-xl" />)}
                     </div>
+                    <div className="h-48 bg-[#111] rounded-xl" />
                 </div>
             </div>
         );
     }
 
+    const planColors = { gold: '#EAB308', silver: '#9CA3AF', bronze: '#C2410C', elm: '#FF671F' };
+    const totalPlanActive = Object.values(stats?.plans || {}).reduce((a, b) => a + b, 0);
+
     return (
-        <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen">
+        <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen" data-testid="admin-dashboard">
+            {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="heading-2 text-white">DASHBOARD</h1>
-                    <p className="text-white/50 uppercase tracking-wider text-sm">Panel de operaciones JG12</p>
+                    <h1 className="text-3xl font-bold text-white tracking-tight" style={{ fontFamily: 'Bebas Neue' }}>PANEL DE CONTROL</h1>
+                    <p className="text-white/40 text-sm">Estado del negocio en tiempo real</p>
                 </div>
                 <Button variant="outline" size="icon" className="bg-transparent border-white/20 hover:border-[#FF671F]">
                     <Bell className="w-4 h-4 text-white" />
                 </Button>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="bg-[#111111] border-[#222222]">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-white/50 uppercase tracking-wider">Clientes Activos</p>
-                                <p className="text-4xl font-bold text-[#FF671F] mt-1" style={{ fontFamily: 'Bebas Neue' }}>
-                                    {stats?.total_clients || 0}
-                                </p>
-                            </div>
-                            <div className="w-12 h-12 bg-[#FF671F]/10 rounded-lg flex items-center justify-center">
-                                <Users className="w-6 h-6 text-[#FF671F]" />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-[#111111] border-[#222222]">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-white/50 uppercase tracking-wider">MRR</p>
-                                <p className="text-4xl font-bold text-green-500 mt-1" style={{ fontFamily: 'Bebas Neue' }}>
-                                    {stats?.mrr || 0}€
-                                </p>
-                            </div>
-                            <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center">
-                                <DollarSign className="w-6 h-6 text-green-500" />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-[#111111] border-[#222222]">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-white/50 uppercase tracking-wider">Reportes Pend.</p>
-                                <p className="text-4xl font-bold text-yellow-500 mt-1" style={{ fontFamily: 'Bebas Neue' }}>
-                                    {stats?.pending_reports || 0}
-                                </p>
-                            </div>
-                            <div className="w-12 h-12 bg-yellow-500/10 rounded-lg flex items-center justify-center">
-                                <FileText className="w-6 h-6 text-yellow-500" />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-[#111111] border-[#222222]">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-white/50 uppercase tracking-wider">Rutinas Pend.</p>
-                                <p className="text-4xl font-bold text-purple-500 mt-1" style={{ fontFamily: 'Bebas Neue' }}>
-                                    {stats?.pending_routines || 0}
-                                </p>
-                            </div>
-                            <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                                <Dumbbell className="w-6 h-6 text-purple-500" />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+            {/* KPI Row */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="kpi-row">
+                <KpiCard value={stats?.total_clients || 0} label="Clientes totales" icon={Users} color="#FF671F" testId="kpi-total" />
+                <KpiCard value={stats?.active_clients || 0} label="Activos" icon={UserCheck} color="#22C55E" testId="kpi-active" />
+                <KpiCard value={stats?.at_risk_clients || 0} label="En riesgo" icon={AlertTriangle} color="#EAB308" testId="kpi-risk" />
+                <KpiCard value={stats?.inactive_clients || 0} label="Bajas" icon={UserMinus} color="#EF4444" testId="kpi-bajas" />
+                <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />
             </div>
 
-            {/* Bottom Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-[#111111] border-[#222222]">
-                    <CardHeader>
-                        <CardTitle className="text-lg text-white uppercase tracking-wider">Clientes por Plan</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-3">
-                            {Object.entries(stats?.clients_by_plan || {}).map(([plan, count]) => (
-                                <div key={plan} className="flex items-center justify-between p-3 bg-[#1A1A1A] rounded-lg">
-                                    <PlanBadge plan={plan} />
-                                    <span className="font-bold text-white text-xl" style={{ fontFamily: 'Bebas Neue' }}>{count}</span>
+            {/* Plan Distribution */}
+            <Card className="bg-[#111111] border-[#222]" data-testid="plan-distribution">
+                <CardContent className="p-5">
+                    <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-4">Distribución por plan</p>
+                    <div className="flex items-center gap-3">
+                        {/* Bar */}
+                        <div className="flex-1 flex h-8 rounded-lg overflow-hidden bg-[#1A1A1A]">
+                            {['gold', 'silver', 'bronze', 'elm'].map(plan => {
+                                const count = stats?.plans?.[plan] || 0;
+                                const pct = totalPlanActive > 0 ? (count / totalPlanActive) * 100 : 0;
+                                if (pct === 0) return null;
+                                return (
+                                    <div
+                                        key={plan}
+                                        className="h-full flex items-center justify-center text-xs font-bold transition-all"
+                                        style={{ width: `${pct}%`, backgroundColor: planColors[plan], color: plan === 'silver' ? '#000' : '#fff', minWidth: count > 0 ? '40px' : 0 }}
+                                        title={`${plan}: ${count}`}
+                                    >
+                                        {count}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {/* Legend */}
+                        <div className="flex gap-3 flex-shrink-0">
+                            {['gold', 'silver', 'bronze', 'elm'].map(plan => (
+                                <div key={plan} className="flex items-center gap-1.5">
+                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: planColors[plan] }} />
+                                    <span className="text-xs text-white/50 uppercase">{plan}</span>
+                                    <span className="text-xs font-bold text-white">{stats?.plans?.[plan] || 0}</span>
                                 </div>
                             ))}
-                            {Object.keys(stats?.clients_by_plan || {}).length === 0 && (
-                                <p className="text-white/50 text-center py-4">Sin clientes aún</p>
-                            )}
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </CardContent>
+            </Card>
 
-                <Card className="bg-[#111111] border-[#222222]">
-                    <CardHeader>
-                        <CardTitle className="text-lg text-white uppercase tracking-wider">Pagos de Hoy</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                    <span className="text-white">Exitosos</span>
-                                </div>
-                                <span className="font-bold text-green-500 text-xl" style={{ fontFamily: 'Bebas Neue' }}>
-                                    {stats?.today_payments?.count || 0}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-[#1A1A1A] rounded-lg">
-                                <div className="flex items-center gap-2">
-                                    <DollarSign className="w-5 h-5 text-white/50" />
-                                    <span className="text-white">Total recaudado</span>
-                                </div>
-                                <span className="font-bold text-[#FF671F] text-xl" style={{ fontFamily: 'Bebas Neue' }}>
-                                    {stats?.today_payments?.total || 0}€
-                                </span>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Quick Actions */}
-            <Card className="bg-[#111111] border-[#222222]">
-                <CardHeader>
-                    <CardTitle className="text-lg text-white uppercase tracking-wider">Acciones Rápidas</CardTitle>
+            {/* Upcoming Payments */}
+            <Card className="bg-[#111111] border-[#222]" data-testid="upcoming-payments">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="text-base text-white uppercase tracking-wider flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-[#FF671F]" />
+                            Próximos cobros (7 días)
+                        </span>
+                        <Badge className="bg-[#FF671F]/20 text-[#FF671F] border-0 text-xs">{upcoming.length}</Badge>
+                    </CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Button 
-                            variant="outline" 
-                            className="h-20 flex-col bg-transparent border-[#333] hover:border-[#FF671F] hover:bg-[#FF671F]/10 text-white" 
-                            onClick={() => navigate('/admin/clients')}
-                        >
-                            <Users className="w-5 h-5 mb-2 text-[#FF671F]" />
-                            <span className="uppercase text-xs tracking-wider">Ver Clientes</span>
+                <CardContent className="pt-0">
+                    {upcoming.length === 0 ? (
+                        <p className="text-white/30 text-sm text-center py-4">No hay cobros programados en los próximos 7 días</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {upcoming.map((u, i) => {
+                                const payDate = u.next_payment ? new Date(u.next_payment) : null;
+                                const daysLeft = payDate ? Math.ceil((payDate - new Date()) / (1000 * 60 * 60 * 24)) : '?';
+                                return (
+                                    <div key={i} className="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-lg border border-[#222] hover:border-[#FF671F]/30 transition-colors" data-testid={`upcoming-${i}`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 bg-[#FF671F]/10 rounded-lg flex items-center justify-center">
+                                                <span className="text-[#FF671F] font-bold text-sm" style={{ fontFamily: 'Bebas Neue' }}>{daysLeft}d</span>
+                                            </div>
+                                            <div>
+                                                <p className="text-white text-sm font-medium">{u.name}</p>
+                                                <p className="text-white/40 text-xs">{payDate ? payDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '—'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <PlanBadge plan={u.plan} />
+                                            <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Bebas Neue' }}>{u.price}€</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Client List (compact) */}
+            <Card className="bg-[#111111] border-[#222]" data-testid="client-list-compact">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="text-base text-white uppercase tracking-wider flex items-center gap-2">
+                            <Users className="w-4 h-4 text-[#FF671F]" />
+                            Clientes ({clients.length})
+                        </span>
+                        <Button variant="ghost" size="sm" className="text-[#FF671F] hover:bg-[#FF671F]/10 uppercase text-xs" onClick={() => navigate('/admin/clients')}>
+                            Ver todos <ChevronRight className="w-3 h-3 ml-1" />
                         </Button>
-                        <Button 
-                            variant="outline" 
-                            className="h-20 flex-col bg-transparent border-[#333] hover:border-[#FF671F] hover:bg-[#FF671F]/10 text-white" 
-                            onClick={() => navigate('/admin/routines')}
-                        >
-                            <Dumbbell className="w-5 h-5 mb-2 text-[#FF671F]" />
-                            <span className="uppercase text-xs tracking-wider">Generar Rutina</span>
-                        </Button>
-                        <Button 
-                            variant="outline" 
-                            className="h-20 flex-col bg-transparent border-[#333] hover:border-[#FF671F] hover:bg-[#FF671F]/10 text-white" 
-                            onClick={() => toast.info('Próximamente')}
-                        >
-                            <MessageCircle className="w-5 h-5 mb-2 text-[#FF671F]" />
-                            <span className="uppercase text-xs tracking-wider">Mensajes</span>
-                        </Button>
-                        <Button 
-                            variant="outline" 
-                            className="h-20 flex-col bg-transparent border-[#333] hover:border-[#FF671F] hover:bg-[#FF671F]/10 text-white" 
-                            onClick={() => toast.info('Próximamente')}
-                        >
-                            <CreditCard className="w-5 h-5 mb-2 text-[#FF671F]" />
-                            <span className="uppercase text-xs tracking-wider">Pagos</span>
-                        </Button>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    <div className="space-y-1.5">
+                        {clients.slice(0, 8).map(c => (
+                            <div
+                                key={c.id}
+                                className="flex items-center justify-between p-2.5 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
+                                onClick={() => navigate(`/admin/clients/${c.id}`)}
+                                data-testid={`client-row-${c.id}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-[#222] rounded-lg flex items-center justify-center">
+                                        <span className="text-[#FF671F] font-bold text-xs">{c.user?.name?.charAt(0)}</span>
+                                    </div>
+                                    <div>
+                                        <p className="text-white text-sm font-medium">{c.user?.name}</p>
+                                        <p className="text-white/30 text-xs">{c.user?.email}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <PlanBadge plan={c.plan} />
+                                    <Badge className={c.status === 'activo' ? 'bg-green-500/10 text-green-500 border-0 text-[10px]' : 'bg-red-500/10 text-red-400 border-0 text-[10px]'}>
+                                        {c.status}
+                                    </Badge>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </CardContent>
             </Card>
         </div>
     );
 };
+
+// KPI Card Component
+const KpiCard = ({ value, label, icon: Icon, color, testId }) => (
+    <Card className="bg-[#111111] border-[#222]" data-testid={testId}>
+        <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+                <div>
+                    <p className="text-3xl font-bold mt-1" style={{ fontFamily: 'Bebas Neue', color }}>{value}</p>
+                    <p className="text-[10px] text-white/40 uppercase tracking-wider mt-1">{label}</p>
+                </div>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
+                    <Icon className="w-4 h-4" style={{ color }} />
+                </div>
+            </div>
+        </CardContent>
+    </Card>
+);
 
 // Admin Clients List
 const AdminClientsList = () => {

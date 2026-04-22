@@ -2,7 +2,7 @@
 Rutas de administración: clientes, dashboard, entrenadores.
 """
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
 import uuid
 
@@ -122,33 +122,106 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
 
 # ==================== DASHBOARD ====================
 
-@router.get("/dashboard")
-async def get_dashboard_stats(user = Depends(get_admin_user)):
-    """Obtener estadísticas del dashboard de admin."""
-    total_clients = await db.client_profiles.count_documents({})
-    active_clients = await db.client_profiles.count_documents({"status": "activo"})
-    
-    # Plans distribution
+@router.get("/dashboard-stats")
+async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
+    """Métricas reales del negocio con agregación MongoDB."""
+    now = datetime.now(timezone.utc)
+    first_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    total = await db.client_profiles.count_documents({})
+    active = await db.client_profiles.count_documents({"status": "activo"})
+    inactive = await db.client_profiles.count_documents({"status": {"$in": ["inactivo", "baja", "cancelado"]}})
+
+    # At-risk: active but week >= 3 and no report in last 14 days
+    fourteen_ago = (now - timedelta(days=14)).isoformat()
+    active_profiles = await db.client_profiles.find(
+        {"status": "activo", "week": {"$gte": 3}}, {"_id": 0, "id": 1, "user_id": 1}
+    ).to_list(500)
+    at_risk = 0
+    for p in active_profiles:
+        recent_report = await db.reports.find_one(
+            {"client_id": p["id"], "created_at": {"$gte": fourteen_ago}}
+        )
+        if not recent_report:
+            at_risk += 1
+
+    # Bajas del mes
+    bajas_mes = await db.client_profiles.count_documents({
+        "status": {"$in": ["baja", "cancelado", "inactivo"]},
+    })
+
+    # Plan distribution
     plans = {}
     for plan in ["gold", "silver", "bronze", "elm"]:
-        count = await db.client_profiles.count_documents({"plan": plan})
-        plans[plan] = count
-    
-    # Recent activity
-    recent_reports = await db.reports.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
-    recent_messages = await db.messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
-    
-    # Revenue (mocked)
-    payments = await db.payments.find({"status": "success"}, {"_id": 0}).to_list(1000)
+        plans[plan] = await db.client_profiles.count_documents({"plan": plan, "status": "activo"})
+
+    # MRR (Monthly Recurring Revenue)
+    mrr = 0
+    active_for_mrr = await db.client_profiles.find(
+        {"status": "activo"}, {"_id": 0, "price": 1}
+    ).to_list(500)
+    mrr = sum(p.get("price", 0) for p in active_for_mrr)
+
+    # Revenue this month
+    payments = await db.payments.find(
+        {"status": "success"}, {"_id": 0, "amount": 1}
+    ).to_list(1000)
     total_revenue = sum(p.get("amount", 0) for p in payments)
-    
+
     return {
-        "total_clients": total_clients,
-        "active_clients": active_clients,
+        "total_clients": total,
+        "active_clients": active,
+        "at_risk_clients": at_risk,
+        "bajas_mes": bajas_mes,
+        "inactive_clients": inactive,
         "plans": plans,
-        "recent_reports": recent_reports,
-        "recent_messages": recent_messages,
-        "total_revenue": total_revenue
+        "mrr": mrr,
+        "total_revenue": total_revenue,
+    }
+
+
+@router.get("/upcoming-payments")
+async def get_upcoming_payments(user = Depends(get_admin_user)):
+    """Clientes con cobro en los próximos 7 días."""
+    now = datetime.now(timezone.utc)
+    seven_days = now + timedelta(days=7)
+    now_iso = now.isoformat()
+    seven_iso = seven_days.isoformat()
+
+    profiles = await db.client_profiles.find(
+        {
+            "status": "activo",
+            "next_payment": {"$gte": now_iso, "$lte": seven_iso}
+        },
+        {"_id": 0}
+    ).sort("next_payment", 1).to_list(100)
+
+    results = []
+    for p in profiles:
+        user_data = await db.users.find_one({"id": p["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+        results.append({
+            "client_id": p["id"],
+            "name": user_data.get("name", "?") if user_data else "?",
+            "email": user_data.get("email", "") if user_data else "",
+            "plan": p.get("plan"),
+            "price": p.get("price", 0),
+            "next_payment": p.get("next_payment"),
+        })
+
+    return {"upcoming": results, "total": len(results)}
+
+
+@router.get("/dashboard")
+async def get_dashboard_stats(user = Depends(get_admin_user)):
+    """Legacy dashboard endpoint (backwards compatible)."""
+    stats = await get_dashboard_stats_v2(user)
+    return {
+        "total_clients": stats["total_clients"],
+        "active_clients": stats["active_clients"],
+        "plans": stats["plans"],
+        "mrr": stats["mrr"],
+        "total_revenue": stats["total_revenue"],
+        "clients_by_plan": stats["plans"],
     }
 
 # ==================== TRAINERS ====================

@@ -1,0 +1,69 @@
+{
+  "summary": "JG12 Iteration 18 - Admin Dashboard with real metrics fully verified. Backend: All 16 API tests pass (dashboard-stats, upcoming-payments, legacy dashboard, auth protection). Frontend: All 12 features verified (5 KPI cards, plan distribution bar, upcoming payments section, client list, navigation).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ Backend: Admin login returns token with admin/trainer role",
+    "✅ Backend: GET /api/admin/dashboard-stats returns all KPI fields (total_clients, active_clients, at_risk_clients, inactive_clients, mrr, plans)",
+    "✅ Backend: dashboard-stats plans object has gold, silver, bronze, elm counts",
+    "✅ Backend: dashboard-stats values match expected (4 total, 4 active, 0 risk, 496€ MRR)",
+    "✅ Backend: dashboard-stats plan distribution correct (gold=2, silver=2)",
+    "✅ Backend: dashboard-stats requires admin auth (rejects client token with 403)",
+    "✅ Backend: dashboard-stats rejects no auth (401)",
+    "✅ Backend: GET /api/admin/upcoming-payments returns structure with upcoming array and total",
+    "✅ Backend: upcoming-payments items have name, plan, price, next_payment fields",
+    "✅ Backend: upcoming-payments returns 0 items (dates in past as expected)",
+    "✅ Backend: upcoming-payments requires admin auth (rejects client token)",
+    "✅ Backend: GET /api/admin/dashboard (legacy) still works with backwards compatibility",
+    "✅ Backend: legacy dashboard has clients_by_plan alias",
+    "✅ Backend: GET /api/admin/clients returns 4 clients with user data",
+    "✅ Backend: admin clients have user object with name and email",
+    "✅ Frontend: Admin dashboard loads with data-testid='admin-dashboard'",
+    "✅ Frontend: KPI row shows 5 cards (kpi-total, kpi-active, kpi-risk, kpi-bajas, kpi-mrr)",
+    "✅ Frontend: KPI values match backend (4 total, 4 active, 0 risk, 0 bajas, 496€ MRR)",
+    "✅ Frontend: Plan distribution bar shows Gold 2 (yellow) and Silver 2 (gray) with correct colors",
+    "✅ Frontend: Próximos cobros section shows '0' badge and 'No hay cobros programados' message",
+    "✅ Frontend: Client list shows 4 clients with name, email, plan badge, status",
+    "✅ Frontend: Click on client row navigates to /admin/clients/{id}"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration18_admin_dashboard.py",
+    "/app/test_reports/pytest/pytest_iteration18.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "admin.py: dashboard-stats correctly calculates MRR from active client prices (sum of price field)",
+    "admin.py: at_risk logic correctly checks week>=3 AND no report in 14 days",
+    "admin.py: upcoming-payments correctly filters by next_payment date range (now to +7 days)",
+    "admin.py: legacy dashboard endpoint correctly delegates to dashboard-stats for backwards compatibility",
+    "AdminDashboard.jsx: KpiCard component properly uses data-testid for all 5 cards",
+    "AdminDashboard.jsx: Plan distribution bar uses correct colors (gold=#EAB308, silver=#9CA3AF, bronze=#C2410C, elm=#FF671F)",
+    "AdminDashboard.jsx: Client rows have data-testid='client-row-{id}' for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration18_admin_dashboard.py - Created comprehensive test suite for admin dashboard endpoints"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (12/12 features verified)"
+  },
+  "test_credentials": {
+    "admin": "alvaro@test.com / Alvaro123",
+    "client": "clientedemo@test.com / demo123"
+  },
+  "seed_data_creation": "Using existing 4 client_profiles: 2 gold (149€ each), 2 silver (99€ each) = 496€ MRR. All status='activo'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 18 verified admin dashboard with real metrics. Backend endpoints: GET /api/admin/dashboard-stats (KPIs), GET /api/admin/upcoming-payments (7-day payments), GET /api/admin/dashboard (legacy). Frontend data-testids: admin-dashboard, kpi-row, kpi-total, kpi-active, kpi-risk, kpi-bajas, kpi-mrr, plan-distribution, upcoming-payments, client-list-compact, client-row-{id}. All 4 clients are active with status='activo'. MRR calculation: 2*149 + 2*99 = 496€. No upcoming payments because next_payment dates are in the past.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Stripe payments"]
+  }
+}
