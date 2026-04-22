@@ -6,8 +6,9 @@
 - Dashboard: trackers circulares consumido vs objetivo, detección entreno/descanso
 - ProfilePage: formulario datos corporales → auto-targets
 - RoutinePage: grid 7 días, stats, ejercicios expandibles, cardio, historial
-- NutritionPage: calendario visual, PDF export, auto-detección día, búsqueda por frecuencia
-- BuildMealModal: flujo guiado (P→H→G), bloqueo real cuando macro cubierto
+- NutritionPage: calendario visual, PDF export, auto-detección día, búsqueda frecuencia+favoritos
+- BuildMealModal: flujo guiado (P→H→G), bloqueo macro cubierto, favoritos con estrella
+- SearchFoodModal: favoritos con estrella, ordenación favoritos>frecuencia>alfabético
 - Chatbot Claude 4.5, auth JWT, PDF export, 3110 alimentos
 
 ## Credenciales
@@ -24,3 +25,8 @@
 
 ## Integraciones
 - Claude Sonnet 4.5 (Emergent LLM Key) | Stripe (MOCKED) | ReportLab (PDFs)
+
+## Colecciones MongoDB (11)
+- foods (3110), food_categories (232), users (11), diets (6), payments (6)
+- client_profiles (4), macro_history (2), messages (2), reports (2), routines (1)
+- food_favorites (NEW)
