@@ -8,7 +8,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
-import { Search, X, Plus, Minus, ArrowLeft } from 'lucide-react';
+import { Search, X, Plus, Minus, ArrowLeft, Star } from 'lucide-react';
 import { PREFERENCE_CATEGORIES } from './PreferencesSetup';
 
 // Categories for Build Meal Modal - Step 1 (Proteínas)
@@ -114,6 +114,9 @@ const BuildMealModal = ({
     const [selectedFood, setSelectedFood] = useState(null);
     const [adjustedQuantity, setAdjustedQuantity] = useState(0);
     const [adjustedMacros, setAdjustedMacros] = useState({ P: 0, H: 0, G: 0 });
+
+    // Favorites
+    const [favorites, setFavorites] = useState(new Set());
     
     // Mode-specific config
     const isIntraMode = mode === 'intra';
@@ -131,6 +134,31 @@ const BuildMealModal = ({
         P: Math.max(0, target.P - served.P),
         H: Math.max(0, target.H - served.H),
         G: Math.max(0, target.G - served.G)
+    };
+
+    // Load favorites on mount
+    useEffect(() => {
+        const loadFavorites = async () => {
+            try {
+                const res = await api('/api/favorites');
+                setFavorites(new Set((res.favorites || []).map(String)));
+            } catch (e) { /* ignore */ }
+        };
+        if (open) loadFavorites();
+    }, [open]); // eslint-disable-line
+
+    const toggleFavorite = async (foodId) => {
+        const fid = Number(foodId);
+        const isFav = favorites.has(String(foodId));
+        try {
+            if (isFav) {
+                await api(`/api/favorites/${fid}`, { method: 'DELETE' });
+                setFavorites(prev => { const s = new Set(prev); s.delete(String(foodId)); return s; });
+            } else {
+                await api(`/api/favorites/${fid}`, { method: 'POST' });
+                setFavorites(prev => new Set(prev).add(String(foodId)));
+            }
+        } catch (e) { /* ignore */ }
     };
     
     // Check if meal is "cuadrada"
@@ -603,33 +631,42 @@ const BuildMealModal = ({
                                             {displayFoods.map((food, idx) => {
                                                 const blockReason = getFoodBlockReason(food);
                                                 const isBlocked = !!blockReason;
+                                                const isFav = favorites.has(String(food.id));
                                                 return (
-                                                    <button
-                                                        key={food.id || idx}
-                                                        onClick={() => !isBlocked && handleFoodPreview(food)}
-                                                        disabled={isBlocked}
-                                                        className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${
-                                                            isBlocked
-                                                                ? 'opacity-40 cursor-not-allowed bg-gray-50'
-                                                                : 'hover:bg-gray-100'
-                                                        }`}
-                                                        title={blockReason || ''}
-                                                        data-testid={`food-item-${food.id || idx}`}
-                                                    >
-                                                        <span className="text-lg">{getEmoji(food.categorias)}</span>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="text-sm text-black truncate">{food.nombre}</div>
-                                                            <div className="text-xs text-gray-500">
-                                                                {food._cantidad_sugerida ? `${food._cantidad_sugerida}${food.unidades ? ' ud' : 'g'} → ` : ''}
-                                                                P={food._macros_sugeridos?.P || Math.round(food.proteinas)}g
-                                                                {isBlocked && <span className="ml-1 text-red-400 font-semibold">· Macro cubierto</span>}
+                                                    <div key={food.id || idx} className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); toggleFavorite(food.id); }}
+                                                            className={`flex-shrink-0 p-1 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'}`}
+                                                            data-testid={`fav-toggle-${food.id}`}
+                                                        >
+                                                            <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => !isBlocked && handleFoodPreview(food)}
+                                                            disabled={isBlocked}
+                                                            className={`flex-1 flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${
+                                                                isBlocked
+                                                                    ? 'opacity-40 cursor-not-allowed bg-gray-50'
+                                                                    : 'hover:bg-gray-100'
+                                                            }`}
+                                                            title={blockReason || ''}
+                                                            data-testid={`food-item-${food.id || idx}`}
+                                                        >
+                                                            <span className="text-lg">{getEmoji(food.categorias)}</span>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-sm text-black truncate">{food.nombre}</div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    {food._cantidad_sugerida ? `${food._cantidad_sugerida}${food.unidades ? ' ud' : 'g'} → ` : ''}
+                                                                    P={food._macros_sugeridos?.P || Math.round(food.proteinas)}g
+                                                                    {isBlocked && <span className="ml-1 text-red-400 font-semibold">· Macro cubierto</span>}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                        {isBlocked
-                                                            ? <span className="text-xs text-red-400 font-semibold flex-shrink-0">Bloqueado</span>
-                                                            : <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                                        }
-                                                    </button>
+                                                            {isBlocked
+                                                                ? <span className="text-xs text-red-400 font-semibold flex-shrink-0">Bloqueado</span>
+                                                                : <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                            }
+                                                        </button>
+                                                    </div>
                                                 );
                                             })}
                                         </div>

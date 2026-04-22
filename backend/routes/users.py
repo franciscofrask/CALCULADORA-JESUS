@@ -206,3 +206,35 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         "training": data.training.model_dump(),
         "rest": data.rest.model_dump()
     }
+
+
+# ==================== FAVORITE FOODS ====================
+
+@router.get("/favorites")
+async def get_favorites(user = Depends(get_current_user)):
+    """Get user's favorite food IDs."""
+    doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"favorites": doc.get("food_ids", []) if doc else []}
+
+
+@router.post("/favorites/{food_id}")
+async def add_favorite(food_id: int, user = Depends(get_current_user)):
+    """Add a food to favorites."""
+    await db.food_favorites.update_one(
+        {"user_id": user["id"]},
+        {"$addToSet": {"food_ids": food_id}},
+        upsert=True
+    )
+    doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"favorites": doc.get("food_ids", [])}
+
+
+@router.delete("/favorites/{food_id}")
+async def remove_favorite(food_id: int, user = Depends(get_current_user)):
+    """Remove a food from favorites."""
+    await db.food_favorites.update_one(
+        {"user_id": user["id"]},
+        {"$pull": {"food_ids": food_id}}
+    )
+    doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"favorites": doc.get("food_ids", []) if doc else []}

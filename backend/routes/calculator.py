@@ -221,7 +221,7 @@ async def search_foods_endpoint(
     vegano: bool = False,
     user = Depends(get_current_user)
 ):
-    """Búsqueda de alimentos con macros efectivos (CALMA), ordenados por frecuencia de uso."""
+    """Búsqueda de alimentos con macros efectivos (CALMA), ordenados por: favoritos > frecuencia > alfabético."""
     alimentos = await buscar_alimentos_async(
         db=db,
         query=q,
@@ -233,12 +233,21 @@ async def search_foods_endpoint(
         tag_filter=tag or ""
     )
 
-    # Sort by client's usage frequency
+    # Get favorites and frequency
+    fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
+    fav_ids = set(str(fid) for fid in (fav_doc.get("food_ids", []) if fav_doc else []))
     food_freq = await _get_food_frequency(user["id"])
-    if food_freq:
-        alimentos.sort(key=lambda f: -food_freq.get(str(f.get("id", "")), 0))
-    else:
-        alimentos.sort(key=lambda f: f.get("nombre", ""))
+
+    # Mark favorites and sort: favorites first, then by frequency, then alphabetical
+    for a in alimentos:
+        fid = str(a.get("id", ""))
+        a["is_favorite"] = fid in fav_ids
+
+    alimentos.sort(key=lambda f: (
+        0 if f.get("is_favorite") else 1,
+        -food_freq.get(str(f.get("id", "")), 0),
+        f.get("nombre", "")
+    ))
 
     return {"alimentos": alimentos, "total": len(alimentos)}
 

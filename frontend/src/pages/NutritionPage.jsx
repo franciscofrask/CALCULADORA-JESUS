@@ -113,6 +113,9 @@ const NutritionPage = () => {
     const [numComidas, setNumComidas] = useState(4);
     const [momentoEntreno, setMomentoEntreno] = useState(1);
     const [opcionPeri, setOpcionPeri] = useState('intra_post');
+
+    // Favorites state
+    const [favorites, setFavorites] = useState(new Set());
     
     // Data state
     const [distribution, setDistribution] = useState(null);
@@ -185,6 +188,31 @@ const NutritionPage = () => {
         };
         checkPreferences();
     }, [api]);
+
+    // Load favorites on mount
+    useEffect(() => {
+        const loadFavorites = async () => {
+            try {
+                const res = await api('/api/favorites');
+                setFavorites(new Set((res.favorites || []).map(String)));
+            } catch (e) { /* ignore */ }
+        };
+        loadFavorites();
+    }, [api]);
+
+    const toggleFavorite = async (foodId) => {
+        const fid = Number(foodId);
+        const isFav = favorites.has(String(foodId));
+        try {
+            if (isFav) {
+                await api(`/api/favorites/${fid}`, { method: 'DELETE' });
+                setFavorites(prev => { const s = new Set(prev); s.delete(String(foodId)); return s; });
+            } else {
+                await api(`/api/favorites/${fid}`, { method: 'POST' });
+                setFavorites(prev => new Set(prev).add(String(foodId)));
+            }
+        } catch (e) { /* ignore */ }
+    };
     
     // Handle preferences saved
     const handlePreferencesSaved = (preferences) => {
@@ -957,6 +985,8 @@ const NutritionPage = () => {
                 searchResults={searchResults}
                 onAddFood={handleAddFood}
                 getFoodEmoji={getFoodEmoji}
+                favorites={favorites}
+                onToggleFavorite={toggleFavorite}
             />
 
             {/* Menu Options Modal */}

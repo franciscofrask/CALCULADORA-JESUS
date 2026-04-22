@@ -2,7 +2,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
-import { Check } from 'lucide-react';
+import { Check, Star } from 'lucide-react';
 import { Search, X } from 'lucide-react';
 
 const CATEGORY_CHIPS = [
@@ -32,7 +32,7 @@ const CATEGORY_CHIPS = [
 const SearchFoodModal = ({
     open, mealKey, onClose, searchQuery, setSearchQuery,
     searchCategory, setSearchCategory, searchLoading, searchResults,
-    onAddFood, getFoodEmoji,
+    onAddFood, getFoodEmoji, favorites = new Set(), onToggleFavorite,
 }) => (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
@@ -87,23 +87,35 @@ const SearchFoodModal = ({
                             const hEf = macrosEf.H ?? food.hidratos ?? 0;
                             const gEf = macrosEf.G ?? food.grasas ?? 0;
                             const racion = food.racion || 100;
+                            const isFav = favorites.has(String(food.id));
                             return (
-                                <button key={food.id} className="w-full text-left p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
-                                    onClick={() => onAddFood(food)}>
-                                    <div className="flex items-start gap-3">
-                                        <span className="text-2xl">{getFoodEmoji(food.categorias)}</span>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-gray-900 truncate">{food.nombre}</p>
-                                            <p className="text-xs text-gray-500">{racion}g / 1 ración</p>
-                                            <div className="flex flex-wrap gap-1 mt-2">
-                                                {pEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-protein-yellow text-gray-800">{pEf.toFixed(1)}g P</span>}
-                                                {hEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{hEf.toFixed(1)}g H</span>}
-                                                {gEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-fat-red text-white">{gEf.toFixed(1)}g G</span>}
-                                                {pEf === 0 && hEf === 0 && gEf === 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600">Sin macros</span>}
+                                <div key={food.id} className="flex items-start gap-1 bg-white rounded-xl shadow-sm hover:shadow-md transition-all">
+                                    {onToggleFavorite && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onToggleFavorite(food.id); }}
+                                            className={`flex-shrink-0 p-3 pt-4 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'}`}
+                                            data-testid={`fav-search-${food.id}`}
+                                        >
+                                            <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
+                                        </button>
+                                    )}
+                                    <button className="flex-1 text-left p-4 pl-0 active:scale-[0.98]"
+                                        onClick={() => onAddFood(food)}>
+                                        <div className="flex items-start gap-3">
+                                            <span className="text-2xl">{getFoodEmoji(food.categorias)}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-gray-900 truncate">{food.nombre}</p>
+                                                <p className="text-xs text-gray-500">{racion}g / 1 ración</p>
+                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                    {pEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-protein-yellow text-gray-800">{pEf.toFixed(1)}g P</span>}
+                                                    {hEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{hEf.toFixed(1)}g H</span>}
+                                                    {gEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-fat-red text-white">{gEf.toFixed(1)}g G</span>}
+                                                    {pEf === 0 && hEf === 0 && gEf === 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600">Sin macros</span>}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </button>
+                                    </button>
+                                </div>
                             );
                         })}
                     </div>
