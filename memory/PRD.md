@@ -5,8 +5,9 @@
 - Dashboard cliente: trackers circulares consumido vs objetivo
 - ProfilePage: datos corporales → auto-targets
 - RoutinePage: grid 7 días, stats, ejercicios expandibles
-- NutritionPage: calendario, PDF export, auto-detección, favoritos, bloqueo macros, flujo guiado
-- AdminDashboard: 5 KPIs (total, activos, riesgo, bajas, MRR), distribución plan, próximos cobros
+- NutritionPage: calendario, PDF, auto-detección, favoritos, bloqueo macros, flujo guiado
+- AdminDashboard: 5 KPIs, distribución plan, próximos cobros
+- ClientDetailPage: 8 pestañas (Resumen, Macros+historial+modal, Membresía, Reportes, Cuestionario, Entrenamiento, Nutrición, Seguimiento)
 - Chatbot Claude 4.5, auth JWT, 3110 alimentos, 11 colecciones MongoDB
 
 ## Credenciales
