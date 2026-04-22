@@ -390,7 +390,7 @@ const AdminLayout = () => {
 
     return (
         <div className="min-h-screen bg-[#0A0A0A] flex">
-            {/* Sidebar */}
+            {/* Sidebar (desktop) */}
             <aside className="w-64 border-r border-white/10 bg-[#0A0A0A] h-screen sticky top-0 hidden lg:flex flex-col">
                 <div className="p-6 border-b border-white/10">
                     <JG12Logo size="md" />
@@ -438,9 +438,26 @@ const AdminLayout = () => {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-auto">
+            <main className="flex-1 overflow-auto pb-16 lg:pb-0">
                 <Outlet />
             </main>
+
+            {/* Mobile Bottom Nav */}
+            <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#111] border-t border-[#222] lg:hidden" data-testid="admin-mobile-nav">
+                <div className="flex items-center justify-around h-14 px-1">
+                    {navItems.map((item) => {
+                        const active = isActive(item.path, item.exact);
+                        return (
+                            <Link key={item.path} to={item.path}
+                                className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all ${active ? 'text-[#FF671F]' : 'text-white/40'}`}
+                            >
+                                <item.icon className={`w-5 h-5 mb-0.5 ${active ? 'text-[#FF671F]' : ''}`} strokeWidth={active ? 2.5 : 2} />
+                                <span className={`text-[9px] uppercase tracking-wider ${active ? 'font-bold' : ''}`}>{item.label}</span>
+                            </Link>
+                        );
+                    })}
+                </div>
+            </nav>
         </div>
     );
 };
