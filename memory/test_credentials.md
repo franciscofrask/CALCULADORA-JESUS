@@ -1,15 +1,7 @@
 # JG12 - Credenciales de Test
 
 ## Usuarios
-- **Cliente:** `clientedemo@test.com` / `demo123`
+- **Cliente demo:** `clientedemo@test.com` / `demo123` (hombre 80kg 20%BF volumen, rutina 5 días, plan gold)
+- **Cliente test:** `cliente@test.com` / `Cliente123` (plan silver)
 - **Admin:** `alvaro@test.com` / `Alvaro123`
-
-## Perfil del Cliente Demo (después de targets/apply)
-- Peso: 80kg
-- Sexo: hombre
-- % Graso: 20%
-- Objetivo: volumen
-- Macros Entreno: P=190g, H=170g, G=60g (1980 kcal)
-- Macros Descanso: P=225g, H=170g, G=60g (2120 kcal)
-- Macros Peri: P=45g, H=50g
-- Source: auto
+- **Admin (owner):** `agutierrezp95@gmail.com` / `agutierrezp95@gmail.com`
