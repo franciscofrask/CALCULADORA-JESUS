@@ -376,8 +376,9 @@ const BuildMealModal = ({
             const foodToAdd = {
                 ...food,
                 alimento_id: food.id || food._id,
-                cantidad: quantity,
-                unidad: food.unidades ? 'ud' : 'g',
+                cantidad_g: quantity,
+                unidades: food.unidades || false,
+                racion: food.racion || 100,
                 macros_efectivos: macrosEf
             };
             
@@ -409,7 +410,8 @@ const BuildMealModal = ({
     // Adjust quantity
     const handleAdjustQuantity = (delta) => {
         if (!selectedFood) return;
-        const step = selectedFood.unidades ? 1 : 10;
+        const racion = selectedFood.racion || 100;
+        const step = selectedFood.unidades ? racion : 10;
         const newQty = Math.max(step, adjustedQuantity + (delta * step));
         setAdjustedQuantity(newQty);
         
@@ -434,8 +436,9 @@ const BuildMealModal = ({
         const foodToAdd = {
             ...selectedFood,
             alimento_id: selectedFood.id || selectedFood._id,
-            cantidad: adjustedQuantity,
-            unidad: selectedFood.unidades ? 'ud' : 'g',
+            cantidad_g: adjustedQuantity,
+            unidades: selectedFood.unidades || false,
+            racion: selectedFood.racion || 100,
             macros_efectivos: adjustedMacros
         };
         
@@ -455,12 +458,14 @@ const BuildMealModal = ({
     const handleFoodQuantityChange = (index, delta) => {
         setTempFoods(prev => prev.map((f, i) => {
             if (i !== index) return f;
-            const step = f.unidad === 'ud' ? 1 : 10;
-            const newQty = Math.max(step, f.cantidad + (delta * step));
+            const racion = f.racion || 100;
+            const step = f.unidades ? racion : 10;
+            const currentQty = f.cantidad_g || f.cantidad || 0;
+            const newQty = Math.max(step, currentQty + (delta * step));
             const factor = newQty / 100;
             return {
                 ...f,
-                cantidad: newQty,
+                cantidad_g: newQty,
                 macros_efectivos: {
                     P: Math.round((f.proteinas || 0) * factor * 10) / 10,
                     H: Math.round((f.hidratos || 0) * factor * 10) / 10,
@@ -578,8 +583,11 @@ const BuildMealModal = ({
                                         <Button variant="outline" size="sm" onClick={() => handleAdjustQuantity(-1)}>
                                             <Minus className="w-4 h-4" />
                                         </Button>
-                                        <span className="text-lg font-bold w-20 text-center">
-                                            {adjustedQuantity}{selectedFood.unidades ? ' ud' : 'g'}
+                                        <span className="text-lg font-bold w-24 text-center">
+                                            {selectedFood.unidades && selectedFood.racion > 0
+                                                ? `${Math.round((adjustedQuantity / selectedFood.racion) * 2) / 2} ud`
+                                                : `${adjustedQuantity}g`
+                                            }
                                         </span>
                                         <Button variant="outline" size="sm" onClick={() => handleAdjustQuantity(1)}>
                                             <Plus className="w-4 h-4" />
@@ -692,8 +700,11 @@ const BuildMealModal = ({
                                             >
                                                 <Minus className="w-3 h-3" />
                                             </button>
-                                            <span className="w-12 text-center text-xs">
-                                                {food.cantidad}{food.unidad === 'ud' ? 'ud' : 'g'}
+                                            <span className="w-16 text-center text-xs">
+                                                {food.unidades && food.racion > 0
+                                                    ? `${Math.round(((food.cantidad_g || food.cantidad || 0) / food.racion) * 2) / 2} ud`
+                                                    : `${food.cantidad_g || food.cantidad || 0}g`
+                                                }
                                             </span>
                                             <button
                                                 onClick={() => handleFoodQuantityChange(idx, 1)}

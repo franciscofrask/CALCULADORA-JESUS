@@ -72,7 +72,7 @@ const MealCard = ({
     loadMenuOptions, setBuildMealModal, openRepeatModal,
     removeFood, updateFoodQuantity, updateFoodQuantityDirect,
     editingQuantity, setEditingQuantity, getQuantityIncrement,
-    clearMeal, getFoodEmoji,
+    clearMeal, getFoodEmoji, formatFoodQuantity,
 }) => {
     const isExpanded = expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
@@ -164,12 +164,14 @@ const MealCard = ({
                                                     <div className="flex items-center gap-1">
                                                         <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => updateFoodQuantity(mealKey, idx, -increment)}><Minus className="w-3 h-3" /></Button>
                                                         {isEditing ? (
-                                                            <input type="number" defaultValue={food.cantidad_g} className="w-16 h-8 text-center text-sm font-bold border rounded-lg" autoFocus
+                                                            <input type="number" defaultValue={food.cantidad_g || 0} className="w-16 h-8 text-center text-sm font-bold border rounded-lg" autoFocus
                                                                 onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
                                                                 onKeyDown={(e) => { if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value); if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null }); }} />
                                                         ) : (
-                                                            <button className="w-16 h-8 text-sm font-bold text-center bg-white border border-gray-200 rounded-lg hover:border-brand-orange"
-                                                                onClick={() => setEditingQuantity({ mealKey, foodIndex: idx })}>{food.cantidad_g}g</button>
+                                                            <button className="min-w-[64px] h-8 px-2 text-sm font-bold text-center bg-white border border-gray-200 rounded-lg hover:border-brand-orange"
+                                                                onClick={() => setEditingQuantity({ mealKey, foodIndex: idx })}>
+                                                                {formatFoodQuantity ? formatFoodQuantity(food) : `${food.cantidad_g || 0}g`}
+                                                            </button>
                                                         )}
                                                         <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => updateFoodQuantity(mealKey, idx, increment)}><Plus className="w-3 h-3" /></Button>
                                                     </div>

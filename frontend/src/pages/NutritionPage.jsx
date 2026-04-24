@@ -447,16 +447,15 @@ const NutritionPage = () => {
     };
 
     // Get quantity increment based on food category
-    // REGLA: TODO por peso = ±1g, excepto:
-    //   - Por unidad (hamburguesas, huevos, fruta): peso_unidad/2
-    //   - Verduras (cat 13): ±50g
-    //   - Bebidas vegetales (cat 24): ±50g
-    //   - Salsas zero (cat 16.1): ±5g
+    // REGLA: Para alimentos con unidades, incrementar por 1 unidad (= racion gramos)
+    // Para alimentos sin unidades, incrementar por categoría
     const getQuantityIncrement = (food) => {
         const cat = food.categorias?.split(' | ')[0]?.split('.')[0] || '';
         const subCat = food.categorias?.split(' | ')[0] || '';
-        const nombre = (food.nombre || '').toLowerCase();
         const racion = food.racion || 100;
+        
+        // Alimentos con unidades: incrementar 1 unidad = racion gramos
+        if (food.unidades) return racion;
         
         // Verduras (cat 13): ±50g
         if (cat === '13') return 50;
@@ -467,21 +466,21 @@ const NutritionPage = () => {
         // Salsas zero (cat 16.1): ±5g
         if (subCat.startsWith('16.1')) return 5;
         
-        // Huevos (cat 1): ±55g (1 huevo)
-        if (cat === '1') return 55;
-        
-        // Hamburguesas: media unidad
-        if (nombre.includes('hamburguesa')) {
-            return Math.round(racion / 2);
-        }
-        
-        // Fruta fresca (cat 11.1): media unidad
-        if (subCat.startsWith('11.1')) {
-            return Math.round(racion / 2);
-        }
-        
         // TODO lo demás: ±1g
         return 1;
+    };
+
+    // Format quantity for display: "2 ud" for unit foods, "120g" for gram foods
+    const formatFoodQuantity = (food) => {
+        if (!food) return '0g';
+        const qty = food.cantidad_g || 0;
+        const racion = food.racion || 100;
+        if (food.unidades && racion > 0) {
+            const units = qty / racion;
+            const rounded = Math.round(units * 2) / 2; // round to 0.5
+            return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)} ud`;
+        }
+        return `${Math.round(qty)}g`;
     };
 
     // Food operations
@@ -505,7 +504,8 @@ const NutritionPage = () => {
                 macros_brutos: result.macros_brutos,
                 que_cuenta: result.que_cuenta,
                 categorias: food.categorias,
-                racion: food.racion
+                racion: food.racion,
+                unidades: food.unidades || false
             };
             setMealsData(prev => ({
                 ...prev,
@@ -939,6 +939,7 @@ const NutritionPage = () => {
                                 getQuantityIncrement={getQuantityIncrement}
                                 clearMeal={clearMeal}
                                 getFoodEmoji={getFoodEmoji}
+                                formatFoodQuantity={formatFoodQuantity}
                             />
                         ))}
                     </div>
