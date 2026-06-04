@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd frontend && CI=false GENERATE_SOURCEMAP=false yarn build",
+  "buildCommand": "CI=false GENERATE_SOURCEMAP=false yarn --cwd frontend build",
   "installCommand": "yarn --cwd frontend install",
   "outputDirectory": "frontend/build",
   "framework": "create-react-app",
