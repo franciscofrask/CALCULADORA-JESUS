@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "buildCommand": "yarn --cwd frontend build",
+  "installCommand": "yarn --cwd frontend install",
+  "outputDirectory": "frontend/build",
+  "framework": "create-react-app",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
