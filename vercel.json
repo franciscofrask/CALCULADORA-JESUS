@@ -1,5 +1,5 @@
 {
-  "buildCommand": "CI=false yarn --cwd frontend build",
-  "outputDirectory": "frontend/build",
+  "buildCommand": "CI=false BUILD_PATH=../build yarn --cwd frontend build",
+  "outputDirectory": "build",
   "installCommand": "yarn --cwd frontend install"
 }
