@@ -184,10 +184,7 @@ const MealCard = ({
                                     })}
                                 </div>
                             </div>
-                            {foods.length < (isPeri ? 3 : 5)
-                                ? <Button variant="ghost" className="w-full text-brand-orange hover:text-brand-orange-dark" onClick={() => setBuildMealModal({ open: true, mealKey, startStep: 2 })}><Plus className="w-4 h-4 mr-1" /> Añadir ingrediente</Button>
-                                : <p className="text-xs text-gray-400 text-center">Máximo {isPeri ? 3 : 5} alimentos alcanzado</p>
-                            }
+                            <Button variant="ghost" className="w-full text-brand-orange hover:text-brand-orange-dark" onClick={() => setBuildMealModal({ open: true, mealKey, startStep: 2 })}><Plus className="w-4 h-4 mr-1" /> Añadir ingrediente</Button>
                             <button className="w-full text-xs text-gray-400 hover:text-red-500 mt-2 py-1" onClick={() => clearMeal(mealKey)}>Vaciar comida</button>
                         </>
                     )}

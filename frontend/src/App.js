@@ -16,6 +16,10 @@ import { AdminDashboard, AdminClientsList, AdminLayout } from "./pages/AdminDash
 import ClientDetailPage from "./pages/ClientDetailPage";
 import LeadsPage from "./pages/LeadsPage";
 import ChatbotPage from "./pages/ChatbotPage";
+import SupplementsPage from "./pages/SupplementsPage";
+import CheckInsPage from "./pages/CheckInsPage";
+import MacroCalculatorClientPage from "./pages/MacroCalculatorClientPage";
+import QuestionnairePage from "./pages/QuestionnairePage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -102,6 +106,10 @@ function AppRoutes() {
                 <Route path="messages" element={<MessagesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="chatbot" element={<ChatbotPage />} />
+                <Route path="supplements" element={<SupplementsPage />} />
+                <Route path="checkins" element={<CheckInsPage />} />
+                <Route path="macro-calculator" element={<MacroCalculatorClientPage />} />
+                <Route path="questionnaire" element={<QuestionnairePage />} />
             </Route>
 
             {/* Admin Routes */}

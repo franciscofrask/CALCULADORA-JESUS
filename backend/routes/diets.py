@@ -68,7 +68,8 @@ async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
             "tipo_dia": diet.get("tipo_dia", "entrenamiento"),
             "num_comidas": diet.get("num_comidas", 4),
             "comidas_resumen": comidas_resumen,
-            "comidas": diet.get("comidas", {})
+            "comidas": diet.get("comidas", {}),
+            "distribution_targets": diet.get("distribution_targets", None)
         })
     
     return {"diets": result, "count": len(result)}
@@ -149,13 +150,22 @@ async def copy_diet(data: dict, user = Depends(get_current_user)):
     if not source_comida:
         raise HTTPException(status_code=404, detail="Comida origen no encontrada")
     
+    # Also copy distribution target for that specific meal if it exists
+    source_targets = source_diet.get("distribution_targets") or {}
+    source_meal_target = source_targets.get(source_meal)
+
+    update_payload = {
+        f"comidas.{target_meal}": source_comida,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if source_meal_target:
+        update_payload[f"distribution_targets.{target_meal}"] = source_meal_target
+
     await db.diets.update_one(
         {"user_id": user["id"], "fecha": target_date},
         {
-            "$set": {
-                f"comidas.{target_meal}": source_comida,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
+            "$set": update_payload
         },
         upsert=True
     )

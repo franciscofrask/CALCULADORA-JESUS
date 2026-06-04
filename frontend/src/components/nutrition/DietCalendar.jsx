@@ -108,9 +108,9 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                                         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                                         const isToday = dateStr === todayStr;
                                         const status = getDayStatus(day);
-                                        const isComplete = status?.status === 'complete';
-                                        const isPartial = status?.status === 'partial';
-                                        const hasDiet = isComplete || isPartial;
+                                        const hasDiet = status?.status === 'complete' || status?.status === 'partial';
+                                        const isCuadrado = hasDiet && status?.is_cuadrado === true;
+                                        const isPartial = hasDiet && !isCuadrado;
 
                                         return (
                                             <button
@@ -118,7 +118,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                                                 onClick={() => handleDayClick(day)}
                                                 className={`relative w-full aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-all
                                                     ${isToday ? 'ring-2 ring-orange-500' : ''}
-                                                    ${isComplete ? 'bg-green-500/20 text-green-600 hover:bg-green-500/30' : ''}
+                                                    ${isCuadrado ? 'bg-green-500/20 text-green-600 hover:bg-green-500/30' : ''}
                                                     ${isPartial ? 'bg-orange-500/20 text-orange-600 hover:bg-orange-500/30' : ''}
                                                     ${!hasDiet ? 'text-gray-600 hover:bg-gray-100' : ''}
                                                 `}
@@ -126,7 +126,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                                             >
                                                 {day}
                                                 {hasDiet && (
-                                                    <span className={`absolute bottom-0.5 w-1.5 h-1.5 rounded-full ${isComplete ? 'bg-green-500' : 'bg-orange-500'}`} />
+                                                    <span className={`absolute bottom-0.5 w-1.5 h-1.5 rounded-full ${isCuadrado ? 'bg-green-500' : 'bg-orange-500'}`} />
                                                 )}
                                             </button>
                                         );
@@ -138,9 +138,9 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
 
                     {/* Legend */}
                     <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t text-xs text-gray-500">
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Completa</span>
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> Parcial</span>
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" /> Vacía</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Cuadrada</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> Sin cuadrar</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" /> Sin dieta</span>
                     </div>
                 </div>
             </DialogContent>

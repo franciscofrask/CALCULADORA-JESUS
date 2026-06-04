@@ -124,12 +124,18 @@ const BuildMealModal = ({
     const isPeriMode = isIntraMode || isPostMode;
     
     // Calculate served and remaining macros
+    // existingServed = foods already in the meal before opening the modal
     const target = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0, G: 0 };
-    const served = tempFoods.reduce((acc, f) => ({
+    const existingServed = (mealsData[mealKey]?.alimentos || []).reduce((acc, f) => ({
         P: acc.P + (f.macros_efectivos?.P || 0),
         H: acc.H + (f.macros_efectivos?.H || 0),
         G: acc.G + (f.macros_efectivos?.G || 0)
     }), { P: 0, H: 0, G: 0 });
+    const served = tempFoods.reduce((acc, f) => ({
+        P: acc.P + (f.macros_efectivos?.P || 0),
+        H: acc.H + (f.macros_efectivos?.H || 0),
+        G: acc.G + (f.macros_efectivos?.G || 0)
+    }), { P: existingServed.P, H: existingServed.H, G: existingServed.G });
     const remaining = {
         P: Math.max(0, target.P - served.P),
         H: Math.max(0, target.H - served.H),
@@ -166,22 +172,18 @@ const BuildMealModal = ({
                        Math.abs(target.H - served.H) <= 4 && 
                        (isPeriMode || Math.abs(target.G - served.G) <= 4);
 
-    // Check if a food should be blocked (macro already covered)
+    // Check if a food should be blocked (adding it would push any macro over target + margin)
     const getBlockReason = (macrosEf) => {
         if (isPeriMode) return null;
-        const margin = 4;
-        const overP = served.P >= target.P + margin && macrosEf.P > 2;
-        const overH = served.H >= target.H + margin && macrosEf.H > 2;
-        const overG = served.G >= target.G + margin && macrosEf.G > 2;
-        
-        if (overP && macrosEf.P > macrosEf.H && macrosEf.P > macrosEf.G) {
-            return 'No se puede añadir: ya has cubierto la proteína de esta comida.';
+        const margin = mealKey === 'Intra' ? 2 : 4;
+        if (macrosEf.P > 0 && served.P + macrosEf.P > target.P + margin) {
+            return 'No cabe — superaría la proteína objetivo de esta comida.';
         }
-        if (overH && macrosEf.H > macrosEf.P && macrosEf.H > macrosEf.G) {
-            return 'No se puede añadir: ya has cubierto los hidratos de esta comida.';
+        if (macrosEf.H > 0 && served.H + macrosEf.H > target.H + margin) {
+            return 'No cabe — superaría los hidratos objetivo de esta comida.';
         }
-        if (overG && macrosEf.G > macrosEf.P && macrosEf.G > macrosEf.H) {
-            return 'No se puede añadir: ya has cubierto las grasas de esta comida.';
+        if (macrosEf.G > 0 && served.G + macrosEf.G > target.G + margin) {
+            return 'No cabe — superaría las grasas objetivo de esta comida.';
         }
         return null;
     };
@@ -357,6 +359,14 @@ const BuildMealModal = ({
     // Handle select food
     const handleSelectFood = async (food) => {
         try {
+            const foodId = food.id || food._id;
+            const alreadyInMeal = (mealsData[mealKey]?.alimentos || []).some(f => f.alimento_id === foodId);
+            const alreadyInTemp = tempFoods.some(f => f.alimento_id === foodId);
+            if (alreadyInMeal || alreadyInTemp) {
+                toast.error(`${food.nombre} ya está en esta comida — ajusta su cantidad directamente.`);
+                return;
+            }
+
             // Calcular cantidad sugerida basada en ración o 100g
             const quantity = food.racion || 100;
             const factor = quantity / 100;
@@ -365,7 +375,7 @@ const BuildMealModal = ({
                 H: Math.round((food.hidratos || 0) * factor * 10) / 10,
                 G: Math.round((food.grasas || 0) * factor * 10) / 10
             };
-            
+
             // Check if adding this food would exceed macros significantly
             const blockReason = getBlockReason(macrosEf);
             if (blockReason) {
@@ -456,6 +466,31 @@ const BuildMealModal = ({
     
     // Increase/decrease food quantity
     const handleFoodQuantityChange = (index, delta) => {
+        if (delta > 0) {
+            const food = tempFoods[index];
+            const racion = food.racion || 100;
+            const step = food.unidades ? racion : 10;
+            const currentQty = food.cantidad_g || food.cantidad || 0;
+            const newQty = Math.max(step, currentQty + step);
+            const factor = newQty / 100;
+            const newMacros = {
+                P: Math.round((food.proteinas || 0) * factor * 10) / 10,
+                H: Math.round((food.hidratos || 0) * factor * 10) / 10,
+                G: Math.round((food.grasas || 0) * factor * 10) / 10
+            };
+            const otherServed = tempFoods.filter((_, i) => i !== index).reduce((acc, f) => ({
+                P: acc.P + (f.macros_efectivos?.P || 0),
+                H: acc.H + (f.macros_efectivos?.H || 0),
+                G: acc.G + (f.macros_efectivos?.G || 0)
+            }), { P: existingServed.P, H: existingServed.H, G: existingServed.G });
+            const margin = mealKey === 'Intra' ? 2 : 4;
+            if ((newMacros.P > 0 && otherServed.P + newMacros.P > target.P + margin) ||
+                (newMacros.H > 0 && otherServed.H + newMacros.H > target.H + margin) ||
+                (newMacros.G > 0 && otherServed.G + newMacros.G > target.G + margin)) {
+                toast.error('No puedes aumentar más — superaría los macros objetivo.');
+                return;
+            }
+        }
         setTempFoods(prev => prev.map((f, i) => {
             if (i !== index) return f;
             const racion = f.racion || 100;

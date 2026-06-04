@@ -119,6 +119,7 @@ const NutritionPage = () => {
     
     // Data state
     const [distribution, setDistribution] = useState(null);
+    const [distribTargetsOverlay, setDistribTargetsOverlay] = useState(null);
     const [mealsData, setMealsData] = useState({});
     const [expandedMeals, setExpandedMeals] = useState({ C1: true });
     const [loading, setLoading] = useState(true);
@@ -283,7 +284,7 @@ const NutritionPage = () => {
         }
     }, [api, tipoDia, numComidas, momentoEntreno, opcionPeri]);
 
-    // Load saved diet
+    // Load saved diet — returns distribution_targets if they were saved
     const loadDiet = useCallback(async (date) => {
         try {
             const diet = await api(`/api/diets/${date}`);
@@ -292,7 +293,7 @@ const NutritionPage = () => {
                 setNumComidas(diet.num_comidas || 4);
                 setMomentoEntreno(diet.momento_entreno || 1);
                 setOpcionPeri(diet.opcion_peri || 'intra_post');
-                
+
                 const updatedMeals = {};
                 for (const [mealKey, mealData] of Object.entries(diet.comidas || {})) {
                     if (mealData.alimentos && mealData.alimentos.length > 0) {
@@ -320,12 +321,15 @@ const NutritionPage = () => {
                     }
                 }
                 setMealsData(updatedMeals);
+                return diet.distribution_targets || null;
             } else {
                 setMealsData({});
+                return null;
             }
         } catch (err) {
             console.error('Error loading diet:', err);
             setMealsData({});
+            return null;
         }
     }, [api]);
 
@@ -333,7 +337,11 @@ const NutritionPage = () => {
     useEffect(() => {
         const init = async () => {
             setLoading(true);
-            await loadDiet(currentDate);
+            setDistribTargetsOverlay(null); // Reset before loading new date
+            const savedTargets = await loadDiet(currentDate);
+            if (savedTargets) {
+                setDistribTargetsOverlay(savedTargets);
+            }
             await loadDistribution();
             setLoading(false);
         };
@@ -344,6 +352,12 @@ const NutritionPage = () => {
     useEffect(() => {
         if (!loading) loadDistribution();
     }, [tipoDia, numComidas, momentoEntreno, opcionPeri]); // eslint-disable-line
+
+    // Wrappers for user-initiated config changes
+    const handleSetTipoDia = (v) => { setTipoDia(v); };
+    const handleSetNumComidas = (v) => { setNumComidas(v); };
+    const handleSetMomentoEntreno = (v) => { setMomentoEntreno(v); };
+    const handleSetOpcionPeri = (v) => { setOpcionPeri(v); };
 
     // Search foods
     useEffect(() => {
@@ -415,6 +429,9 @@ const NutritionPage = () => {
     };
 
     const getMealTarget = (mealKey) => {
+        // Volcado overlay takes absolute precedence
+        if (distribTargetsOverlay?.[mealKey]) return distribTargetsOverlay[mealKey];
+        
         if (!distribution) return { P: 0, H: 0, G: 0 };
         if (mealKey === 'Intra' || mealKey === 'Post') {
             return distribution.periworkout?.[mealKey] || { P: 0, H: 0, G: 0 };
@@ -486,6 +503,11 @@ const NutritionPage = () => {
     // Food operations
     const handleAddFood = async (food) => {
         const mealKey = addFoodModal.mealKey;
+        const alreadyInMeal = (mealsData[mealKey]?.alimentos || []).some(f => f.alimento_id === food.id);
+        if (alreadyInMeal) {
+            toast.error(`${food.nombre} ya está en esta comida — ajusta su cantidad directamente.`);
+            return;
+        }
         const remaining = getMealRemaining(mealKey);
         try {
             const result = await api('/api/calculator/adjust', {
@@ -496,6 +518,27 @@ const NutritionPage = () => {
                     es_vegano: false
                 })
             });
+
+            // Free foods (all zeros: konjac, salsas zero, verduras libres) always pass
+            const ef = result.macros_efectivos || {};
+            const isFreeFood = !ef.P && !ef.H && !ef.G;
+            if (!isFreeFood) {
+                const mealStatus = getMealStatus(mealKey);
+                if (mealStatus === 'cuadrada' || mealStatus === 'sobra') {
+                    toast.error('Esta comida ya está completa — no hay espacio para más alimentos.');
+                    return;
+                }
+                const target = getMealTarget(mealKey);
+                const served = calculateMealMacros(mealKey);
+                const margin = mealKey === 'Intra' ? 2 : 4;
+                if ((ef.P > 0 && served.P + ef.P > target.P + margin) ||
+                    (ef.H > 0 && served.H + ef.H > target.H + margin) ||
+                    (ef.G > 0 && served.G + ef.G > target.G + margin)) {
+                    toast.error(`${food.nombre} no cabe — superaría los macros de esta comida.`);
+                    return;
+                }
+            }
+
             const newFood = {
                 alimento_id: food.id,
                 nombre: food.nombre,
@@ -525,11 +568,26 @@ const NutritionPage = () => {
         const food = foods[foodIndex];
         const increment = delta !== null ? delta : getQuantityIncrement(food);
         const newQuantity = Math.max(1, food.cantidad_g + (delta !== null ? delta : increment));
+        const isIncreasing = newQuantity > food.cantidad_g;
         try {
             const result = await api('/api/calculator/macros-efectivos', {
                 method: 'POST',
                 body: JSON.stringify({ alimento_id: food.alimento_id, cantidad_g: newQuantity, es_vegano: false })
             });
+            if (isIncreasing) {
+                const target = getMealTarget(mealKey);
+                const margin = mealKey === 'Intra' ? 2 : 4;
+                const ef = result.efectivos || {};
+                const otherP = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.P || 0), 0);
+                const otherH = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.H || 0), 0);
+                const otherG = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.G || 0), 0);
+                if ((ef.P > 0 && otherP + ef.P > target.P + margin) ||
+                    (ef.H > 0 && otherH + ef.H > target.H + margin) ||
+                    (ef.G > 0 && otherG + ef.G > target.G + margin)) {
+                    toast.error('No puedes aumentar más — superaría los macros objetivo.');
+                    return;
+                }
+            }
             foods[foodIndex] = { ...food, cantidad_g: newQuantity, macros_efectivos: result.efectivos, macros_brutos: result.brutos, que_cuenta: result.que_cuenta };
             setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
         } catch (err) { console.error('Error updating quantity:', err); }
@@ -539,11 +597,27 @@ const NutritionPage = () => {
         const foods = [...(mealsData[mealKey]?.alimentos || [])];
         const food = foods[foodIndex];
         const quantity = Math.max(1, parseInt(newQuantity) || 1);
+        const isIncreasing = quantity > food.cantidad_g;
         try {
             const result = await api('/api/calculator/macros-efectivos', {
                 method: 'POST',
                 body: JSON.stringify({ alimento_id: food.alimento_id, cantidad_g: quantity, es_vegano: false })
             });
+            if (isIncreasing) {
+                const target = getMealTarget(mealKey);
+                const margin = mealKey === 'Intra' ? 2 : 4;
+                const ef = result.efectivos || {};
+                const otherP = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.P || 0), 0);
+                const otherH = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.H || 0), 0);
+                const otherG = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.G || 0), 0);
+                if ((ef.P > 0 && otherP + ef.P > target.P + margin) ||
+                    (ef.H > 0 && otherH + ef.H > target.H + margin) ||
+                    (ef.G > 0 && otherG + ef.G > target.G + margin)) {
+                    toast.error('Cantidad demasiado alta — superaría los macros objetivo.');
+                    setEditingQuantity({ mealKey: null, foodIndex: null });
+                    return;
+                }
+            }
             foods[foodIndex] = { ...food, cantidad_g: quantity, macros_efectivos: result.efectivos, macros_brutos: result.brutos, que_cuenta: result.que_cuenta };
             setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
         } catch (err) { console.error('Error updating quantity:', err); }
@@ -705,7 +779,9 @@ const NutritionPage = () => {
                     momento_entreno: momentoEntreno,
                     opcion_peri: opcionPeri,
                     comidas: mealsData,
-                    macros_snapshot: distribution?.resumen
+                    macros_snapshot: distribution?.resumen,
+                    distribution_targets: distribTargetsOverlay || null,
+                    is_cuadrado: getDayStatus() === 'cuadrado'
                 })
             });
             toast.success('Dieta guardada');
@@ -728,6 +804,34 @@ const NutritionPage = () => {
     // Day summary
     const dayMacros = calculateDayMacros();
     const dayTarget = distribution?.resumen || { P_total: 0, H_total: 0, G_total: 0, kcal_total: 0 };
+    const remainingDay = {
+        P: Math.max(0, Math.round((dayTarget.P_total || 0) - dayMacros.P)),
+        H: Math.max(0, Math.round((dayTarget.H_total || 0) - dayMacros.H)),
+        G: Math.max(0, Math.round((dayTarget.G_total || 0) - dayMacros.G)),
+    };
+
+    const handleVolcarMacros = () => {
+        const regularMeals = getMealOrder().filter(k => !['Intra', 'Post'].includes(k));
+        const lastMeal = regularMeals[regularMeals.length - 1];
+        if (!lastMeal) return;
+
+        // Sum macros of ALL meals except the last one (including peri)
+        const otherServed = getMealOrder()
+            .filter(k => k !== lastMeal)
+            .reduce((acc, k) => {
+                const m = calculateMealMacros(k);
+                return { P: acc.P + m.P, H: acc.H + m.H, G: acc.G + m.G };
+            }, { P: 0, H: 0, G: 0 });
+
+        const targetForLastMeal = {
+            P: Math.max(0, Math.round((dayTarget.P_total || 0) - otherServed.P)),
+            H: Math.max(0, Math.round((dayTarget.H_total || 0) - otherServed.H)),
+            G: Math.max(0, Math.round((dayTarget.G_total || 0) - otherServed.G)),
+        };
+
+        setDistribTargetsOverlay(prev => ({ ...(prev || {}), [lastMeal]: targetForLastMeal }));
+        toast.success(`Macros volcados a ${mealInfo[lastMeal]?.name}`);
+    };
     const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + dayMacros.G * 9;
     const targetKcal = dayTarget.kcal_total || 0;
     
@@ -884,18 +988,18 @@ const NutritionPage = () => {
                                             ? 'bg-brand-orange text-white shadow-md' 
                                             : 'bg-gray-100 text-gray-600'
                                     }`}
-                                    onClick={() => setTipoDia('entrenamiento')}
+                                    onClick={() => handleSetTipoDia('entrenamiento')}
                                     data-testid="tipo-dia-entrenamiento"
                                 >
                                     Día de entrenamiento
                                 </button>
-                                <button 
+                                <button
                                     className={`flex-1 py-2 px-3 rounded-full text-sm font-semibold transition-all ${
-                                        tipoDia === 'descanso' 
-                                            ? 'bg-gray-800 text-white shadow-md' 
+                                        tipoDia === 'descanso'
+                                            ? 'bg-gray-800 text-white shadow-md'
                                             : 'bg-gray-100 text-gray-600'
                                     }`}
-                                    onClick={() => setTipoDia('descanso')}
+                                    onClick={() => handleSetTipoDia('descanso')}
                                     data-testid="tipo-dia-descanso"
                                 >
                                     Día de descanso
@@ -908,12 +1012,33 @@ const NutritionPage = () => {
                     <ConfigSection
                         tipoDia={tipoDia}
                         numComidas={numComidas}
-                        setNumComidas={setNumComidas}
+                        setNumComidas={handleSetNumComidas}
                         momentoEntreno={momentoEntreno}
-                        setMomentoEntreno={setMomentoEntreno}
+                        setMomentoEntreno={handleSetMomentoEntreno}
                         opcionPeri={opcionPeri}
-                        setOpcionPeri={setOpcionPeri}
+                        setOpcionPeri={handleSetOpcionPeri}
                     />
+
+                    {/* Volcado de macros banner */}
+                    {distribution && getDayStatus() === 'falta' && (remainingDay.P > 4 || remainingDay.H > 4 || remainingDay.G > 4) && (
+                        <div className="bg-orange-50 border border-brand-orange/30 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3">
+                            <div>
+                                <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-1">Macros pendientes hoy</p>
+                                <p className="text-sm text-gray-700">
+                                    {remainingDay.P > 0 && <span className="font-bold text-blue-600">{remainingDay.P}g P </span>}
+                                    {remainingDay.H > 0 && <span className="font-bold text-amber-500">{remainingDay.H}g H </span>}
+                                    {remainingDay.G > 0 && <span className="font-bold text-red-500">{remainingDay.G}g G</span>}
+                                </p>
+                            </div>
+                            <Button
+                                size="sm"
+                                className="bg-brand-orange hover:bg-brand-orange/90 text-white rounded-full font-bold shrink-0"
+                                onClick={handleVolcarMacros}
+                            >
+                                Volcar a {mealInfo[getMealOrder().filter(k => !['Intra','Post'].includes(k)).slice(-1)[0]]?.name || 'última comida'}
+                            </Button>
+                        </div>
+                    )}
 
                     {/* Meals */}
                     <div className="space-y-3 mb-4">
