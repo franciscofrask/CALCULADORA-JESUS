@@ -29,7 +29,9 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
         "opcion_peri": data.get("opcion_peri", "intra_post"),
         "comidas": data.get("comidas", {}),
         "updated_at": datetime.now(timezone.utc).isoformat(),
-        "macros_snapshot": data.get("macros_snapshot", None)
+        "macros_snapshot": data.get("macros_snapshot", None),
+        "distribution_targets": data.get("distribution_targets", None),
+        "is_cuadrado": data.get("is_cuadrado", False)
     }
     
     await db.diets.update_one(
@@ -45,7 +47,7 @@ async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
     """Lista los últimos días con dieta guardada."""
     cursor = db.diets.find(
         {"user_id": user["id"]},
-        {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "comidas": 1}
+        {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "comidas": 1, "distribution_targets": 1}
     ).sort("fecha", -1).limit(limit)
     
     diets = await cursor.to_list(length=limit)
@@ -83,7 +85,7 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
             "user_id": user["id"],
             "fecha": {"$gte": start_date, "$lte": end_date}
         },
-        {"_id": 0, "fecha": 1, "tipo_dia": 1, "comidas": 1}
+        {"_id": 0, "fecha": 1, "tipo_dia": 1, "comidas": 1, "is_cuadrado": 1}
     ).to_list(31)
     
     calendar_data = {}
@@ -105,7 +107,8 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
         calendar_data[fecha] = {
             "tipo_dia": diet.get("tipo_dia", "entrenamiento"),
             "status": status,
-            "total_comidas": total_comidas
+            "total_comidas": total_comidas,
+            "is_cuadrado": diet.get("is_cuadrado", False)
         }
     
     return {"year": year, "month": month, "days": calendar_data}
