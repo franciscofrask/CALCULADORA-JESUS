@@ -4,6 +4,9 @@
   "installCommand": "yarn --cwd frontend install",
   "outputDirectory": "frontend/build",
   "framework": "create-react-app",
+  "env": {
+    "CI": "false"
+  },
   "rewrites": [
     {
       "source": "/(.*)",
