@@ -1019,26 +1019,34 @@ const NutritionPage = () => {
                         setOpcionPeri={handleSetOpcionPeri}
                     />
 
-                    {/* Volcado de macros banner */}
-                    {distribution && getDayStatus() === 'falta' && (remainingDay.P > 4 || remainingDay.H > 4 || remainingDay.G > 4) && (
-                        <div className="bg-orange-50 border border-brand-orange/30 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3">
-                            <div>
-                                <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-1">Macros pendientes hoy</p>
-                                <p className="text-sm text-gray-700">
-                                    {remainingDay.P > 0 && <span className="font-bold text-blue-600">{remainingDay.P}g P </span>}
-                                    {remainingDay.H > 0 && <span className="font-bold text-amber-500">{remainingDay.H}g H </span>}
-                                    {remainingDay.G > 0 && <span className="font-bold text-red-500">{remainingDay.G}g G</span>}
-                                </p>
+                    {/* Volcado de macros banner - Solo mostrar para hoy o futuro */}
+                    {(() => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const dietDate = new Date(currentDate + 'T12:00:00');
+                        dietDate.setHours(0, 0, 0, 0);
+                        const isPast = dietDate < today;
+
+                        return distribution && !isPast && getDayStatus() === 'falta' && (remainingDay.P > 4 || remainingDay.H > 4 || remainingDay.G > 4) && (
+                            <div className="bg-orange-50 border border-brand-orange/30 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-1">Macros pendientes hoy</p>
+                                    <p className="text-sm text-gray-700">
+                                        {remainingDay.P > 0 && <span className="font-bold text-blue-600">{remainingDay.P}g P </span>}
+                                        {remainingDay.H > 0 && <span className="font-bold text-amber-500">{remainingDay.H}g H </span>}
+                                        {remainingDay.G > 0 && <span className="font-bold text-red-500">{remainingDay.G}g G</span>}
+                                    </p>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    className="bg-brand-orange hover:bg-brand-orange/90 text-white rounded-full font-bold shrink-0"
+                                    onClick={handleVolcarMacros}
+                                >
+                                    Volcar a {mealInfo[getMealOrder().filter(k => !['Intra','Post'].includes(k)).slice(-1)[0]]?.name || 'última comida'}
+                                </Button>
                             </div>
-                            <Button
-                                size="sm"
-                                className="bg-brand-orange hover:bg-brand-orange/90 text-white rounded-full font-bold shrink-0"
-                                onClick={handleVolcarMacros}
-                            >
-                                Volcar a {mealInfo[getMealOrder().filter(k => !['Intra','Post'].includes(k)).slice(-1)[0]]?.name || 'última comida'}
-                            </Button>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Meals */}
                     <div className="space-y-3 mb-4">
