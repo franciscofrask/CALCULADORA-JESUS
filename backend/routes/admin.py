@@ -146,8 +146,75 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.macro_history.insert_one(macro_log)
-    
+
     return {"training": training, "rest": rest}
+
+@router.post("/clients/{client_id}/calculator/apply")
+async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_admin_user)):
+    """Calcular targets con tablas JG y aplicarlos al perfil del cliente."""
+    from target_calculator import calcular_targets, targets_to_profile_macros
+
+    profile = await db.client_profiles.find_one({"id": client_id})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    peso = data.get("peso")
+    sexo = data.get("sexo")
+    bf = data.get("porcentaje_graso")
+    objetivo = data.get("objetivo")
+    note = data.get("note", "Cálculo automático JG")
+
+    if not all([peso, sexo, bf is not None, objetivo]):
+        raise HTTPException(status_code=400, detail="Faltan campos: peso, sexo, porcentaje_graso, objetivo")
+
+    try:
+        targets = calcular_targets(float(peso), sexo, float(bf), objetivo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    profile_macros = targets_to_profile_macros(targets)
+    training = profile_macros["macros_training"]
+    rest = profile_macros["macros_rest"]
+    peri = profile_macros["macros_periworkout"]
+
+    # Aliases for chatbot compatibility
+    for m in (training, rest):
+        m["proteinas"] = m["protein"]
+        m["hidratos"] = m["carbs"]
+        m["grasas"] = m["fat"]
+
+    await db.client_profiles.update_one(
+        {"id": client_id},
+        {"$set": {
+            "weight": float(peso),
+            "sex": sexo,
+            "body_fat": float(bf),
+            "goal": objetivo,
+            "macros_training": training,
+            "macros_rest": rest,
+            "macros_periworkout": peri,
+            "macros_source": "auto",
+            "macros_multiplicadores": targets["multiplicadores"],
+        }}
+    )
+
+    macro_log = {
+        "id": str(uuid.uuid4()),
+        "client_id": client_id,
+        "previous_training": profile.get("macros_training"),
+        "previous_rest": profile.get("macros_rest"),
+        "new_training": training,
+        "new_rest": rest,
+        "training": training,
+        "rest": rest,
+        "note": note,
+        "changed_by": user.get("name", user.get("email", "admin")),
+        "client_weight": float(peso),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.macro_history.insert_one(macro_log)
+
+    return {"applied": True, "targets": targets, "training": training, "rest": rest, "peri": peri}
 
 # ==================== DASHBOARD ====================
 

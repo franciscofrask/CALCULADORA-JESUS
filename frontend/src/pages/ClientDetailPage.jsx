@@ -16,7 +16,7 @@ import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
     ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp,
-    AlertCircle
+    AlertCircle, Calculator, CheckCircle2
 } from 'lucide-react';
 
 const ClientDetailPage = () => {
@@ -41,6 +41,14 @@ const ClientDetailPage = () => {
     const [generatingRoutine, setGeneratingRoutine] = useState(false);
     const [routineInstructions, setRoutineInstructions] = useState('');
     const [generatedRoutine, setGeneratedRoutine] = useState(null);
+
+    // Calculator tab
+    const [calcForm, setCalcForm] = useState({ peso: '', porcentaje_graso: '', sexo: 'hombre', objetivo: 'volumen' });
+    const [calcResults, setCalcResults] = useState(null);
+    const [calcLoading, setCalcLoading] = useState(false);
+    const [calcApplying, setCalcApplying] = useState(false);
+    const [calcApplied, setCalcApplied] = useState(false);
+    const [calcNote, setCalcNote] = useState('');
 
     useEffect(() => { fetchClient(); }, [clientId]); // eslint-disable-line
 
@@ -113,6 +121,7 @@ const ClientDetailPage = () => {
     const TAB_CONFIG = [
         { id: 'resumen', label: 'Resumen', icon: User },
         { id: 'macros', label: 'Macros', icon: Apple },
+        { id: 'calculadora', label: 'Calculadora', icon: Calculator },
         { id: 'membresia', label: 'Membresía', icon: CreditCard },
         { id: 'reportes', label: 'Reportes', icon: FileText },
         { id: 'cuestionario', label: 'Cuestionario', icon: ClipboardList },
@@ -375,6 +384,123 @@ const ClientDetailPage = () => {
                             </Card>
                         </div>
                     </>) : <EmptyState icon={Utensils} message="Sin datos de nutrición aún." />}
+                </TabsContent>
+
+                {/* ========== TAB CALCULADORA ========== */}
+                <TabsContent value="calculadora" className="space-y-4">
+                    <Card className="bg-[#111] border-[#222]"><CardContent className="p-5 space-y-4">
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Calcular macros — Método JG</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs text-white/40 uppercase mb-1">Peso (kg)</label>
+                                <input type="number" min="30" max="200" step="0.5"
+                                    value={calcForm.peso}
+                                    onChange={e => { setCalcForm(f => ({...f, peso: e.target.value})); setCalcResults(null); setCalcApplied(false); }}
+                                    placeholder="80"
+                                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-white/40 uppercase mb-1">% Graso</label>
+                                <input type="number" min="5" max="60" step="0.5"
+                                    value={calcForm.porcentaje_graso}
+                                    onChange={e => { setCalcForm(f => ({...f, porcentaje_graso: e.target.value})); setCalcResults(null); setCalcApplied(false); }}
+                                    placeholder="20"
+                                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[['hombre','Hombre'],['mujer','Mujer']].map(([v,l]) => (
+                                <button key={v} onClick={() => { setCalcForm(f => ({...f, sexo: v})); setCalcResults(null); }}
+                                    className={`py-2.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all ${calcForm.sexo === v ? 'text-white' : 'bg-[#1A1A1A] text-white/40'}`}
+                                    style={calcForm.sexo === v ? { backgroundColor: '#FF671F' } : {}}
+                                >{l}</button>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[['volumen','Volumen'],['definicion','Definición']].map(([v,l]) => (
+                                <button key={v} onClick={() => { setCalcForm(f => ({...f, objetivo: v})); setCalcResults(null); }}
+                                    className={`py-2.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all ${calcForm.objetivo === v ? 'text-white' : 'bg-[#1A1A1A] text-white/40'}`}
+                                    style={calcForm.objetivo === v ? { backgroundColor: '#FF671F' } : {}}
+                                >{l}</button>
+                            ))}
+                        </div>
+                        <Button onClick={async () => {
+                            const peso = parseFloat(calcForm.peso);
+                            const bf = parseFloat(calcForm.porcentaje_graso);
+                            if (!peso || isNaN(bf)) { toast.error('Rellena peso y % graso'); return; }
+                            setCalcLoading(true);
+                            try {
+                                const res = await api.post('/calculator/targets', { peso, porcentaje_graso: bf, sexo: calcForm.sexo, objetivo: calcForm.objetivo });
+                                setCalcResults(res.data);
+                                setCalcApplied(false);
+                            } catch (err) { toast.error(err.response?.data?.detail || 'Error'); }
+                            finally { setCalcLoading(false); }
+                        }} disabled={calcLoading || !calcForm.peso || !calcForm.porcentaje_graso}
+                            className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold uppercase tracking-wider disabled:opacity-40">
+                            {calcLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Calculator className="w-4 h-4 mr-2" />}
+                            {calcLoading ? 'Calculando...' : 'Calcular macros'}
+                        </Button>
+
+                        {calcResults && (<>
+                            <div className="grid grid-cols-3 gap-2">
+                                {[
+                                    { label: 'Entreno', m: calcResults.macros.entreno, color: '#FF671F' },
+                                    { label: 'Peri', m: { proteina: calcResults.macros.perientreno.proteina, hidratos: calcResults.macros.perientreno.hidratos, grasa: null }, color: '#EAB308' },
+                                    { label: 'Descanso', m: calcResults.macros.descanso, color: '#22C55E' },
+                                ].map(({ label, m, color }) => (
+                                    <div key={label} className="bg-[#0A0A0A] rounded-xl p-3 border border-[#222]">
+                                        <p className="text-[10px] font-bold uppercase mb-2" style={{ color }}>{label}</p>
+                                        <p className="text-xs text-white/60">P <span className="text-white font-bold">{Math.round(m.proteina)}</span></p>
+                                        <p className="text-xs text-white/60">H <span className="text-white font-bold">{Math.round(m.hidratos)}</span></p>
+                                        {m.grasa !== null && <p className="text-xs text-white/60">G <span className="text-white font-bold">{Math.round(m.grasa)}</span></p>}
+                                    </div>
+                                ))}
+                            </div>
+                            <div>
+                                <label className="block text-xs text-white/40 uppercase mb-1">Motivo (obligatorio)</label>
+                                <input type="text" value={calcNote}
+                                    onChange={e => setCalcNote(e.target.value)}
+                                    placeholder="Ej: Inicio de programa, ajuste semana 3..."
+                                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]"
+                                />
+                            </div>
+                            <Button onClick={async () => {
+                                if (!calcNote.trim()) { toast.error('El motivo es obligatorio'); return; }
+                                setCalcApplying(true);
+                                try {
+                                    await api.post(`/admin/clients/${clientId}/calculator/apply`, {
+                                        peso: parseFloat(calcForm.peso),
+                                        porcentaje_graso: parseFloat(calcForm.porcentaje_graso),
+                                        sexo: calcForm.sexo,
+                                        objetivo: calcForm.objetivo,
+                                        note: calcNote,
+                                    });
+                                    setCalcApplied(true);
+                                    toast.success(`Macros aplicados a ${client?.user?.name}`);
+                                    fetchClient();
+                                } catch (err) { toast.error(err.response?.data?.detail || 'Error aplicando'); }
+                                finally { setCalcApplying(false); }
+                            }} disabled={calcApplying || calcApplied}
+                                className={`w-full font-bold uppercase tracking-wider ${calcApplied ? 'bg-green-600 hover:bg-green-600' : 'bg-[#1A1A1A] border border-[#333] hover:border-[#FF671F]'} text-white disabled:opacity-60`}>
+                                {calcApplying ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : calcApplied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : null}
+                                {calcApplying ? 'Aplicando...' : calcApplied ? 'Aplicado' : `Aplicar a ${client?.user?.name?.split(' ')[0] || 'cliente'}`}
+                            </Button>
+                        </>)}
+                    </CardContent></Card>
+
+                    {/* Historial */}
+                    <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                            <History className="w-4 h-4" />Historial de macros
+                        </CardTitle>
+                    </CardHeader>
+                        <CardContent>{macro_history?.length > 0
+                            ? <div className="space-y-2">{macro_history.map((h, i) => <MacroHistoryItem key={h.id || i} item={h} />)}</div>
+                            : <p className="text-white/30 text-sm text-center py-4">Sin historial</p>}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 {/* ========== TAB 8: SEGUIMIENTO ========== */}

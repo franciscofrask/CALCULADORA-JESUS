@@ -1,40 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Textarea } from '../components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Slider } from '../components/ui/slider';
-import { ScrollArea } from '../components/ui/scroll-area';
 import { toast } from 'sonner';
-import { 
+import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { 
-    FileText, TrendingUp, Camera, Scale, Ruler, 
-    Activity, Moon, Zap, Brain, Send, ChevronRight, 
-    Calendar, Image as ImageIcon
+import {
+    FileText, TrendingUp, Scale, Ruler,
+    Activity, Moon, Zap, Brain, Send, ChevronRight,
+    Calendar
 } from 'lucide-react';
 
+const ORANGE = '#FF671F';
+
+const inputCls = "w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
+const labelCls = "block text-xs font-bold text-white/40 uppercase tracking-wider mb-1.5";
+
+const SliderRow = ({ icon: Icon, iconColor, label, value, max, unit, onChange }) => (
+    <div>
+        <div className="flex items-center justify-between mb-2">
+            <span className="flex items-center gap-2 text-sm text-white/70">
+                <Icon className="w-4 h-4" style={{ color: iconColor }} />
+                {label}
+            </span>
+            <span className="font-bold text-sm" style={{ color: iconColor }}>{value}{unit}</span>
+        </div>
+        <input
+            type="range"
+            min={0}
+            max={max}
+            step={max === 10 ? 1 : 5}
+            value={value}
+            onChange={(e) => onChange(Number(e.target.value))}
+            className="w-full h-2 rounded-full appearance-none cursor-pointer"
+            style={{
+                background: `linear-gradient(to right, ${iconColor} 0%, ${iconColor} ${value / max * 100}%, #333 ${value / max * 100}%, #333 100%)`
+            }}
+        />
+    </div>
+);
+
 const ReportsPage = () => {
-    const { api, profile } = useAuth();
+    const { api } = useAuth();
     const [reports, setReports] = useState([]);
     const [evolution, setEvolution] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState('form');
-    
+
     const [reportData, setReportData] = useState({
         weight: '',
-        measurements: {
-            chest: '',
-            waist: '',
-            hip: '',
-            arm: '',
-            thigh: ''
-        },
+        measurements: { chest: '', waist: '', hip: '', arm: '', thigh: '' },
         training_compliance: 80,
         nutrition_compliance: 80,
         sleep_quality: 7,
@@ -43,9 +58,7 @@ const ReportsPage = () => {
         notes: ''
     });
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {
         try {
@@ -64,12 +77,7 @@ const ReportsPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        if (!reportData.weight) {
-            toast.error('El peso es obligatorio');
-            return;
-        }
-        
+        if (!reportData.weight) { toast.error('El peso es obligatorio'); return; }
         setSubmitting(true);
         try {
             const payload = {
@@ -86,13 +94,10 @@ const ReportsPage = () => {
                 stress_level: reportData.stress_level,
                 notes: reportData.notes || null
             };
-            
             await api.post('/reports', payload);
             toast.success('Reporte enviado correctamente');
             fetchData();
             setActiveTab('history');
-            
-            // Reset form
             setReportData({
                 weight: '',
                 measurements: { chest: '', waist: '', hip: '', arm: '', thigh: '' },
@@ -110,337 +115,234 @@ const ReportsPage = () => {
         }
     };
 
+    const set = (field, value) => setReportData(prev => ({ ...prev, [field]: value }));
+
     const weightData = evolution?.weight?.map(w => ({
         date: new Date(w.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
         peso: w.value
     })) || [];
 
+    const tabs = [
+        { id: 'form', icon: FileText, label: 'Nuevo' },
+        { id: 'evolution', icon: TrendingUp, label: 'Evolución' },
+        { id: 'history', icon: Calendar, label: 'Historial' },
+    ];
+
     if (loading) {
         return (
-            <div className="p-4 md:p-6 pb-24 md:pb-6">
+            <div className="px-4 pt-6 pb-28">
                 <div className="animate-pulse space-y-4">
-                    <div className="h-8 bg-muted rounded w-1/3"></div>
-                    <div className="h-48 bg-muted rounded"></div>
+                    <div className="h-8 bg-[#222] rounded w-1/3" />
+                    <div className="h-48 bg-[#111111] rounded-2xl" />
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="p-4 md:p-6 pb-24 md:pb-6 animate-fade-in space-y-6">
-            <h1 className="heading-2">Mis Reportes</h1>
+        <div className="px-4 pt-6 pb-28 max-w-md mx-auto space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${ORANGE}20` }}>
+                    <FileText className="w-5 h-5" style={{ color: ORANGE }} />
+                </div>
+                <div>
+                    <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Bebas Neue', letterSpacing: '0.05em' }}>
+                        MIS REPORTES
+                    </h1>
+                    <p className="text-xs text-white/30">Seguimiento semanal</p>
+                </div>
+            </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="form" data-testid="report-form-tab">
-                        <FileText className="w-4 h-4 mr-2" />
-                        Nuevo
-                    </TabsTrigger>
-                    <TabsTrigger value="evolution" data-testid="evolution-tab">
-                        <TrendingUp className="w-4 h-4 mr-2" />
-                        Evolución
-                    </TabsTrigger>
-                    <TabsTrigger value="history" data-testid="history-tab">
-                        <Calendar className="w-4 h-4 mr-2" />
-                        Historial
-                    </TabsTrigger>
-                </TabsList>
+            {/* Tab bar */}
+            <div className="grid grid-cols-3 gap-1 bg-[#111111] border border-[#222] rounded-2xl p-1">
+                {tabs.map(({ id, icon: Icon, label }) => (
+                    <button
+                        key={id}
+                        onClick={() => setActiveTab(id)}
+                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                            activeTab === id ? 'text-white' : 'text-white/40 hover:text-white/70'
+                        }`}
+                        style={activeTab === id ? { backgroundColor: ORANGE } : {}}
+                    >
+                        <Icon className="w-3.5 h-3.5" />
+                        {label}
+                    </button>
+                ))}
+            </div>
 
-                <TabsContent value="form" className="space-y-4">
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Weight */}
-                        <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                                        <Scale className="w-5 h-5 text-primary" />
-                                    </div>
-                                    <div>
-                                        <Label className="font-semibold">Peso actual *</Label>
-                                        <p className="text-xs text-muted-foreground">En ayunas, sin ropa</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Input
+            {/* ── FORM TAB ── */}
+            {activeTab === 'form' && (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Weight */}
+                    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${ORANGE}20` }}>
+                                <Scale className="w-4 h-4" style={{ color: ORANGE }} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-white">Peso actual *</p>
+                                <p className="text-xs text-white/30">En ayunas, sin ropa</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={reportData.weight}
+                                onChange={(e) => set('weight', e.target.value)}
+                                placeholder="75.5"
+                                data-testid="weight-input"
+                                className="flex-1 bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-3 text-white text-2xl font-bold placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors"
+                            />
+                            <span className="text-lg text-white/40 font-bold">kg</span>
+                        </div>
+                    </div>
+
+                    {/* Measurements */}
+                    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-9 h-9 rounded-xl bg-[#1A1A1A] flex items-center justify-center">
+                                <Ruler className="w-4 h-4 text-white/40" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-white">Medidas (cm)</p>
+                                <p className="text-xs text-white/30">Opcional</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { key: 'chest', label: 'Pecho' },
+                                { key: 'waist', label: 'Cintura' },
+                                { key: 'hip', label: 'Cadera' },
+                                { key: 'arm', label: 'Brazo' },
+                                { key: 'thigh', label: 'Muslo' }
+                            ].map(({ key, label }) => (
+                                <div key={key}>
+                                    <label className={labelCls}>{label}</label>
+                                    <input
                                         type="number"
                                         step="0.1"
-                                        value={reportData.weight}
-                                        onChange={(e) => setReportData({ ...reportData, weight: e.target.value })}
-                                        placeholder="75.5"
-                                        className="text-2xl font-bold h-14"
-                                        data-testid="weight-input"
-                                    />
-                                    <span className="text-xl text-muted-foreground">kg</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Measurements */}
-                        <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center">
-                                        <Ruler className="w-5 h-5 text-secondary" />
-                                    </div>
-                                    <div>
-                                        <Label className="font-semibold">Medidas (cm)</Label>
-                                        <p className="text-xs text-muted-foreground">Opcional</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {[
-                                        { key: 'chest', label: 'Pecho' },
-                                        { key: 'waist', label: 'Cintura' },
-                                        { key: 'hip', label: 'Cadera' },
-                                        { key: 'arm', label: 'Brazo' },
-                                        { key: 'thigh', label: 'Muslo' }
-                                    ].map(({ key, label }) => (
-                                        <div key={key}>
-                                            <Label className="text-xs">{label}</Label>
-                                            <Input
-                                                type="number"
-                                                step="0.1"
-                                                value={reportData.measurements[key]}
-                                                onChange={(e) => setReportData({
-                                                    ...reportData,
-                                                    measurements: { ...reportData.measurements, [key]: e.target.value }
-                                                })}
-                                                placeholder="--"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Compliance Sliders */}
-                        <Card>
-                            <CardContent className="p-4 space-y-6">
-                                <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <Label className="flex items-center gap-2">
-                                            <Activity className="w-4 h-4 text-primary" />
-                                            Cumplimiento entrenamiento
-                                        </Label>
-                                        <span className="font-bold text-primary">{reportData.training_compliance}%</span>
-                                    </div>
-                                    <Slider
-                                        value={[reportData.training_compliance]}
-                                        onValueChange={([v]) => setReportData({ ...reportData, training_compliance: v })}
-                                        max={100}
-                                        step={5}
-                                        data-testid="training-compliance-slider"
+                                        value={reportData.measurements[key]}
+                                        onChange={(e) => set('measurements', { ...reportData.measurements, [key]: e.target.value })}
+                                        placeholder="--"
+                                        className={inputCls}
                                     />
                                 </div>
+                            ))}
+                        </div>
+                    </div>
 
-                                <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <Label className="flex items-center gap-2">
-                                            <Activity className="w-4 h-4 text-secondary" />
-                                            Cumplimiento nutrición
-                                        </Label>
-                                        <span className="font-bold text-secondary">{reportData.nutrition_compliance}%</span>
-                                    </div>
-                                    <Slider
-                                        value={[reportData.nutrition_compliance]}
-                                        onValueChange={([v]) => setReportData({ ...reportData, nutrition_compliance: v })}
-                                        max={100}
-                                        step={5}
-                                    />
-                                </div>
+                    {/* Sliders */}
+                    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4 space-y-5">
+                        <SliderRow icon={Activity} iconColor={ORANGE}    label="Cumplimiento entrenamiento" value={reportData.training_compliance}  max={100} unit="%" onChange={(v) => set('training_compliance', v)} />
+                        <SliderRow icon={Activity} iconColor="#22C55E"   label="Cumplimiento nutrición"      value={reportData.nutrition_compliance} max={100} unit="%" onChange={(v) => set('nutrition_compliance', v)} />
+                        <SliderRow icon={Moon}     iconColor="#818CF8"   label="Calidad del sueño"           value={reportData.sleep_quality}        max={10}  unit="/10" onChange={(v) => set('sleep_quality', v)} />
+                        <SliderRow icon={Zap}      iconColor="#F59E0B"   label="Nivel de energía"            value={reportData.energy_level}         max={10}  unit="/10" onChange={(v) => set('energy_level', v)} />
+                        <SliderRow icon={Brain}    iconColor="#F43F5E"   label="Nivel de estrés"             value={reportData.stress_level}         max={10}  unit="/10" onChange={(v) => set('stress_level', v)} />
+                    </div>
 
-                                <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <Label className="flex items-center gap-2">
-                                            <Moon className="w-4 h-4 text-indigo-500" />
-                                            Calidad del sueño
-                                        </Label>
-                                        <span className="font-bold text-indigo-500">{reportData.sleep_quality}/10</span>
-                                    </div>
-                                    <Slider
-                                        value={[reportData.sleep_quality]}
-                                        onValueChange={([v]) => setReportData({ ...reportData, sleep_quality: v })}
-                                        max={10}
-                                        step={1}
-                                    />
-                                </div>
+                    {/* Notes */}
+                    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                        <label className={labelCls}>Notas adicionales</label>
+                        <textarea
+                            value={reportData.notes}
+                            onChange={(e) => set('notes', e.target.value)}
+                            placeholder="¿Cómo te has sentido esta semana? ¿Alguna dificultad o logro?"
+                            rows={4}
+                            data-testid="notes-textarea"
+                            className="w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors resize-none"
+                        />
+                    </div>
 
-                                <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <Label className="flex items-center gap-2">
-                                            <Zap className="w-4 h-4 text-amber-500" />
-                                            Nivel de energía
-                                        </Label>
-                                        <span className="font-bold text-amber-500">{reportData.energy_level}/10</span>
-                                    </div>
-                                    <Slider
-                                        value={[reportData.energy_level]}
-                                        onValueChange={([v]) => setReportData({ ...reportData, energy_level: v })}
-                                        max={10}
-                                        step={1}
-                                    />
-                                </div>
+                    <button
+                        type="submit"
+                        disabled={submitting}
+                        data-testid="submit-report-btn"
+                        className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+                        style={{ backgroundColor: ORANGE }}
+                    >
+                        <Send className="w-4 h-4" />
+                        {submitting ? 'Enviando...' : 'Enviar reporte'}
+                    </button>
+                </form>
+            )}
 
-                                <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <Label className="flex items-center gap-2">
-                                            <Brain className="w-4 h-4 text-rose-500" />
-                                            Nivel de estrés
-                                        </Label>
-                                        <span className="font-bold text-rose-500">{reportData.stress_level}/10</span>
-                                    </div>
-                                    <Slider
-                                        value={[reportData.stress_level]}
-                                        onValueChange={([v]) => setReportData({ ...reportData, stress_level: v })}
-                                        max={10}
-                                        step={1}
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Notes */}
-                        <Card>
-                            <CardContent className="p-4">
-                                <Label className="mb-2 block">Notas adicionales</Label>
-                                <Textarea
-                                    value={reportData.notes}
-                                    onChange={(e) => setReportData({ ...reportData, notes: e.target.value })}
-                                    placeholder="¿Cómo te has sentido esta semana? ¿Alguna dificultad o logro?"
-                                    rows={4}
-                                    data-testid="notes-textarea"
-                                />
-                            </CardContent>
-                        </Card>
-
-                        <Button 
-                            type="submit" 
-                            className="w-full btn-primary"
-                            disabled={submitting}
-                            data-testid="submit-report-btn"
-                        >
-                            <Send className="w-4 h-4 mr-2" />
-                            {submitting ? 'Enviando...' : 'Enviar reporte'}
-                        </Button>
-                    </form>
-                </TabsContent>
-
-                <TabsContent value="evolution" className="space-y-4">
-                    {/* Weight Chart */}
+            {/* ── EVOLUTION TAB ── */}
+            {activeTab === 'evolution' && (
+                <div className="space-y-4">
                     {weightData.length > 0 ? (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Scale className="w-5 h-5" />
-                                    Evolución del peso
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="h-64">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={weightData}>
-                                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                                            <XAxis dataKey="date" className="text-xs" />
-                                            <YAxis domain={['auto', 'auto']} className="text-xs" />
-                                            <Tooltip />
-                                            <Line 
-                                                type="monotone" 
-                                                dataKey="peso" 
-                                                stroke="hsl(var(--primary))" 
-                                                strokeWidth={2}
-                                                dot={{ fill: 'hsl(var(--primary))' }}
-                                            />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Scale className="w-4 h-4" style={{ color: ORANGE }} />
+                                <p className="text-sm font-bold text-white uppercase tracking-wider">Evolución del peso</p>
+                            </div>
+                            <div className="h-56">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={weightData}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                                        <XAxis dataKey="date" tick={{ fill: '#ffffff66', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                        <YAxis domain={['auto', 'auto']} tick={{ fill: '#ffffff66', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #333', borderRadius: 12, color: '#fff' }}
+                                            labelStyle={{ color: '#fff' }}
+                                        />
+                                        <Line type="monotone" dataKey="peso" stroke={ORANGE} strokeWidth={2} dot={{ fill: ORANGE, r: 3 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
                     ) : (
-                        <Card className="bg-muted/50">
-                            <CardContent className="p-8 text-center">
-                                <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                                <h3 className="heading-3 mb-2">Sin datos de evolución</h3>
-                                <p className="text-muted-foreground">
-                                    Envía tu primer reporte para ver tu progreso.
-                                </p>
-                            </CardContent>
-                        </Card>
+                        <div className="bg-[#111111] border border-[#222] rounded-2xl p-8 text-center">
+                            <TrendingUp className="w-10 h-10 text-white/20 mx-auto mb-3" />
+                            <p className="text-white font-bold mb-1">Sin datos de evolución</p>
+                            <p className="text-xs text-white/30">Envía tu primer reporte para ver tu progreso.</p>
+                        </div>
                     )}
+                </div>
+            )}
 
-                    {/* Photos Gallery */}
-                    {evolution?.photos?.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <ImageIcon className="w-5 h-5" />
-                                    Galería de fotos
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {evolution.photos.slice(0, 9).map((item, index) => (
-                                        <div key={index} className="aspect-square bg-muted rounded-lg flex items-center justify-center">
-                                            <Camera className="w-6 h-6 text-muted-foreground" />
-                                        </div>
-                                    ))}
+            {/* ── HISTORY TAB ── */}
+            {activeTab === 'history' && (
+                <div className="space-y-3">
+                    {reports.length > 0 ? reports.map((report) => (
+                        <div key={report.id} className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                            <div className="flex items-start justify-between mb-3">
+                                <div>
+                                    <p className="text-xs text-white/40 uppercase tracking-wider">
+                                        {new Date(report.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </p>
+                                    <p className="text-2xl font-bold text-white" style={{ fontFamily: 'Bebas Neue' }}>
+                                        {report.weight} <span className="text-base text-white/40">kg</span>
+                                    </p>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    )}
-                </TabsContent>
-
-                <TabsContent value="history">
-                    <ScrollArea className="h-[60vh]">
-                        <div className="space-y-3">
-                            {reports.length > 0 ? (
-                                reports.map((report) => (
-                                    <Card key={report.id}>
-                                        <CardContent className="p-4">
-                                            <div className="flex items-start justify-between mb-3">
-                                                <div>
-                                                    <p className="font-semibold">
-                                                        {new Date(report.created_at).toLocaleDateString('es-ES', {
-                                                            day: 'numeric',
-                                                            month: 'long',
-                                                            year: 'numeric'
-                                                        })}
-                                                    </p>
-                                                    <p className="text-2xl font-bold text-primary">
-                                                        {report.weight} kg
-                                                    </p>
-                                                </div>
-                                                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-2 gap-2 text-sm">
-                                                <div className="flex items-center gap-2">
-                                                    <Activity className="w-4 h-4 text-primary" />
-                                                    <span>Entreno: {report.training_compliance}%</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Activity className="w-4 h-4 text-secondary" />
-                                                    <span>Nutrición: {report.nutrition_compliance}%</span>
-                                                </div>
-                                            </div>
-                                            
-                                            {report.trainer_feedback && (
-                                                <div className="mt-3 p-3 bg-primary/5 rounded-lg">
-                                                    <p className="text-xs font-semibold text-primary mb-1">Feedback del entrenador</p>
-                                                    <p className="text-sm">{report.trainer_feedback}</p>
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                ))
-                            ) : (
-                                <p className="text-center text-muted-foreground py-8">
-                                    No hay reportes anteriores.
-                                </p>
+                                <ChevronRight className="w-4 h-4 text-white/20 mt-1" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-[#1A1A1A] rounded-xl px-3 py-2 flex items-center gap-2">
+                                    <Activity className="w-3.5 h-3.5" style={{ color: ORANGE }} />
+                                    <span className="text-xs text-white/60">Entreno <span className="text-white font-bold">{report.training_compliance}%</span></span>
+                                </div>
+                                <div className="bg-[#1A1A1A] rounded-xl px-3 py-2 flex items-center gap-2">
+                                    <Activity className="w-3.5 h-3.5 text-green-400" />
+                                    <span className="text-xs text-white/60">Nutrición <span className="text-white font-bold">{report.nutrition_compliance}%</span></span>
+                                </div>
+                            </div>
+                            {report.trainer_feedback && (
+                                <div className="mt-3 p-3 rounded-xl border" style={{ backgroundColor: `${ORANGE}10`, borderColor: `${ORANGE}30` }}>
+                                    <p className="text-xs font-bold mb-1" style={{ color: ORANGE }}>Feedback del entrenador</p>
+                                    <p className="text-sm text-white/70">{report.trainer_feedback}</p>
+                                </div>
                             )}
                         </div>
-                    </ScrollArea>
-                </TabsContent>
-            </Tabs>
+                    )) : (
+                        <div className="bg-[#111111] border border-[#222] rounded-2xl p-8 text-center">
+                            <Calendar className="w-10 h-10 text-white/20 mx-auto mb-3" />
+                            <p className="text-white/40 text-sm">No hay reportes anteriores.</p>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

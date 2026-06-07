@@ -15,11 +15,22 @@ router = APIRouter(prefix="/diets", tags=["diets"])
 
 @router.post("")
 async def save_diet(data: dict, user = Depends(get_current_user)):
-    """Guardar la dieta completa de un día."""
+    """Guardar la dieta completa de un día, o solo distribution_targets si targets_only=true."""
     fecha = data.get("fecha")
     if not fecha:
         raise HTTPException(status_code=400, detail="Fecha requerida")
-    
+
+    if data.get("targets_only"):
+        await db.diets.update_one(
+            {"user_id": user["id"], "fecha": fecha},
+            {"$set": {
+                "distribution_targets": data.get("distribution_targets"),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+        return {"message": "Targets actualizados", "fecha": fecha}
+
     diet_doc = {
         "user_id": user["id"],
         "fecha": fecha,
@@ -33,13 +44,13 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
         "distribution_targets": data.get("distribution_targets", None),
         "is_cuadrado": data.get("is_cuadrado", False)
     }
-    
+
     await db.diets.update_one(
         {"user_id": user["id"], "fecha": fecha},
         {"$set": diet_doc},
         upsert=True
     )
-    
+
     return {"message": "Dieta guardada", "fecha": fecha}
 
 @router.get("/recent")
@@ -114,6 +125,51 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
     
     return {"year": year, "month": month, "days": calendar_data}
 
+@router.patch("/{fecha}/targets")
+async def update_diet_targets(fecha: str, data: dict, user = Depends(get_current_user)):
+    """Actualizar solo distribution_targets sin tocar comidas."""
+    await db.diets.update_one(
+        {"user_id": user["id"], "fecha": fecha},
+        {"$set": {
+            "distribution_targets": data.get("distribution_targets"),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }},
+        upsert=True
+    )
+    return {"message": "Targets actualizados", "fecha": fecha}
+
+@router.post("/copy-day")
+async def copy_day(data: dict, user = Depends(get_current_user)):
+    """Copiar el día completo (todas las comidas) de una fecha a otra."""
+    source_date = data.get("fecha_origen")
+    target_date = data.get("fecha_destino")
+    if not source_date or not target_date:
+        raise HTTPException(status_code=400, detail="Faltan fecha_origen y fecha_destino")
+
+    source_diet = await db.diets.find_one({"user_id": user["id"], "fecha": source_date}, {"_id": 0})
+    if not source_diet:
+        raise HTTPException(status_code=404, detail="No hay dieta guardada para la fecha origen")
+
+    copy_doc = {
+        "user_id": user["id"],
+        "fecha": target_date,
+        "tipo_dia": source_diet.get("tipo_dia", "entrenamiento"),
+        "num_comidas": source_diet.get("num_comidas", 4),
+        "momento_entreno": source_diet.get("momento_entreno", 1),
+        "opcion_peri": source_diet.get("opcion_peri", "intra_post"),
+        "comidas": source_diet.get("comidas", {}),
+        "macros_snapshot": source_diet.get("macros_snapshot"),
+        "distribution_targets": source_diet.get("distribution_targets"),
+        "is_cuadrado": source_diet.get("is_cuadrado", False),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.diets.update_one(
+        {"user_id": user["id"], "fecha": target_date},
+        {"$set": copy_doc},
+        upsert=True
+    )
+    return {"message": "Día copiado", "origen": source_date, "destino": target_date}
+
 @router.get("/{fecha}")
 async def get_diet(fecha: str, user = Depends(get_current_user)):
     """Obtener la dieta guardada para una fecha."""
@@ -123,7 +179,7 @@ async def get_diet(fecha: str, user = Depends(get_current_user)):
     )
     if not diet:
         return {"fecha": fecha, "exists": False}
-    
+
     diet["exists"] = True
     return diet
 

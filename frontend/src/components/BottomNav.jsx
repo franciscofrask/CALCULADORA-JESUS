@@ -1,15 +1,15 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Utensils, Dumbbell, Zap, Menu } from 'lucide-react';
+import { Home, Utensils, Dumbbell, Calculator, Menu } from 'lucide-react';
 
 const BottomNav = () => {
     const location = useLocation();
-    
+
     const navItems = [
         { path: '/dashboard', icon: Home, label: 'Inicio', emoji: '🏠' },
         { path: '/dashboard/nutrition', icon: Utensils, label: 'Nutrición', emoji: '🍽️' },
         { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina', emoji: '💪' },
-        { path: '/dashboard/supplements', icon: Zap, label: 'Suplem.', emoji: '⚡' },
+        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Calc.', emoji: '🔢' },
         { path: '/dashboard/profile', icon: Menu, label: 'Más', emoji: '≡' },
     ];
 

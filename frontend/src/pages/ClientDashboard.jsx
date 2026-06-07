@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import {
     Home, Dumbbell, Apple, FileText, MessageCircle, User,
     LogOut, Bell, ChevronRight, CreditCard, Target, ArrowUpRight, Bot,
-    Flame, Activity, Zap, Scale
+    Flame, Activity, Zap, Scale, Calculator
 } from 'lucide-react';
 
 // =============== SHARED COMPONENTS ===============
@@ -349,6 +349,7 @@ const ClientLayout = () => {
         { path: '/dashboard', icon: Home, label: 'Inicio' },
         { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
         { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
+        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Calculadora' },
         { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
         { path: '/dashboard/reports', icon: FileText, label: 'Reportes' },
         { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat' },
@@ -393,7 +394,7 @@ const ClientLayout = () => {
                         { path: '/dashboard', icon: Home, label: 'Inicio' },
                         { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
                         { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
-                        { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat' },
+                        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Calc.' },
                         { path: '/dashboard/profile', icon: User, label: 'Más' },
                     ].map((item) => {
                         const active = isActive(item.path);

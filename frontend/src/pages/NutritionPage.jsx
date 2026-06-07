@@ -108,7 +108,10 @@ const NutritionPage = () => {
     const [preferencesLoading, setPreferencesLoading] = useState(true);
     
     // Date & Config state
-    const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
+    const [currentDate, setCurrentDate] = useState(() => {
+        const n = new Date();
+        return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    });
     const [tipoDia, setTipoDia] = useState('entrenamiento');
     const [numComidas, setNumComidas] = useState(4);
     const [momentoEntreno, setMomentoEntreno] = useState(1);
@@ -321,6 +324,7 @@ const NutritionPage = () => {
                     }
                 }
                 setMealsData(updatedMeals);
+                console.log('[loadDiet] distribution_targets:', diet.distribution_targets);
                 return diet.distribution_targets || null;
             } else {
                 setMealsData({});
@@ -332,6 +336,14 @@ const NutritionPage = () => {
             return null;
         }
     }, [api]);
+
+    // Fix date to local on mount
+    useEffect(() => {
+        const n = new Date();
+        const local = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+        console.log('DATE-FIX-V3 firing, local=', local);
+        setCurrentDate(local);
+    }, []);
 
     // Initial load
     useEffect(() => {
@@ -383,19 +395,19 @@ const NutritionPage = () => {
 
     // Navigation
     const changeDate = (days) => {
-        const d = new Date(currentDate);
+        const d = new Date(currentDate + 'T12:00:00');
         d.setDate(d.getDate() + days);
-        setCurrentDate(d.toISOString().split('T')[0]);
+        const n = d;
+        setCurrentDate(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`);
     };
 
     const formatDate = (dateStr) => {
-        const d = new Date(dateStr);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const dateOnly = new Date(d);
-        dateOnly.setHours(0, 0, 0, 0);
-        if (dateOnly.getTime() === today.getTime()) return 'Hoy';
-        return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+        const n = new Date();
+        const todayStr = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+        if (dateStr === todayStr) return 'Hoy';
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const local = new Date(y, m - 1, d);
+        return local.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
     };
 
     // Meal order based on config
@@ -791,14 +803,29 @@ const NutritionPage = () => {
     const copyDiet = async () => {
         if (!copyDate) { toast.error('Selecciona una fecha'); return; }
         try {
-            await api('/api/diets/copy', {
+            const sourceDiet = await api(`/api/diets/${currentDate}`);
+            if (!sourceDiet || !sourceDiet.exists) {
+                toast.error('No hay dieta guardada para hoy');
+                return;
+            }
+            await api('/api/diets', {
                 method: 'POST',
-                body: JSON.stringify({ fecha_origen: currentDate, fecha_destino: copyDate })
+                body: JSON.stringify({
+                    fecha: copyDate,
+                    tipo_dia: sourceDiet.tipo_dia,
+                    num_comidas: sourceDiet.num_comidas,
+                    momento_entreno: sourceDiet.momento_entreno,
+                    opcion_peri: sourceDiet.opcion_peri,
+                    comidas: sourceDiet.comidas,
+                    macros_snapshot: sourceDiet.macros_snapshot,
+                    distribution_targets: sourceDiet.distribution_targets,
+                    is_cuadrado: sourceDiet.is_cuadrado,
+                })
             });
             toast.success(`Copiada a ${formatDate(copyDate)}`);
             setCopyModalOpen(false);
             setCopyDate('');
-        } catch (err) { toast.error('Error copiando dieta'); }
+        } catch (err) { toast.error(err.message || 'Error copiando dieta'); }
     };
 
     // Day summary
@@ -810,7 +837,7 @@ const NutritionPage = () => {
         G: Math.max(0, Math.round((dayTarget.G_total || 0) - dayMacros.G)),
     };
 
-    const handleVolcarMacros = () => {
+    const handleVolcarMacros = async () => {
         const regularMeals = getMealOrder().filter(k => !['Intra', 'Post'].includes(k));
         const lastMeal = regularMeals[regularMeals.length - 1];
         if (!lastMeal) return;
@@ -829,8 +856,18 @@ const NutritionPage = () => {
             G: Math.max(0, Math.round((dayTarget.G_total || 0) - otherServed.G)),
         };
 
-        setDistribTargetsOverlay(prev => ({ ...(prev || {}), [lastMeal]: targetForLastMeal }));
+        const newOverlay = { ...(distribTargetsOverlay || {}), [lastMeal]: targetForLastMeal };
+        setDistribTargetsOverlay(newOverlay);
         toast.success(`Macros volcados a ${mealInfo[lastMeal]?.name}`);
+
+        try {
+            await api('/api/diets', {
+                method: 'POST',
+                body: JSON.stringify({ fecha: currentDate, targets_only: true, distribution_targets: newOverlay })
+            });
+        } catch (err) {
+            toast.error(`Error guardando volcado: ${err.message}`);
+        }
     };
     const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + dayMacros.G * 9;
     const targetKcal = dayTarget.kcal_total || 0;
