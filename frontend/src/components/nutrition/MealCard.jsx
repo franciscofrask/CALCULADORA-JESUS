@@ -58,7 +58,7 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, getMeal
                     <span className="w-5 text-center text-sm">{emoji}</span>
                     <span className="w-4 text-xs font-semibold text-gray-600">{label}</span>
                     <div className="flex-1"><ProgressBar value={val} max={tgt} color={color} height={8} showCheck /></div>
-                    <span className={`text-xs font-mono w-16 text-right ${over ? 'text-red-500 font-bold' : ''}`}>{val.toFixed(0)}/{tgt.toFixed(0)}g</span>
+                    <span className={`text-xs font-mono w-16 text-right ${over ? 'text-red-500 font-bold' : ''}`}>{val.toFixed(1)}/{tgt.toFixed(1)}g</span>
                 </div>
             ))}
             {statusMessage && <div className={`text-xs font-semibold ${statusColor} mt-1`}>{statusMessage}</div>}
@@ -97,7 +97,7 @@ const MealCard = ({
                             <span className="text-sm">{statusSymbol}</span>
                         </div>
                         <p className="text-xs text-gray-500">
-                            {isPeri ? `${target.P.toFixed(0)}P | ${target.H.toFixed(0)}H` : `${target.P.toFixed(0)}P | ${target.H.toFixed(0)}H | ${target.G.toFixed(0)}G`}
+                            {isPeri ? `${target.P.toFixed(1)}P | ${target.H.toFixed(1)}H` : `${target.P.toFixed(1)}P | ${target.H.toFixed(1)}H | ${target.G.toFixed(1)}G`}
                         </p>
                     </div>
                 </div>

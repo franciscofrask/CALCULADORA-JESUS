@@ -113,7 +113,7 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     rest = data.rest.model_dump()
     training["calories"] = training["protein"] * 4 + training["carbs"] * 4 + training["fat"] * 9
     rest["calories"] = rest["protein"] * 4 + rest["carbs"] * 4 + rest["fat"] * 9
-    
+
     # Also store in alternative format for chatbot compatibility
     training["proteinas"] = training["protein"]
     training["hidratos"] = training["carbs"]
@@ -121,14 +121,23 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     rest["proteinas"] = rest["protein"]
     rest["hidratos"] = rest["carbs"]
     rest["grasas"] = rest["fat"]
-    
+
+    set_data = {
+        "macros_training": training,
+        "macros_rest": rest,
+        "macros_source": "manual",
+    }
+
+    if data.peri is not None:
+        peri = data.peri.model_dump()
+        peri["calories"] = peri["protein"] * 4 + peri["carbs"] * 4
+        peri["proteinas"] = peri["protein"]
+        peri["hidratos"] = peri["carbs"]
+        set_data["macros_periworkout"] = peri
+
     await db.client_profiles.update_one(
         {"id": client_id},
-        {"$set": {
-            "macros_training": training,
-            "macros_rest": rest,
-            "macros_source": "manual",
-        }}
+        {"$set": set_data}
     )
     
     macro_log = {

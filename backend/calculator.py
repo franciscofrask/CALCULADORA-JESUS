@@ -11,6 +11,7 @@ Funciones principales:
 """
 
 from typing import Dict, List, Optional
+import math
 from calma_engine import (
     calcular_macros_efectivos,
     calcular_macros_efectivos_alimento,
@@ -513,10 +514,16 @@ def calcular_cantidad_automatica(
         dict con cantidad_g, macros_efectivos, macros_brutos, que_cuenta, cabe
     """
     
-    # Normalizar keys de macros_restantes
-    p_rest = float(macros_restantes.get("P", macros_restantes.get("proteina", 0)) or 0)
-    h_rest = float(macros_restantes.get("H", macros_restantes.get("hidratos", 0)) or 0)
-    g_rest = float(macros_restantes.get("G", macros_restantes.get("grasa", 0)) or 0)
+    # Normalizar keys de macros_restantes (inf = sin límite en ese macro)
+    def _get_macro(d, *keys):
+        for k in keys:
+            v = d.get(k)
+            if v is not None:
+                return float(v)
+        return 0.0
+    p_rest = _get_macro(macros_restantes, "P", "proteina")
+    h_rest = _get_macro(macros_restantes, "H", "hidratos")
+    g_rest = _get_macro(macros_restantes, "G", "grasa")
     
     # Datos del alimento
     racion = float(alimento.get("racion", 100) or 100)
@@ -564,17 +571,34 @@ def calcular_cantidad_automatica(
     elif g_ef_100 > 0 and g_rest <= 0:
         cantidades.append(0)
     
+    # excede=True si el alimento tiene macros que cuentan pero alguno ya está lleno (min=0)
+    excede_macros = bool(cantidades) and min(cantidades) <= 0
+
     if not cantidades:
         return {
             "cantidad_g": 0,
             "macros_efectivos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
             "macros_brutos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
             "que_cuenta": {"P": False, "H": False, "G": False},
-            "cabe": False
+            "cabe": False,
+            "excede": False  # sin macros efectivos → no excede, puede añadirse libremente
         }
-    
+
+    if excede_macros:
+        return {
+            "cantidad_g": 0,
+            "macros_efectivos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+            "macros_brutos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+            "que_cuenta": {"P": False, "H": False, "G": False},
+            "cabe": False,
+            "excede": True  # macro ya lleno → este alimento no cabe
+        }
+
     # Elegir la cantidad MÍNIMA (macro más limitante)
+    # Si no hay límite en ningún macro conocido, usar la ración por defecto
     cantidad = max(0, min(cantidades))
+    if math.isinf(cantidad):
+        cantidad = racion
     
     # Obtener config del alimento
     config = get_food_config(alimento)
@@ -596,7 +620,10 @@ def calcular_cantidad_automatica(
     
     # Aplicar mínimo del config
     minimo_config = config.get('minimo', 5)
-    if 0 < cantidad < minimo_config:
+    if cantidad == 0:
+        # Redondeó a 0 pero el macro ideal era > 0: forzar al mínimo para evaluar si cabe
+        cantidad = minimo_config
+    elif 0 < cantidad < minimo_config:
         cantidad = minimo_config
     
     # Recalcular macros efectivos con la cantidad final
@@ -637,6 +664,7 @@ def calcular_cantidad_automatica(
             "G": efectivos_final["grasa_cuenta"]
         },
         "cabe": cabe,
+        "excede": not cabe,
         "config": get_food_config(alimento)
     }
 

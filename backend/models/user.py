@@ -98,7 +98,12 @@ class MacrosData(BaseModel):
     fat: float
     calories: Optional[float] = None
 
+class PeriMacrosData(BaseModel):
+    protein: float
+    carbs: float
+
 class MacrosUpdate(BaseModel):
     training: MacrosData
     rest: MacrosData
+    peri: Optional[PeriMacrosData] = None
     note: Optional[str] = None

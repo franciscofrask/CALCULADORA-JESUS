@@ -122,29 +122,37 @@ async def get_user_preferences(user = Depends(get_current_user)):
     """Obtener preferencias de alimentos del usuario."""
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
-        return {"food_preferences": [], "has_preferences": False}
-    
+        return {"food_preferences": [], "avoided_categories": [], "avoided_keywords": [], "has_preferences": False}
+
     preferences = profile.get("food_preferences", [])
     return {
         "food_preferences": preferences,
+        "avoided_categories": profile.get("avoided_categories", []),
+        "avoided_keywords": profile.get("avoided_keywords", []),
         "has_preferences": len(preferences) > 0
     }
 
 @router.post("/user/preferences")
 async def save_user_preferences(data: dict, user = Depends(get_current_user)):
-    """Guardar preferencias de alimentos del usuario."""
+    """Guardar preferencias y alimentos a evitar del usuario."""
     preferences = data.get("food_preferences", [])
-    
+    avoided_categories = data.get("avoided_categories", [])
+    avoided_keywords = data.get("avoided_keywords", [])
+
     if len(preferences) < 3:
         raise HTTPException(status_code=400, detail="Debes seleccionar al menos 3 categorías")
-    
+
     await db.client_profiles.update_one(
         {"user_id": user["id"]},
-        {"$set": {"food_preferences": preferences}},
+        {"$set": {
+            "food_preferences": preferences,
+            "avoided_categories": avoided_categories,
+            "avoided_keywords": avoided_keywords,
+        }},
         upsert=True
     )
-    
-    return {"success": True, "food_preferences": preferences}
+
+    return {"success": True, "food_preferences": preferences, "avoided_categories": avoided_categories, "avoided_keywords": avoided_keywords}
 
 # ==================== MACROS ====================
 

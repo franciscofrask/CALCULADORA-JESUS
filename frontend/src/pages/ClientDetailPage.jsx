@@ -61,7 +61,7 @@ const ClientDetailPage = () => {
                 setMacrosForm({
                     training: { protein: p.macros_training.protein || p.macros_training.proteinas || '', carbs: p.macros_training.carbs || p.macros_training.hidratos || '', fat: p.macros_training.fat || p.macros_training.grasas || '' },
                     rest: { protein: p.macros_rest?.protein || p.macros_rest?.proteinas || '', carbs: p.macros_rest?.carbs || p.macros_rest?.hidratos || '', fat: p.macros_rest?.fat || p.macros_rest?.grasas || '' },
-                    peri: { protein: p.macros_periworkout?.protein || p.macros_periworkout?.proteinas || '', carbs: p.macros_periworkout?.carbs || p.macros_periworkout?.hidratos || '' },
+                    peri: { protein: p.macros_periworkout?.protein ?? p.macros_periworkout?.proteinas ?? '', carbs: p.macros_periworkout?.carbs ?? p.macros_periworkout?.hidratos ?? '' },
                     note: ''
                 });
             }
@@ -78,6 +78,7 @@ const ClientDetailPage = () => {
             await api.put(`/admin/clients/${clientId}/macros`, {
                 training: { protein: parseFloat(macrosForm.training.protein), carbs: parseFloat(macrosForm.training.carbs), fat: parseFloat(macrosForm.training.fat) },
                 rest: { protein: parseFloat(macrosForm.rest.protein), carbs: parseFloat(macrosForm.rest.carbs), fat: parseFloat(macrosForm.rest.fat) },
+                peri: { protein: parseFloat(macrosForm.peri.protein) || 0, carbs: parseFloat(macrosForm.peri.carbs) || 0 },
                 note: macrosForm.note
             });
             toast.success('Macros actualizados');
@@ -233,6 +234,13 @@ const ClientDetailPage = () => {
                                         <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={macrosForm.rest.protein} onChange={e => setMacrosForm({...macrosForm, rest: {...macrosForm.rest, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                                         <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={macrosForm.rest.carbs} onChange={e => setMacrosForm({...macrosForm, rest: {...macrosForm.rest, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                                         <div><Label className="text-white/60 text-xs">Grasa</Label><Input type="number" value={macrosForm.rest.fat} onChange={e => setMacrosForm({...macrosForm, rest: {...macrosForm.rest, fat: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-white/40 uppercase tracking-wider mb-2">Perientreno</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={macrosForm.peri.protein} onChange={e => setMacrosForm({...macrosForm, peri: {...macrosForm.peri, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                        <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={macrosForm.peri.carbs} onChange={e => setMacrosForm({...macrosForm, peri: {...macrosForm.peri, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                                     </div>
                                 </div>
                                 <div>

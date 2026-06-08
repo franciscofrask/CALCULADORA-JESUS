@@ -743,7 +743,11 @@ def _redondear_cantidad(cantidad: float, categoria: str) -> float:
        cat.startswith("21.") or cat.startswith("22."):
         return round(cantidad / 25) * 25
     
-    # Huevos: multiplos de 55g (aprox 1 huevo)
+    # Claras de huevo (cat 1.1): medición continua, 1g de precisión
+    if cat == "1.1" or cat.startswith("1.1."):
+        return round(cantidad)
+
+    # Huevos enteros (cat 1.2): múltiplos de 55g (aprox 1 huevo)
     if cat == "1" or cat.startswith("1."):
         return round(cantidad / 55) * 55
     

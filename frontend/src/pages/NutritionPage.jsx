@@ -3,9 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { 
+import {
     ChevronLeft, ChevronRight,
-    Save, Copy, ArrowUpRight, Calendar, FileDown
+    Save, Copy, ArrowUpRight, Calendar, FileDown, SlidersHorizontal
 } from 'lucide-react';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 import BuildMealModal from '../components/nutrition/BuildMealModal';
@@ -105,6 +105,8 @@ const NutritionPage = () => {
     // Preferences state - for checking if user has configured preferences
     const [showPreferencesSetup, setShowPreferencesSetup] = useState(false);
     const [userPreferences, setUserPreferences] = useState([]);
+    const [avoidedCategories, setAvoidedCategories] = useState([]);
+    const [avoidedKeywords, setAvoidedKeywords] = useState([]);
     const [preferencesLoading, setPreferencesLoading] = useState(true);
     
     // Date & Config state
@@ -183,6 +185,8 @@ const NutritionPage = () => {
                     setShowPreferencesSetup(true);
                 } else {
                     setUserPreferences(res.food_preferences);
+                    setAvoidedCategories(res.avoided_categories || []);
+                    setAvoidedKeywords(res.avoided_keywords || []);
                 }
             } catch (err) {
                 console.error('Error checking preferences:', err);
@@ -219,8 +223,10 @@ const NutritionPage = () => {
     };
     
     // Handle preferences saved
-    const handlePreferencesSaved = (preferences) => {
+    const handlePreferencesSaved = (preferences, avoidedCats, avoidedKws) => {
         setUserPreferences(preferences);
+        setAvoidedCategories(avoidedCats || []);
+        setAvoidedKeywords(avoidedKws || []);
         setShowPreferencesSetup(false);
     };
 
@@ -503,10 +509,11 @@ const NutritionPage = () => {
     const formatFoodQuantity = (food) => {
         if (!food) return '0g';
         const qty = food.cantidad_g || 0;
-        const racion = food.racion || 100;
-        if (food.unidades && racion > 0) {
-            const units = qty / racion;
-            const rounded = Math.round(units * 2) / 2; // round to 0.5
+        const isPorUnidad = food.por_unidad ?? food.unidades;
+        const unitWeight = food.peso_unidad || food.racion || 100;
+        if (isPorUnidad && unitWeight > 0) {
+            const units = qty / unitWeight;
+            const rounded = Math.round(units * 2) / 2;
             return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)} ud`;
         }
         return `${Math.round(qty)}g`;
@@ -938,10 +945,13 @@ const NutritionPage = () => {
     
     if (showPreferencesSetup) {
         return (
-            <PreferencesSetup 
+            <PreferencesSetup
                 api={api}
                 initialPreferences={userPreferences}
+                initialAvoidedCategories={avoidedCategories}
+                initialAvoidedKeywords={avoidedKeywords}
                 onSave={handlePreferencesSaved}
+                onCancel={userPreferences.length > 0 ? () => setShowPreferencesSetup(false) : undefined}
                 isEditMode={userPreferences.length > 0}
             />
         );
@@ -971,7 +981,16 @@ const NutritionPage = () => {
                     <div className="max-w-lg mx-auto px-4 py-3">
                         <div className="flex items-center justify-between">
                             <Logo12EN12 />
-                            <span className="text-gray-400 text-sm">Nutrición</span>
+                            <div className="flex items-center gap-3">
+                                <span className="text-gray-400 text-sm">Nutrición</span>
+                                <button
+                                    onClick={() => setShowPreferencesSetup(true)}
+                                    className="text-gray-400 hover:text-brand-orange transition-colors"
+                                    title="Preferencias alimentarias"
+                                >
+                                    <SlidersHorizontal size={18} />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

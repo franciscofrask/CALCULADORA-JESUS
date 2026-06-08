@@ -117,7 +117,10 @@ const BuildMealModal = ({
 
     // Favorites
     const [favorites, setFavorites] = useState(new Set());
-    
+
+    // Categories with no available foods (when macros context active)
+    const [emptyCategoryIds, setEmptyCategoryIds] = useState(new Set());
+
     // Mode-specific config
     const isIntraMode = mode === 'intra';
     const isPostMode = mode === 'post';
@@ -302,21 +305,98 @@ const BuildMealModal = ({
         }
     }, [served.P, served.H, target.P, target.H, tempFoods.length, paso, isIntraMode]);
     
+    // Reload current category when remaining macros change (auto-quantity updates after adding a food)
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        if (selectedCategory) {
+            const params = new URLSearchParams({ q: '', category: selectedCategory.prefixes[0], limit: '100' });
+            if (target.P > 0) params.set('p_rest', remaining.P);
+            if (target.H > 0) params.set('h_rest', remaining.H);
+            if (target.G > 0) params.set('g_rest', remaining.G);
+            api(`/api/calculator/search?${params}`).then(result => {
+                if (!cancelled) setCategoryFoods(sortByFit(result.alimentos || []));
+            }).catch(() => {});
+        } else if (isSearching && searchQuery.length >= 2) {
+            const params = new URLSearchParams({ q: searchQuery, limit: '50', ...getMacrosParams() });
+            api(`/api/calculator/search?${params}`).then(result => {
+                if (!cancelled) setSearchResults(sortByFit(result.alimentos || []));
+            }).catch(() => {});
+        }
+        return () => { cancelled = true; };
+    }, [remaining.P, remaining.H, remaining.G]); // eslint-disable-line
+
+    // Pre-check which categories have available foods (hide empty ones)
+    useEffect(() => {
+        const hasMacros = target.P > 0 || target.H > 0 || target.G > 0;
+        if (!open || !hasMacros) {
+            setEmptyCategoryIds(new Set());
+            return;
+        }
+        const cats = getCurrentCategories();
+        const macroParams = {};
+        if (target.P > 0) macroParams.p_rest = remaining.P;
+        if (target.H > 0) macroParams.h_rest = remaining.H;
+        if (target.G > 0) macroParams.g_rest = remaining.G;
+        let cancelled = false;
+        Promise.all(cats.map(async cat => {
+            try {
+                const params = new URLSearchParams({ q: '', category: cat.prefixes[0], limit: '1', ...macroParams });
+                const result = await api(`/api/calculator/search?${params}`);
+                return { id: cat.id, empty: (result.alimentos || []).length === 0 };
+            } catch {
+                return { id: cat.id, empty: false };
+            }
+        })).then(results => {
+            if (!cancelled) setEmptyCategoryIds(new Set(results.filter(r => r.empty).map(r => r.id)));
+        });
+        return () => { cancelled = true; };
+    }, [open, paso, remaining.P, remaining.H, remaining.G]); // eslint-disable-line
+
+    // Build macros context params for search (so backend auto-calculates quantity + sorts by aporte)
+    const getMacrosParams = () => {
+        const params = {};
+        if (target.P > 0) params.p_rest = remaining.P;
+        if (target.H > 0) params.h_rest = remaining.H;
+        if (target.G > 0) params.g_rest = remaining.G;
+        return params;
+    };
+
+    // Sort foods by how well they fill the most-needed macro first
+    const sortByFit = (foods) => {
+        if (!foods.length) return foods;
+        const pFilled = target.P > 0 ? served.P / target.P : 1;
+        const hFilled = target.H > 0 ? served.H / target.H : 1;
+        const gFilled = target.G > 0 ? served.G / target.G : 1;
+        // Primary macro = least filled (most needed)
+        const primary = pFilled <= hFilled && pFilled <= gFilled ? 'P'
+            : hFilled <= pFilled && hFilled <= gFilled ? 'H' : 'G';
+        const macroKey = { P: 'proteinas', H: 'hidratos', G: 'grasas' }[primary];
+        return [...foods].sort((a, b) => {
+            const getContrib = (food) => {
+                if (food._macros_sugeridos) return food._macros_sugeridos[primary] || 0;
+                const qty = food._cantidad_sugerida || food.racion || 100;
+                return (food[macroKey] || 0) * qty / 100;
+            };
+            return getContrib(b) - getContrib(a);
+        });
+    };
+
     // Handle category click
     const handleCategoryClick = async (category) => {
         setSelectedCategory(category);
         setLoadingFoods(true);
         setCategoryFoods([]);
-        
+
         try {
-            // Usar el endpoint de búsqueda con filtro de categoría
-            const params = new URLSearchParams({ 
-                q: '', 
+            const params = new URLSearchParams({
+                q: '',
                 category: category.prefixes[0],
-                limit: '100' 
+                limit: '100',
+                ...getMacrosParams()
             });
             const result = await api(`/api/calculator/search?${params}`);
-            setCategoryFoods(result.alimentos || []);
+            setCategoryFoods(sortByFit(result.alimentos || []));
         } catch (err) {
             console.error('Error cargando alimentos:', err);
             toast.error('Error cargando alimentos');
@@ -324,31 +404,34 @@ const BuildMealModal = ({
             setLoadingFoods(false);
         }
     };
-    
+
     // Handle back to categories
     const handleBackToCategories = () => {
         setSelectedCategory(null);
         setCategoryFoods([]);
     };
-    
+
     // Handle search
     const handleSearch = async (query) => {
         setSearchQuery(query);
-        
+
         if (query.length < 2) {
             setIsSearching(false);
             setSearchResults([]);
             return;
         }
-        
+
         setIsSearching(true);
         setLoadingFoods(true);
-        
+
         try {
-            const params = new URLSearchParams({ q: query, limit: '50' });
-            
+            const params = new URLSearchParams({
+                q: query,
+                limit: '50',
+                ...getMacrosParams()
+            });
             const result = await api(`/api/calculator/search?${params}`);
-            setSearchResults(result.alimentos || []);
+            setSearchResults(sortByFit(result.alimentos || []));
         } catch (err) {
             console.error('Error buscando:', err);
         } finally {
@@ -367,27 +450,22 @@ const BuildMealModal = ({
                 return;
             }
 
-            // Calcular cantidad sugerida basada en ración o 100g
-            const quantity = food.racion || 100;
-            const factor = quantity / 100;
-            const macrosEf = {
-                P: Math.round((food.proteinas || 0) * factor * 10) / 10,
-                H: Math.round((food.hidratos || 0) * factor * 10) / 10,
-                G: Math.round((food.grasas || 0) * factor * 10) / 10
-            };
+            // Usar cantidad calculada por el backend (ajustada a macros restantes) o la ración estándar
+            const quantity = food._cantidad_sugerida || food.racion || 100;
+            const macrosEf = food._macros_sugeridos && Object.keys(food._macros_sugeridos).length > 0
+                ? { P: food._macros_sugeridos.P || 0, H: food._macros_sugeridos.H || 0, G: food._macros_sugeridos.G || 0 }
+                : {
+                    P: Math.round((food.proteinas || 0) * quantity / 100 * 10) / 10,
+                    H: Math.round((food.hidratos || 0) * quantity / 100 * 10) / 10,
+                    G: Math.round((food.grasas || 0) * quantity / 100 * 10) / 10
+                };
 
-            // Check if adding this food would exceed macros significantly
-            const blockReason = getBlockReason(macrosEf);
-            if (blockReason) {
-                toast.error(blockReason);
-                return;
-            }
-            
             const foodToAdd = {
                 ...food,
                 alimento_id: food.id || food._id,
                 cantidad_g: quantity,
-                unidades: food.unidades || false,
+                por_unidad: food.por_unidad ?? food.unidades ?? false,
+                peso_unidad: food.peso_unidad || food.racion || 100,
                 racion: food.racion || 100,
                 macros_efectivos: macrosEf
             };
@@ -420,8 +498,9 @@ const BuildMealModal = ({
     // Adjust quantity
     const handleAdjustQuantity = (delta) => {
         if (!selectedFood) return;
-        const racion = selectedFood.racion || 100;
-        const step = selectedFood.unidades ? racion : 10;
+        const isPorUnidad = selectedFood.por_unidad ?? selectedFood.unidades;
+        const unitWeight = selectedFood.peso_unidad || selectedFood.racion || 100;
+        const step = isPorUnidad ? unitWeight : 10;
         const newQty = Math.max(step, adjustedQuantity + (delta * step));
         setAdjustedQuantity(newQty);
         
@@ -436,18 +515,13 @@ const BuildMealModal = ({
     // Confirm add adjusted food
     const handleConfirmAddFood = () => {
         if (!selectedFood) return;
-        
-        const blockReason = getBlockReason(adjustedMacros);
-        if (blockReason) {
-            toast.error(blockReason);
-            return;
-        }
-        
+
         const foodToAdd = {
             ...selectedFood,
             alimento_id: selectedFood.id || selectedFood._id,
             cantidad_g: adjustedQuantity,
-            unidades: selectedFood.unidades || false,
+            por_unidad: selectedFood.por_unidad ?? selectedFood.unidades ?? false,
+            peso_unidad: selectedFood.peso_unidad || selectedFood.racion || 100,
             racion: selectedFood.racion || 100,
             macros_efectivos: adjustedMacros
         };
@@ -468,8 +542,7 @@ const BuildMealModal = ({
     const handleFoodQuantityChange = (index, delta) => {
         if (delta > 0) {
             const food = tempFoods[index];
-            const racion = food.racion || 100;
-            const step = food.unidades ? racion : 10;
+            const step = (food.por_unidad ?? food.unidades) ? (food.peso_unidad || food.racion || 100) : 10;
             const currentQty = food.cantidad_g || food.cantidad || 0;
             const newQty = Math.max(step, currentQty + step);
             const factor = newQty / 100;
@@ -493,8 +566,7 @@ const BuildMealModal = ({
         }
         setTempFoods(prev => prev.map((f, i) => {
             if (i !== index) return f;
-            const racion = f.racion || 100;
-            const step = f.unidades ? racion : 10;
+            const step = (f.por_unidad ?? f.unidades) ? (f.peso_unidad || f.racion || 100) : 10;
             const currentQty = f.cantidad_g || f.cantidad || 0;
             const newQty = Math.max(step, currentQty + (delta * step));
             const factor = newQty / 100;
@@ -540,7 +612,11 @@ const BuildMealModal = ({
         return 'Paso 3: Últimos toques';
     };
     
-    const categories = getCurrentCategories();
+    const allCategories = getCurrentCategories();
+    const hasMacrosContext = remaining.P > 0 || remaining.H > 0 || remaining.G > 0;
+    const categories = hasMacrosContext
+        ? allCategories.filter(cat => !emptyCategoryIds.has(cat.id))
+        : allCategories;
     const displayFoods = isSearching ? searchResults : categoryFoods;
 
     return (
@@ -619,8 +695,8 @@ const BuildMealModal = ({
                                             <Minus className="w-4 h-4" />
                                         </Button>
                                         <span className="text-lg font-bold w-24 text-center">
-                                            {selectedFood.unidades && selectedFood.racion > 0
-                                                ? `${Math.round((adjustedQuantity / selectedFood.racion) * 2) / 2} ud`
+                                            {(selectedFood.por_unidad ?? selectedFood.unidades) && (selectedFood.peso_unidad || selectedFood.racion) > 0
+                                                ? `${Math.round((adjustedQuantity / (selectedFood.peso_unidad || selectedFood.racion)) * 2) / 2} ud`
                                                 : `${adjustedQuantity}g`
                                             }
                                         </span>
@@ -672,8 +748,6 @@ const BuildMealModal = ({
                                     ) : (
                                         <div className="space-y-1">
                                             {displayFoods.map((food, idx) => {
-                                                const blockReason = getFoodBlockReason(food);
-                                                const isBlocked = !!blockReason;
                                                 const isFav = favorites.has(String(food.id));
                                                 return (
                                                     <div key={food.id || idx} className="flex items-center gap-1">
@@ -685,29 +759,19 @@ const BuildMealModal = ({
                                                             <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
                                                         </button>
                                                         <button
-                                                            onClick={() => !isBlocked && handleFoodPreview(food)}
-                                                            disabled={isBlocked}
-                                                            className={`flex-1 flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${
-                                                                isBlocked
-                                                                    ? 'opacity-40 cursor-not-allowed bg-gray-50'
-                                                                    : 'hover:bg-gray-100'
-                                                            }`}
-                                                            title={blockReason || ''}
+                                                            onClick={() => handleFoodPreview(food)}
+                                                            className="flex-1 flex items-center gap-2 p-2 rounded-lg text-left transition-colors hover:bg-gray-100"
                                                             data-testid={`food-item-${food.id || idx}`}
                                                         >
                                                             <span className="text-lg">{getEmoji(food.categorias)}</span>
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="text-sm text-black truncate">{food.nombre}</div>
                                                                 <div className="text-xs text-gray-500">
-                                                                    {food._cantidad_sugerida ? `${food._cantidad_sugerida}${food.unidades ? ' ud' : 'g'} → ` : ''}
+                                                                    {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud` : `${food._cantidad_sugerida}g`} → ` : ''}
                                                                     P={food._macros_sugeridos?.P || Math.round(food.proteinas)}g
-                                                                    {isBlocked && <span className="ml-1 text-red-400 font-semibold">· Macro cubierto</span>}
                                                                 </div>
                                                             </div>
-                                                            {isBlocked
-                                                                ? <span className="text-xs text-red-400 font-semibold flex-shrink-0">Bloqueado</span>
-                                                                : <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                                            }
+                                                            <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                                         </button>
                                                     </div>
                                                 );
@@ -736,8 +800,8 @@ const BuildMealModal = ({
                                                 <Minus className="w-3 h-3" />
                                             </button>
                                             <span className="w-16 text-center text-xs">
-                                                {food.unidades && food.racion > 0
-                                                    ? `${Math.round(((food.cantidad_g || food.cantidad || 0) / food.racion) * 2) / 2} ud`
+                                                {(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
+                                                    ? `${Math.round(((food.cantidad_g || food.cantidad || 0) / (food.peso_unidad || food.racion)) * 2) / 2} ud`
                                                     : `${food.cantidad_g || food.cantidad || 0}g`
                                                 }
                                             </span>

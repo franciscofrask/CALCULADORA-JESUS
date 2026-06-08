@@ -231,14 +231,12 @@ def _calcular_periworkout(
             "H": round(h_peri * 0.35, 1),
             "G": 0.0
         }
-        # El 75% de P y 65% de H se reparten entre las comidas principales
         resultado["extra_comidas"] = {
             "P": round(p_peri * 0.75, 1),
             "H": round(h_peri * 0.65, 1)
         }
 
     elif opcion_peri == "sin_peri":
-        # Todo se reparte entre comidas principales
         resultado["extra_comidas"] = {
             "P": round(p_peri, 1),
             "H": round(h_peri, 1)

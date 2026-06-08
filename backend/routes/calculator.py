@@ -12,12 +12,13 @@ from models.common import FoodSuggestion, FoodSuggestionResponse
 
 # Import calculator functions
 from calma_engine import (
-    calcular_macros_efectivos_alimento as calcular_macros_efectivos, 
-    que_macros_cuentan, 
-    calcular_macros_brutos, 
-    run_tests as calma_run_tests
+    calcular_macros_efectivos_alimento as calcular_macros_efectivos,
+    que_macros_cuentan,
+    calcular_macros_brutos,
+    run_tests as calma_run_tests,
+    parse_categories,
 )
-from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config
+from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica
 from target_calculator import calcular_targets, targets_to_profile_macros, run_tests as target_run_tests
 from macro_distribution import distribuir_macros as dist_macros
 
@@ -219,9 +220,15 @@ async def search_foods_endpoint(
     tag: Optional[str] = None,
     limit: int = 50,
     vegano: bool = False,
+    p_rest: Optional[float] = None,
+    h_rest: Optional[float] = None,
+    g_rest: Optional[float] = None,
     user = Depends(get_current_user)
 ):
-    """Búsqueda de alimentos con macros efectivos (CALMA), ordenados por: favoritos > frecuencia > alfabético."""
+    """Búsqueda de alimentos con macros efectivos (CALMA).
+    Si se pasan p_rest/h_rest/g_rest, ordena por aporte y calcula cantidad sugerida.
+    Filtra alimentos que el usuario marcó como 'a evitar'.
+    """
     alimentos = await buscar_alimentos_async(
         db=db,
         query=q,
@@ -233,21 +240,108 @@ async def search_foods_endpoint(
         tag_filter=tag or ""
     )
 
-    # Get favorites and frequency
-    fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
-    fav_ids = set(str(fid) for fid in (fav_doc.get("food_ids", []) if fav_doc else []))
-    food_freq = await _get_food_frequency(user["id"])
+    # Load user avoided preferences for filtering
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    avoided_categories = []
+    avoided_keywords = []
+    if profile:
+        avoided_categories = profile.get("avoided_categories", [])
+        avoided_keywords = [kw.lower() for kw in profile.get("avoided_keywords", [])]
 
-    # Mark favorites and sort: favorites first, then by frequency, then alphabetical
+    # Map avoided_category IDs to category prefixes (mirrors frontend PREFERENCE_CATEGORIES)
+    AVOIDABLE_PREFIXES = {
+        'grasas_buenas': ['42'], 'grasas_todo': ['17'], 'aperitivos': ['38'],
+        'arroces': ['21'], 'aves': ['2.2'], 'barritas': ['47'],
+        'bebidas': ['19'], 'isotonicas': ['18.1'], 'beb_vegetales': ['24'],
+        'bolleria': ['31'], 'cacao': ['37'], 'casqueria': ['40'],
+        'cerdo': ['2.4'], 'cereales': ['7'], 'chocolates': ['34'],
+        'cocina_esp': ['39'], 'comida_rapida': ['49'], 'embutidos': ['2.1'],
+        'fruta': ['11'], 'helados': ['35', '36'], 'huevos': ['1'],
+        'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.5'],
+        'carnes_rojas': ['2.6'], 'panes': ['8'], 'pasta': ['22'],
+        'pescados': ['3'], 'pizza': ['32'], 'proteina_polvo': ['4', '29', '30'],
+        'proteina_vegetal': ['28'], 'salsas': ['16'], 'sopas': ['48'],
+        'superalimentos': ['52'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
+        'verduras': ['13'],
+    }
+    avoided_prefixes = set()
+    for cat_id in avoided_categories:
+        for prefix in AVOIDABLE_PREFIXES.get(cat_id, []):
+            avoided_prefixes.add(prefix)
+
+    def is_avoided(alimento):
+        nombre = alimento.get("nombre", "").lower()
+        # Filter by keyword
+        for kw in avoided_keywords:
+            if kw in nombre:
+                return True
+        if not avoided_prefixes:
+            return False
+        # Parse numeric category parts and check against avoided prefixes
+        food_cats = parse_categories(alimento.get("categorias", []))
+        for food_cat in food_cats:
+            for prefix in avoided_prefixes:
+                if food_cat == prefix or food_cat.startswith(prefix + "."):
+                    return True
+        return False
+
+    alimentos = [a for a in alimentos if not is_avoided(a)]
+
+    # Inject per-unit config so frontend can display "2 ud" vs "120g" correctly
     for a in alimentos:
-        fid = str(a.get("id", ""))
-        a["is_favorite"] = fid in fav_ids
+        cfg = get_food_config(a)
+        a["por_unidad"] = cfg.get("por_unidad", False)
+        a["peso_unidad"] = cfg.get("peso_unidad", 0)
 
-    alimentos.sort(key=lambda f: (
-        0 if f.get("is_favorite") else 1,
-        -food_freq.get(str(f.get("id", "")), 0),
-        f.get("nombre", "")
-    ))
+    has_macros_context = p_rest is not None or h_rest is not None or g_rest is not None
+    # Use inf for unspecified macros — means "no limit on this macro"
+    macros_restantes = {
+        "P": float(p_rest) if p_rest is not None else float('inf'),
+        "H": float(h_rest) if h_rest is not None else float('inf'),
+        "G": float(g_rest) if g_rest is not None else float('inf'),
+    }
+
+    if has_macros_context:
+        # Calculate auto-quantity and exclude foods that exceed remaining macros
+        procesados = []
+        for a in alimentos:
+            resultado = calcular_cantidad_automatica(a, macros_restantes, vegano)
+            if resultado.get("excede", False):
+                continue  # food conflicts with a full macro — hide it
+            raw_qty = resultado.get("cantidad_g", 0)
+            a["_cantidad_sugerida"] = raw_qty if raw_qty > 0 else (a.get("racion") or 100)
+            a["_macros_sugeridos"] = resultado.get("macros_efectivos", {})
+            ef = resultado.get("macros_efectivos", {})
+            a["_aporte_total"] = (ef.get("P", 0) + ef.get("H", 0) + ef.get("G", 0))
+            procesados.append(a)
+        alimentos = procesados
+
+        # Get favorites to keep them first even with macros sorting
+        fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
+        fav_ids = set(str(fid) for fid in (fav_doc.get("food_ids", []) if fav_doc else []))
+        for a in alimentos:
+            a["is_favorite"] = str(a.get("id", "")) in fav_ids
+
+        # Sort: favorites first, then by aporte (how much it helps complete the meal)
+        alimentos.sort(key=lambda f: (
+            0 if f.get("is_favorite") else 1,
+            -f.get("_aporte_total", 0),
+            f.get("nombre", "")
+        ))
+    else:
+        # Default sort: favorites > frequency > alphabetical
+        fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
+        fav_ids = set(str(fid) for fid in (fav_doc.get("food_ids", []) if fav_doc else []))
+        food_freq = await _get_food_frequency(user["id"])
+
+        for a in alimentos:
+            a["is_favorite"] = str(a.get("id", "")) in fav_ids
+
+        alimentos.sort(key=lambda f: (
+            0 if f.get("is_favorite") else 1,
+            -food_freq.get(str(f.get("id", "")), 0),
+            f.get("nombre", "")
+        ))
 
     return {"alimentos": alimentos, "total": len(alimentos)}
 
