@@ -2,7 +2,8 @@
 Rutas del calculador de macros y búsqueda de alimentos.
 """
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
+import math
 from typing import List, Dict, Any, Optional
 import uuid
 
@@ -237,7 +238,7 @@ async def search_foods_endpoint(
         es_vegano=vegano,
         limit=limit,
         calcular_efectivos=True,
-        tag_filter=tag or ""
+        tag_filter=""  # tag filtering done below, after computing available_preps
     )
 
     # Load user avoided preferences for filtering
@@ -286,6 +287,36 @@ async def search_foods_endpoint(
         return False
 
     alimentos = [a for a in alimentos if not is_avoided(a)]
+
+    def _cat_tokens(alimento) -> set:
+        """All tokens from categorias (list or string) + tags, uppercased."""
+        cats = alimento.get("categorias", "") or ""
+        if isinstance(cats, list):
+            raw = []
+            for c in cats:
+                raw.extend(str(c).replace("|", ",").split(","))
+        else:
+            raw = str(cats).replace("|", ",").split(",")
+        tokens = {t.strip().upper() for t in raw if t.strip()}
+        # also include explicit tags field
+        tags_val = alimento.get("tags", "") or ""
+        if isinstance(tags_val, list):
+            tokens.update(str(t).upper() for t in tags_val if t)
+        else:
+            tokens.update(str(tags_val).upper().split())
+        return tokens
+
+    # Collect which preparation tags exist in this category (before tag-filtering).
+    _KNOWN_PREPS = {"GEN", "FRE", "SNA", "UNI", "YA", "SGL", "CGE", "LAT", "PRE", "MIN", "YCO", "PRO", "POL"}
+    _seen_preps: set = set()
+    for _a in alimentos:
+        _seen_preps.update(_cat_tokens(_a) & _KNOWN_PREPS)
+    available_preps = sorted(_seen_preps)
+
+    # Apply preparation tag filter (after collecting available_preps).
+    if tag:
+        _tag_upper = tag.upper()
+        alimentos = [a for a in alimentos if _tag_upper in _cat_tokens(a)]
 
     # Inject per-unit config so frontend can display "2 ud" vs "120g" correctly
     for a in alimentos:
@@ -343,27 +374,117 @@ async def search_foods_endpoint(
             f.get("nombre", "")
         ))
 
-    return {"alimentos": alimentos, "total": len(alimentos)}
+    return {"alimentos": alimentos, "total": len(alimentos), "available_preps": available_preps}
 
 
 async def _get_food_frequency(user_id: str) -> dict:
-    """Count how many times each food appears in user's saved diets."""
+    """Exponential-decay weighted food frequency from user's saved diets.
+    score = Σ e^(-0.05 * days_since_use) — half-life ~14 days.
+    Recent uses outweigh old ones so preferences update quickly.
+    """
+    today = date.today()
     diets = await db.diets.find(
         {"user_id": user_id},
-        {"_id": 0, "comidas": 1}
-    ).to_list(100)
+        {"_id": 0, "comidas": 1, "fecha": 1}
+    ).to_list(365)
 
     if not diets:
         return {}
 
-    freq = {}
+    scores = {}
     for diet in diets:
+        try:
+            diet_date = date.fromisoformat(diet.get("fecha", ""))
+            days_ago = max(0, (today - diet_date).days)
+        except (ValueError, TypeError):
+            days_ago = 30
+        weight = math.exp(-0.05 * days_ago)
         for meal_data in (diet.get("comidas") or {}).values():
             for alimento in (meal_data.get("alimentos") or []):
                 fid = str(alimento.get("id", alimento.get("alimento_id", "")))
                 if fid:
-                    freq[fid] = freq.get(fid, 0) + 1
-    return freq
+                    scores[fid] = scores.get(fid, 0) + weight
+    return scores
+
+@router.get("/frequent-foods")
+async def get_frequent_foods(
+    limit: int = 20,
+    user = Depends(get_current_user)
+):
+    """Top alimentos más usados por el usuario en su historial de dietas."""
+    freq = await _get_food_frequency(user["id"])
+    if not freq:
+        return {"alimentos": []}
+
+    # Top IDs sorted by frequency
+    top_ids_str = sorted(freq, key=lambda k: freq[k], reverse=True)[:limit]
+
+    # Convert to int where possible (food IDs are numeric in this DB)
+    top_ids = []
+    for fid in top_ids_str:
+        try:
+            top_ids.append(int(fid))
+        except (ValueError, TypeError):
+            top_ids.append(fid)
+
+    foods_cursor = db.foods.find({"id": {"$in": top_ids}}, {"_id": 0})
+    foods_map = {}
+    async for f in foods_cursor:
+        foods_map[str(f["id"])] = f
+
+    # Load user avoided preferences
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    avoided_categories = profile.get("avoided_categories", []) if profile else []
+    avoided_keywords = [kw.lower() for kw in (profile.get("avoided_keywords", []) if profile else [])]
+    AVOIDABLE_PREFIXES = {
+        'grasas_buenas': ['42'], 'grasas_todo': ['17'], 'aperitivos': ['38'],
+        'arroces': ['21'], 'aves': ['2.2'], 'barritas': ['47'],
+        'bebidas': ['19'], 'isotonicas': ['18.1'], 'beb_vegetales': ['24'],
+        'bolleria': ['31'], 'cacao': ['37'], 'casqueria': ['40'],
+        'cerdo': ['2.4'], 'cereales': ['7'], 'chocolates': ['34'],
+        'cocina_esp': ['39'], 'comida_rapida': ['49'], 'embutidos': ['2.1'],
+        'fruta': ['11'], 'helados': ['35', '36'], 'huevos': ['1'],
+        'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.5'],
+        'carnes_rojas': ['2.6'], 'panes': ['8'], 'pasta': ['22'],
+        'pescados': ['3'], 'pizza': ['32'], 'proteina_polvo': ['4', '29', '30'],
+        'proteina_vegetal': ['28'], 'salsas': ['16'], 'sopas': ['48'],
+        'superalimentos': ['52'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
+        'verduras': ['13'],
+    }
+    avoided_prefixes = set()
+    for cat_id in avoided_categories:
+        for prefix in AVOIDABLE_PREFIXES.get(cat_id, []):
+            avoided_prefixes.add(prefix)
+
+    def is_avoided(alimento):
+        nombre = alimento.get("nombre", "").lower()
+        for kw in avoided_keywords:
+            if kw in nombre:
+                return True
+        if not avoided_prefixes:
+            return False
+        food_cats = parse_categories(alimento.get("categorias", []))
+        for food_cat in food_cats:
+            for prefix in avoided_prefixes:
+                if food_cat == prefix or food_cat.startswith(prefix + "."):
+                    return True
+        return False
+
+    enriched = []
+    for fid_str in top_ids_str:
+        food = foods_map.get(fid_str)
+        if not food or is_avoided(food):
+            continue
+        cfg = get_food_config(food)
+        enriched.append({
+            **food,
+            "por_unidad": cfg.get("por_unidad", False),
+            "peso_unidad": cfg.get("peso_unidad", 0),
+            "usos": freq[fid_str],
+        })
+
+    return {"alimentos": enriched}
+
 
 @router.post("/suggest")
 async def suggest_foods_endpoint(
