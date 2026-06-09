@@ -959,23 +959,11 @@ const NutritionPage = () => {
 
     // ===== MAIN RENDER =====
     return (
-        <div 
-            className="min-h-screen pb-32 relative"
-            style={{
-                backgroundImage: `url('/gohan-light.png')`,
-                backgroundSize: 'contain',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-                backgroundAttachment: 'fixed',
-                opacity: 1
-            }}
+        <div
+            className="min-h-screen pb-32 bg-bg-page"
             data-testid="nutrition-page"
         >
-            {/* Background overlay */}
-            <div className="absolute inset-0 bg-bg-page/[0.97]" />
-            
-            {/* Content */}
-            <div className="relative z-10">
+            <div>
                 {/* Header */}
                 <div className="bg-bg-dark sticky top-0 z-40">
                     <div className="max-w-lg mx-auto px-4 py-3">
@@ -1014,7 +1002,15 @@ const NutritionPage = () => {
                     getDayStatus={getDayStatus}
                 />
 
-                <div className="max-w-lg mx-auto px-4 py-4">
+                <div
+                    className="max-w-lg mx-auto px-4 py-4"
+                    style={{
+                        backgroundImage: `linear-gradient(rgba(250,250,250,0.88), rgba(250,250,250,0.88)), url('/gohan-light.png')`,
+                        backgroundSize: '100% auto',
+                        backgroundPosition: 'center top',
+                        backgroundRepeat: 'no-repeat',
+                    }}
+                >
                     {/* Date & Day type */}
                     <Card className="bg-white shadow-md rounded-2xl mb-4">
                         <CardContent className="p-4">
