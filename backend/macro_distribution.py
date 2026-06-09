@@ -398,7 +398,10 @@ def distribuir_macros(
             "P_total": round(p_total, 1),
             "H_total": round(h_total, 1),
             "G_total": round(g_total, 1),
-            "kcal_total": round(p_total * 4 + h_total * 4 + g_total * 9, 1)
+            "kcal_total": round(p_total * 4 + h_total * 4 + g_total * 9, 1),
+            "P_entreno": round(p_entreno, 1),
+            "H_entreno": round(h_entreno, 1),
+            "G_entreno": round(g_entreno, 1),
         },
         "escenario": escenario,
         "config": {

@@ -27,6 +27,11 @@ const DaySummary = ({
     dayMacros, dayTarget, servedPeriP, servedPeriH, totalPeriP, totalPeriH,
     opcionPeri, mealOrder, mealInfo, calculateMealMacros, getMealStatus, getDayStatus,
 }) => {
+    const mainP = dayMacros.P - servedPeriP;
+    const mainH = dayMacros.H - servedPeriH;
+    const tgtP = dayTarget.P_entreno ?? dayTarget.P_total;
+    const tgtH = dayTarget.H_entreno ?? dayTarget.H_total;
+    const tgtG = dayTarget.G_entreno ?? dayTarget.G_total;
     const dayStatus = getDayStatus();
 
     const getMealStatusDot = (mealKey) => {
@@ -53,9 +58,9 @@ const DaySummary = ({
                 </div>
 
                 {[
-                    { emoji: '🟢', label: 'P', val: dayMacros.P, tgt: dayTarget.P_total, color: '#4CAF50' },
-                    { emoji: '🔵', label: 'H', val: dayMacros.H, tgt: dayTarget.H_total, color: '#2196F3' },
-                    { emoji: '🟠', label: 'G', val: dayMacros.G, tgt: dayTarget.G_total, color: '#FFA500' },
+                    { emoji: '🟢', label: 'P', val: mainP, tgt: tgtP, color: '#4CAF50' },
+                    { emoji: '🔵', label: 'H', val: mainH, tgt: tgtH, color: '#2196F3' },
+                    { emoji: '🟠', label: 'G', val: dayMacros.G, tgt: tgtG, color: '#FFA500' },
                 ].map(({ emoji, label, val, tgt, color }) => (
                     <div key={label} className="flex items-center gap-2 text-xs mb-1.5">
                         <span className="w-4 text-center">{emoji}</span>
@@ -113,9 +118,9 @@ const DaySummary = ({
                                 </tr>
                                 <tr className="text-gray-500">
                                     <td className="py-1">OBJETIVO</td>
-                                    <td className="text-right font-mono">{(dayTarget.P_total || 0).toFixed(0)}g</td>
-                                    <td className="text-right font-mono">{(dayTarget.H_total || 0).toFixed(0)}g</td>
-                                    <td className="text-right font-mono">{(dayTarget.G_total || 0).toFixed(0)}g</td>
+                                    <td className="text-right font-mono">{(tgtP || 0).toFixed(0)}g</td>
+                                    <td className="text-right font-mono">{(tgtH || 0).toFixed(0)}g</td>
+                                    <td className="text-right font-mono">{(tgtG || 0).toFixed(0)}g</td>
                                 </tr>
                             </tbody>
                         </table>
