@@ -14,7 +14,7 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, getMeal
 
     const getMacroDiff = (servedVal, targetVal) => {
         const diff = targetVal - servedVal;
-        if (Math.abs(diff) <= 4) return { ok: true, diff: 0 };
+        if (Math.abs(diff) <= 0) return { ok: true, diff: 0 };
         return { ok: false, diff };
     };
 
@@ -22,9 +22,9 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, getMeal
     const hDiff = getMacroDiff(served.H, target.H);
     const gDiff = !isPeri ? getMacroDiff(served.G, target.G) : { ok: true, diff: 0 };
 
-    const pOver = served.P > target.P + 4;
-    const hOver = served.H > target.H + 4;
-    const gOver = !isPeri && served.G > target.G + 4;
+    const pOver = served.P > target.P;
+    const hOver = served.H > target.H;
+    const gOver = !isPeri && served.G > target.G;
 
     let statusMessage = '';
     let statusColor = '';
@@ -176,7 +176,13 @@ const MealCard = ({
                                                         <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => updateFoodQuantity(mealKey, idx, increment)}><Plus className="w-3 h-3" /></Button>
                                                     </div>
                                                     <div className="text-xs text-gray-500">
-                                                        {hasMacros ? <span>({(macros.P || 0).toFixed(0)}P | {(macros.H || 0).toFixed(0)}H | {(macros.G || 0).toFixed(0)}G)</span> : <span className="text-gray-400">(no aporta macros)</span>}
+                                                        {hasMacros ? (
+                                                        <span>({[
+                                                            macros.P > 0 && `${(macros.P).toFixed(0)}P`,
+                                                            macros.H > 0 && `${(macros.H).toFixed(0)}H`,
+                                                            macros.G > 0 && `${(macros.G).toFixed(0)}G`,
+                                                        ].filter(Boolean).join(' | ')})</span>
+                                                    ) : <span className="text-gray-400">(no aporta macros)</span>}
                                                     </div>
                                                 </div>
                                             </div>

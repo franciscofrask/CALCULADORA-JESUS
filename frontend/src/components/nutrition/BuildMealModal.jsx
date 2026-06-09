@@ -171,14 +171,14 @@ const BuildMealModal = ({
     };
     
     // Check if meal is "cuadrada"
-    const isCuadrada = Math.abs(target.P - served.P) <= 4 && 
-                       Math.abs(target.H - served.H) <= 4 && 
-                       (isPeriMode || Math.abs(target.G - served.G) <= 4);
+    const isCuadrada = Math.abs(target.P - served.P) <= 0 &&
+                       Math.abs(target.H - served.H) <= 0 &&
+                       (isPeriMode || Math.abs(target.G - served.G) <= 0);
 
     // Check if a food should be blocked (adding it would push any macro over target + margin)
     const getBlockReason = (macrosEf) => {
         if (isPeriMode) return null;
-        const margin = mealKey === 'Intra' ? 2 : 4;
+        const margin = 0;
         if (macrosEf.P > 0 && served.P + macrosEf.P > target.P + margin) {
             return 'No cabe — superaría la proteína objetivo de esta comida.';
         }
@@ -495,21 +495,41 @@ const BuildMealModal = ({
         setAdjustedMacros(macros);
     };
     
-    // Adjust quantity
-    const handleAdjustQuantity = (delta) => {
+    // Adjust quantity — calls backend for CALMA-accurate macros
+    const handleAdjustQuantity = async (delta) => {
         if (!selectedFood) return;
         const isPorUnidad = selectedFood.por_unidad ?? selectedFood.unidades;
         const unitWeight = selectedFood.peso_unidad || selectedFood.racion || 100;
-        const step = isPorUnidad ? unitWeight : 10;
+        const step = isPorUnidad ? unitWeight : 1;
         const newQty = Math.max(step, adjustedQuantity + (delta * step));
-        setAdjustedQuantity(newQty);
-        
-        const factor = newQty / 100;
-        setAdjustedMacros({
-            P: Math.round((selectedFood.proteinas || 0) * factor * 10) / 10,
-            H: Math.round((selectedFood.hidratos || 0) * factor * 10) / 10,
-            G: Math.round((selectedFood.grasas || 0) * factor * 10) / 10
-        });
+
+        try {
+            const result = await api('/api/calculator/macros-efectivos', {
+                method: 'POST',
+                body: JSON.stringify({ alimento_id: selectedFood.id || selectedFood._id, cantidad_g: newQty, es_vegano: false })
+            });
+            const ef = result.efectivos || {};
+            if (delta > 0) {
+                const margin = 0;
+                if ((ef.P > 0 && served.P + ef.P > target.P + margin) ||
+                    (ef.H > 0 && served.H + ef.H > target.H + margin) ||
+                    (ef.G > 0 && served.G + ef.G > target.G + margin)) {
+                    toast.error('No puedes aumentar más — superaría los macros objetivo.');
+                    return;
+                }
+            }
+            setAdjustedQuantity(newQty);
+            setAdjustedMacros({ P: ef.P || 0, H: ef.H || 0, G: ef.G || 0 });
+        } catch {
+            // fallback a cálculo raw si falla la red
+            setAdjustedQuantity(newQty);
+            const factor = newQty / 100;
+            setAdjustedMacros({
+                P: Math.round((selectedFood.proteinas || 0) * factor * 10) / 10,
+                H: Math.round((selectedFood.hidratos || 0) * factor * 10) / 10,
+                G: Math.round((selectedFood.grasas || 0) * factor * 10) / 10
+            });
+        }
     };
     
     // Confirm add adjusted food
@@ -542,7 +562,7 @@ const BuildMealModal = ({
     const handleFoodQuantityChange = (index, delta) => {
         if (delta > 0) {
             const food = tempFoods[index];
-            const step = (food.por_unidad ?? food.unidades) ? (food.peso_unidad || food.racion || 100) : 10;
+            const step = (food.por_unidad ?? food.unidades) ? (food.peso_unidad || food.racion || 100) : 1;
             const currentQty = food.cantidad_g || food.cantidad || 0;
             const newQty = Math.max(step, currentQty + step);
             const factor = newQty / 100;
@@ -556,7 +576,7 @@ const BuildMealModal = ({
                 H: acc.H + (f.macros_efectivos?.H || 0),
                 G: acc.G + (f.macros_efectivos?.G || 0)
             }), { P: existingServed.P, H: existingServed.H, G: existingServed.G });
-            const margin = mealKey === 'Intra' ? 2 : 4;
+            const margin = 0;
             if ((newMacros.P > 0 && otherServed.P + newMacros.P > target.P + margin) ||
                 (newMacros.H > 0 && otherServed.H + newMacros.H > target.H + margin) ||
                 (newMacros.G > 0 && otherServed.G + newMacros.G > target.G + margin)) {
@@ -566,7 +586,7 @@ const BuildMealModal = ({
         }
         setTempFoods(prev => prev.map((f, i) => {
             if (i !== index) return f;
-            const step = (f.por_unidad ?? f.unidades) ? (f.peso_unidad || f.racion || 100) : 10;
+            const step = (f.por_unidad ?? f.unidades) ? (f.peso_unidad || f.racion || 100) : 1;
             const currentQty = f.cantidad_g || f.cantidad || 0;
             const newQty = Math.max(step, currentQty + (delta * step));
             const factor = newQty / 100;
@@ -678,41 +698,45 @@ const BuildMealModal = ({
                         </div>
                     </div>
                     
+                    {/* Food preview for quantity adjustment — fuera del scroll para no recortarse */}
+                    {selectedFood && (
+                        <div className="flex-shrink-0 bg-orange-50 border-b border-orange-200 p-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium text-black">{selectedFood.nombre}</span>
+                                <button onClick={() => setSelectedFood(null)} className="text-gray-400">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-center gap-3 mb-2">
+                                <Button variant="outline" size="sm" onClick={() => handleAdjustQuantity(-1)}>
+                                    <Minus className="w-4 h-4" />
+                                </Button>
+                                <span className="text-lg font-bold w-24 text-center">
+                                    {(selectedFood.por_unidad ?? selectedFood.unidades) && (selectedFood.peso_unidad || selectedFood.racion) > 0
+                                        ? `${Math.round((adjustedQuantity / (selectedFood.peso_unidad || selectedFood.racion)) * 2) / 2} ud`
+                                        : `${adjustedQuantity}g`
+                                    }
+                                </span>
+                                <Button variant="outline" size="sm" onClick={() => handleAdjustQuantity(1)}>
+                                    <Plus className="w-4 h-4" />
+                                </Button>
+                            </div>
+                            <div className="text-xs text-gray-600 text-center mb-2">
+                                {[
+                                    adjustedMacros.P > 0 && `P=${adjustedMacros.P}g`,
+                                    adjustedMacros.H > 0 && `H=${adjustedMacros.H}g`,
+                                    adjustedMacros.G > 0 && `G=${adjustedMacros.G}g`,
+                                ].filter(Boolean).join(' · ') || 'sin macros'}
+                            </div>
+                            <Button onClick={handleConfirmAddFood} className="w-full bg-orange-500 hover:bg-orange-600">
+                                Añadir
+                            </Button>
+                        </div>
+                    )}
+
                     {/* Content area */}
                     <ScrollArea className="flex-1">
                         <div className="p-3">
-                            {/* Food preview for quantity adjustment */}
-                            {selectedFood && (
-                                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="font-medium text-black">{selectedFood.nombre}</span>
-                                        <button onClick={() => setSelectedFood(null)} className="text-gray-400">
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center justify-center gap-3 mb-2">
-                                        <Button variant="outline" size="sm" onClick={() => handleAdjustQuantity(-1)}>
-                                            <Minus className="w-4 h-4" />
-                                        </Button>
-                                        <span className="text-lg font-bold w-24 text-center">
-                                            {(selectedFood.por_unidad ?? selectedFood.unidades) && (selectedFood.peso_unidad || selectedFood.racion) > 0
-                                                ? `${Math.round((adjustedQuantity / (selectedFood.peso_unidad || selectedFood.racion)) * 2) / 2} ud`
-                                                : `${adjustedQuantity}g`
-                                            }
-                                        </span>
-                                        <Button variant="outline" size="sm" onClick={() => handleAdjustQuantity(1)}>
-                                            <Plus className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                    <div className="text-xs text-gray-600 text-center mb-2">
-                                        P={adjustedMacros.P}g · H={adjustedMacros.H}g · G={adjustedMacros.G}g
-                                    </div>
-                                    <Button onClick={handleConfirmAddFood} className="w-full bg-orange-500 hover:bg-orange-600">
-                                        Añadir
-                                    </Button>
-                                </div>
-                            )}
-                            
                             {/* Categories or food list */}
                             {!isSearching && !selectedCategory ? (
                                 <div className="grid grid-cols-3 gap-2">

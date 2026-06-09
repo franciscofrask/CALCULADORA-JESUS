@@ -4,8 +4,8 @@ import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 // Progress Bar Component
 export const ProgressBar = ({ value, max, color, height = 6, showCheck = false }) => {
     const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-    const isOver = value > max + 4;
-    const isOk = Math.abs(value - max) <= 4;
+    const isOver = value > max;
+    const isOk = Math.abs(value - max) <= 0;
     const actualColor = isOver ? '#EF4444' : color;
 
     return (

@@ -472,7 +472,7 @@ const NutritionPage = () => {
         const served = calculateMealMacros(mealKey);
         const foods = mealsData[mealKey]?.alimentos || [];
         if (foods.length === 0) return 'empty';
-        const margin = 4;
+        const margin = 0;
         const pOk = Math.abs(target.P - served.P) <= margin;
         const hOk = Math.abs(target.H - served.H) <= margin;
         const gOk = mealKey === 'Intra' || mealKey === 'Post' || Math.abs(target.G - served.G) <= margin;
@@ -549,7 +549,7 @@ const NutritionPage = () => {
                 }
                 const target = getMealTarget(mealKey);
                 const served = calculateMealMacros(mealKey);
-                const margin = mealKey === 'Intra' ? 2 : 4;
+                const margin = 0;
                 if ((ef.P > 0 && served.P + ef.P > target.P + margin) ||
                     (ef.H > 0 && served.H + ef.H > target.H + margin) ||
                     (ef.G > 0 && served.G + ef.G > target.G + margin)) {
@@ -595,7 +595,7 @@ const NutritionPage = () => {
             });
             if (isIncreasing) {
                 const target = getMealTarget(mealKey);
-                const margin = mealKey === 'Intra' ? 2 : 4;
+                const margin = 0;
                 const ef = result.efectivos || {};
                 const otherP = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.P || 0), 0);
                 const otherH = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.H || 0), 0);
@@ -624,7 +624,7 @@ const NutritionPage = () => {
             });
             if (isIncreasing) {
                 const target = getMealTarget(mealKey);
-                const margin = mealKey === 'Intra' ? 2 : 4;
+                const margin = 0;
                 const ef = result.efectivos || {};
                 const otherP = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.P || 0), 0);
                 const otherH = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.H || 0), 0);
@@ -890,11 +890,11 @@ const NutritionPage = () => {
 
     // Day status calculation
     const getDayStatus = () => {
-        const margin = 4;
+        const margin = 0;
         const pDiff = dayMacros.P - (dayTarget.P_total || 0);
         const hDiff = dayMacros.H - (dayTarget.H_total || 0);
         const gDiff = dayMacros.G - (dayTarget.G_total || 0);
-        
+
         const pOver = pDiff > margin;
         const hOver = hDiff > margin;
         const gOver = gDiff > margin;
