@@ -628,12 +628,24 @@ def calcular_cantidad_automatica(
     # Si el mínimo causaría sobrepasar un macro, devolver excede=True
     minimo_config = config.get('minimo', 5)
     if cantidad == 0:
+        ef_at_min0 = calcular_macros_efectivos(P_100, H_100, G_100, cat, minimo_config, cat_sec, es_vegano)
+        if (not math.isinf(p_rest) and p_rest >= 0 and ef_at_min0["proteina_efectiva"] > p_rest + 0.05) or \
+           (not math.isinf(h_rest) and h_rest >= 0 and ef_at_min0["hidratos_efectivos"] > h_rest + 0.05) or \
+           (not math.isinf(g_rest) and g_rest >= 0 and ef_at_min0["grasa_efectiva"] > g_rest + 0.05):
+            return {
+                "cantidad_g": 0,
+                "macros_efectivos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+                "macros_brutos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+                "que_cuenta": {"P": False, "H": False, "G": False},
+                "cabe": False,
+                "excede": True
+            }
         cantidad = minimo_config
     elif 0 < cantidad < minimo_config:
         ef_at_min = calcular_macros_efectivos(P_100, H_100, G_100, cat, minimo_config, cat_sec, es_vegano)
-        if (p_rest > 0 and ef_at_min["proteina_efectiva"] > p_rest + 0.5) or \
-           (h_rest > 0 and ef_at_min["hidratos_efectivos"] > h_rest + 0.5) or \
-           (g_rest > 0 and ef_at_min["grasa_efectiva"] > g_rest + 0.5):
+        if (p_rest > 0 and ef_at_min["proteina_efectiva"] > p_rest + 0.05) or \
+           (h_rest > 0 and ef_at_min["hidratos_efectivos"] > h_rest + 0.05) or \
+           (g_rest > 0 and ef_at_min["grasa_efectiva"] > g_rest + 0.05):
             return {
                 "cantidad_g": 0,
                 "macros_efectivos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
@@ -660,7 +672,20 @@ def calcular_cantidad_automatica(
     p_ef = efectivos_final["proteina_efectiva"]
     h_ef = efectivos_final["hidratos_efectivos"]
     g_ef = efectivos_final["grasa_efectiva"]
-    
+
+    # Strict overshoot guard: any finite-limited macro exceeded → exclude
+    if (not math.isinf(p_rest) and p_rest >= 0 and p_ef > p_rest + 0.05) or \
+       (not math.isinf(h_rest) and h_rest >= 0 and h_ef > h_rest + 0.05) or \
+       (not math.isinf(g_rest) and g_rest >= 0 and g_ef > g_rest + 0.05):
+        return {
+            "cantidad_g": 0,
+            "macros_efectivos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+            "macros_brutos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+            "que_cuenta": {"P": False, "H": False, "G": False},
+            "cabe": False,
+            "excede": True
+        }
+
     cabe = True
     if p_ef > p_rest + 4:  # margen CALMA de 4g
         cabe = False
@@ -1016,10 +1041,12 @@ async def buscar_alimentos(
     # Filtrar por tag (ej: "GEN" para genéricos)
     if tag_filter:
         tag_upper = tag_filter.upper()
-        alimentos = [
-            a for a in alimentos
-            if tag_upper in (a.get("tags", "") or "").upper()
-        ]
+        def _food_has_tag(a, t_up):
+            raw = a.get("tags", "") or ""
+            if isinstance(raw, list):
+                return t_up in {str(x).strip().upper() for x in raw}
+            return t_up in {x.strip().upper() for x in str(raw).split("|")}
+        alimentos = [a for a in alimentos if _food_has_tag(a, tag_upper)]
     
     # Filtrar por tipo de comida (intra/post)
     if tipo_comida in ("intra", "post"):

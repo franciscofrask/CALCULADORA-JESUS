@@ -153,7 +153,6 @@ const MealCard = ({
                                             <div key={idx} className="bg-gray-50 rounded-lg p-3">
                                                 <div className="flex items-center justify-between mb-1">
                                                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                        <span className="text-xl">{getFoodEmoji(food.categorias)}</span>
                                                         <span className="text-sm font-semibold text-gray-800 truncate">{food.nombre}</span>
                                                     </div>
                                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-red-500" onClick={() => removeFood(mealKey, idx)}>
@@ -190,7 +189,7 @@ const MealCard = ({
                                     })}
                                 </div>
                             </div>
-                            <Button variant="ghost" className="w-full text-brand-orange hover:text-brand-orange-dark" onClick={() => setBuildMealModal({ open: true, mealKey, startStep: 2 })}><Plus className="w-4 h-4 mr-1" /> Añadir ingrediente</Button>
+                            <Button variant="ghost" className="w-full text-brand-orange hover:text-brand-orange-dark disabled:opacity-40 disabled:cursor-not-allowed" disabled={status === 'cuadrada' || status === 'sobra'} onClick={() => setBuildMealModal({ open: true, mealKey, startStep: 2 })}><Plus className="w-4 h-4 mr-1" /> Añadir ingrediente</Button>
                             <button className="w-full text-xs text-gray-400 hover:text-red-500 mt-2 py-1" onClick={() => clearMeal(mealKey)}>Vaciar comida</button>
                         </>
                     )}

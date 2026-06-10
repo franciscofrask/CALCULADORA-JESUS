@@ -33,8 +33,14 @@ def _has_any_exact_cat(alimento, cat_codes: set) -> bool:
 
 def _has_token(alimento, tag: str) -> bool:
     tag_up = tag.upper()
-    combined = str(alimento.get("categorias", "") or "") + "|" + str(alimento.get("tags", "") or "")
-    return any(t.strip().upper() == tag_up for t in combined.split("|"))
+    cats = str(alimento.get("categorias", "") or "")
+    raw_tags = alimento.get("tags", "") or ""
+    if isinstance(raw_tags, list):
+        tag_tokens = {str(t).strip().upper() for t in raw_tags}
+    else:
+        tag_tokens = {t.strip().upper() for t in str(raw_tags).split("|")}
+    cat_tokens = {t.strip().upper() for t in cats.split("|")}
+    return tag_up in cat_tokens or tag_up in tag_tokens
 
 _LAT_CATS = {"2.2.8", "2.3.8", "2.4.8", "3.8", "3.9.8", "10.1.8", "11.8", "13.8"}
 _FRE_CATS = {"FRE", "1.2.1", "2.2.1", "2.3.1", "2.4.1", "3.1", "3.9.1", "11.1", "13.1"}
@@ -358,18 +364,15 @@ async def search_foods_endpoint(
     # Collect available preparations using Calma-equivalent test functions (before filtering).
     available_preps = [p for p in _PREPS_ORDER if any(_PREP_TESTS[p](a) for a in alimentos)]
 
-    # Apply preparation filter using the same Calma-equivalent tests.
+    # Apply preparation filter — supports comma-separated multiple tags (OR logic).
     if tag:
-        tag_upper = tag.upper()
-        test_fn = _PREP_TESTS.get(tag_upper)
-        if test_fn:
-            alimentos = [a for a in alimentos if test_fn(a)]
-        else:
-            # Fallback for unknown tags: exact token match
-            alimentos = [a for a in alimentos if any(
-                t.strip().upper() == tag_upper
-                for t in (str(a.get("categorias","")) + "|" + str(a.get("tags",""))).split("|")
-            )]
+        tag_list = [t.strip().upper() for t in tag.split(',') if t.strip()]
+        def matches_tag(alimento, tag_upper):
+            test_fn = _PREP_TESTS.get(tag_upper)
+            if test_fn:
+                return test_fn(alimento)
+            return _has_token(alimento, tag_upper)
+        alimentos = [a for a in alimentos if any(matches_tag(a, t) for t in tag_list)]
 
     # When browsing by category, show all matching foods. Text searches keep the limit.
     if q:

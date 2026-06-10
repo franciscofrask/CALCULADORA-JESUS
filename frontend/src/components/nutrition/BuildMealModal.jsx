@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star } from 'lucide-react';
 import {
     faStopwatch20,
-    faEgg, faBacon, faDove, faCow, faPiggyBank, faDrumstickBite,
+    faEgg, faBacon, faBurger, faDove, faCow, faPiggyBank, faDrumstickBite, faFireFlameCurved,
     faFish, faCheese, faJar, faJarWheat, faSeedling, faBowlRice,
     faBreadSlice, faPlateWheat, faBowlFood, faCarrot, faAppleWhole,
     faLeaf, faBottleWater, faBolt, faBlender, faPizzaSlice, faCookie,
@@ -97,6 +97,8 @@ const POST_CARB_CATEGORIES = [
 const PREPARATIONS = [
     { value: 'GEN', label: 'Genérico',                                 icon: faCircleInfo },
     { value: 'FRE', label: 'Frescos',                                  icon: faDroplet },
+    { value: 'HAM', label: 'Hamburguesa / Carne picada',               icon: faBurger },
+    { value: 'AHU', label: 'Ahumados',                                 icon: faFireFlameCurved },
     { value: 'SNA', label: 'Snacks fáciles de transportar',            icon: faCookieBite },
     { value: 'UNI', label: 'Ya pesado',                                icon: faScaleBalanced },
     { value: 'YA',  label: 'Listo para comer',                         icon: faSquareCheck },
@@ -143,7 +145,7 @@ const BuildMealModal = ({
     const [paso, setPaso] = useState(1);
     const [tempFoods, setTempFoods] = useState([]);
 
-    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedCategories, setSelectedCategories] = useState([]);
     const [categoryFoods, setCategoryFoods] = useState([]);
     const [loadingFoods, setLoadingFoods] = useState(false);
 
@@ -161,7 +163,7 @@ const BuildMealModal = ({
     const lastCheckedRemaining = React.useRef(null);
 
     // Preparation filter
-    const [selectedPreparation, setSelectedPreparation] = useState('');
+    const [selectedPreparations, setSelectedPreparations] = useState([]);
     const [availablePreps, setAvailablePreps] = useState([]);
 
     const isIntraMode = mode === 'intra';
@@ -290,13 +292,13 @@ const BuildMealModal = ({
     useEffect(() => {
         if (open && mealKey) {
             setTempFoods([]);
-            setSelectedCategory(null);
+            setSelectedCategories([]);
             setCategoryFoods([]);
             setSearchQuery('');
             setSearchResults([]);
             setIsSearching(false);
             setSelectedFood(null);
-            setSelectedPreparation('');
+            setSelectedPreparations([]);
             setAvailablePreps([]);
             setEmptyCategoryIds(new Set());
             setCheckingCategories(false);
@@ -325,9 +327,9 @@ const BuildMealModal = ({
             const hasExisting = (mealsData[mealKey]?.alimentos || []).length > 0;
             if (!hasExisting && paso !== 1) {
                 setPaso(1);
-                setSelectedCategory(null);
+                setSelectedCategories([]);
                 setCategoryFoods([]);
-                setSelectedPreparation('');
+                setSelectedPreparations([]);
                 setAvailablePreps([]);
             }
             return;
@@ -341,45 +343,57 @@ const BuildMealModal = ({
         if (pPct < 80) {
             if (paso !== 1) {
                 setPaso(1);
-                setSelectedCategory(null);
+                setSelectedCategories([]);
                 setCategoryFoods([]);
-                setSelectedPreparation('');
+                setSelectedPreparations([]);
                 setAvailablePreps([]);
             }
         } else if (pPct >= 80 && hPct < 80) {
             if (paso !== 2) {
                 setPaso(2);
-                setSelectedCategory(null);
+                setSelectedCategories([]);
                 setCategoryFoods([]);
-                setSelectedPreparation('');
+                setSelectedPreparations([]);
                 setAvailablePreps([]);
                 toast.info('✅ Proteínas cubiertas. Elige el acompañamiento.');
             }
         } else if (pPct >= 80 && hPct >= 80) {
             if (paso !== 3) {
                 setPaso(3);
-                setSelectedCategory(null);
+                setSelectedCategories([]);
                 setCategoryFoods([]);
-                setSelectedPreparation('');
+                setSelectedPreparations([]);
                 setAvailablePreps([]);
                 toast.info('✨ ¡Macros cubiertos! Últimos toques.');
             }
         }
     }, [served.P, served.H, target.P, target.H, tempFoods.length, paso, isIntraMode]);
 
-    // Reload foods when macros change or preparation filter changes
+    // Reload foods when macros, categories or preparations change
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
-        if (selectedCategory) {
-            const params = new URLSearchParams({ q: '', category: selectedCategory.prefixes[0], limit: '100' });
-            if (target.P > 0) params.set('p_rest', remaining.P);
-            if (target.H > 0) params.set('h_rest', remaining.H);
-            if (target.G > 0) params.set('g_rest', remaining.G);
-            if (selectedPreparation) params.set('tag', selectedPreparation);
+        const hasFrequent = selectedCategories.some(c => c.id === '__frequent__');
+        if (hasFrequent) {
+            setLoadingFoods(true);
+            api('/api/calculator/frequent-foods?limit=20').then(result => {
+                if (!cancelled) { setCategoryFoods(result.alimentos || []); setAvailablePreps([]); }
+            }).catch(() => {}).finally(() => { if (!cancelled) setLoadingFoods(false); });
+        } else if (selectedCategories.length > 0) {
+            setLoadingFoods(true);
+            const categoryParam = selectedCategories.map(c => c.prefixes?.[0]).filter(Boolean).join(',');
+            const params = new URLSearchParams({ q: '', category: categoryParam, limit: '100' });
+            const tolerance = paso === 3 ? 4 : 0;
+            if (target.P > 0) params.set('p_rest', Math.max(0, remaining.P + tolerance));
+            if (target.H > 0) params.set('h_rest', Math.max(0, remaining.H + tolerance));
+            if (target.G > 0) params.set('g_rest', Math.max(0, remaining.G));
+            if (selectedPreparations.length > 0) params.set('tag', selectedPreparations.join(','));
             api(`/api/calculator/search?${params}`).then(result => {
-                if (!cancelled) setCategoryFoods(sortByFit(result.alimentos || []));
-            }).catch(() => {});
+                if (!cancelled) {
+                    setCategoryFoods(sortByFit(result.alimentos || []));
+                    setAvailablePreps(result.available_preps || []);
+                }
+            }).catch(() => {}).finally(() => { if (!cancelled) setLoadingFoods(false); });
         } else if (isSearching && searchQuery.length >= 2) {
             const params = new URLSearchParams({ q: searchQuery, limit: '50', ...getMacrosParams() });
             api(`/api/calculator/search?${params}`).then(result => {
@@ -387,7 +401,7 @@ const BuildMealModal = ({
             }).catch(() => {});
         }
         return () => { cancelled = true; };
-    }, [remaining.P, remaining.H, remaining.G, selectedPreparation]); // eslint-disable-line
+    }, [remaining.P, remaining.H, remaining.G, selectedCategories, selectedPreparations]); // eslint-disable-line
 
     // Pre-check which categories have available foods
     useEffect(() => {
@@ -442,9 +456,10 @@ const BuildMealModal = ({
 
     const getMacrosParams = () => {
         const params = {};
-        if (target.P > 0 && remaining.P > 0) params.p_rest = remaining.P;
-        if (target.H > 0 && remaining.H > 0) params.h_rest = remaining.H;
-        if (target.G > 0 && remaining.G > 0) params.g_rest = remaining.G;
+        const tolerance = paso === 3 ? 4 : 0;
+        if (target.P > 0) params.p_rest = Math.max(0, remaining.P + tolerance);
+        if (target.H > 0) params.h_rest = Math.max(0, remaining.H + tolerance);
+        if (target.G > 0) params.g_rest = Math.max(0, remaining.G);
         return params;
     };
 
@@ -466,41 +481,16 @@ const BuildMealModal = ({
         });
     };
 
-    const handleCategoryClick = async (category) => {
-        setSelectedCategory(category);
-        setSelectedPreparation('');
-        setLoadingFoods(true);
-        setCategoryFoods([]);
-        setAvailablePreps([]);
-
-        try {
-            if (category.id === '__frequent__') {
-                const result = await api('/api/calculator/frequent-foods?limit=20');
-                setCategoryFoods(result.alimentos || []);
-            } else {
-                const params = new URLSearchParams({
-                    q: '',
-                    category: category.prefixes[0],
-                    limit: '100',
-                    ...getMacrosParams()
-                });
-                const result = await api(`/api/calculator/search?${params}`);
-                setCategoryFoods(sortByFit(result.alimentos || []));
-                setAvailablePreps(result.available_preps || []);
-            }
-        } catch (err) {
-            console.error('Error cargando alimentos:', err);
-            toast.error('Error cargando alimentos');
-        } finally {
-            setLoadingFoods(false);
+    const handleCategoriesChange = (newValues) => {
+        if (!newValues || newValues.length === 0) {
+            setSelectedCategories([]);
+            setCategoryFoods([]);
+            setAvailablePreps([]);
+            return;
         }
-    };
-
-    const handleBackToCategories = () => {
-        setSelectedCategory(null);
+        const cats = newValues.map(v => allCategories.find(c => c.id === v)).filter(Boolean);
+        setSelectedCategories(cats);
         setCategoryFoods([]);
-        setSelectedPreparation('');
-        setAvailablePreps([]);
     };
 
     const handleSearch = async (query) => {
@@ -548,6 +538,12 @@ const BuildMealModal = ({
                     H: Math.round((food.hidratos || 0) * quantity / 100 * 10) / 10,
                     G: Math.round((food.grasas || 0) * quantity / 100 * 10) / 10
                 };
+
+            const blockReason = getBlockReason(macrosEf);
+            if (blockReason) {
+                toast.error(blockReason);
+                return;
+            }
 
             const foodToAdd = {
                 ...food,
@@ -798,24 +794,17 @@ const BuildMealModal = ({
                             <CategoryRail
                                 label="Categorías:"
                                 categories={categories}
-                                value={selectedCategory?.id || ''}
-                                onChange={(val) => {
-                                    if (!val) {
-                                        handleBackToCategories();
-                                    } else {
-                                        const cat = categories.find(c => c.id === val);
-                                        if (cat) handleCategoryClick(cat);
-                                    }
-                                }}
+                                value={selectedCategories.map(c => c.id)}
+                                onChange={handleCategoriesChange}
                                 size="sm"
                             />
                         )}
-                        {selectedCategory && availablePreparations.length > 0 && (
+                        {selectedCategories.length > 0 && availablePreparations.length > 0 && (
                             <CategoryRail
                                 label="Preparación:"
                                 categories={availablePreparations}
-                                value={selectedPreparation}
-                                onChange={setSelectedPreparation}
+                                value={selectedPreparations}
+                                onChange={setSelectedPreparations}
                                 size="sm"
                             />
                         )}
@@ -824,7 +813,7 @@ const BuildMealModal = ({
                     {/* Food list */}
                     <ScrollArea className="flex-1">
                         <div className="p-3">
-                            {!isSearching && !selectedCategory ? (
+                            {!isSearching && selectedCategories.length === 0 ? (
                                 <div className="text-center py-10 text-gray-400 text-sm">
                                     Selecciona una categoría arriba para ver los alimentos
                                 </div>
@@ -836,7 +825,7 @@ const BuildMealModal = ({
                                         <div className="text-center py-8 text-gray-500">
                                             {isSearching
                                                 ? 'No se encontraron alimentos'
-                                                : selectedCategory?.id === '__frequent__'
+                                                : selectedCategories.some(c => c.id === '__frequent__')
                                                     ? 'Aún no tienes alimentos frecuentes — guarda algunas dietas primero'
                                                     : 'No hay alimentos en esta categoría'}
                                         </div>
@@ -858,16 +847,15 @@ const BuildMealModal = ({
                                                             className="flex-1 flex items-center gap-2 p-2 rounded-lg text-left transition-colors hover:bg-gray-100"
                                                             data-testid={`food-item-${food.id || idx}`}
                                                         >
-                                                            <span className="text-lg">{getEmoji(food.categorias)}</span>
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="text-sm text-black truncate">{food.nombre}</div>
                                                                 <div className="text-xs text-gray-500">
                                                                     {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud` : `${food._cantidad_sugerida}g`} → ` : ''}
-                                                                    {paso === 2
-                                                                        ? `H=${food._macros_sugeridos?.H ?? Math.round(food.hidratos)}g`
-                                                                        : paso === 3
-                                                                        ? `G=${food._macros_sugeridos?.G ?? Math.round(food.grasas)}g`
-                                                                        : `P=${food._macros_sugeridos?.P ?? Math.round(food.proteinas)}g`}
+                                                                    {[
+                                                                        (food._macros_sugeridos?.P ?? food.proteinas) > 0 && `P=${Math.round(food._macros_sugeridos?.P ?? food.proteinas)}g`,
+                                                                        (food._macros_sugeridos?.H ?? food.hidratos) > 0 && `H=${Math.round(food._macros_sugeridos?.H ?? food.hidratos)}g`,
+                                                                        (food._macros_sugeridos?.G ?? food.grasas) > 0 && `G=${Math.round(food._macros_sugeridos?.G ?? food.grasas)}g`,
+                                                                    ].filter(Boolean).join(' | ')}
                                                                 </div>
                                                             </div>
                                                             <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -889,7 +877,6 @@ const BuildMealModal = ({
                             <div className="space-y-1">
                                 {tempFoods.map((food, idx) => (
                                     <div key={idx} className="flex items-center gap-2 bg-white rounded p-2 text-sm">
-                                        <span>{getEmoji(food.categorias)}</span>
                                         <span className="flex-1 truncate text-black">{food.nombre}</span>
                                         <div className="flex items-center gap-1">
                                             <button

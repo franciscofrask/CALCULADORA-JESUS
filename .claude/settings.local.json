@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show *)",
+      "Bash(pip3 show *)",
+      "Bash(python -c \"import uvicorn\")",
+      "Read(//c/Users/Francisco Frascona/AppData/Local/Programs/**)",
+      "Read(//c//**)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(wsl python3 --version 2>&1; wsl python --version 2>&1; wsl which uvicorn 2>&1)",
+      "PowerShell(docker info *)",
+      "PowerShell(wsl --list --verbose 2>&1)",
+      "PowerShell(yarn *)",
+      "PowerShell(npm *)",
+      "PowerShell(corepack *)",
+      "PowerShell(winget search *)",
+      "PowerShell(py *)",
+      "PowerShell(winget install *)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); python --version 2>&1)",
+      "PowerShell(pip install *)",
+      "PowerShell(yarn install *)",
+      "Bash(C:\\\\Users\\\\Francisco Frascona\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe *)"
+    ]
+  }
+}
