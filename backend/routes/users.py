@@ -154,6 +154,40 @@ async def save_user_preferences(data: dict, user = Depends(get_current_user)):
 
     return {"success": True, "food_preferences": preferences, "avoided_categories": avoided_categories, "avoided_keywords": avoided_keywords}
 
+# ==================== DIET CONFIG ====================
+
+@router.get("/user/diet-config")
+async def get_diet_config(user = Depends(get_current_user)):
+    """Obtener configuración de dieta persistida (momento entreno, num comidas, opcion peri)."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    defaults = {"momento_entreno": 1, "num_comidas": 4, "opcion_peri": "intra_post"}
+    if not profile:
+        return defaults
+    return {
+        "momento_entreno": profile.get("diet_momento_entreno", 1),
+        "num_comidas": profile.get("diet_num_comidas", 4),
+        "opcion_peri": profile.get("diet_opcion_peri", "intra_post"),
+    }
+
+@router.patch("/user/diet-config")
+async def save_diet_config(data: dict, user = Depends(get_current_user)):
+    """Guardar configuración de dieta para el usuario (persiste entre dispositivos)."""
+    allowed = {"momento_entreno", "num_comidas", "opcion_peri"}
+    update = {}
+    if "momento_entreno" in data and isinstance(data["momento_entreno"], int):
+        update["diet_momento_entreno"] = data["momento_entreno"]
+    if "num_comidas" in data and isinstance(data["num_comidas"], int):
+        update["diet_num_comidas"] = data["num_comidas"]
+    if "opcion_peri" in data and isinstance(data["opcion_peri"], str):
+        update["diet_opcion_peri"] = data["opcion_peri"]
+    if update:
+        await db.client_profiles.update_one(
+            {"user_id": user["id"]},
+            {"$set": update},
+            upsert=False
+        )
+    return {"ok": True}
+
 # ==================== MACROS ====================
 
 @router.get("/macros")

@@ -275,16 +275,16 @@ const NutritionPage = () => {
         setExportingPdf(false);
     };
 
-    // Load distribution
-    const loadDistribution = useCallback(async () => {
+    // Load distribution — accepts optional overrides to avoid stale closure on init
+    const loadDistribution = useCallback(async (overrides = {}) => {
         try {
             const result = await api('/api/calculator/distribute', {
                 method: 'POST',
                 body: JSON.stringify({
-                    tipo_dia: tipoDia,
-                    num_comidas: numComidas,
-                    momento_entreno: momentoEntreno,
-                    opcion_peri: opcionPeri
+                    tipo_dia: overrides.tipoDia ?? tipoDia,
+                    num_comidas: overrides.numComidas ?? numComidas,
+                    momento_entreno: overrides.momentoEntreno ?? momentoEntreno,
+                    opcion_peri: overrides.opcionPeri ?? opcionPeri
                 })
             });
             setDistribution(result);
@@ -293,15 +293,21 @@ const NutritionPage = () => {
         }
     }, [api, tipoDia, numComidas, momentoEntreno, opcionPeri]);
 
-    // Load saved diet — returns distribution_targets if they were saved
+    // Load saved diet — returns { targets, config } where config has the diet's day values
     const loadDiet = useCallback(async (date) => {
         try {
             const diet = await api(`/api/diets/${date}`);
             if (diet.exists) {
-                setTipoDia(diet.tipo_dia || 'entrenamiento');
-                setNumComidas(diet.num_comidas || 4);
-                setMomentoEntreno(diet.momento_entreno || 1);
-                setOpcionPeri(diet.opcion_peri || 'intra_post');
+                const dietConfig = {
+                    tipoDia: diet.tipo_dia || 'entrenamiento',
+                    numComidas: diet.num_comidas || 4,
+                    momentoEntreno: diet.momento_entreno || 1,
+                    opcionPeri: diet.opcion_peri || 'intra_post',
+                };
+                setTipoDia(dietConfig.tipoDia);
+                setNumComidas(dietConfig.numComidas);
+                setMomentoEntreno(dietConfig.momentoEntreno);
+                setOpcionPeri(dietConfig.opcionPeri);
 
                 const updatedMeals = {};
                 for (const [mealKey, mealData] of Object.entries(diet.comidas || {})) {
@@ -331,15 +337,15 @@ const NutritionPage = () => {
                 }
                 setMealsData(updatedMeals);
                 console.log('[loadDiet] distribution_targets:', diet.distribution_targets);
-                return diet.distribution_targets || null;
+                return { targets: diet.distribution_targets || null, config: dietConfig };
             } else {
                 setMealsData({});
-                return null;
+                return { targets: null, config: null };
             }
         } catch (err) {
             console.error('Error loading diet:', err);
             setMealsData({});
-            return null;
+            return { targets: null, config: null };
         }
     }, [api]);
 
@@ -355,12 +361,27 @@ const NutritionPage = () => {
     useEffect(() => {
         const init = async () => {
             setLoading(true);
-            setDistribTargetsOverlay(null); // Reset before loading new date
-            const savedTargets = await loadDiet(currentDate);
-            if (savedTargets) {
-                setDistribTargetsOverlay(savedTargets);
-            }
-            await loadDistribution();
+            setDistribTargetsOverlay(null);
+
+            // Load persisted diet config FIRST to avoid stale-closure distribution call
+            let cfgOverrides = {};
+            try {
+                const cfg = await api('/api/user/diet-config');
+                const me = cfg.momento_entreno ?? 1;
+                const nc = cfg.num_comidas ?? 4;
+                const op = cfg.opcion_peri ?? 'intra_post';
+                setMomentoEntreno(me);
+                setNumComidas(nc);
+                setOpcionPeri(op);
+                cfgOverrides = { momentoEntreno: me, numComidas: nc, opcionPeri: op };
+            } catch (e) {}
+
+            const { targets, config: dietConfig } = await loadDiet(currentDate);
+            if (targets) setDistribTargetsOverlay(targets);
+
+            // If diet has its own config, use that (overrides profile defaults for this day)
+            const finalOverrides = dietConfig || cfgOverrides;
+            await loadDistribution(finalOverrides);
             setLoading(false);
         };
         init();
@@ -371,11 +392,20 @@ const NutritionPage = () => {
         if (!loading) loadDistribution();
     }, [tipoDia, numComidas, momentoEntreno, opcionPeri]); // eslint-disable-line
 
-    // Wrappers for user-initiated config changes
+    // Wrappers for user-initiated config changes — persist to profile (cross-device)
     const handleSetTipoDia = (v) => { setTipoDia(v); };
-    const handleSetNumComidas = (v) => { setNumComidas(v); };
-    const handleSetMomentoEntreno = (v) => { setMomentoEntreno(v); };
-    const handleSetOpcionPeri = (v) => { setOpcionPeri(v); };
+    const handleSetNumComidas = (v) => {
+        setNumComidas(v);
+        api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ num_comidas: v }) }).catch(() => {});
+    };
+    const handleSetMomentoEntreno = (v) => {
+        setMomentoEntreno(v);
+        api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ momento_entreno: v }) }).catch(() => {});
+    };
+    const handleSetOpcionPeri = (v) => {
+        setOpcionPeri(v);
+        api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ opcion_peri: v }) }).catch(() => {});
+    };
 
     // Search foods
     useEffect(() => {
