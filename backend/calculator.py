@@ -246,7 +246,7 @@ def get_food_config(alimento: dict) -> dict:
     # ===========================================
     # Si el alimento tiene unidades=True en la BD, es por unidad
     # y la ración indica el peso de 1 unidad
-    if alimento.get("unidades") == True:
+    if alimento.get("unidades") == True or alimento.get("por_unidad") == True:
         peso = int(racion) if racion > 0 else 30
         return {
             "minimo": peso,           # 1 unidad mínimo
@@ -480,12 +480,8 @@ def ajustar_por_unidades(cantidad_g: float, config: dict) -> float:
         # Redondear a la unidad entera más cercana hacia ABAJO
         unidades = int(cantidad_g / peso_unidad)
         cantidad_ajustada = unidades * peso_unidad
-    
-    # Mínimo 1 unidad (o media si permite)
-    minimo = peso_unidad / 2 if permite_media else peso_unidad
-    if cantidad_ajustada < minimo:
-        cantidad_ajustada = minimo
-    
+
+    # No forzar mínimo: si 0 unidades caben, devolver 0 (se marcará como excede en el llamador)
     return cantidad_ajustada
 
 
@@ -606,24 +602,46 @@ def calcular_cantidad_automatica(
     # BUG 2 FIX: Si es por unidad, ajustar a unidades enteras (o medias)
     if config.get('por_unidad', False):
         cantidad = ajustar_por_unidades(cantidad, config)
+        # If no units fit without overshooting, hide this food
+        if cantidad == 0:
+            return {
+                "cantidad_g": 0,
+                "macros_efectivos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+                "macros_brutos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+                "que_cuenta": {"P": False, "H": False, "G": False},
+                "cabe": False,
+                "excede": True
+            }
     elif es_media_unidad(alimento):
         # Fallback para compatibilidad
         peso_unidad = float(alimento.get("peso_unidad", racion) or racion)
         media = peso_unidad / 2.0
         if media > 0:
-            cantidad = round(cantidad / media) * media
+            cantidad = math.floor(cantidad / media) * media
             if cantidad < media:
                 cantidad = media
     else:
-        # Redondear según categoría
-        cantidad = _redondear_cantidad(cantidad, cat)
-    
-    # Aplicar mínimo del config
+        # 1g floor precision: match macro target exactly without overshooting
+        cantidad = math.floor(cantidad)
+
+    # Aplicar mínimo del config (solo para alimentos no-por-unidad)
+    # Si el mínimo causaría sobrepasar un macro, devolver excede=True
     minimo_config = config.get('minimo', 5)
     if cantidad == 0:
-        # Redondeó a 0 pero el macro ideal era > 0: forzar al mínimo para evaluar si cabe
         cantidad = minimo_config
     elif 0 < cantidad < minimo_config:
+        ef_at_min = calcular_macros_efectivos(P_100, H_100, G_100, cat, minimo_config, cat_sec, es_vegano)
+        if (p_rest > 0 and ef_at_min["proteina_efectiva"] > p_rest + 0.5) or \
+           (h_rest > 0 and ef_at_min["hidratos_efectivos"] > h_rest + 0.5) or \
+           (g_rest > 0 and ef_at_min["grasa_efectiva"] > g_rest + 0.5):
+            return {
+                "cantidad_g": 0,
+                "macros_efectivos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+                "macros_brutos": {"P": 0, "H": 0, "G": 0, "kcal": 0},
+                "que_cuenta": {"P": False, "H": False, "G": False},
+                "cabe": False,
+                "excede": True
+            }
         cantidad = minimo_config
     
     # Recalcular macros efectivos con la cantidad final

@@ -14,6 +14,7 @@ IMPORTANTE: Los macros en la BD son POR RACION, no por 100g.
 Las reglas CALMA siempre se evaluan sobre macros POR 100 GRAMOS.
 """
 
+import math
 from typing import Tuple, List, Dict, Optional
 
 
@@ -729,49 +730,50 @@ def _calibracion_frutos_secos(acumulado_g: float) -> float:
 
 
 def _redondear_cantidad(cantidad: float, categoria: str) -> float:
-    """Redondea la cantidad segun el tipo de alimento."""
+    """Redondea la cantidad segun el tipo de alimento.
+    Usa floor para nunca exceder el macro objetivo cuando se calcula cantidad automatica."""
     cat = str(categoria).strip()
-    
+
     # Pan: multiplos de 10g
     if cat == "8" or cat.startswith("8."):
-        return round(cantidad / 10) * 10
-    
+        return math.floor(cantidad / 10) * 10
+
     # Arroz, pasta, patata, carne, pescado, verduras: multiplos de 25g
     if cat in ("2", "3", "9", "13", "21", "22") or \
        cat.startswith("2.") or cat.startswith("3.") or \
        cat.startswith("9.") or cat.startswith("13.") or \
        cat.startswith("21.") or cat.startswith("22."):
-        return round(cantidad / 25) * 25
-    
+        return math.floor(cantidad / 25) * 25
+
     # Claras de huevo (cat 1.1): medición continua, 1g de precisión
     if cat == "1.1" or cat.startswith("1.1."):
-        return round(cantidad)
+        return math.floor(cantidad)
 
     # Huevos enteros (cat 1.2): múltiplos de 55g (aprox 1 huevo)
     if cat == "1" or cat.startswith("1."):
-        return round(cantidad / 55) * 55
-    
+        return math.floor(cantidad / 55) * 55
+
     # Frutos secos, proteina polvo, cereales: multiplos de 5g
     if cat.startswith("17.2") or cat.startswith("4") or \
        cat == "7" or cat.startswith("7."):
-        return round(cantidad / 5) * 5
-    
+        return math.floor(cantidad / 5) * 5
+
     # Aceite: multiplos de 5ml
     if cat in ("17.1", "17.4", "17.6", "17.10") or \
        cat.startswith("17.1.") or cat.startswith("17.4.") or \
        cat.startswith("17.6.") or cat.startswith("17.10."):
-        return round(cantidad / 5) * 5
-    
+        return math.floor(cantidad / 5) * 5
+
     # Fruta: multiplos de 25g (aprox media pieza)
     if cat == "11" or cat.startswith("11."):
-        return round(cantidad / 25) * 25
-    
+        return math.floor(cantidad / 25) * 25
+
     # Lacteos: multiplos de 25g
     if cat == "5" or cat.startswith("5."):
-        return round(cantidad / 25) * 25
-    
+        return math.floor(cantidad / 25) * 25
+
     # Default: multiplos de 10g
-    return round(cantidad / 10) * 10
+    return math.floor(cantidad / 10) * 10
 
 
 # =========================================================

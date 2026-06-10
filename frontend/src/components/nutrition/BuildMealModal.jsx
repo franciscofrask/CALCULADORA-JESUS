@@ -15,7 +15,7 @@ import {
     faFish, faCheese, faJar, faJarWheat, faSeedling, faBowlRice,
     faBreadSlice, faPlateWheat, faBowlFood, faCarrot, faAppleWhole,
     faLeaf, faBottleWater, faBolt, faBlender, faPizzaSlice, faCookie,
-    faUtensils, faPepperHot, faBottleDroplet,
+    faUtensils, faPepperHot, faBottleDroplet, faOilCan,
     faCircleInfo, faDroplet, faCookieBite, faScaleBalanced,
     faSquareCheck, faWheatAwnCircleExclamation, faSnowflake, faRing,
     faThumbsUp, faClock, faFireBurner, faMedal,
@@ -64,6 +64,14 @@ const SIDE_CATEGORIES = [
     { id: 'sopas',       value: 'sopas',       label: 'Sopas',        emoji: '🍲', icon: faUtensils,      prefixes: ['48'] },
 ];
 
+// Step 3 - fat sources
+const FAT_CATEGORIES = [
+    { id: 'grasas_buenas', value: 'grasas_buenas', label: 'Grasas de buena calidad', icon: faBottleDroplet, prefixes: ['42'] },
+    { id: 'grasas_todo',   value: 'grasas_todo',   label: 'Grasas',                  icon: faOilCan,        prefixes: ['17'] },
+    { id: 'lacteos',       value: 'lacteos',       label: 'Lácteos',                 icon: faCheese,        prefixes: ['5'] },
+    { id: 'huevos',        value: 'huevos',        label: 'Huevos',                  icon: faEgg,           prefixes: ['1'] },
+];
+
 // INTRA categories
 const INTRA_CATEGORIES = [
     { id: 'aminoacidos', value: 'aminoacidos', label: 'Aminoácidos', emoji: '⚡', icon: faJar,         prefixes: ['41'] },
@@ -107,7 +115,9 @@ const FOOD_EMOJIS = {
     '2': '🥩', '3': '🐟', '1': '🥚', '5': '🥛', '4': '💪',
     '7': '🌾', '8': '🍞', '21': '🍚', '22': '🍝', '9': '🥔',
     '10': '🫘', '11': '🍎', '13': '🥦', '17': '🫒', '17.2': '🥜',
-    '16': '🥫', '24': '🥤', 'default': '🍽️'
+    '16': '🥫', '24': '🥤', '42': '🥑', '28': '🌱', '6': '🌿',
+    '32': '🍕', '39': '🥘', '49': '🍔', '50': '🌮', '53': '🍱',
+    'default': '🍽️'
 };
 
 const getFoodEmojiLocal = (categorias) => {
@@ -148,6 +158,7 @@ const BuildMealModal = ({
     const [favorites, setFavorites] = useState(new Set());
     const [emptyCategoryIds, setEmptyCategoryIds] = useState(new Set());
     const [checkingCategories, setCheckingCategories] = useState(false);
+    const lastCheckedRemaining = React.useRef(null);
 
     // Preparation filter
     const [selectedPreparation, setSelectedPreparation] = useState('');
@@ -251,27 +262,24 @@ const BuildMealModal = ({
         } else if (paso === 2) {
             base = SIDE_CATEGORIES;
         } else if (paso === 3) {
+            // Only fat-relevant and zero-macro categories at paso 3
+            const FAT_IDS = new Set([
+                'grasas_buenas', 'grasas_todo', 'lacteos', 'huevos',
+                'aperitivos', 'chocolates', 'salsas', 'superalimentos',
+            ]);
             let cats = [];
             if (userPreferences && userPreferences.length > 0) {
                 cats = PREFERENCE_CATEGORIES
-                    .filter(cat => userPreferences.includes(cat.id))
-                    .map(cat => ({
-                        ...cat,
-                        value: cat.id,
-                        emoji: preferenceEmojis[cat.id] || '🍽️'
-                    }));
-            } else {
-                cats = [...SIDE_CATEGORIES];
+                    .filter(cat => userPreferences.includes(cat.id) && FAT_IDS.has(cat.id))
+                    .map(cat => ({ ...cat, value: cat.id }));
             }
-            const grasaRestante = Math.max(0, target.G - served.G);
-            if (grasaRestante > 1) {
-                const grasaCat = {
-                    id: 'grasas_buenas', value: 'grasas_buenas',
-                    label: 'Grasas de buena calidad', emoji: '🫒',
-                    icon: faBottleDroplet, prefixes: ['42']
-                };
-                if (!cats.find(c => c.id === 'grasas_buenas')) cats.unshift(grasaCat);
-            }
+            // Always ensure fat base categories are present
+            const ensurecat = (id, label, icon, prefixes) => {
+                if (!cats.find(c => c.id === id))
+                    cats.unshift({ id, value: id, label, icon, prefixes });
+            };
+            ensurecat('grasas_todo',   'Grasas',                  faOilCan,        ['17']);
+            ensurecat('grasas_buenas', 'Grasas de buena calidad', faBottleDroplet, ['42']);
             base = cats;
         } else {
             base = SIDE_CATEGORIES;
@@ -281,7 +289,6 @@ const BuildMealModal = ({
 
     useEffect(() => {
         if (open && mealKey) {
-            setPaso(1);
             setTempFoods([]);
             setSelectedCategory(null);
             setCategoryFoods([]);
@@ -293,12 +300,30 @@ const BuildMealModal = ({
             setAvailablePreps([]);
             setEmptyCategoryIds(new Set());
             setCheckingCategories(false);
+
+            // Determine correct starting paso based on already-saved foods in this meal
+            if (!isIntraMode) {
+                const ex = (mealsData[mealKey]?.alimentos || []).reduce((acc, f) => ({
+                    P: acc.P + (f.macros_efectivos?.P || 0),
+                    H: acc.H + (f.macros_efectivos?.H || 0),
+                }), { P: 0, H: 0 });
+                const t = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0 };
+                const pPct = t.P > 0 ? (ex.P / t.P) * 100 : 100;
+                const hPct = t.H > 0 ? (ex.H / t.H) * 100 : 100;
+                if (pPct >= 80 && hPct >= 80) setPaso(3);
+                else if (pPct >= 80) setPaso(2);
+                else setPaso(1);
+            } else {
+                setPaso(1);
+            }
         }
-    }, [open, mealKey, mode]);
+    }, [open, mealKey, mode]); // eslint-disable-line
 
     useEffect(() => {
         if (tempFoods.length === 0) {
-            if (paso !== 1) {
+            // Only reset to paso 1 if there are no existing saved foods either
+            const hasExisting = (mealsData[mealKey]?.alimentos || []).length > 0;
+            if (!hasExisting && paso !== 1) {
                 setPaso(1);
                 setSelectedCategory(null);
                 setCategoryFoods([]);
@@ -373,19 +398,35 @@ const BuildMealModal = ({
             return;
         }
         const cats = getCurrentCategories();
+        // Only pass macros that are still needed (> 0) so the backend doesn't
+        // exclude foods for "full" macros — categories should show if they have
+        // any food that fits what's still missing
         const macroParams = {};
-        if (target.P > 0) macroParams.p_rest = remaining.P;
-        if (target.H > 0) macroParams.h_rest = remaining.H;
-        if (target.G > 0) macroParams.g_rest = remaining.G;
+        if (target.P > 0 && remaining.P > 0) macroParams.p_rest = remaining.P;
+        if (target.H > 0 && remaining.H > 0) macroParams.h_rest = remaining.H;
+        if (target.G > 0 && remaining.G > 0) macroParams.g_rest = remaining.G;
         let cancelled = false;
         setCheckingCategories(true);
+        lastCheckedRemaining.current = null; // invalidate until check completes
         // Exclude virtual categories (no backend prefix to check)
         const checkableCats = cats.filter(cat => cat.prefixes?.length > 0);
+        const isGrasasPaso = paso === 3 && remaining.G > 0;
         Promise.all(checkableCats.map(async cat => {
             try {
-                const params = new URLSearchParams({ q: '', category: cat.prefixes[0], limit: '1', ...macroParams });
+                const limit = isGrasasPaso ? '10' : '1';
+                const params = new URLSearchParams({ q: '', category: cat.prefixes[0], limit, ...macroParams });
                 const result = await api(`/api/calculator/search?${params}`);
-                return { id: cat.id, empty: (result.alimentos || []).length === 0 };
+                const foods = result.alimentos || [];
+                if (!isGrasasPaso) return { id: cat.id, empty: foods.length === 0 };
+                // At paso 3: category useful only if it has foods with fat OR truly zero-macro foods
+                const hasUseful = foods.some(f => {
+                    const ms = f._macros_sugeridos || {};
+                    const g = ms.G ?? 0;
+                    const p = ms.P ?? 0;
+                    const h = ms.H ?? 0;
+                    return g > 0 || (p === 0 && h === 0 && g === 0);
+                });
+                return { id: cat.id, empty: !hasUseful };
             } catch {
                 return { id: cat.id, empty: false };
             }
@@ -393,6 +434,7 @@ const BuildMealModal = ({
             if (!cancelled) {
                 setEmptyCategoryIds(new Set(results.filter(r => r.empty).map(r => r.id)));
                 setCheckingCategories(false);
+                lastCheckedRemaining.current = { P: remaining.P, H: remaining.H, G: remaining.G };
             }
         });
         return () => { cancelled = true; };
@@ -400,9 +442,9 @@ const BuildMealModal = ({
 
     const getMacrosParams = () => {
         const params = {};
-        if (target.P > 0) params.p_rest = remaining.P;
-        if (target.H > 0) params.h_rest = remaining.H;
-        if (target.G > 0) params.g_rest = remaining.G;
+        if (target.P > 0 && remaining.P > 0) params.p_rest = remaining.P;
+        if (target.H > 0 && remaining.H > 0) params.h_rest = remaining.H;
+        if (target.G > 0 && remaining.G > 0) params.g_rest = remaining.G;
         return params;
     };
 
@@ -672,6 +714,8 @@ const BuildMealModal = ({
 
     const allCategories = getCurrentCategories();
     const hasMacrosContext = remaining.P > 0 || remaining.H > 0 || remaining.G > 0;
+    const lcr = lastCheckedRemaining.current;
+    const isStaleCheck = !lcr || lcr.P !== remaining.P || lcr.H !== remaining.H || lcr.G !== remaining.G;
     const categories = hasMacrosContext
         ? allCategories.filter(cat => !emptyCategoryIds.has(cat.id))
         : allCategories;
@@ -740,8 +784,8 @@ const BuildMealModal = ({
                     </div>
 
                     {/* Category + Preparation Rails */}
-                    <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-white space-y-2">
-                        {checkingCategories ? (
+                    {!isCuadrada && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-white space-y-2">
+                        {(checkingCategories || isStaleCheck) ? (
                             <div className="flex items-center gap-2 h-8">
                                 <span className="text-xs font-bold text-gray-500">Categorías:</span>
                                 <div className="flex gap-1.5">
@@ -775,43 +819,7 @@ const BuildMealModal = ({
                                 size="sm"
                             />
                         )}
-                    </div>
-
-                    {/* Food preview for quantity adjustment */}
-                    {selectedFood && (
-                        <div className="flex-shrink-0 bg-orange-50 border-b border-orange-200 p-3">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="font-medium text-black">{selectedFood.nombre}</span>
-                                <button onClick={() => setSelectedFood(null)} className="text-gray-400">
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                            <div className="flex items-center justify-center gap-3 mb-2">
-                                <Button variant="outline" size="sm" onClick={() => handleAdjustQuantity(-1)}>
-                                    <Minus className="w-4 h-4" />
-                                </Button>
-                                <span className="text-lg font-bold w-24 text-center">
-                                    {(selectedFood.por_unidad ?? selectedFood.unidades) && (selectedFood.peso_unidad || selectedFood.racion) > 0
-                                        ? `${Math.round((adjustedQuantity / (selectedFood.peso_unidad || selectedFood.racion)) * 2) / 2} ud`
-                                        : `${adjustedQuantity}g`
-                                    }
-                                </span>
-                                <Button variant="outline" size="sm" onClick={() => handleAdjustQuantity(1)}>
-                                    <Plus className="w-4 h-4" />
-                                </Button>
-                            </div>
-                            <div className="text-xs text-gray-600 text-center mb-2">
-                                {[
-                                    adjustedMacros.P > 0 && `P=${adjustedMacros.P}g`,
-                                    adjustedMacros.H > 0 && `H=${adjustedMacros.H}g`,
-                                    adjustedMacros.G > 0 && `G=${adjustedMacros.G}g`,
-                                ].filter(Boolean).join(' · ') || 'sin macros'}
-                            </div>
-                            <Button onClick={handleConfirmAddFood} className="w-full bg-orange-500 hover:bg-orange-600">
-                                Añadir
-                            </Button>
-                        </div>
-                    )}
+                    </div>}
 
                     {/* Food list */}
                     <ScrollArea className="flex-1">
@@ -846,7 +854,7 @@ const BuildMealModal = ({
                                                             <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
                                                         </button>
                                                         <button
-                                                            onClick={() => handleFoodPreview(food)}
+                                                            onClick={() => handleSelectFood(food)}
                                                             className="flex-1 flex items-center gap-2 p-2 rounded-lg text-left transition-colors hover:bg-gray-100"
                                                             data-testid={`food-item-${food.id || idx}`}
                                                         >
@@ -855,7 +863,11 @@ const BuildMealModal = ({
                                                                 <div className="text-sm text-black truncate">{food.nombre}</div>
                                                                 <div className="text-xs text-gray-500">
                                                                     {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud` : `${food._cantidad_sugerida}g`} → ` : ''}
-                                                                    P={food._macros_sugeridos?.P || Math.round(food.proteinas)}g
+                                                                    {paso === 2
+                                                                        ? `H=${food._macros_sugeridos?.H ?? Math.round(food.hidratos)}g`
+                                                                        : paso === 3
+                                                                        ? `G=${food._macros_sugeridos?.G ?? Math.round(food.grasas)}g`
+                                                                        : `P=${food._macros_sugeridos?.P ?? Math.round(food.proteinas)}g`}
                                                                 </div>
                                                             </div>
                                                             <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
