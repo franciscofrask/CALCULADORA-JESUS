@@ -70,7 +70,7 @@ def _prep_ahu(a):
     return _has_any_exact_cat(a, {"AHU", "3.7"}) or "ahumad" in n
 
 def _prep_ya(a):
-    return _has_any_exact_cat(a, {"YA", "2.1", "4", "11.5"}) or _prep_ahu(a)
+    return _has_any_exact_cat(a, {"2.1", "11.5"}) or _has_token(a, "YA") or _prep_ahu(a)
 
 _PREP_TESTS = {
     "LAT": _prep_lat,
