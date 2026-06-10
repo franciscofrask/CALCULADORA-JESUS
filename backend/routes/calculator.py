@@ -25,6 +25,71 @@ from macro_distribution import distribuir_macros as dist_macros
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
+# ── Preparation filter helpers (mirrors Calma group-home-utils.js) ──────────
+
+def _has_any_exact_cat(alimento, cat_codes: set) -> bool:
+    cats = str(alimento.get("categorias", "") or "")
+    return any(t.strip() in cat_codes for t in cats.split("|"))
+
+def _has_token(alimento, tag: str) -> bool:
+    tag_up = tag.upper()
+    combined = str(alimento.get("categorias", "") or "") + "|" + str(alimento.get("tags", "") or "")
+    return any(t.strip().upper() == tag_up for t in combined.split("|"))
+
+_LAT_CATS = {"2.2.8", "2.3.8", "2.4.8", "3.8", "3.9.8", "10.1.8", "11.8", "13.8"}
+_FRE_CATS = {"FRE", "1.2.1", "2.2.1", "2.3.1", "2.4.1", "3.1", "3.9.1", "11.1", "13.1"}
+_CGE_CATS = {"CGE", "2.2.4", "2.3.4", "2.4.4", "3.4", "3.9.4", "10.1.4", "11.4", "13.4"}
+_PRE_CATS = {"PRE", "2.2.2", "2.3.2", "2.4.2", "3.2", "3.9.2", "11.5", "17.9.2"}
+_YCO_CATS = {"YCO", "2.1", "2.2.3", "2.3.3", "2.4.3", "3.3", "3.9.3", "13.2", "17.9.3", "39"}
+
+def _prep_lat(a):
+    n = (a.get("nombre") or "").lower()
+    return " lata" in n or "conserva" in n or _has_any_exact_cat(a, _LAT_CATS)
+
+def _prep_fre(a):
+    return _has_any_exact_cat(a, _FRE_CATS)
+
+def _prep_cge(a):
+    n = (a.get("nombre") or "").lower()
+    return _has_any_exact_cat(a, _CGE_CATS) or "congelad" in n or "helad" in n
+
+def _prep_pre(a):
+    return _has_any_exact_cat(a, _PRE_CATS)
+
+def _prep_yco(a):
+    return _has_any_exact_cat(a, _YCO_CATS)
+
+def _prep_ahu(a):
+    n = (a.get("nombre") or "").lower()
+    return _has_any_exact_cat(a, {"AHU", "3.7"}) or "ahumad" in n
+
+def _prep_ya(a):
+    return _has_any_exact_cat(a, {"YA", "2.1", "4", "11.5"}) or _prep_ahu(a)
+
+_PREP_TESTS = {
+    "LAT": _prep_lat,
+    "FRE": _prep_fre,
+    "CGE": _prep_cge,
+    "PRE": _prep_pre,
+    "YCO": _prep_yco,
+    "AHU": _prep_ahu,
+    "YA":  _prep_ya,
+    "HAM": lambda a: _has_token(a, "HAM"),
+    "SNA": lambda a: _has_token(a, "SNA"),
+    "SGL": lambda a: _has_token(a, "SGL"),
+    "GEN": lambda a: not a.get("url"),
+    "PRO": lambda a: _has_token(a, "PRO"),
+    "POL": lambda a: (
+        _has_any_exact_cat(a, {"POL", "4", "18.3", "27"}) or
+        any(w in (a.get("nombre") or "").lower() for w in ("polvo", "harina")) or
+        (("crema" in (a.get("nombre") or "").lower()) and ("arroz" in (a.get("nombre") or "").lower()))
+    ),
+    "MIN": lambda a: _has_token(a, "MIN"),
+    "UNI": lambda a: bool(a.get("unidades") or a.get("por_unidad")),
+}
+
+_PREPS_ORDER = ["GEN", "PRO", "FRE", "CGE", "AHU", "LAT", "POL", "PRE", "HAM", "SNA", "MIN", "YCO", "UNI", "YA", "SGL"]
+
 # ==================== FOODS ====================
 
 @router.get("/foods")
@@ -230,13 +295,15 @@ async def search_foods_endpoint(
     Si se pasan p_rest/h_rest/g_rest, ordena por aporte y calcula cantidad sugerida.
     Filtra alimentos que el usuario marcó como 'a evitar'.
     """
+    # When browsing by category (no text query), fetch all — no artificial limit.
+    fetch_limit = 4000 if (category and not q) else limit
     alimentos = await buscar_alimentos_async(
         db=db,
         query=q,
         categoria=category or "",
         tipo_comida=tipo_comida,
         es_vegano=vegano,
-        limit=limit,
+        limit=fetch_limit,
         calcular_efectivos=True,
         tag_filter=""  # tag filtering done below, after computing available_preps
     )
@@ -288,35 +355,25 @@ async def search_foods_endpoint(
 
     alimentos = [a for a in alimentos if not is_avoided(a)]
 
-    def _cat_tokens(alimento) -> set:
-        """All tokens from categorias (list or string) + tags, uppercased."""
-        cats = alimento.get("categorias", "") or ""
-        if isinstance(cats, list):
-            raw = []
-            for c in cats:
-                raw.extend(str(c).replace("|", ",").split(","))
-        else:
-            raw = str(cats).replace("|", ",").split(",")
-        tokens = {t.strip().upper() for t in raw if t.strip()}
-        # also include explicit tags field
-        tags_val = alimento.get("tags", "") or ""
-        if isinstance(tags_val, list):
-            tokens.update(str(t).upper() for t in tags_val if t)
-        else:
-            tokens.update(str(tags_val).upper().split())
-        return tokens
+    # Collect available preparations using Calma-equivalent test functions (before filtering).
+    available_preps = [p for p in _PREPS_ORDER if any(_PREP_TESTS[p](a) for a in alimentos)]
 
-    # Collect which preparation tags exist in this category (before tag-filtering).
-    _KNOWN_PREPS = {"GEN", "FRE", "SNA", "UNI", "YA", "SGL", "CGE", "LAT", "PRE", "MIN", "YCO", "PRO", "POL"}
-    _seen_preps: set = set()
-    for _a in alimentos:
-        _seen_preps.update(_cat_tokens(_a) & _KNOWN_PREPS)
-    available_preps = sorted(_seen_preps)
-
-    # Apply preparation tag filter (after collecting available_preps).
+    # Apply preparation filter using the same Calma-equivalent tests.
     if tag:
-        _tag_upper = tag.upper()
-        alimentos = [a for a in alimentos if _tag_upper in _cat_tokens(a)]
+        tag_upper = tag.upper()
+        test_fn = _PREP_TESTS.get(tag_upper)
+        if test_fn:
+            alimentos = [a for a in alimentos if test_fn(a)]
+        else:
+            # Fallback for unknown tags: exact token match
+            alimentos = [a for a in alimentos if any(
+                t.strip().upper() == tag_upper
+                for t in (str(a.get("categorias","")) + "|" + str(a.get("tags",""))).split("|")
+            )]
+
+    # When browsing by category, show all matching foods. Text searches keep the limit.
+    if q:
+        alimentos = alimentos[:limit]
 
     # Inject per-unit config so frontend can display "2 ud" vs "120g" correctly
     for a in alimentos:
