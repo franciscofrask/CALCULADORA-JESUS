@@ -16,7 +16,7 @@ export const ProgressBar = ({ value, max, color, height = 6, showCheck = false }
                     style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: actualColor }}
                 />
             </div>
-            {showCheck && isOk && value > 0 && <Check className="w-4 h-4 text-green-500 flex-shrink-0" />}
+            {showCheck && <Check className={`w-4 h-4 flex-shrink-0 ${isOk && value > 0 ? 'text-green-500' : 'invisible'}`} />}
         </div>
     );
 };
