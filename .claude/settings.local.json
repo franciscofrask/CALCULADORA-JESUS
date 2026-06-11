@@ -19,7 +19,29 @@
       "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); python --version 2>&1)",
       "PowerShell(pip install *)",
       "PowerShell(yarn install *)",
-      "Bash(C:\\\\Users\\\\Francisco Frascona\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe *)"
+      "Bash(C:\\\\Users\\\\Francisco Frascona\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe *)",
+      "Bash(python -c \"import json; foods = json.load\\(open\\('alimentos_calma.json'\\)\\); caldos = [f for f in foods if 'caldo' in f.get\\('nombre',''\\).lower\\(\\)]; [print\\(f['nombre'], '|', f.get\\('categorias',''\\), '|', f.get\\('hidratos',''\\), 'H/100g'\\) for f in caldos[:10]]\")",
+      "Bash(python -c ' *)",
+      "Bash(python)",
+      "WebFetch(domain:calma.jesusgallegopt.com)",
+      "Bash(curl -s \"https://calma.jesusgallegopt.com\")",
+      "Bash(curl -s \"https://calma.jesusgallegopt.com/asset-manifest.json\")",
+      "Bash(curl -s \"https://calma.jesusgallegopt.com/assets/index.fd32e092.js\")",
+      "Bash(curl -s \"https://calma.jesusgallegopt.com/assets/utils_.ac9d7b60.js\")",
+      "Bash(curl -s \"https://calma.jesusgallegopt.com/assets/group-home-utils.e5bc7415.js\")",
+      "Bash(curl -s \"https://europe-west1-jesusgallegopt.cloudfunctions.net/\")",
+      "Bash(curl -s \"https://calma.jesusgallegopt.com/assets/firebase-alimentos.js\")",
+      "Bash(curl -s \"https://firestore.googleapis.com/v1/projects/jesusgallegopt/databases/calma-alimentos/documents/alimentos_aprobados?pageSize=5&key=AIzaSyCDeFM3SpZBxrAFQzhnZkm5LtnREjg_KTs\")",
+      "Bash(curl *)",
+      "Read(//tmp/**)",
+      "Bash(grep -o '..\\\\{0,30\\\\}startsWith.\\\\{0,60\\\\}' /tmp/calma_utils.js)",
+      "Bash(mkdir -p /c/tmp)",
+      "Bash(curl -s --compressed \"https://calma.jesusgallegopt.com/assets/group-home-utils.e5bc7415.js\")",
+      "Read(//c/tmp/**)",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e ' *)",
+      "Bash(node *)",
+      "Bash(cmd //c echo %TEMP%)"
     ]
   }
 }

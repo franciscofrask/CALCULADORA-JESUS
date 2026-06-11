@@ -70,14 +70,21 @@ def calcular_macros_efectivos(
     
     # Paso 2: Si hay categoria secundaria, aplicar regla de doble categoria
     # (la mas permisiva: si CUALQUIERA dice que cuenta -> cuenta)
+    # EXCEPCION: categorias con P/G absolutamente prohibidas (NUNCA) no se sobreescriben
+    _P_ABSOLUTE_NEVER = ("11", "13", "14", "46")
+    _G_ABSOLUTE_NEVER = ("11", "14")
     if categoria_secundaria:
         p2, h2, g2, cal2 = _aplicar_reglas_categoria(
             proteina_100g, hidratos_100g, grasa_100g,
             categoria_secundaria, cantidad_g, acumulado_cereales_panes, acumulado_frutos_secos
         )
-        p_cuenta = p_cuenta or p2
+        p_locked = any(categoria.startswith(c) for c in _P_ABSOLUTE_NEVER)
+        g_locked = any(categoria.startswith(c) for c in _G_ABSOLUTE_NEVER)
+        if not p_locked:
+            p_cuenta = p_cuenta or p2
         h_cuenta = h_cuenta or h2
-        g_cuenta = g_cuenta or g2
+        if not g_locked:
+            g_cuenta = g_cuenta or g2
         # Usar la calibracion mas alta
         calibracion_p = max(calibracion_p, cal2)
     
@@ -626,10 +633,10 @@ def _aplicar_reglas_categoria(
     
     # =====================================================
     # CAT 48 - Sopas y caldos
-    # Cualquier macro >= 2g cuenta
+    # Cualquier macro > 0 cuenta (caldos son muy diluidos, cualquier aporte es valido)
     # =====================================================
     if cat == "48" or cat.startswith("48."):
-        return (p100 >= 2.0, h100 >= 2.0, g100 >= 2.0, 1.0)
+        return (p100 > 0, h100 > 0, g100 > 0, 1.0)
     
     # =====================================================
     # CAT 52 - Mundo vegano

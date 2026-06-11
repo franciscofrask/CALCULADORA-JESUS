@@ -390,7 +390,7 @@ const BuildMealModal = ({
             if (selectedPreparations.length > 0) params.set('tag', selectedPreparations.join(','));
             api(`/api/calculator/search?${params}`).then(result => {
                 if (!cancelled) {
-                    setCategoryFoods(sortByFit(result.alimentos || []));
+                    setCategoryFoods(result.alimentos || []);
                     setAvailablePreps(result.available_preps || []);
                 }
             }).catch(() => {}).finally(() => { if (!cancelled) setLoadingFoods(false); });
@@ -463,6 +463,12 @@ const BuildMealModal = ({
         return params;
     };
 
+
+    const handleCategoriesChange = (ids) => {
+        setSelectedCategories(allCategories.filter(c => ids.includes(c.id)));
+        setCategoryFoods([]);
+        setSelectedPreparations([]);
+    };
 
     const handleCategoryClick = async (category) => {
         setSelectedCategory(category);

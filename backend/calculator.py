@@ -261,7 +261,7 @@ def get_food_config(alimento: dict) -> dict:
     # REGLAS TRANSVERSALES (por nombre, prioridad)
     # ===========================================
     
-    if "hamburguesa" in nombre or "carne picada" in nombre:
+    if "hamburguesa" in nombre:
         peso = int(racion) if racion > 0 else 100
         return {"minimo": peso//2, "incremento": peso//2, "defecto": peso, "por_unidad": True, "permite_media": True, "peso_unidad": peso}
     
@@ -473,8 +473,9 @@ def ajustar_por_unidades(cantidad_g: float, config: dict) -> float:
         return cantidad_g
     
     if permite_media:
-        # Redondear a la media unidad más cercana hacia ABAJO (no pasarse)
-        medias = int(cantidad_g / (peso_unidad / 2))
+        # Redondear a la media unidad más cercana (igual que calma: round to nearest 0.5)
+        # El guard de sobrepasar macros en calcular_cantidad_automatica filtra si se pasa
+        medias = math.floor(cantidad_g / (peso_unidad / 2) + 0.5)
         cantidad_ajustada = medias * (peso_unidad / 2)
     else:
         # Redondear a la unidad entera más cercana hacia ABAJO
