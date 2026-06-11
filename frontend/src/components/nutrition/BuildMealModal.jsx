@@ -378,12 +378,12 @@ const BuildMealModal = ({
             if (target.G > 0) params.set('g_rest', remaining.G);
             if (selectedPreparation) params.set('tag', selectedPreparation);
             api(`/api/calculator/search?${params}`).then(result => {
-                if (!cancelled) setCategoryFoods(sortByFit(result.alimentos || []));
+                if (!cancelled) setCategoryFoods(result.alimentos || []);
             }).catch(() => {});
         } else if (isSearching && searchQuery.length >= 2) {
             const params = new URLSearchParams({ q: searchQuery, limit: '50', ...getMacrosParams() });
             api(`/api/calculator/search?${params}`).then(result => {
-                if (!cancelled) setSearchResults(sortByFit(result.alimentos || []));
+                if (!cancelled) setSearchResults(result.alimentos || []);
             }).catch(() => {});
         }
         return () => { cancelled = true; };
@@ -448,23 +448,6 @@ const BuildMealModal = ({
         return params;
     };
 
-    const sortByFit = (foods) => {
-        if (!foods.length) return foods;
-        const pFilled = target.P > 0 ? served.P / target.P : 1;
-        const hFilled = target.H > 0 ? served.H / target.H : 1;
-        const gFilled = target.G > 0 ? served.G / target.G : 1;
-        const primary = pFilled <= hFilled && pFilled <= gFilled ? 'P'
-            : hFilled <= pFilled && hFilled <= gFilled ? 'H' : 'G';
-        const macroKey = { P: 'proteinas', H: 'hidratos', G: 'grasas' }[primary];
-        return [...foods].sort((a, b) => {
-            const getContrib = (food) => {
-                if (food._macros_sugeridos) return food._macros_sugeridos[primary] || 0;
-                const qty = food._cantidad_sugerida || food.racion || 100;
-                return (food[macroKey] || 0) * qty / 100;
-            };
-            return getContrib(b) - getContrib(a);
-        });
-    };
 
     const handleCategoryClick = async (category) => {
         setSelectedCategory(category);
@@ -485,7 +468,7 @@ const BuildMealModal = ({
                     ...getMacrosParams()
                 });
                 const result = await api(`/api/calculator/search?${params}`);
-                setCategoryFoods(sortByFit(result.alimentos || []));
+                setCategoryFoods(result.alimentos || []);
                 setAvailablePreps(result.available_preps || []);
             }
         } catch (err) {
@@ -522,7 +505,7 @@ const BuildMealModal = ({
                 ...getMacrosParams()
             });
             const result = await api(`/api/calculator/search?${params}`);
-            setSearchResults(sortByFit(result.alimentos || []));
+            setSearchResults(result.alimentos || []);
         } catch (err) {
             console.error('Error buscando:', err);
         } finally {
@@ -863,11 +846,19 @@ const BuildMealModal = ({
                                                                 <div className="text-sm text-black truncate">{food.nombre}</div>
                                                                 <div className="text-xs text-gray-500">
                                                                     {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud` : `${food._cantidad_sugerida}g`} → ` : ''}
-                                                                    {paso === 2
-                                                                        ? `H=${food._macros_sugeridos?.H ?? Math.round(food.hidratos)}g`
-                                                                        : paso === 3
-                                                                        ? `G=${food._macros_sugeridos?.G ?? Math.round(food.grasas)}g`
-                                                                        : `P=${food._macros_sugeridos?.P ?? Math.round(food.proteinas)}g`}
+                                                                    {(() => {
+                                                                        const ms = food._macros_sugeridos;
+                                                                        const qty = food._cantidad_sugerida || food.racion || 100;
+                                                                        const fmt = v => { const r = Math.round(v * 10) / 10; return r % 1 === 0 ? String(r) : r.toFixed(1); };
+                                                                        const p = ms?.P ?? (food.proteinas || 0) * qty / 100;
+                                                                        const h = ms?.H ?? (food.hidratos || 0) * qty / 100;
+                                                                        const g = ms?.G ?? (food.grasas || 0) * qty / 100;
+                                                                        return [
+                                                                            p > 0 ? `P=${fmt(p)}g` : null,
+                                                                            h > 0 ? `H=${fmt(h)}g` : null,
+                                                                            g > 0 ? `G=${fmt(g)}g` : null,
+                                                                        ].filter(Boolean).join(' ');
+                                                                    })()}
                                                                 </div>
                                                             </div>
                                                             <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />

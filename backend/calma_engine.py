@@ -133,28 +133,28 @@ def _aplicar_reglas_categoria(
     
     # =====================================================
     # CAT 1 - Huevos y derivados (1.1, 1.2, 1.2.1, 1.2.2)
-    # P: SIEMPRE | H: si >= 2g | G: si >= 3g
+    # P: SIEMPRE | H: si > 2g (Calma: H=0 si H<=2) | G: si >= 3g (Calma: G=0 si G<3)
     # =====================================================
     if cat == "1" or cat.startswith("1."):
-        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
-    
+        return (True, h100 > 2.0, g100 >= 3.0, 1.0)
+
     # =====================================================
     # CAT 2 - Carnes (todas las subcategorias)
-    # P: SIEMPRE | H: si >= 2g | G: si >= 3g
+    # P: SIEMPRE | H: si > 2g (Calma: H=0 si H<=2) | G: si >= 3g (Calma: G=0 si G<3)
     # =====================================================
     if cat == "2" or cat.startswith("2."):
-        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
-    
+        return (True, h100 > 2.0, g100 >= 3.0, 1.0)
+
     # =====================================================
     # CAT 3 - Pescados y mariscos
     # =====================================================
-    # CAT 3.9 - Mariscos: H si > 3g (ESTRICTO, no >=)
+    # CAT 3.9 - Mariscos: H si > 3g | G si >= 3g
     if _cat_matches(cat, "3.9"):
         return (True, h100 > 3.0, g100 >= 3.0, 1.0)
-    
-    # CAT 3 - Pescados generales
+
+    # CAT 3 - Pescados generales: H si > 2g | G si >= 3g
     if cat == "3" or cat.startswith("3."):
-        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
+        return (True, h100 > 2.0, g100 >= 3.0, 1.0)
     
     # =====================================================
     # CAT 4 - Proteina en polvo
@@ -165,10 +165,10 @@ def _aplicar_reglas_categoria(
     
     # =====================================================
     # CAT 5 - Lacteos y derivados (ALIMENTO MIXTO)
-    # P: SIEMPRE | H: SIEMPRE | G: si > 1g
+    # P: SIEMPRE | H: SIEMPRE | G: si >= 1g (Calma: G=0 si G<1)
     # =====================================================
     if cat == "5" or cat.startswith("5."):
-        return (True, True, g100 > 1.0, 1.0)
+        return (True, True, g100 >= 1.0, 1.0)
     
     # =====================================================
     # CAT 6 - Soja y derivados
@@ -591,10 +591,10 @@ def _aplicar_reglas_categoria(
     
     # =====================================================
     # CAT 40 - Casqueria
-    # Como carnes: P siempre, H si >= 2g, G si >= 3g
+    # Como carnes: P siempre, H si > 2g, G si >= 3g
     # =====================================================
     if cat == "40" or cat.startswith("40."):
-        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
+        return (True, h100 > 2.0, g100 >= 3.0, 1.0)
     
     # =====================================================
     # CAT 41 - Aminoacidos para entrenar
@@ -612,10 +612,10 @@ def _aplicar_reglas_categoria(
     
     # =====================================================
     # CAT 45 - Otras carnes
-    # Funciona como carnes (cat 2): P siempre, H si >=2g, G si >=3g
+    # Funciona como carnes (cat 2): P siempre, H si > 2g, G si >= 3g
     # =====================================================
     if cat == "45" or cat.startswith("45."):
-        return (True, h100 >= 2.0, g100 >= 3.0, 1.0)
+        return (True, h100 > 2.0, g100 >= 3.0, 1.0)
     
     # =====================================================
     # CAT 46 - Cremas y tortas de arroz
