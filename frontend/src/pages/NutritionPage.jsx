@@ -55,7 +55,7 @@ const PROTEIN_CATEGORIES = [
     { id: 'lacteos', label: 'Lácteos', emoji: '🧀', prefixes: ['5'] },
     { id: 'proteina_polvo', label: 'Proteína', emoji: '🥤', prefixes: ['4'] },
     { id: 'legumbres', label: 'Legumbres', emoji: '🫘', prefixes: ['10'] },
-    { id: 'vegetal', label: 'Vegetal', emoji: '🌱', prefixes: ['28', '6'] },
+    { id: 'vegetal', label: 'Proteína vegetal', emoji: '🌱', prefixes: ['28', '6'] },
 ];
 
 // Categories for Build Meal Modal - Step 2 (Acompañamientos)

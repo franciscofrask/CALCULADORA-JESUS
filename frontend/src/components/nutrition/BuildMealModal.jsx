@@ -37,12 +37,12 @@ const PROTEIN_CATEGORIES = [
     { id: 'aves',           value: 'aves',           label: 'Aves',             emoji: '🍗', icon: faDove,          prefixes: ['2.2'] },
     { id: 'vacuno',         value: 'vacuno',         label: 'Vacuno',           emoji: '🥩', icon: faCow,           prefixes: ['2.3'] },
     { id: 'cerdo',          value: 'cerdo',          label: 'Cerdo',            emoji: '🐷', icon: faPiggyBank,     prefixes: ['2.4'] },
-    { id: 'otras_carnes',   value: 'otras_carnes',   label: 'Otras carnes',     emoji: '🍖', icon: faDrumstickBite, prefixes: ['2.5', '2.6', '2.7', '40', '45'] },
+    { id: 'otras_carnes',   value: 'otras_carnes',   label: 'Otras carnes',     emoji: '🍖', icon: faDrumstickBite, prefixes: ['2.6', '2.7', '45'] },
     { id: 'pescados',       value: 'pescados',       label: 'Pescados',         emoji: '🐟', icon: faFish,          prefixes: ['3'] },
     { id: 'lacteos',        value: 'lacteos',        label: 'Lácteos',          emoji: '🧀', icon: faCheese,        prefixes: ['5'] },
     { id: 'proteina_polvo', value: 'proteina_polvo', label: 'Proteína',         emoji: '🥤', icon: faJar,           prefixes: ['4'] },
     { id: 'legumbres',      value: 'legumbres',      label: 'Legumbres',        emoji: '🫘', icon: faSeedling,      prefixes: ['10'] },
-    { id: 'vegetal',        value: 'vegetal',        label: 'Vegetal',          emoji: '🌱', icon: faJarWheat,      prefixes: ['28', '6'] },
+    { id: 'vegetal',        value: 'vegetal',        label: 'Proteína vegetal', emoji: '🌱', icon: faJarWheat,      prefixes: ['28', '6'] },
 ];
 
 // Categories - Step 2 (Acompañamientos)
@@ -381,7 +381,7 @@ const BuildMealModal = ({
             }).catch(() => {}).finally(() => { if (!cancelled) setLoadingFoods(false); });
         } else if (selectedCategories.length > 0) {
             setLoadingFoods(true);
-            const categoryParam = selectedCategories.map(c => c.prefixes?.[0]).filter(Boolean).join(',');
+            const categoryParam = selectedCategories.flatMap(c => c.prefixes || []).filter(Boolean).join(',');
             const params = new URLSearchParams({ q: '', category: categoryParam, limit: '100' });
             const tolerance = paso === 3 ? 4 : 0;
             if (target.P > 0) params.set('p_rest', Math.max(0, remaining.P + tolerance));
@@ -428,7 +428,7 @@ const BuildMealModal = ({
         Promise.all(checkableCats.map(async cat => {
             try {
                 const limit = isGrasasPaso ? '10' : '1';
-                const params = new URLSearchParams({ q: '', category: cat.prefixes[0], limit, ...macroParams });
+                const params = new URLSearchParams({ q: '', category: cat.prefixes.join(','), limit, ...macroParams });
                 const result = await api(`/api/calculator/search?${params}`);
                 const foods = result.alimentos || [];
                 if (!isGrasasPaso) return { id: cat.id, empty: foods.length === 0 };

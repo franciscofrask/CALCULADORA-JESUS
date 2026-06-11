@@ -107,7 +107,9 @@ def es_media_unidad(alimento: dict) -> bool:
         return True
     
     # Excepciones por nombre
-    if 'hamburguesa' in nombre or 'bagel' in nombre:
+    if 'hamburguesa' in nombre:
+        return alimento.get("unidades") == True or alimento.get("por_unidad") == True
+    if 'bagel' in nombre:
         return True
     if 'brazo' in nombre and 'my fitness meals' in nombre:
         return True
@@ -242,32 +244,30 @@ def get_food_config(alimento: dict) -> dict:
         return any(c.strip().startswith(prefix) for c in cats)
     
     # ===========================================
+    # REGLAS TRANSVERSALES (por nombre, prioridad sobre campo BD)
+    # ===========================================
+
+    # ===========================================
     # REGLA PRIORITARIA: Campo 'unidades' de la BD
     # ===========================================
-    # Si el alimento tiene unidades=True en la BD, es por unidad
-    # y la ración indica el peso de 1 unidad
-    if alimento.get("unidades") == True or alimento.get("por_unidad") == True:
+    alimento_unidades = alimento.get("unidades") == True or alimento.get("por_unidad") == True
+
+    # Hamburguesas por unidad con medias (0.5, 1, 1.5...) — SOLO si BD marca unidades=True
+    # Hamburguesas sin unidades=True se tratan por peso (e.g. "Hamburguesa de cerdo" = 93g)
+    if "hamburguesa" in nombre and alimento_unidades:
+        peso = int(racion) if racion > 0 else 100
+        return {"minimo": peso//2, "incremento": peso//2, "defecto": peso, "por_unidad": True, "permite_media": True, "peso_unidad": peso}
+
+    if alimento_unidades:
         peso = int(racion) if racion > 0 else 30
         return {
-            "minimo": peso,           # 1 unidad mínimo
-            "incremento": peso,       # de 1 en 1 unidad
-            "defecto": peso * 2,      # 2 unidades por defecto
+            "minimo": peso,
+            "incremento": peso,
+            "defecto": peso * 2,
             "por_unidad": True,
             "permite_media": False,
             "peso_unidad": peso
         }
-    
-    # ===========================================
-    # REGLAS TRANSVERSALES (por nombre, prioridad)
-    # ===========================================
-    
-    if "hamburguesa" in nombre:
-        peso = int(racion) if racion > 0 else 100
-        return {"minimo": peso//2, "incremento": peso//2, "defecto": peso, "por_unidad": True, "permite_media": True, "peso_unidad": peso}
-    
-    if ("lata" in nombre or "conserva" in nombre) and racion < 200:
-        peso = int(racion) if racion > 0 else 80
-        return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
     
     if "arroz" in nombre and "minuto" in nombre:
         peso = int(racion) if racion > 0 else 125
@@ -289,15 +289,16 @@ def get_food_config(alimento: dict) -> dict:
     # Cat 2.1 — Embutidos/Fiambres
     if has_cat('2.1'):
         return {"minimo": 25, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
-    
+
+    # Cat 2.4.2 (bacon, panceta), 2.4.3 (torreznos) — alto % grasa, caben < 50g con G_rest=15
+    if has_cat('2.4.2') or has_cat('2.4.3'):
+        return {"minimo": 25, "incremento": 1, "defecto": 50, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
+
     # Cat 2.2, 2.3, 2.4, 2.6, 2.7 — Aves, Vacuno, Cerdo, otras carnes
     if has_cat('2.'):
         return {"minimo": 50, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
-    # Cat 3.8 — Conservas de pescado (por unidad/lata)
-    if has_cat('3.8'):
-        peso = int(racion) if 0 < racion < 200 else 80
-        return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
+
     
     # Cat 3 — Pescado y marisco (por peso)
     # IMPORTANTE: usar '3.' para no matchear con 38.x (otras categorías)
@@ -313,11 +314,10 @@ def get_food_config(alimento: dict) -> dict:
     if has_cat('5.1'):
         return {"minimo": 20, "incremento": 1, "defecto": 200, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
-    # Cat 5.2 — Yogures (por unidad si racion < 200)
+    # Cat 5.2 — Yogures/Kéfir (por peso)
+    # unidades=True items ya son capturados por el bloque alimento_unidades (línea 261)
+    # Los que llegan aquí tienen unidades=False → siempre por peso
     if has_cat('5.2'):
-        if racion < 200:
-            peso = int(racion) if racion > 0 else 125
-            return {"minimo": peso, "incremento": peso, "defecto": peso, "por_unidad": True, "permite_media": False, "peso_unidad": peso}
         return {"minimo": 50, "incremento": 1, "defecto": 150, "por_unidad": False, "permite_media": False, "peso_unidad": 0}
     
     # Cat 5.3, 5.4 — Quesos, Batidos proteicos
@@ -473,9 +473,8 @@ def ajustar_por_unidades(cantidad_g: float, config: dict) -> float:
         return cantidad_g
     
     if permite_media:
-        # Redondear a la media unidad más cercana (igual que calma: round to nearest 0.5)
-        # El guard de sobrepasar macros en calcular_cantidad_automatica filtra si se pasa
-        medias = math.floor(cantidad_g / (peso_unidad / 2) + 0.5)
+        # Redondear hacia ABAJO a la media unidad más cercana — nunca sobrepasar el macro objetivo
+        medias = math.floor(cantidad_g / (peso_unidad / 2))
         cantidad_ajustada = medias * (peso_unidad / 2)
     else:
         # Redondear a la unidad entera más cercana hacia ABAJO
@@ -600,10 +599,30 @@ def calcular_cantidad_automatica(
     # Obtener config del alimento
     config = get_food_config(alimento)
     
-    # BUG 2 FIX: Si es por unidad, ajustar a unidades enteras (o medias)
+    # Para items por unidad: calcular desde macros POR UNIDAD para evitar errores de punto flotante
+    # que ocurren al escalar desde 100g (p.ej. H_100=5.5556 → 5.56 → opt=179.86 → floor=9 en vez de 10)
     if config.get('por_unidad', False):
-        cantidad = ajustar_por_unidades(cantidad, config)
-        # If no units fit without overshooting, hide this food
+        peso_ud = config.get('peso_unidad', 0)
+        permite_media = config.get('permite_media', False)
+        if peso_ud > 0:
+            ef_unit = calcular_macros_efectivos(P_100, H_100, G_100, cat, peso_ud, cat_sec, es_vegano)
+            p_ud = ef_unit['proteina_efectiva']
+            h_ud = ef_unit['hidratos_efectivos']
+            g_ud = ef_unit['grasa_efectiva']
+            max_n_list = []
+            if p_ud > 1e-9 and p_rest > 0: max_n_list.append(p_rest / p_ud)
+            if h_ud > 1e-9 and h_rest > 0: max_n_list.append(h_rest / h_ud)
+            if g_ud > 1e-9 and g_rest > 0: max_n_list.append(g_rest / g_ud)
+            if max_n_list:
+                if permite_media:
+                    n = math.floor(min(max_n_list) * 2) / 2
+                else:
+                    n = math.floor(min(max_n_list))
+                cantidad = n * peso_ud
+            else:
+                cantidad = peso_ud  # sin macros efectivos → 1 unidad por defecto
+        else:
+            cantidad = ajustar_por_unidades(cantidad, config)
         if cantidad == 0:
             return {
                 "cantidad_g": 0,

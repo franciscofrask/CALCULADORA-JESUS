@@ -26,10 +26,22 @@ from macro_distribution import distribuir_macros as dist_macros
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
 # ── Preparation filter helpers (mirrors Calma group-home-utils.js) ──────────
+#
+# Calma's $ function: new RegExp(`^((${code})[.]\d|(${code})$)`).test(token)
+# → matches token if it EQUALS code exactly OR starts with "code.digit"
+# → effectively a prefix match: "4" matches "4", "4.1", "4.1.1", "4.2", etc.
 
 def _has_any_exact_cat(alimento, cat_codes: set) -> bool:
+    """Mirror Calma's o(e, list) + $ function: prefix-aware category matching.
+    'code' matches a token if token == code OR token starts with code+'.'
+    """
     cats = str(alimento.get("categorias", "") or "")
-    return any(t.strip() in cat_codes for t in cats.split("|"))
+    for t in cats.split("|"):
+        t = t.strip()
+        for code in cat_codes:
+            if t == code or t.startswith(code + "."):
+                return True
+    return False
 
 def _has_token(alimento, tag: str) -> bool:
     tag_up = tag.upper()
@@ -70,7 +82,9 @@ def _prep_ahu(a):
     return _has_any_exact_cat(a, {"AHU", "3.7"}) or "ahumad" in n
 
 def _prep_ya(a):
-    return _has_any_exact_cat(a, {"2.1", "11.5"}) or _has_token(a, "YA") or _prep_ahu(a)
+    # Original: o(e, ["YA", "2.1", "4", "11.5"]) || j.test(e)
+    # "4" prefix matches all protein powders (4, 4.1, 4.1.1, etc.) → YA
+    return _has_any_exact_cat(a, {"YA", "2.1", "4", "11.5"}) or _prep_ahu(a)
 
 _PREP_TESTS = {
     "LAT": _prep_lat,
@@ -85,8 +99,9 @@ _PREP_TESTS = {
     "SGL": lambda a: _has_token(a, "SGL"),
     "GEN": lambda a: not a.get("url"),
     "PRO": lambda a: _has_token(a, "PRO"),
+    # Original: P(nombre,["polvo","harina"]) || o(e,["POL","4","7.1.2.6","16.5","18.3","27"]) || P(nombre,["crema","arroz"],AND)
     "POL": lambda a: (
-        _has_any_exact_cat(a, {"POL", "4", "18.3", "27"}) or
+        _has_any_exact_cat(a, {"POL", "4", "7.1.2.6", "16.5", "18.3", "27"}) or
         any(w in (a.get("nombre") or "").lower() for w in ("polvo", "harina")) or
         (("crema" in (a.get("nombre") or "").lower()) and ("arroz" in (a.get("nombre") or "").lower()))
     ),
