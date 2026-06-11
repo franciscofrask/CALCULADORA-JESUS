@@ -394,8 +394,6 @@ const BuildMealModal = ({
                     setAvailablePreps(result.available_preps || []);
                 }
             }).catch(() => {}).finally(() => { if (!cancelled) setLoadingFoods(false); });
-                if (!cancelled) setCategoryFoods(result.alimentos || []);
-            }).catch(() => {});
         } else if (isSearching && searchQuery.length >= 2) {
             const params = new URLSearchParams({ q: searchQuery, limit: '50', ...getMacrosParams() });
             api(`/api/calculator/search?${params}`).then(result => {
