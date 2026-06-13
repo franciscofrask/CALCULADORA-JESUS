@@ -363,8 +363,11 @@ async def search_foods_endpoint(
         base_order = {fid: i for i, fid in enumerate(top_int)}
         alimentos.sort(key=lambda a: base_order.get(a.get("id"), 9999))
     else:
-        # When browsing by category (no text query), fetch all — no artificial limit.
-        fetch_limit = 4000 if (category and not q) else limit
+        # Fetch ALL matches for both category browse AND text search — Calma ranks the full
+        # filtered set by diferencia and shows it. Capping to `limit` BEFORE the engine sort
+        # truncated in DB order, dropping the best-fitting foods (e.g. searching "arroz" lost
+        # Pollo tikka / Crema de lentejas because they sat past the first 50 DB matches).
+        fetch_limit = limit if (not category and not q) else 4000
         alimentos = await buscar_alimentos_async(
             db=db,
             query=q,
@@ -442,9 +445,8 @@ async def search_foods_endpoint(
             return _has_token(alimento, tag_upper)
         alimentos = [a for a in alimentos if any(matches_tag(a, t) for t in tag_list)]
 
-    # When browsing by category, show all matching foods. Text searches keep the limit.
-    if q:
-        alimentos = alimentos[:limit]
+    # No early truncation: the diferencia sort (below) must see the FULL filtered set, then
+    # we cap AFTER sorting so the top results are the best-fitting, like Calma.
 
     # Inject per-unit config so frontend can display "2 ud" vs "120g" correctly
     for a in alimentos:
@@ -553,6 +555,11 @@ async def search_foods_endpoint(
             -food_freq.get(str(f.get("id", "")), 0),
             f.get("nombre", "")
         ))
+
+    # Text search: cap AFTER the diferencia sort so the top (best-fitting) results survive,
+    # like Calma's full-list ranking. 200 comfortably covers any real query (e.g. "arroz" ~120).
+    if q:
+        alimentos = alimentos[:max(limit, 200)]
 
     return {"alimentos": alimentos, "total": len(alimentos), "available_preps": available_preps}
 

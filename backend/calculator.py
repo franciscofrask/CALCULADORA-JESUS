@@ -1049,13 +1049,20 @@ async def buscar_alimentos(
     cursor = db.foods.find(filtro, {"_id": 0}).limit(search_limit)
     alimentos = await cursor.to_list(length=search_limit)
     
-    # Filtrar por texto con normalización de acentos
+    # Filtrar por texto — Calma `alimentosFiltradosConCategoriasYNombre`:
+    #   filter(s => Ye(s.nombre, nombre.split(" "), true))  con Ye = P/E:
+    #   cada PALABRA de la query debe ser substring (normalizado, sin acentos, case-insens)
+    #   del nombre, en cualquier orden/posición (no la query completa contigua).
+    #   Ej "arroz integral" matchea "Arroz blanco integral". El orden NO se re-ordena por
+    #   relevancia: se preserva el orden del engine (diferencia), igual que Calma — su
+    #   buscador de Dieta no usa el scoring `Ie` (eso es del catálogo ListadoAlimentos).
     if query and len(query) >= 2:
-        query_normalized = normalize_text(query)
-        alimentos = [
-            a for a in alimentos
-            if query_normalized in normalize_text(a.get("nombre", ""))
-        ]
+        tokens = [normalize_text(t) for t in query.split(" ") if t.strip()]
+        if tokens:
+            alimentos = [
+                a for a in alimentos
+                if all(tok in normalize_text(a.get("nombre", "")) for tok in tokens)
+            ]
     
     # Filtrar por tag (ej: "GEN" para genéricos)
     if tag_filter:
