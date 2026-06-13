@@ -45,16 +45,13 @@ def normalize_text(text: str) -> str:
 # =========================================================
 
 # Categorías permitidas en INTRA-ENTRENO (solo estas)
-CATS_INTRA = ['41', '18.1.1', '18.1.3', '18.1.2']
+# Original: categoriasIntraentreno: ["18", "41"] — todo lo de 18 (18.1.x isotónicas, 18.3 carbos)
+CATS_INTRA = ['41', '18']
 
 # Categorías permitidas en POST-ENTRENO (solo estas)
-CATS_POST = [
-    '4.1.1', '4.1.2', '4.1', '4.2', '5.4', '5.2.3', '5.2.2', '5.1',
-    '4.3', '27', '21.3', '7.1.1', '7.1.2.1',
-    '18.3', '11.5', '11.2.1', '11.2.2', '11.1', '11.4', '11.2.1',
-    '11.2.2', '11.6', '11.7', '21.2', '7.3.1',
-    '8', '24', '19.1', '18.1', '18.2', '37', '16.5', '16.1'
-]
+# Original categoriasPostentreno: ["4","5","46","7","8","11","27","24","19","37","36","16"]
+# + prioritarias.postentreno includes 18.1/18.2/18.3 for auto-suggestion
+CATS_POST = ['4', '5', '46', '7', '8', '11', '27', '24', '18', '19', '37', '36', '16']
 
 # Categorías para CUADRAR GRASAS AL FINAL
 CATS_CUADRAR_GRASAS = ['17.1.1', '17.1', '42']
@@ -835,10 +832,12 @@ def filtrar_por_tipo_comida(alimentos: list, tipo_comida: str) -> list:
     
     resultado = []
     for alimento in alimentos:
-        cat = get_categoria_principal(alimento)
-        if cat_in_list(cat, cats_permitidas):
+        # Check ALL category tokens (mirrors original's d(e,code) on e.categorias)
+        # so "21.2 | 46" matches via "46", and "18.3 | 37" matches via "37"
+        cats = get_categorias(alimento)
+        if any(cat_in_list(c, cats_permitidas) for c in cats):
             resultado.append(alimento)
-    
+
     return resultado
 
 

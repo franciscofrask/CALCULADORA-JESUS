@@ -40,9 +40,9 @@ const PROTEIN_CATEGORIES = [
     { id: 'otras_carnes',   value: 'otras_carnes',   label: 'Otras carnes',     emoji: '🍖', icon: faDrumstickBite, prefixes: ['2.6', '2.7', '45'] },
     { id: 'pescados',       value: 'pescados',       label: 'Pescados',         emoji: '🐟', icon: faFish,          prefixes: ['3'] },
     { id: 'lacteos',        value: 'lacteos',        label: 'Lácteos',          emoji: '🧀', icon: faCheese,        prefixes: ['5'] },
-    { id: 'proteina_polvo', value: 'proteina_polvo', label: 'Proteína',         emoji: '🥤', icon: faJar,           prefixes: ['4'] },
-    { id: 'legumbres',      value: 'legumbres',      label: 'Legumbres',        emoji: '🫘', icon: faSeedling,      prefixes: ['10'] },
+    { id: 'proteina_polvo', value: 'proteina_polvo', label: 'Proteína',         emoji: '🥤', icon: faJar,           prefixes: ['30'] },
     { id: 'vegetal',        value: 'vegetal',        label: 'Proteína vegetal', emoji: '🌱', icon: faJarWheat,      prefixes: ['28', '6'] },
+    { id: 'legumbres',      value: 'legumbres',      label: 'Legumbres',        emoji: '🫘', icon: faSeedling,      prefixes: ['10'] },
 ];
 
 // Categories - Step 2 (Acompañamientos)
@@ -58,9 +58,9 @@ const SIDE_CATEGORIES = [
     { id: 'lacteos',     value: 'lacteos',     label: 'Lácteos',      emoji: '🧀', icon: faCheese,        prefixes: ['5'] },
     { id: 'bebidas',     value: 'bebidas',     label: 'Bebidas',      emoji: '🥤', icon: faBolt,          prefixes: ['19', '24'] },
     { id: 'comida_prep', value: 'comida_prep', label: 'Comida prep.', emoji: '🍕', icon: faPizzaSlice,    prefixes: ['32', '39', '49', '50', '51', '53'] },
-    { id: 'dulces',      value: 'dulces',      label: 'Dulces',       emoji: '🍫', icon: faCookie,        prefixes: ['31', '34', '35', '36', '37', '43', '44', '47'] },
+    { id: 'dulces',      value: 'dulces',      label: 'Dulces',       emoji: '🍫', icon: faCookie,        prefixes: ['29', '30', '31', '34', '35', '36', '37', '43', '44', '47'] },
     { id: 'salsas',      value: 'salsas',      label: 'Salsas',       emoji: '🥫', icon: faPepperHot,     prefixes: ['16'] },
-    { id: 'grasas',      value: 'grasas',      label: 'Grasas',       emoji: '🫒', icon: faBottleDroplet, prefixes: ['17', '42'] },
+    { id: 'grasas',      value: 'grasas',      label: 'Grasas',       emoji: '🫒', icon: faBottleDroplet, prefixes: ['17'] },
     { id: 'sopas',       value: 'sopas',       label: 'Sopas',        emoji: '🍲', icon: faUtensils,      prefixes: ['48'] },
 ];
 
@@ -72,44 +72,47 @@ const FAT_CATEGORIES = [
     { id: 'huevos',        value: 'huevos',        label: 'Huevos',                  icon: faEgg,           prefixes: ['1'] },
 ];
 
-// INTRA categories
+// INTRA categories — Calma categoriasIntraentreno: ["18","41"] (chips hidden, pre-active)
 const INTRA_CATEGORIES = [
+    { id: 'isotonicas',  value: 'isotonicas',  label: 'Isotónicas',  emoji: '💧', icon: faBottleWater, prefixes: ['18'] },
     { id: 'aminoacidos', value: 'aminoacidos', label: 'Aminoácidos', emoji: '⚡', icon: faJar,         prefixes: ['41'] },
-    { id: 'isotonicas',  value: 'isotonicas',  label: 'Isotónicas',  emoji: '💧', icon: faBottleWater, prefixes: ['18.1'] },
 ];
 
-// POST Step 1 - protein powders
-const POST_PROTEIN_CATEGORIES = [
-    { id: 'whey',    value: 'whey',    label: 'Whey',    emoji: '💪', icon: faJar,        prefixes: ['4.1'] },
-    { id: 'caseina', value: 'caseina', label: 'Caseína', emoji: '🥛', icon: faJar,        prefixes: ['4.2'] },
-    { id: 'vegetal', value: 'vegetal', label: 'Vegetal', emoji: '🌱', icon: faJarWheat,   prefixes: ['4.3'] },
-    { id: 'batido',  value: 'batido',  label: 'Batido',  emoji: '🥤', icon: faBlender,    prefixes: ['5.4'] },
+// POST categories — single list, Calma categoriasPostentreno order:
+// ["4","5","46","7","8","11","27","24","19","37","36","16"]
+const POST_CATEGORIES = [
+    { id: 'proteina',      value: 'proteina',      label: 'Proteína',          emoji: '💪', icon: faJar,        prefixes: ['4'] },
+    { id: 'lacteos',       value: 'lacteos',       label: 'Lácteos',           emoji: '🧀', icon: faCheese,     prefixes: ['5'] },
+    { id: 'cremas_arroz',  value: 'cremas_arroz',  label: 'Cremas de arroz',   emoji: '🍚', icon: faBowlRice,   prefixes: ['46'] },
+    { id: 'cereales',      value: 'cereales',      label: 'Cereales',          emoji: '🌾', icon: faPlateWheat, prefixes: ['7'] },
+    { id: 'pan',           value: 'pan',           label: 'Pan',               emoji: '🍞', icon: faBreadSlice, prefixes: ['8'] },
+    { id: 'fruta',         value: 'fruta',         label: 'Fruta',             emoji: '🍎', icon: faAppleWhole, prefixes: ['11'] },
+    { id: 'sustitutivos',  value: 'sustitutivos',  label: 'Sustitutivos',      emoji: '🥤', icon: faBlender,    prefixes: ['27'] },
+    { id: 'beb_vegetales', value: 'beb_vegetales', label: 'Bebidas vegetales', emoji: '🥛', icon: faBlender,    prefixes: ['24'] },
+    { id: 'bebidas',       value: 'bebidas',       label: 'Bebidas',           emoji: '⚡', icon: faBolt,       prefixes: ['19'] },
+    { id: 'azucar',        value: 'azucar',        label: 'Cacao/Azúcar',      emoji: '🍯', icon: faCookie,     prefixes: ['37'] },
+    { id: 'postres',       value: 'postres',       label: 'Postres',           emoji: '🍮', icon: faCookieBite, prefixes: ['36'] },
+    { id: 'salsas',        value: 'salsas',        label: 'Salsas',            emoji: '🥫', icon: faPepperHot,  prefixes: ['16'] },
 ];
 
-// POST Step 2 - fast carbs
-const POST_CARB_CATEGORIES = [
-    { id: 'fruta',       value: 'fruta',       label: 'Fruta',    emoji: '🍎', icon: faAppleWhole, prefixes: ['11'] },
-    { id: 'crema_arroz', value: 'crema_arroz', label: 'C. Arroz', emoji: '🍚', icon: faBowlRice,   prefixes: ['21.3'] },
-    { id: 'cereales',    value: 'cereales',    label: 'Cereales', emoji: '🌾', icon: faPlateWheat, prefixes: ['7.1'] },
-    { id: 'bebida',      value: 'bebida',      label: 'Bebida',   emoji: '🥤', icon: faBottleWater, prefixes: ['24'] },
-];
-
+// Ordered to match Calma's `A.preparaciones`:
+// [GEN, PRO, FRE, CGE, AHU, LAT, POL, PRE, HAM, SNA, MIN, YCO, UNI, YA, SGL]
 const PREPARATIONS = [
     { value: 'GEN', label: 'Genérico',                                 icon: faCircleInfo },
+    { value: 'PRO', label: 'Marca recomendada con descuento especial', icon: faMedal },
     { value: 'FRE', label: 'Frescos',                                  icon: faDroplet },
-    { value: 'HAM', label: 'Hamburguesa / Carne picada',               icon: faBurger },
+    { value: 'CGE', label: 'Congelados',                               icon: faSnowflake },
     { value: 'AHU', label: 'Ahumados',                                 icon: faFireFlameCurved },
+    { value: 'LAT', label: 'Conservas',                                icon: faRing },
+    { value: 'POL', label: 'En polvo',                                 icon: faJar },
+    { value: 'PRE', label: 'Preparado',                                icon: faThumbsUp },
+    { value: 'HAM', label: 'Hamburguesa / Carne picada',               icon: faBurger },
     { value: 'SNA', label: 'Snacks fáciles de transportar',            icon: faCookieBite },
+    { value: 'MIN', label: '1 minuto al micro y listo',                icon: faClock },
+    { value: 'YCO', label: 'Ya cocinados',                             icon: faFireBurner },
     { value: 'UNI', label: 'Ya pesado',                                icon: faScaleBalanced },
     { value: 'YA',  label: 'Listo para comer',                         icon: faSquareCheck },
     { value: 'SGL', label: 'Etiquetado "Sin gluten"',                  icon: faWheatAwnCircleExclamation },
-    { value: 'CGE', label: 'Congelados',                               icon: faSnowflake },
-    { value: 'LAT', label: 'Conservas',                                icon: faRing },
-    { value: 'PRE', label: 'Preparado',                                icon: faThumbsUp },
-    { value: 'MIN', label: '1 minuto al micro y listo',                icon: faClock },
-    { value: 'YCO', label: 'Ya cocinados',                             icon: faFireBurner },
-    { value: 'PRO', label: 'Marca recomendada con descuento especial', icon: faMedal },
-    { value: 'POL', label: 'En polvo',                                 icon: faJar },
 ];
 
 // Food emojis
@@ -140,7 +143,8 @@ const BuildMealModal = ({
     mealsData,
     setMealsData,
     getFoodEmoji,
-    userPreferences = []
+    userPreferences = [],
+    avoidedCategories = []
 }) => {
     const [paso, setPaso] = useState(1);
     const [tempFoods, setTempFoods] = useState([]);
@@ -211,13 +215,28 @@ const BuildMealModal = ({
         } catch (e) { /* ignore */ }
     };
 
+    // Calma per-macro status (margenValido = 4): round(remaining)==0 -> Cuadrado (green),
+    // |remaining|<4 -> Válido (amber), served>target -> Sobran X (red), else Faltan (default).
+    const MARGEN_VALIDO = 4;
+    const macroStatus = (s, tgt) => {
+        if (!tgt) return null;
+        const t = Math.round(tgt - s);          // remaining, rounded
+        if (t === 0) return { label: 'Cuadrado', cls: 'text-green-600' };
+        if (t < 0) return { label: `Sobran ${-t}g`, cls: 'text-red-500' };
+        if (t < MARGEN_VALIDO) return { label: 'Válido', cls: 'text-amber-500' };
+        return null;  // still far ("faltan") -> no label, the number already shows it
+    };
+
     const isCuadrada = Math.abs(target.P - served.P) <= 0 &&
                        Math.abs(target.H - served.H) <= 0 &&
                        (isPeriMode || Math.abs(target.G - served.G) <= 0);
 
     const getBlockReason = (macrosEf) => {
         if (isPeriMode) return null;
-        const margin = 0;
+        // Calma's tolerance is margenValido = 4 g. Suggested foods are already capped (me)
+        // to not overshoot the remaining, so a strict margin=0 only blocked them on rounding
+        // (e.g. fill 0.6 g H that lands at 46.8000…1 > 46.8). Use 4 to match Calma.
+        const margin = 4;
         if (macrosEf.P > 0 && served.P + macrosEf.P > target.P + margin) {
             return 'No cabe — superaría la proteína objetivo de esta comida.';
         }
@@ -253,35 +272,45 @@ const BuildMealModal = ({
         sopas: '🍲', superalimentos: '✨', tuberculos: '🥔', vacuno: '🥩', verduras: '🥬'
     };
 
+    // Calma: filtrosSinAlergias removes chips whose category code is in user's avoid list
+    // Chips whose id (or mapped preference id) is in avoidedCategories are hidden
+    const CHIP_PREF_MAP = {
+        'vegetal': ['proteina_vegetal'],
+        'otras_carnes': ['carnes_blancas', 'carnes_rojas'],
+    };
+    const filterAvoided = (chips) => {
+        if (!avoidedCategories || avoidedCategories.length === 0) return chips;
+        const avoidSet = new Set(avoidedCategories);
+        return chips.filter(chip => {
+            const prefIds = CHIP_PREF_MAP[chip.id] || [chip.id];
+            return !prefIds.some(id => avoidSet.has(id));
+        });
+    };
+
     const getCurrentCategories = () => {
         let base = [];
         if (isIntraMode) {
             base = INTRA_CATEGORIES;
         } else if (isPostMode) {
-            base = paso === 1 ? POST_PROTEIN_CATEGORIES : POST_CARB_CATEGORIES;
+            // Calma: post is a single phase — all 12 categoriasPostentreno at once (no split).
+            base = POST_CATEGORIES;
         } else if (paso === 1) {
-            base = PROTEIN_CATEGORIES;
+            base = filterAvoided(PROTEIN_CATEGORIES);
         } else if (paso === 2) {
-            base = SIDE_CATEGORIES;
+            base = filterAvoided(SIDE_CATEGORIES);
         } else if (paso === 3) {
-            // Only fat-relevant and zero-macro categories at paso 3
-            const FAT_IDS = new Set([
-                'grasas_buenas', 'grasas_todo', 'lacteos', 'huevos',
-                'aperitivos', 'chocolates', 'salsas', 'superalimentos',
-            ]);
-            let cats = [];
-            if (userPreferences && userPreferences.length > 0) {
-                cats = PREFERENCE_CATEGORIES
-                    .filter(cat => userPreferences.includes(cat.id) && FAT_IDS.has(cat.id))
-                    .map(cat => ({ ...cat, value: cat.id }));
-            }
-            // Always ensure fat base categories are present
-            const ensurecat = (id, label, icon, prefixes) => {
-                if (!cats.find(c => c.id === id))
-                    cats.unshift({ id, value: id, label, icon, prefixes });
-            };
-            ensurecat('grasas_todo',   'Grasas',                  faOilCan,        ['17']);
-            ensurecat('grasas_buenas', 'Grasas de buena calidad', faBottleDroplet, ['42']);
+            // Calma: paso 3 (todos) shows the user's preferences in their SAVED order
+            // (filtrosDePreferencias = [...preferencias].map — Set insertion order), NOT code
+            // order. Paso 1/2 use fixed lists (categoriasProteinas/Hidratos) so code order is
+            // right there; paso 3 must follow the user's preference order.
+            const byId = new Map(PREFERENCE_CATEGORIES.map(c => [c.id, c]));
+            let cats = (userPreferences || [])
+                .map(id => byId.get(id))
+                .filter(Boolean)
+                .map(cat => ({ ...cat, value: cat.id }));
+            // grasas_buenas (42) is a fixed preference (Calma fija) — ensure it's present
+            if (!cats.find(c => c.id === 'grasas_buenas'))
+                cats.unshift({ id: 'grasas_buenas', value: 'grasas_buenas', label: 'Grasas de buena calidad', icon: faBottleDroplet, prefixes: ['42'] });
             base = cats;
         } else {
             base = SIDE_CATEGORIES;
@@ -292,7 +321,9 @@ const BuildMealModal = ({
     useEffect(() => {
         if (open && mealKey) {
             setTempFoods([]);
-            setSelectedCategories([]);
+            // Calma: intra has its category chips hidden and pre-activated (c(e, true)),
+            // so foods load immediately. Auto-select the intra categories on open.
+            setSelectedCategories(isIntraMode ? INTRA_CATEGORIES.map(c => ({ ...c, value: c.id })) : []);
             setCategoryFoods([]);
             setSearchQuery('');
             setSearchResults([]);
@@ -304,7 +335,7 @@ const BuildMealModal = ({
             setCheckingCategories(false);
 
             // Determine correct starting paso based on already-saved foods in this meal
-            if (!isIntraMode) {
+            if (!isPeriMode) {
                 const ex = (mealsData[mealKey]?.alimentos || []).reduce((acc, f) => ({
                     P: acc.P + (f.macros_efectivos?.P || 0),
                     H: acc.H + (f.macros_efectivos?.H || 0),
@@ -335,7 +366,7 @@ const BuildMealModal = ({
             return;
         }
 
-        if (isIntraMode) return;
+        if (isPeriMode) return;  // peri (intra/post) is a single phase — no paso split
 
         const pPct = target.P > 0 ? (served.P / target.P) * 100 : 100;
         const hPct = target.H > 0 ? (served.H / target.H) * 100 : 100;
@@ -369,6 +400,11 @@ const BuildMealModal = ({
         }
     }, [served.P, served.H, target.P, target.H, tempFoods.length, paso, isIntraMode]);
 
+    // Calma: filtrosActivacionPorDefecto = false. In paso 3 (cuadrarMacros / "últimos
+    // toques") the preference category chips are shown but start INACTIVE — the user
+    // picks which to finish with. We previously auto-selected all of them, which was a
+    // bug (every chip appeared selected and the whole catalog loaded). No pre-activation.
+
     // Reload foods when macros, categories or preparations change
     useEffect(() => {
         if (!open) return;
@@ -376,17 +412,28 @@ const BuildMealModal = ({
         const hasFrequent = selectedCategories.some(c => c.id === '__frequent__');
         if (hasFrequent) {
             setLoadingFoods(true);
-            api('/api/calculator/frequent-foods?limit=20').then(result => {
-                if (!cancelled) { setCategoryFoods(result.alimentos || []); setAvailablePreps([]); }
+            // Calma: frequent foods (top-20 by raw count) go through the SAME engine —
+            // suggested quantity + macro rule + diferencia ordering, using the meal remaining.
+            const params = new URLSearchParams({ frequent: 'true', limit: '20' });
+            const mp = getMacrosParams();
+            Object.entries(mp).forEach(([k, v]) => params.set(k, v));
+            api(`/api/calculator/search?${params}`).then(result => {
+                if (!cancelled) { setCategoryFoods(result.alimentos || []); setAvailablePreps(result.available_preps || []); }
             }).catch(() => {}).finally(() => { if (!cancelled) setLoadingFoods(false); });
         } else if (selectedCategories.length > 0) {
             setLoadingFoods(true);
             const categoryParam = selectedCategories.flatMap(c => c.prefixes || []).filter(Boolean).join(',');
             const params = new URLSearchParams({ q: '', category: categoryParam, limit: '100' });
-            const tolerance = paso === 3 ? 4 : 0;
-            if (target.P > 0) params.set('p_rest', Math.max(0, remaining.P + tolerance));
-            if (target.H > 0) params.set('h_rest', Math.max(0, remaining.H + tolerance));
+            // Calma uses ONE unified remaining (full meal target minus added), all three macros,
+            // every step. The "paso" only changes which CATEGORIES are shown, never the macro
+            // constraints. Sending only P+G in paso 1 left H unconstrained -> Tortitas 4ud and an
+            // order that ignored hidratos. Send all three, no tolerance.
+            if (target.P > 0) params.set('p_rest', Math.max(0, remaining.P));
+            if (target.H > 0) params.set('h_rest', Math.max(0, remaining.H));
             if (target.G > 0) params.set('g_rest', Math.max(0, remaining.G));
+            if (isIntraMode) params.set('peri', 'intra');
+            else if (isPostMode) params.set('peri', 'post');
+            else if (paso === 3) params.set('cuadrar', 'true');  // good-fat prioridad sort
             if (selectedPreparations.length > 0) params.set('tag', selectedPreparations.join(','));
             api(`/api/calculator/search?${params}`).then(result => {
                 if (!cancelled) {
@@ -415,32 +462,28 @@ const BuildMealModal = ({
         // Only pass macros that are still needed (> 0) so the backend doesn't
         // exclude foods for "full" macros — categories should show if they have
         // any food that fits what's still missing
+        // Use the SAME params as the real food load (getMacrosParams) so the grid's
+        // empty-detection matches what the category actually shows. Always send each
+        // macro (max(0, remaining)) — a 0 means that macro is complete, so foods that
+        // would add to it get excluded by the engine.
         const macroParams = {};
-        if (target.P > 0 && remaining.P > 0) macroParams.p_rest = remaining.P;
-        if (target.H > 0 && remaining.H > 0) macroParams.h_rest = remaining.H;
-        if (target.G > 0 && remaining.G > 0) macroParams.g_rest = remaining.G;
+        if (target.P > 0) macroParams.p_rest = Math.max(0, remaining.P);
+        if (target.H > 0) macroParams.h_rest = Math.max(0, remaining.H);
+        if (target.G > 0) macroParams.g_rest = Math.max(0, remaining.G);
+        if (paso === 3) macroParams.cuadrar = 'true';
         let cancelled = false;
         setCheckingCategories(true);
         lastCheckedRemaining.current = null; // invalidate until check completes
         // Exclude virtual categories (no backend prefix to check)
         const checkableCats = cats.filter(cat => cat.prefixes?.length > 0);
-        const isGrasasPaso = paso === 3 && remaining.G > 0;
         Promise.all(checkableCats.map(async cat => {
             try {
-                const limit = isGrasasPaso ? '10' : '1';
-                const params = new URLSearchParams({ q: '', category: cat.prefixes.join(','), limit, ...macroParams });
+                const params = new URLSearchParams({ q: '', category: cat.prefixes.join(','), limit: '1', ...macroParams });
                 const result = await api(`/api/calculator/search?${params}`);
-                const foods = result.alimentos || [];
-                if (!isGrasasPaso) return { id: cat.id, empty: foods.length === 0 };
-                // At paso 3: category useful only if it has foods with fat OR truly zero-macro foods
-                const hasUseful = foods.some(f => {
-                    const ms = f._macros_sugeridos || {};
-                    const g = ms.G ?? 0;
-                    const p = ms.P ?? 0;
-                    const h = ms.H ?? 0;
-                    return g > 0 || (p === 0 && h === 0 && g === 0);
-                });
-                return { id: cat.id, empty: !hasUseful };
+                // Hide the category if NO food fits — i.e. every food would overshoot an
+                // already-complete macro. Zero-macro foods (me=inf) still count as present,
+                // so categories that can still take a "No aporta macros" filler stay visible.
+                return { id: cat.id, empty: (result.alimentos || []).length === 0 };
             } catch {
                 return { id: cat.id, empty: false };
             }
@@ -455,11 +498,17 @@ const BuildMealModal = ({
     }, [open, paso, remaining.P, remaining.H, remaining.G]); // eslint-disable-line
 
     const getMacrosParams = () => {
+        // Calma's manual builder uses ONE unified remaining (full meal target minus
+        // added ingredients), all three macros, NO tolerance. The engine (calma_suggest)
+        // computes quantity = floor(min(remaining/perUnit)) and orders by diferenciaDeMacros.
         const params = {};
-        const tolerance = paso === 3 ? 4 : 0;
-        if (target.P > 0) params.p_rest = Math.max(0, remaining.P + tolerance);
-        if (target.H > 0) params.h_rest = Math.max(0, remaining.H + tolerance);
+        if (target.P > 0) params.p_rest = Math.max(0, remaining.P);
+        if (target.H > 0) params.h_rest = Math.max(0, remaining.H);
         if (target.G > 0) params.g_rest = Math.max(0, remaining.G);
+        // Peri meals use their own prioridad lists; paso 3 normal meal = cuadrarMacros.
+        if (isIntraMode) params.peri = 'intra';
+        else if (isPostMode) params.peri = 'post';
+        else if (paso === 3) params.cuadrar = 'true';
         return params;
     };
 
@@ -479,8 +528,11 @@ const BuildMealModal = ({
 
         try {
             if (category.id === '__frequent__') {
-                const result = await api('/api/calculator/frequent-foods?limit=20');
+                // Frequent foods through the same engine (quantity + macro rule + diferencia).
+                const params = new URLSearchParams({ frequent: 'true', limit: '20', ...getMacrosParams() });
+                const result = await api(`/api/calculator/search?${params}`);
                 setCategoryFoods(result.alimentos || []);
+                setAvailablePreps(result.available_preps || []);
             } else {
                 const params = new URLSearchParams({
                     q: '',
@@ -604,15 +656,7 @@ const BuildMealModal = ({
                 body: JSON.stringify({ alimento_id: selectedFood.id || selectedFood._id, cantidad_g: newQty, es_vegano: false })
             });
             const ef = result.efectivos || {};
-            if (delta > 0) {
-                const margin = 0;
-                if ((ef.P > 0 && served.P + ef.P > target.P + margin) ||
-                    (ef.H > 0 && served.H + ef.H > target.H + margin) ||
-                    (ef.G > 0 && served.G + ef.G > target.G + margin)) {
-                    toast.error('No puedes aumentar más — superaría los macros objetivo.');
-                    return;
-                }
-            }
+            // Calma: free to adjust past the target (bars show over-target). No block.
             setAdjustedQuantity(newQty);
             setAdjustedMacros({ P: ef.P || 0, H: ef.H || 0, G: ef.G || 0 });
         } catch {
@@ -651,43 +695,25 @@ const BuildMealModal = ({
     };
 
     const handleFoodQuantityChange = (index, delta) => {
-        if (delta > 0) {
-            const food = tempFoods[index];
-            const step = (food.por_unidad ?? food.unidades) ? (food.peso_unidad || food.racion || 100) : 1;
-            const currentQty = food.cantidad_g || food.cantidad || 0;
-            const newQty = Math.max(step, currentQty + step);
-            const factor = newQty / 100;
-            const newMacros = {
-                P: Math.round((food.proteinas || 0) * factor * 10) / 10,
-                H: Math.round((food.hidratos || 0) * factor * 10) / 10,
-                G: Math.round((food.grasas || 0) * factor * 10) / 10
-            };
-            const otherServed = tempFoods.filter((_, i) => i !== index).reduce((acc, f) => ({
-                P: acc.P + (f.macros_efectivos?.P || 0),
-                H: acc.H + (f.macros_efectivos?.H || 0),
-                G: acc.G + (f.macros_efectivos?.G || 0)
-            }), { P: existingServed.P, H: existingServed.H, G: existingServed.G });
-            const margin = 0;
-            if ((newMacros.P > 0 && otherServed.P + newMacros.P > target.P + margin) ||
-                (newMacros.H > 0 && otherServed.H + newMacros.H > target.H + margin) ||
-                (newMacros.G > 0 && otherServed.G + newMacros.G > target.G + margin)) {
-                toast.error('No puedes aumentar más — superaría los macros objetivo.');
-                return;
-            }
-        }
+        // Calma lets you freely increase/decrease an added food's quantity even past the
+        // meal target — the macro bars just show over-target (red). No block.
         setTempFoods(prev => prev.map((f, i) => {
             if (i !== index) return f;
-            const step = (f.por_unidad ?? f.unidades) ? (f.peso_unidad || f.racion || 100) : 1;
+            const isUnit = f.por_unidad ?? f.unidades;
+            const racion = f.racion || 100;
+            const step = isUnit ? (f.peso_unidad || racion) : 1;
             const currentQty = f.cantidad_g || f.cantidad || 0;
             const newQty = Math.max(step, currentQty + (delta * step));
-            const factor = newQty / 100;
+            // For `unidades` foods the macro fields are PER UNIT, so scale by number of
+            // units (newQty/racion), NOT by grams/100 (that's only for granel).
+            const mult = isUnit ? (newQty / racion) : (newQty / 100);
             return {
                 ...f,
                 cantidad_g: newQty,
                 macros_efectivos: {
-                    P: Math.round((f.proteinas || 0) * factor * 10) / 10,
-                    H: Math.round((f.hidratos || 0) * factor * 10) / 10,
-                    G: Math.round((f.grasas || 0) * factor * 10) / 10
+                    P: Math.round((f.proteinas || 0) * mult * 10) / 10,
+                    H: Math.round((f.hidratos || 0) * mult * 10) / 10,
+                    G: Math.round((f.grasas || 0) * mult * 10) / 10
                 }
             };
         }));
@@ -712,9 +738,7 @@ const BuildMealModal = ({
 
     const getPasoLabel = () => {
         if (isIntraMode) return 'Alimentos Intra-entreno';
-        if (isPostMode) {
-            return paso === 1 ? 'Paso 1: Proteína' : 'Paso 2: Carbohidratos';
-        }
+        if (isPostMode) return 'Alimentos Post-entreno';
         if (paso === 1) return 'Paso 1: Proteína';
         if (paso === 2) return 'Paso 2: Acompañamiento';
         return 'Paso 3: Últimos toques';
@@ -734,9 +758,9 @@ const BuildMealModal = ({
 
     return (
         <Dialog open={open} onOpenChange={() => onClose()}>
-            <DialogContent className="max-w-md h-[90vh] p-0 flex flex-col bg-white">
-                <DialogHeader className="flex-shrink-0 p-4 border-b">
-                    <DialogTitle className="text-xl font-bold text-black">
+            <DialogContent className="max-w-2xl h-[90vh] p-0 flex flex-col bg-white">
+                <DialogHeader className="flex-shrink-0 px-4 py-3 border-b">
+                    <DialogTitle className="text-lg font-bold text-black">
                         {mealInfo?.label || `Comida ${mealKey?.replace('C', '')}`}
                     </DialogTitle>
                     <DialogDescription className="sr-only">
@@ -754,18 +778,21 @@ const BuildMealModal = ({
                                 <div className={`font-bold ${served.P > target.P ? 'text-red-500' : 'text-orange-500'}`}>
                                     {served.P.toFixed(1)}/{target.P}g
                                 </div>
+                                {(() => { const st = macroStatus(served.P, target.P); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
                             </div>
                             <div>
                                 <div className="text-xs text-gray-500">Hidratos</div>
                                 <div className={`font-bold ${served.H > target.H ? 'text-red-500' : 'text-blue-500'}`}>
                                     {served.H.toFixed(1)}/{target.H}g
                                 </div>
+                                {(() => { const st = macroStatus(served.H, target.H); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
                             </div>
                             <div>
                                 <div className="text-xs text-gray-500">Grasas</div>
                                 <div className={`font-bold ${served.G > target.G ? 'text-red-500' : 'text-yellow-500'}`}>
                                     {served.G.toFixed(1)}/{target.G}g
                                 </div>
+                                {!isPeriMode && (() => { const st = macroStatus(served.G, target.G); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
                             </div>
                         </div>
                     </div>
@@ -791,8 +818,8 @@ const BuildMealModal = ({
                         </div>
                     </div>
 
-                    {/* Category + Preparation Rails */}
-                    {!isCuadrada && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-white space-y-2">
+                    {/* Category + Preparation Rails — hidden for intra (Calma: chips hidden) */}
+                    {!isCuadrada && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-white space-y-2">
                         {(checkingCategories || isStaleCheck) ? (
                             <div className="flex items-center gap-2 h-8">
                                 <span className="text-xs font-bold text-gray-500">Categorías:</span>
@@ -862,7 +889,7 @@ const BuildMealModal = ({
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="text-sm text-black truncate">{food.nombre}</div>
                                                                 <div className="text-xs text-gray-500">
-                                                                    {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud` : `${food._cantidad_sugerida}g`} → ` : ''}
+                                                                    {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)` : `${food._cantidad_sugerida}g`} → ` : ''}
                                                                     {(() => {
                                                                         const ms = food._macros_sugeridos;
                                                                         const qty = food._cantidad_sugerida || food.racion || 100;
@@ -874,7 +901,7 @@ const BuildMealModal = ({
                                                                             p > 0 ? `P=${fmt(p)}g` : null,
                                                                             h > 0 ? `H=${fmt(h)}g` : null,
                                                                             g > 0 ? `G=${fmt(g)}g` : null,
-                                                                        ].filter(Boolean).join(' ');
+                                                                        ].filter(Boolean).join(' ') || 'No aporta macros';
                                                                     })()}
                                                                 </div>
                                                             </div>
@@ -907,7 +934,7 @@ const BuildMealModal = ({
                                             </button>
                                             <span className="w-16 text-center text-xs">
                                                 {(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
-                                                    ? `${Math.round(((food.cantidad_g || food.cantidad || 0) / (food.peso_unidad || food.racion)) * 2) / 2} ud`
+                                                    ? `${Math.round(((food.cantidad_g || food.cantidad || 0) / (food.peso_unidad || food.racion)) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)`
                                                     : `${food.cantidad_g || food.cantidad || 0}g`
                                                 }
                                             </span>

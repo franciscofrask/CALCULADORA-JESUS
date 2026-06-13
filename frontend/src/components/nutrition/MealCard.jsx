@@ -6,6 +6,10 @@ import {
     ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw
 } from 'lucide-react';
 
+// Calma rounds the per-meal target to the nearest 0.5 g FOR DISPLAY ONLY (stepRedondeo).
+// The engine/remaining stay unrounded, so suggestions match Calma exactly.
+const fmtHalf = (x) => (Math.round((x || 0) * 2) / 2).toString();
+
 const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, getMealStatus }) => {
     const target = getMealTarget(mealKey);
     const served = calculateMealMacros(mealKey);
@@ -58,7 +62,7 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, getMeal
                     <span className="w-5 text-center text-sm">{emoji}</span>
                     <span className="w-4 text-xs font-semibold text-gray-600">{label}</span>
                     <div className="flex-1"><ProgressBar value={val} max={tgt} color={color} height={8} showCheck /></div>
-                    <span className={`text-xs font-mono w-16 text-right ${over ? 'text-red-500 font-bold' : ''}`}>{val.toFixed(1)}/{tgt.toFixed(1)}g</span>
+                    <span className={`text-xs font-mono w-16 text-right ${over ? 'text-red-500 font-bold' : ''}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
                 </div>
             ))}
             {statusMessage && <div className={`text-xs font-semibold ${statusColor} mt-1`}>{statusMessage}</div>}
@@ -97,7 +101,7 @@ const MealCard = ({
                             <span className="text-sm">{statusSymbol}</span>
                         </div>
                         <p className="text-xs text-gray-500">
-                            {isPeri ? `${target.P.toFixed(1)}P | ${target.H.toFixed(1)}H` : `${target.P.toFixed(1)}P | ${target.H.toFixed(1)}H | ${target.G.toFixed(1)}G`}
+                            {isPeri ? `${fmtHalf(target.P)}P | ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P | ${fmtHalf(target.H)}H | ${fmtHalf(target.G)}G`}
                         </p>
                     </div>
                 </div>

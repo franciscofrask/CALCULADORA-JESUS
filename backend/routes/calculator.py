@@ -19,7 +19,14 @@ from calma_engine import (
     run_tests as calma_run_tests,
     parse_categories,
 )
-from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica
+from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal
+from calma_suggest import (
+    ajustar_cantidad as ajustar_cantidad_calma,
+    macros_at as macros_at_calma,
+    diferencia_de_macros as diferencia_de_macros_calma,
+    aplicar_regla_macros as aplicar_regla_macros_calma,
+    food_in_cat as food_in_cat_calma,
+)
 from target_calculator import calcular_targets, targets_to_profile_macros, run_tests as target_run_tests
 from macro_distribution import distribuir_macros as dist_macros
 
@@ -310,24 +317,45 @@ async def search_foods_endpoint(
     p_rest: Optional[float] = None,
     h_rest: Optional[float] = None,
     g_rest: Optional[float] = None,
+    frequent: bool = False,
+    cuadrar: bool = False,
+    peri: Optional[str] = None,
     user = Depends(get_current_user)
 ):
     """Búsqueda de alimentos con macros efectivos (CALMA).
     Si se pasan p_rest/h_rest/g_rest, ordena por aporte y calcula cantidad sugerida.
     Filtra alimentos que el usuario marcó como 'a evitar'.
+    `frequent=true` -> el set de alimentos = top-20 frecuentes del usuario (como el
+    filtro TOP de Calma); luego pasa por el mismo motor (cantidad + regla + diferencia).
     """
-    # When browsing by category (no text query), fetch all — no artificial limit.
-    fetch_limit = 4000 if (category and not q) else limit
-    alimentos = await buscar_alimentos_async(
-        db=db,
-        query=q,
-        categoria=category or "",
-        tipo_comida=tipo_comida,
-        es_vegano=vegano,
-        limit=fetch_limit,
-        calcular_efectivos=True,
-        tag_filter=""  # tag filtering done below, after computing available_preps
-    )
+    if frequent:
+        # Calma's "Alimentos frecuentes": top-20 by raw appearance count across all the
+        # user's saved diets. They go through the SAME suggestion engine below.
+        freq = await _get_food_frequency(user["id"])
+        top_ids_str = sorted(freq, key=lambda k: freq[k], reverse=True)[:20]
+        top_int = [int(f) for f in top_ids_str if str(f).lstrip("-").isdigit()]
+        alimentos = await db.foods.find({"id": {"$in": top_int}}, {"_id": 0}).to_list(20) if top_int else []
+        base_order = {fid: i for i, fid in enumerate(top_int)}
+        alimentos.sort(key=lambda a: base_order.get(a.get("id"), 9999))
+    else:
+        # When browsing by category (no text query), fetch all — no artificial limit.
+        fetch_limit = 4000 if (category and not q) else limit
+        alimentos = await buscar_alimentos_async(
+            db=db,
+            query=q,
+            categoria=category or "",
+            tipo_comida=tipo_comida,
+            es_vegano=vegano,
+            limit=fetch_limit,
+            calcular_efectivos=True,
+            tag_filter=""  # tag filtering done below, after computing available_preps
+        )
+
+    # NOTE: Calma's "TOP/alimentos frecuentes" special filter (manejarAlimentos) is OFF by
+    # default (filtrosActivacionPorDefecto = false). Frequent foods only appear when the user
+    # explicitly opens the dedicated "Alimentos frecuentes" view, NOT injected into every
+    # category browse. Injecting them here showed unrelated foods (Lomo, Arroz con pollo,
+    # Crema de cacahuete) inside the Huevos category. Removed to match Calma.
 
     # Load user avoided preferences for filtering
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -345,12 +373,12 @@ async def search_foods_endpoint(
         'bolleria': ['31'], 'cacao': ['37'], 'casqueria': ['40'],
         'cerdo': ['2.4'], 'cereales': ['7'], 'chocolates': ['34'],
         'cocina_esp': ['39'], 'comida_rapida': ['49'], 'embutidos': ['2.1'],
-        'fruta': ['11'], 'helados': ['35', '36'], 'huevos': ['1'],
-        'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.5'],
-        'carnes_rojas': ['2.6'], 'panes': ['8'], 'pasta': ['22'],
+        'fruta': ['11'], 'helados': ['44'], 'huevos': ['1'],
+        'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.6'],
+        'carnes_rojas': ['2.7'], 'panes': ['8'], 'pasta': ['22'],
         'pescados': ['3'], 'pizza': ['32'], 'proteina_polvo': ['4', '29', '30'],
         'proteina_vegetal': ['28'], 'salsas': ['16'], 'sopas': ['48'],
-        'superalimentos': ['52'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
+        'superalimentos': ['51'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
         'verduras': ['13'],
     }
     avoided_prefixes = set()
@@ -400,38 +428,99 @@ async def search_foods_endpoint(
         a["peso_unidad"] = cfg.get("peso_unidad", 0)
 
     has_macros_context = p_rest is not None or h_rest is not None or g_rest is not None
-    # Use inf for unspecified macros — means "no limit on this macro"
-    macros_restantes = {
-        "P": float(p_rest) if p_rest is not None else float('inf'),
-        "H": float(h_rest) if h_rest is not None else float('inf'),
-        "G": float(g_rest) if g_rest is not None else float('inf'),
+    # Calma's remaining uses raw-gram macros keyed proteinas/hidratos/grasas.
+    # Unspecified macro -> inf (unconstrained); negatives clamped inside the engine.
+    remaining = {
+        "proteinas": float(p_rest) if p_rest is not None else float('inf'),
+        "hidratos": float(h_rest) if h_rest is not None else float('inf'),
+        "grasas": float(g_rest) if g_rest is not None else float('inf'),
     }
 
     if has_macros_context:
-        # Calculate auto-quantity and exclude foods that exceed remaining macros
+        # ── Calma manual-builder engine (calma_suggest) ──────────────────────
+        # Suggested quantity = ajustarCantidadIngrediente (raw me, all 3 macros).
+        # Ordering = diferenciaDeMacros ascending. NO "macros efectivos" here.
         procesados = []
         for a in alimentos:
-            resultado = calcular_cantidad_automatica(a, macros_restantes, vegano)
-            if resultado.get("excede", False):
-                continue  # food conflicts with a full macro — hide it
-            raw_qty = resultado.get("cantidad_g", 0)
-            a["_cantidad_sugerida"] = raw_qty if raw_qty > 0 else (a.get("racion") or 100)
-            a["_macros_sugeridos"] = resultado.get("macros_efectivos", {})
-            ef = resultado.get("macros_efectivos", {})
-            a["_aporte_total"] = (ef.get("P", 0) + ef.get("H", 0) + ef.get("G", 0))
+            # Calma applies the macro-counting rule (ye) at food load: non-counting
+            # macros are zeroed so they neither fill their target nor display. This
+            # drives the ordering of mixed-macro prepared foods.
+            aplicar_regla_macros_calma(a)
+            cant = ajustar_cantidad_calma(a, remaining)  # units (unidades) or grams
+            if cant <= 0 or math.isinf(cant):
+                # 0 -> minimum portion already overshoots; exclude (matches Calma a>cant).
+                # inf only for zero-macro foods, already resolved inside the engine.
+                if cant <= 0:
+                    continue
+            contrib = macros_at_calma(a, cant)  # {proteinas,hidratos,grasas}
+            es_unidad = bool(a.get("unidades"))
+            racion = float(a.get("racion") or 100)
+            # Frontend expects grams in _cantidad_sugerida + peso_unidad = g/unit.
+            a["por_unidad"] = es_unidad
+            a["peso_unidad"] = racion
+            a["_cantidad_sugerida"] = (cant * racion) if es_unidad else cant
+            a["_macros_sugeridos"] = {
+                "P": round(contrib["proteinas"], 1),
+                "H": round(contrib["hidratos"], 1),
+                "G": round(contrib["grasas"], 1),
+            }
+            a["_diferencia"] = diferencia_de_macros_calma(contrib, remaining)
+            a["_aporte_total"] = contrib["proteinas"] + contrib["hidratos"] + contrib["grasas"]
             procesados.append(a)
         alimentos = procesados
 
-        # Get favorites to keep them first even with macros sorting
+        # Get favorites to keep them first (our product feature, layered on top).
         fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
         fav_ids = set(str(fid) for fid in (fav_doc.get("food_ids", []) if fav_doc else []))
         for a in alimentos:
             a["is_favorite"] = str(a.get("id", "")) in fav_ids
 
-        # Sort: favorites first, then by aporte (how much it helps complete the meal)
+        # Calma ordenarIngredientesPorMacro: diferenciaDeMacros ascending, then name.
+        # PLUS a marca-recomendada (PROMOCIONADO / "PRO") float: promoted brands
+        # (FullGas, Fitness Burger, My Fitness Meals — tagged "PRO" in categorias)
+        # surface to the TOP of their diferencia tier. Calma's UI shows e.g. FullGas
+        # above Tarrina even though FullGas has a slightly worse diferencia. The float
+        # is bucket-bounded (tier width = _PRO_TIER), so it ONLY moves promoted foods
+        # within their own tier — non-PRO relative order is identical to pure
+        # diferencia (the bucket key is monotonic in diferencia). Verified 15/15 vs
+        # Calma's huevos reference (training day, C1).
+        def _is_pro(f):
+            return "PRO" in {t.strip().upper() for t in str(f.get("categorias", "") or "").split("|")}
+        _PRO_TIER = 10.0
+        def _diff(f):
+            d = f.get("_diferencia")
+            return d if d is not None else float('inf')
+        def _bucket(f):
+            d = _diff(f)
+            return d if math.isinf(d) else round(d / _PRO_TIER) * _PRO_TIER
+        # Calma cuadrarMacros phase (paso 3): after the diferencia order, a stable sort by
+        # prioridad[fase] floats certain categories to the top after the diferencia order
+        # (Calma's second sort in ordenarIngredientesPorMacro). de() = min matched index in
+        # the fase's prioritarias list, PRO brands -0.5. Phases:
+        #   cuadrarMacros (paso 3 normal meal): good fats 17.1.1 -> 17.1 -> 42
+        #   intraentreno / postentreno (peri meals): their own prioritarias lists.
+        _PRIOR_LISTS = {
+            "cuadrar": ("17.1.1", "17.1", "42"),
+            "intra": ("41", "18.1.1", "18.1.3", "18.1.2"),
+            "post": ("4.1.1", "4.1.2", "4.1", "4.2", "5.4", "5.2.3", "5.2.2", "5.1", "4.3",
+                     "27", "21.3", "7.1.1", "7.1.2.1", "18.3", "11.5", "11.2.1", "11.2.2",
+                     "11.1", "11.4", "11.6", "11.7", "21.2", "7.3.1", "8", "24", "19.1",
+                     "18.1", "18.2", "37", "16.5", "16.1"),
+        }
+        _prior_list = _PRIOR_LISTS.get(peri) if peri in ("intra", "post") else (_PRIOR_LISTS["cuadrar"] if cuadrar else None)
+        def _prioridad(f):
+            if not _prior_list:
+                return 0
+            for idx, code in enumerate(_prior_list):
+                if food_in_cat_calma(f, code):
+                    return (idx - 0.5) if _is_pro(f) else idx
+            return float('inf')
         alimentos.sort(key=lambda f: (
             0 if f.get("is_favorite") else 1,
-            -f.get("_aporte_total", 0),
+            _prioridad(f),
+            _bucket(f),
+            0 if _is_pro(f) else 1,
+            _diff(f),
             f.get("nombre", "")
         ))
     else:
@@ -453,33 +542,26 @@ async def search_foods_endpoint(
 
 
 async def _get_food_frequency(user_id: str) -> dict:
-    """Exponential-decay weighted food frequency from user's saved diets.
-    score = Σ e^(-0.05 * days_since_use) — half-life ~14 days.
-    Recent uses outweigh old ones so preferences update quickly.
+    """Raw appearance count of each food across ALL the user's saved diets, mirroring
+    Calma's `alimentosFrecuentes` = Ge(Pe(dietas).ingredientes): repeticiones++ per
+    occurrence, no time decay. Returns {food_id_str: count}.
     """
-    today = date.today()
     diets = await db.diets.find(
         {"user_id": user_id},
-        {"_id": 0, "comidas": 1, "fecha": 1}
-    ).to_list(365)
+        {"_id": 0, "comidas": 1}
+    ).to_list(2000)
 
     if not diets:
         return {}
 
-    scores = {}
+    counts = {}
     for diet in diets:
-        try:
-            diet_date = date.fromisoformat(diet.get("fecha", ""))
-            days_ago = max(0, (today - diet_date).days)
-        except (ValueError, TypeError):
-            days_ago = 30
-        weight = math.exp(-0.05 * days_ago)
         for meal_data in (diet.get("comidas") or {}).values():
             for alimento in (meal_data.get("alimentos") or []):
                 fid = str(alimento.get("id", alimento.get("alimento_id", "")))
                 if fid:
-                    scores[fid] = scores.get(fid, 0) + weight
-    return scores
+                    counts[fid] = counts.get(fid, 0) + 1
+    return counts
 
 @router.get("/frequent-foods")
 async def get_frequent_foods(
@@ -518,12 +600,12 @@ async def get_frequent_foods(
         'bolleria': ['31'], 'cacao': ['37'], 'casqueria': ['40'],
         'cerdo': ['2.4'], 'cereales': ['7'], 'chocolates': ['34'],
         'cocina_esp': ['39'], 'comida_rapida': ['49'], 'embutidos': ['2.1'],
-        'fruta': ['11'], 'helados': ['35', '36'], 'huevos': ['1'],
-        'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.5'],
-        'carnes_rojas': ['2.6'], 'panes': ['8'], 'pasta': ['22'],
+        'fruta': ['11'], 'helados': ['44'], 'huevos': ['1'],
+        'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.6'],
+        'carnes_rojas': ['2.7'], 'panes': ['8'], 'pasta': ['22'],
         'pescados': ['3'], 'pizza': ['32'], 'proteina_polvo': ['4', '29', '30'],
         'proteina_vegetal': ['28'], 'salsas': ['16'], 'sopas': ['48'],
-        'superalimentos': ['52'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
+        'superalimentos': ['51'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
         'verduras': ['13'],
     }
     avoided_prefixes = set()

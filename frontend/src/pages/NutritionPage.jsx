@@ -1230,6 +1230,7 @@ const NutritionPage = () => {
                 setMealsData={setMealsData}
                 getFoodEmoji={getFoodEmoji}
                 userPreferences={userPreferences}
+                avoidedCategories={avoidedCategories}
             />
 
             {/* Repeat Meal Modal */}

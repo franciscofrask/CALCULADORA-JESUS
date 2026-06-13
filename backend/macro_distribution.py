@@ -13,6 +13,15 @@ from typing import Dict, List, Optional
 import math
 
 
+# NOTE: Calma rounds each per-meal macro to the nearest 0.5 g (stepRedondeo) ONLY FOR
+# DISPLAY. The unrounded value drives the suggestion engine (me/diferencia). Rounding here
+# made the frontend send the rounded remaining (e.g. 47 instead of 46.8) -> a granel food's
+# me became 47/0.06=783 instead of 46.8/0.06=780. So distribution stays UNROUNDED; the 0.5
+# display rounding lives in the frontend meal-target display only.
+def _round_comidas_half(comidas: Dict[str, Dict[str, float]]) -> None:
+    return  # intentionally a no-op; rounding is display-only (frontend)
+
+
 # =====================================================
 # 16 TABLAS DE DISTRIBUCIÓN — DÍA DE ENTRENAMIENTO
 # =====================================================
@@ -315,6 +324,7 @@ def distribuir_macros(
     # === DÍA DE DESCANSO ===
     if tipo_dia == "descanso":
         comidas = _distribuir_descanso(p_descanso, h_descanso, g_descanso, num_comidas)
+        _round_comidas_half(comidas)
 
         p_total = p_descanso
         h_total = h_descanso
@@ -378,6 +388,10 @@ def distribuir_macros(
         periworkout_result["Intra"] = peri["Intra"]
     if "Post" in peri:
         periworkout_result["Post"] = peri["Post"]
+
+    # Calma redondea cada macro de cada comida/peri a 0.5 g (stepRedondeo).
+    _round_comidas_half(comidas)
+    _round_comidas_half(periworkout_result)
 
     # 5. Calcular totales
     p_total = sum(c["P"] for c in comidas.values())
