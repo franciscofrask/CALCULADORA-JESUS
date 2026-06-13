@@ -245,3 +245,10 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Claude local settings
+.claude/settings.local.json
+
+# Calma reference data (one-off food sync; app reads from MongoDB, not these)
+backend/calma_alimentos.json
+backend/firebase_foods.json
