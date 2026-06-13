@@ -294,19 +294,41 @@ async def test_calma():
 
 # ==================== DISTRIBUTE MACROS ====================
 
+async def _resolve_macros_for_date(profile: dict, fecha: Optional[str]):
+    """Date-versioned macros (Calma todosLosMacros / esDiaConCambioDeMacros): return the macros
+    effective for `fecha` = the macro_history entry with the latest effective_date <= fecha.
+    Before any change -> the earliest entry. No history -> the profile's current macros."""
+    cur_training = profile.get("macros_training") or {}
+    cur_rest = profile.get("macros_rest") or {}
+    cur_peri = profile.get("macros_periworkout") or profile.get("macros_peri") or {}
+    if not fecha:
+        return cur_training, cur_rest, cur_peri
+    entries = await db.macro_history.find({"client_id": profile.get("id")}, {"_id": 0}).to_list(500)
+    if not entries:
+        return cur_training, cur_rest, cur_peri
+    def eff(e):  # effective date (fallback to the created_at date part for legacy entries)
+        return e.get("effective_date") or str(e.get("created_at", ""))[:10]
+    applicable = [e for e in entries if eff(e) and eff(e) <= fecha]
+    chosen = (max(applicable, key=lambda e: (eff(e), e.get("created_at", "")))
+              if applicable else min(entries, key=lambda e: (eff(e), e.get("created_at", ""))))
+    training = chosen.get("new_training") or chosen.get("training") or cur_training
+    rest = chosen.get("new_rest") or chosen.get("rest") or cur_rest
+    peri = chosen.get("peri") or cur_peri  # legacy entries have no peri -> current
+    return training, rest, peri
+
+
 @router.post("/distribute")
 async def distribute_macros(data: dict, user = Depends(get_current_user)):
     """
     Distribuye los macros del usuario entre sus comidas del día.
-    Los macros se obtienen del perfil del usuario.
+    Los macros se resuelven POR FECHA (date-versioned, Calma todosLosMacros): un día usa la
+    versión de macros vigente a esa fecha, no siempre la última.
     """
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil de cliente no encontrado")
 
-    training = profile.get("macros_training", {})
-    rest = profile.get("macros_rest", {})
-    peri = profile.get("macros_periworkout") or profile.get("macros_peri") or {}
+    training, rest, peri = await _resolve_macros_for_date(profile, data.get("fecha"))
 
     if not training:
         raise HTTPException(status_code=400, detail="No tienes macros asignados")
@@ -323,7 +345,10 @@ async def distribute_macros(data: dict, user = Depends(get_current_user)):
         tipo_dia=data.get("tipo_dia", "entrenamiento"),
         num_comidas=data.get("num_comidas", 4),
         momento_entreno=data.get("momento_entreno", 1),
-        opcion_peri=data.get("opcion_peri", "intra_post")
+        opcion_peri=data.get("opcion_peri", "intra_post"),
+        # Calma quiereRepartoDeComidas=false -> single-meal mode. Coach-set on the client
+        # profile (not a user-facing toggle); the whole day's macros go to one comida.
+        single_meal=bool(profile.get("single_meal_mode", False)),
     )
 
     return resultado

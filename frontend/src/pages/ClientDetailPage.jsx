@@ -33,7 +33,8 @@ const ClientDetailPage = () => {
         training: { protein: '', carbs: '', fat: '' },
         rest: { protein: '', carbs: '', fat: '' },
         peri: { protein: '', carbs: '' },
-        note: ''
+        note: '',
+        effective_date: new Date().toISOString().slice(0, 10),
     });
     const [savingMacros, setSavingMacros] = useState(false);
 
@@ -62,7 +63,8 @@ const ClientDetailPage = () => {
                     training: { protein: p.macros_training.protein || p.macros_training.proteinas || '', carbs: p.macros_training.carbs || p.macros_training.hidratos || '', fat: p.macros_training.fat || p.macros_training.grasas || '' },
                     rest: { protein: p.macros_rest?.protein || p.macros_rest?.proteinas || '', carbs: p.macros_rest?.carbs || p.macros_rest?.hidratos || '', fat: p.macros_rest?.fat || p.macros_rest?.grasas || '' },
                     peri: { protein: p.macros_periworkout?.protein ?? p.macros_periworkout?.proteinas ?? '', carbs: p.macros_periworkout?.carbs ?? p.macros_periworkout?.hidratos ?? '' },
-                    note: ''
+                    note: '',
+                    effective_date: new Date().toISOString().slice(0, 10),
                 });
             }
         } catch (error) {
@@ -79,7 +81,8 @@ const ClientDetailPage = () => {
                 training: { protein: parseFloat(macrosForm.training.protein), carbs: parseFloat(macrosForm.training.carbs), fat: parseFloat(macrosForm.training.fat) },
                 rest: { protein: parseFloat(macrosForm.rest.protein), carbs: parseFloat(macrosForm.rest.carbs), fat: parseFloat(macrosForm.rest.fat) },
                 peri: { protein: parseFloat(macrosForm.peri.protein) || 0, carbs: parseFloat(macrosForm.peri.carbs) || 0 },
-                note: macrosForm.note
+                note: macrosForm.note,
+                effective_date: macrosForm.effective_date,
             });
             toast.success('Macros actualizados');
             setMacrosModalOpen(false);
@@ -87,6 +90,15 @@ const ClientDetailPage = () => {
             fetchClient();
         } catch (error) { toast.error('Error al actualizar macros'); }
         finally { setSavingMacros(false); }
+    };
+
+    // Calma quiereRepartoDeComidas: coach toggles single-meal mode for this client.
+    const handleToggleSingleMeal = async (val) => {
+        try {
+            await api.put(`/admin/clients/${clientId}`, { single_meal_mode: val });
+            toast.success(val ? 'Dieta de comida única activada' : 'Reparto por comidas activado');
+            fetchClient();
+        } catch (error) { toast.error('Error actualizando estructura de dieta'); }
     };
 
     const handleGenerateRoutine = async () => {
@@ -208,6 +220,21 @@ const ClientDetailPage = () => {
                         </CardContent></Card>
                     ) : <EmptyState icon={Apple} message="Sin macros asignados. Usa 'Cambiar macros' para asignar." action={<Button size="sm" className="bg-[#FF671F] text-white mt-2" onClick={() => setMacrosModalOpen(true)}>Asignar macros</Button>} />}
 
+                    {/* Estructura de dieta (Calma quiereRepartoDeComidas) */}
+                    <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Estructura de dieta</p>
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="text-sm text-white font-medium">{profile?.single_meal_mode ? 'Comida única' : 'Reparto por comidas'}</p>
+                                <p className="text-xs text-white/40">{profile?.single_meal_mode ? 'Todo el presupuesto del día en una sola comida, sin reparto.' : 'Reparto estándar en 4 comidas + peri.'}</p>
+                            </div>
+                            <button
+                                onClick={() => handleToggleSingleMeal(!profile?.single_meal_mode)}
+                                className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all ${profile?.single_meal_mode ? 'bg-[#FF671F] text-white' : 'bg-[#1a1a1a] text-white/60 border border-[#222] hover:text-white'}`}
+                            >{profile?.single_meal_mode ? 'Comida única: ON' : 'Activar comida única'}</button>
+                        </div>
+                    </CardContent></Card>
+
                     {/* Macro History */}
                     <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><History className="w-4 h-4" />Historial de cambios</CardTitle></CardHeader>
                         <CardContent>{macro_history?.length > 0 ? (
@@ -242,6 +269,11 @@ const ClientDetailPage = () => {
                                         <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={macrosForm.peri.protein} onChange={e => setMacrosForm({...macrosForm, peri: {...macrosForm.peri, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                                         <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={macrosForm.peri.carbs} onChange={e => setMacrosForm({...macrosForm, peri: {...macrosForm.peri, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                                     </div>
+                                </div>
+                                <div>
+                                    <Label className="text-white/60 text-xs">Vigente desde</Label>
+                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({...macrosForm, effective_date: e.target.value})} className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-effective-date" />
+                                    <p className="text-[10px] text-white/30 mt-1">Las dietas anteriores a esta fecha conservan los macros previos.</p>
                                 </div>
                                 <div>
                                     <Label className="text-white/60 text-xs">Motivo del cambio (obligatorio)</Label>

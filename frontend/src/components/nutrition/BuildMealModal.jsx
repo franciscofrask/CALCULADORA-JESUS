@@ -253,11 +253,11 @@ const BuildMealModal = ({
                        Math.abs(target.H - served.H) <= 0 &&
                        (isPeriMode || Math.abs(target.G - served.G) <= 0);
 
+    // Calma: a meal that is already valida (within margenValido) has no remaining to fill, so
+    // the engine returns no suggestions and you can't keep stuffing it. Block a food that would
+    // overshoot the meal target by more than the 4 g margin.
     const getBlockReason = (macrosEf) => {
         if (isPeriMode) return null;
-        // Calma's tolerance is margenValido = 4 g. Suggested foods are already capped (me)
-        // to not overshoot the remaining, so a strict margin=0 only blocked them on rounding
-        // (e.g. fill 0.6 g H that lands at 46.8000…1 > 46.8). Use 4 to match Calma.
         const margin = 4;
         if (macrosEf.P > 0 && served.P + macrosEf.P > target.P + margin) {
             return 'No cabe — superaría la proteína objetivo de esta comida.';
@@ -269,17 +269,6 @@ const BuildMealModal = ({
             return 'No cabe — superaría las grasas objetivo de esta comida.';
         }
         return null;
-    };
-
-    const getFoodBlockReason = (food) => {
-        const qty = food.racion || 100;
-        const factor = qty / 100;
-        const macrosEf = {
-            P: Math.round((food.proteinas || 0) * factor * 10) / 10,
-            H: Math.round((food.hidratos || 0) * factor * 10) / 10,
-            G: Math.round((food.grasas || 0) * factor * 10) / 10,
-        };
-        return getBlockReason(macrosEf);
     };
 
     const preferenceEmojis = {
@@ -709,12 +698,13 @@ const BuildMealModal = ({
 
     const getEmoji = getFoodEmoji || getFoodEmojiLocal;
 
+    // Calma consejoParaEscogerAlimento: phase guidance text (not "Paso 1/2/3").
     const getPasoLabel = () => {
         if (isIntraMode) return 'Alimentos Intra-entreno';
         if (isPostMode) return 'Alimentos Post-entreno';
-        if (paso === 1) return 'Paso 1: Proteína';
-        if (paso === 2) return 'Paso 2: Acompañamiento';
-        return 'Paso 3: Últimos toques';
+        if (paso === 1) return 'Definiendo base de proteínas...';
+        if (paso === 2) return 'Añade hidratos de carbono...';
+        return 'Termina de cuadrar tus macros';
     };
 
     // Calma shows ALL category chips for the current phase (filtrosSinAlergias only removes

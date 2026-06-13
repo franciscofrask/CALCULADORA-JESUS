@@ -55,6 +55,8 @@ class ClientProfile(BaseModel):
     macros_periworkout: Optional[Dict[str, float]] = None
     macros_source: Optional[str] = None
     macros_multiplicadores: Optional[Dict[str, float]] = None
+    # Coach-set (Calma quiereRepartoDeComidas=false): the whole day's macros go to ONE comida.
+    single_meal_mode: Optional[bool] = None
     weight: Optional[float] = None
     height: Optional[float] = None
     age: Optional[int] = None
@@ -81,6 +83,7 @@ class ClientProfileUpdate(BaseModel):
     macros_rest: Optional[Dict[str, float]] = None
     macros_periworkout: Optional[Dict[str, float]] = None
     macros_source: Optional[str] = None
+    single_meal_mode: Optional[bool] = None
     weight: Optional[float] = None
     height: Optional[float] = None
     age: Optional[int] = None
@@ -107,3 +110,6 @@ class MacrosUpdate(BaseModel):
     rest: MacrosData
     peri: Optional[PeriMacrosData] = None
     note: Optional[str] = None
+    # Date-versioned macros (Calma todosLosMacros): these macros apply to diet days on/after
+    # this date. Default = today. Diets before it keep the prior version.
+    effective_date: Optional[str] = None

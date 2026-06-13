@@ -43,6 +43,24 @@ const ProfilePage = () => {
     const [calculating, setCalculating] = useState(false);
     const [showMacrosResult, setShowMacrosResult] = useState(false);
 
+    // Perientreno option (Calma quiereIntraentrenamiento): intra_post | solo_post. Persisted in
+    // diet-config (same setting the daily diet page reads/writes), so both stay in sync.
+    const [periOption, setPeriOption] = useState('intra_post');
+    useEffect(() => {
+        api('/api/user/diet-config').then(cfg => {
+            const v = cfg?.opcion_peri;
+            if (v) setPeriOption((v === 'intra_post' || v === 'solo_post') ? v : 'intra_post');
+        }).catch(() => {});
+    }, []); // eslint-disable-line
+
+    const handleSetPeri = async (v) => {
+        setPeriOption(v);
+        try {
+            await api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ opcion_peri: v }) });
+            toast.success('Perientreno actualizado');
+        } catch { toast.error('Error guardando'); }
+    };
+
     useEffect(() => {
         if (profile) {
             setBodyData({
@@ -321,6 +339,28 @@ const ProfilePage = () => {
                                 )}
                             </div>
                         )}
+                    </CardContent>
+                </Card>
+
+                {/* Perientreno (Calma quiereIntraentrenamiento) — post siempre presente, intra opcional */}
+                <Card className="bg-[#111] border-[#222]">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center gap-2 text-white uppercase tracking-wider text-base">
+                            <Zap className="w-5 h-5 text-yellow-400" />
+                            Perientreno
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-white/40 text-xs mb-3">¿Tomás algo intra-entreno? El post siempre está presente.</p>
+                        <div className="flex gap-2">
+                            {[{ v: 'intra_post', l: 'Intra + Post' }, { v: 'solo_post', l: 'Solo Post' }].map(o => (
+                                <button
+                                    key={o.v}
+                                    onClick={() => handleSetPeri(o.v)}
+                                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${periOption === o.v ? 'bg-[#FF671F] text-white' : 'bg-[#1a1a1a] text-white/60 border border-[#222] hover:text-white'}`}
+                                >{o.l}</button>
+                            ))}
+                        </div>
                     </CardContent>
                 </Card>
 

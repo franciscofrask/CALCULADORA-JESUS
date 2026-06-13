@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -11,6 +11,7 @@ import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition
 import BuildMealModal from '../components/nutrition/BuildMealModal';
 import RepeatMealModal from '../components/nutrition/RepeatMealModal';
 import CopyDietModal from '../components/nutrition/CopyDietModal';
+import FavoritesModal from '../components/nutrition/FavoritesModal';
 import DaySummary from '../components/nutrition/DaySummary';
 import ConfigSection from '../components/nutrition/ConfigSection';
 import MealCard from '../components/nutrition/MealCard';
@@ -125,6 +126,9 @@ const NutritionPage = () => {
     // Data state
     const [distribution, setDistribution] = useState(null);
     const [distribTargetsOverlay, setDistribTargetsOverlay] = useState(null);
+    // Calma comidaConMacrosVolcadas: the meal key that absorbs the day's remaining macros.
+    // When set, every OTHER meal is locked (target = its served = cuadrada). null = no volcado.
+    const [volcadoMeal, setVolcadoMeal] = useState(null);
     const [mealsData, setMealsData] = useState({});
     const [expandedMeals, setExpandedMeals] = useState({ C1: true });
     const [loading, setLoading] = useState(true);
@@ -133,6 +137,8 @@ const NutritionPage = () => {
     const [addFoodModal, setAddFoodModal] = useState({ open: false, mealKey: null });
     const [menuOptionsModal, setMenuOptionsModal] = useState({ open: false, mealKey: null });
     const [copyModalOpen, setCopyModalOpen] = useState(false);
+    const [favoritesModalOpen, setFavoritesModalOpen] = useState(false);
+    const [dietFavorites, setDietFavorites] = useState([]);
     const [copyDate, setCopyDate] = useState('');
     const [buildMealModal, setBuildMealModal] = useState({ open: false, mealKey: null });
     const [repeatMealModal, setRepeatMealModal] = useState({ open: false, mealKey: null });
@@ -281,6 +287,7 @@ const NutritionPage = () => {
             const result = await api('/api/calculator/distribute', {
                 method: 'POST',
                 body: JSON.stringify({
+                    fecha: currentDate, // date-versioned macros: backend resolves the version effective on this date
                     tipo_dia: overrides.tipoDia ?? tipoDia,
                     num_comidas: overrides.numComidas ?? numComidas,
                     momento_entreno: overrides.momentoEntreno ?? momentoEntreno,
@@ -291,7 +298,7 @@ const NutritionPage = () => {
         } catch (err) {
             console.error('Error loading distribution:', err);
         }
-    }, [api, tipoDia, numComidas, momentoEntreno, opcionPeri]);
+    }, [api, tipoDia, numComidas, momentoEntreno, opcionPeri, currentDate]);
 
     // Load saved diet — returns { targets, config } where config has the diet's day values
     const loadDiet = useCallback(async (date) => {
@@ -300,9 +307,9 @@ const NutritionPage = () => {
             if (diet.exists) {
                 const dietConfig = {
                     tipoDia: diet.tipo_dia || 'entrenamiento',
-                    numComidas: diet.num_comidas || 4,
+                    numComidas: (diet.num_comidas === 3) ? 4 : (diet.num_comidas || 4), // 3-meal option removed
                     momentoEntreno: diet.momento_entreno || 1,
-                    opcionPeri: diet.opcion_peri || 'intra_post',
+                    opcionPeri: (diet.opcion_peri === 'solo_post') ? 'solo_post' : 'intra_post', // solo_intra/sin_peri removed
                 };
                 setTipoDia(dietConfig.tipoDia);
                 setNumComidas(dietConfig.numComidas);
@@ -336,17 +343,41 @@ const NutritionPage = () => {
                     }
                 }
                 setMealsData(updatedMeals);
+                setVolcadoMeal(diet.comida_volcada || null);
                 console.log('[loadDiet] distribution_targets:', diet.distribution_targets);
-                return { targets: diet.distribution_targets || null, config: dietConfig };
+                return { targets: diet.distribution_targets || null, config: dietConfig, ok: true };
             } else {
                 setMealsData({});
-                return { targets: null, config: null };
+                setVolcadoMeal(null);
+                return { targets: null, config: null, ok: true };
             }
         } catch (err) {
             console.error('Error loading diet:', err);
             setMealsData({});
-            return { targets: null, config: null };
+            // ok:false -> the load FAILED (not "no diet"); auto-save must not treat the empty
+            // in-memory state as authoritative and delete a diet that may exist on the server.
+            return { targets: null, config: null, ok: false };
         }
+    }, [api]);
+
+    // ── Auto-guardado (Calma autoGuardadoEnFecha) ────────────────────────────
+    // Calma auto-saves the diet you are LEAVING when the date changes and on page unmount
+    // (no per-keystroke save). An empty day is deleted (borrarDieta). autoSaveRef holds the
+    // latest savable snapshot; loadedDateRef guards against saving/deleting a date whose
+    // diet never loaded (or failed to load) — preventing accidental deletion on a race.
+    const autoSaveRef = useRef({});
+    const loadedDateRef = useRef(null);
+
+    const autoSaveDiet = useCallback(async (date, snap) => {
+        if (!date || !snap) return;
+        const hasFood = Object.values(snap.comidas || {}).some(m => (m?.alimentos || []).length > 0);
+        try {
+            if (hasFood) {
+                await api('/api/diets', { method: 'POST', body: JSON.stringify({ fecha: date, ...snap }) });
+            } else {
+                await api(`/api/diets/${date}`, { method: 'DELETE' }).catch(() => {}); // 404 = nothing to delete
+            }
+        } catch (e) { /* silent: auto-save must never interrupt the user */ }
     }, [api]);
 
     // Fix date to local on mount
@@ -368,24 +399,42 @@ const NutritionPage = () => {
             try {
                 const cfg = await api('/api/user/diet-config');
                 const me = cfg.momento_entreno ?? 1;
-                const nc = cfg.num_comidas ?? 4;
-                const op = cfg.opcion_peri ?? 'intra_post';
+                const nc = (cfg.num_comidas === 3) ? 4 : (cfg.num_comidas ?? 4); // 3-meal option removed
+                const op = (cfg.opcion_peri === 'solo_post') ? 'solo_post' : 'intra_post'; // solo_intra/sin_peri removed
                 setMomentoEntreno(me);
                 setNumComidas(nc);
                 setOpcionPeri(op);
                 cfgOverrides = { momentoEntreno: me, numComidas: nc, opcionPeri: op };
             } catch (e) {}
 
-            const { targets, config: dietConfig } = await loadDiet(currentDate);
+            const { targets, config: dietConfig, ok } = await loadDiet(currentDate);
             if (targets) setDistribTargetsOverlay(targets);
 
             // If diet has its own config, use that (overrides profile defaults for this day)
             const finalOverrides = dietConfig || cfgOverrides;
             await loadDistribution(finalOverrides);
             setLoading(false);
+            // Only enable auto-save for this date once it has loaded successfully.
+            if (ok) loadedDateRef.current = currentDate;
         };
         init();
     }, [currentDate]); // eslint-disable-line
+
+    // Auto-save the date being LEFT (cleanup runs on date change and on unmount) — mirrors
+    // Calma's `watch fecha` + `unmounted` -> autoGuardadoEnFecha. Guarded by loadedDateRef so
+    // a not-yet-loaded date is never persisted/deleted. autoSaveDiet is kept in a ref so the
+    // effect depends ONLY on currentDate (not on autoSaveDiet/api identity) — otherwise an
+    // unstable `api` would re-fire the cleanup on every render and save constantly.
+    const autoSaveDietRef = useRef(autoSaveDiet);
+    autoSaveDietRef.current = autoSaveDiet;
+    useEffect(() => {
+        const dateLeaving = currentDate;
+        return () => {
+            if (loadedDateRef.current === dateLeaving) {
+                autoSaveDietRef.current(dateLeaving, autoSaveRef.current);
+            }
+        };
+    }, [currentDate]);
 
     // Reload distribution when config changes
     useEffect(() => {
@@ -394,10 +443,6 @@ const NutritionPage = () => {
 
     // Wrappers for user-initiated config changes — persist to profile (cross-device)
     const handleSetTipoDia = (v) => { setTipoDia(v); };
-    const handleSetNumComidas = (v) => {
-        setNumComidas(v);
-        api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ num_comidas: v }) }).catch(() => {});
-    };
     const handleSetMomentoEntreno = (v) => {
         setMomentoEntreno(v);
         api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ momento_entreno: v }) }).catch(() => {});
@@ -447,15 +492,20 @@ const NutritionPage = () => {
     };
 
     // Meal order based on config
+    // Calma esModoSinRepartoDeMacrosPorComidas (coach-set quiereRepartoDeComidas=false):
+    // a single comida holds the whole day's macros; peri (intra/post) stays separate.
+    const singleMeal = distribution?.config?.single_meal === true;
+
     const getMealOrder = () => {
-        const baseMeals = numComidas === 3 ? ['C1', 'C2', 'C3'] : ['C1', 'C2', 'C3', 'C4'];
+        const baseMeals = singleMeal ? ['C1'] : (numComidas === 3 ? ['C1', 'C2', 'C3'] : ['C1', 'C2', 'C3', 'C4']);
         if (tipoDia === 'descanso') return baseMeals;
         const periMeals = opcionPeri === 'intra_post' ? ['Intra', 'Post'] :
                          opcionPeri === 'solo_post' ? ['Post'] :
                          opcionPeri === 'solo_intra' ? ['Intra'] : [];
         if (periMeals.length === 0) return baseMeals;
         const result = [...baseMeals];
-        result.splice(momentoEntreno, 0, ...periMeals);
+        // single mode: peri after the one comida; otherwise spliced at the training moment.
+        result.splice(singleMeal ? baseMeals.length : momentoEntreno, 0, ...periMeals);
         return result;
     };
 
@@ -476,10 +526,39 @@ const NutritionPage = () => {
         }, { P: 0, H: 0, G: 0 });
     };
 
+    // Guard: only honor the volcado if its meal still exists in the current layout (e.g. the
+    // user dropped from 4 to 3 meals after volcando to C4 → ignore, don't lock everything).
+    const activeVolcado = (volcadoMeal && getMealOrder().includes(volcadoMeal)) ? volcadoMeal : null;
+
     const getMealTarget = (mealKey) => {
+        // Volcado (Calma comidaConMacrosVolcadas): the chosen meal absorbs the day's remaining
+        // macros — but ONLY over the REGULAR comidas budget; peri (intra/post) is excluded from
+        // the volcado (Calma's "Macros para las comidas" = 190/130/60 ≠ day total incl. peri).
+        if (activeVolcado) {
+            const isPeriMeal = mealKey === 'Intra' || mealKey === 'Post';
+            if (mealKey === activeVolcado) {
+                const regulars = getMealOrder().filter(k => !['Intra', 'Post'].includes(k));
+                const dist = distribution?.comidas || {};
+                const budget = regulars.reduce((acc, k) => {
+                    const t = dist[k] || {};
+                    return { P: acc.P + (t.P || 0), H: acc.H + (t.H || 0), G: acc.G + (t.G || 0) };
+                }, { P: 0, H: 0, G: 0 });
+                const otherServed = regulars.filter(k => k !== activeVolcado).reduce((acc, k) => {
+                    const m = calculateMealMacros(k);
+                    return { P: acc.P + m.P, H: acc.H + m.H, G: acc.G + m.G };
+                }, { P: 0, H: 0, G: 0 });
+                const r1 = (v) => Math.max(0, Math.round(v * 10) / 10);
+                return { P: r1(budget.P - otherServed.P), H: r1(budget.H - otherServed.H), G: r1(budget.G - otherServed.G) };
+            }
+            // Peri keeps its normal peri target (just locked from editing); other regular meals
+            // are locked to their served macros (cuadrada).
+            if (isPeriMeal) return distribution?.periworkout?.[mealKey] || { P: 0, H: 0, G: 0 };
+            return calculateMealMacros(mealKey);
+        }
+
         // Volcado overlay takes absolute precedence
         if (distribTargetsOverlay?.[mealKey]) return distribTargetsOverlay[mealKey];
-        
+
         if (!distribution) return { P: 0, H: 0, G: 0 };
         if (mealKey === 'Intra' || mealKey === 'Post') {
             return distribution.periworkout?.[mealKey] || { P: 0, H: 0, G: 0 };
@@ -826,7 +905,8 @@ const NutritionPage = () => {
                     comidas: mealsData,
                     macros_snapshot: distribution?.resumen,
                     distribution_targets: distribTargetsOverlay || null,
-                    is_cuadrado: getDayStatus() === 'cuadrado'
+                    is_cuadrado: getDayStatus() === 'cuadrado',
+                    comida_volcada: volcadoMeal,
                 })
             });
             toast.success('Dieta guardada');
@@ -861,6 +941,58 @@ const NutritionPage = () => {
         } catch (err) { toast.error(err.message || 'Error copiando dieta'); }
     };
 
+    // ── Dietas favoritas (Calma guardarFavorita / favoritas) ──────────────────
+    const loadDietFavorites = async () => {
+        try {
+            const res = await api('/api/diets/favorites');
+            setDietFavorites(res.favorites || []);
+        } catch (err) { setDietFavorites([]); }
+    };
+
+    const saveDietFavorite = async (name) => {
+        try {
+            await api('/api/diets/favorites', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    tipo_dia: tipoDia, num_comidas: numComidas,
+                    momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
+                    comidas: mealsData, macros_snapshot: distribution?.resumen,
+                    distribution_targets: distribTargetsOverlay || null,
+                })
+            });
+            toast.success('Favorita guardada');
+            loadDietFavorites();
+        } catch (err) { toast.error('Error guardando favorita'); }
+    };
+
+    const applyDietFavorite = (fav) => {
+        // Load the favorite's meals + config into the current day (does NOT auto-save; the
+        // user saves/auto-saves the day after). Foods keep their stored macros_efectivos + raw.
+        setTipoDia(fav.tipo_dia || 'entrenamiento');
+        setNumComidas((fav.num_comidas === 3) ? 4 : (fav.num_comidas || 4));
+        setMomentoEntreno(fav.momento_entreno ?? 1);
+        setOpcionPeri((fav.opcion_peri === 'solo_post') ? 'solo_post' : 'intra_post');
+        setMealsData(fav.comidas || {});
+        setDistribTargetsOverlay(fav.distribution_targets || null);
+        setVolcadoMeal(null);
+        setFavoritesModalOpen(false);
+        toast.success(`Aplicada: ${fav.name}`);
+        loadDistribution({
+            tipoDia: fav.tipo_dia || 'entrenamiento',
+            numComidas: (fav.num_comidas === 3) ? 4 : (fav.num_comidas || 4),
+            momentoEntreno: fav.momento_entreno ?? 1,
+            opcionPeri: (fav.opcion_peri === 'solo_post') ? 'solo_post' : 'intra_post',
+        });
+    };
+
+    const deleteDietFavorite = async (id) => {
+        try {
+            await api(`/api/diets/favorites/${id}`, { method: 'DELETE' });
+            setDietFavorites(prev => prev.filter(f => f.id !== id));
+        } catch (err) { toast.error('Error eliminando favorita'); }
+    };
+
     // Day summary
     const dayMacros = calculateDayMacros();
     const dayTarget = distribution?.resumen || { P_total: 0, H_total: 0, G_total: 0, kcal_total: 0 };
@@ -870,37 +1002,39 @@ const NutritionPage = () => {
         G: Math.max(0, Math.round((dayTarget.G_total || 0) - dayMacros.G)),
     };
 
-    const handleVolcarMacros = async () => {
-        const regularMeals = getMealOrder().filter(k => !['Intra', 'Post'].includes(k));
-        const lastMeal = regularMeals[regularMeals.length - 1];
-        if (!lastMeal) return;
+    // Calma volcarMacros(t): meal `t` absorbs the day's remaining macros (target computed in
+    // getMealTarget), every OTHER meal is locked. Locking lives in `volcadoMeal` state, not in
+    // an overlay, so removing the volcado restores the normal per-meal targets exactly.
+    const isMealLocked = (mealKey) => activeVolcado != null && mealKey !== activeVolcado;
 
-        // Sum macros of ALL meals except the last one (including peri)
-        const otherServed = getMealOrder()
-            .filter(k => k !== lastMeal)
-            .reduce((acc, k) => {
-                const m = calculateMealMacros(k);
-                return { P: acc.P + m.P, H: acc.H + m.H, G: acc.G + m.G };
-            }, { P: 0, H: 0, G: 0 });
-
-        const targetForLastMeal = {
-            P: Math.max(0, Math.round((dayTarget.P_total || 0) - otherServed.P)),
-            H: Math.max(0, Math.round((dayTarget.H_total || 0) - otherServed.H)),
-            G: Math.max(0, Math.round((dayTarget.G_total || 0) - otherServed.G)),
-        };
-
-        const newOverlay = { ...(distribTargetsOverlay || {}), [lastMeal]: targetForLastMeal };
-        setDistribTargetsOverlay(newOverlay);
-        toast.success(`Macros volcados a ${mealInfo[lastMeal]?.name}`);
-
+    const persistVolcado = async (meal) => {
         try {
             await api('/api/diets', {
                 method: 'POST',
-                body: JSON.stringify({ fecha: currentDate, targets_only: true, distribution_targets: newOverlay })
+                body: JSON.stringify({
+                    fecha: currentDate,
+                    tipo_dia: tipoDia, num_comidas: numComidas,
+                    momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
+                    comidas: mealsData, macros_snapshot: distribution?.resumen,
+                    distribution_targets: distribTargetsOverlay || null,
+                    is_cuadrado: getDayStatus() === 'cuadrado',
+                    comida_volcada: meal,
+                })
             });
-        } catch (err) {
-            toast.error(`Error guardando volcado: ${err.message}`);
-        }
+        } catch (err) { /* silent: volcado state is already applied in the UI */ }
+    };
+
+    const handleVolcarToMeal = (mealKey) => {
+        if (['Intra', 'Post'].includes(mealKey)) return;
+        setVolcadoMeal(mealKey);
+        persistVolcado(mealKey);
+        toast.success(`Macros volcados en ${mealInfo[mealKey]?.name} — las demás comidas quedan bloqueadas`);
+    };
+
+    const handleEliminarVolcado = () => {
+        setVolcadoMeal(null);
+        persistVolcado(null);
+        toast.info('Volcado eliminado — reparto normal restaurado');
     };
     const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + dayMacros.G * 9;
     const targetKcal = dayTarget.kcal_total || 0;
@@ -935,9 +1069,34 @@ const NutritionPage = () => {
         return 'falta';
     };
 
+    // Latest savable snapshot for auto-save (read in the [currentDate] cleanup). Mirrors the
+    // manual saveDiet payload. Updated every render so the cleanup sees the data of the date
+    // being left (state hasn't reloaded the new date yet when the cleanup fires).
+    autoSaveRef.current = {
+        tipo_dia: tipoDia,
+        num_comidas: numComidas,
+        momento_entreno: momentoEntreno,
+        opcion_peri: opcionPeri,
+        comidas: mealsData,
+        macros_snapshot: distribution?.resumen,
+        distribution_targets: distribTargetsOverlay || null,
+        is_cuadrado: getDayStatus() === 'cuadrado',
+        comida_volcada: volcadoMeal,
+    };
+
+    // Calma macrosParaVolcar(e): the volcar action is offered on meal `e` ONLY when `e` is the
+    // SINGLE regular meal still not cuadrada and no volcado is active (comidasNoValidas.length
+    // == 1 && comidasNoValidas[0] == e && !comidaConMacrosVolcadas). Peri meals don't count.
+    const volcarTargetMeal = (() => {
+        if (activeVolcado || singleMeal) return null; // Calma: volcar disabled in single-meal mode
+        const regulars = getMealOrder().filter(k => !['Intra', 'Post'].includes(k));
+        const noValidas = regulars.filter(k => getMealStatus(k) !== 'cuadrada');
+        return noValidas.length === 1 ? noValidas[0] : null;
+    })();
+
     // Meal info
     const mealInfo = {
-        C1: { name: 'Comida 1', shortName: 'C1', emoji: '🌅' },
+        C1: { name: singleMeal ? 'Comida única' : 'Comida 1', shortName: 'C1', emoji: singleMeal ? '🍽️' : '🌅' },
         C2: { name: 'Comida 2', shortName: 'C2', emoji: '☀️' },
         C3: { name: numComidas === 3 ? 'Comida 3' : 'Comida 3', shortName: 'C3', emoji: numComidas === 3 ? '🌙' : '🌤️' },
         C4: { name: 'Comida 4', shortName: 'C4', emoji: '🌙' },
@@ -1089,12 +1248,11 @@ const NutritionPage = () => {
                     {/* Config Section */}
                     <ConfigSection
                         tipoDia={tipoDia}
-                        numComidas={numComidas}
-                        setNumComidas={handleSetNumComidas}
                         momentoEntreno={momentoEntreno}
                         setMomentoEntreno={handleSetMomentoEntreno}
                         opcionPeri={opcionPeri}
                         setOpcionPeri={handleSetOpcionPeri}
+                        singleMeal={singleMeal}
                     />
 
                     {/* Volcado de macros banner - Solo mostrar para hoy o futuro */}
@@ -1105,23 +1263,34 @@ const NutritionPage = () => {
                         dietDate.setHours(0, 0, 0, 0);
                         const isPast = dietDate < today;
 
-                        return distribution && !isPast && getDayStatus() === 'falta' && (remainingDay.P > 4 || remainingDay.H > 4 || remainingDay.G > 4) && (
-                            <div className="bg-orange-50 border border-brand-orange/30 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3">
-                                <div>
-                                    <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-1">Macros pendientes hoy</p>
-                                    <p className="text-sm text-gray-700">
-                                        {remainingDay.P > 0 && <span className="font-bold text-blue-600">{remainingDay.P}g P </span>}
-                                        {remainingDay.H > 0 && <span className="font-bold text-amber-500">{remainingDay.H}g H </span>}
-                                        {remainingDay.G > 0 && <span className="font-bold text-red-500">{remainingDay.G}g G</span>}
-                                    </p>
+                        if (activeVolcado) {
+                            return (
+                                <div className="bg-white border border-gray-100 shadow-md rounded-2xl p-4 mb-4 flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-gray-900 truncate">Macros volcados en {mealInfo[activeVolcado]?.name}</p>
+                                        <p className="text-xs text-gray-500">Las demás comidas quedan bloqueadas hasta quitarlo.</p>
+                                    </div>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="rounded-full font-bold shrink-0 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
+                                        onClick={handleEliminarVolcado}
+                                    >
+                                        Quitar volcado
+                                    </Button>
                                 </div>
-                                <Button
-                                    size="sm"
-                                    className="bg-brand-orange hover:bg-brand-orange/90 text-white rounded-full font-bold shrink-0"
-                                    onClick={handleVolcarMacros}
-                                >
-                                    Volcar a {mealInfo[getMealOrder().filter(k => !['Intra','Post'].includes(k)).slice(-1)[0]]?.name || 'última comida'}
-                                </Button>
+                            );
+                        }
+
+                        return distribution && !isPast && getDayStatus() === 'falta' && (remainingDay.P > 4 || remainingDay.H > 4 || remainingDay.G > 4) && (
+                            <div className="bg-orange-50 border border-brand-orange/30 rounded-2xl p-4 mb-4">
+                                <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-1">Macros pendientes hoy</p>
+                                <p className="text-sm text-gray-700">
+                                    {remainingDay.P > 0 && <span className="font-bold text-blue-600">{remainingDay.P}g P </span>}
+                                    {remainingDay.H > 0 && <span className="font-bold text-amber-500">{remainingDay.H}g H </span>}
+                                    {remainingDay.G > 0 && <span className="font-bold text-red-500">{remainingDay.G}g G</span>}
+                                    <span className="text-gray-400"> · volcalos a una comida con “Volcar aquí”.</span>
+                                </p>
                             </div>
                         );
                     })()}
@@ -1152,6 +1321,9 @@ const NutritionPage = () => {
                                 clearMeal={clearMeal}
                                 getFoodEmoji={getFoodEmoji}
                                 formatFoodQuantity={formatFoodQuantity}
+                                isLocked={isMealLocked(mealKey)}
+                                canVolcar={mealKey === volcarTargetMeal}
+                                onVolcar={handleVolcarToMeal}
                             />
                         ))}
                     </div>
@@ -1178,7 +1350,11 @@ const NutritionPage = () => {
                                 : <FileDown className="w-5 h-5" />
                             }
                         </Button>
-                        <Button variant="outline" className="h-12 w-12 rounded-full" onClick={() => setCopyModalOpen(true)}>
+                        {/* Dietas favoritas — ocultas por ahora (código + endpoints quedan listos).
+                        <Button variant="outline" className="h-12 w-12 rounded-full" onClick={openFavoritesModal} title="Dietas favoritas">
+                            <Star className="w-5 h-5" />
+                        </Button> */}
+                        <Button variant="outline" className="h-12 w-12 rounded-full" onClick={() => setCopyModalOpen(true)} title="Copiar a otra fecha">
                             <Copy className="w-5 h-5" />
                         </Button>
                     </div>
@@ -1255,6 +1431,16 @@ const NutritionPage = () => {
                 setCopyDate={setCopyDate}
                 onCopy={copyDiet}
                 currentDateFormatted={formatDate(currentDate)}
+            />
+
+            {/* Dietas favoritas */}
+            <FavoritesModal
+                open={favoritesModalOpen}
+                onClose={() => setFavoritesModalOpen(false)}
+                favorites={dietFavorites}
+                onSave={saveDietFavorite}
+                onApply={applyDietFavorite}
+                onDelete={deleteDietFavorite}
             />
 
             {/* Diet Calendar Modal */}

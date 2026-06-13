@@ -7,36 +7,22 @@ const MOMENTO_OPTIONS = [
     { value: 3, label: 'Después de Comida 3' },
 ];
 
+// Calma's peri model = a boolean `quiereIntraentrenamiento`: post is ALWAYS present, intra is
+// optional. So only two states. `solo_intra` and `sin_peri` did not exist in Calma — removed.
 const PERI_OPTIONS = [
     { value: 'intra_post', label: 'Intra + Post' },
     { value: 'solo_post', label: 'Solo Post' },
-    { value: 'solo_intra', label: 'Solo Intra' },
-    { value: 'sin_peri', label: 'Sin periworkout' },
 ];
 
-const ConfigSection = ({ tipoDia, numComidas, setNumComidas, momentoEntreno, setMomentoEntreno, opcionPeri, setOpcionPeri }) => {
-    const momentoOptions = numComidas === 3
-        ? MOMENTO_OPTIONS.filter(o => o.value < 3)
-        : MOMENTO_OPTIONS;
+const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri, setOpcionPeri, singleMeal = false }) => {
+    // Calma's diet is fixed at 4 meals (its z/J/W reparto tables are 4-meal). The 3-meal
+    // option (equitable 33%) had no Calma equivalent, so it was removed — meals are always 4.
+    const momentoOptions = MOMENTO_OPTIONS;
 
     return (
         <div className="bg-gray-100 rounded-xl p-3 mb-4" data-testid="config-section">
             <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600 font-medium">Comidas:</span>
-                    <div className="flex gap-1">
-                        {[3, 4].map(n => (
-                            <button
-                                key={n}
-                                onClick={() => { setNumComidas(n); if (n === 3 && momentoEntreno > 2) setMomentoEntreno(2); }}
-                                className={`w-8 h-8 rounded-full text-sm font-bold transition-all ${numComidas === n ? 'bg-brand-orange text-white shadow' : 'bg-white text-gray-600 border border-gray-300'}`}
-                                data-testid={`comidas-${n}-btn`}
-                            >{n}</button>
-                        ))}
-                    </div>
-                </div>
-
-                {tipoDia === 'entrenamiento' && (
+                {tipoDia === 'entrenamiento' && !singleMeal && (
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-600 font-medium">Entrenas:</span>
                         <select value={momentoEntreno} onChange={(e) => setMomentoEntreno(Number(e.target.value))}

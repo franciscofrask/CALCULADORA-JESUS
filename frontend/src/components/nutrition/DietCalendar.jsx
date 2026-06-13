@@ -11,6 +11,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
     const [year, setYear] = useState(today.getFullYear());
     const [month, setMonth] = useState(today.getMonth() + 1);
     const [calendarData, setCalendarData] = useState({});
+    const [macroChangeDates, setMacroChangeDates] = useState([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -20,6 +21,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
             try {
                 const res = await api(`/api/diets/calendar/${year}/${month}`);
                 setCalendarData(res.days || {});
+                setMacroChangeDates(res.macro_change_dates || []);
             } catch (err) {
                 console.error('Error loading calendar:', err);
             }
@@ -111,6 +113,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                                         const hasDiet = status?.status === 'complete' || status?.status === 'partial';
                                         const isCuadrado = hasDiet && status?.is_cuadrado === true;
                                         const isPartial = hasDiet && !isCuadrado;
+                                        const isMacroChange = macroChangeDates.includes(dateStr);
 
                                         return (
                                             <button
@@ -118,13 +121,18 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                                                 onClick={() => handleDayClick(day)}
                                                 className={`relative w-full aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-all
                                                     ${isToday ? 'ring-2 ring-orange-500' : ''}
+                                                    ${!isToday && isMacroChange ? 'ring-2 ring-blue-400' : ''}
                                                     ${isCuadrado ? 'bg-green-500/20 text-green-600 hover:bg-green-500/30' : ''}
                                                     ${isPartial ? 'bg-orange-500/20 text-orange-600 hover:bg-orange-500/30' : ''}
                                                     ${!hasDiet ? 'text-gray-600 hover:bg-gray-100' : ''}
                                                 `}
+                                                title={isMacroChange ? 'Cambio de macros desde este día' : undefined}
                                                 data-testid={`cal-day-${day}`}
                                             >
                                                 {day}
+                                                {isMacroChange && (
+                                                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                                )}
                                                 {hasDiet && (
                                                     <span className={`absolute bottom-0.5 w-1.5 h-1.5 rounded-full ${isCuadrado ? 'bg-green-500' : 'bg-orange-500'}`} />
                                                 )}
@@ -141,6 +149,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Cuadrada</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> Sin cuadrar</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" /> Sin dieta</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Cambio macros</span>
                     </div>
                 </div>
             </DialogContent>

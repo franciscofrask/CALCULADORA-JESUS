@@ -140,6 +140,10 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         {"$set": set_data}
     )
     
+    # Date-versioned macros (Calma todosLosMacros): the entry records the date FROM which these
+    # macros apply. Default = today. The resolver picks the latest entry with effective_date <=
+    # the diet date, so past diets keep the prior version.
+    effective_date = data.effective_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     macro_log = {
         "id": str(uuid.uuid4()),
         "client_id": client_id,
@@ -149,6 +153,8 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         "new_rest": rest,
         "training": training,
         "rest": rest,
+        "peri": set_data.get("macros_periworkout"),
+        "effective_date": effective_date,
         "note": data.note,
         "changed_by": user.get("name", user.get("email", "admin")),
         "client_weight": profile.get("weight"),

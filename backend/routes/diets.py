@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
 from typing import Optional
 import calendar
+import uuid
 
 from core.database import db
 from core.security import get_current_user
@@ -42,7 +43,10 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "macros_snapshot": data.get("macros_snapshot", None),
         "distribution_targets": data.get("distribution_targets", None),
-        "is_cuadrado": data.get("is_cuadrado", False)
+        "is_cuadrado": data.get("is_cuadrado", False),
+        # Calma comidaConMacrosVolcadas: which meal absorbs the day's remaining macros
+        # (the others are locked). null = no volcado.
+        "comida_volcada": data.get("comida_volcada", None),
     }
 
     await db.diets.update_one(
@@ -52,6 +56,50 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
     )
 
     return {"message": "Dieta guardada", "fecha": fecha}
+
+
+# ── Dietas favoritas (Calma guardarFavorita / favoritas) — plantillas de día con NOMBRE ──
+# Declaradas ANTES de /{fecha} para que "/favorites" no caiga en el path param.
+@router.post("/favorites")
+async def save_favorite(data: dict, user = Depends(get_current_user)):
+    """Guardar el día actual como plantilla favorita con un nombre."""
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Nombre requerido")
+    fav = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": name[:60],
+        "tipo_dia": data.get("tipo_dia", "entrenamiento"),
+        "num_comidas": data.get("num_comidas", 4),
+        "momento_entreno": data.get("momento_entreno", 1),
+        "opcion_peri": data.get("opcion_peri", "intra_post"),
+        "comidas": data.get("comidas", {}),
+        "macros_snapshot": data.get("macros_snapshot"),
+        "distribution_targets": data.get("distribution_targets"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.diet_favorites.insert_one(dict(fav))
+    return {"message": "Favorita guardada", "favorite": fav}
+
+
+@router.get("/favorites")
+async def list_favorites(user = Depends(get_current_user)):
+    """Lista las plantillas favoritas del usuario."""
+    favs = await db.diet_favorites.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"favorites": favs}
+
+
+@router.delete("/favorites/{fav_id}")
+async def delete_favorite(fav_id: str, user = Depends(get_current_user)):
+    """Eliminar una plantilla favorita."""
+    res = await db.diet_favorites.delete_one({"id": fav_id, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Favorita no encontrada")
+    return {"message": "Favorita eliminada"}
+
 
 @router.get("/recent")
 async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
@@ -122,8 +170,21 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
             "total_comidas": total_comidas,
             "is_cuadrado": diet.get("is_cuadrado", False)
         }
-    
-    return {"year": year, "month": month, "days": calendar_data}
+
+    # Días con cambio de macros (Calma esDiaConCambioDeMacros): effective_date de macro_history
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+    macro_change_dates = []
+    if profile:
+        hist = await db.macro_history.find(
+            {"client_id": profile["id"]}, {"_id": 0, "effective_date": 1, "created_at": 1}
+        ).to_list(500)
+        for h in hist:
+            d = h.get("effective_date") or str(h.get("created_at", ""))[:10]
+            if d and start_date <= d <= end_date:
+                macro_change_dates.append(d)
+
+    return {"year": year, "month": month, "days": calendar_data,
+            "macro_change_dates": sorted(set(macro_change_dates))}
 
 @router.patch("/{fecha}/targets")
 async def update_diet_targets(fecha: str, data: dict, user = Depends(get_current_user)):

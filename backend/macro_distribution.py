@@ -131,26 +131,26 @@ def _distribuir_escenario_4(
     momento: int
 ) -> Dict[str, Dict[str, float]]:
     """
-    Escenario 4: <50g H.
-    Regla: 10g van a la 2ª comida más importante (cercana al entreno).
-    Todo el resto va a la comida más importante (justo después del entreno).
-    Resto de comidas = 0g H.
+    Escenario 4: <50g H. Mirrors Calma `pe`:
+      - H < 30:  ALL carbs go to the post meal (s==a+1), 0 everywhere else.
+                 (e.g. h=25, momento1 -> [0,25,0,0], NOT [10,15,0,0].)
+      - 30 <= H < 50: post meal gets H-10, the secondary meal (s%4==a) gets 10, rest 0.
     P y G usan porcentajes del escenario 1.
     """
-    h_restantes = h_total - 10  # Lo que va a la comida principal
-    if h_restantes < 0:
-        h_restantes = 0
+    if h_total < 30:
+        h_principal = h_total       # post meal absorbs everything
+        h_secundaria = 0
+    else:
+        h_principal = max(0, h_total - 10)
+        h_secundaria = 10
 
-    # Momento 0: entreno en ayunas → post=C1 (principal), C4=secundaria
-    # Momento 1: entreno después C1 → post=C2 (principal), C1=secundaria
-    # Momento 2: entreno después C2 → post=C3 (principal), C2=secundaria
-    # Momento 3: entreno después C3 → post=C4 (principal), C3=secundaria
-
+    # principal = post meal (s == a+1); secundaria = s%4 == a
+    # Momento 0: post=C1, secundaria=C4 | 1: post=C2, sec=C1 | 2: post=C3, sec=C2 | 3: post=C4, sec=C3
     h_map = {
-        0: {"C1": h_restantes, "C2": 0, "C3": 0, "C4": 10},
-        1: {"C1": 10, "C2": h_restantes, "C3": 0, "C4": 0},
-        2: {"C1": 0, "C2": 10, "C3": h_restantes, "C4": 0},
-        3: {"C1": 0, "C2": 0, "C3": 10, "C4": h_restantes},
+        0: {"C1": h_principal, "C2": 0, "C3": 0, "C4": h_secundaria},
+        1: {"C1": h_secundaria, "C2": h_principal, "C3": 0, "C4": 0},
+        2: {"C1": 0, "C2": h_secundaria, "C3": h_principal, "C4": 0},
+        3: {"C1": 0, "C2": 0, "C3": h_secundaria, "C4": h_principal},
     }
 
     p_dist = DIST_E1[momento]
@@ -203,56 +203,22 @@ def _calcular_periworkout(
     """
     Calcula los macros de Intra y Post según la opción de periworkout.
 
-    opcion_peri:
-        "intra_post" → Intra 20%P/30%H, Post 80%P/70%H
-        "solo_post"  → Post 100%P/100%H
-        "solo_intra" → Intra 25%P/35%H, resto se reparte entre comidas
-        "sin_peri"   → Todo se reparte entre comidas
-    
-    Returns dict con claves "Intra" y/o "Post" y/o "extra_comidas" (macros a repartir).
+    Calma `pe` (a==B branch): post is ALWAYS present, intra optional (hayIntraentrenamiento).
+        "intra_post" → Intra 20%P/30%H, Post 80%P/70%H   (quiereIntra = true)
+        "solo_post"  → Post 100%P/100%H                  (quiereIntra = false)
+    `solo_intra` / `sin_peri` did NOT exist in Calma — removed. Anything else defaults to
+    intra_post.
     """
     resultado = {}
 
-    if opcion_peri == "intra_post":
-        resultado["Intra"] = {
-            "P": round(p_peri * 0.20, 1),
-            "H": round(h_peri * 0.30, 1),
-            "G": 0.0
-        }
-        resultado["Post"] = {
-            "P": round(p_peri * 0.80, 1),
-            "H": round(h_peri * 0.70, 1),
-            "G": 0.0
-        }
-        resultado["extra_comidas"] = {"P": 0.0, "H": 0.0}
-
-    elif opcion_peri == "solo_post":
+    if opcion_peri == "solo_post":
         resultado["Post"] = {
             "P": round(p_peri, 1),
             "H": round(h_peri, 1),
             "G": 0.0
         }
-        resultado["extra_comidas"] = {"P": 0.0, "H": 0.0}
-
-    elif opcion_peri == "solo_intra":
-        resultado["Intra"] = {
-            "P": round(p_peri * 0.25, 1),
-            "H": round(h_peri * 0.35, 1),
-            "G": 0.0
-        }
-        resultado["extra_comidas"] = {
-            "P": round(p_peri * 0.75, 1),
-            "H": round(h_peri * 0.65, 1)
-        }
-
-    elif opcion_peri == "sin_peri":
-        resultado["extra_comidas"] = {
-            "P": round(p_peri, 1),
-            "H": round(h_peri, 1)
-        }
-
     else:
-        # Default: intra_post
+        # intra_post (default)
         resultado["Intra"] = {
             "P": round(p_peri * 0.20, 1),
             "H": round(h_peri * 0.30, 1),
@@ -263,8 +229,8 @@ def _calcular_periworkout(
             "H": round(h_peri * 0.70, 1),
             "G": 0.0
         }
-        resultado["extra_comidas"] = {"P": 0.0, "H": 0.0}
 
+    resultado["extra_comidas"] = {"P": 0.0, "H": 0.0}
     return resultado
 
 
@@ -280,7 +246,8 @@ def distribuir_macros(
     tipo_dia: str,
     num_comidas: int,
     momento_entreno: int,
-    opcion_peri: str
+    opcion_peri: str,
+    single_meal: bool = False
 ) -> Dict:
     """
     FUNCIÓN PRINCIPAL — Distribuye los macros totales del día entre las comidas.
@@ -323,7 +290,12 @@ def distribuir_macros(
 
     # === DÍA DE DESCANSO ===
     if tipo_dia == "descanso":
-        comidas = _distribuir_descanso(p_descanso, h_descanso, g_descanso, num_comidas)
+        # Modo comida única (Calma esModoSinRepartoDeMacrosPorComidas): 1 comida con TODO el
+        # presupuesto del día, sin reparto. Descanso no tiene peri.
+        if single_meal:
+            comidas = {"C1": {"P": round(p_descanso, 1), "H": round(h_descanso, 1), "G": round(g_descanso, 1)}}
+        else:
+            comidas = _distribuir_descanso(p_descanso, h_descanso, g_descanso, num_comidas)
         _round_comidas_half(comidas)
 
         p_total = p_descanso
@@ -356,7 +328,12 @@ def distribuir_macros(
     extra_H = peri.get("extra_comidas", {}).get("H", 0.0)
 
     # 2. Distribuir comidas principales
-    if num_comidas == 3:
+    if single_meal:
+        # Modo comida única: la única comida recibe TODO el presupuesto de entreno (no-peri);
+        # el peri (intra/post) queda aparte. Sin escenarios de H ni reparto.
+        comidas = {"C1": {"P": round(p_entreno, 1), "H": round(h_entreno, 1), "G": round(g_entreno, 1)}}
+        escenario = 0
+    elif num_comidas == 3:
         # 3 comidas: reparto equitativo, sin escenarios de H
         comidas = _distribuir_3_comidas(p_entreno, h_entreno, g_entreno)
         escenario = 0
@@ -420,9 +397,10 @@ def distribuir_macros(
         "escenario": escenario,
         "config": {
             "tipo_dia": "entrenamiento",
-            "num_comidas": num_comidas,
+            "num_comidas": 1 if single_meal else num_comidas,
             "momento_entreno": momento_entreno,
-            "opcion_peri": opcion_peri
+            "opcion_peri": opcion_peri,
+            "single_meal": single_meal
         }
     }
 
@@ -526,35 +504,7 @@ def run_tests():
     test("Post P = 40 (100%)", r["periworkout"]["Post"]["P"], 40.0)
     test("Post H = 30 (100%)", r["periworkout"]["Post"]["H"], 30.0)
 
-    # --- TEST 5: Sin periworkout ---
-    print("\n--- 4 comidas, sin peri ---")
-    r = distribuir_macros(
-        p_entreno=180, h_entreno=250, g_entreno=65,
-        p_peri=40, h_peri=30,
-        p_descanso=180, h_descanso=200, g_descanso=65,
-        tipo_dia="entrenamiento", num_comidas=4,
-        momento_entreno=1, opcion_peri="sin_peri"
-    )
-    test("Sin Intra ni Post", len(r["periworkout"]), 0)
-    # Cada comida recibe extra 40/4=10P y 30/4=7.5H
-    test("C1 P incluye extra", r["comidas"]["C1"]["P"], 55.0)  # 45 + 10
-    test("C1 H incluye extra", r["comidas"]["C1"]["H"], 82.5)  # 75 + 7.5
-
-    # --- TEST 6: Solo intra ---
-    print("\n--- 4 comidas, solo intra ---")
-    r = distribuir_macros(
-        p_entreno=180, h_entreno=250, g_entreno=65,
-        p_peri=40, h_peri=30,
-        p_descanso=180, h_descanso=200, g_descanso=65,
-        tipo_dia="entrenamiento", num_comidas=4,
-        momento_entreno=1, opcion_peri="solo_intra"
-    )
-    test("Tiene Intra", "Intra" in r["periworkout"], True)
-    test("No tiene Post", "Post" not in r["periworkout"], True)
-    test("Intra P = 10 (25% de 40)", r["periworkout"]["Intra"]["P"], 10.0)
-    test("Intra H = 10.5 (35% de 30)", r["periworkout"]["Intra"]["H"], 10.5)
-    # Extra a comidas: 75% de 40P = 30P → 30/4 = 7.5 per comida
-    test("C1 P incluye extra", r["comidas"]["C1"]["P"], 52.5)  # 45 + 7.5
+    # (solo_intra / sin_peri eliminados — no existen en Calma)
 
     # --- TEST 7: Escenario 3 (50-100H) ---
     print("\n--- Escenario 3: 80H, momento 1 ---")
@@ -587,6 +537,22 @@ def run_tests():
     test("C1 H = 0", r["comidas"]["C1"]["H"], 0.0)
     test("C2 H = 10", r["comidas"]["C2"]["H"], 10.0)
     test("C3 H = 30 (40-10)", r["comidas"]["C3"]["H"], 30.0)
+    test("C4 H = 0", r["comidas"]["C4"]["H"], 0.0)
+
+    # --- TEST 8b: Escenario 4 con H<30 (todo al post) ---
+    print("\n--- Escenario 4: 25H (<30), momento 1 -> todo al post ---")
+    r = distribuir_macros(
+        p_entreno=180, h_entreno=25, g_entreno=65,
+        p_peri=40, h_peri=30,
+        p_descanso=180, h_descanso=20, g_descanso=65,
+        tipo_dia="entrenamiento", num_comidas=4,
+        momento_entreno=1, opcion_peri="intra_post"
+    )
+    test("Escenario", r["escenario"], 4)
+    # Calma: H<30 -> todo a C2 (post, s==a+1), 0 al resto. NO [10,15,0,0].
+    test("C1 H = 0", r["comidas"]["C1"]["H"], 0.0)
+    test("C2 H = 25 (todo)", r["comidas"]["C2"]["H"], 25.0)
+    test("C3 H = 0", r["comidas"]["C3"]["H"], 0.0)
     test("C4 H = 0", r["comidas"]["C4"]["H"], 0.0)
 
     # --- TEST 9: Escenario 2 (100-150H), en ayunas ---
