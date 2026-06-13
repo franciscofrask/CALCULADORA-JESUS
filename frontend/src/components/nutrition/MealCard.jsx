@@ -3,69 +3,54 @@ import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { ProgressBar } from './DaySummary';
 import {
-    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw
+    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp
 } from 'lucide-react';
 
 // Calma rounds the per-meal target to the nearest 0.5 g FOR DISPLAY ONLY (stepRedondeo).
 // The engine/remaining stay unrounded, so suggestions match Calma exactly.
 const fmtHalf = (x) => (Math.round((x || 0) * 2) / 2).toString();
+// Calma d(n,1): round to 1 decimal, drop trailing ".0" (e.g. 10.6, 50, 13.9).
+const fmt1 = (x) => { const r = Math.round((x || 0) * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
 
-const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, getMealStatus }) => {
+const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros }) => {
     const target = getMealTarget(mealKey);
     const served = calculateMealMacros(mealKey);
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
-    const status = getMealStatus(mealKey);
 
-    const getMacroDiff = (servedVal, targetVal) => {
-        const diff = targetVal - servedVal;
-        if (Math.abs(diff) <= 0) return { ok: true, diff: 0 };
-        return { ok: false, diff };
+    // Calma per-macro status (calcularIcono + etiqueta, margenValido = 4), r = target - served
+    // UNROUNDED: round(r)==0 -> "Cuadrado" (green); else "[Válido · ]?(faltan|sobran) X.Xg"
+    // where the "Válido" prefix shows when |r| < 4 (amber), otherwise danger (faltan yellow /
+    // sobran red). Matches Calma e.g. "Cuadrado", "Válido · sobran 3.3g", "sobran 14.8g".
+    const macroState = (servedVal, tgtVal) => {
+        const r = tgtVal - servedVal;
+        if (Math.round(r) === 0) return { txt: 'Cuadrado', cls: 'text-green-600', over: false };
+        const within = Math.abs(r) < 4;
+        const amt = (Math.round(Math.abs(r) * 10) / 10).toFixed(1);
+        const verb = r > 0 ? 'faltan' : 'sobran';
+        const txt = within ? `Válido · ${verb} ${amt}g` : `${r > 0 ? 'Faltan' : 'Sobran'} ${amt}g`;
+        const cls = within ? 'text-amber-500' : (r > 0 ? 'text-yellow-600' : 'text-red-600');
+        return { txt, cls, over: !within && r < 0 };
     };
 
-    const pDiff = getMacroDiff(served.P, target.P);
-    const hDiff = getMacroDiff(served.H, target.H);
-    const gDiff = !isPeri ? getMacroDiff(served.G, target.G) : { ok: true, diff: 0 };
-
-    const pOver = served.P > target.P;
-    const hOver = served.H > target.H;
-    const gOver = !isPeri && served.G > target.G;
-
-    let statusMessage = '';
-    let statusColor = '';
-
-    if (status === 'cuadrada') {
-        statusMessage = '🟢 Cuadrada'; statusColor = 'text-green-600';
-    } else if (pOver || hOver || gOver) {
-        const parts = [];
-        if (pOver) parts.push(`${(served.P - target.P).toFixed(0)}g P`);
-        if (hOver) parts.push(`${(served.H - target.H).toFixed(0)}g H`);
-        if (gOver) parts.push(`${(served.G - target.G).toFixed(0)}g G`);
-        statusMessage = `🔴 Sobran ${parts.join(', ')}`; statusColor = 'text-red-600';
-    } else if (status === 'falta') {
-        const parts = [];
-        if (!pDiff.ok && pDiff.diff > 0) parts.push(`${pDiff.diff.toFixed(0)}g P`);
-        if (!hDiff.ok && hDiff.diff > 0) parts.push(`${hDiff.diff.toFixed(0)}g H`);
-        if (!gDiff.ok && gDiff.diff > 0) parts.push(`${gDiff.diff.toFixed(0)}g G`);
-        if (parts.length > 0) { statusMessage = `🟡 Faltan ${parts.join(', ')}`; statusColor = 'text-yellow-600'; }
-    }
-
     const bars = [
-        { emoji: '🟢', label: 'P', val: served.P, tgt: target.P, color: '#4CAF50', over: pOver },
-        { emoji: '🔵', label: 'H', val: served.H, tgt: target.H, color: '#2196F3', over: hOver },
+        { emoji: '🟢', label: 'P', val: served.P, tgt: target.P, color: '#4CAF50', st: macroState(served.P, target.P) },
+        { emoji: '🔵', label: 'H', val: served.H, tgt: target.H, color: '#2196F3', st: macroState(served.H, target.H) },
     ];
-    if (!isPeri) bars.push({ emoji: '🟠', label: 'G', val: served.G, tgt: target.G, color: '#FFA500', over: gOver });
+    if (!isPeri) bars.push({ emoji: '🟠', label: 'G', val: served.G, tgt: target.G, color: '#FFA500', st: macroState(served.G, target.G) });
 
     return (
         <div className="bg-gray-50 rounded-lg p-3 mb-3" data-testid={`meal-progress-${mealKey}`}>
-            {bars.map(({ emoji, label, val, tgt, color, over }) => (
-                <div key={label} className="flex items-center gap-2 mb-2">
-                    <span className="w-5 text-center text-sm">{emoji}</span>
-                    <span className="w-4 text-xs font-semibold text-gray-600">{label}</span>
-                    <div className="flex-1"><ProgressBar value={val} max={tgt} color={color} height={8} showCheck /></div>
-                    <span className={`text-xs font-mono w-16 text-right ${over ? 'text-red-500 font-bold' : ''}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
+            {bars.map(({ emoji, label, val, tgt, color, st }) => (
+                <div key={label} className="mb-2">
+                    <div className="flex items-center gap-2">
+                        <span className="w-5 text-center text-sm">{emoji}</span>
+                        <span className="w-4 text-xs font-semibold text-gray-600">{label}</span>
+                        <div className="flex-1"><ProgressBar value={val} max={tgt} color={color} height={8} showCheck /></div>
+                        <span className={`text-xs font-mono w-16 text-right ${st.over ? 'text-red-500 font-bold' : ''}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
+                    </div>
+                    <div className={`text-[10px] font-semibold ${st.cls} ml-9`}>{st.txt}</div>
                 </div>
             ))}
-            {statusMessage && <div className={`text-xs font-semibold ${statusColor} mt-1`}>{statusMessage}</div>}
         </div>
     );
 };
@@ -74,7 +59,7 @@ const MealCard = ({
     mealKey, mealInfo, mealsData, expandedMeals, setExpandedMeals,
     getMealTarget, calculateMealMacros, getMealStatus,
     loadMenuOptions, setBuildMealModal, openRepeatModal,
-    removeFood, updateFoodQuantity, updateFoodQuantityDirect,
+    removeFood, moveFoodUp, updateFoodQuantity, updateFoodQuantityDirect,
     editingQuantity, setEditingQuantity, getQuantityIncrement,
     clearMeal, getFoodEmoji, formatFoodQuantity,
 }) => {
@@ -157,6 +142,11 @@ const MealCard = ({
                                             <div key={idx} className="bg-gray-50 rounded-lg p-3">
                                                 <div className="flex items-center justify-between mb-1">
                                                     <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                        <Button variant="outline" size="icon"
+                                                            className="h-8 w-8 rounded-full shrink-0 border-brand-orange/40 text-brand-orange bg-brand-orange/5 hover:bg-brand-orange hover:text-white disabled:opacity-25 disabled:border-gray-200 disabled:text-gray-300 disabled:bg-transparent disabled:cursor-not-allowed"
+                                                            disabled={idx === 0} onClick={() => moveFoodUp(mealKey, idx)} title="Subir">
+                                                            <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
+                                                        </Button>
                                                         <span className="text-sm font-semibold text-gray-800 truncate">{food.nombre}</span>
                                                     </div>
                                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-red-500" onClick={() => removeFood(mealKey, idx)}>
@@ -181,9 +171,9 @@ const MealCard = ({
                                                     <div className="text-xs text-gray-500">
                                                         {hasMacros ? (
                                                         <span>({[
-                                                            macros.P > 0 && `${(macros.P).toFixed(0)}P`,
-                                                            macros.H > 0 && `${(macros.H).toFixed(0)}H`,
-                                                            macros.G > 0 && `${(macros.G).toFixed(0)}G`,
+                                                            macros.P > 0 && `${fmt1(macros.P)}P`,
+                                                            macros.H > 0 && `${fmt1(macros.H)}H`,
+                                                            macros.G > 0 && `${fmt1(macros.G)}G`,
                                                         ].filter(Boolean).join(' | ')})</span>
                                                     ) : <span className="text-gray-400">(no aporta macros)</span>}
                                                     </div>

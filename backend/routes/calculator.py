@@ -4,6 +4,7 @@ Rutas del calculador de macros y búsqueda de alimentos.
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone, date
 import math
+import copy
 from typing import List, Dict, Any, Optional
 import uuid
 
@@ -179,21 +180,45 @@ async def calculate_meal(foods: List[Dict[str, Any]], user = Depends(get_current
 
 # ==================== CALMA ENGINE ====================
 
+def _efectivos_calma(alimento: dict, cantidad_g: float):
+    """Macros efectivos/brutos at `cantidad_g` using the SAME engine as the suggestion/
+    add path (calma_suggest), so editing a food's quantity stays consistent with how it
+    was first added. The legacy calcular_macros_efectivos divided granel macros by `racion`
+    instead of 100 (broke any food with racion != 100, e.g. prepared dishes), and used a
+    different regla — switching quantity replaced correct macros with garbage. Here:
+      - apply aplicar_regla_macros (regla 25% + _ajuste) on a copy,
+      - granel: scale by cantidad_g/100; unidades: macros are per-unit, scale by units
+        (cantidad_g / racion), which macros_at expects.
+    Returns ({P,H,G} efectivos, {P,H,G} brutos, {P,H,G} bool que_cuenta)."""
+    es_unidad = bool(alimento.get("unidades"))
+    racion = float(alimento.get("racion") or 100) or 100.0
+    cant_for_macros = (cantidad_g / racion) if es_unidad else cantidad_g
+    food_copy = copy.deepcopy(alimento)
+    aplicar_regla_macros_calma(food_copy)  # zeroes non-counting macros + sets _ajuste
+    m = macros_at_calma(food_copy, cant_for_macros)
+    efectivos = {"P": round(m["proteinas"], 1), "H": round(m["hidratos"], 1), "G": round(m["grasas"], 1)}
+    scale = (cantidad_g / racion) if es_unidad else (cantidad_g / 100.0)
+    brutos = {
+        "P": round(float(alimento.get("proteinas") or 0) * scale, 1),
+        "H": round(float(alimento.get("hidratos") or 0) * scale, 1),
+        "G": round(float(alimento.get("grasas") or 0) * scale, 1),
+    }
+    cuenta = {"P": efectivos["P"] > 0, "H": efectivos["H"] > 0, "G": efectivos["G"] > 0}
+    return efectivos, brutos, cuenta
+
+
 @router.post("/macros-efectivos")
 async def get_macros_efectivos(data: dict, user = Depends(get_current_user)):
     """Calcula los macros efectivos de un alimento."""
     alimento_id = data.get("alimento_id")
     cantidad_g = data.get("cantidad_g", 100)
-    es_vegano = data.get("es_vegano", False)
-    
+
     alimento = await db.foods.find_one({"id": alimento_id}, {"_id": 0})
     if not alimento:
         raise HTTPException(status_code=404, detail="Alimento no encontrado")
-    
-    efectivos = calcular_macros_efectivos(alimento, cantidad_g, es_vegano)
-    brutos = calcular_macros_brutos(alimento, cantidad_g)
-    cuenta = que_macros_cuentan(alimento, cantidad_g, es_vegano)
-    
+
+    efectivos, brutos, cuenta = _efectivos_calma(alimento, cantidad_g)
+
     return {
         "alimento": {
             "id": alimento.get("id"),
@@ -475,24 +500,17 @@ async def search_foods_endpoint(
         for a in alimentos:
             a["is_favorite"] = str(a.get("id", "")) in fav_ids
 
-        # Calma ordenarIngredientesPorMacro: diferenciaDeMacros ascending, then name.
-        # PLUS a marca-recomendada (PROMOCIONADO / "PRO") float: promoted brands
-        # (FullGas, Fitness Burger, My Fitness Meals — tagged "PRO" in categorias)
-        # surface to the TOP of their diferencia tier. Calma's UI shows e.g. FullGas
-        # above Tarrina even though FullGas has a slightly worse diferencia. The float
-        # is bucket-bounded (tier width = _PRO_TIER), so it ONLY moves promoted foods
-        # within their own tier — non-PRO relative order is identical to pure
-        # diferencia (the bucket key is monotonic in diferencia). Verified 15/15 vs
-        # Calma's huevos reference (training day, C1).
+        # Calma ordenarIngredientesPorMacro: PRIMARY sort is pure diferenciaDeMacros
+        # ascending, tie-break by nombre.localeCompare. NO promocionado/PRO float —
+        # the bundle's sort has no such bucket. PROMOCIONADO is only a badge; a promoted
+        # brand sits in its natural diferencia position (verified vs Dieta.8ec0f1e0.js
+        # ordenarIngredientesPorMacro on 2026-06-13: arroces paso 2 ranks by aporte,
+        # FullGas/Proenutrition "Zero" do NOT surface to the top).
         def _is_pro(f):
             return "PRO" in {t.strip().upper() for t in str(f.get("categorias", "") or "").split("|")}
-        _PRO_TIER = 10.0
         def _diff(f):
             d = f.get("_diferencia")
             return d if d is not None else float('inf')
-        def _bucket(f):
-            d = _diff(f)
-            return d if math.isinf(d) else round(d / _PRO_TIER) * _PRO_TIER
         # Calma cuadrarMacros phase (paso 3): after the diferencia order, a stable sort by
         # prioridad[fase] floats certain categories to the top after the diferencia order
         # (Calma's second sort in ordenarIngredientesPorMacro). de() = min matched index in
@@ -518,8 +536,6 @@ async def search_foods_endpoint(
         alimentos.sort(key=lambda f: (
             0 if f.get("is_favorite") else 1,
             _prioridad(f),
-            _bucket(f),
-            0 if _is_pro(f) else 1,
             _diff(f),
             f.get("nombre", "")
         ))

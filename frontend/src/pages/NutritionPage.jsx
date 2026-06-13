@@ -502,12 +502,17 @@ const NutritionPage = () => {
         const served = calculateMealMacros(mealKey);
         const foods = mealsData[mealKey]?.alimentos || [];
         if (foods.length === 0) return 'empty';
-        const margin = 0;
-        const pOk = Math.abs(target.P - served.P) <= margin;
-        const hOk = Math.abs(target.H - served.H) <= margin;
-        const gOk = mealKey === 'Intra' || mealKey === 'Post' || Math.abs(target.G - served.G) <= margin;
+        // Calma margenValido = 4: a macro is OK while |target - served| < 4. "Sobra" only when
+        // a macro genuinely overshoots by >= 4; "falta" otherwise. (margin 0 wrongly flagged
+        // a 0.2 g overshoot as "sobra".)
+        const margin = 4;
+        const isPeriMeal = mealKey === 'Intra' || mealKey === 'Post';
+        const pOk = Math.abs(target.P - served.P) < margin;
+        const hOk = Math.abs(target.H - served.H) < margin;
+        const gOk = isPeriMeal || Math.abs(target.G - served.G) < margin;
         if (pOk && hOk && gOk) return 'cuadrada';
-        if (served.P > target.P + margin || served.H > target.H + margin || served.G > target.G + margin) return 'sobra';
+        if (served.P - target.P >= margin || served.H - target.H >= margin ||
+            (!isPeriMeal && served.G - target.G >= margin)) return 'sobra';
         return 'falta';
     };
 
@@ -612,64 +617,43 @@ const NutritionPage = () => {
         }
     };
 
-    const updateFoodQuantity = async (mealKey, foodIndex, delta) => {
-        const foods = [...(mealsData[mealKey]?.alimentos || [])];
-        const food = foods[foodIndex];
-        const increment = delta !== null ? delta : getQuantityIncrement(food);
-        const newQuantity = Math.max(1, food.cantidad_g + (delta !== null ? delta : increment));
-        const isIncreasing = newQuantity > food.cantidad_g;
-        try {
-            const result = await api('/api/calculator/macros-efectivos', {
-                method: 'POST',
-                body: JSON.stringify({ alimento_id: food.alimento_id, cantidad_g: newQuantity, es_vegano: false })
-            });
-            if (isIncreasing) {
-                const target = getMealTarget(mealKey);
-                const margin = 0;
-                const ef = result.efectivos || {};
-                const otherP = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.P || 0), 0);
-                const otherH = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.H || 0), 0);
-                const otherG = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.G || 0), 0);
-                if ((ef.P > 0 && otherP + ef.P > target.P + margin) ||
-                    (ef.H > 0 && otherH + ef.H > target.H + margin) ||
-                    (ef.G > 0 && otherG + ef.G > target.G + margin)) {
-                    toast.error('No puedes aumentar más — superaría los macros objetivo.');
-                    return;
-                }
-            }
-            foods[foodIndex] = { ...food, cantidad_g: newQuantity, macros_efectivos: result.efectivos, macros_brutos: result.brutos, que_cuenta: result.que_cuenta };
-            setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
-        } catch (err) { console.error('Error updating quantity:', err); }
+    // Calma computes a food's macros synchronously on the client (K() = raw post-regla
+    // macros × quantity), never per-keystroke server calls. We do the same: scale the
+    // stored raw fields locally. This is race-free (no await between read and write) — the
+    // old version read mealsData from the render closure and awaited an API call, so rapid
+    // clicks overwrote each other and left cantidad_g out of sync with macros_efectivos
+    // (the "suma de a poco" lag). Calma also lets you set ANY quantity past the target
+    // (bars just go red); no block.
+    const scaleFood = (food, newQty) => {
+        const isUnit = food.por_unidad ?? food.unidades;
+        const racion = food.racion || 100;
+        // unidades: raw fields are per-unit -> scale by units (qty/racion). granel: per-100g.
+        const mult = isUnit ? (racion ? newQty / racion : 0) : newQty / 100;
+        const m = (k) => Math.round((food[k] || 0) * mult * 10) / 10;
+        return { ...food, cantidad_g: newQty, macros_efectivos: { P: m('proteinas'), H: m('hidratos'), G: m('grasas') } };
     };
 
-    const updateFoodQuantityDirect = async (mealKey, foodIndex, newQuantity) => {
-        const foods = [...(mealsData[mealKey]?.alimentos || [])];
-        const food = foods[foodIndex];
+    const updateFoodQuantity = (mealKey, foodIndex, delta) => {
+        setMealsData(prev => {
+            const foods = [...(prev[mealKey]?.alimentos || [])];
+            const food = foods[foodIndex];
+            if (!food) return prev;
+            const increment = delta !== null ? delta : getQuantityIncrement(food);
+            const newQuantity = Math.max(1, (food.cantidad_g || 0) + (delta !== null ? delta : increment));
+            foods[foodIndex] = scaleFood(food, newQuantity);
+            return { ...prev, [mealKey]: { alimentos: foods } };
+        });
+    };
+
+    const updateFoodQuantityDirect = (mealKey, foodIndex, newQuantity) => {
         const quantity = Math.max(1, parseInt(newQuantity) || 1);
-        const isIncreasing = quantity > food.cantidad_g;
-        try {
-            const result = await api('/api/calculator/macros-efectivos', {
-                method: 'POST',
-                body: JSON.stringify({ alimento_id: food.alimento_id, cantidad_g: quantity, es_vegano: false })
-            });
-            if (isIncreasing) {
-                const target = getMealTarget(mealKey);
-                const margin = 0;
-                const ef = result.efectivos || {};
-                const otherP = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.P || 0), 0);
-                const otherH = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.H || 0), 0);
-                const otherG = foods.filter((_, i) => i !== foodIndex).reduce((s, f) => s + (f.macros_efectivos?.G || 0), 0);
-                if ((ef.P > 0 && otherP + ef.P > target.P + margin) ||
-                    (ef.H > 0 && otherH + ef.H > target.H + margin) ||
-                    (ef.G > 0 && otherG + ef.G > target.G + margin)) {
-                    toast.error('Cantidad demasiado alta — superaría los macros objetivo.');
-                    setEditingQuantity({ mealKey: null, foodIndex: null });
-                    return;
-                }
-            }
-            foods[foodIndex] = { ...food, cantidad_g: quantity, macros_efectivos: result.efectivos, macros_brutos: result.brutos, que_cuenta: result.que_cuenta };
-            setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
-        } catch (err) { console.error('Error updating quantity:', err); }
+        setMealsData(prev => {
+            const foods = [...(prev[mealKey]?.alimentos || [])];
+            const food = foods[foodIndex];
+            if (!food) return prev;
+            foods[foodIndex] = scaleFood(food, quantity);
+            return { ...prev, [mealKey]: { alimentos: foods } };
+        });
         setEditingQuantity({ mealKey: null, foodIndex: null });
     };
 
@@ -678,6 +662,18 @@ const NutritionPage = () => {
             ...prev,
             [mealKey]: { alimentos: (prev[mealKey]?.alimentos || []).filter((_, i) => i !== foodIndex) }
         }));
+    };
+
+    // Reordenar ingrediente hacia arriba — replica Calma Dieta.subir = mover(e, -1):
+    // saca el elemento en i-1 y lo reinserta en i (swap adyacente con el anterior).
+    const moveFoodUp = (mealKey, foodIndex) => {
+        if (foodIndex <= 0) return;
+        setMealsData(prev => {
+            const foods = [...(prev[mealKey]?.alimentos || [])];
+            const n = foods.splice(foodIndex - 1, 1);
+            foods.splice(foodIndex, 0, n[0]);
+            return { ...prev, [mealKey]: { ...prev[mealKey], alimentos: foods } };
+        });
     };
 
     const clearMeal = (mealKey) => {
@@ -1147,6 +1143,7 @@ const NutritionPage = () => {
                                 setBuildMealModal={setBuildMealModal}
                                 openRepeatModal={openRepeatModal}
                                 removeFood={removeFood}
+                                moveFoodUp={moveFoodUp}
                                 updateFoodQuantity={updateFoodQuantity}
                                 updateFoodQuantityDirect={updateFoodQuantityDirect}
                                 editingQuantity={editingQuantity}

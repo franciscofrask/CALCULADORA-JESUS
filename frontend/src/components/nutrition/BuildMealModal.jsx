@@ -11,14 +11,15 @@ import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star } from 'lucide-react';
 import {
     faStopwatch20,
-    faEgg, faBacon, faBurger, faDove, faCow, faPiggyBank, faDrumstickBite, faFireFlameCurved,
+    faEgg, faBacon, faBurger, faDove, faCow, faPiggyBank, faDrumstickBite,
     faFish, faCheese, faJar, faJarWheat, faSeedling, faBowlRice,
     faBreadSlice, faPlateWheat, faBowlFood, faCarrot, faAppleWhole,
     faLeaf, faBottleWater, faBolt, faBlender, faPizzaSlice, faCookie,
-    faUtensils, faPepperHot, faBottleDroplet, faOilCan,
+    faPepperHot, faBottleDroplet, faOilCan,
     faCircleInfo, faDroplet, faCookieBite, faScaleBalanced,
     faSquareCheck, faWheatAwnCircleExclamation, faSnowflake, faRing,
     faThumbsUp, faClock, faFireBurner, faMedal,
+    faMugHot, faTrowelBricks, faCandyCane, faIceCream, faSmog,
 } from '@fortawesome/free-solid-svg-icons';
 
 const FREQUENT_CATEGORY = {
@@ -61,7 +62,7 @@ const SIDE_CATEGORIES = [
     { id: 'dulces',      value: 'dulces',      label: 'Dulces',       emoji: '🍫', icon: faCookie,        prefixes: ['29', '30', '31', '34', '35', '36', '37', '43', '44', '47'] },
     { id: 'salsas',      value: 'salsas',      label: 'Salsas',       emoji: '🥫', icon: faPepperHot,     prefixes: ['16'] },
     { id: 'grasas',      value: 'grasas',      label: 'Grasas',       emoji: '🫒', icon: faBottleDroplet, prefixes: ['17'] },
-    { id: 'sopas',       value: 'sopas',       label: 'Sopas',        emoji: '🍲', icon: faUtensils,      prefixes: ['48'] },
+    { id: 'sopas',       value: 'sopas',       label: 'Sopas',        emoji: '🍲', icon: faMugHot,        prefixes: ['48'] },
 ];
 
 // Step 3 - fat sources
@@ -75,7 +76,7 @@ const FAT_CATEGORIES = [
 // INTRA categories — Calma categoriasIntraentreno: ["18","41"] (chips hidden, pre-active)
 const INTRA_CATEGORIES = [
     { id: 'isotonicas',  value: 'isotonicas',  label: 'Isotónicas',  emoji: '💧', icon: faBottleWater, prefixes: ['18'] },
-    { id: 'aminoacidos', value: 'aminoacidos', label: 'Aminoácidos', emoji: '⚡', icon: faJar,         prefixes: ['41'] },
+    { id: 'aminoacidos', value: 'aminoacidos', label: 'Aminoácidos', emoji: '⚡', icon: faTrowelBricks, prefixes: ['41'] },
 ];
 
 // POST categories — single list, Calma categoriasPostentreno order:
@@ -88,10 +89,10 @@ const POST_CATEGORIES = [
     { id: 'pan',           value: 'pan',           label: 'Pan',               emoji: '🍞', icon: faBreadSlice, prefixes: ['8'] },
     { id: 'fruta',         value: 'fruta',         label: 'Fruta',             emoji: '🍎', icon: faAppleWhole, prefixes: ['11'] },
     { id: 'sustitutivos',  value: 'sustitutivos',  label: 'Sustitutivos',      emoji: '🥤', icon: faBlender,    prefixes: ['27'] },
-    { id: 'beb_vegetales', value: 'beb_vegetales', label: 'Bebidas vegetales', emoji: '🥛', icon: faBlender,    prefixes: ['24'] },
+    { id: 'beb_vegetales', value: 'beb_vegetales', label: 'Bebidas vegetales', emoji: '🥛', icon: faBottleWater, prefixes: ['24'] },
     { id: 'bebidas',       value: 'bebidas',       label: 'Bebidas',           emoji: '⚡', icon: faBolt,       prefixes: ['19'] },
-    { id: 'azucar',        value: 'azucar',        label: 'Cacao/Azúcar',      emoji: '🍯', icon: faCookie,     prefixes: ['37'] },
-    { id: 'postres',       value: 'postres',       label: 'Postres',           emoji: '🍮', icon: faCookieBite, prefixes: ['36'] },
+    { id: 'azucar',        value: 'azucar',        label: 'Cacao/Azúcar',      emoji: '🍯', icon: faCandyCane,  prefixes: ['37'] },
+    { id: 'postres',       value: 'postres',       label: 'Postres',           emoji: '🍮', icon: faIceCream,   prefixes: ['36'] },
     { id: 'salsas',        value: 'salsas',        label: 'Salsas',            emoji: '🥫', icon: faPepperHot,  prefixes: ['16'] },
 ];
 
@@ -102,7 +103,7 @@ const PREPARATIONS = [
     { value: 'PRO', label: 'Marca recomendada con descuento especial', icon: faMedal },
     { value: 'FRE', label: 'Frescos',                                  icon: faDroplet },
     { value: 'CGE', label: 'Congelados',                               icon: faSnowflake },
-    { value: 'AHU', label: 'Ahumados',                                 icon: faFireFlameCurved },
+    { value: 'AHU', label: 'Ahumados',                                 icon: faSmog },
     { value: 'LAT', label: 'Conservas',                                icon: faRing },
     { value: 'POL', label: 'En polvo',                                 icon: faJar },
     { value: 'PRE', label: 'Preparado',                                icon: faThumbsUp },
@@ -162,9 +163,6 @@ const BuildMealModal = ({
     const [adjustedMacros, setAdjustedMacros] = useState({ P: 0, H: 0, G: 0 });
 
     const [favorites, setFavorites] = useState(new Set());
-    const [emptyCategoryIds, setEmptyCategoryIds] = useState(new Set());
-    const [checkingCategories, setCheckingCategories] = useState(false);
-    const lastCheckedRemaining = React.useRef(null);
 
     // Preparation filter
     const [selectedPreparations, setSelectedPreparations] = useState([]);
@@ -175,16 +173,32 @@ const BuildMealModal = ({
     const isPeriMode = isIntraMode || isPostMode;
 
     const target = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0, G: 0 };
-    const existingServed = (mealsData[mealKey]?.alimentos || []).reduce((acc, f) => ({
-        P: acc.P + (f.macros_efectivos?.P || 0),
-        H: acc.H + (f.macros_efectivos?.H || 0),
-        G: acc.G + (f.macros_efectivos?.G || 0)
-    }), { P: 0, H: 0, G: 0 });
-    const served = tempFoods.reduce((acc, f) => ({
-        P: acc.P + (f.macros_efectivos?.P || 0),
-        H: acc.H + (f.macros_efectivos?.H || 0),
-        G: acc.G + (f.macros_efectivos?.G || 0)
-    }), { P: existingServed.P, H: existingServed.H, G: existingServed.G });
+    // Calma's macroEnIngredientes sums UNROUNDED per-food contributions (raw post-regla
+    // macros × quantity). The stored macros_efectivos are rounded to 1 decimal for display;
+    // summing those loses ~0.05 g/food, enough to flip a floor() in the suggested quantity
+    // (e.g. tikka H = 26.5×1.37 = 36.305 → remaining 10.495, not 10.5 → Tasty rice 13 g not
+    // 14 g) and reorder the list. Rebuild the contribution from the raw fields, gated by
+    // macros_efectivos so regla-25% zeroed macros stay zero; fall back to the rounded
+    // efectivos when raw fields are absent (older saved diets).
+    const foodContrib = (f) => {
+        const ef = f.macros_efectivos || {};
+        const isUnit = f.por_unidad ?? f.unidades;
+        const racion = f.racion || 100;
+        const qty = f.cantidad_g ?? f.cantidad ?? 0;
+        const factor = isUnit ? (racion ? qty / racion : 0) : qty / 100;
+        const m = (rawKey, efVal) => {
+            if (!(efVal > 0)) return 0;                       // zeroed by regla -> stays 0
+            const raw = f[rawKey];
+            return (raw != null && qty) ? raw * factor : (efVal || 0);  // unrounded if raw present
+        };
+        return { P: m('proteinas', ef.P), H: m('hidratos', ef.H), G: m('grasas', ef.G) };
+    };
+    const sumContrib = (list, acc) => list.reduce((a, f) => {
+        const c = foodContrib(f);
+        return { P: a.P + c.P, H: a.H + c.H, G: a.G + c.G };
+    }, acc);
+    const existingServed = sumContrib(mealsData[mealKey]?.alimentos || [], { P: 0, H: 0, G: 0 });
+    const served = sumContrib(tempFoods, { ...existingServed });
     const remaining = {
         P: Math.max(0, target.P - served.P),
         H: Math.max(0, target.H - served.H),
@@ -215,16 +229,24 @@ const BuildMealModal = ({
         } catch (e) { /* ignore */ }
     };
 
-    // Calma per-macro status (margenValido = 4): round(remaining)==0 -> Cuadrado (green),
-    // |remaining|<4 -> Válido (amber), served>target -> Sobran X (red), else Faltan (default).
+    // Calma rounds the per-meal target to the nearest 0.5 g FOR DISPLAY ONLY (stepRedondeo):
+    // an internal H target of 46.8 shows as "47". The status math below stays UNROUNDED so
+    // "Faltan 10.5g" = 46.8 - 36.3, matching Calma exactly.
+    const fmtHalf = (x) => (Math.round((x || 0) * 2) / 2).toString();
+
+    // Calma calcularIcono (margenValido = 4), per macro, using r = target - served (UNROUNDED):
+    //   round(r)==0 -> Cuadrado (green check) | |r|<4 -> Válido (amber check) |
+    //   else danger (red xmark): Faltan r (r>0) / Sobran |r| (r<0).
     const MARGEN_VALIDO = 4;
     const macroStatus = (s, tgt) => {
         if (!tgt) return null;
-        const t = Math.round(tgt - s);          // remaining, rounded
-        if (t === 0) return { label: 'Cuadrado', cls: 'text-green-600' };
-        if (t < 0) return { label: `Sobran ${-t}g`, cls: 'text-red-500' };
-        if (t < MARGEN_VALIDO) return { label: 'Válido', cls: 'text-amber-500' };
-        return null;  // still far ("faltan") -> no label, the number already shows it
+        const r = tgt - s;                       // remaining, unrounded (Calma: macros - enIngredientes)
+        if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-green-600' };
+        if (Math.abs(r) < MARGEN_VALIDO) return { label: 'Válido', cls: 'text-amber-500' };
+        const g = Math.round(Math.abs(r) * 10) / 10;
+        return r > 0
+            ? { label: `Faltan ${g}g`, cls: 'text-red-500' }
+            : { label: `Sobran ${g}g`, cls: 'text-red-500' };
     };
 
     const isCuadrada = Math.abs(target.P - served.P) <= 0 &&
@@ -331,8 +353,6 @@ const BuildMealModal = ({
             setSelectedFood(null);
             setSelectedPreparations([]);
             setAvailablePreps([]);
-            setEmptyCategoryIds(new Set());
-            setCheckingCategories(false);
 
             // Determine correct starting paso based on already-saved foods in this meal
             if (!isPeriMode) {
@@ -450,53 +470,6 @@ const BuildMealModal = ({
         return () => { cancelled = true; };
     }, [remaining.P, remaining.H, remaining.G, selectedCategories, selectedPreparations]); // eslint-disable-line
 
-    // Pre-check which categories have available foods
-    useEffect(() => {
-        const hasMacros = target.P > 0 || target.H > 0 || target.G > 0;
-        if (!open || !hasMacros) {
-            setEmptyCategoryIds(new Set());
-            setCheckingCategories(false);
-            return;
-        }
-        const cats = getCurrentCategories();
-        // Only pass macros that are still needed (> 0) so the backend doesn't
-        // exclude foods for "full" macros — categories should show if they have
-        // any food that fits what's still missing
-        // Use the SAME params as the real food load (getMacrosParams) so the grid's
-        // empty-detection matches what the category actually shows. Always send each
-        // macro (max(0, remaining)) — a 0 means that macro is complete, so foods that
-        // would add to it get excluded by the engine.
-        const macroParams = {};
-        if (target.P > 0) macroParams.p_rest = Math.max(0, remaining.P);
-        if (target.H > 0) macroParams.h_rest = Math.max(0, remaining.H);
-        if (target.G > 0) macroParams.g_rest = Math.max(0, remaining.G);
-        if (paso === 3) macroParams.cuadrar = 'true';
-        let cancelled = false;
-        setCheckingCategories(true);
-        lastCheckedRemaining.current = null; // invalidate until check completes
-        // Exclude virtual categories (no backend prefix to check)
-        const checkableCats = cats.filter(cat => cat.prefixes?.length > 0);
-        Promise.all(checkableCats.map(async cat => {
-            try {
-                const params = new URLSearchParams({ q: '', category: cat.prefixes.join(','), limit: '1', ...macroParams });
-                const result = await api(`/api/calculator/search?${params}`);
-                // Hide the category if NO food fits — i.e. every food would overshoot an
-                // already-complete macro. Zero-macro foods (me=inf) still count as present,
-                // so categories that can still take a "No aporta macros" filler stay visible.
-                return { id: cat.id, empty: (result.alimentos || []).length === 0 };
-            } catch {
-                return { id: cat.id, empty: false };
-            }
-        })).then(results => {
-            if (!cancelled) {
-                setEmptyCategoryIds(new Set(results.filter(r => r.empty).map(r => r.id)));
-                setCheckingCategories(false);
-                lastCheckedRemaining.current = { P: remaining.P, H: remaining.H, G: remaining.G };
-            }
-        });
-        return () => { cancelled = true; };
-    }, [open, paso, remaining.P, remaining.H, remaining.G]); // eslint-disable-line
-
     const getMacrosParams = () => {
         // Calma's manual builder uses ONE unified remaining (full meal target minus
         // added ingredients), all three macros, NO tolerance. The engine (calma_suggest)
@@ -514,7 +487,7 @@ const BuildMealModal = ({
 
 
     const handleCategoriesChange = (ids) => {
-        setSelectedCategories(allCategories.filter(c => ids.includes(c.id)));
+        setSelectedCategories(getCurrentCategories().filter(c => ids.includes(c.id)));
         setCategoryFoods([]);
         setSelectedPreparations([]);
     };
@@ -744,13 +717,12 @@ const BuildMealModal = ({
         return 'Paso 3: Últimos toques';
     };
 
-    const allCategories = getCurrentCategories();
-    const hasMacrosContext = remaining.P > 0 || remaining.H > 0 || remaining.G > 0;
-    const lcr = lastCheckedRemaining.current;
-    const isStaleCheck = !lcr || lcr.P !== remaining.P || lcr.H !== remaining.H || lcr.G !== remaining.G;
-    const categories = hasMacrosContext
-        ? allCategories.filter(cat => !emptyCategoryIds.has(cat.id))
-        : allCategories;
+    // Calma shows ALL category chips for the current phase (filtrosSinAlergias only removes
+    // allergy categories); it NEVER hides a category because its foods don't fit the remaining.
+    // Individual foods that overshoot are still excluded server-side (ajustarCantidad -> 0).
+    // We mirror that: no emptiness-based chip hiding (was dropping most chips in paso 3, where
+    // the remaining is tiny). filterAvoided() already applied the allergy removal upstream.
+    const categories = getCurrentCategories();
     const displayFoods = isSearching ? searchResults : categoryFoods;
 
     // Preparations available for the selected category
@@ -776,21 +748,21 @@ const BuildMealModal = ({
                             <div>
                                 <div className="text-xs text-gray-500">Proteína</div>
                                 <div className={`font-bold ${served.P > target.P ? 'text-red-500' : 'text-orange-500'}`}>
-                                    {served.P.toFixed(1)}/{target.P}g
+                                    {served.P.toFixed(1)}/{fmtHalf(target.P)}g
                                 </div>
                                 {(() => { const st = macroStatus(served.P, target.P); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
                             </div>
                             <div>
                                 <div className="text-xs text-gray-500">Hidratos</div>
                                 <div className={`font-bold ${served.H > target.H ? 'text-red-500' : 'text-blue-500'}`}>
-                                    {served.H.toFixed(1)}/{target.H}g
+                                    {served.H.toFixed(1)}/{fmtHalf(target.H)}g
                                 </div>
                                 {(() => { const st = macroStatus(served.H, target.H); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
                             </div>
                             <div>
                                 <div className="text-xs text-gray-500">Grasas</div>
                                 <div className={`font-bold ${served.G > target.G ? 'text-red-500' : 'text-yellow-500'}`}>
-                                    {served.G.toFixed(1)}/{target.G}g
+                                    {served.G.toFixed(1)}/{fmtHalf(target.G)}g
                                 </div>
                                 {!isPeriMode && (() => { const st = macroStatus(served.G, target.G); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
                             </div>
@@ -820,24 +792,13 @@ const BuildMealModal = ({
 
                     {/* Category + Preparation Rails — hidden for intra (Calma: chips hidden) */}
                     {!isCuadrada && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-white space-y-2">
-                        {(checkingCategories || isStaleCheck) ? (
-                            <div className="flex items-center gap-2 h-8">
-                                <span className="text-xs font-bold text-gray-500">Categorías:</span>
-                                <div className="flex gap-1.5">
-                                    {[...Array(5)].map((_, i) => (
-                                        <div key={i} className="w-8 h-8 rounded-full bg-gray-100 animate-pulse" />
-                                    ))}
-                                </div>
-                            </div>
-                        ) : (
-                            <CategoryRail
-                                label="Categorías:"
-                                categories={categories}
-                                value={selectedCategories.map(c => c.id)}
-                                onChange={handleCategoriesChange}
-                                size="sm"
-                            />
-                        )}
+                        <CategoryRail
+                            label="Categorías:"
+                            categories={categories}
+                            value={selectedCategories.map(c => c.id)}
+                            onChange={handleCategoriesChange}
+                            size="sm"
+                        />
                         {selectedCategories.length > 0 && availablePreparations.length > 0 && (
                             <CategoryRail
                                 label="Preparación:"
