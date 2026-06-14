@@ -428,11 +428,19 @@ const BuildMealModal = ({
             if (target.P > 0) params.set('p_rest', Math.max(0, remaining.P));
             if (target.H > 0) params.set('h_rest', Math.max(0, remaining.H));
             if (target.G > 0) params.set('g_rest', Math.max(0, remaining.G));
-            // Peri (intra/post): no grasas objetivo, but the fat budget = (target.G - served.G)
-            // + margenValido lets a little fat be sized/ordered (Calma). Backend clamps negatives.
-            if (isIntraMode) { params.set('peri', 'intra'); params.set('g_rest', target.G - served.G + MARGEN_VALIDO); }
-            else if (isPostMode) { params.set('peri', 'post'); params.set('g_rest', target.G - served.G + MARGEN_VALIDO); }
-            else if (paso === 3) params.set('cuadrar', 'true');  // good-fat prioridad sort
+            // Calma prioridad fase (Dieta.js ordenarIngredientesPorMacro): once P AND H are >80%
+            // of target (porcentajeSuficienteMacros) the sort switches to `cuadrarMacros` (good
+            // fats) REGARDLESS of meal type; otherwise peri uses its own list. Peri meals always
+            // add margenValido to the fat budget (g_rest), independent of the fase.
+            const sufP = !(target.P > 0) || served.P / target.P > 0.8;
+            const sufH = !(target.H > 0) || served.H / target.H > 0.8;
+            if (isIntraMode || isPostMode) {
+                // peri = MEAL TYPE (post → cat-25 universe + grasas margin); sent always.
+                params.set('peri', isIntraMode ? 'intra' : 'post');
+                params.set('g_rest', target.G - served.G + MARGEN_VALIDO);
+            }
+            // cuadrar = prioridad FASE (good fats), once P&H >80% — independent of meal type.
+            if (sufP && sufH || paso === 3) params.set('cuadrar', 'true');
             if (selectedPreparations.length > 0) params.set('tag', selectedPreparations.join(','));
             api(`/api/calculator/search?${params}`).then(result => {
                 if (!cancelled) {
@@ -457,11 +465,15 @@ const BuildMealModal = ({
         if (target.P > 0) params.p_rest = Math.max(0, remaining.P);
         if (target.H > 0) params.h_rest = Math.max(0, remaining.H);
         if (target.G > 0) params.g_rest = Math.max(0, remaining.G);
-        // Peri meals use their own prioridad lists; paso 3 normal meal = cuadrarMacros.
-        // Peri fat budget = (target.G - served.G) + margenValido (Calma). Backend clamps negatives.
-        if (isIntraMode) { params.peri = 'intra'; params.g_rest = target.G - served.G + MARGEN_VALIDO; }
-        else if (isPostMode) { params.peri = 'post'; params.g_rest = target.G - served.G + MARGEN_VALIDO; }
-        else if (paso === 3) params.cuadrar = 'true';
+        // Calma prioridad fase: cuadrarMacros once P&H >80% of target (any meal); else peri uses
+        // its own list. Peri meals always add margenValido to the fat budget (g_rest).
+        const sufP = !(target.P > 0) || served.P / target.P > 0.8;
+        const sufH = !(target.H > 0) || served.H / target.H > 0.8;
+        if (isIntraMode || isPostMode) {
+            params.peri = isIntraMode ? 'intra' : 'post';   // meal type: cat-25 universe + grasas margin
+            params.g_rest = target.G - served.G + MARGEN_VALIDO;
+        }
+        if (sufP && sufH || paso === 3) params.cuadrar = 'true';   // prioridad fase (good fats)
         return params;
     };
 

@@ -457,6 +457,15 @@ async def search_foods_endpoint(
 
     alimentos = [a for a in alimentos if not is_avoided(a)]
 
+    # POSTENTRENO universe restriction (Calma Dieta.js `todosLosAlimentos`):
+    #   nombre == "postentreno" ? G(getTodosLosAlimentos, ["25"]) : getTodosLosAlimentos
+    # i.e. for postentreno the WHOLE food universe is restricted to category "25" = "Postentreno"
+    # (utils_ I map: ["25","Postentreno"]) — fast-digesting recovery foods. Intersected with the
+    # picked category this is why e.g. the Salsas/Siropes/Konjac category in postentreno shows
+    # ONLY the siropes (the only cat-16 foods also tagged 25). Intraentreno is NOT restricted.
+    if peri == "post":
+        alimentos = [a for a in alimentos if food_in_cat_calma(a, "25")]
+
     # Collect available preparations using Calma-equivalent test functions (before filtering).
     available_preps = [p for p in _PREPS_ORDER if any(_PREP_TESTS[p](a) for a in alimentos)]
 
@@ -552,7 +561,16 @@ async def search_foods_endpoint(
                      "11.1", "11.4", "11.6", "11.7", "21.2", "7.3.1", "8", "24", "19.1",
                      "18.1", "18.2", "37", "16.5", "16.1"),
         }
-        _prior_list = _PRIOR_LISTS.get(peri) if peri in ("intra", "post") else (_PRIOR_LISTS["cuadrar"] if cuadrar else None)
+        # Calma fase selection (Dieta.js ordenarIngredientesPorMacro): `cuadrarMacros` once P&H
+        # are >80% of target, REGARDLESS of meal type, takes precedence over the peri list.
+        # `peri` (post/intra) is the MEAL TYPE (drives the cat-25 universe + grasas margin) and is
+        # sent independently of `cuadrar`, so cuadrar must win here when both are present.
+        if cuadrar:
+            _prior_list = _PRIOR_LISTS["cuadrar"]
+        elif peri in ("intra", "post"):
+            _prior_list = _PRIOR_LISTS[peri]
+        else:
+            _prior_list = None
         def _prioridad(f):
             if not _prior_list:
                 return 0
