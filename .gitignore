@@ -253,3 +253,7 @@ credentials.json
 backend/calma_alimentos.json
 backend/firebase_foods.json
 _calma_ref/
+
+# Server logs
+backend.log
+backend/*.log

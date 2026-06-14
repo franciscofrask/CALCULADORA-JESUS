@@ -1025,10 +1025,17 @@ const NutritionPage = () => {
     // Day summary
     const dayMacros = calculateDayMacros();
     const dayTarget = distribution?.resumen || { P_total: 0, H_total: 0, G_total: 0, kcal_total: 0 };
+    // Peri (intra/post) grasas do NOT count toward the comidas budget. Calma: peri objetivo has
+    // no grasas key, so resumen.G_total = sum(comidas.G) only (backend macro_distribution sums
+    // peri P/H but NOT G). dayMacros.G however includes peri served grasas → subtract them so the
+    // comidas G served stays consistent with the comidas-only G_total. (P/H need no subtraction:
+    // their _total budgets already include peri.)
+    const servedPeriG = (calculateMealMacros('Intra').G || 0) + (calculateMealMacros('Post').G || 0);
+    const comidasG = dayMacros.G - servedPeriG;
     const remainingDay = {
         P: Math.max(0, Math.round((dayTarget.P_total || 0) - dayMacros.P)),
         H: Math.max(0, Math.round((dayTarget.H_total || 0) - dayMacros.H)),
-        G: Math.max(0, Math.round((dayTarget.G_total || 0) - dayMacros.G)),
+        G: Math.max(0, Math.round((dayTarget.G_total || 0) - comidasG)),
     };
 
     // Calma volcarMacros(t): meal `t` absorbs the day's remaining macros (target computed in
@@ -1065,7 +1072,7 @@ const NutritionPage = () => {
         persistVolcado(null);
         toast.info('Volcado eliminado — reparto normal restaurado');
     };
-    const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + dayMacros.G * 9;
+    const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + comidasG * 9;  // peri grasas excluded (match G_total)
     const targetKcal = dayTarget.kcal_total || 0;
     
     // Periworkout totals from distribution
@@ -1082,7 +1089,7 @@ const NutritionPage = () => {
         const margin = 0;
         const pDiff = dayMacros.P - (dayTarget.P_total || 0);
         const hDiff = dayMacros.H - (dayTarget.H_total || 0);
-        const gDiff = dayMacros.G - (dayTarget.G_total || 0);
+        const gDiff = comidasG - (dayTarget.G_total || 0);  // peri grasas excluded from comidas G
 
         const pOver = pDiff > margin;
         const hOver = hDiff > margin;
@@ -1206,6 +1213,7 @@ const NutritionPage = () => {
                     dayTarget={dayTarget}
                     servedPeriP={servedPeriP}
                     servedPeriH={servedPeriH}
+                    servedPeriG={servedPeriG}
                     totalPeriP={totalPeriP}
                     totalPeriH={totalPeriH}
                     opcionPeri={opcionPeri}

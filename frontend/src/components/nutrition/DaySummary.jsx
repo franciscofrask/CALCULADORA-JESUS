@@ -24,11 +24,13 @@ export const ProgressBar = ({ value, max, color, height = 6, showCheck = false }
 // Day Summary (sticky top bar)
 const DaySummary = ({
     tipoDia, summaryExpanded, setSummaryExpanded,
-    dayMacros, dayTarget, servedPeriP, servedPeriH, totalPeriP, totalPeriH,
+    dayMacros, dayTarget, servedPeriP, servedPeriH, servedPeriG = 0, totalPeriP, totalPeriH,
     opcionPeri, mealOrder, mealInfo, calculateMealMacros, getMealStatus, getDayStatus,
 }) => {
     const mainP = dayMacros.P - servedPeriP;
     const mainH = dayMacros.H - servedPeriH;
+    // Peri grasas don't count toward the comidas G budget (Calma: peri has no grasas objetivo).
+    const mainG = dayMacros.G - servedPeriG;
     const tgtP = dayTarget.P_entreno ?? dayTarget.P_total;
     const tgtH = dayTarget.H_entreno ?? dayTarget.H_total;
     const tgtG = dayTarget.G_entreno ?? dayTarget.G_total;
@@ -60,7 +62,7 @@ const DaySummary = ({
                 {[
                     { emoji: '🟢', label: 'P', val: mainP, tgt: tgtP, color: '#4CAF50' },
                     { emoji: '🔵', label: 'H', val: mainH, tgt: tgtH, color: '#2196F3' },
-                    { emoji: '🟠', label: 'G', val: dayMacros.G, tgt: tgtG, color: '#FFA500' },
+                    { emoji: '🟠', label: 'G', val: mainG, tgt: tgtG, color: '#FFA500' },
                 ].map(({ emoji, label, val, tgt, color }) => (
                     <div key={label} className="flex items-center gap-2 text-xs mb-1.5">
                         <span className="w-4 text-center">{emoji}</span>
@@ -114,7 +116,7 @@ const DaySummary = ({
                                     <td className="py-1">TOTAL</td>
                                     <td className="text-right font-mono">{dayMacros.P.toFixed(0)}g</td>
                                     <td className="text-right font-mono">{dayMacros.H.toFixed(0)}g</td>
-                                    <td className="text-right font-mono">{dayMacros.G.toFixed(0)}g</td>
+                                    <td className="text-right font-mono">{mainG.toFixed(0)}g</td>
                                 </tr>
                                 <tr className="text-gray-500">
                                     <td className="py-1">OBJETIVO</td>
