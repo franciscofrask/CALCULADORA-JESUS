@@ -22,6 +22,12 @@ import {
     faTrowelBricks, faCandyCane, faIceCream, faSmog, faUtensils, faMartiniGlassCitrus,
 } from '@fortawesome/free-solid-svg-icons';
 
+// Calma config T.macros.margenValido: peri (intra/post) meals have NO grasas objetivo, but
+// macrosRestantes adds this fat slack so a little incidental fat is allowed/sized for. Fat
+// budget = (target.G - served.G) + MARGEN_VALIDO, used by the engine to size AND order. Must
+// match backend calma_suggest.MARGEN_VALIDO. Verified vs the Calma bundle 2026-06-14.
+const MARGEN_VALIDO = 4;
+
 const FREQUENT_CATEGORY = {
     id: '__frequent__',
     value: '__frequent__',
@@ -422,8 +428,10 @@ const BuildMealModal = ({
             if (target.P > 0) params.set('p_rest', Math.max(0, remaining.P));
             if (target.H > 0) params.set('h_rest', Math.max(0, remaining.H));
             if (target.G > 0) params.set('g_rest', Math.max(0, remaining.G));
-            if (isIntraMode) params.set('peri', 'intra');
-            else if (isPostMode) params.set('peri', 'post');
+            // Peri (intra/post): no grasas objetivo, but the fat budget = (target.G - served.G)
+            // + margenValido lets a little fat be sized/ordered (Calma). Backend clamps negatives.
+            if (isIntraMode) { params.set('peri', 'intra'); params.set('g_rest', target.G - served.G + MARGEN_VALIDO); }
+            else if (isPostMode) { params.set('peri', 'post'); params.set('g_rest', target.G - served.G + MARGEN_VALIDO); }
             else if (paso === 3) params.set('cuadrar', 'true');  // good-fat prioridad sort
             if (selectedPreparations.length > 0) params.set('tag', selectedPreparations.join(','));
             api(`/api/calculator/search?${params}`).then(result => {
@@ -450,8 +458,9 @@ const BuildMealModal = ({
         if (target.H > 0) params.h_rest = Math.max(0, remaining.H);
         if (target.G > 0) params.g_rest = Math.max(0, remaining.G);
         // Peri meals use their own prioridad lists; paso 3 normal meal = cuadrarMacros.
-        if (isIntraMode) params.peri = 'intra';
-        else if (isPostMode) params.peri = 'post';
+        // Peri fat budget = (target.G - served.G) + margenValido (Calma). Backend clamps negatives.
+        if (isIntraMode) { params.peri = 'intra'; params.g_rest = target.G - served.G + MARGEN_VALIDO; }
+        else if (isPostMode) { params.peri = 'post'; params.g_rest = target.G - served.G + MARGEN_VALIDO; }
         else if (paso === 3) params.cuadrar = 'true';
         return params;
     };
@@ -716,7 +725,8 @@ const BuildMealModal = ({
                     {/* Macros summary */}
                     <div className="flex-shrink-0 p-4 bg-gray-50 border-b">
                         <div className="text-sm font-medium text-gray-600 mb-2">{getPasoLabel()}</div>
-                        <div className="grid grid-cols-3 gap-2 text-center">
+                        {/* Peri (intra/post) carry only P+H — Calma shows no Grasas column for them. */}
+                        <div className={`grid ${isPeriMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-center`}>
                             {(() => { const c = macroCell(served.P, target.P); return (
                                 <div>
                                     <div className="text-xs text-gray-500">Proteína</div>
@@ -731,11 +741,11 @@ const BuildMealModal = ({
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
-                            {(() => { const c = macroCell(served.G, target.G); return (
+                            {!isPeriMode && (() => { const c = macroCell(served.G, target.G); return (
                                 <div>
                                     <div className="text-xs text-gray-500">Grasas</div>
                                     <div className={`font-bold ${c.over ? 'text-red-500' : 'text-yellow-500'}`}>{c.num}</div>
-                                    {!isPeriMode && c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
+                                    {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
                         </div>
