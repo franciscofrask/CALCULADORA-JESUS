@@ -8,7 +8,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
-import { Search, X, Plus, Minus, Star } from 'lucide-react';
+import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
 import {
     faStopwatch20,
     faEgg, faBacon, faBurger, faDove, faCow, faPiggyBank, faDrumstickBite,
@@ -162,6 +162,7 @@ const BuildMealModal = ({
 }) => {
     const [paso, setPaso] = useState(1);
     const [tempFoods, setTempFoods] = useState([]);
+    const [addedOpen, setAddedOpen] = useState(false);  // collapsible "añadidos" bar (closed → list keeps space)
 
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [categoryFoods, setCategoryFoods] = useState([]);
@@ -872,45 +873,67 @@ const BuildMealModal = ({
                         </div>
                     </ScrollArea>
 
-                    {/* Added foods */}
-                    {tempFoods.length > 0 && (
-                        <div className="flex-shrink-0 border-t bg-gray-50 p-3 max-h-48 overflow-auto">
-                            <div className="text-xs text-gray-500 mb-2">Alimentos añadidos ({tempFoods.length})</div>
-                            <div className="space-y-1">
-                                {tempFoods.map((food, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 bg-white rounded p-2 text-sm">
-                                        <span className="flex-1 truncate text-black">{food.nombre}</span>
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => handleFoodQuantityChange(idx, -1)}
-                                                className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded"
-                                            >
-                                                <Minus className="w-3 h-3" />
-                                            </button>
-                                            <span className="w-16 text-center text-xs">
-                                                {(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
-                                                    ? `${Math.round(((food.cantidad_g || food.cantidad || 0) / (food.peso_unidad || food.racion)) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)`
-                                                    : `${food.cantidad_g || food.cantidad || 0}g`
-                                                }
-                                            </span>
-                                            <button
-                                                onClick={() => handleFoodQuantityChange(idx, 1)}
-                                                className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded"
-                                            >
-                                                <Plus className="w-3 h-3" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleRemoveFood(idx)}
-                                                className="w-6 h-6 flex items-center justify-center text-red-500"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                    {/* Added foods — collapsible bar (closed by default so the list keeps the space) */}
+                    {tempFoods.length > 0 && (() => {
+                        const tot = tempFoods.reduce((a, f) => ({
+                            P: a.P + (f.macros_efectivos?.P || 0),
+                            H: a.H + (f.macros_efectivos?.H || 0),
+                            G: a.G + (f.macros_efectivos?.G || 0),
+                        }), { P: 0, H: 0, G: 0 });
+                        const fmt = v => Math.round(v);
+                        return (
+                            <div className="flex-shrink-0 border-t bg-gray-50">
+                                <button
+                                    type="button"
+                                    onClick={() => setAddedOpen(o => !o)}
+                                    className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-700"
+                                    data-testid="added-bar-toggle"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-black text-white text-xs">{tempFoods.length}</span>
+                                        <span>añadidos</span>
+                                        <span className="text-xs text-gray-500 font-normal">· P {fmt(tot.P)} · H {fmt(tot.H)} · G {fmt(tot.G)}</span>
+                                    </span>
+                                    <ChevronUp className={`w-4 h-4 text-gray-400 transition-transform ${addedOpen ? '' : 'rotate-180'}`} />
+                                </button>
+                                {addedOpen && (
+                                    <div className="px-3 pb-3 max-h-56 overflow-auto space-y-1">
+                                        {tempFoods.map((food, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 bg-white rounded p-2 text-sm">
+                                                <span className="flex-1 truncate text-black">{food.nombre}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        onClick={() => handleFoodQuantityChange(idx, -1)}
+                                                        className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded"
+                                                    >
+                                                        <Minus className="w-3 h-3" />
+                                                    </button>
+                                                    <span className="w-16 text-center text-xs">
+                                                        {(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
+                                                            ? `${Math.round(((food.cantidad_g || food.cantidad || 0) / (food.peso_unidad || food.racion)) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)`
+                                                            : `${food.cantidad_g || food.cantidad || 0}g`
+                                                        }
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleFoodQuantityChange(idx, 1)}
+                                                        className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded"
+                                                    >
+                                                        <Plus className="w-3 h-3" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleRemoveFood(idx)}
+                                                        className="w-6 h-6 flex items-center justify-center text-red-500"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
                 </div>
 
                 {/* Footer */}
