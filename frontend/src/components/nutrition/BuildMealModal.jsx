@@ -373,6 +373,7 @@ const BuildMealModal = ({
     // back from paso 3 to paso 2. haySuficientes = served/target > 0.8 (porcentajeSuficienteMacros,
     // STRICT >). target==0 -> that macro counts as sufficient (nothing to add there).
     useEffect(() => {
+        if (!open) return;       // modal stays mounted while closed; don't react to day switches
         if (isPeriMode) return;  // peri (intra/post) is a single phase — no paso split
         const pOk = !(target.P > 0) || (served.P / target.P) > 0.8;
         const hOk = !(target.H > 0) || (served.H / target.H) > 0.8;
@@ -388,7 +389,7 @@ const BuildMealModal = ({
                 else if (newPaso === 3) toast.info('✨ ¡Macros cubiertos! Últimos toques.');
             }
         }
-    }, [served.P, served.H, target.P, target.H, paso, isPeriMode]);
+    }, [open, served.P, served.H, target.P, target.H, paso, isPeriMode]);
 
     // Calma: filtrosActivacionPorDefecto = false. In paso 3 (cuadrarMacros / "últimos
     // toques") the preference category chips are shown but start INACTIVE — the user
