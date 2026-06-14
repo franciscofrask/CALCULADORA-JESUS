@@ -1,6 +1,0 @@
-INFO:     Started server process [4480]
-INFO:     Waiting for application startup.
-INFO:server:Starting JG12 API...
-INFO:server:Database indexes created successfully
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
