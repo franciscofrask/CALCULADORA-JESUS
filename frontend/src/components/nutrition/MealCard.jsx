@@ -3,7 +3,7 @@ import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { ProgressBar } from './DaySummary';
 import {
-    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download, CheckCircle2, XCircle
+    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download
 } from 'lucide-react';
 
 // Calma rounds the per-meal target to the nearest 0.5 g FOR DISPLAY ONLY (stepRedondeo).
@@ -17,15 +17,17 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     const served = calculateMealMacros(mealKey);
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
 
-    // Calma per-macro status = calcularIcono (margenValido = 4), r = target - served UNROUNDED:
-    //   round(r)==0 -> circle-check green (cuadrado) | |r|<4 -> circle-check amber (válido) |
-    //   else -> circle-xmark red (falta/sobra). Calma shows ONLY this icon next to the macro,
-    //   no "faltan Xg" text. We keep the bar + served/target number and append the icon.
+    // Per-macro status, EXACT Calma "Macros para Comida X" (margenValido = 4), r = target-served:
+    //   served == 0 -> no status (just the target)
+    //   round(r)==0 -> "Cuadrado" | |r|<4 -> "Válido" | r>=4 -> "faltan X.Xg" | r<=-4 -> "sobran X.Xg"
     const macroState = (servedVal, tgtVal) => {
+        if (!(servedVal > 0)) return { label: null, cls: '', over: false };
         const r = tgtVal - servedVal;
-        if (Math.round(r) === 0) return { ok: true, cls: 'text-green-600' };   // cuadrado
-        if (Math.abs(r) < 4) return { ok: true, cls: 'text-amber-500' };       // válido
-        return { ok: false, cls: 'text-red-500' };                             // falta / sobra
+        if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-green-600', over: false };
+        if (Math.abs(r) < 4) return { label: 'Válido', cls: 'text-amber-500', over: false };
+        return r > 0
+            ? { label: `faltan ${fmt1(r)}g`, cls: 'text-red-500', over: false }
+            : { label: `sobran ${fmt1(-r)}g`, cls: 'text-red-500', over: true };
     };
 
     const bars = [
@@ -37,16 +39,15 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     return (
         <div className="bg-gray-50 rounded-lg p-3 mb-3" data-testid={`meal-progress-${mealKey}`}>
             {bars.map(({ emoji, label, val, tgt, color, st }) => (
-                <div key={label} className="flex items-center gap-2 mb-2">
-                    <span className="w-5 text-center text-sm">{emoji}</span>
-                    <span className="w-4 text-xs font-semibold text-gray-600">{label}</span>
-                    <div className="flex-1"><ProgressBar value={val} max={tgt} color={color} height={8} showCheck /></div>
-                    <span className={`text-xs font-mono w-16 text-right ${hasFoods && !st.ok ? 'text-red-500 font-bold' : ''}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
-                    {/* Calma shows the status icon only once the meal has ingredients — an empty
-                        meal just lists its target macros, no red xmarks. */}
-                    {hasFoods && (st.ok
-                        ? <CheckCircle2 className={`w-4 h-4 shrink-0 ${st.cls}`} />
-                        : <XCircle className={`w-4 h-4 shrink-0 ${st.cls}`} />)}
+                <div key={label} className="mb-2">
+                    <div className="flex items-center gap-2">
+                        <span className="w-5 text-center text-sm">{emoji}</span>
+                        <span className="w-4 text-xs font-semibold text-gray-600">{label}</span>
+                        <div className="flex-1"><ProgressBar value={val} max={tgt} color={color} height={8} showCheck /></div>
+                        <span className={`text-xs font-mono w-16 text-right ${hasFoods && st.over ? 'text-red-500 font-bold' : ''}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
+                    </div>
+                    {/* Status BELOW the macro letter (P/H/G), left-aligned — only when served>0. */}
+                    {hasFoods && st.label && <div className={`text-[10px] font-semibold text-left ml-7 ${st.cls}`}>{st.label}</div>}
                 </div>
             ))}
         </div>

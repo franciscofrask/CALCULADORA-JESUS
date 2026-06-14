@@ -380,13 +380,19 @@ const NutritionPage = () => {
         } catch (e) { /* silent: auto-save must never interrupt the user */ }
     }, [api]);
 
-    // Fix date to local on mount
+    // On mount: restore the last viewed date (so a reload returns to the day you were on, not
+    // today), else the local date. Persisted below on every date change.
     useEffect(() => {
+        const stored = localStorage.getItem('nutrition_last_date');
+        if (stored) { setCurrentDate(stored); return; }
         const n = new Date();
-        const local = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-        console.log('DATE-FIX-V3 firing, local=', local);
-        setCurrentDate(local);
+        setCurrentDate(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`);
     }, []);
+
+    // Persist the viewed date so a refresh returns to it.
+    useEffect(() => {
+        if (currentDate) localStorage.setItem('nutrition_last_date', currentDate);
+    }, [currentDate]);
 
     // Initial load
     useEffect(() => {
@@ -435,6 +441,29 @@ const NutritionPage = () => {
             }
         };
     }, [currentDate]);
+
+    // A browser REFRESH/close does NOT run React cleanup, so the unmount auto-save never fires
+    // and the day looked "lost". Save synchronously on `beforeunload` via keepalive fetch (it
+    // survives unload and carries the auth header). Only saves a loaded, non-empty day.
+    useEffect(() => {
+        const handler = () => {
+            if (loading || loadedDateRef.current !== currentDate) return;
+            const snap = autoSaveRef.current;
+            const hasFood = Object.values(snap.comidas || {}).some(m => (m?.alimentos || []).length > 0);
+            if (!hasFood) return;
+            try {
+                const token = localStorage.getItem('token');
+                fetch(`${process.env.REACT_APP_BACKEND_URL}/api/diets`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    body: JSON.stringify({ fecha: currentDate, ...snap }),
+                    keepalive: true,
+                });
+            } catch (e) { /* best effort */ }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [currentDate, loading]);
 
     // Reload distribution when config changes
     useEffect(() => {

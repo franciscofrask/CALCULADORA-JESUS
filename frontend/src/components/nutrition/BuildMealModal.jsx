@@ -19,7 +19,7 @@ import {
     faCircleInfo, faDroplet, faCookieBite, faScaleBalanced,
     faSquareCheck, faWheatAwnCircleExclamation, faSnowflake, faRing,
     faThumbsUp, faClock, faFireBurner, faMedal,
-    faMugHot, faTrowelBricks, faCandyCane, faIceCream, faSmog,
+    faTrowelBricks, faCandyCane, faIceCream, faSmog, faUtensils, faMartiniGlassCitrus,
 } from '@fortawesome/free-solid-svg-icons';
 
 const FREQUENT_CATEGORY = {
@@ -31,38 +31,45 @@ const FREQUENT_CATEGORY = {
 import CategoryRail from './CategoryRail';
 import { PREFERENCE_CATEGORIES } from './PreferencesSetup';
 
-// Categories - Step 1 (Proteínas)
+// Categories - Step 1 (Proteínas) — EXACT Calma T.categorias.categoriasProteinas order:
+// ["1","2.1","2.2","2.3","2.4","45","3","5","30","28","10"] (single-code chips).
 const PROTEIN_CATEGORIES = [
-    { id: 'huevos',         value: 'huevos',         label: 'Huevos y derivados', emoji: '🥚', icon: faEgg,         prefixes: ['1'] },
-    { id: 'embutidos',      value: 'embutidos',      label: 'Embutidos',        emoji: '🥓', icon: faBacon,         prefixes: ['2.1'] },
-    { id: 'aves',           value: 'aves',           label: 'Aves',             emoji: '🍗', icon: faDove,          prefixes: ['2.2'] },
-    { id: 'vacuno',         value: 'vacuno',         label: 'Vacuno',           emoji: '🥩', icon: faCow,           prefixes: ['2.3'] },
-    { id: 'cerdo',          value: 'cerdo',          label: 'Cerdo',            emoji: '🐷', icon: faPiggyBank,     prefixes: ['2.4'] },
-    { id: 'otras_carnes',   value: 'otras_carnes',   label: 'Otras carnes',     emoji: '🍖', icon: faDrumstickBite, prefixes: ['2.6', '2.7', '45'] },
-    { id: 'pescados',       value: 'pescados',       label: 'Pescados',         emoji: '🐟', icon: faFish,          prefixes: ['3'] },
-    { id: 'lacteos',        value: 'lacteos',        label: 'Lácteos',          emoji: '🧀', icon: faCheese,        prefixes: ['5'] },
-    { id: 'proteina_polvo', value: 'proteina_polvo', label: 'Proteína',         emoji: '🥤', icon: faJar,           prefixes: ['30'] },
-    { id: 'vegetal',        value: 'vegetal',        label: 'Proteína vegetal', emoji: '🌱', icon: faJarWheat,      prefixes: ['28', '6'] },
-    { id: 'legumbres',      value: 'legumbres',      label: 'Legumbres',        emoji: '🫘', icon: faSeedling,      prefixes: ['10'] },
+    { id: 'huevos',           value: 'huevos',           label: 'Huevos y derivados',                    emoji: '🥚', icon: faEgg,           prefixes: ['1'] },
+    { id: 'embutidos',        value: 'embutidos',        label: 'Embutidos',                             emoji: '🥓', icon: faBacon,         prefixes: ['2.1'] },
+    { id: 'aves',             value: 'aves',             label: 'Aves',                                  emoji: '🍗', icon: faDove,          prefixes: ['2.2'] },
+    { id: 'vacuno',           value: 'vacuno',           label: 'Vacuno o buey',                         emoji: '🥩', icon: faCow,           prefixes: ['2.3'] },
+    { id: 'cerdo',            value: 'cerdo',            label: 'Cerdo',                                 emoji: '🐷', icon: faPiggyBank,     prefixes: ['2.4'] },
+    { id: 'otras_carnes',     value: 'otras_carnes',     label: 'Otras carnes',                          emoji: '🍖', icon: faDrumstickBite, prefixes: ['45'] },
+    { id: 'pescados',         value: 'pescados',         label: 'Pescados y mariscos',                   emoji: '🐟', icon: faFish,          prefixes: ['3'] },
+    { id: 'lacteos',          value: 'lacteos',          label: 'Lácteos y derivados',                   emoji: '🧀', icon: faCheese,        prefixes: ['5'] },
+    { id: 'proteina_polvo',   value: 'proteina_polvo',   label: 'Proteína en polvo y barritas proteicas', emoji: '🥤', icon: faJar,          prefixes: ['30'] },
+    { id: 'proteina_vegetal', value: 'proteina_vegetal', label: 'Proteína vegetal',                      emoji: '🌱', icon: faJarWheat,      prefixes: ['28'] },
+    { id: 'legumbres',        value: 'legumbres',        label: 'Legumbres',                             emoji: '🫘', icon: faSeedling,      prefixes: ['10'] },
 ];
 
-// Categories - Step 2 (Acompañamientos)
+// Categories - Step 2 (Acompañamientos) — EXACT Calma T.categorias.categoriasHidratos order:
+// ["21","8","7","22","9","11","13","10","5","24","19","27","32","43","44","37","38","39","16","17"].
 const SIDE_CATEGORIES = [
-    { id: 'arroces',     value: 'arroces',     label: 'Arroces',      emoji: '🍚', icon: faBowlRice,      prefixes: ['21'] },
-    { id: 'panes',       value: 'panes',       label: 'Panes',        emoji: '🍞', icon: faBreadSlice,    prefixes: ['8'] },
-    { id: 'cereales',    value: 'cereales',    label: 'Cereales',     emoji: '🌾', icon: faPlateWheat,    prefixes: ['7'] },
-    { id: 'pasta',       value: 'pasta',       label: 'Pasta',        emoji: '🍝', icon: faBowlFood,      prefixes: ['22'] },
-    { id: 'tuberculos',  value: 'tuberculos',  label: 'Tubérculos',   emoji: '🥔', icon: faCarrot,        prefixes: ['9'] },
-    { id: 'fruta',       value: 'fruta',       label: 'Fruta',        emoji: '🍎', icon: faAppleWhole,    prefixes: ['11'] },
-    { id: 'verduras',    value: 'verduras',    label: 'Verduras',     emoji: '🥬', icon: faLeaf,          prefixes: ['13'] },
-    { id: 'legumbres',   value: 'legumbres',   label: 'Legumbres',    emoji: '🫘', icon: faSeedling,      prefixes: ['10'] },
-    { id: 'lacteos',     value: 'lacteos',     label: 'Lácteos',      emoji: '🧀', icon: faCheese,        prefixes: ['5'] },
-    { id: 'bebidas',     value: 'bebidas',     label: 'Bebidas',      emoji: '🥤', icon: faBolt,          prefixes: ['19', '24'] },
-    { id: 'comida_prep', value: 'comida_prep', label: 'Comida prep.', emoji: '🍕', icon: faPizzaSlice,    prefixes: ['32', '39', '49', '50', '51', '53'] },
-    { id: 'dulces',      value: 'dulces',      label: 'Dulces',       emoji: '🍫', icon: faCookie,        prefixes: ['29', '30', '31', '34', '35', '36', '37', '43', '44', '47'] },
-    { id: 'salsas',      value: 'salsas',      label: 'Salsas',       emoji: '🥫', icon: faPepperHot,     prefixes: ['16'] },
-    { id: 'grasas',      value: 'grasas',      label: 'Grasas',       emoji: '🫒', icon: faBottleDroplet, prefixes: ['17'] },
-    { id: 'sopas',       value: 'sopas',       label: 'Sopas',        emoji: '🍲', icon: faMugHot,        prefixes: ['48'] },
+    { id: 'arroces',       value: 'arroces',       label: 'Arroces y derivados',                                      emoji: '🍚', icon: faBowlRice,          prefixes: ['21'] },
+    { id: 'panes',         value: 'panes',         label: 'Panes y tortillas de trigo',                               emoji: '🍞', icon: faBreadSlice,        prefixes: ['8'] },
+    { id: 'cereales',      value: 'cereales',      label: 'Cereales (excepto arroz)',                                 emoji: '🌾', icon: faPlateWheat,        prefixes: ['7'] },
+    { id: 'pasta',         value: 'pasta',         label: 'Pasta, quinoa y derivados',                                emoji: '🍝', icon: faBowlFood,          prefixes: ['22'] },
+    { id: 'tuberculos',    value: 'tuberculos',    label: 'Tubérculos y derivados',                                   emoji: '🥔', icon: faCarrot,            prefixes: ['9'] },
+    { id: 'fruta',         value: 'fruta',         label: 'Fruta, zumo, potitos y mermeladas',                        emoji: '🍎', icon: faAppleWhole,        prefixes: ['11'] },
+    { id: 'verduras',      value: 'verduras',      label: 'Verduras y hortalizas',                                    emoji: '🥬', icon: faLeaf,              prefixes: ['13'] },
+    { id: 'legumbres',     value: 'legumbres',     label: 'Legumbres',                                                emoji: '🫘', icon: faSeedling,          prefixes: ['10'] },
+    { id: 'lacteos',       value: 'lacteos',       label: 'Lácteos y derivados',                                      emoji: '🧀', icon: faCheese,            prefixes: ['5'] },
+    { id: 'beb_vegetales', value: 'beb_vegetales', label: 'Bebidas vegetales',                                        emoji: '🥛', icon: faBottleWater,      prefixes: ['24'] },
+    { id: 'bebidas',       value: 'bebidas',       label: 'Bebidas energéticas, refrescos y cafés',                   emoji: '🥤', icon: faBolt,              prefixes: ['19'] },
+    { id: 'sustitutivos',  value: 'sustitutivos',  label: 'Sustitutivos de comidas',                                  emoji: '🥤', icon: faBlender,           prefixes: ['27'] },
+    { id: 'pizza',         value: 'pizza',         label: 'Pizza, lasaña, empanadas y empanadillas',                  emoji: '🍕', icon: faPizzaSlice,        prefixes: ['32'] },
+    { id: 'cremas',        value: 'cremas',        label: 'Bollería, galletas, barritas energéticas, chocolate y chocolatinas', emoji: '🍫', icon: faCookie, prefixes: ['43'] },
+    { id: 'helados',       value: 'helados',       label: 'Helados y postres',                                        emoji: '🍨', icon: faIceCream,          prefixes: ['44'] },
+    { id: 'cacao',         value: 'cacao',         label: 'Cacao en polvo y azúcares de todo tipo, chucherías y miel', emoji: '🍯', icon: faCandyCane,        prefixes: ['37'] },
+    { id: 'aperitivos',    value: 'aperitivos',    label: 'Aperitivos',                                               emoji: '🥨', icon: faMartiniGlassCitrus, prefixes: ['38'] },
+    { id: 'cocina_esp',    value: 'cocina_esp',    label: 'Cocina tradicional española',                              emoji: '🥘', icon: faUtensils,         prefixes: ['39'] },
+    { id: 'salsas',        value: 'salsas',        label: 'Salsas, siropes y konjac',                                 emoji: '🥫', icon: faPepperHot,         prefixes: ['16'] },
+    { id: 'grasas',        value: 'grasas',        label: 'Alimentos ricos en grasas de todo tipo',                   emoji: '🫒', icon: faBottleDroplet,     prefixes: ['17'] },
 ];
 
 // Step 3 - fat sources
@@ -75,25 +82,25 @@ const FAT_CATEGORIES = [
 
 // INTRA categories — Calma categoriasIntraentreno: ["18","41"] (chips hidden, pre-active)
 const INTRA_CATEGORIES = [
-    { id: 'isotonicas',  value: 'isotonicas',  label: 'Isotónicas',  emoji: '💧', icon: faBottleWater, prefixes: ['18'] },
-    { id: 'aminoacidos', value: 'aminoacidos', label: 'Aminoácidos', emoji: '⚡', icon: faTrowelBricks, prefixes: ['41'] },
+    { id: 'isotonicas',  value: 'isotonicas',  label: 'Intraentrenamiento',       emoji: '💧', icon: faBottleWater, prefixes: ['18'] },
+    { id: 'aminoacidos', value: 'aminoacidos', label: 'Aminoacidos para entrenar', emoji: '⚡', icon: faTrowelBricks, prefixes: ['41'] },
 ];
 
 // POST categories — single list, Calma categoriasPostentreno order:
 // ["4","5","46","7","8","11","27","24","19","37","36","16"]
 const POST_CATEGORIES = [
-    { id: 'proteina',      value: 'proteina',      label: 'Proteína',          emoji: '💪', icon: faJar,        prefixes: ['4'] },
-    { id: 'lacteos',       value: 'lacteos',       label: 'Lácteos',           emoji: '🧀', icon: faCheese,     prefixes: ['5'] },
-    { id: 'cremas_arroz',  value: 'cremas_arroz',  label: 'Cremas de arroz',   emoji: '🍚', icon: faBowlRice,   prefixes: ['46'] },
-    { id: 'cereales',      value: 'cereales',      label: 'Cereales',          emoji: '🌾', icon: faPlateWheat, prefixes: ['7'] },
-    { id: 'pan',           value: 'pan',           label: 'Pan',               emoji: '🍞', icon: faBreadSlice, prefixes: ['8'] },
-    { id: 'fruta',         value: 'fruta',         label: 'Fruta',             emoji: '🍎', icon: faAppleWhole, prefixes: ['11'] },
-    { id: 'sustitutivos',  value: 'sustitutivos',  label: 'Sustitutivos',      emoji: '🥤', icon: faBlender,    prefixes: ['27'] },
-    { id: 'beb_vegetales', value: 'beb_vegetales', label: 'Bebidas vegetales', emoji: '🥛', icon: faBottleWater, prefixes: ['24'] },
-    { id: 'bebidas',       value: 'bebidas',       label: 'Bebidas',           emoji: '⚡', icon: faBolt,       prefixes: ['19'] },
-    { id: 'azucar',        value: 'azucar',        label: 'Cacao/Azúcar',      emoji: '🍯', icon: faCandyCane,  prefixes: ['37'] },
-    { id: 'postres',       value: 'postres',       label: 'Postres',           emoji: '🍮', icon: faIceCream,   prefixes: ['36'] },
-    { id: 'salsas',        value: 'salsas',        label: 'Salsas',            emoji: '🥫', icon: faPepperHot,  prefixes: ['16'] },
+    { id: 'proteina',      value: 'proteina',      label: 'Proteínas en polvo',                                        emoji: '💪', icon: faJar,        prefixes: ['4'] },
+    { id: 'lacteos',       value: 'lacteos',       label: 'Lácteos y derivados',                                       emoji: '🧀', icon: faCheese,     prefixes: ['5'] },
+    { id: 'cremas_arroz',  value: 'cremas_arroz',  label: 'Cremas y tortas de arroz',                                  emoji: '🍚', icon: faBowlRice,   prefixes: ['46'] },
+    { id: 'cereales',      value: 'cereales',      label: 'Cereales (excepto arroz)',                                  emoji: '🌾', icon: faPlateWheat, prefixes: ['7'] },
+    { id: 'pan',           value: 'pan',           label: 'Panes y tortillas de trigo',                                emoji: '🍞', icon: faBreadSlice, prefixes: ['8'] },
+    { id: 'fruta',         value: 'fruta',         label: 'Fruta, zumo, potitos y mermeladas',                         emoji: '🍎', icon: faAppleWhole, prefixes: ['11'] },
+    { id: 'sustitutivos',  value: 'sustitutivos',  label: 'Sustitutivos de comidas',                                   emoji: '🥤', icon: faBlender,    prefixes: ['27'] },
+    { id: 'beb_vegetales', value: 'beb_vegetales', label: 'Bebidas vegetales',                                         emoji: '🥛', icon: faBottleWater, prefixes: ['24'] },
+    { id: 'bebidas',       value: 'bebidas',       label: 'Bebidas energéticas, refrescos y cafés',                    emoji: '⚡', icon: faBolt,       prefixes: ['19'] },
+    { id: 'azucar',        value: 'azucar',        label: 'Cacao en polvo y azúcares de todo tipo, chucherías y miel', emoji: '🍯', icon: faCandyCane,  prefixes: ['37'] },
+    { id: 'postres',       value: 'postres',       label: 'Postres',                                                   emoji: '🍮', icon: faIceCream,   prefixes: ['36'] },
+    { id: 'salsas',        value: 'salsas',        label: 'Salsas, siropes y konjac',                                  emoji: '🥫', icon: faPepperHot,  prefixes: ['16'] },
 ];
 
 // Ordered to match Calma's `A.preparaciones`:
@@ -105,15 +112,15 @@ const PREPARATIONS = [
     { value: 'CGE', label: 'Congelados',                               icon: faSnowflake },
     { value: 'AHU', label: 'Ahumados',                                 icon: faSmog },
     { value: 'LAT', label: 'Conservas',                                icon: faRing },
-    { value: 'POL', label: 'En polvo',                                 icon: faJar },
+    { value: 'POL', label: 'En Polvo',                                 icon: faJar },
     { value: 'PRE', label: 'Preparado',                                icon: faThumbsUp },
-    { value: 'HAM', label: 'Hamburguesa / Carne picada',               icon: faBurger },
+    { value: 'HAM', label: 'Carne picada y hamburguesas',              icon: faBurger },
     { value: 'SNA', label: 'Snacks fáciles de transportar',            icon: faCookieBite },
-    { value: 'MIN', label: '1 minuto al micro y listo',                icon: faClock },
+    { value: 'MIN', label: '1 Minuto al micro y listo',                icon: faClock },
     { value: 'YCO', label: 'Ya cocinados',                             icon: faFireBurner },
     { value: 'UNI', label: 'Ya pesado',                                icon: faScaleBalanced },
     { value: 'YA',  label: 'Listo para comer',                         icon: faSquareCheck },
-    { value: 'SGL', label: 'Etiquetado "Sin gluten"',                  icon: faWheatAwnCircleExclamation },
+    { value: 'SGL', label: 'Sin gluten',                               icon: faWheatAwnCircleExclamation },
 ];
 
 // Food emojis
@@ -234,19 +241,23 @@ const BuildMealModal = ({
     // "Faltan 10.5g" = 46.8 - 36.3, matching Calma exactly.
     const fmtHalf = (x) => (Math.round((x || 0) * 2) / 2).toString();
 
-    // Calma calcularIcono (margenValido = 4), per macro, using r = target - served (UNROUNDED):
-    //   round(r)==0 -> Cuadrado (green check) | |r|<4 -> Válido (amber check) |
-    //   else danger (red xmark): Faltan r (r>0) / Sobran |r| (r<0).
+    // Calma "Macros para Comida X" per macro (margenValido = 4), r = target - served UNROUNDED:
+    //   served > 0  -> num "served/target g" + status:
+    //                  round(r)==0 -> "Cuadrado" | |r|<4 -> "Válido" |
+    //                  r>=4 -> "faltan X.Xg" | r<=-4 -> "sobran X.Xg"
+    //   served == 0 -> num "targetg" ONLY, NO status (e.g. "Hidratos: 30g"). The status appears
+    //                  at the SAME moment Calma shows it: only once that macro has something served.
     const MARGEN_VALIDO = 4;
-    const macroStatus = (s, tgt) => {
-        if (!tgt) return null;
-        const r = tgt - s;                       // remaining, unrounded (Calma: macros - enIngredientes)
-        if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-green-600' };
-        if (Math.abs(r) < MARGEN_VALIDO) return { label: 'Válido', cls: 'text-amber-500' };
-        const g = Math.round(Math.abs(r) * 10) / 10;
-        return r > 0
-            ? { label: `Faltan ${g}g`, cls: 'text-red-500' }
-            : { label: `Sobran ${g}g`, cls: 'text-red-500' };
+    const fmt1 = (v) => { const r = Math.round((v || 0) * 10) / 10; return r % 1 === 0 ? String(r) : r.toFixed(1); };
+    const macroCell = (servedVal, tgtVal) => {
+        if (!(servedVal > 0)) return { num: `${fmtHalf(tgtVal)}g`, status: null, over: false };
+        const r = tgtVal - servedVal;
+        let status, cls;
+        if (Math.round(r) === 0) { status = 'Cuadrado'; cls = 'text-green-600'; }
+        else if (Math.abs(r) < MARGEN_VALIDO) { status = 'Válido'; cls = 'text-amber-500'; }
+        else if (r > 0) { status = `faltan ${fmt1(r)}g`; cls = 'text-red-500'; }
+        else { status = `sobran ${fmt1(-r)}g`; cls = 'text-red-500'; }
+        return { num: `${fmt1(servedVal)}/${fmtHalf(tgtVal)}g`, status, cls, over: r < 0 };
     };
 
     const isCuadrada = Math.abs(target.P - served.P) <= 0 &&
@@ -310,19 +321,17 @@ const BuildMealModal = ({
         } else if (paso === 2) {
             base = filterAvoided(SIDE_CATEGORIES);
         } else if (paso === 3) {
-            // Calma: paso 3 (todos) shows the user's preferences in their SAVED order
-            // (filtrosDePreferencias = [...preferencias].map — Set insertion order), NOT code
-            // order. Paso 1/2 use fixed lists (categoriasProteinas/Hidratos) so code order is
-            // right there; paso 3 must follow the user's preference order.
-            const byId = new Map(PREFERENCE_CATEGORIES.map(c => [c.id, c]));
-            let cats = (userPreferences || [])
-                .map(id => byId.get(id))
-                .filter(Boolean)
-                .map(cat => ({ ...cat, value: cat.id }));
-            // grasas_buenas (42) is a fixed preference (Calma fija) — ensure it's present
-            if (!cats.find(c => c.id === 'grasas_buenas'))
-                cats.unshift({ id: 'grasas_buenas', value: 'grasas_buenas', label: 'Grasas de buena calidad', icon: faBottleDroplet, prefixes: ['42'] });
-            base = cats;
+            // Calma paso 3 (todos) = filtrosDePreferencias: the user's preferences shown in the
+            // CANONICAL categoriasParaPreferencias order (the prefs form builds the Set by iterating
+            // that fixed list, so [...preferencias] is code order, NOT click order). grasas_buenas
+            // (42) is a "fija" -> always present. PREFERENCE_CATEGORIES already IS that canonical
+            // order with grasas_buenas first, so just filter it (don't re-order by selection).
+            const prefSet = new Set(userPreferences || []);
+            base = filterAvoided(
+                PREFERENCE_CATEGORIES
+                    .filter(c => c.id === 'grasas_buenas' || prefSet.has(c.id))
+                    .map(cat => ({ ...cat, value: cat.id }))
+            );
         } else {
             base = SIDE_CATEGORIES;
         }
@@ -350,64 +359,36 @@ const BuildMealModal = ({
                     H: acc.H + (f.macros_efectivos?.H || 0),
                 }), { P: 0, H: 0 });
                 const t = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0 };
-                const pPct = t.P > 0 ? (ex.P / t.P) * 100 : 100;
-                const hPct = t.H > 0 ? (ex.H / t.H) * 100 : 100;
-                if (pPct >= 80 && hPct >= 80) setPaso(3);
-                else if (pPct >= 80) setPaso(2);
-                else setPaso(1);
+                const pOk = !(t.P > 0) || (ex.P / t.P) > 0.8;   // Calma porcentajeSuficienteMacros, strict >
+                const hOk = !(t.H > 0) || (ex.H / t.H) > 0.8;
+                setPaso(!pOk ? 1 : (!hOk ? 2 : 3));
             } else {
                 setPaso(1);
             }
         }
     }, [open, mealKey, mode]); // eslint-disable-line
 
+    // Calma filtroParaAplicar is REACTIVE: the phase is recomputed from the current served macros
+    // every change — NOT a one-way advance. So removing the food that supplied the carbs drops you
+    // back from paso 3 to paso 2. haySuficientes = served/target > 0.8 (porcentajeSuficienteMacros,
+    // STRICT >). target==0 -> that macro counts as sufficient (nothing to add there).
     useEffect(() => {
-        if (tempFoods.length === 0) {
-            // Only reset to paso 1 if there are no existing saved foods either
-            const hasExisting = (mealsData[mealKey]?.alimentos || []).length > 0;
-            if (!hasExisting && paso !== 1) {
-                setPaso(1);
-                setSelectedCategories([]);
-                setCategoryFoods([]);
-                setSelectedPreparations([]);
-                setAvailablePreps([]);
-            }
-            return;
-        }
-
         if (isPeriMode) return;  // peri (intra/post) is a single phase — no paso split
-
-        const pPct = target.P > 0 ? (served.P / target.P) * 100 : 100;
-        const hPct = target.H > 0 ? (served.H / target.H) * 100 : 100;
-
-        if (pPct < 80) {
-            if (paso !== 1) {
-                setPaso(1);
-                setSelectedCategories([]);
-                setCategoryFoods([]);
-                setSelectedPreparations([]);
-                setAvailablePreps([]);
-            }
-        } else if (pPct >= 80 && hPct < 80) {
-            if (paso !== 2) {
-                setPaso(2);
-                setSelectedCategories([]);
-                setCategoryFoods([]);
-                setSelectedPreparations([]);
-                setAvailablePreps([]);
-                toast.info('✅ Proteínas cubiertas. Elige el acompañamiento.');
-            }
-        } else if (pPct >= 80 && hPct >= 80) {
-            if (paso !== 3) {
-                setPaso(3);
-                setSelectedCategories([]);
-                setCategoryFoods([]);
-                setSelectedPreparations([]);
-                setAvailablePreps([]);
-                toast.info('✨ ¡Macros cubiertos! Últimos toques.');
+        const pOk = !(target.P > 0) || (served.P / target.P) > 0.8;
+        const hOk = !(target.H > 0) || (served.H / target.H) > 0.8;
+        const newPaso = !pOk ? 1 : (!hOk ? 2 : 3);
+        if (newPaso !== paso) {
+            setPaso(newPaso);
+            setSelectedCategories([]);
+            setCategoryFoods([]);
+            setSelectedPreparations([]);
+            setAvailablePreps([]);
+            if (newPaso > paso) {  // toast only when advancing
+                if (newPaso === 2) toast.info('✅ Proteínas cubiertas. Elige el acompañamiento.');
+                else if (newPaso === 3) toast.info('✨ ¡Macros cubiertos! Últimos toques.');
             }
         }
-    }, [served.P, served.H, target.P, target.H, tempFoods.length, paso, isIntraMode]);
+    }, [served.P, served.H, target.P, target.H, paso, isPeriMode]);
 
     // Calma: filtrosActivacionPorDefecto = false. In paso 3 (cuadrarMacros / "últimos
     // toques") the preference category chips are shown but start INACTIVE — the user
@@ -735,27 +716,27 @@ const BuildMealModal = ({
                     <div className="flex-shrink-0 p-4 bg-gray-50 border-b">
                         <div className="text-sm font-medium text-gray-600 mb-2">{getPasoLabel()}</div>
                         <div className="grid grid-cols-3 gap-2 text-center">
-                            <div>
-                                <div className="text-xs text-gray-500">Proteína</div>
-                                <div className={`font-bold ${served.P > target.P ? 'text-red-500' : 'text-orange-500'}`}>
-                                    {served.P.toFixed(1)}/{fmtHalf(target.P)}g
+                            {(() => { const c = macroCell(served.P, target.P); return (
+                                <div>
+                                    <div className="text-xs text-gray-500">Proteína</div>
+                                    <div className={`font-bold ${c.over ? 'text-red-500' : 'text-orange-500'}`}>{c.num}</div>
+                                    {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
-                                {(() => { const st = macroStatus(served.P, target.P); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
-                            </div>
-                            <div>
-                                <div className="text-xs text-gray-500">Hidratos</div>
-                                <div className={`font-bold ${served.H > target.H ? 'text-red-500' : 'text-blue-500'}`}>
-                                    {served.H.toFixed(1)}/{fmtHalf(target.H)}g
+                            ); })()}
+                            {(() => { const c = macroCell(served.H, target.H); return (
+                                <div>
+                                    <div className="text-xs text-gray-500">Hidratos</div>
+                                    <div className={`font-bold ${c.over ? 'text-red-500' : 'text-blue-500'}`}>{c.num}</div>
+                                    {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
-                                {(() => { const st = macroStatus(served.H, target.H); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
-                            </div>
-                            <div>
-                                <div className="text-xs text-gray-500">Grasas</div>
-                                <div className={`font-bold ${served.G > target.G ? 'text-red-500' : 'text-yellow-500'}`}>
-                                    {served.G.toFixed(1)}/{fmtHalf(target.G)}g
+                            ); })()}
+                            {(() => { const c = macroCell(served.G, target.G); return (
+                                <div>
+                                    <div className="text-xs text-gray-500">Grasas</div>
+                                    <div className={`font-bold ${c.over ? 'text-red-500' : 'text-yellow-500'}`}>{c.num}</div>
+                                    {!isPeriMode && c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
-                                {!isPeriMode && (() => { const st = macroStatus(served.G, target.G); return st && <div className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</div>; })()}
-                            </div>
+                            ); })()}
                         </div>
                     </div>
 
