@@ -3,7 +3,7 @@ Rutas de usuarios: perfiles, preferencias y macros.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import uuid
 
 from core.database import db
@@ -148,7 +148,7 @@ async def save_user_preferences(data: dict, user = Depends(get_current_user)):
             "food_preferences": preferences,
             "avoided_categories": avoided_categories,
             "avoided_keywords": avoided_keywords,
-        }},
+        }, "$setOnInsert": {"id": str(uuid.uuid4())}},
         upsert=True
     )
 
@@ -191,8 +191,11 @@ async def save_diet_config(data: dict, user = Depends(get_current_user)):
 # ==================== MACROS ====================
 
 @router.get("/macros")
-async def get_macros(user = Depends(get_current_user)):
-    """Obtener macros del usuario."""
+async def get_macros(fecha: Optional[str] = None, user = Depends(get_current_user)):
+    """Obtener macros del usuario. Si se pasa `fecha` (YYYY-MM-DD), devuelve la versión de
+    macros VIGENTE a esa fecha (date-versioned, Calma todosLosMacros): la última entrada de
+    macro_history con effective_date <= fecha; antes del primer cambio, la más antigua; sin
+    historial, los macros actuales del perfil. Así el editor precarga los del día elegido."""
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         return {
@@ -201,22 +204,60 @@ async def get_macros(user = Depends(get_current_user)):
             "periworkout": {"protein": 35, "carbs": 15},
             "source": "default"
         }
+    if fecha:
+        # Reusa el mismo resolver que las dietas, para no divergir.
+        from routes.calculator import _resolve_macros_for_date, _choose_macro_entry_for_date
+        training, rest, peri = await _resolve_macros_for_date(profile, fecha)
+        entry = await _choose_macro_entry_for_date(profile, fecha)
+        # Inputs de la entrada vigente; si la entrada es legacy (sin inputs) cae al perfil.
+        inputs = {
+            "peso": (entry or {}).get("peso") if entry else None,
+            "porcentaje_graso": (entry or {}).get("porcentaje_graso") if entry else None,
+            "sexo": (entry or {}).get("sexo") if entry else None,
+            "objetivo": (entry or {}).get("objetivo") if entry else None,
+        }
+        if inputs["peso"] is None: inputs["peso"] = profile.get("weight")
+        if inputs["porcentaje_graso"] is None: inputs["porcentaje_graso"] = profile.get("body_fat")
+        if inputs["sexo"] is None: inputs["sexo"] = profile.get("sex")
+        if inputs["objetivo"] is None: inputs["objetivo"] = profile.get("goal")
+        return {
+            "training": training or {"protein": 160, "carbs": 50, "fat": 40},
+            "rest": rest or {"protein": 140, "carbs": 40, "fat": 40},
+            "periworkout": peri or {"protein": 35, "carbs": 15},
+            "source": profile.get("macros_source", "default"),
+            "fecha": fecha,
+            **inputs,
+        }
     return {
         "training": profile.get("macros_training") or {"protein": 160, "carbs": 50, "fat": 40},
         "rest": profile.get("macros_rest") or {"protein": 140, "carbs": 40, "fat": 40},
         "periworkout": profile.get("macros_periworkout") or {"protein": 35, "carbs": 15},
-        "source": profile.get("macros_source", "default")
+        "source": profile.get("macros_source", "default"),
+        "peso": profile.get("weight"),
+        "porcentaje_graso": profile.get("body_fat"),
+        "sexo": profile.get("sex"),
+        "objetivo": profile.get("goal"),
     }
 
 @router.put("/macros", response_model=Dict[str, Any])
 async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
-    """Actualizar macros del usuario (manual override)."""
+    """Actualizar macros del usuario (override manual, versionado por fecha).
+
+    El cliente ajusta sus propios macros igual que el admin: además de guardarlos en el
+    perfil, se registra una entrada en `macro_history` con `effective_date` para que las
+    dietas resuelvan la versión vigente a cada fecha (Calma todosLosMacros). Antes esto
+    escribía en `macro_logs` sin fecha ni peri, así que los cambios del cliente no se
+    versionaban ni los veía el resolver de dietas.
+    """
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
+
     training = data.training.model_dump()
     rest = data.rest.model_dump()
+    training["calories"] = training["protein"] * 4 + training["carbs"] * 4 + training["fat"] * 9
+    rest["calories"] = rest["protein"] * 4 + rest["carbs"] * 4 + rest["fat"] * 9
+    # Formato alternativo (proteinas/hidratos/grasas) para el chatbot y el motor de dietas.
     training["proteinas"] = training["protein"]
     training["hidratos"] = training["carbs"]
     training["grasas"] = training["fat"]
@@ -229,24 +270,68 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         "macros_rest": rest,
         "macros_source": "manual",
     }
-    
+
+    peri = None
+    if data.peri is not None:
+        peri = data.peri.model_dump()
+        peri["calories"] = peri["protein"] * 4 + peri["carbs"] * 4
+        peri["proteinas"] = peri["protein"]
+        peri["hidratos"] = peri["carbs"]
+        update["macros_periworkout"] = peri
+
+    # Calc inputs → también al perfil (peso/%graso/sexo/objetivo) para que la calculadora
+    # precargue los últimos valores y haya trazabilidad del estado actual.
+    if data.peso is not None:
+        update["weight"] = data.peso
+    if data.porcentaje_graso is not None:
+        update["body_fat"] = data.porcentaje_graso
+    if data.sexo:
+        update["sex"] = data.sexo
+    if data.objetivo:
+        update["goal"] = data.objetivo
+
+    # El versionado por fecha (macro_history) se indexa por profile.id. Algunos perfiles antiguos
+    # no tienen el campo `id`; lo generamos y persistimos para que el resolver de dietas funcione.
+    client_id = profile.get("id") or str(uuid.uuid4())
+    if not profile.get("id"):
+        update["id"] = client_id
+
     await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
-    
-    # Log the macro change
+
+    # Macros versionados por fecha (Calma todosLosMacros): la entrada registra la fecha DESDE la
+    # que aplican. Por defecto = hoy. El resolver (_resolve_macros_for_date) elige la última
+    # entrada con effective_date <= fecha de la dieta, así las dietas pasadas mantienen su versión.
+    effective_date = data.effective_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     macro_log = {
         "id": str(uuid.uuid4()),
+        "client_id": client_id,
         "user_id": user["id"],
-        "training": data.training.model_dump(),
-        "rest": data.rest.model_dump(),
+        "previous_training": profile.get("macros_training"),
+        "previous_rest": profile.get("macros_rest"),
+        "new_training": training,
+        "new_rest": rest,
+        "training": training,
+        "rest": rest,
+        "peri": peri,
+        "effective_date": effective_date,
         "note": data.note,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "changed_by": user.get("name", user.get("email", "cliente")),
+        "client_weight": data.peso if data.peso is not None else profile.get("weight"),
+        # Calc inputs guardados POR cambio → trazabilidad de cómo se derivaron los macros.
+        "peso": data.peso,
+        "porcentaje_graso": data.porcentaje_graso,
+        "sexo": data.sexo,
+        "objetivo": data.objetivo,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.macro_logs.insert_one(macro_log)
-    
+    await db.macro_history.insert_one(macro_log)
+
     return {
         "success": True,
-        "training": data.training.model_dump(),
-        "rest": data.rest.model_dump()
+        "training": training,
+        "rest": rest,
+        "peri": peri,
+        "effective_date": effective_date,
     }
 
 

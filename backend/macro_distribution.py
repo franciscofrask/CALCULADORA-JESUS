@@ -211,6 +211,24 @@ def _calcular_periworkout(
     """
     resultado = {}
 
+    if opcion_peri == "sin_peri":
+        # Sin peri: no hay Intra/Post; el presupuesto peri se reparte equitativo entre las comidas.
+        resultado["extra_comidas"] = {"P": p_peri, "H": h_peri}
+        return resultado
+
+    if opcion_peri == "solo_intra":
+        # Solo intra (spec del video): el intra se lleva su parte normal + 5 puntos =
+        #   proteínas 20% -> 25% del peri ; hidratos 30% -> 35% del peri.
+        # El RESTO del peri (75% P, 65% H) se reparte EQUITATIVO entre las comidas
+        # (mecanismo extra_comidas). El intra NO lleva grasa (peri = solo P/H).
+        resultado["Intra"] = {
+            "P": round(p_peri * 0.25, 1),
+            "H": round(h_peri * 0.35, 1),
+            "G": 0.0
+        }
+        resultado["extra_comidas"] = {"P": p_peri * 0.75, "H": h_peri * 0.65}
+        return resultado
+
     if opcion_peri == "solo_post":
         resultado["Post"] = {
             "P": round(p_peri, 1),

@@ -119,6 +119,18 @@ _PREP_TESTS = {
 
 _PREPS_ORDER = ["GEN", "PRO", "FRE", "CGE", "AHU", "LAT", "POL", "PRE", "HAM", "SNA", "MIN", "YCO", "UNI", "YA", "SGL"]
 
+# Calma T.marcasRecomendadas: foods whose nombre matches get the PROMOCIONADO badge + a -0.5
+# prioridad float. Calma appends "| PRO" to them at load (except "Native Isolate"); our DB has no
+# PRO tag, so we detect by name (and honor an explicit PRO token if present).
+_MARCAS_RECOMENDADAS = ("fullgas", "fitness burger", "my fitness meals")
+
+def _es_promocionado(food) -> bool:
+    cats = {t.strip().upper() for t in str(food.get("categorias", "") or "").split("|")}
+    if "PRO" in cats:
+        return True
+    n = (food.get("nombre") or "").lower()
+    return any(m in n for m in _MARCAS_RECOMENDADAS) and "native isolate" not in n
+
 # ==================== FOODS ====================
 
 @router.get("/foods")
@@ -294,6 +306,21 @@ async def test_calma():
 
 # ==================== DISTRIBUTE MACROS ====================
 
+async def _choose_macro_entry_for_date(profile: dict, fecha: Optional[str]):
+    """Return the macro_history entry effective for `fecha` (latest effective_date <= fecha;
+    before any change -> earliest entry), or None when there's no history / no fecha."""
+    if not fecha:
+        return None
+    entries = await db.macro_history.find({"client_id": profile.get("id")}, {"_id": 0}).to_list(500)
+    if not entries:
+        return None
+    def eff(e):  # effective date (fallback to the created_at date part for legacy entries)
+        return e.get("effective_date") or str(e.get("created_at", ""))[:10]
+    applicable = [e for e in entries if eff(e) and eff(e) <= fecha]
+    return (max(applicable, key=lambda e: (eff(e), e.get("created_at", "")))
+            if applicable else min(entries, key=lambda e: (eff(e), e.get("created_at", ""))))
+
+
 async def _resolve_macros_for_date(profile: dict, fecha: Optional[str]):
     """Date-versioned macros (Calma todosLosMacros / esDiaConCambioDeMacros): return the macros
     effective for `fecha` = the macro_history entry with the latest effective_date <= fecha.
@@ -301,16 +328,9 @@ async def _resolve_macros_for_date(profile: dict, fecha: Optional[str]):
     cur_training = profile.get("macros_training") or {}
     cur_rest = profile.get("macros_rest") or {}
     cur_peri = profile.get("macros_periworkout") or profile.get("macros_peri") or {}
-    if not fecha:
+    chosen = await _choose_macro_entry_for_date(profile, fecha)
+    if not chosen:
         return cur_training, cur_rest, cur_peri
-    entries = await db.macro_history.find({"client_id": profile.get("id")}, {"_id": 0}).to_list(500)
-    if not entries:
-        return cur_training, cur_rest, cur_peri
-    def eff(e):  # effective date (fallback to the created_at date part for legacy entries)
-        return e.get("effective_date") or str(e.get("created_at", ""))[:10]
-    applicable = [e for e in entries if eff(e) and eff(e) <= fecha]
-    chosen = (max(applicable, key=lambda e: (eff(e), e.get("created_at", "")))
-              if applicable else min(entries, key=lambda e: (eff(e), e.get("created_at", ""))))
     training = chosen.get("new_training") or chosen.get("training") or cur_training
     rest = chosen.get("new_rest") or chosen.get("rest") or cur_rest
     peri = chosen.get("peri") or cur_peri  # legacy entries have no peri -> current
@@ -487,6 +507,7 @@ async def search_foods_endpoint(
         cfg = get_food_config(a)
         a["por_unidad"] = cfg.get("por_unidad", False)
         a["peso_unidad"] = cfg.get("peso_unidad", 0)
+        a["is_promocionado"] = _es_promocionado(a)  # PROMOCIONADO badge (Calma esPromocionado)
 
     has_macros_context = p_rest is not None or h_rest is not None or g_rest is not None
     # Calma's remaining uses raw-gram macros keyed proteinas/hidratos/grasas.
@@ -536,14 +557,12 @@ async def search_foods_endpoint(
         for a in alimentos:
             a["is_favorite"] = str(a.get("id", "")) in fav_ids
 
-        # Calma ordenarIngredientesPorMacro: PRIMARY sort is pure diferenciaDeMacros
-        # ascending, tie-break by nombre.localeCompare. NO promocionado/PRO float —
-        # the bundle's sort has no such bucket. PROMOCIONADO is only a badge; a promoted
-        # brand sits in its natural diferencia position (verified vs Dieta.8ec0f1e0.js
-        # ordenarIngredientesPorMacro on 2026-06-13: arroces paso 2 ranks by aporte,
-        # FullGas/Proenutrition "Zero" do NOT surface to the top).
-        def _is_pro(f):
-            return "PRO" in {t.strip().upper() for t in str(f.get("categorias", "") or "").split("|")}
+        # Calma ordenarIngredientesPorMacro: sort by diferenciaDeMacros asc (tie-break nombre),
+        # THEN a stable sort by prioridad[fase]. prioridad (de()) = min matched index in the fase's
+        # prioritarias list, and PRO/PROMOCIONADO brands get idx-0.5 so they float to the TOP of
+        # their bucket (verified 2026-06-15 in the intra phase: FullGas amino/peptides surface
+        # above non-promo of cat 41). See _is_pro below for the marcasRecomendadas detection.
+        _is_pro = _es_promocionado  # PRO/PROMOCIONADO float (-0.5), Calma de() + marcasRecomendadas
         def _diff(f):
             d = f.get("_diferencia")
             return d if d is not None else float('inf')
@@ -876,9 +895,12 @@ async def calculate_and_apply_targets(data: dict, user = Depends(get_current_use
         "macros_multiplicadores": targets["multiplicadores"],
     }
 
+    # upsert: si el perfil aún no existe (cuenta nueva que usa la calculadora antes de crear el
+    # perfil formal), asignar un `id` al INSERTAR. Sin esto el doc se creaba sin `id` y rompía el
+    # versionado de macros (macro_history se indexa por profile.id).
     result = await db.client_profiles.update_one(
         {"user_id": user["id"]},
-        {"$set": update_data},
+        {"$set": update_data, "$setOnInsert": {"id": str(uuid.uuid4())}},
         upsert=True
     )
 

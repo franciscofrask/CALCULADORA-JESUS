@@ -9,7 +9,7 @@ const BottomNav = () => {
         { path: '/dashboard', icon: Home, label: 'Inicio', emoji: '🏠' },
         { path: '/dashboard/nutrition', icon: Utensils, label: 'Nutrición', emoji: '🍽️' },
         { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina', emoji: '💪' },
-        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Calc.', emoji: '🔢' },
+        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Macros', emoji: '🔢' },
         { path: '/dashboard/profile', icon: Menu, label: 'Más', emoji: '≡' },
     ];
 

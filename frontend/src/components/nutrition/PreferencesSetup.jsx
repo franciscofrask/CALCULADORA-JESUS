@@ -224,9 +224,19 @@ const PreferencesSetup = ({
                 <div className="flex-1 overflow-y-auto p-4">
                     {activeTab === 'like' && (
                         <>
-                            <p className="text-gray-500 text-sm mb-3">
-                                La calculadora te sugerirá estos alimentos en los últimos toques de cada comida.
-                            </p>
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-gray-500 text-sm flex-1 pr-2">
+                                    La calculadora te sugerirá estos alimentos en los últimos toques de cada comida.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelected(selected.size === PREFERENCE_CATEGORIES.length ? new Set() : new Set(PREFERENCE_CATEGORIES.map(c => c.id)))}
+                                    className="text-xs font-semibold text-brand-orange hover:underline whitespace-nowrap flex-shrink-0"
+                                    data-testid="select-all-like"
+                                >
+                                    {selected.size === PREFERENCE_CATEGORIES.length ? 'Quitar todos' : 'Seleccionar todos'}
+                                </button>
+                            </div>
                             <div className="space-y-1">
                                 {PREFERENCE_CATEGORIES.map(cat => (
                                     <CategoryCheckbox
@@ -284,7 +294,17 @@ const PreferencesSetup = ({
                             </div>
 
                             {/* Category section */}
-                            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Por categoría</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-semibold text-gray-500 uppercase">Por categoría</p>
+                                <button
+                                    type="button"
+                                    onClick={() => setAvoidedCats(avoidedCats.size === PREFERENCE_CATEGORIES.length ? new Set() : new Set(PREFERENCE_CATEGORIES.map(c => c.id)))}
+                                    className="text-xs font-semibold text-red-500 hover:underline whitespace-nowrap"
+                                    data-testid="select-all-avoid"
+                                >
+                                    {avoidedCats.size === PREFERENCE_CATEGORIES.length ? 'Quitar todos' : 'Seleccionar todos'}
+                                </button>
+                            </div>
                             <div className="space-y-1">
                                 {PREFERENCE_CATEGORIES.map(cat => (
                                     <CategoryCheckbox

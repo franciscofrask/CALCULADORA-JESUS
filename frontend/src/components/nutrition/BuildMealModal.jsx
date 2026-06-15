@@ -843,7 +843,12 @@ const BuildMealModal = ({
                                                             data-testid={`food-item-${food.id || idx}`}
                                                         >
                                                             <div className="flex-1 min-w-0">
-                                                                <div className="text-sm text-black truncate">{food.nombre}</div>
+                                                                <div className="text-sm text-black truncate">
+                                                                    {food.nombre}
+                                                                    {food.is_promocionado && (
+                                                                        <span className="ml-1.5 align-middle inline-block text-[9px] font-bold tracking-wide text-white bg-black rounded px-1 py-0.5">PROMOCIONADO</span>
+                                                                    )}
+                                                                </div>
                                                                 <div className="text-xs text-gray-500">
                                                                     {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)` : `${food._cantidad_sugerida}g`} → ` : ''}
                                                                     {(() => {
@@ -853,11 +858,14 @@ const BuildMealModal = ({
                                                                         const p = ms?.P ?? (food.proteinas || 0) * qty / 100;
                                                                         const h = ms?.H ?? (food.hidratos || 0) * qty / 100;
                                                                         const g = ms?.G ?? (food.grasas || 0) * qty / 100;
-                                                                        return [
-                                                                            p > 0 ? `P=${fmt(p)}g` : null,
-                                                                            h > 0 ? `H=${fmt(h)}g` : null,
-                                                                            g > 0 ? `G=${fmt(g)}g` : null,
-                                                                        ].filter(Boolean).join(' ') || 'No aporta macros';
+                                                                        // Colores P/H/G consistentes con la cabecera del modal: P naranja, H azul, G amarillo.
+                                                                        const parts = [
+                                                                            p > 0 ? <span key="p" className="font-semibold text-orange-500">P={fmt(p)}g</span> : null,
+                                                                            h > 0 ? <span key="h" className="font-semibold text-blue-500">H={fmt(h)}g</span> : null,
+                                                                            g > 0 ? <span key="g" className="font-semibold text-yellow-500">G={fmt(g)}g</span> : null,
+                                                                        ].filter(Boolean);
+                                                                        if (parts.length === 0) return 'No aporta macros';
+                                                                        return parts.reduce((acc, el, i) => (i === 0 ? [el] : [...acc, ' ', el]), []);
                                                                     })()}
                                                                 </div>
                                                             </div>
@@ -892,7 +900,7 @@ const BuildMealModal = ({
                                     <span className="flex items-center gap-2">
                                         <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-black text-white text-xs">{tempFoods.length}</span>
                                         <span>añadidos</span>
-                                        <span className="text-xs text-gray-500 font-normal">· P {fmt(tot.P)} · H {fmt(tot.H)} · G {fmt(tot.G)}</span>
+                                        <span className="text-xs font-normal">· <span className="font-semibold text-orange-500">P {fmt(tot.P)}</span> · <span className="font-semibold text-blue-500">H {fmt(tot.H)}</span> · <span className="font-semibold text-yellow-500">G {fmt(tot.G)}</span></span>
                                     </span>
                                     <ChevronUp className={`w-4 h-4 text-gray-400 transition-transform ${addedOpen ? '' : 'rotate-180'}`} />
                                 </button>

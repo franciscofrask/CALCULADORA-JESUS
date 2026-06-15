@@ -20,6 +20,11 @@ import DietCalendar from '../components/nutrition/DietCalendar';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Peri options: intra_post/solo_post (Calma) + solo_intra/sin_peri (custom). Normalize stored
+// values, defaulting unknown to intra_post.
+const PERI_VALUES = ['intra_post', 'solo_post', 'solo_intra', 'sin_peri'];
+const normPeri = (v) => (PERI_VALUES.includes(v) ? v : 'intra_post');
+
 // 12EN12 Logo Component
 const Logo12EN12 = () => (
     <div className="flex items-center text-xl font-bold tracking-tight">
@@ -308,8 +313,8 @@ const NutritionPage = () => {
                 const dietConfig = {
                     tipoDia: diet.tipo_dia || 'entrenamiento',
                     numComidas: (diet.num_comidas === 3) ? 4 : (diet.num_comidas || 4), // 3-meal option removed
-                    momentoEntreno: diet.momento_entreno || 1,
-                    opcionPeri: (diet.opcion_peri === 'solo_post') ? 'solo_post' : 'intra_post', // solo_intra/sin_peri removed
+                    momentoEntreno: diet.momento_entreno ?? 1,  // ?? not || so 0 (en ayunas) persiste
+                    opcionPeri: normPeri(diet.opcion_peri),
                 };
                 setTipoDia(dietConfig.tipoDia);
                 setNumComidas(dietConfig.numComidas);
@@ -406,7 +411,7 @@ const NutritionPage = () => {
                 const cfg = await api('/api/user/diet-config');
                 const me = cfg.momento_entreno ?? 1;
                 const nc = (cfg.num_comidas === 3) ? 4 : (cfg.num_comidas ?? 4); // 3-meal option removed
-                const op = (cfg.opcion_peri === 'solo_post') ? 'solo_post' : 'intra_post'; // solo_intra/sin_peri removed
+                const op = normPeri(cfg.opcion_peri);
                 setMomentoEntreno(me);
                 setNumComidas(nc);
                 setOpcionPeri(op);
@@ -1001,7 +1006,7 @@ const NutritionPage = () => {
         setTipoDia(fav.tipo_dia || 'entrenamiento');
         setNumComidas((fav.num_comidas === 3) ? 4 : (fav.num_comidas || 4));
         setMomentoEntreno(fav.momento_entreno ?? 1);
-        setOpcionPeri((fav.opcion_peri === 'solo_post') ? 'solo_post' : 'intra_post');
+        setOpcionPeri(normPeri(fav.opcion_peri));
         setMealsData(fav.comidas || {});
         setDistribTargetsOverlay(fav.distribution_targets || null);
         setVolcadoMeal(null);
@@ -1011,7 +1016,7 @@ const NutritionPage = () => {
             tipoDia: fav.tipo_dia || 'entrenamiento',
             numComidas: (fav.num_comidas === 3) ? 4 : (fav.num_comidas || 4),
             momentoEntreno: fav.momento_entreno ?? 1,
-            opcionPeri: (fav.opcion_peri === 'solo_post') ? 'solo_post' : 'intra_post',
+            opcionPeri: normPeri(fav.opcion_peri),
         });
     };
 
@@ -1319,17 +1324,7 @@ const NutritionPage = () => {
                             );
                         }
 
-                        return distribution && !isPast && getDayStatus() === 'falta' && (remainingDay.P > 4 || remainingDay.H > 4 || remainingDay.G > 4) && (
-                            <div className="bg-orange-50 border border-brand-orange/30 rounded-2xl p-4 mb-4">
-                                <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-1">Macros pendientes hoy</p>
-                                <p className="text-sm text-gray-700">
-                                    {remainingDay.P > 0 && <span className="font-bold text-blue-600">{remainingDay.P}g P </span>}
-                                    {remainingDay.H > 0 && <span className="font-bold text-amber-500">{remainingDay.H}g H </span>}
-                                    {remainingDay.G > 0 && <span className="font-bold text-red-500">{remainingDay.G}g G</span>}
-                                    <span className="text-gray-400"> · volcalos a una comida con “Volcar aquí”.</span>
-                                </p>
-                            </div>
-                        );
+                        return null;
                     })()}
 
                     {/* Meals */}

@@ -349,7 +349,7 @@ const ClientLayout = () => {
         { path: '/dashboard', icon: Home, label: 'Inicio' },
         { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
         { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
-        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Calculadora' },
+        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Ajustar macros' },
         { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
         { path: '/dashboard/reports', icon: FileText, label: 'Reportes' },
         { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat' },
@@ -394,7 +394,7 @@ const ClientLayout = () => {
                         { path: '/dashboard', icon: Home, label: 'Inicio' },
                         { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
                         { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
-                        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Calc.' },
+                        { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Macros' },
                         { path: '/dashboard/profile', icon: User, label: 'Más' },
                     ].map((item) => {
                         const active = isActive(item.path);

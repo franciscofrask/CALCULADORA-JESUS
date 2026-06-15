@@ -7,11 +7,14 @@ const MOMENTO_OPTIONS = [
     { value: 3, label: 'Después de Comida 3' },
 ];
 
-// Calma's peri model = a boolean `quiereIntraentrenamiento`: post is ALWAYS present, intra is
-// optional. So only two states. `solo_intra` and `sin_peri` did not exist in Calma — removed.
+// Peri options. intra_post/solo_post = Calma. Added (custom): solo_intra (intra = 5% de cada
+// macro del día, resto equitativo entre comidas) y sin_peri (sin intra/post; el peri se reparte
+// entre las comidas).
 const PERI_OPTIONS = [
     { value: 'intra_post', label: 'Intra + Post' },
     { value: 'solo_post', label: 'Solo Post' },
+    { value: 'solo_intra', label: 'Solo Intra' },
+    { value: 'sin_peri', label: 'Sin peri' },
 ];
 
 const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri, setOpcionPeri, singleMeal = false }) => {
@@ -24,7 +27,7 @@ const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri,
             <div className="flex items-center gap-3 flex-wrap">
                 {tipoDia === 'entrenamiento' && !singleMeal && (
                     <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600 font-medium">Entrenas:</span>
+                        <span className="text-xs text-gray-600 font-medium">Cuando entrenas:</span>
                         <select value={momentoEntreno} onChange={(e) => setMomentoEntreno(Number(e.target.value))}
                             className="text-xs bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
                             data-testid="momento-entreno-select"

@@ -113,3 +113,8 @@ class MacrosUpdate(BaseModel):
     # Date-versioned macros (Calma todosLosMacros): these macros apply to diet days on/after
     # this date. Default = today. Diets before it keep the prior version.
     effective_date: Optional[str] = None
+    # Calc inputs stored per change for traceability (history of how the macros were derived).
+    peso: Optional[float] = None
+    porcentaje_graso: Optional[float] = None
+    sexo: Optional[str] = None
+    objetivo: Optional[str] = None
