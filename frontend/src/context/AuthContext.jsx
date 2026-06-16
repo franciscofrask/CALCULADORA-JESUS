@@ -61,6 +61,7 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- api recreado cada render; refetch solo en cambio de token
     }, [token]);
 
     useEffect(() => {

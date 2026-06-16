@@ -12,7 +12,7 @@ from core.database import db
 from core.security import get_current_user, get_admin_user
 from models.common import RoutineResponse, RoutineCreate
 from models.user import PLAN_TYPES
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from llm_client import LlmChat, UserMessage
 
 router = APIRouter(prefix="/routines", tags=["routines"])
 
@@ -101,12 +101,12 @@ La rutina debe tener este formato exacto:
 Genera una rutina completa de 7 días. Responde SOLO con el JSON."""
 
     try:
-        llm_key = os.environ.get('EMERGENT_LLM_KEY')
+        llm_key = os.environ.get('ANTHROPIC_API_KEY')
         chat = LlmChat(
             api_key=llm_key,
             session_id=f"routine-{data.client_id}-{uuid.uuid4()}",
             system_message="Eres un entrenador personal experto. Genera rutinas en formato JSON."
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        ).with_model("anthropic", "claude-sonnet-4-6")
         
         response = await chat.send_message(UserMessage(text=prompt))
         

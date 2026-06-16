@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from llm_client import LlmChat, UserMessage
 
 # Importar funciones del motor CALMA
 from calma_engine import (
@@ -90,7 +90,7 @@ class NutritionChatbot:
         """
         self.session_id = session_id
         self.db = db
-        self.api_key = os.environ.get('EMERGENT_LLM_KEY')
+        self.api_key = os.environ.get('ANTHROPIC_API_KEY')
         
         # Estado de la conversación
         self.state = {
@@ -124,7 +124,7 @@ class NutritionChatbot:
             api_key=self.api_key,
             session_id=session_id,
             system_message=SYSTEM_PROMPT
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        ).with_model("anthropic", "claude-sonnet-4-6")
     
     def set_user_macros(self, macros: dict):
         """Establece los macros del usuario desde su perfil."""

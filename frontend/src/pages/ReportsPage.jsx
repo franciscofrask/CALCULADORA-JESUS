@@ -58,6 +58,7 @@ const ReportsPage = () => {
         notes: ''
     });
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch solo al montar
     useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {

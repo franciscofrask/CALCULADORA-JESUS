@@ -257,3 +257,7 @@ _calma_ref/
 # Server logs
 backend.log
 backend/*.log
+
+# Frontend logs
+frontend.log
+frontend/frontend.log

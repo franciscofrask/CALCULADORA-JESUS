@@ -19,6 +19,3 @@ JWT_EXPIRATION_HOURS = 24
 
 # CORS
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
-
-# LLM
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')

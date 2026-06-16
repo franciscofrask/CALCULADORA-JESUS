@@ -21,6 +21,7 @@ const RoutinePage = () => {
     const [loading, setLoading] = useState(true);
     const [showHistory, setShowHistory] = useState(false);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch solo al montar
     useEffect(() => { fetchRoutine(); }, []);
 
     const fetchRoutine = async () => {

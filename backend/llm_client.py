@@ -1,5 +1,5 @@
 """
-Stub for emergentintegrations.llm.chat using Anthropic SDK directly.
+Cliente LLM mínimo sobre el SDK de Anthropic.
 """
 import anthropic
 
@@ -14,7 +14,7 @@ class LlmChat:
         self.api_key = api_key
         self.session_id = session_id
         self.system_message = system_message
-        self.model = "claude-sonnet-4-5-20250929"
+        self.model = "claude-sonnet-4-6"
         self.history = []
         self._client = None
 

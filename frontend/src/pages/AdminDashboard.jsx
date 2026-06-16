@@ -239,6 +239,7 @@ const AdminClientsList = () => {
 
     useEffect(() => {
         fetchClients();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- correr al montar y al cambiar planFilter
     }, [planFilter]);
 
     const fetchClients = async () => {
