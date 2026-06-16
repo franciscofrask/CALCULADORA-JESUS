@@ -62,12 +62,12 @@ class TestBloque1ConteoCategoria:
         assert r["grasa_efectiva"] == 0
     
     def test_1_4_chorizo(self):
-        """Test 1.4 - Chorizo (cat 2.1): todos los umbrales pasados."""
+        """Test 1.4 - Chorizo (cat 2.1). Calma: H=0 si H<=2, asi que H=2 NO cuenta."""
         # Por 100g: P=22, H=2, G=30
         r = calcular_macros_efectivos(22, 2, 30, "2.1", 100)
-        
+
         assert r["proteina_cuenta"] == True
-        assert r["hidratos_cuenta"] == True, "H=2 >= 2"
+        assert r["hidratos_cuenta"] == False, "Calma cat 2: H<=2 no cuenta, H=2 fuera"
         assert r["grasa_cuenta"] == True, "G=30 >= 3"
     
     def test_1_5_salmon(self):

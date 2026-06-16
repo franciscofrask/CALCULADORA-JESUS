@@ -633,10 +633,10 @@ def _aplicar_reglas_categoria(
     
     # =====================================================
     # CAT 48 - Sopas y caldos
-    # Cualquier macro > 0 cuenta (caldos son muy diluidos, cualquier aporte es valido)
+    # Calma: P=0 si P<2 | H=0 si H<=2 | G=0 si G<2
     # =====================================================
     if cat == "48" or cat.startswith("48."):
-        return (p100 > 0, h100 > 0, g100 > 0, 1.0)
+        return (p100 >= 2.0, h100 > 2.0, g100 >= 2.0, 1.0)
     
     # =====================================================
     # CAT 52 - Mundo vegano
