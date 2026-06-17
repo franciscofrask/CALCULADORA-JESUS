@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, ArrowUpRight, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
+import BrandArrow from '../components/BrandArrow';
 
 // 12EN12 Logo Component
 const Logo12EN12 = ({ size = 'lg' }) => {
@@ -26,10 +27,7 @@ const Logo12EN12 = ({ size = 'lg' }) => {
             <span className="text-white">12</span>
             <span className="text-white">EN</span>
             <span className="text-white">12</span>
-            <ArrowUpRight 
-                className={`text-brand-orange ${arrowSizes[size]} -ml-1`} 
-                strokeWidth={3} 
-            />
+            <BrandArrow className="text-brand-orange h-[1em] w-[1em] -ml-0.5" />
         </div>
     );
 };

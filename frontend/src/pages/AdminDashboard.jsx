@@ -13,7 +13,7 @@ import { PlanBadge, JG12Logo } from './ClientDashboard';
 import { 
     LayoutDashboard, Users, CreditCard, Dumbbell, 
     MessageCircle, LogOut, Search, Bell,
-    ChevronRight, DollarSign, FileText, ArrowUpRight,
+    ChevronRight, DollarSign, FileText,
     AlertTriangle, UserCheck, UserMinus, UserPlus
 } from 'lucide-react';
 

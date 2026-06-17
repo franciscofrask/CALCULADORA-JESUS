@@ -5,8 +5,9 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
     ChevronLeft, ChevronRight,
-    Save, Copy, ArrowUpRight, Calendar, FileDown, SlidersHorizontal
+    Save, Copy, Calendar, FileDown, SlidersHorizontal
 } from 'lucide-react';
+import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 import BuildMealModal from '../components/nutrition/BuildMealModal';
 import RepeatMealModal from '../components/nutrition/RepeatMealModal';
@@ -29,7 +30,7 @@ const normPeri = (v) => (PERI_VALUES.includes(v) ? v : 'intra_post');
 const Logo12EN12 = () => (
     <div className="flex items-center text-xl font-bold tracking-tight">
         <span className="text-white">12EN12</span>
-        <ArrowUpRight className="text-brand-orange w-5 h-5 -ml-0.5" strokeWidth={3} />
+        <BrandArrow className="text-brand-orange h-[1em] w-[1em] -ml-0.5" />
     </div>
 );
 

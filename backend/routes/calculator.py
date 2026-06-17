@@ -27,6 +27,7 @@ from calma_suggest import (
     diferencia_de_macros as diferencia_de_macros_calma,
     aplicar_regla_macros as aplicar_regla_macros_calma,
     food_in_cat as food_in_cat_calma,
+    cantidad_minima as cantidad_minima_calma,
 )
 from target_calculator import calcular_targets, targets_to_profile_macros, run_tests as target_run_tests
 from macro_distribution import distribuir_macros as dist_macros
@@ -158,6 +159,55 @@ async def get_foods_count(user = Depends(get_current_user)):
     """Retorna el conteo total de alimentos."""
     count = await db.foods.count_documents({})
     return {"total": count}
+
+def _n1(x: float) -> str:
+    """Calma C(): número con hasta 1 decimal, sin .0 sobrante.
+    Redondeo half-up (como toLocaleString JS), no el banker's de round()."""
+    r = math.floor(float(x or 0) * 10 + 0.5) / 10
+    return str(int(r)) if r == int(r) else str(r)
+
+def _fmt_macros(m: dict) -> str:
+    """Calma ae()/Q(): 'Xg proteínas / Yg hidratos / Zg grasas' (solo > 0)."""
+    parts = []
+    for k, label in (("proteinas", "proteínas"), ("hidratos", "hidratos"), ("grasas", "grasas")):
+        v = m.get(k, 0)
+        if v:
+            parts.append(f"{_n1(v)}g {label}")
+    return " / ".join(parts)
+
+@router.get("/foods-listado")
+async def get_foods_listado(user = Depends(get_current_user)):
+    """Lista completa de alimentos enriquecida para el Buscador (réplica de Calma
+    `getTodosLosAlimentos`): macros efectivos tras la regla, info de etiqueta con los
+    originales, cantidad mínima y si 'siempre puede ser sugerido'."""
+    foods = await db.foods.find({}, {"_id": 0}).to_list(5000)
+    out = []
+    for f in foods:
+        orig = {"proteinas": float(f.get("proteinas") or 0),
+                "hidratos": float(f.get("hidratos") or 0),
+                "grasas": float(f.get("grasas") or 0)}
+        aplicar_regla_macros_calma(f)  # zera macros que no cuentan (in place) + fija _ajuste
+        eff = {"proteinas": float(f.get("proteinas") or 0),
+               "hidratos": float(f.get("hidratos") or 0),
+               "grasas": float(f.get("grasas") or 0)}
+        cm = cantidad_minima_calma(f)
+        mins_str = _fmt_macros(macros_at_calma(f, cm))
+        out.append({
+            "id": f.get("id"),
+            "nombre": f.get("nombre"),
+            "categorias": f.get("categorias"),
+            "url": f.get("url"),
+            "racion": f.get("racion"),
+            "unidades": bool(f.get("unidades")),
+            "proteinas": eff["proteinas"],
+            "hidratos": eff["hidratos"],
+            "grasas": eff["grasas"],
+            "tiene_macros": any(v > 0 for v in eff.values()),
+            "info_etiqueta": _fmt_macros(orig) if eff != orig else None,
+            "cantidad_minima": cm,
+            "sugerencia": (f"Necesita {mins_str} para ser sugerido" if mins_str else "Siempre puede ser sugerido"),
+        })
+    return out
 
 # ==================== CATEGORIES ====================
 

@@ -8,8 +8,9 @@ import { toast } from 'sonner';
 import {
     Home, Dumbbell, Apple, FileText, MessageCircle, User,
     LogOut, Bell, ChevronRight, CreditCard, Target, ArrowUpRight, Bot,
-    Flame, Activity, Zap, Scale, Calculator
+    Flame, Activity, Zap, Scale, Calculator, Search
 } from 'lucide-react';
+import BrandArrow from '../components/BrandArrow';
 
 // =============== SHARED COMPONENTS ===============
 
@@ -20,7 +21,7 @@ const JG12Logo = ({ size = 'md' }) => {
         <div className={`jg-logo ${sizeClasses[size]} flex items-center`}>
             <span className="text-white font-bold">JG</span>
             <span className="text-white font-bold">12</span>
-            <ArrowUpRight className={`text-[#FF671F] ${iconSizes[size]} -ml-0.5`} strokeWidth={3} />
+            <BrandArrow className="text-[#FF671F] h-[1em] w-[1em] -ml-0.5" />
         </div>
     );
 };
@@ -349,6 +350,7 @@ const ClientLayout = () => {
         { path: '/dashboard', icon: Home, label: 'Inicio' },
         { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
         { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
+        { path: '/dashboard/foods', icon: Search, label: 'Alimentos' },
         { path: '/dashboard/macro-calculator', icon: Calculator, label: 'Ajustar macros' },
         { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
         { path: '/dashboard/reports', icon: FileText, label: 'Reportes' },

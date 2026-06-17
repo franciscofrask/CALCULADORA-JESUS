@@ -59,6 +59,18 @@ export const PREFERENCE_CATEGORIES = [
     { id: 'superalimentos',   label: 'Superalimentos',                             prefixes: ['51'],            icon: faStar },
 ];
 
+// Obligatoria: siempre marcada, no se puede desmarcar.
+export const OBLIGATORY_PREFERENCES = ['grasas_buenas'];
+
+// Pre-marcadas para clientes nuevos (todas desmarcables salvo las obligatorias).
+export const DEFAULT_PREFERENCES = ['grasas_buenas', 'verduras', 'embutidos', 'lacteos', 'salsas'];
+
+const withObligatory = (ids) => {
+    const s = new Set(ids);
+    OBLIGATORY_PREFERENCES.forEach(id => s.add(id));
+    return s;
+};
+
 const PreferencesSetup = ({
     api,
     initialPreferences = [],
@@ -69,15 +81,17 @@ const PreferencesSetup = ({
     isEditMode = false
 }) => {
     const [activeTab, setActiveTab] = useState('like');
-    const [selected, setSelected] = useState(new Set(initialPreferences));
+    const [selected, setSelected] = useState(
+        withObligatory(isEditMode || initialPreferences.length ? initialPreferences : DEFAULT_PREFERENCES)
+    );
     const [avoidedCats, setAvoidedCats] = useState(new Set(initialAvoidedCategories));
     const [avoidedKeywords, setAvoidedKeywords] = useState(initialAvoidedKeywords);
     const [keywordInput, setKeywordInput] = useState('');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        setSelected(new Set(initialPreferences));
-    }, [initialPreferences]);
+        setSelected(withObligatory(isEditMode || initialPreferences.length ? initialPreferences : DEFAULT_PREFERENCES));
+    }, [initialPreferences, isEditMode]);
 
     useEffect(() => {
         setAvoidedCats(new Set(initialAvoidedCategories));
@@ -88,6 +102,7 @@ const PreferencesSetup = ({
     }, [initialAvoidedKeywords]);
 
     const toggleCategory = (id) => {
+        if (OBLIGATORY_PREFERENCES.includes(id)) return; // obligatoria, no se desmarca
         setSelected(prev => {
             const s = new Set(prev);
             s.has(id) ? s.delete(id) : s.add(id);
@@ -147,24 +162,25 @@ const PreferencesSetup = ({
         }
     };
 
-    const CategoryCheckbox = ({ cat, checked, onToggle, colorClass }) => (
+    const CategoryCheckbox = ({ cat, checked, onToggle, colorClass, locked = false }) => (
         <label
             key={cat.id}
-            className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+            className={`flex items-center gap-3 p-3 rounded-lg transition-all ${locked ? 'cursor-default' : 'cursor-pointer'} ${
                 checked
                     ? `${colorClass} border`
                     : 'bg-gray-50 border border-transparent hover:bg-gray-100'
             }`}
-            onClick={() => onToggle(cat.id)}
+            onClick={() => !locked && onToggle(cat.id)}
         >
             <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
                 checked ? `${colorClass.includes('orange') ? 'bg-brand-orange border-brand-orange' : 'bg-red-500 border-red-500'}` : 'border-gray-300'
             }`}>
                 {checked && <Check className="w-3 h-3 text-white" />}
             </div>
-            <span className={`text-sm ${checked ? 'text-gray-900 font-medium' : 'text-gray-700'}`}>
+            <span className={`text-sm flex-1 ${checked ? 'text-gray-900 font-medium' : 'text-gray-700'}`}>
                 {cat.label}
             </span>
+            {locked && <span className="text-xs text-gray-400 flex-shrink-0">Obligatorio</span>}
         </label>
     );
 
@@ -230,7 +246,7 @@ const PreferencesSetup = ({
                                 </p>
                                 <button
                                     type="button"
-                                    onClick={() => setSelected(selected.size === PREFERENCE_CATEGORIES.length ? new Set() : new Set(PREFERENCE_CATEGORIES.map(c => c.id)))}
+                                    onClick={() => setSelected(selected.size === PREFERENCE_CATEGORIES.length ? withObligatory([]) : new Set(PREFERENCE_CATEGORIES.map(c => c.id)))}
                                     className="text-xs font-semibold text-brand-orange hover:underline whitespace-nowrap flex-shrink-0"
                                     data-testid="select-all-like"
                                 >
@@ -244,6 +260,7 @@ const PreferencesSetup = ({
                                         cat={cat}
                                         checked={selected.has(cat.id)}
                                         onToggle={toggleCategory}
+                                        locked={OBLIGATORY_PREFERENCES.includes(cat.id)}
                                         colorClass="bg-brand-orange/10 border-brand-orange"
                                     />
                                 ))}

@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Check, ArrowRight, Loader2, Star, ArrowUpRight } from 'lucide-react';
+import { Check, ArrowRight, Loader2, Star } from 'lucide-react';
+import BrandArrow from '../components/BrandArrow';
 
 const PLANS = [
     {
@@ -105,7 +106,7 @@ const OnboardingPage = () => {
                     <div className="inline-flex items-center text-5xl mb-4" style={{ fontFamily: 'Bebas Neue' }}>
                         <span className="text-white">JG</span>
                         <span className="text-white">12</span>
-                        <ArrowUpRight className="text-[#FF671F] w-10 h-10 -ml-1" strokeWidth={3} />
+                        <BrandArrow className="text-[#FF671F] h-[1em] w-[1em] -ml-0.5" />
                     </div>
                     <h1 className="heading-1 text-white mb-2">ELIGE TU PLAN</h1>
                     <p className="text-white/60 uppercase tracking-wider text-sm">

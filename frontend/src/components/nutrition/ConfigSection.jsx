@@ -22,6 +22,10 @@ const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri,
     // option (equitable 33%) had no Calma equivalent, so it was removed — meals are always 4.
     const momentoOptions = MOMENTO_OPTIONS;
 
+    // Solo hay selects (cuando entrenas / peri) en día de entrenamiento; en descanso
+    // no renderizamos nada para no dejar una caja gris vacía.
+    if (tipoDia !== 'entrenamiento') return null;
+
     return (
         <div className="bg-gray-100 rounded-xl p-3 mb-4" data-testid="config-section">
             <div className="flex items-center gap-3 flex-wrap">
@@ -29,7 +33,7 @@ const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri,
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-600 font-medium">Cuando entrenas:</span>
                         <select value={momentoEntreno} onChange={(e) => setMomentoEntreno(Number(e.target.value))}
-                            className="text-xs bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
+                            className="text-xs text-gray-900 [color-scheme:light] bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
                             data-testid="momento-entreno-select"
                         >
                             {momentoOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -41,7 +45,7 @@ const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri,
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-600 font-medium">Peri:</span>
                         <select value={opcionPeri} onChange={(e) => setOpcionPeri(e.target.value)}
-                            className="text-xs bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
+                            className="text-xs text-gray-900 [color-scheme:light] bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
                             data-testid="peri-select"
                         >
                             {PERI_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}

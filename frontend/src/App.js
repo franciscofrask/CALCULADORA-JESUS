@@ -19,6 +19,7 @@ import ChatbotPage from "./pages/ChatbotPage";
 import SupplementsPage from "./pages/SupplementsPage";
 import CheckInsPage from "./pages/CheckInsPage";
 import MacroCalculatorClientPage from "./pages/MacroCalculatorClientPage";
+import FoodSearchPage from "./pages/FoodSearchPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 
 // Protected Route Component
@@ -109,6 +110,7 @@ function AppRoutes() {
                 <Route path="supplements" element={<SupplementsPage />} />
                 <Route path="checkins" element={<CheckInsPage />} />
                 <Route path="macro-calculator" element={<MacroCalculatorClientPage />} />
+                <Route path="foods" element={<FoodSearchPage />} />
                 <Route path="questionnaire" element={<QuestionnairePage />} />
             </Route>
 
