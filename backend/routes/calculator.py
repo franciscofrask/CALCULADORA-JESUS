@@ -416,9 +416,10 @@ async def distribute_macros(data: dict, user = Depends(get_current_user)):
         num_comidas=data.get("num_comidas", 4),
         momento_entreno=data.get("momento_entreno", 1),
         opcion_peri=data.get("opcion_peri", "intra_post"),
-        # Calma quiereRepartoDeComidas=false -> single-meal mode. Coach-set on the client
-        # profile (not a user-facing toggle); the whole day's macros go to one comida.
-        single_meal=bool(profile.get("single_meal_mode", False)),
+        # single-meal: el cliente puede elegirlo desde Nutrición (select nº comidas = 1),
+        # lo que sobrescribe el ajuste del coach. Si el request no lo manda, se usa el perfil.
+        single_meal=(bool(data["single_meal"]) if data.get("single_meal") is not None
+                     else bool(profile.get("single_meal_mode", False))),
     )
 
     return resultado

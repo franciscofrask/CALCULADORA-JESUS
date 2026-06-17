@@ -297,7 +297,8 @@ const NutritionPage = () => {
                     tipo_dia: overrides.tipoDia ?? tipoDia,
                     num_comidas: overrides.numComidas ?? numComidas,
                     momento_entreno: overrides.momentoEntreno ?? momentoEntreno,
-                    opcion_peri: overrides.opcionPeri ?? opcionPeri
+                    opcion_peri: overrides.opcionPeri ?? opcionPeri,
+                    single_meal: (overrides.numComidas ?? numComidas) === 1, // el cliente manda
                 })
             });
             setDistribution(result);
@@ -313,7 +314,7 @@ const NutritionPage = () => {
             if (diet.exists) {
                 const dietConfig = {
                     tipoDia: diet.tipo_dia || 'entrenamiento',
-                    numComidas: (diet.num_comidas === 3) ? 4 : (diet.num_comidas || 4), // 3-meal option removed
+                    numComidas: diet.num_comidas || 4,
                     momentoEntreno: diet.momento_entreno ?? 1,  // ?? not || so 0 (en ayunas) persiste
                     opcionPeri: normPeri(diet.opcion_peri),
                 };
@@ -411,7 +412,7 @@ const NutritionPage = () => {
             try {
                 const cfg = await api('/api/user/diet-config');
                 const me = cfg.momento_entreno ?? 1;
-                const nc = (cfg.num_comidas === 3) ? 4 : (cfg.num_comidas ?? 4); // 3-meal option removed
+                const nc = cfg.num_comidas ?? 4;
                 const op = normPeri(cfg.opcion_peri);
                 setMomentoEntreno(me);
                 setNumComidas(nc);
@@ -485,6 +486,10 @@ const NutritionPage = () => {
     const handleSetOpcionPeri = (v) => {
         setOpcionPeri(v);
         api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ opcion_peri: v }) }).catch(() => {});
+    };
+    const handleSetNumComidas = (v) => {
+        setNumComidas(v);
+        api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ num_comidas: v }) }).catch(() => {});
     };
 
     // Search foods
@@ -1005,7 +1010,7 @@ const NutritionPage = () => {
         // Load the favorite's meals + config into the current day (does NOT auto-save; the
         // user saves/auto-saves the day after). Foods keep their stored macros_efectivos + raw.
         setTipoDia(fav.tipo_dia || 'entrenamiento');
-        setNumComidas((fav.num_comidas === 3) ? 4 : (fav.num_comidas || 4));
+        setNumComidas(fav.num_comidas || 4);
         setMomentoEntreno(fav.momento_entreno ?? 1);
         setOpcionPeri(normPeri(fav.opcion_peri));
         setMealsData(fav.comidas || {});
@@ -1295,6 +1300,8 @@ const NutritionPage = () => {
                         setMomentoEntreno={handleSetMomentoEntreno}
                         opcionPeri={opcionPeri}
                         setOpcionPeri={handleSetOpcionPeri}
+                        numComidas={numComidas}
+                        setNumComidas={handleSetNumComidas}
                         singleMeal={singleMeal}
                     />
 

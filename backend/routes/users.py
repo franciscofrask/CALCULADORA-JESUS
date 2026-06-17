@@ -163,9 +163,14 @@ async def get_diet_config(user = Depends(get_current_user)):
     defaults = {"momento_entreno": 1, "num_comidas": 4, "opcion_peri": "intra_post"}
     if not profile:
         return defaults
+    # num_comidas: la elección del cliente manda; si no eligió, deriva del ajuste del
+    # coach (single_meal_mode -> 1 comida), si no, 4.
+    num_comidas = profile.get("diet_num_comidas")
+    if num_comidas is None:
+        num_comidas = 1 if profile.get("single_meal_mode") else 4
     return {
         "momento_entreno": profile.get("diet_momento_entreno", 1),
-        "num_comidas": profile.get("diet_num_comidas", 4),
+        "num_comidas": num_comidas,
         "opcion_peri": profile.get("diet_opcion_peri", "intra_post"),
     }
 

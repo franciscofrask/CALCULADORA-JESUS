@@ -17,41 +17,57 @@ const PERI_OPTIONS = [
     { value: 'sin_peri', label: 'Sin peri' },
 ];
 
-const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri, setOpcionPeri, singleMeal = false }) => {
-    // Calma's diet is fixed at 4 meals (its z/J/W reparto tables are 4-meal). The 3-meal
-    // option (equitable 33%) had no Calma equivalent, so it was removed — meals are always 4.
-    const momentoOptions = MOMENTO_OPTIONS;
+const COMIDAS_OPTIONS = [
+    { value: 1, label: 'Comida única' },
+    { value: 3, label: '3 comidas' },
+    { value: 4, label: '4 comidas' },
+];
 
-    // Solo hay selects (cuando entrenas / peri) en día de entrenamiento; en descanso
-    // no renderizamos nada para no dejar una caja gris vacía.
-    if (tipoDia !== 'entrenamiento') return null;
+const selectCls = "w-full text-sm text-gray-900 [color-scheme:light] bg-white border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange";
+const labelCls = "text-xs font-medium text-gray-500 mb-1";
+
+const Field = ({ label, grow, children }) => (
+    <label className={`flex flex-col ${grow ? 'flex-1 min-w-0' : 'w-44'}`}>
+        <span className={labelCls}>{label}</span>
+        {children}
+    </label>
+);
+
+const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri, setOpcionPeri, numComidas = 4, setNumComidas }) => {
+    const single = numComidas === 1;
+    const entreno = tipoDia === 'entrenamiento';
+    const soloComidas = !entreno || single; // Horario/Peri ocultos → solo queda Comidas
 
     return (
-        <div className="bg-gray-100 rounded-xl p-3 mb-4" data-testid="config-section">
-            <div className="flex items-center gap-3 flex-wrap">
-                {tipoDia === 'entrenamiento' && !singleMeal && (
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600 font-medium">Cuando entrenas:</span>
+        <div className="bg-white shadow-md rounded-2xl p-4 mb-4" data-testid="config-section">
+            <div className={`flex flex-wrap gap-3 ${soloComidas ? 'justify-center' : ''}`}>
+                {entreno && !single && (
+                    <Field label="Horario de entreno" grow>
                         <select value={momentoEntreno} onChange={(e) => setMomentoEntreno(Number(e.target.value))}
-                            className="text-xs text-gray-900 [color-scheme:light] bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
-                            data-testid="momento-entreno-select"
+                            className={selectCls} data-testid="momento-entreno-select"
                         >
-                            {momentoOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            {MOMENTO_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                         </select>
-                    </div>
+                    </Field>
                 )}
 
-                {tipoDia === 'entrenamiento' && (
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600 font-medium">Peri:</span>
+                {entreno && !single && (
+                    <Field label="Peri" grow>
                         <select value={opcionPeri} onChange={(e) => setOpcionPeri(e.target.value)}
-                            className="text-xs text-gray-900 [color-scheme:light] bg-white border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-orange"
-                            data-testid="peri-select"
+                            className={selectCls} data-testid="peri-select"
                         >
                             {PERI_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                         </select>
-                    </div>
+                    </Field>
                 )}
+
+                <Field label="Comidas" grow={!soloComidas}>
+                    <select value={numComidas} onChange={(e) => setNumComidas(Number(e.target.value))}
+                        className={selectCls} data-testid="num-comidas-select"
+                    >
+                        {COMIDAS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                </Field>
             </div>
         </div>
     );
