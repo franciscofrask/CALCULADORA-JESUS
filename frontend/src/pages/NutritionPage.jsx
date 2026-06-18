@@ -344,7 +344,7 @@ const NutritionPage = () => {
                                 } catch { return food; }
                             })
                         );
-                        updatedMeals[mealKey] = { alimentos: updatedFoods };
+                        updatedMeals[mealKey] = { ...mealData, alimentos: updatedFoods };
                     } else {
                         updatedMeals[mealKey] = mealData;
                     }
@@ -1034,6 +1034,15 @@ const NutritionPage = () => {
     };
 
     // Day summary
+    // Per-meal builder mode (manual | auto). Default auto. Switching never touches the
+    // already-loaded foods (spread prev[mealKey]); autosave persists `modo` inside comidas.
+    const setMealMode = (mealKey, modo) => {
+        setMealsData(prev => ({
+            ...prev,
+            [mealKey]: { alimentos: [], ...(prev[mealKey] || {}), modo },
+        }));
+    };
+
     const dayMacros = calculateDayMacros();
     const dayTarget = distribution?.resumen || { P_total: 0, H_total: 0, G_total: 0, kcal_total: 0 };
     // Peri (intra/post) grasas do NOT count toward the comidas budget. Calma: peri objetivo has
@@ -1364,6 +1373,8 @@ const NutritionPage = () => {
                                 isLocked={isMealLocked(mealKey)}
                                 canVolcar={mealKey === volcarTargetMeal}
                                 onVolcar={handleVolcarToMeal}
+                                mealMode={mealsData[mealKey]?.modo === 'manual' ? 'manual' : 'auto'}
+                                setMealMode={setMealMode}
                             />
                         ))}
                     </div>
@@ -1441,6 +1452,7 @@ const NutritionPage = () => {
                 tipoDia={tipoDia}
                 mealsData={mealsData}
                 setMealsData={setMealsData}
+                setMealMode={setMealMode}
                 getFoodEmoji={getFoodEmoji}
                 userPreferences={userPreferences}
                 avoidedCategories={avoidedCategories}

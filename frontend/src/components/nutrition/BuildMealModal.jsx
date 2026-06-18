@@ -2,7 +2,7 @@
  * BuildMealModal - Modal para construir comidas paso a paso
  * Extraído de NutritionPage.jsx para mejor mantenibilidad
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -156,6 +156,7 @@ const BuildMealModal = ({
     tipoDia,
     mealsData,
     setMealsData,
+    setMealMode,
     getFoodEmoji,
     userPreferences = [],
     avoidedCategories = []
@@ -185,6 +186,9 @@ const BuildMealModal = ({
     const isIntraMode = mode === 'intra';
     const isPostMode = mode === 'post';
     const isPeriMode = isIntraMode || isPostMode;
+    // Manual mode (per meal): no auto-quantity, no 80% progression, no suggestions, free
+    // amount, foods alphabetical, no min-quantity block. Peri meals never use it.
+    const isManual = !isPeriMode && !!mealKey && mealsData[mealKey]?.modo === 'manual';
 
     const target = mealKey ? getMealTarget(mealKey) : { P: 0, H: 0, G: 0 };
     // Calma's macroEnIngredientes sums UNROUNDED per-food contributions (raw post-regla
@@ -318,6 +322,13 @@ const BuildMealModal = ({
 
     const getCurrentCategories = () => {
         let base = [];
+        if (isManual) {
+            // Manual: no progression, so expose the WHOLE Calma category universe at once
+            // (PREFERENCE_CATEGORIES = the 38 canonical category codes) for free browsing.
+            // Order within a category is alphabetical.
+            base = filterAvoided(PREFERENCE_CATEGORIES.map(cat => ({ ...cat, value: cat.id })));
+            return [FREQUENT_CATEGORY, ...base];
+        }
         if (isIntraMode) {
             base = INTRA_CATEGORIES;
         } else if (isPostMode) {
@@ -375,6 +386,19 @@ const BuildMealModal = ({
         }
     }, [open, mealKey, mode]); // eslint-disable-line
 
+    // Switching mode (manual<->auto) mid-modal resets the category selection so stale chips
+    // don't linger. Skip the first run (ref starts equal) so intra's auto-selection survives mount.
+    const prevManual = useRef(isManual);
+    useEffect(() => {
+        if (prevManual.current === isManual) return;
+        prevManual.current = isManual;
+        if (!open) return;
+        setSelectedCategories([]);
+        setCategoryFoods([]);
+        setSelectedPreparations([]);
+        setAvailablePreps([]);
+    }, [isManual, open]);
+
     // Calma filtroParaAplicar is REACTIVE: the phase is recomputed from the current served macros
     // every change — NOT a one-way advance. So removing the food that supplied the carbs drops you
     // back from paso 3 to paso 2. haySuficientes = served/target > 0.8 (porcentajeSuficienteMacros,
@@ -382,6 +406,7 @@ const BuildMealModal = ({
     useEffect(() => {
         if (!open) return;       // modal stays mounted while closed; don't react to day switches
         if (isPeriMode) return;  // peri (intra/post) is a single phase — no paso split
+        if (isManual) return;    // manual: no 80% progression at all
         const pOk = !(target.P > 0) || (served.P / target.P) > 0.8;
         const hOk = !(target.H > 0) || (served.H / target.H) > 0.8;
         const newPaso = !pOk ? 1 : (!hOk ? 2 : 3);
@@ -396,7 +421,7 @@ const BuildMealModal = ({
                 else if (newPaso === 3) toast.info('✨ ¡Macros cubiertos! Últimos toques.');
             }
         }
-    }, [open, served.P, served.H, target.P, target.H, paso, isPeriMode]);
+    }, [open, served.P, served.H, target.P, target.H, paso, isPeriMode, isManual]);
 
     // Calma: filtrosActivacionPorDefecto = false. In paso 3 (cuadrarMacros / "últimos
     // toques") the preference category chips are shown but start INACTIVE — the user
@@ -422,26 +447,30 @@ const BuildMealModal = ({
             setLoadingFoods(true);
             const categoryParam = selectedCategories.flatMap(c => c.prefixes || []).filter(Boolean).join(',');
             const params = new URLSearchParams({ q: '', category: categoryParam, limit: '100' });
-            // Calma uses ONE unified remaining (full meal target minus added), all three macros,
-            // every step. The "paso" only changes which CATEGORIES are shown, never the macro
-            // constraints. Sending only P+G in paso 1 left H unconstrained -> Tortitas 4ud and an
-            // order that ignored hidratos. Send all three, no tolerance.
-            if (target.P > 0) params.set('p_rest', Math.max(0, remaining.P));
-            if (target.H > 0) params.set('h_rest', Math.max(0, remaining.H));
-            if (target.G > 0) params.set('g_rest', Math.max(0, remaining.G));
-            // Calma prioridad fase (Dieta.js ordenarIngredientesPorMacro): once P AND H are >80%
-            // of target (porcentajeSuficienteMacros) the sort switches to `cuadrarMacros` (good
-            // fats) REGARDLESS of meal type; otherwise peri uses its own list. Peri meals always
-            // add margenValido to the fat budget (g_rest), independent of the fase.
-            const sufP = !(target.P > 0) || served.P / target.P > 0.8;
-            const sufH = !(target.H > 0) || served.H / target.H > 0.8;
-            if (isIntraMode || isPostMode) {
-                // peri = MEAL TYPE (post → cat-25 universe + grasas margin); sent always.
-                params.set('peri', isIntraMode ? 'intra' : 'post');
-                params.set('g_rest', target.G - served.G + MARGEN_VALIDO);
+            // Manual: send NO macro context, so the backend returns the plain category list
+            // (no suggested quantity, no diferencia ordering). Frontend sorts it alphabetically.
+            if (!isManual) {
+                // Calma uses ONE unified remaining (full meal target minus added), all three macros,
+                // every step. The "paso" only changes which CATEGORIES are shown, never the macro
+                // constraints. Sending only P+G in paso 1 left H unconstrained -> Tortitas 4ud and an
+                // order that ignored hidratos. Send all three, no tolerance.
+                if (target.P > 0) params.set('p_rest', Math.max(0, remaining.P));
+                if (target.H > 0) params.set('h_rest', Math.max(0, remaining.H));
+                if (target.G > 0) params.set('g_rest', Math.max(0, remaining.G));
+                // Calma prioridad fase (Dieta.js ordenarIngredientesPorMacro): once P AND H are >80%
+                // of target (porcentajeSuficienteMacros) the sort switches to `cuadrarMacros` (good
+                // fats) REGARDLESS of meal type; otherwise peri uses its own list. Peri meals always
+                // add margenValido to the fat budget (g_rest), independent of the fase.
+                const sufP = !(target.P > 0) || served.P / target.P > 0.8;
+                const sufH = !(target.H > 0) || served.H / target.H > 0.8;
+                if (isIntraMode || isPostMode) {
+                    // peri = MEAL TYPE (post → cat-25 universe + grasas margin); sent always.
+                    params.set('peri', isIntraMode ? 'intra' : 'post');
+                    params.set('g_rest', target.G - served.G + MARGEN_VALIDO);
+                }
+                // cuadrar = prioridad FASE (good fats), once P&H >80% — independent of meal type.
+                if (sufP && sufH || paso === 3) params.set('cuadrar', 'true');
             }
-            // cuadrar = prioridad FASE (good fats), once P&H >80% — independent of meal type.
-            if (sufP && sufH || paso === 3) params.set('cuadrar', 'true');
             if (selectedPreparations.length > 0) params.set('tag', selectedPreparations.join(','));
             api(`/api/calculator/search?${params}`).then(result => {
                 if (!cancelled) {
@@ -456,13 +485,14 @@ const BuildMealModal = ({
             }).catch(() => {});
         }
         return () => { cancelled = true; };
-    }, [remaining.P, remaining.H, remaining.G, selectedCategories, selectedPreparations]); // eslint-disable-line
+    }, [remaining.P, remaining.H, remaining.G, selectedCategories, selectedPreparations, isManual]); // eslint-disable-line
 
     const getMacrosParams = () => {
         // Calma's manual builder uses ONE unified remaining (full meal target minus
         // added ingredients), all three macros, NO tolerance. The engine (calma_suggest)
         // computes quantity = floor(min(remaining/perUnit)) and orders by diferenciaDeMacros.
         const params = {};
+        if (isManual) return params;   // manual: no suggestion/quantity context
         if (target.P > 0) params.p_rest = Math.max(0, remaining.P);
         if (target.H > 0) params.h_rest = Math.max(0, remaining.H);
         if (target.G > 0) params.g_rest = Math.max(0, remaining.G);
@@ -569,7 +599,7 @@ const BuildMealModal = ({
                     G: Math.round((food.grasas || 0) * quantity / 100 * 10) / 10
                 };
 
-            const blockReason = getBlockReason(macrosEf);
+            const blockReason = isManual ? null : getBlockReason(macrosEf);
             if (blockReason) {
                 toast.error(blockReason);
                 return;
@@ -704,6 +734,7 @@ const BuildMealModal = ({
 
     // Calma consejoParaEscogerAlimento: phase guidance text (not "Paso 1/2/3").
     const getPasoLabel = () => {
+        if (isManual) return 'Modo manual — cantidad libre, sin autoajuste';
         if (isIntraMode) return 'Alimentos Intra-entreno';
         if (isPostMode) return 'Alimentos Post-entreno';
         if (paso === 1) return 'Definiendo base de proteínas...';
@@ -717,7 +748,11 @@ const BuildMealModal = ({
     // We mirror that: no emptiness-based chip hiding (was dropping most chips in paso 3, where
     // the remaining is tiny). filterAvoided() already applied the allergy removal upstream.
     const categories = getCurrentCategories();
-    const displayFoods = isSearching ? searchResults : categoryFoods;
+    const rawFoods = isSearching ? searchResults : categoryFoods;
+    // Manual: no suggestion ranking, so list alphabetically.
+    const displayFoods = isManual
+        ? [...rawFoods].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+        : rawFoods;
 
     // Preparations available for the selected category
     const availablePreparations = PREPARATIONS.filter(p => availablePreps.includes(p.value));
@@ -726,9 +761,31 @@ const BuildMealModal = ({
         <Dialog open={open} onOpenChange={() => onClose()}>
             <DialogContent className="max-w-2xl h-[90vh] p-0 flex flex-col bg-white">
                 <DialogHeader className="flex-shrink-0 px-4 py-3 border-b">
-                    <DialogTitle className="text-lg font-bold text-black">
-                        {mealInfo?.label || `Comida ${mealKey?.replace('C', '')}`}
-                    </DialogTitle>
+                    <div className="flex items-center justify-between gap-2">
+                        <DialogTitle className="text-lg font-bold text-black">
+                            {mealInfo?.label || `Comida ${mealKey?.replace('C', '')}`}
+                        </DialogTitle>
+                        {!isPeriMode && setMealMode && (
+                            <div className="inline-flex rounded-full bg-gray-100 p-0.5 shrink-0">
+                                <button
+                                    type="button"
+                                    className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${!isManual ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                                    onClick={() => setMealMode(mealKey, 'auto')}
+                                    data-testid="modal-mode-auto"
+                                >
+                                    Automático
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${isManual ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                                    onClick={() => setMealMode(mealKey, 'manual')}
+                                    data-testid="modal-mode-manual"
+                                >
+                                    Manual
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <DialogDescription className="sr-only">
                         Construye tu comida paso a paso
                     </DialogDescription>
@@ -786,7 +843,7 @@ const BuildMealModal = ({
                     </div>
 
                     {/* Category + Preparation Rails — hidden for intra (Calma: chips hidden) */}
-                    {!isCuadrada && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-white space-y-2">
+                    {(isManual || !isCuadrada) && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-white space-y-2">
                         <CategoryRail
                             label="Categorías:"
                             categories={categories}

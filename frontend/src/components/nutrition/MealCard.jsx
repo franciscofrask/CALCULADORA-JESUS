@@ -62,6 +62,7 @@ const MealCard = ({
     editingQuantity, setEditingQuantity, getQuantityIncrement,
     clearMeal, getFoodEmoji, formatFoodQuantity,
     isLocked = false, canVolcar = false, onVolcar,
+    mealMode = 'auto', setMealMode,
 }) => {
     const isExpanded = expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
@@ -96,6 +97,30 @@ const MealCard = ({
 
             {isExpanded && (
                 <CardContent className="pt-0 px-4 pb-4">
+                    {/* Manual/Automático: cambia el modo del constructor para esta comida.
+                        Manual = sin autoajuste de cantidades, sin sugerencias, cantidad libre.
+                        Peri (Intra/Post) no tiene progresión, así que no lleva interruptor. */}
+                    {!isPeri && !isLocked && setMealMode && (
+                        <div className="flex items-center justify-end gap-1 mb-3">
+                            <span className="text-[11px] text-gray-400 mr-1">Modo</span>
+                            <div className="inline-flex rounded-full bg-gray-100 p-0.5">
+                                <button
+                                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${mealMode !== 'manual' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                                    onClick={() => setMealMode(mealKey, 'auto')}
+                                    data-testid={`mode-auto-${mealKey}`}
+                                >
+                                    Automático
+                                </button>
+                                <button
+                                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${mealMode === 'manual' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                                    onClick={() => setMealMode(mealKey, 'manual')}
+                                    data-testid={`mode-manual-${mealKey}`}
+                                >
+                                    Manual
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <MealProgressBars mealKey={mealKey} getMealTarget={getMealTarget} calculateMealMacros={calculateMealMacros} hasFoods={foods.length > 0} />
 
                     {isLocked && (
