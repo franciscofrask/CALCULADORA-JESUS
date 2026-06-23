@@ -46,7 +46,7 @@ def test_distribution():
           c["C1"]["P"] == 45 and c["C2"]["P"] == 45 and c["C3"]["P"] == 36 and c["C4"]["P"] == 54, c)
 
 
-# ── #12 Peri options (solo intra_post / solo_post) ──────────────────────────
+# ── #12 Peri options (4 modos oficiales) ────────────────────────────────────
 def test_peri():
     from macro_distribution import _calcular_periworkout as P
     r = P(40, 30, "intra_post")
@@ -54,8 +54,15 @@ def test_peri():
           r["Intra"]["P"] == 8 and r["Intra"]["H"] == 9 and r["Post"]["P"] == 32 and r["Post"]["H"] == 21, r)
     r = P(40, 30, "solo_post")
     check("#12 solo_post: Post 100%, sin Intra", r["Post"]["P"] == 40 and r["Post"]["H"] == 30 and "Intra" not in r, r)
-    r = P(40, 30, "sin_peri")  # eliminado -> default intra_post
-    check("#12 sin_peri/solo_intra -> default intra_post", "Intra" in r and "Post" in r, r)
+    # modo 3 (oficial): solo intra 25%P/35%H, resto (75%/65%) a las comidas, sin Post
+    r = P(40, 30, "solo_intra")
+    check("#12 solo_intra: Intra 10/10.5, resto a comidas, sin Post",
+          r["Intra"]["P"] == 10 and r["Intra"]["H"] == 10.5 and "Post" not in r
+          and round(r["extra_comidas"]["P"]) == 30, r)
+    # modo 4 (oficial): sin intra/post, todo el peri a las comidas
+    r = P(40, 30, "sin_peri")
+    check("#12 sin_peri: sin Intra/Post, todo a comidas",
+          "Intra" not in r and "Post" not in r and r["extra_comidas"]["P"] == 40 and r["extra_comidas"]["H"] == 30, r)
 
 
 # ── #9 Modo comida única ────────────────────────────────────────────────────

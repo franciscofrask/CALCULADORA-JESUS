@@ -19,7 +19,7 @@ const CopyDietModal = ({
                     <DialogDescription className="sr-only">Copia esta dieta a otro día</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-muted-foreground">
                         Copiar dieta del <span className="font-semibold">{currentDateFormatted}</span> a:
                     </p>
                     <Input

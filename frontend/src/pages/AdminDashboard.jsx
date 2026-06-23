@@ -69,7 +69,7 @@ const AdminDashboard = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-white tracking-tight" style={{ fontFamily: 'Bebas Neue' }}>PANEL DE CONTROL</h1>
+                    <h1 className="text-3xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>PANEL DE CONTROL</h1>
                     <p className="text-white/40 text-sm">Estado del negocio en tiempo real</p>
                 </div>
                 <Button variant="outline" size="icon" className="bg-transparent border-white/20 hover:border-[#FF671F]">
@@ -146,7 +146,7 @@ const AdminDashboard = () => {
                                     <div key={i} className="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-lg border border-[#222] hover:border-[#FF671F]/30 transition-colors" data-testid={`upcoming-${i}`}>
                                         <div className="flex items-center gap-3">
                                             <div className="w-9 h-9 bg-[#FF671F]/10 rounded-lg flex items-center justify-center">
-                                                <span className="text-[#FF671F] font-bold text-sm" style={{ fontFamily: 'Bebas Neue' }}>{daysLeft}d</span>
+                                                <span className="text-[#FF671F] font-bold text-sm" style={{ fontFamily: 'Barlow Condensed' }}>{daysLeft}d</span>
                                             </div>
                                             <div>
                                                 <p className="text-white text-sm font-medium">{u.name}</p>
@@ -155,7 +155,7 @@ const AdminDashboard = () => {
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <PlanBadge plan={u.plan} />
-                                            <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Bebas Neue' }}>{u.price}€</span>
+                                            <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Barlow Condensed' }}>{u.price}€</span>
                                         </div>
                                     </div>
                                 );
@@ -217,7 +217,7 @@ const KpiCard = ({ value, label, icon: Icon, color, testId }) => (
         <CardContent className="p-4">
             <div className="flex items-start justify-between">
                 <div>
-                    <p className="text-3xl font-bold mt-1" style={{ fontFamily: 'Bebas Neue', color }}>{value}</p>
+                    <p className="text-3xl font-bold mt-1" style={{ fontFamily: 'Barlow Condensed', color }}>{value}</p>
                     <p className="text-[10px] text-white/40 uppercase tracking-wider mt-1">{label}</p>
                 </div>
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
@@ -330,7 +330,7 @@ const AdminClientsList = () => {
                                         <TableCell>
                                             <PlanBadge plan={client.plan} />
                                         </TableCell>
-                                        <TableCell className="font-bold text-[#FF671F]" style={{ fontFamily: 'Bebas Neue' }}>
+                                        <TableCell className="font-bold text-[#FF671F]" style={{ fontFamily: 'Barlow Condensed' }}>
                                             {client.price}€
                                         </TableCell>
                                         <TableCell>

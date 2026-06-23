@@ -203,11 +203,13 @@ def _calcular_periworkout(
     """
     Calcula los macros de Intra y Post según la opción de periworkout.
 
-    Calma `pe` (a==B branch): post is ALWAYS present, intra optional (hayIntraentrenamiento).
-        "intra_post" → Intra 20%P/30%H, Post 80%P/70%H   (quiereIntra = true)
-        "solo_post"  → Post 100%P/100%H                  (quiereIntra = false)
-    `solo_intra` / `sin_peri` did NOT exist in Calma — removed. Anything else defaults to
-    intra_post.
+    4 modos OFICIALES (decisión de proyecto 2026-06-22):
+        "intra_post" → Intra 20%P/30%H, Post 80%P/70%H         (modo 1, base Calma)
+        "solo_post"  → Post 100%P/100%H, sin Intra             (modo 2, base Calma)
+        "solo_intra" → Intra 25%P/35%H; el resto (75%/65%) se reparte entre las comidas (modo 3)
+        "sin_peri"   → sin Intra/Post; todo el presupuesto peri se reparte entre las comidas (modo 4)
+    Los modos 3 y 4 NO existen en Calma pero son oficiales en nuestra app.
+    Cualquier otro valor cae a intra_post.
     """
     resultado = {}
 

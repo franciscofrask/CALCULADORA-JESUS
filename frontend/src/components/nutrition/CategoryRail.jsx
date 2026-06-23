@@ -48,7 +48,7 @@ const CategoryRail = ({
         <TooltipProvider delayDuration={120} skipDelayDuration={120}>
             <div className={cn('flex items-center gap-2 flex-wrap', className)}>
                 {label && (
-                    <span className="text-xs font-bold text-gray-500 mr-1 flex-shrink-0">
+                    <span className="text-xs font-bold text-muted-foreground mr-1 flex-shrink-0">
                         {label}
                     </span>
                 )}
@@ -69,7 +69,7 @@ const CategoryRail = ({
                                             btn,
                                             selected
                                                 ? 'bg-brand-orange/10 text-brand-orange ring-2 ring-brand-orange shadow-sm'
-                                                : 'bg-white text-gray-500 border border-gray-200 hover:border-brand-orange/40 hover:text-brand-orange'
+                                                : 'bg-card text-muted-foreground border border-border hover:border-brand-orange/40 hover:text-brand-orange'
                                         )}
                                     >
                                         {iconNode || (

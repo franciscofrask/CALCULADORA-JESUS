@@ -23,9 +23,9 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete })
 
     return (
         <Dialog open={open} onOpenChange={() => onClose()}>
-            <DialogContent className="max-w-md bg-white">
+            <DialogContent className="max-w-md bg-card">
                 <DialogHeader>
-                    <DialogTitle className="text-lg font-bold text-black flex items-center gap-2">
+                    <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
                         <Star className="w-5 h-5 text-brand-orange" /> Dietas favoritas
                     </DialogTitle>
                     <DialogDescription className="sr-only">Guardá y reusá días como plantillas</DialogDescription>
@@ -47,25 +47,25 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete })
                         Guardar
                     </Button>
                 </div>
-                <p className="text-xs text-gray-400 -mt-2">Guarda la comida actual del día como plantilla reusable.</p>
+                <p className="text-xs text-muted-foreground -mt-2">Guarda la comida actual del día como plantilla reusable.</p>
 
                 {/* Lista */}
                 <div className="max-h-72 overflow-auto -mx-1 px-1 space-y-1">
                     {(!favorites || favorites.length === 0) ? (
-                        <p className="text-sm text-gray-400 text-center py-6">Todavía no tenés favoritas.</p>
+                        <p className="text-sm text-muted-foreground text-center py-6">Todavía no tenés favoritas.</p>
                     ) : favorites.map(fav => {
                         const n = Object.values(fav.comidas || {}).filter(m => (m?.alimentos || []).length > 0).length;
                         return (
-                            <div key={fav.id} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2">
+                            <div key={fav.id} className="flex items-center gap-2 bg-muted rounded-lg p-2">
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-gray-800 truncate">{fav.name}</p>
-                                    <p className="text-xs text-gray-400">{n} comida(s) · {fav.tipo_dia}</p>
+                                    <p className="text-sm font-semibold text-foreground truncate">{fav.name}</p>
+                                    <p className="text-xs text-muted-foreground">{n} comida(s) · {fav.tipo_dia}</p>
                                 </div>
                                 <Button variant="outline" size="sm" className="rounded-full border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white shrink-0"
                                     onClick={() => onApply(fav)} title="Aplicar a este día">
                                     <Download className="w-4 h-4 mr-1" /> Aplicar
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500 shrink-0"
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-500 shrink-0"
                                     onClick={() => onDelete(fav.id)} title="Eliminar">
                                     <Trash2 className="w-4 h-4" />
                                 </Button>

@@ -150,7 +150,7 @@ const ClientDetailPage = () => {
                 <Button variant="ghost" size="icon" onClick={() => navigate('/admin/clients')} className="text-white/50 hover:text-white"><ArrowLeft className="w-5 h-5" /></Button>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <h1 className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Bebas Neue' }}>{user?.name?.toUpperCase()}</h1>
+                        <h1 className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Barlow Condensed' }}>{user?.name?.toUpperCase()}</h1>
                         <PlanBadge plan={profile?.plan} />
                         <Badge className={profile?.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-red-500/20 text-red-400 border-0'}>{profile?.status}</Badge>
                     </div>
@@ -317,7 +317,7 @@ const ClientDetailPage = () => {
                             <Card key={r.id} className="bg-[#111] border-[#222]"><CardContent className="p-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <p className="text-white text-sm font-bold">{new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                                    <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Bebas Neue' }}>{r.weight} kg</span>
+                                    <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Barlow Condensed' }}>{r.weight} kg</span>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                     <MiniStat label="Entreno" value={`${r.training_compliance}%`} />
@@ -591,7 +591,7 @@ const MacroGroup = ({ title, icon: Icon, color, items }) => (
         <div className="space-y-2">{items.map(it => (
             <div key={it.label} className="flex items-center justify-between">
                 <span className="text-white/50 text-xs">{it.label}</span>
-                <span className="text-white font-bold text-sm" style={{ fontFamily: 'Bebas Neue' }}>{it.value}g</span>
+                <span className="text-white font-bold text-sm" style={{ fontFamily: 'Barlow Condensed' }}>{it.value}g</span>
             </div>
         ))}</div>
     </div>

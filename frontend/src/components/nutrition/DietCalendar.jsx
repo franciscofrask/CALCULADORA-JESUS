@@ -92,7 +92,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                     {/* Day headers */}
                     <div className="grid grid-cols-7 gap-1 mb-2">
                         {DAYS_SHORT.map(d => (
-                            <div key={d} className="text-center text-xs font-bold text-gray-400 uppercase">{d}</div>
+                            <div key={d} className="text-center text-xs font-bold text-muted-foreground uppercase">{d}</div>
                         ))}
                     </div>
 
@@ -124,7 +124,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                                                     ${!isToday && isMacroChange ? 'ring-2 ring-blue-400' : ''}
                                                     ${isCuadrado ? 'bg-green-500/20 text-green-600 hover:bg-green-500/30' : ''}
                                                     ${isPartial ? 'bg-orange-500/20 text-orange-600 hover:bg-orange-500/30' : ''}
-                                                    ${!hasDiet ? 'text-gray-600 hover:bg-gray-100' : ''}
+                                                    ${!hasDiet ? 'text-muted-foreground hover:bg-muted' : ''}
                                                 `}
                                                 title={isMacroChange ? 'Cambio de macros desde este día' : undefined}
                                                 data-testid={`cal-day-${day}`}
@@ -145,10 +145,10 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
                     )}
 
                     {/* Legend */}
-                    <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t text-xs text-gray-500">
+                    <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Cuadrada</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> Sin cuadrar</span>
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" /> Sin dieta</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted" /> Sin dieta</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Cambio macros</span>
                     </div>
                 </div>

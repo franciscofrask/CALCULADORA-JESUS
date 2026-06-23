@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
     ChevronLeft, ChevronRight,
-    Save, Copy, Calendar, FileDown, SlidersHorizontal
+    Copy, Calendar, FileDown, SlidersHorizontal
 } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
@@ -15,7 +15,7 @@ import CopyDietModal from '../components/nutrition/CopyDietModal';
 import FavoritesModal from '../components/nutrition/FavoritesModal';
 import DaySummary from '../components/nutrition/DaySummary';
 import ConfigSection from '../components/nutrition/ConfigSection';
-import MealCard from '../components/nutrition/MealCard';
+import MealCard, { MealSelectorItem } from '../components/nutrition/MealCard';
 import { SearchFoodModal, MenuOptionsModal } from '../components/nutrition/SearchFoodModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
 
@@ -137,6 +137,7 @@ const NutritionPage = () => {
     const [volcadoMeal, setVolcadoMeal] = useState(null);
     const [mealsData, setMealsData] = useState({});
     const [expandedMeals, setExpandedMeals] = useState({ C1: true });
+    const [selectedMeal, setSelectedMeal] = useState('C1');
     const [loading, setLoading] = useState(true);
     
     // Modal states
@@ -548,6 +549,13 @@ const NutritionPage = () => {
         result.splice(singleMeal ? baseMeals.length : momentoEntreno, 0, ...periMeals);
         return result;
     };
+
+    // Mantener la comida seleccionada (vista master-detail) válida al cambiar la config
+    useEffect(() => {
+        const order = getMealOrder();
+        if (!order.includes(selectedMeal)) setSelectedMeal(order[0]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [numComidas, tipoDia, opcionPeri, momentoEntreno, singleMeal]);
 
     // Calculations
     const calculateMealMacros = (mealKey) => {
@@ -1166,10 +1174,10 @@ const NutritionPage = () => {
     // ===== LOADING STATE =====
     if (loading) {
         return (
-            <div className="min-h-screen bg-bg-page flex items-center justify-center">
+            <div className="min-h-[60vh] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
-                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent" />
-                    <p className="text-gray-500 text-sm">Cargando...</p>
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand border-t-transparent" />
+                    <p className="text-muted-foreground text-sm">Cargando...</p>
                 </div>
             </div>
         );
@@ -1178,8 +1186,8 @@ const NutritionPage = () => {
     // ===== SHOW PREFERENCES SETUP IF NEEDED =====
     if (preferencesLoading) {
         return (
-            <div className="min-h-screen bg-bg-dark flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-orange border-t-transparent" />
+            <div className="min-h-[60vh] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand border-t-transparent" />
             </div>
         );
     }
@@ -1199,32 +1207,60 @@ const NutritionPage = () => {
     }
 
     // ===== MAIN RENDER =====
-    return (
-        <div
-            className="min-h-screen pb-32 bg-bg-page"
-            data-testid="nutrition-page"
-        >
-            <div>
-                {/* Header */}
-                <div className="bg-bg-dark sticky top-0 z-40">
-                    <div className="max-w-lg mx-auto px-4 py-3">
-                        <div className="flex items-center justify-between">
-                            <Logo12EN12 />
-                            <div className="flex items-center gap-3">
-                                <span className="text-gray-400 text-sm">Nutrición</span>
-                                <button
-                                    onClick={() => setShowPreferencesSetup(true)}
-                                    className="text-gray-400 hover:text-brand-orange transition-colors"
-                                    title="Preferencias alimentarias"
-                                >
-                                    <SlidersHorizontal size={18} />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    const mealCardProps = {
+        mealInfo, mealsData, expandedMeals, setExpandedMeals, getMealTarget, calculateMealMacros,
+        getMealStatus, loadMenuOptions, setBuildMealModal, openRepeatModal, removeFood, moveFoodUp,
+        updateFoodQuantity, updateFoodQuantityDirect, editingQuantity, setEditingQuantity,
+        getQuantityIncrement, clearMeal, getFoodEmoji, formatFoodQuantity, setMealMode,
+    };
+    const renderMealCard = (mealKey, forceExpanded) => (
+        <MealCard
+            key={mealKey + (forceExpanded ? '-d' : '-m')}
+            forceExpanded={forceExpanded}
+            mealKey={mealKey}
+            {...mealCardProps}
+            isLocked={isMealLocked(mealKey)}
+            canVolcar={mealKey === volcarTargetMeal}
+            onVolcar={handleVolcarToMeal}
+            mealMode={mealsData[mealKey]?.modo === 'manual' ? 'manual' : 'auto'}
+        />
+    );
 
-                {/* Sticky Summary */}
+    const renderActions = (suffix = '') => (
+        <div className="surface p-3 grid grid-cols-2 gap-2">
+            <button onClick={exportPdf} disabled={exportingPdf} data-testid={`export-pdf-btn${suffix}`} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
+                {exportingPdf ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <FileDown className="w-4 h-4" />} PDF
+            </button>
+            <button onClick={() => setCopyModalOpen(true)} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
+                <Copy className="w-4 h-4" /> Copiar
+            </button>
+        </div>
+    );
+
+    return (
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto pb-24 lg:pb-10 animate-fade-in" data-testid="nutrition-page">
+            <header className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                    <p className="caption text-brand mb-1">Plan nutricional</p>
+                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none">Nutrición</h1>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={exportPdf} disabled={exportingPdf} data-testid="export-pdf-btn"
+                        className="hidden sm:inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Exportar a PDF">
+                        {exportingPdf ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <FileDown size={16} />} PDF
+                    </button>
+                    <button onClick={() => setCopyModalOpen(true)}
+                        className="hidden sm:inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Copiar dieta a otro día">
+                        <Copy size={16} /> Copiar
+                    </button>
+                    <button onClick={() => setShowPreferencesSetup(true)} data-testid="open-preferences-btn"
+                        className="inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Preferencias alimentarias">
+                        <SlidersHorizontal size={16} /> <span className="hidden sm:inline">Preferencias</span>
+                    </button>
+                </div>
+            </header>
+
+            {/* Resumen del día */}
                 <DaySummary
                     tipoDia={tipoDia}
                     summaryExpanded={summaryExpanded}
@@ -1244,173 +1280,118 @@ const NutritionPage = () => {
                     getDayStatus={getDayStatus}
                 />
 
-                <div
-                    className="max-w-lg mx-auto px-4 py-4"
-                    style={{
-                        backgroundImage: `linear-gradient(rgba(250,250,250,0.88), rgba(250,250,250,0.88)), url('/gohan-light.png')`,
-                        backgroundSize: '100% auto',
-                        backgroundPosition: 'center top',
-                        backgroundRepeat: 'no-repeat',
-                    }}
-                >
-                    {/* Date & Day type */}
-                    <Card className="bg-white shadow-md rounded-2xl mb-4">
-                        <CardContent className="p-4">
-                            {/* Date selector */}
-                            <div className="flex items-center justify-between mb-4">
-                                <Button variant="ghost" size="icon" onClick={() => changeDate(-1)}>
-                                    <ChevronLeft className="w-5 h-5" />
-                                </Button>
-                                <button
-                                    className="flex items-center gap-2 hover:text-brand-orange transition-colors"
-                                    onClick={() => setCalendarOpen(true)}
-                                    data-testid="open-calendar-btn"
-                                >
-                                    <Calendar className="w-4 h-4 text-brand-orange" />
-                                    <span className="font-bold text-gray-900">{formatDate(currentDate)}</span>
-                                </button>
-                                <Button variant="ghost" size="icon" onClick={() => changeDate(1)}>
-                                    <ChevronRight className="w-5 h-5" />
-                                </Button>
-                            </div>
-                            
-                            {/* Day type toggle */}
-                            <div className="flex gap-2">
-                                <button 
-                                    className={`flex-1 py-2 px-3 rounded-full text-sm font-semibold transition-all ${
-                                        tipoDia === 'entrenamiento' 
-                                            ? 'bg-brand-orange text-white shadow-md' 
-                                            : 'bg-gray-100 text-gray-600'
-                                    }`}
-                                    onClick={() => handleSetTipoDia('entrenamiento')}
-                                    data-testid="tipo-dia-entrenamiento"
-                                >
-                                    Día de entrenamiento
-                                </button>
-                                <button
-                                    className={`flex-1 py-2 px-3 rounded-full text-sm font-semibold transition-all ${
-                                        tipoDia === 'descanso'
-                                            ? 'bg-gray-800 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-600'
-                                    }`}
-                                    onClick={() => handleSetTipoDia('descanso')}
-                                    data-testid="tipo-dia-descanso"
-                                >
-                                    Día de descanso
-                                </button>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Config Section */}
-                    <ConfigSection
-                        tipoDia={tipoDia}
-                        momentoEntreno={momentoEntreno}
-                        setMomentoEntreno={handleSetMomentoEntreno}
-                        opcionPeri={opcionPeri}
-                        setOpcionPeri={handleSetOpcionPeri}
-                        numComidas={numComidas}
-                        setNumComidas={handleSetNumComidas}
-                        singleMeal={singleMeal}
-                    />
-
-                    {/* Volcado de macros banner - Solo mostrar para hoy o futuro */}
-                    {(() => {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const dietDate = new Date(currentDate + 'T12:00:00');
-                        dietDate.setHours(0, 0, 0, 0);
-                        const isPast = dietDate < today;
-
-                        if (activeVolcado) {
-                            return (
-                                <div className="bg-white border border-gray-100 shadow-md rounded-2xl p-4 mb-4 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="font-bold text-gray-900 truncate">Macros volcados en {mealInfo[activeVolcado]?.name}</p>
-                                        <p className="text-xs text-gray-500">Las demás comidas quedan bloqueadas hasta quitarlo.</p>
-                                    </div>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="rounded-full font-bold shrink-0 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
-                                        onClick={handleEliminarVolcado}
-                                    >
-                                        Quitar volcado
-                                    </Button>
-                                </div>
-                            );
-                        }
-
-                        return null;
-                    })()}
-
-                    {/* Meals */}
-                    <div className="space-y-3 mb-4">
-                        {getMealOrder().map(mealKey => (
-                            <MealCard
-                                key={mealKey}
-                                mealKey={mealKey}
-                                mealInfo={mealInfo}
-                                mealsData={mealsData}
-                                expandedMeals={expandedMeals}
-                                setExpandedMeals={setExpandedMeals}
-                                getMealTarget={getMealTarget}
-                                calculateMealMacros={calculateMealMacros}
-                                getMealStatus={getMealStatus}
-                                loadMenuOptions={loadMenuOptions}
-                                setBuildMealModal={setBuildMealModal}
-                                openRepeatModal={openRepeatModal}
-                                removeFood={removeFood}
-                                moveFoodUp={moveFoodUp}
-                                updateFoodQuantity={updateFoodQuantity}
-                                updateFoodQuantityDirect={updateFoodQuantityDirect}
-                                editingQuantity={editingQuantity}
-                                setEditingQuantity={setEditingQuantity}
-                                getQuantityIncrement={getQuantityIncrement}
-                                clearMeal={clearMeal}
-                                getFoodEmoji={getFoodEmoji}
-                                formatFoodQuantity={formatFoodQuantity}
-                                isLocked={isMealLocked(mealKey)}
-                                canVolcar={mealKey === volcarTargetMeal}
-                                onVolcar={handleVolcarToMeal}
-                                mealMode={mealsData[mealKey]?.modo === 'manual' ? 'manual' : 'auto'}
-                                setMealMode={setMealMode}
-                            />
-                        ))}
+                {/* ── Controles del día (2 tarjetas compactas: Día unificado + Configuración) ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-stretch mt-6 mb-6" data-testid="nutrition-controls">
+                    {/* Tarjeta Día: navegación de fecha + tipo de día unificados */}
+                    <div className="surface p-4 sm:p-5 lg:col-span-5 flex flex-col gap-3.5">
+                        <div className="flex items-center justify-between gap-3">
+                            <button onClick={() => changeDate(-1)} aria-label="Día anterior" className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-brand hover:bg-brand/10 transition-colors flex-shrink-0">
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <button onClick={() => setCalendarOpen(true)} data-testid="open-calendar-btn" className="flex items-center justify-center gap-2.5 flex-1 min-w-0 h-10 rounded-xl hover:bg-muted/60 transition-colors">
+                                <Calendar className="w-5 h-5 text-brand flex-shrink-0" />
+                                <span className="font-heading font-bold text-xl text-foreground capitalize truncate">{formatDate(currentDate)}</span>
+                            </button>
+                            <button onClick={() => changeDate(1)} aria-label="Día siguiente" className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-brand hover:bg-brand/10 transition-colors flex-shrink-0">
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2.5 flex-1">
+                            <button
+                                className={`h-full min-h-[48px] px-3 rounded-2xl text-sm font-bold transition-all ${tipoDia === 'entrenamiento' ? 'bg-brand text-white shadow-sm' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
+                                onClick={() => handleSetTipoDia('entrenamiento')}
+                                data-testid="tipo-dia-entrenamiento"
+                            >
+                                <span className="sm:hidden">Entreno</span>
+                                <span className="hidden sm:inline">Día de entrenamiento</span>
+                            </button>
+                            <button
+                                className={`h-full min-h-[48px] px-3 rounded-2xl text-sm font-bold transition-all ${tipoDia === 'descanso' ? 'bg-ink text-white dark:bg-card dark:text-ink shadow-sm' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
+                                onClick={() => handleSetTipoDia('descanso')}
+                                data-testid="tipo-dia-descanso"
+                            >
+                                <span className="sm:hidden">Descanso</span>
+                                <span className="hidden sm:inline">Día de descanso</span>
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Action buttons */}
-                    <div className="flex gap-2">
-                        <Button 
-                            className="flex-1 h-12 bg-black hover:bg-gray-900 text-white rounded-full font-bold"
-                            onClick={saveDiet}
-                            data-testid="save-diet-btn"
-                        >
-                            <Save className="w-5 h-5 mr-2" /> Guardar día
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="h-12 w-12 rounded-full"
-                            onClick={exportPdf}
-                            disabled={exportingPdf}
-                            data-testid="export-pdf-btn"
-                            title="Exportar PDF"
-                        >
-                            {exportingPdf
-                                ? <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                                : <FileDown className="w-5 h-5" />
-                            }
-                        </Button>
-                        {/* Dietas favoritas — ocultas por ahora (código + endpoints quedan listos).
-                        <Button variant="outline" className="h-12 w-12 rounded-full" onClick={openFavoritesModal} title="Dietas favoritas">
-                            <Star className="w-5 h-5" />
-                        </Button> */}
-                        <Button variant="outline" className="h-12 w-12 rounded-full" onClick={() => setCopyModalOpen(true)} title="Copiar a otra fecha">
-                            <Copy className="w-5 h-5" />
-                        </Button>
+                    {/* Tarjeta Configuración (3 selects en una línea) */}
+                    <div className="surface p-4 sm:p-5 lg:col-span-7 flex flex-col justify-center">
+                        <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-5">
+                            <ConfigSection
+                                inline
+                                tipoDia={tipoDia}
+                                momentoEntreno={momentoEntreno}
+                                setMomentoEntreno={handleSetMomentoEntreno}
+                                opcionPeri={opcionPeri}
+                                setOpcionPeri={handleSetOpcionPeri}
+                                numComidas={numComidas}
+                                setNumComidas={handleSetNumComidas}
+                                singleMeal={singleMeal}
+                            />
+                        </div>
                     </div>
                 </div>
-            </div>
+
+                {/* ── Comidas: selector en columna + detalle ── */}
+                <div data-testid="nutrition-meals">
+                    {/* Volcado de macros banner (ancho completo) */}
+                    {activeVolcado && (
+                        <div className="surface p-4 mb-4 flex items-center justify-between gap-3 border-brand/30">
+                            <div className="min-w-0">
+                                <p className="font-bold text-foreground truncate">Macros volcados en {mealInfo[activeVolcado]?.name}</p>
+                                <p className="text-xs text-muted-foreground">Las demás comidas quedan bloqueadas hasta quitarlo.</p>
+                            </div>
+                            <button
+                                className="shrink-0 rounded-xl font-bold text-sm px-4 py-2 border border-brand text-brand hover:bg-brand hover:text-white transition-colors"
+                                onClick={handleEliminarVolcado}
+                            >
+                                Quitar volcado
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Cabecera de sección (desktop): alinea selector y detalle a la misma altura */}
+                    <p className="hidden lg:block caption mb-2.5">Comidas del día</p>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
+                        {/* Selector de comidas (columna) — desktop lg+ */}
+                        <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 lg:sticky lg:top-6 self-start space-y-2" data-testid="meal-selector">
+                            {getMealOrder().map(mealKey => (
+                                <MealSelectorItem
+                                    key={mealKey}
+                                    mealKey={mealKey}
+                                    mealInfo={mealInfo}
+                                    getMealTarget={getMealTarget}
+                                    calculateMealMacros={calculateMealMacros}
+                                    getMealStatus={getMealStatus}
+                                    isLocked={isMealLocked(mealKey)}
+                                    selected={selectedMeal === mealKey}
+                                    onSelect={() => setSelectedMeal(mealKey)}
+                                />
+                            ))}
+                        </aside>
+
+                        {/* Detalle (desktop) + acordeón (móvil) */}
+                        <main className="lg:col-span-8 xl:col-span-9 min-w-0 space-y-5">
+                            {/* Desktop: detalle de la comida seleccionada */}
+                            <div className="hidden lg:block" data-testid="meal-detail">
+                                {getMealOrder().includes(selectedMeal) && renderMealCard(selectedMeal, true)}
+                            </div>
+
+                            {/* Móvil/tablet (<lg): acordeón de comidas en una sola columna */}
+                            <div className="lg:hidden space-y-3" data-testid="meals-accordion">
+                                {getMealOrder().map(mealKey => renderMealCard(mealKey, false))}
+                            </div>
+
+                            {/* Acciones (móvil <sm: tras las comidas; en sm+ van en la tarjeta de config) */}
+                            <div className="sm:hidden">
+                                {renderActions('-mobile')}
+                            </div>
+                        </main>
+                    </div>
+                </div>
 
             {/* Search Food Modal */}
             <SearchFoodModal

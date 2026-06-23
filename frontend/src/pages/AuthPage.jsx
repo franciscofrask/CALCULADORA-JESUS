@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Loader2, Eye, EyeOff, User } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 
 // 12EN12 Logo Component
@@ -27,7 +27,7 @@ const Logo12EN12 = ({ size = 'lg' }) => {
             <span className="text-white">12</span>
             <span className="text-white">EN</span>
             <span className="text-white">12</span>
-            <BrandArrow className="text-brand-orange h-[1em] w-[1em] -ml-0.5" />
+            <BrandArrow className="text-brand h-[1em] w-[1em] -ml-0.5" />
         </div>
     );
 };
@@ -106,13 +106,13 @@ const AuthPage = () => {
                 <form onSubmit={handleSubmit} className="w-full space-y-4">
                     {isRegister && (
                         <div className="relative">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand-orange/20 flex items-center justify-center">
-                                <span className="text-brand-orange text-xs">👤</span>
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand/20 flex items-center justify-center">
+                                <User className="w-3 h-3 text-brand" />
                             </div>
                             <Input
                                 type="text"
                                 placeholder="Nombre completo"
-                                className="pl-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand-orange"
+                                className="pl-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 required={isRegister}
@@ -122,13 +122,13 @@ const AuthPage = () => {
                     )}
                     
                     <div className="relative">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand-orange/20 flex items-center justify-center">
-                            <Mail className="w-3 h-3 text-brand-orange" />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand/20 flex items-center justify-center">
+                            <Mail className="w-3 h-3 text-brand" />
                         </div>
                         <Input
                             type="email"
                             placeholder="Email"
-                            className="pl-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand-orange"
+                            className="pl-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand"
                             value={formData.email}
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             required
@@ -137,13 +137,13 @@ const AuthPage = () => {
                     </div>
                     
                     <div className="relative">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand-orange/20 flex items-center justify-center">
-                            <Lock className="w-3 h-3 text-brand-orange" />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand/20 flex items-center justify-center">
+                            <Lock className="w-3 h-3 text-brand" />
                         </div>
                         <Input
                             type={showPassword ? "text" : "password"}
                             placeholder="Contraseña"
-                            className="pl-12 pr-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand-orange"
+                            className="pl-12 pr-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand"
                             value={formData.password}
                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                             required
@@ -163,7 +163,7 @@ const AuthPage = () => {
                     {!isRegister && (
                         <button 
                             type="button"
-                            className="text-brand-orange text-sm hover:underline w-full text-right"
+                            className="text-brand text-sm hover:underline w-full text-right"
                             onClick={() => toast.info('Contacta al administrador para recuperar tu contraseña')}
                         >
                             ¿Olvidaste tu contraseña?
@@ -172,7 +172,7 @@ const AuthPage = () => {
                     
                     <Button 
                         type="submit" 
-                        className="w-full h-14 bg-brand-orange hover:bg-brand-orange-dark text-white font-bold text-lg rounded-full transition-all duration-200 shadow-lg shadow-brand-orange/30"
+                        className="w-full h-14 bg-brand hover:bg-brand-dark text-white font-bold text-lg rounded-full transition-all duration-200 shadow-lg shadow-brand/30"
                         disabled={loading}
                         data-testid="login-submit"
                     >
@@ -191,9 +191,9 @@ const AuthPage = () => {
                     onClick={() => setIsRegister(!isRegister)}
                 >
                     {isRegister ? (
-                        <>¿Ya tienes cuenta? <span className="text-brand-orange font-semibold">Inicia sesión</span></>
+                        <>¿Ya tienes cuenta? <span className="text-brand font-semibold">Inicia sesión</span></>
                     ) : (
-                        <>¿No tienes cuenta? <span className="text-brand-orange font-semibold">Regístrate</span></>
+                        <>¿No tienes cuenta? <span className="text-brand font-semibold">Regístrate</span></>
                     )}
                 </button>
                 

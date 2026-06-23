@@ -1,344 +1,167 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
     :root {
-        /* JG12 Brand Colors - Light mode (minimal usage) */
-        --background: 0 0% 100%;
-        --foreground: 0 0% 0%;
-        --card: 0 0% 98%;
-        --card-foreground: 0 0% 0%;
+        /* 12EN12 — Light theme (vigente) */
+        --background: 0 0% 94%;          /* #F0F0F0 page — más gris para que las cards resalten */
+        --foreground: 0 0% 4%;           /* #0A0A0A ink */
+        --card: 0 0% 100%;               /* white cards */
+        --card-foreground: 0 0% 4%;
         --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 0%;
-        --primary: 22 100% 56%;
+        --popover-foreground: 0 0% 4%;
+        --primary: 18 100% 56%;          /* #FF671F brand */
         --primary-foreground: 0 0% 100%;
-        --secondary: 0 0% 10%;
+        --secondary: 0 0% 4%;
         --secondary-foreground: 0 0% 100%;
-        --muted: 0 0% 96%;
-        --muted-foreground: 0 0% 40%;
-        --accent: 22 100% 56%;
+        --muted: 0 0% 90%;
+        --muted-foreground: 0 0% 42%;
+        --accent: 18 100% 56%;
         --accent-foreground: 0 0% 100%;
-        --destructive: 0 84% 60%;
+        --destructive: 0 72% 51%;
         --destructive-foreground: 0 0% 100%;
-        --border: 0 0% 90%;
-        --input: 0 0% 90%;
-        --ring: 22 100% 56%;
-        --radius: 0.5rem;
-        
-        --chart-1: 22 100% 56%;
-        --chart-2: 0 0% 30%;
-        --chart-3: 45 93% 47%;
-        --chart-4: 142 76% 36%;
-        --chart-5: 199 89% 48%;
+        --border: 0 0% 87%;
+        --input: 0 0% 87%;
+        --ring: 18 100% 56%;
+        --radius: 0.875rem;
+        --track: 0 0% 89%;               /* anillos/barras: pista */
+
+        --chart-1: 18 100% 56%;
+        --chart-2: 207 90% 54%;
+        --chart-3: 38 100% 50%;
+        --chart-4: 142 71% 45%;
+        --chart-5: 0 0% 20%;
     }
 
     .dark {
-        /* JG12 Brand Colors - Dark mode (PRIMARY) */
-        --background: 0 0% 4%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 7%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 7%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 22 100% 56%;
+        --background: 0 0% 7%;           /* #121212 */
+        --foreground: 0 0% 96%;
+        --card: 0 0% 11%;                /* #1C1C1C */
+        --card-foreground: 0 0% 96%;
+        --popover: 0 0% 11%;
+        --popover-foreground: 0 0% 96%;
+        --primary: 18 100% 56%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 0 0% 14%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 14%;
-        --muted-foreground: 0 0% 60%;
-        --accent: 22 100% 56%;
+        --secondary: 0 0% 90%;
+        --secondary-foreground: 0 0% 4%;
+        --muted: 0 0% 16%;               /* #292929 */
+        --muted-foreground: 0 0% 64%;    /* #A3A3A3 */
+        --accent: 18 100% 56%;
         --accent-foreground: 0 0% 100%;
-        --destructive: 0 62% 50%;
+        --destructive: 0 62% 52%;
         --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 18%;
-        --input: 0 0% 18%;
-        --ring: 22 100% 56%;
+        --border: 0 0% 20%;              /* #333 */
+        --input: 0 0% 20%;
+        --ring: 18 100% 56%;
+        --track: 0 0% 24%;
     }
 }
 
-/* Force dark mode */
 :root {
-    color-scheme: dark;
+    /* 12EN12 brand tokens (no cambian con el tema) */
+    --brand: #FF671F;
+    --brand-dark: #E85A15;
+    --brand-light: #FF8A4C;
+    --ink: #0A0A0A;
+    --ink-800: #1A1A1A;
+    --macro-protein: #FF671F;
+    --macro-carbs: #2196F3;
+    --macro-fat: #FFA500;
 }
 
 @layer base {
     * {
         @apply border-border;
     }
-    
-    html {
-        @apply dark;
-    }
-    
+
     body {
         @apply bg-background text-foreground antialiased;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-feature-settings: 'cv11', 'ss01';
+        transition: background-color 0.2s ease, color 0.2s ease;
     }
-    
-    h1, h2, h3, h4, h5, h6 {
-        font-family: 'Bebas Neue', 'Impact', sans-serif;
-        letter-spacing: 0.02em;
-    }
-}
 
-/* JG12 Brand Variables */
-:root {
-    --jg-orange: #FF671F;
-    --jg-orange-dark: #E85A15;
-    --jg-orange-light: #FF8A4C;
-    --jg-black: #000000;
-    --jg-dark: #0A0A0A;
-    --jg-gray-dark: #1A1A1A;
-    --jg-gray: #2D2D2D;
-    --jg-gray-light: #404040;
-    --jg-white: #FFFFFF;
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Barlow Condensed', 'Impact', sans-serif;
+        letter-spacing: 0.005em;
+    }
+
+    .tnum { font-variant-numeric: tabular-nums; }
 }
 
 @layer components {
-    /* JG12 Logo Text */
-    .jg-logo {
-        font-family: 'Bebas Neue', 'Impact', sans-serif;
-        font-weight: 400;
-        letter-spacing: 0.02em;
+    /* ---- Tipografía de marca ---- */
+    .font-display { font-family: 'Barlow Condensed', 'Impact', sans-serif; }
+    .font-data { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+    .heading-1 { @apply font-heading text-4xl md:text-5xl font-bold tracking-tight uppercase; }
+    .heading-2 { @apply font-heading text-3xl md:text-4xl font-bold tracking-tight uppercase; }
+    .heading-3 { @apply font-heading text-xl md:text-2xl font-semibold tracking-tight uppercase; }
+    .caption   { @apply text-xs text-muted-foreground uppercase tracking-widest font-semibold; }
+
+    /* ---- Superficies (adaptan con el tema) ---- */
+    .surface {
+        @apply bg-card border border-border rounded-2xl;
     }
-    
-    .jg-logo-text {
-        @apply text-white font-bold tracking-tight;
-        font-family: 'Bebas Neue', sans-serif;
+    .surface-hover {
+        @apply transition-all duration-200 hover:border-foreground/15 hover:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)];
     }
-    
-    .jg-logo-accent {
-        color: var(--jg-orange);
+    .surface-dark {
+        @apply bg-ink text-white rounded-2xl;
     }
-    
-    /* Arrow Icon (brand element) */
-    .jg-arrow {
-        display: inline-block;
-        color: var(--jg-orange);
-        transform: rotate(-45deg);
-        font-weight: bold;
+
+    /* ---- Botones ---- */
+    .btn-brand {
+        background: var(--brand);
+        @apply text-white font-semibold tracking-wide rounded-xl px-5 py-3 transition-all duration-200 hover:bg-brand-dark active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
     }
-    
-    /* Heading Styles - Miedinger/Bebas style */
-    .heading-1 {
-        @apply text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight uppercase;
-        font-family: 'Bebas Neue', sans-serif;
+    .btn-outline-brand {
+        @apply border border-border text-foreground font-semibold tracking-wide rounded-xl px-5 py-3 transition-all duration-200 hover:border-brand hover:text-brand active:scale-[0.98];
     }
-    
-    .heading-2 {
-        @apply text-3xl md:text-4xl font-bold tracking-tight uppercase;
-        font-family: 'Bebas Neue', sans-serif;
+
+    /* ---- Inputs ---- */
+    .input-light {
+        @apply w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 transition-all;
     }
-    
-    .heading-3 {
-        @apply text-xl md:text-2xl font-bold tracking-tight uppercase;
-        font-family: 'Bebas Neue', sans-serif;
-    }
-    
-    .heading-4 {
-        @apply text-lg font-bold tracking-tight uppercase;
-        font-family: 'Bebas Neue', sans-serif;
-    }
-    
-    .body-large {
-        @apply text-lg leading-relaxed;
-    }
-    
-    .caption {
-        @apply text-sm text-muted-foreground uppercase tracking-widest;
-    }
-    
-    /* Plan Badges - JG12 Style */
-    .badge-gold {
-        @apply bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-600 text-black font-bold px-3 py-1 rounded text-xs uppercase tracking-wider;
-    }
-    
-    .badge-silver {
-        @apply bg-gradient-to-r from-gray-300 via-gray-200 to-gray-400 text-black font-bold px-3 py-1 rounded text-xs uppercase tracking-wider;
-    }
-    
-    .badge-bronze {
-        @apply bg-gradient-to-r from-orange-700 via-orange-600 to-orange-800 text-white font-bold px-3 py-1 rounded text-xs uppercase tracking-wider;
-    }
-    
-    .badge-elm {
-        background: var(--jg-orange);
-        @apply text-white font-bold px-3 py-1 rounded text-xs uppercase tracking-wider;
-    }
-    
-    /* Cards - Dark Style */
-    .card-dark {
-        @apply bg-[#111111] border-[#222222] rounded-lg;
-    }
-    
-    .card-glass {
-        @apply bg-black/60 backdrop-blur-xl border border-white/10 rounded-lg;
-    }
-    
-    /* JG12 Buttons */
-    .btn-primary {
-        background: var(--jg-orange);
-        @apply text-white font-bold uppercase tracking-wider px-6 py-3 rounded transition-all duration-200 hover:brightness-110 active:scale-95;
-    }
-    
-    .btn-secondary {
-        @apply bg-white/10 text-white font-bold uppercase tracking-wider px-6 py-3 rounded border border-white/20 transition-all duration-200 hover:bg-white/20 active:scale-95;
-    }
-    
-    .btn-outline {
-        @apply border-2 border-[#FF671F] text-[#FF671F] font-bold uppercase tracking-wider px-6 py-3 rounded transition-all duration-200 hover:bg-[#FF671F] hover:text-white active:scale-95;
-    }
-    
-    /* Mobile Navigation */
-    .mobile-nav {
-        @apply fixed bottom-0 left-0 right-0 bg-[#0A0A0A]/95 backdrop-blur-lg border-t border-white/10 z-50 flex justify-around py-3 md:hidden;
-    }
-    
-    .mobile-nav-item {
-        @apply flex flex-col items-center gap-1 text-white/60 hover:text-[#FF671F] transition-colors;
-    }
-    
-    .mobile-nav-item.active {
-        @apply text-[#FF671F];
-    }
-    
-    /* Stats Numbers */
-    .stat-number {
-        @apply text-4xl md:text-5xl font-bold;
-        font-family: 'Bebas Neue', sans-serif;
-        color: var(--jg-orange);
-    }
-    
-    /* Exercise Card */
-    .exercise-card {
-        @apply bg-[#111111] rounded-lg border border-[#222222] p-4 hover:border-[#FF671F]/50 transition-all;
-    }
-    
-    .exercise-reps {
-        @apply text-2xl font-bold;
-        font-family: 'Bebas Neue', sans-serif;
-        color: var(--jg-orange);
-    }
-    
-    /* Input Styles */
-    .input-dark {
-        @apply bg-[#111111] border-[#333333] text-white placeholder:text-white/40 focus:border-[#FF671F] focus:ring-[#FF671F]/20;
-    }
-    
-    /* Sidebar */
-    .sidebar-dark {
-        @apply bg-[#0A0A0A] border-r border-white/10;
-    }
-    
-    .sidebar-item {
-        @apply flex items-center gap-3 px-4 py-3 rounded-lg text-white/70 hover:text-white hover:bg-white/5 transition-all;
-    }
-    
-    .sidebar-item.active {
-        @apply bg-[#FF671F] text-white;
-    }
-    
-    /* Progress bars */
-    .progress-jg {
-        @apply bg-[#222222] rounded-full h-2;
-    }
-    
-    .progress-jg-fill {
-        background: var(--jg-orange);
-        @apply rounded-full h-full transition-all;
-    }
-    
-    /* Accent line (brand element) */
-    .accent-line {
-        @apply w-12 h-1 rounded-full;
-        background: var(--jg-orange);
-    }
-    
-    /* Tab styles */
-    .tab-jg {
-        @apply px-4 py-2 text-white/60 font-medium uppercase tracking-wider text-sm transition-all border-b-2 border-transparent;
-    }
-    
-    .tab-jg.active {
-        @apply text-[#FF671F] border-[#FF671F];
-    }
+
+    /* ---- Badges de plan ---- */
+    .badge-gold   { @apply bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25 font-bold px-2.5 py-0.5 rounded-md text-xs uppercase tracking-wider; }
+    .badge-silver { @apply bg-neutral-100 text-neutral-700 border border-neutral-200 dark:bg-white/10 dark:text-neutral-300 dark:border-white/15 font-bold px-2.5 py-0.5 rounded-md text-xs uppercase tracking-wider; }
+    .badge-bronze { @apply bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/25 font-bold px-2.5 py-0.5 rounded-md text-xs uppercase tracking-wider; }
+    .badge-elm    { @apply bg-brand/10 text-brand border border-brand/20 font-bold px-2.5 py-0.5 rounded-md text-xs uppercase tracking-wider; }
+
+    /* ===== Legacy (páginas dark aún no rediseñadas) ===== */
+    .jg-logo { font-family: 'Barlow Condensed', 'Impact', sans-serif; font-weight: 700; letter-spacing: 0.01em; }
+    .card-dark { @apply bg-[#111111] border-[#222222] rounded-lg; }
+    .btn-primary { background: var(--brand); @apply text-white font-bold uppercase tracking-wider px-6 py-3 rounded transition-all duration-200 hover:brightness-110 active:scale-95; }
+    .sidebar-dark { @apply bg-ink border-r border-white/10; }
+    .stat-number { @apply font-heading text-4xl md:text-5xl font-bold; color: var(--brand); }
+    .exercise-reps { @apply font-heading text-2xl font-bold; color: var(--brand); }
 }
 
 @layer utilities {
-    .text-balance {
-        text-wrap: balance;
-    }
-    
-    .animate-fade-in {
-        animation: fadeIn 0.3s ease-out;
-    }
-    
-    .animate-slide-up {
-        animation: slideUp 0.3s ease-out;
-    }
-    
-    .animate-scale-in {
-        animation: scaleIn 0.2s ease-out;
-    }
-    
-    .text-jg-orange {
-        color: var(--jg-orange);
-    }
-    
-    .bg-jg-orange {
-        background-color: var(--jg-orange);
-    }
-    
-    .border-jg-orange {
-        border-color: var(--jg-orange);
-    }
+    .text-balance { text-wrap: balance; }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    .animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+    .text-brand { color: var(--brand); }
+    .bg-brandc { background-color: var(--brand); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .track-stroke { stroke: hsl(var(--track)); }
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: hsl(var(--border)); border-radius: 9999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--muted-foreground)); background-clip: content-box; }
 
-@keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
-}
+::selection { background: var(--brand); color: white; }
 
-/* Scrollbar Styling - Dark */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
+*:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
-::-webkit-scrollbar-track {
-    @apply bg-[#111111] rounded-full;
-}
-
-::-webkit-scrollbar-thumb {
-    @apply bg-[#333333] rounded-full hover:bg-[#444444];
-}
-
-/* Selection color */
-::selection {
-    background: var(--jg-orange);
-    color: white;
-}
-
-/* Focus outline */
-*:focus-visible {
-    outline: 2px solid var(--jg-orange);
-    outline-offset: 2px;
-}
-
-/* Data wrapper fix */
-[data-debug-wrapper="true"] {
-    display: contents !important;
-}
+[data-debug-wrapper="true"] { display: contents !important; }

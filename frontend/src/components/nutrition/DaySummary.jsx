@@ -1,6 +1,8 @@
 import React from 'react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 
+const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
+
 // Progress Bar Component
 export const ProgressBar = ({ value, max, color, height = 6, showCheck = false }) => {
     const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
@@ -10,18 +12,28 @@ export const ProgressBar = ({ value, max, color, height = 6, showCheck = false }
 
     return (
         <div className="flex items-center gap-2 w-full">
-            <div className="flex-1 bg-gray-200 rounded-full overflow-hidden" style={{ height }}>
+            <div className="flex-1 bg-muted rounded-full overflow-hidden" style={{ height }}>
                 <div
                     className="h-full rounded-full transition-all duration-300"
                     style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: actualColor }}
                 />
             </div>
-            {showCheck && <Check className={`w-4 h-4 flex-shrink-0 ${isOk && value > 0 ? 'text-green-500' : 'invisible'}`} />}
+            {showCheck && <Check className={`w-4 h-4 flex-shrink-0 ${isOk && value > 0 ? 'text-emerald-500' : 'invisible'}`} />}
         </div>
     );
 };
 
-// Day Summary (sticky top bar)
+const STATUS_DOT = {
+    empty: 'bg-neutral-300 dark:bg-neutral-600',
+    cuadrada: 'bg-emerald-500',
+    sobra: 'bg-red-500',
+    falta: 'bg-amber-400',
+};
+export const StatusDot = ({ status, className = '' }) => (
+    <span className={`inline-block w-2.5 h-2.5 rounded-full ${STATUS_DOT[status] || STATUS_DOT.empty} ${className}`} />
+);
+
+// Day Summary
 const DaySummary = ({
     tipoDia, summaryExpanded, setSummaryExpanded,
     dayMacros, dayTarget, servedPeriP, servedPeriH, servedPeriG = 0, totalPeriP, totalPeriH,
@@ -29,110 +41,109 @@ const DaySummary = ({
 }) => {
     const mainP = dayMacros.P - servedPeriP;
     const mainH = dayMacros.H - servedPeriH;
-    // Peri grasas don't count toward the comidas G budget (Calma: peri has no grasas objetivo).
     const mainG = dayMacros.G - servedPeriG;
     const tgtP = dayTarget.P_entreno ?? dayTarget.P_total;
     const tgtH = dayTarget.H_entreno ?? dayTarget.H_total;
     const tgtG = dayTarget.G_entreno ?? dayTarget.G_total;
     const dayStatus = getDayStatus();
 
-    const getMealStatusDot = (mealKey) => {
-        const status = getMealStatus(mealKey);
-        if (status === 'empty') return '⚪';
-        if (status === 'cuadrada') return '🟢';
-        if (status === 'sobra') return '🔴';
-        return '🟡';
-    };
+    const macros = [
+        { key: 'P', label: 'Proteína', val: mainP, tgt: tgtP, color: MACRO.P },
+        { key: 'H', label: 'Hidratos', val: mainH, tgt: tgtH, color: MACRO.H },
+        { key: 'G', label: 'Grasas', val: mainG, tgt: tgtG, color: MACRO.G },
+    ];
 
     return (
-        <div
-            className="sticky top-[52px] z-30 bg-white shadow-md border-b cursor-pointer"
-            onClick={() => setSummaryExpanded(!summaryExpanded)}
-            data-testid="day-summary"
-        >
-            <div className="max-w-lg mx-auto px-4 py-3">
-                <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                        {tipoDia === 'entrenamiento' ? 'Día de Entrenamiento' : 'Día de Descanso'}
-                    </span>
-                    {dayStatus === 'cuadrado' && <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">Cuadrado</span>}
-                    {dayStatus === 'sobra' && <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">Te pasas</span>}
+        <div className="surface overflow-hidden" data-testid="day-summary">
+            {/* Header */}
+            <button
+                className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-left"
+                onClick={() => setSummaryExpanded(!summaryExpanded)}
+            >
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="caption">{tipoDia === 'entrenamiento' ? 'Día de entreno' : 'Día de descanso'}</span>
+                    {dayStatus === 'cuadrado' && <span className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Cuadrado</span>}
+                    {dayStatus === 'sobra' && <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Te pasas</span>}
                 </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                    <span className="text-[11px] hidden sm:inline">{summaryExpanded ? 'Ocultar detalle' : 'Ver detalle'}</span>
+                    {summaryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+            </button>
 
-                {[
-                    { emoji: '🟢', label: 'P', val: mainP, tgt: tgtP, color: '#4CAF50' },
-                    { emoji: '🔵', label: 'H', val: mainH, tgt: tgtH, color: '#2196F3' },
-                    { emoji: '🟠', label: 'G', val: mainG, tgt: tgtG, color: '#FFA500' },
-                ].map(({ emoji, label, val, tgt, color }) => (
-                    <div key={label} className="flex items-center gap-2 text-xs mb-1.5">
-                        <span className="w-4 text-center">{emoji}</span>
-                        <span className="w-6 font-semibold">{label}:</span>
-                        <div className="flex-1"><ProgressBar value={val} max={tgt || 0} color={color} height={6} /></div>
-                        <span className={`w-20 text-right font-mono ${val > (tgt || 0) + 4 ? 'text-red-500' : ''}`}>
-                            {val.toFixed(0)}/{(tgt || 0).toFixed(0)}g
-                        </span>
-                    </div>
-                ))}
+            {/* Macro bars — vertical en móvil, 3 columnas en desktop */}
+            <div className="px-4 sm:px-5 pb-3 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-2">
+                {macros.map(({ key, label, val, tgt, color }) => {
+                    const over = val > (tgt || 0) + 4;
+                    return (
+                        <div key={key} className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                            <span className="text-[11px] font-bold w-3 flex-shrink-0" style={{ color }}>{key}</span>
+                            <div className="flex-1 min-w-0"><ProgressBar value={val} max={tgt || 0} color={color} height={7} /></div>
+                            <span className={`font-data text-[11px] w-[72px] text-right ${over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                                {val.toFixed(0)}/{(tgt || 0).toFixed(0)}g
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
 
-                {tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri' && (
-                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-center text-xs text-gray-500">
-                        Peri: {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
-                    </div>
-                )}
-
-                <div className="mt-2 flex items-center justify-center gap-1 text-xs">
-                    {mealOrder.map((mealKey, idx) => (
-                        <span key={mealKey} className="flex items-center">
-                            {idx > 0 && <span className="text-gray-300 mx-1">|</span>}
-                            <span className="text-gray-500">{mealInfo[mealKey].shortName}</span>
-                            <span className="ml-0.5">{getMealStatusDot(mealKey)}</span>
+            {/* Peri + meal dots */}
+            <div className="px-4 sm:px-5 pb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border pt-2.5">
+                {tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri' ? (
+                    <span className="text-[11px] text-muted-foreground font-data">
+                        Peri {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
+                    </span>
+                ) : <span />}
+                <div className="flex items-center gap-2.5 flex-wrap">
+                    {mealOrder.map((mealKey) => (
+                        <span key={mealKey} className="flex items-center gap-1">
+                            <StatusDot status={getMealStatus(mealKey)} />
+                            <span className="text-[11px] text-muted-foreground">{mealInfo[mealKey].shortName}</span>
                         </span>
                     ))}
                 </div>
-
-                {summaryExpanded && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                        <table className="w-full text-xs">
-                            <thead><tr className="text-gray-500">
-                                <th className="text-left font-medium py-1"></th>
-                                <th className="text-right font-medium py-1 w-16">P</th>
-                                <th className="text-right font-medium py-1 w-16">H</th>
-                                <th className="text-right font-medium py-1 w-16">G</th>
-                            </tr></thead>
-                            <tbody>
-                                {mealOrder.map(mealKey => {
-                                    const served = calculateMealMacros(mealKey);
-                                    const isPeri = mealKey === 'Intra' || mealKey === 'Post';
-                                    return (
-                                        <tr key={mealKey} className="border-t border-gray-100">
-                                            <td className="py-1 text-gray-700">{mealInfo[mealKey].name}</td>
-                                            <td className="text-right font-mono">{served.P.toFixed(0)}g</td>
-                                            <td className="text-right font-mono">{served.H.toFixed(0)}g</td>
-                                            <td className="text-right font-mono">{isPeri ? '-' : `${served.G.toFixed(0)}g`}</td>
-                                        </tr>
-                                    );
-                                })}
-                                <tr className="border-t-2 border-gray-300 font-bold">
-                                    <td className="py-1">TOTAL</td>
-                                    <td className="text-right font-mono">{dayMacros.P.toFixed(0)}g</td>
-                                    <td className="text-right font-mono">{dayMacros.H.toFixed(0)}g</td>
-                                    <td className="text-right font-mono">{mainG.toFixed(0)}g</td>
-                                </tr>
-                                <tr className="text-gray-500">
-                                    <td className="py-1">OBJETIVO</td>
-                                    <td className="text-right font-mono">{(tgtP || 0).toFixed(0)}g</td>
-                                    <td className="text-right font-mono">{(tgtH || 0).toFixed(0)}g</td>
-                                    <td className="text-right font-mono">{(tgtG || 0).toFixed(0)}g</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                <div className="mt-2 flex justify-center">
-                    {summaryExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                </div>
             </div>
+
+            {/* Expanded table */}
+            {summaryExpanded && (
+                <div className="px-4 sm:px-5 pb-4 pt-1 border-t border-border">
+                    <table className="w-full text-xs">
+                        <thead><tr className="text-muted-foreground">
+                            <th className="text-left font-medium py-1.5">Comida</th>
+                            <th className="text-right font-medium py-1.5 w-14">P</th>
+                            <th className="text-right font-medium py-1.5 w-14">H</th>
+                            <th className="text-right font-medium py-1.5 w-14">G</th>
+                        </tr></thead>
+                        <tbody>
+                            {mealOrder.map(mealKey => {
+                                const served = calculateMealMacros(mealKey);
+                                const isPeri = mealKey === 'Intra' || mealKey === 'Post';
+                                return (
+                                    <tr key={mealKey} className="border-t border-border">
+                                        <td className="py-1.5 text-foreground">{mealInfo[mealKey].name}</td>
+                                        <td className="text-right font-data text-muted-foreground">{served.P.toFixed(0)}</td>
+                                        <td className="text-right font-data text-muted-foreground">{served.H.toFixed(0)}</td>
+                                        <td className="text-right font-data text-muted-foreground">{isPeri ? '—' : served.G.toFixed(0)}</td>
+                                    </tr>
+                                );
+                            })}
+                            <tr className="border-t-2 border-border font-bold text-foreground">
+                                <td className="py-1.5">TOTAL</td>
+                                <td className="text-right font-data">{dayMacros.P.toFixed(0)}</td>
+                                <td className="text-right font-data">{dayMacros.H.toFixed(0)}</td>
+                                <td className="text-right font-data">{mainG.toFixed(0)}</td>
+                            </tr>
+                            <tr className="text-muted-foreground">
+                                <td className="py-1">OBJETIVO</td>
+                                <td className="text-right font-data">{(tgtP || 0).toFixed(0)}</td>
+                                <td className="text-right font-data">{(tgtH || 0).toFixed(0)}</td>
+                                <td className="text-right font-data">{(tgtG || 0).toFixed(0)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 };

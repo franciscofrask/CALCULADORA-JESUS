@@ -2,33 +2,31 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SlidersHorizontal, Calculator, Loader2, CheckCircle2, CalendarDays, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import { MACRO } from './ClientDashboard';
 
-const ORANGE = '#FF671F';
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 // One macro input cell (P/H/G)
 const Field = ({ label, color, value, onChange, suffix = 'g' }) => (
     <div>
-        <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color }}>{label}</label>
+        <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color }}>{label}</label>
         <div className="relative">
             <input
                 type="number" min="0" step="1" value={value}
                 onChange={e => onChange(e.target.value)}
-                className="w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#FF671F] transition-colors"
-                placeholder="0"
+                className="input-light font-data pr-7" placeholder="0"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/30">{suffix}</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{suffix}</span>
         </div>
     </div>
 );
 
-// Module-level (NOT redefined per render) so inputs keep focus while typing.
+// Module-level so inputs keep focus while typing.
 const ToggleGroup = ({ options, value, onChange }) => (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
         {options.map(o => (
             <button key={o.value} onClick={() => onChange(o.value)}
-                className={`py-2.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all ${value === o.value ? 'text-white' : 'bg-[#1A1A1A] text-white/40 hover:text-white/70'}`}
-                style={value === o.value ? { backgroundColor: ORANGE } : {}}>
+                className={`py-2.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all border ${value === o.value ? 'bg-brand text-white border-brand' : 'bg-card text-muted-foreground border-border hover:border-neutral-400'}`}>
                 {o.label}
             </button>
         ))}
@@ -36,12 +34,12 @@ const ToggleGroup = ({ options, value, onChange }) => (
 );
 
 const GroupCard = ({ label, group, withFat, macros, setMacro }) => (
-    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
-        <p className="text-xs font-bold uppercase tracking-widest mb-3 text-white/40">{label}</p>
-        <div className={`grid gap-2 ${withFat ? 'grid-cols-3' : 'grid-cols-2'}`}>
-            <Field label="Proteína" color="#3B82F6" value={macros[group].protein} onChange={v => setMacro(group, 'protein', v)} />
-            <Field label="Hidratos" color="#F59E0B" value={macros[group].carbs} onChange={v => setMacro(group, 'carbs', v)} />
-            {withFat && <Field label="Grasas" color="#EF4444" value={macros[group].fat} onChange={v => setMacro(group, 'fat', v)} />}
+    <div className="surface p-4">
+        <p className="caption mb-3">{label}</p>
+        <div className={`grid gap-3 ${withFat ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            <Field label="Proteína" color={MACRO.protein} value={macros[group].protein} onChange={v => setMacro(group, 'protein', v)} />
+            <Field label="Hidratos" color={MACRO.carbs} value={macros[group].carbs} onChange={v => setMacro(group, 'carbs', v)} />
+            {withFat && <Field label="Grasas" color={MACRO.fat} value={macros[group].fat} onChange={v => setMacro(group, 'fat', v)} />}
         </div>
     </div>
 );
@@ -60,8 +58,6 @@ const MacroCalculatorClientPage = () => {
     const [loadingMacros, setLoadingMacros] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    // Preload the macros EFFECTIVE for the chosen date (date-versioned). Re-runs when the date
-    // changes so the editor always shows that day's assigned macros, editable.
     useEffect(() => {
         let alive = true;
         if (!effectiveDate) return;
@@ -74,7 +70,6 @@ const MacroCalculatorClientPage = () => {
                 rest: { protein: pick(d.rest, 'protein', 'proteinas'), carbs: pick(d.rest, 'carbs', 'hidratos'), fat: pick(d.rest, 'fat', 'grasas') },
                 peri: { protein: pick(d.periworkout, 'protein', 'proteinas'), carbs: pick(d.periworkout, 'carbs', 'hidratos') },
             });
-            // Precargar la calculadora con los inputs guardados de ese día (trazabilidad).
             setForm(prev => ({
                 peso: d.peso != null ? String(d.peso) : '',
                 porcentaje_graso: d.porcentaje_graso != null ? String(d.porcentaje_graso) : '',
@@ -104,7 +99,6 @@ const MacroCalculatorClientPage = () => {
                 peri: { protein: num(p.protein) || 0, carbs: num(p.carbs) || 0 },
                 note: note || null,
                 effective_date: effectiveDate,
-                // Inputs para trazabilidad del cambio (cómo se derivaron estos macros).
                 peso: isNaN(num(form.peso)) ? null : num(form.peso),
                 porcentaje_graso: isNaN(num(form.porcentaje_graso)) ? null : num(form.porcentaje_graso),
                 sexo: form.sexo || null,
@@ -154,119 +148,99 @@ const MacroCalculatorClientPage = () => {
     };
 
     return (
-        <div className="px-4 pt-6 pb-28 max-w-md mx-auto space-y-4">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1200px] mx-auto space-y-6 animate-fade-in">
             {/* Header */}
-            <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${ORANGE}20` }}>
-                    <SlidersHorizontal className="w-5 h-5" style={{ color: ORANGE }} />
+            <header className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-brand/10">
+                    <SlidersHorizontal className="w-6 h-6 text-brand" />
                 </div>
                 <div>
-                    <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Bebas Neue', letterSpacing: '0.05em' }}>AJUSTAR MACROS</h1>
-                    <p className="text-xs text-white/30">Modifica tus macros y elige desde qué fecha aplican</p>
+                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none">Ajustar macros</h1>
+                    <p className="text-sm text-muted-foreground mt-1">Modifica tus macros y elige desde qué fecha aplican</p>
                 </div>
-            </div>
+            </header>
 
             {loadingMacros ? (
-                <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-white/40" /></div>
+                <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-muted-foreground" /></div>
             ) : (
-                <>
-                    {/* ── 1. Calculator ── */}
-                    <div>
-                        <p className="text-xs font-bold text-white/30 uppercase tracking-widest mb-2 flex items-center gap-2">
-                            <Calculator className="w-4 h-4" /> Calcula tus macros
-                        </p>
-                        <div className="bg-[#111111] border border-[#222] rounded-2xl p-4 space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                    {/* ── Calculator (helper) ── */}
+                    <section className="space-y-3">
+                        <p className="caption flex items-center gap-2"><Calculator className="w-4 h-4" /> Calcula tus macros</p>
+                        <div className="surface p-5 space-y-4">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-bold text-white/40 uppercase tracking-wider mb-1.5">Peso (kg)</label>
-                                    <input type="number" min="30" max="200" step="0.5" value={form.peso} onChange={e => set('peso', e.target.value)} placeholder="80"
-                                        className="w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors" />
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Peso (kg)</label>
+                                    <input type="number" min="30" max="200" step="0.5" value={form.peso} onChange={e => set('peso', e.target.value)} placeholder="80" className="input-light font-data" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-white/40 uppercase tracking-wider mb-1.5">% Graso</label>
-                                    <input type="number" min="5" max="60" step="0.5" value={form.porcentaje_graso} onChange={e => set('porcentaje_graso', e.target.value)} placeholder="20"
-                                        className="w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors" />
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">% Graso</label>
+                                    <input type="number" min="5" max="60" step="0.5" value={form.porcentaje_graso} onChange={e => set('porcentaje_graso', e.target.value)} placeholder="20" className="input-light font-data" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-wider mb-1.5">Sexo</label>
+                                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Sexo</label>
                                 <ToggleGroup options={[{ value: 'hombre', label: 'Hombre' }, { value: 'mujer', label: 'Mujer' }]} value={form.sexo} onChange={v => set('sexo', v)} />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-wider mb-1.5">Objetivo</label>
+                                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Objetivo</label>
                                 <ToggleGroup options={[{ value: 'volumen', label: 'Volumen' }, { value: 'definicion', label: 'Definición' }]} value={form.objetivo} onChange={v => set('objetivo', v)} />
                             </div>
                             <button onClick={handleCalculate} disabled={loading || !form.peso || !form.porcentaje_graso}
-                                className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider bg-[#1A1A1A] border border-[#333] text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40 hover:border-[#FF671F]">
+                                className="btn-outline-brand w-full flex items-center justify-center gap-2 uppercase tracking-wider disabled:opacity-40">
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
                                 {loading ? 'Calculando...' : 'Calcular'}
                             </button>
 
                             {results && (
-                                <div className="space-y-2 pt-1">
-                                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                <div className="space-y-3 pt-1">
+                                    <div className="grid grid-cols-3 gap-2 text-center">
                                         {[
                                             ['Entreno', results.macros.entreno.proteina, results.macros.entreno.hidratos, results.macros.entreno.grasa],
                                             ['Peri', results.macros.perientreno.proteina, results.macros.perientreno.hidratos, null],
                                             ['Descanso', results.macros.descanso.proteina, results.macros.descanso.hidratos, results.macros.descanso.grasa],
                                         ].map(([lbl, p, h, g]) => (
-                                            <div key={lbl} className="bg-[#1A1A1A] rounded-xl py-2">
-                                                <p className="text-[10px] text-white/30 uppercase mb-1">{lbl}</p>
-                                                <p className="text-white/80">{Math.round(p)}/{Math.round(h)}{g != null ? `/${Math.round(g)}` : ''}</p>
+                                            <div key={lbl} className="bg-muted border border-border rounded-xl py-2.5">
+                                                <p className="text-[10px] text-muted-foreground uppercase mb-1 font-semibold">{lbl}</p>
+                                                <p className="text-foreground text-sm font-data font-semibold">{Math.round(p)}/{Math.round(h)}{g != null ? `/${Math.round(g)}` : ''}</p>
                                             </div>
                                         ))}
                                     </div>
                                     <button onClick={useCalcResults}
-                                        className="w-full py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 transition-all">
+                                        className="w-full py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 transition-all active:scale-[0.98]">
                                         <CheckCircle2 className="w-4 h-4" /> Usar estos valores
                                     </button>
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </section>
 
-                    {/* ── 2. Macros editor ── */}
-                    <div ref={editorRef} className="space-y-4 pt-2">
-                        <p className="text-xs font-bold text-white/30 uppercase tracking-widest flex items-center gap-2">
-                            <SlidersHorizontal className="w-4 h-4" /> Mis macros
-                        </p>
+                    {/* ── Macros editor ── */}
+                    <section ref={editorRef} className="space-y-3">
+                        <p className="caption flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Mis macros</p>
 
-                        {/* Effective date */}
-                        <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
-                            <label className="flex items-center gap-2 text-xs font-bold text-white/40 uppercase tracking-wider mb-2">
-                                <CalendarDays className="w-4 h-4" style={{ color: ORANGE }} /> Aplican desde
+                        <div className="surface p-4">
+                            <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                                <CalendarDays className="w-4 h-4 text-brand" /> Aplican desde
                             </label>
-                            <input
-                                type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)}
-                                className="w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#FF671F] transition-colors [color-scheme:dark]"
-                            />
-                            <p className="text-[11px] text-white/30 mt-2">Las dietas de ese día en adelante usarán estos macros. Las anteriores conservan los previos.</p>
+                            <input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} className="input-light font-data" />
+                            <p className="text-xs text-muted-foreground mt-2">Las dietas de ese día en adelante usarán estos macros. Las anteriores conservan los previos.</p>
                         </div>
 
-                        {/* Editor */}
                         <GroupCard label="Día entrenamiento" group="training" withFat macros={macros} setMacro={setMacro} />
                         <GroupCard label="Día descanso" group="rest" withFat macros={macros} setMacro={setMacro} />
                         <GroupCard label="Perientreno (intra + post)" group="peri" withFat={false} macros={macros} setMacro={setMacro} />
 
-                        {/* Note */}
-                        <input
-                            type="text" value={note} onChange={e => setNote(e.target.value)}
-                            placeholder="Motivo del cambio (opcional)"
-                            className="w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors"
-                        />
+                        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Motivo del cambio (opcional)" className="input-light" />
 
-                        {/* Save */}
-                        <button
-                            onClick={handleSaveMacros} disabled={saving}
-                            className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                            style={{ backgroundColor: ORANGE }}
-                            data-testid="save-my-macros"
-                        >
+                        <button onClick={handleSaveMacros} disabled={saving}
+                            className="btn-brand w-full flex items-center justify-center gap-2 uppercase tracking-wider"
+                            data-testid="save-my-macros">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             {saving ? 'Guardando...' : 'Guardar macros'}
                         </button>
-                    </div>
-                </>
+                    </section>
+                </div>
             )}
         </div>
     );

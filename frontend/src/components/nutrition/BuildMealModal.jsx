@@ -759,17 +759,17 @@ const BuildMealModal = ({
 
     return (
         <Dialog open={open} onOpenChange={() => onClose()}>
-            <DialogContent className="max-w-2xl h-[90vh] p-0 flex flex-col bg-white">
+            <DialogContent className="max-w-2xl h-[90vh] p-0 flex flex-col bg-card">
                 <DialogHeader className="flex-shrink-0 px-4 py-3 border-b">
                     <div className="flex items-center justify-between gap-2">
-                        <DialogTitle className="text-lg font-bold text-black">
+                        <DialogTitle className="text-lg font-bold text-foreground">
                             {mealInfo?.label || `Comida ${mealKey?.replace('C', '')}`}
                         </DialogTitle>
                         {!isPeriMode && setMealMode && (
-                            <div className="inline-flex rounded-full bg-gray-100 p-0.5 shrink-0">
+                            <div className="inline-flex rounded-full bg-muted p-0.5 shrink-0">
                                 <button
                                     type="button"
-                                    className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${!isManual ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                                    className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${!isManual ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
                                     onClick={() => setMealMode(mealKey, 'auto')}
                                     data-testid="modal-mode-auto"
                                 >
@@ -777,7 +777,7 @@ const BuildMealModal = ({
                                 </button>
                                 <button
                                     type="button"
-                                    className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${isManual ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                                    className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${isManual ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
                                     onClick={() => setMealMode(mealKey, 'manual')}
                                     data-testid="modal-mode-manual"
                                 >
@@ -793,27 +793,27 @@ const BuildMealModal = ({
 
                 <div className="flex-1 flex flex-col overflow-hidden">
                     {/* Macros summary */}
-                    <div className="flex-shrink-0 p-4 bg-gray-50 border-b">
-                        <div className="text-sm font-medium text-gray-600 mb-2">{getPasoLabel()}</div>
+                    <div className="flex-shrink-0 p-4 bg-muted border-b">
+                        <div className="text-sm font-medium text-muted-foreground mb-2">{getPasoLabel()}</div>
                         {/* Peri (intra/post) carry only P+H — Calma shows no Grasas column for them. */}
                         <div className={`grid ${isPeriMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-center`}>
                             {(() => { const c = macroCell(served.P, target.P); return (
                                 <div>
-                                    <div className="text-xs text-gray-500">Proteína</div>
+                                    <div className="text-xs text-muted-foreground">Proteína</div>
                                     <div className={`font-bold ${c.over ? 'text-red-500' : 'text-orange-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
                             {(() => { const c = macroCell(served.H, target.H); return (
                                 <div>
-                                    <div className="text-xs text-gray-500">Hidratos</div>
+                                    <div className="text-xs text-muted-foreground">Hidratos</div>
                                     <div className={`font-bold ${c.over ? 'text-red-500' : 'text-blue-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
                             {!isPeriMode && (() => { const c = macroCell(served.G, target.G); return (
                                 <div>
-                                    <div className="text-xs text-gray-500">Grasas</div>
+                                    <div className="text-xs text-muted-foreground">Grasas</div>
                                     <div className={`font-bold ${c.over ? 'text-red-500' : 'text-yellow-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
@@ -824,7 +824,7 @@ const BuildMealModal = ({
                     {/* Search bar */}
                     <div className="flex-shrink-0 p-3 border-b">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                             <Input
                                 placeholder="Buscar alimento..."
                                 value={searchQuery}
@@ -834,7 +834,7 @@ const BuildMealModal = ({
                             {searchQuery && (
                                 <button
                                     onClick={() => { setSearchQuery(''); setIsSearching(false); setSearchResults([]); }}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
@@ -843,7 +843,7 @@ const BuildMealModal = ({
                     </div>
 
                     {/* Category + Preparation Rails — hidden for intra (Calma: chips hidden) */}
-                    {(isManual || !isCuadrada) && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-white space-y-2">
+                    {(isManual || !isCuadrada) && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-card space-y-2">
                         <CategoryRail
                             label="Categorías:"
                             categories={categories}
@@ -866,15 +866,15 @@ const BuildMealModal = ({
                     <ScrollArea className="flex-1">
                         <div className="p-3">
                             {!isSearching && selectedCategories.length === 0 ? (
-                                <div className="text-center py-10 text-gray-400 text-sm">
+                                <div className="text-center py-10 text-muted-foreground text-sm">
                                     Selecciona una categoría arriba para ver los alimentos
                                 </div>
                             ) : (
                                 <>
                                     {loadingFoods ? (
-                                        <div className="text-center py-8 text-gray-500">Cargando...</div>
+                                        <div className="text-center py-8 text-muted-foreground">Cargando...</div>
                                     ) : displayFoods.length === 0 ? (
-                                        <div className="text-center py-8 text-gray-500">
+                                        <div className="text-center py-8 text-muted-foreground">
                                             {isSearching
                                                 ? 'No se encontraron alimentos'
                                                 : selectedCategories.some(c => c.id === '__frequent__')
@@ -889,24 +889,24 @@ const BuildMealModal = ({
                                                     <div key={food.id || idx} className="flex items-center gap-1">
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); toggleFavorite(food.id); }}
-                                                            className={`flex-shrink-0 p-1 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'}`}
+                                                            className={`flex-shrink-0 p-1 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-muted-foreground hover:text-yellow-300'}`}
                                                             data-testid={`fav-toggle-${food.id}`}
                                                         >
                                                             <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleSelectFood(food)}
-                                                            className="flex-1 flex items-center gap-2 p-2 rounded-lg text-left transition-colors hover:bg-gray-100"
+                                                            className="flex-1 flex items-center gap-2 p-2 rounded-lg text-left transition-colors hover:bg-muted"
                                                             data-testid={`food-item-${food.id || idx}`}
                                                         >
                                                             <div className="flex-1 min-w-0">
-                                                                <div className="text-sm text-black truncate">
+                                                                <div className="text-sm text-foreground truncate">
                                                                     {food.nombre}
                                                                     {food.is_promocionado && (
                                                                         <span className="ml-1.5 align-middle inline-block text-[9px] font-bold tracking-wide text-white bg-black rounded px-1 py-0.5">PROMOCIONADO</span>
                                                                     )}
                                                                 </div>
-                                                                <div className="text-xs text-gray-500">
+                                                                <div className="text-xs text-muted-foreground">
                                                                     {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)` : `${food._cantidad_sugerida}g`} → ` : ''}
                                                                     {(() => {
                                                                         const ms = food._macros_sugeridos;
@@ -926,7 +926,7 @@ const BuildMealModal = ({
                                                                     })()}
                                                                 </div>
                                                             </div>
-                                                            <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                            <Plus className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                                                         </button>
                                                     </div>
                                                 );
@@ -947,11 +947,11 @@ const BuildMealModal = ({
                         }), { P: 0, H: 0, G: 0 });
                         const fmt = v => Math.round(v);
                         return (
-                            <div className="flex-shrink-0 border-t bg-gray-50">
+                            <div className="flex-shrink-0 border-t bg-muted">
                                 <button
                                     type="button"
                                     onClick={() => setAddedOpen(o => !o)}
-                                    className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-700"
+                                    className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-foreground"
                                     data-testid="added-bar-toggle"
                                 >
                                     <span className="flex items-center gap-2">
@@ -959,17 +959,17 @@ const BuildMealModal = ({
                                         <span>añadidos</span>
                                         <span className="text-xs font-normal">· <span className="font-semibold text-orange-500">P {fmt(tot.P)}</span> · <span className="font-semibold text-blue-500">H {fmt(tot.H)}</span> · <span className="font-semibold text-yellow-500">G {fmt(tot.G)}</span></span>
                                     </span>
-                                    <ChevronUp className={`w-4 h-4 text-gray-400 transition-transform ${addedOpen ? '' : 'rotate-180'}`} />
+                                    <ChevronUp className={`w-4 h-4 text-muted-foreground transition-transform ${addedOpen ? '' : 'rotate-180'}`} />
                                 </button>
                                 {addedOpen && (
                                     <div className="px-3 pb-3 max-h-56 overflow-auto space-y-1">
                                         {tempFoods.map((food, idx) => (
-                                            <div key={idx} className="flex items-center gap-2 bg-white rounded p-2 text-sm">
-                                                <span className="flex-1 truncate text-black">{food.nombre}</span>
+                                            <div key={idx} className="flex items-center gap-2 bg-card rounded p-2 text-sm">
+                                                <span className="flex-1 truncate text-foreground">{food.nombre}</span>
                                                 <div className="flex items-center gap-1">
                                                     <button
                                                         onClick={() => handleFoodQuantityChange(idx, -1)}
-                                                        className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded"
+                                                        className="w-6 h-6 flex items-center justify-center bg-muted rounded"
                                                     >
                                                         <Minus className="w-3 h-3" />
                                                     </button>
@@ -981,7 +981,7 @@ const BuildMealModal = ({
                                                     </span>
                                                     <button
                                                         onClick={() => handleFoodQuantityChange(idx, 1)}
-                                                        className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded"
+                                                        className="w-6 h-6 flex items-center justify-center bg-muted rounded"
                                                     >
                                                         <Plus className="w-3 h-3" />
                                                     </button>
@@ -1002,7 +1002,7 @@ const BuildMealModal = ({
                 </div>
 
                 {/* Footer */}
-                <div className="flex-shrink-0 bg-white border-t p-4">
+                <div className="flex-shrink-0 bg-card border-t p-4">
                     {tempFoods.length > 0 ? (
                         <Button
                             onClick={handleSaveAndClose}

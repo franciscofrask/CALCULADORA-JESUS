@@ -7,9 +7,7 @@ const MOMENTO_OPTIONS = [
     { value: 3, label: 'Después de Comida 3' },
 ];
 
-// Peri options. intra_post/solo_post = Calma. Added (custom): solo_intra (intra = 5% de cada
-// macro del día, resto equitativo entre comidas) y sin_peri (sin intra/post; el peri se reparte
-// entre las comidas).
+// Peri options. 4 modos oficiales: intra_post/solo_post (base Calma) + solo_intra/sin_peri (propios).
 const PERI_OPTIONS = [
     { value: 'intra_post', label: 'Intra + Post' },
     { value: 'solo_post', label: 'Solo Post' },
@@ -23,52 +21,57 @@ const COMIDAS_OPTIONS = [
     { value: 4, label: '4 comidas' },
 ];
 
-const selectCls = "w-full text-sm text-gray-900 [color-scheme:light] bg-white border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange";
-const labelCls = "text-xs font-medium text-gray-500 mb-1";
+const selectCls = "w-full h-11 text-sm text-foreground bg-card border border-border rounded-xl px-3 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 transition-all";
+const labelCls = "text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2";
 
-const Field = ({ label, grow, children }) => (
-    <label className={`flex flex-col ${grow ? 'flex-1 min-w-0' : 'w-44'}`}>
+const Field = ({ label, children, className = '' }) => (
+    <label className={`flex flex-col ${className}`}>
         <span className={labelCls}>{label}</span>
         {children}
     </label>
 );
 
-const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri, setOpcionPeri, numComidas = 4, setNumComidas }) => {
+// inline=true: renderiza solo los campos (Fragment) para colocarlos en una barra horizontal
+// superior; inline=false: tarjeta vertical "Configuración del día" (layout lateral/móvil).
+const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri, setOpcionPeri, numComidas = 4, setNumComidas, inline = false }) => {
     const single = numComidas === 1;
     const entreno = tipoDia === 'entrenamiento';
-    const soloComidas = !entreno || single; // Horario/Peri ocultos → solo queda Comidas
 
-    return (
-        <div className="bg-white shadow-md rounded-2xl p-4 mb-4" data-testid="config-section">
-            <div className={`flex flex-wrap gap-3 ${soloComidas ? 'justify-center' : ''}`}>
-                {entreno && !single && (
-                    <Field label="Horario de entreno" grow>
-                        <select value={momentoEntreno} onChange={(e) => setMomentoEntreno(Number(e.target.value))}
-                            className={selectCls} data-testid="momento-entreno-select"
-                        >
-                            {MOMENTO_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                        </select>
-                    </Field>
-                )}
+    const fields = (
+        <>
+            <Field label="Número de comidas" className={inline ? 'w-full sm:flex-1 sm:min-w-0' : ''}>
+                <select value={numComidas} onChange={(e) => setNumComidas(Number(e.target.value))}
+                    className={selectCls} data-testid="num-comidas-select">
+                    {COMIDAS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+            </Field>
 
-                {entreno && !single && (
-                    <Field label="Peri" grow>
-                        <select value={opcionPeri} onChange={(e) => setOpcionPeri(e.target.value)}
-                            className={selectCls} data-testid="peri-select"
-                        >
-                            {PERI_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                        </select>
-                    </Field>
-                )}
-
-                <Field label="Comidas" grow={!soloComidas}>
-                    <select value={numComidas} onChange={(e) => setNumComidas(Number(e.target.value))}
-                        className={selectCls} data-testid="num-comidas-select"
-                    >
-                        {COMIDAS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            {entreno && !single && (
+                <Field label="Horario de entreno" className={inline ? 'w-full sm:flex-1 sm:min-w-0' : ''}>
+                    <select value={momentoEntreno} onChange={(e) => setMomentoEntreno(Number(e.target.value))}
+                        className={selectCls} data-testid="momento-entreno-select">
+                        {MOMENTO_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                 </Field>
-            </div>
+            )}
+
+            {entreno && !single && (
+                <Field label="Perientreno" className={inline ? 'w-full sm:flex-1 sm:min-w-0' : ''}>
+                    <select value={opcionPeri} onChange={(e) => setOpcionPeri(e.target.value)}
+                        className={selectCls} data-testid="peri-select">
+                        {PERI_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                </Field>
+            )}
+        </>
+    );
+
+    if (inline) return fields;
+
+    return (
+        <div className="surface p-5 space-y-4" data-testid="config-section">
+            <p className="caption">Configuración del día</p>
+            {fields}
         </div>
     );
 };

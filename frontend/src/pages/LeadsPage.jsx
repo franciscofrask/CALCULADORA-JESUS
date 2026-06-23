@@ -21,7 +21,7 @@ const STATUSES = [
     { id: 'llamada_agendada', label: 'Llamada agendada', color: '#F59E0B', bg: 'bg-yellow-500/10 text-yellow-400' },
     { id: 'propuesta_enviada', label: 'Propuesta enviada', color: '#FF671F', bg: 'bg-[#FF671F]/10 text-[#FF671F]' },
     { id: 'convertido', label: 'Convertido', color: '#22C55E', bg: 'bg-green-500/10 text-green-400' },
-    { id: 'descartado', label: 'Descartado', color: '#6B7280', bg: 'bg-gray-500/10 text-gray-400' },
+    { id: 'descartado', label: 'Descartado', color: '#6B7280', bg: 'bg-gray-500/10 text-muted-foreground' },
 ];
 
 const SOURCES = [
@@ -125,7 +125,7 @@ const LeadsPage = () => {
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold text-white tracking-tight" style={{ fontFamily: 'Bebas Neue' }}>LEADS</h1>
+                    <h1 className="text-2xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>LEADS</h1>
                     <p className="text-white/40 text-sm">{leads.length} prospectos</p>
                 </div>
                 <div className="flex items-center gap-2">

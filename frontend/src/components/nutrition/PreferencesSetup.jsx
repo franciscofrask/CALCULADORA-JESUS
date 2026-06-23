@@ -168,36 +168,36 @@ const PreferencesSetup = ({
             className={`flex items-center gap-3 p-3 rounded-lg transition-all ${locked ? 'cursor-default' : 'cursor-pointer'} ${
                 checked
                     ? `${colorClass} border`
-                    : 'bg-gray-50 border border-transparent hover:bg-gray-100'
+                    : 'bg-muted border border-transparent hover:bg-muted'
             }`}
             onClick={() => !locked && onToggle(cat.id)}
         >
             <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
-                checked ? `${colorClass.includes('orange') ? 'bg-brand-orange border-brand-orange' : 'bg-red-500 border-red-500'}` : 'border-gray-300'
+                checked ? `${colorClass.includes('orange') ? 'bg-brand-orange border-brand-orange' : 'bg-red-500 border-red-500'}` : 'border-border'
             }`}>
                 {checked && <Check className="w-3 h-3 text-white" />}
             </div>
-            <span className={`text-sm flex-1 ${checked ? 'text-gray-900 font-medium' : 'text-gray-700'}`}>
+            <span className={`text-sm flex-1 ${checked ? 'text-foreground font-medium' : 'text-foreground'}`}>
                 {cat.label}
             </span>
-            {locked && <span className="text-xs text-gray-400 flex-shrink-0">Obligatorio</span>}
+            {locked && <span className="text-xs text-muted-foreground flex-shrink-0">Obligatorio</span>}
         </label>
     );
 
     return (
         <div className="min-h-screen bg-bg-dark flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
+            <div className="bg-card rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="p-6 border-b flex-shrink-0">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="w-10 h-10 rounded-full bg-brand-orange/10 flex items-center justify-center">
                             <Settings className="w-5 h-5 text-brand-orange" />
                         </div>
-                        <h1 className="text-xl font-bold text-gray-900 flex-1">
+                        <h1 className="text-xl font-bold text-foreground flex-1">
                             {isEditMode ? 'Editar preferencias' : 'Configura tus preferencias'}
                         </h1>
                         {isEditMode && onCancel && (
-                            <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
+                            <button onClick={onCancel} className="text-muted-foreground hover:text-muted-foreground transition-colors">
                                 <X size={20} />
                             </button>
                         )}
@@ -210,7 +210,7 @@ const PreferencesSetup = ({
                             className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                                 activeTab === 'like'
                                     ? 'bg-brand-orange text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    : 'bg-muted text-muted-foreground hover:bg-muted'
                             }`}
                         >
                             Me gusta
@@ -220,7 +220,7 @@ const PreferencesSetup = ({
                             className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 ${
                                 activeTab === 'avoid'
                                     ? 'bg-red-500 text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    : 'bg-muted text-muted-foreground hover:bg-muted'
                             }`}
                         >
                             <Ban className="w-3 h-3" />
@@ -241,7 +241,7 @@ const PreferencesSetup = ({
                     {activeTab === 'like' && (
                         <>
                             <div className="flex items-center justify-between mb-3">
-                                <p className="text-gray-500 text-sm flex-1 pr-2">
+                                <p className="text-muted-foreground text-sm flex-1 pr-2">
                                     La calculadora te sugerirá estos alimentos en los últimos toques de cada comida.
                                 </p>
                                 <button
@@ -270,13 +270,13 @@ const PreferencesSetup = ({
 
                     {activeTab === 'avoid' && (
                         <>
-                            <p className="text-gray-500 text-sm mb-3">
+                            <p className="text-muted-foreground text-sm mb-3">
                                 Estos alimentos nunca aparecerán en ninguna sugerencia — alergias, intolerancias o simplemente lo que no te gusta.
                             </p>
 
                             {/* Keyword section */}
                             <div className="mb-4">
-                                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Por palabra clave</p>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Por palabra clave</p>
                                 <div className="flex gap-2 mb-2">
                                     <input
                                         type="text"
@@ -284,7 +284,7 @@ const PreferencesSetup = ({
                                         onChange={e => setKeywordInput(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && addKeyword()}
                                         placeholder='Ej: "cerdo", "trigo", "pan"...'
-                                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
                                     />
                                     <button
                                         onClick={addKeyword}
@@ -312,7 +312,7 @@ const PreferencesSetup = ({
 
                             {/* Category section */}
                             <div className="flex items-center justify-between mb-2">
-                                <p className="text-xs font-semibold text-gray-500 uppercase">Por categoría</p>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase">Por categoría</p>
                                 <button
                                     type="button"
                                     onClick={() => setAvoidedCats(avoidedCats.size === PREFERENCE_CATEGORIES.length ? new Set() : new Set(PREFERENCE_CATEGORIES.map(c => c.id)))}
@@ -338,9 +338,9 @@ const PreferencesSetup = ({
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t flex-shrink-0 bg-gray-50">
+                <div className="p-4 border-t flex-shrink-0 bg-muted">
                     {activeTab === 'like' && (
-                        <p className={`text-sm mb-3 ${selected.size < 3 ? 'text-red-500' : 'text-gray-500'}`}>
+                        <p className={`text-sm mb-3 ${selected.size < 3 ? 'text-red-500' : 'text-muted-foreground'}`}>
                             {selected.size < 3
                                 ? `Selecciona al menos 3 categorías (${selected.size}/3)`
                                 : `${selected.size} categorías seleccionadas`
@@ -348,7 +348,7 @@ const PreferencesSetup = ({
                         </p>
                     )}
                     {activeTab === 'avoid' && (
-                        <p className="text-sm mb-3 text-gray-500">
+                        <p className="text-sm mb-3 text-muted-foreground">
                             {avoidedCats.size + avoidedKeywords.length === 0
                                 ? 'Sin restricciones configuradas'
                                 : `${avoidedCats.size} categorías + ${avoidedKeywords.length} palabras clave bloqueadas`

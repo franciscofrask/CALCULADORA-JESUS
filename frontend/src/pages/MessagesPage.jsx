@@ -85,16 +85,16 @@ const MessagesPage = () => {
 
     if (loading) {
         return (
-            <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex items-center justify-center bg-[#0A0A0A]">
+            <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex items-center justify-center bg-background">
                 <div className="animate-spin w-8 h-8 border-2 border-[#FF671F] border-t-transparent rounded-full"></div>
             </div>
         );
     }
 
     return (
-        <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex flex-col animate-fade-in bg-[#0A0A0A]">
+        <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex flex-col animate-fade-in bg-background">
             {/* Header */}
-            <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-[#111111]">
+            <div className="p-4 border-b border-border flex items-center gap-3 bg-card">
                 <Avatar className="border-2 border-[#FF671F]">
                     <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${trainerId}`} />
                     <AvatarFallback className="bg-[#FF671F] text-white">
@@ -102,7 +102,7 @@ const MessagesPage = () => {
                     </AvatarFallback>
                 </Avatar>
                 <div>
-                    <h2 className="font-bold text-white uppercase tracking-wider">
+                    <h2 className="font-bold text-foreground uppercase tracking-wider">
                         {profile?.trainer_id ? 'Tu Entrenador' : 'Soporte JG12'}
                     </h2>
                     <p className="text-xs text-[#FF671F]">
@@ -127,19 +127,19 @@ const MessagesPage = () => {
                                             className={`rounded-2xl px-4 py-2 ${
                                                 isOwn
                                                     ? 'bg-[#FF671F] text-white rounded-br-sm'
-                                                    : 'bg-[#1A1A1A] text-white rounded-bl-sm'
+                                                    : 'bg-muted text-foreground rounded-bl-sm'
                                             }`}
                                         >
                                             <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                                         </div>
                                         <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                                            <span className="text-xs text-white/40">
+                                            <span className="text-xs text-foreground/40">
                                                 {formatTime(msg.created_at)}
                                             </span>
                                             {isOwn && (
                                                 msg.read 
                                                     ? <CheckCheck className="w-3 h-3 text-[#FF671F]" />
-                                                    : <Check className="w-3 h-3 text-white/40" />
+                                                    : <Check className="w-3 h-3 text-foreground/40" />
                                             )}
                                         </div>
                                     </div>
@@ -152,8 +152,8 @@ const MessagesPage = () => {
                         <div className="w-20 h-20 bg-[#FF671F]/10 rounded-full flex items-center justify-center mb-4">
                             <MessageCircle className="w-10 h-10 text-[#FF671F]" />
                         </div>
-                        <h3 className="font-bold text-white uppercase tracking-wider mb-2">Sin mensajes</h3>
-                        <p className="text-sm text-white/50">
+                        <h3 className="font-bold text-foreground uppercase tracking-wider mb-2">Sin mensajes</h3>
+                        <p className="text-sm text-foreground/50">
                             Envía un mensaje a tu entrenador para empezar.
                         </p>
                     </div>
@@ -161,14 +161,14 @@ const MessagesPage = () => {
             </ScrollArea>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-white/10 bg-[#111111]">
+            <div className="p-4 border-t border-border bg-card">
                 <form onSubmit={handleSend} className="flex items-center gap-2">
                     <Input
                         ref={inputRef}
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         placeholder="Escribe un mensaje..."
-                        className="flex-1 bg-[#0A0A0A] border-[#333] text-white placeholder:text-white/30 focus:border-[#FF671F]"
+                        className="flex-1 bg-background border-input text-foreground placeholder:text-muted-foreground focus:border-brand"
                         disabled={sending}
                         data-testid="message-input"
                     />

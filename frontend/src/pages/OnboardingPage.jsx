@@ -13,7 +13,7 @@ const PLANS = [
         id: 'gold',
         name: 'Gold',
         price: 149,
-        badgeClass: 'bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-600 text-black',
+        badgeClass: 'bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-600 text-foreground',
         description: 'El plan más completo para resultados máximos',
         features: [
             'Rutina personalizada semanal',
@@ -30,7 +30,7 @@ const PLANS = [
         id: 'silver',
         name: 'Silver',
         price: 99,
-        badgeClass: 'bg-gradient-to-r from-gray-300 via-gray-200 to-gray-400 text-black',
+        badgeClass: 'bg-gradient-to-r from-gray-300 via-gray-200 to-gray-400 text-foreground',
         description: 'Balance perfecto entre servicio y precio',
         features: [
             'Rutina personalizada semanal',
@@ -95,7 +95,7 @@ const OnboardingPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#0A0A0A] p-4 md:p-8 relative overflow-hidden">
+        <div className="min-h-screen bg-background p-4 md:p-8 relative overflow-hidden">
             {/* Background glow */}
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#FF671F]/10 rounded-full blur-[150px]"></div>
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#FF671F]/5 rounded-full blur-[120px]"></div>
@@ -103,13 +103,13 @@ const OnboardingPage = () => {
             <div className="max-w-5xl mx-auto relative z-10">
                 {/* Header */}
                 <div className="text-center mb-10">
-                    <div className="inline-flex items-center text-5xl mb-4" style={{ fontFamily: 'Bebas Neue' }}>
-                        <span className="text-white">JG</span>
-                        <span className="text-white">12</span>
+                    <div className="inline-flex items-center text-5xl mb-4" style={{ fontFamily: 'Barlow Condensed' }}>
+                        <span className="text-foreground">JG</span>
+                        <span className="text-foreground">12</span>
                         <BrandArrow className="text-[#FF671F] h-[1em] w-[1em] -ml-0.5" />
                     </div>
-                    <h1 className="heading-1 text-white mb-2">ELIGE TU PLAN</h1>
-                    <p className="text-white/60 uppercase tracking-wider text-sm">
+                    <h1 className="heading-1 text-foreground mb-2">ELIGE TU PLAN</h1>
+                    <p className="text-foreground/60 uppercase tracking-wider text-sm">
                         Selecciona el plan que mejor se adapte a tus objetivos
                     </p>
                 </div>
@@ -119,7 +119,7 @@ const OnboardingPage = () => {
                     {PLANS.map((plan) => (
                         <Card 
                             key={plan.id}
-                            className={`bg-[#111111] border-2 cursor-pointer transition-all duration-300 ${
+                            className={`bg-card border-2 cursor-pointer transition-all duration-300 ${
                                 selectedPlan === plan.id 
                                     ? 'border-[#FF671F] scale-[1.02]' 
                                     : 'border-[#222222] hover:border-white/30'
@@ -142,22 +142,22 @@ const OnboardingPage = () => {
                                     </div>
                                     {selectedPlan === plan.id && (
                                         <div className="w-6 h-6 bg-[#FF671F] rounded flex items-center justify-center">
-                                            <Check className="w-4 h-4 text-white" />
+                                            <Check className="w-4 h-4 text-foreground" />
                                         </div>
                                     )}
                                 </div>
                                 <CardTitle className="mt-4">
-                                    <span className="text-5xl font-bold text-white" style={{ fontFamily: 'Bebas Neue' }}>
+                                    <span className="text-5xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed' }}>
                                         {plan.price}
                                     </span>
-                                    <span className="text-white/50 text-lg ml-1">€/ciclo</span>
+                                    <span className="text-foreground/50 text-lg ml-1">€/ciclo</span>
                                 </CardTitle>
-                                <p className="text-sm text-white/50">{plan.description}</p>
+                                <p className="text-sm text-foreground/50">{plan.description}</p>
                             </CardHeader>
                             <CardContent>
                                 <ul className="space-y-2">
                                     {plan.features.map((feature, index) => (
-                                        <li key={index} className="flex items-center gap-2 text-sm text-white/80">
+                                        <li key={index} className="flex items-center gap-2 text-sm text-foreground/80">
                                             <div className="w-5 h-5 bg-[#FF671F]/20 rounded flex items-center justify-center flex-shrink-0">
                                                 <Check className="w-3 h-3 text-[#FF671F]" />
                                             </div>
@@ -185,7 +185,7 @@ const OnboardingPage = () => {
                         )}
                         {loading ? 'Activando...' : 'Continuar'}
                     </Button>
-                    <p className="text-white/30 text-sm mt-4 uppercase tracking-wider">
+                    <p className="text-foreground/30 text-sm mt-4 uppercase tracking-wider">
                         Pago simulado para demostración
                     </p>
                 </div>

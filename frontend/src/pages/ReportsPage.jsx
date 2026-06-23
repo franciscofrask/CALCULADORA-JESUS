@@ -12,13 +12,13 @@ import {
 
 const ORANGE = '#FF671F';
 
-const inputCls = "w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
-const labelCls = "block text-xs font-bold text-white/40 uppercase tracking-wider mb-1.5";
+const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
+const labelCls = "block text-xs font-bold text-foreground/40 uppercase tracking-wider mb-1.5";
 
 const SliderRow = ({ icon: Icon, iconColor, label, value, max, unit, onChange }) => (
     <div>
         <div className="flex items-center justify-between mb-2">
-            <span className="flex items-center gap-2 text-sm text-white/70">
+            <span className="flex items-center gap-2 text-sm text-foreground/70">
                 <Icon className="w-4 h-4" style={{ color: iconColor }} />
                 {label}
             </span>
@@ -133,8 +133,8 @@ const ReportsPage = () => {
         return (
             <div className="px-4 pt-6 pb-28">
                 <div className="animate-pulse space-y-4">
-                    <div className="h-8 bg-[#222] rounded w-1/3" />
-                    <div className="h-48 bg-[#111111] rounded-2xl" />
+                    <div className="h-8 bg-muted rounded w-1/3" />
+                    <div className="h-48 bg-card rounded-2xl" />
                 </div>
             </div>
         );
@@ -148,21 +148,21 @@ const ReportsPage = () => {
                     <FileText className="w-5 h-5" style={{ color: ORANGE }} />
                 </div>
                 <div>
-                    <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Bebas Neue', letterSpacing: '0.05em' }}>
+                    <h1 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.05em' }}>
                         MIS REPORTES
                     </h1>
-                    <p className="text-xs text-white/30">Seguimiento semanal</p>
+                    <p className="text-xs text-foreground/30">Seguimiento semanal</p>
                 </div>
             </div>
 
             {/* Tab bar */}
-            <div className="grid grid-cols-3 gap-1 bg-[#111111] border border-[#222] rounded-2xl p-1">
+            <div className="grid grid-cols-3 gap-1 bg-card border border-border rounded-2xl p-1">
                 {tabs.map(({ id, icon: Icon, label }) => (
                     <button
                         key={id}
                         onClick={() => setActiveTab(id)}
                         className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
-                            activeTab === id ? 'text-white' : 'text-white/40 hover:text-white/70'
+                            activeTab === id ? 'text-foreground' : 'text-foreground/40 hover:text-foreground/70'
                         }`}
                         style={activeTab === id ? { backgroundColor: ORANGE } : {}}
                     >
@@ -176,14 +176,14 @@ const ReportsPage = () => {
             {activeTab === 'form' && (
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Weight */}
-                    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                    <div className="bg-card border border-border rounded-2xl p-4">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${ORANGE}20` }}>
                                 <Scale className="w-4 h-4" style={{ color: ORANGE }} />
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-white">Peso actual *</p>
-                                <p className="text-xs text-white/30">En ayunas, sin ropa</p>
+                                <p className="text-sm font-bold text-foreground">Peso actual *</p>
+                                <p className="text-xs text-foreground/30">En ayunas, sin ropa</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -194,21 +194,21 @@ const ReportsPage = () => {
                                 onChange={(e) => set('weight', e.target.value)}
                                 placeholder="75.5"
                                 data-testid="weight-input"
-                                className="flex-1 bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-3 text-white text-2xl font-bold placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors"
+                                className="flex-1 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors"
                             />
-                            <span className="text-lg text-white/40 font-bold">kg</span>
+                            <span className="text-lg text-foreground/40 font-bold">kg</span>
                         </div>
                     </div>
 
                     {/* Measurements */}
-                    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                    <div className="bg-card border border-border rounded-2xl p-4">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-9 h-9 rounded-xl bg-[#1A1A1A] flex items-center justify-center">
-                                <Ruler className="w-4 h-4 text-white/40" />
+                            <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center">
+                                <Ruler className="w-4 h-4 text-foreground/40" />
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-white">Medidas (cm)</p>
-                                <p className="text-xs text-white/30">Opcional</p>
+                                <p className="text-sm font-bold text-foreground">Medidas (cm)</p>
+                                <p className="text-xs text-foreground/30">Opcional</p>
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -235,7 +235,7 @@ const ReportsPage = () => {
                     </div>
 
                     {/* Sliders */}
-                    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4 space-y-5">
+                    <div className="bg-card border border-border rounded-2xl p-4 space-y-5">
                         <SliderRow icon={Activity} iconColor={ORANGE}    label="Cumplimiento entrenamiento" value={reportData.training_compliance}  max={100} unit="%" onChange={(v) => set('training_compliance', v)} />
                         <SliderRow icon={Activity} iconColor="#22C55E"   label="Cumplimiento nutrición"      value={reportData.nutrition_compliance} max={100} unit="%" onChange={(v) => set('nutrition_compliance', v)} />
                         <SliderRow icon={Moon}     iconColor="#818CF8"   label="Calidad del sueño"           value={reportData.sleep_quality}        max={10}  unit="/10" onChange={(v) => set('sleep_quality', v)} />
@@ -244,7 +244,7 @@ const ReportsPage = () => {
                     </div>
 
                     {/* Notes */}
-                    <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                    <div className="bg-card border border-border rounded-2xl p-4">
                         <label className={labelCls}>Notas adicionales</label>
                         <textarea
                             value={reportData.notes}
@@ -252,7 +252,7 @@ const ReportsPage = () => {
                             placeholder="¿Cómo te has sentido esta semana? ¿Alguna dificultad o logro?"
                             rows={4}
                             data-testid="notes-textarea"
-                            className="w-full bg-[#1A1A1A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors resize-none"
+                            className="w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors resize-none"
                         />
                     </div>
 
@@ -260,7 +260,7 @@ const ReportsPage = () => {
                         type="submit"
                         disabled={submitting}
                         data-testid="submit-report-btn"
-                        className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+                        className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-foreground flex items-center justify-center gap-2 transition-all disabled:opacity-40"
                         style={{ backgroundColor: ORANGE }}
                     >
                         <Send className="w-4 h-4" />
@@ -273,10 +273,10 @@ const ReportsPage = () => {
             {activeTab === 'evolution' && (
                 <div className="space-y-4">
                     {weightData.length > 0 ? (
-                        <div className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                        <div className="bg-card border border-border rounded-2xl p-4">
                             <div className="flex items-center gap-2 mb-4">
                                 <Scale className="w-4 h-4" style={{ color: ORANGE }} />
-                                <p className="text-sm font-bold text-white uppercase tracking-wider">Evolución del peso</p>
+                                <p className="text-sm font-bold text-foreground uppercase tracking-wider">Evolución del peso</p>
                             </div>
                             <div className="h-56">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -294,10 +294,10 @@ const ReportsPage = () => {
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-[#111111] border border-[#222] rounded-2xl p-8 text-center">
-                            <TrendingUp className="w-10 h-10 text-white/20 mx-auto mb-3" />
-                            <p className="text-white font-bold mb-1">Sin datos de evolución</p>
-                            <p className="text-xs text-white/30">Envía tu primer reporte para ver tu progreso.</p>
+                        <div className="bg-card border border-border rounded-2xl p-8 text-center">
+                            <TrendingUp className="w-10 h-10 text-foreground/20 mx-auto mb-3" />
+                            <p className="text-foreground font-bold mb-1">Sin datos de evolución</p>
+                            <p className="text-xs text-foreground/30">Envía tu primer reporte para ver tu progreso.</p>
                         </div>
                     )}
                 </div>
@@ -307,39 +307,39 @@ const ReportsPage = () => {
             {activeTab === 'history' && (
                 <div className="space-y-3">
                     {reports.length > 0 ? reports.map((report) => (
-                        <div key={report.id} className="bg-[#111111] border border-[#222] rounded-2xl p-4">
+                        <div key={report.id} className="bg-card border border-border rounded-2xl p-4">
                             <div className="flex items-start justify-between mb-3">
                                 <div>
-                                    <p className="text-xs text-white/40 uppercase tracking-wider">
+                                    <p className="text-xs text-foreground/40 uppercase tracking-wider">
                                         {new Date(report.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
                                     </p>
-                                    <p className="text-2xl font-bold text-white" style={{ fontFamily: 'Bebas Neue' }}>
-                                        {report.weight} <span className="text-base text-white/40">kg</span>
+                                    <p className="text-2xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed' }}>
+                                        {report.weight} <span className="text-base text-foreground/40">kg</span>
                                     </p>
                                 </div>
-                                <ChevronRight className="w-4 h-4 text-white/20 mt-1" />
+                                <ChevronRight className="w-4 h-4 text-foreground/20 mt-1" />
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-[#1A1A1A] rounded-xl px-3 py-2 flex items-center gap-2">
+                                <div className="bg-muted rounded-xl px-3 py-2 flex items-center gap-2">
                                     <Activity className="w-3.5 h-3.5" style={{ color: ORANGE }} />
-                                    <span className="text-xs text-white/60">Entreno <span className="text-white font-bold">{report.training_compliance}%</span></span>
+                                    <span className="text-xs text-foreground/60">Entreno <span className="text-foreground font-bold">{report.training_compliance}%</span></span>
                                 </div>
-                                <div className="bg-[#1A1A1A] rounded-xl px-3 py-2 flex items-center gap-2">
+                                <div className="bg-muted rounded-xl px-3 py-2 flex items-center gap-2">
                                     <Activity className="w-3.5 h-3.5 text-green-400" />
-                                    <span className="text-xs text-white/60">Nutrición <span className="text-white font-bold">{report.nutrition_compliance}%</span></span>
+                                    <span className="text-xs text-foreground/60">Nutrición <span className="text-foreground font-bold">{report.nutrition_compliance}%</span></span>
                                 </div>
                             </div>
                             {report.trainer_feedback && (
                                 <div className="mt-3 p-3 rounded-xl border" style={{ backgroundColor: `${ORANGE}10`, borderColor: `${ORANGE}30` }}>
                                     <p className="text-xs font-bold mb-1" style={{ color: ORANGE }}>Feedback del entrenador</p>
-                                    <p className="text-sm text-white/70">{report.trainer_feedback}</p>
+                                    <p className="text-sm text-foreground/70">{report.trainer_feedback}</p>
                                 </div>
                             )}
                         </div>
                     )) : (
-                        <div className="bg-[#111111] border border-[#222] rounded-2xl p-8 text-center">
-                            <Calendar className="w-10 h-10 text-white/20 mx-auto mb-3" />
-                            <p className="text-white/40 text-sm">No hay reportes anteriores.</p>
+                        <div className="bg-card border border-border rounded-2xl p-8 text-center">
+                            <Calendar className="w-10 h-10 text-foreground/20 mx-auto mb-3" />
+                            <p className="text-foreground/40 text-sm">No hay reportes anteriores.</p>
                         </div>
                     )}
                 </div>

@@ -29,7 +29,7 @@ const RepeatMealModal = ({
             <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden" data-testid="repeat-meal-modal">
                 <DialogHeader className="bg-bg-dark p-4 flex-shrink-0">
                     <DialogTitle className="text-white">Repetir de otro día</DialogTitle>
-                    <DialogDescription className="text-gray-400">
+                    <DialogDescription className="text-muted-foreground">
                         Copiar a {mealKey && mealInfo[mealKey]?.name}
                     </DialogDescription>
                 </DialogHeader>
@@ -38,7 +38,7 @@ const RepeatMealModal = ({
                     {!selectedDiet ? (
                         <div className="p-4">
                             {recentDiets.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">
+                                <div className="text-center py-8 text-muted-foreground">
                                     <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" />
                                     <p>Cargando días recientes...</p>
                                 </div>
@@ -47,18 +47,18 @@ const RepeatMealModal = ({
                                     {recentDiets.map(diet => (
                                         <button
                                             key={diet.fecha}
-                                            className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all"
+                                            className="w-full text-left p-3 bg-muted hover:bg-muted rounded-xl transition-all"
                                             onClick={() => setSelectedDiet(diet)}
                                             data-testid={`repeat-diet-${diet.fecha}`}
                                         >
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="font-semibold text-gray-900">{formatDate(diet.fecha)}</p>
-                                                    <p className="text-xs text-gray-500">
+                                                    <p className="font-semibold text-foreground">{formatDate(diet.fecha)}</p>
+                                                    <p className="text-xs text-muted-foreground">
                                                         {diet.tipo_dia === 'entrenamiento' ? '🟢 Entreno' : '⚪ Descanso'}, {diet.num_comidas} comidas
                                                     </p>
                                                 </div>
-                                                <ChevronRight className="w-5 h-5 text-gray-400" />
+                                                <ChevronRight className="w-5 h-5 text-muted-foreground" />
                                             </div>
                                         </button>
                                     ))}
@@ -68,13 +68,13 @@ const RepeatMealModal = ({
                     ) : (
                         <div className="p-4">
                             <button
-                                className="flex items-center gap-2 text-sm text-gray-500 mb-4"
+                                className="flex items-center gap-2 text-sm text-muted-foreground mb-4"
                                 onClick={() => setSelectedDiet(null)}
                             >
                                 <ChevronLeft className="w-4 h-4" /> Volver
                             </button>
 
-                            <h3 className="font-bold text-gray-900 mb-3">
+                            <h3 className="font-bold text-foreground mb-3">
                                 Comidas del {formatDate(selectedDiet.fecha)}
                             </h3>
 
@@ -82,16 +82,16 @@ const RepeatMealModal = ({
                                 {Object.entries(selectedDiet.comidas_resumen || {}).map(([key, resumen]) => (
                                     <button
                                         key={key}
-                                        className="w-full text-left p-3 bg-gray-50 hover:bg-brand-orange/10 rounded-xl transition-all border-2 border-transparent hover:border-brand-orange"
+                                        className="w-full text-left p-3 bg-muted hover:bg-brand-orange/10 rounded-xl transition-all border-2 border-transparent hover:border-brand-orange"
                                         onClick={() => handleCopy(key)}
                                         data-testid={`repeat-meal-${key}`}
                                     >
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <p className="font-semibold text-gray-900">
+                                                <p className="font-semibold text-foreground">
                                                     {mealInfo[key]?.name || key}
                                                 </p>
-                                                <p className="text-xs text-gray-500 truncate max-w-[250px]">
+                                                <p className="text-xs text-muted-foreground truncate max-w-[250px]">
                                                     {resumen}
                                                 </p>
                                             </div>
@@ -101,7 +101,7 @@ const RepeatMealModal = ({
                                 ))}
 
                                 {Object.keys(selectedDiet.comidas_resumen || {}).length === 0 && (
-                                    <p className="text-center text-gray-500 py-4">
+                                    <p className="text-center text-muted-foreground py-4">
                                         No hay comidas guardadas este día
                                     </p>
                                 )}

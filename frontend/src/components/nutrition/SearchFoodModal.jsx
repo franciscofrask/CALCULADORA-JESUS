@@ -48,20 +48,20 @@ const SearchFoodModal = ({
                 <DialogDescription className="sr-only">Busca alimentos para añadir a tu comida</DialogDescription>
             </DialogHeader>
 
-            <div className="p-4 bg-white flex-shrink-0 border-b">
+            <div className="p-4 bg-card flex-shrink-0 border-b">
                 <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input placeholder="Escribe un alimento..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 h-12 rounded-xl bg-gray-100 border-0" data-testid="search-food-input" />
+                        className="pl-10 h-12 rounded-xl bg-muted border-0" data-testid="search-food-input" />
                 </div>
             </div>
 
-            <div className="flex-shrink-0 bg-white border-b">
+            <div className="flex-shrink-0 bg-card border-b">
                 <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
                     {CATEGORY_CHIPS.map(chip => (
                         <button key={chip.value} onClick={() => setSearchCategory(chip.value)}
                             className={`flex-shrink-0 inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
-                                searchCategory === chip.value ? 'bg-brand-orange text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                searchCategory === chip.value ? 'bg-brand-orange text-white shadow-md' : 'bg-muted text-foreground hover:bg-muted'
                             }`}>
                             <span className="mr-1">{chip.emoji}</span> {chip.label}
                         </button>
@@ -69,7 +69,7 @@ const SearchFoodModal = ({
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto bg-gray-50">
+            <div className="flex-1 overflow-y-auto bg-muted">
                 {searchLoading ? (
                     <div className="flex items-center justify-center py-12">
                         <div className="animate-spin rounded-full h-8 w-8 border-4 border-brand-orange border-t-transparent" />
@@ -77,7 +77,7 @@ const SearchFoodModal = ({
                 ) : searchResults.length === 0 ? (
                     <div className="text-center py-12">
                         <span className="text-4xl mb-3 block">🔍</span>
-                        <p className="text-gray-500">{searchQuery ? 'No se encontraron resultados' : 'Escribe para buscar'}</p>
+                        <p className="text-muted-foreground">{searchQuery ? 'No se encontraron resultados' : 'Escribe para buscar'}</p>
                     </div>
                 ) : (
                     <div className="p-4 space-y-2">
@@ -89,11 +89,11 @@ const SearchFoodModal = ({
                             const racion = food.racion || 100;
                             const isFav = favorites.has(String(food.id));
                             return (
-                                <div key={food.id} className="flex items-start gap-1 bg-white rounded-xl shadow-sm hover:shadow-md transition-all">
+                                <div key={food.id} className="flex items-start gap-1 bg-card rounded-xl shadow-sm hover:shadow-md transition-all">
                                     {onToggleFavorite && (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onToggleFavorite(food.id); }}
-                                            className={`flex-shrink-0 p-3 pt-4 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-300'}`}
+                                            className={`flex-shrink-0 p-3 pt-4 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-muted-foreground hover:text-yellow-300'}`}
                                             data-testid={`fav-search-${food.id}`}
                                         >
                                             <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
@@ -104,13 +104,13 @@ const SearchFoodModal = ({
                                         <div className="flex items-start gap-3">
                                             <span className="text-2xl">{getFoodEmoji(food.categorias)}</span>
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-gray-900 truncate">{food.nombre}</p>
-                                                <p className="text-xs text-gray-500">{racion}g / 1 ración</p>
+                                                <p className="font-semibold text-foreground truncate">{food.nombre}</p>
+                                                <p className="text-xs text-muted-foreground">{racion}g / 1 ración</p>
                                                 <div className="flex flex-wrap gap-1 mt-2">
-                                                    {pEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-protein-yellow text-gray-800">{pEf.toFixed(1)}g P</span>}
+                                                    {pEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-protein-yellow text-foreground">{pEf.toFixed(1)}g P</span>}
                                                     {hEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{hEf.toFixed(1)}g H</span>}
                                                     {gEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-fat-red text-white">{gEf.toFixed(1)}g G</span>}
-                                                    {pEf === 0 && hEf === 0 && gEf === 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600">Sin macros</span>}
+                                                    {pEf === 0 && hEf === 0 && gEf === 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">Sin macros</span>}
                                                 </div>
                                             </div>
                                         </div>
@@ -130,38 +130,38 @@ const MenuOptionsModal = ({ open, mealKey, onClose, mealInfo, menuOptionsLoading
         <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
             <DialogHeader className="bg-bg-dark p-4">
                 <DialogTitle className="text-white">Elige tu menú</DialogTitle>
-                <DialogDescription className="text-gray-400">{mealKey && mealInfo[mealKey]?.name}</DialogDescription>
+                <DialogDescription className="text-muted-foreground">{mealKey && mealInfo[mealKey]?.name}</DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 bg-gray-50">
+            <ScrollArea className="flex-1 bg-muted">
                 {menuOptionsLoading ? (
                     <div className="flex flex-col items-center justify-center py-16">
                         <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent mb-4" />
-                        <p className="text-gray-500">Calculando opciones...</p>
+                        <p className="text-muted-foreground">Calculando opciones...</p>
                     </div>
                 ) : menuOptions.length === 0 ? (
                     <div className="text-center py-16">
                         <span className="text-4xl mb-3 block">🤷</span>
-                        <p className="text-gray-500">No hay opciones disponibles</p>
+                        <p className="text-muted-foreground">No hay opciones disponibles</p>
                     </div>
                 ) : (
                     <div className="p-4 space-y-4">
                         {menuOptions.map((option, index) => {
                             const letra = ['A', 'B', 'C'][index];
                             return (
-                                <button key={option.plantilla_id} className="w-full text-left p-4 bg-white rounded-2xl shadow-md hover:shadow-lg transition-all"
+                                <button key={option.plantilla_id} className="w-full text-left p-4 bg-card rounded-2xl shadow-md hover:shadow-lg transition-all"
                                     onClick={() => onApplyOption(option)} data-testid={`menu-option-${letra}`}>
                                     <div className="flex items-start gap-4">
                                         <div className="w-12 h-12 rounded-full bg-brand-orange flex items-center justify-center text-white text-xl font-bold">{letra}</div>
                                         <div className="flex-1">
                                             <div className="flex items-center justify-between mb-2">
-                                                <h3 className="font-bold text-gray-900">{option.nombre}</h3>
+                                                <h3 className="font-bold text-foreground">{option.nombre}</h3>
                                                 {option.cuadrada && <span className="bg-carbs-green text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><Check className="w-3 h-3" /> Cuadrada</span>}
                                             </div>
                                             <div className="space-y-1 mb-3">
                                                 {option.items.map((item, i) => (
                                                     <div key={i} className="flex justify-between text-sm">
-                                                        <span className="text-gray-700">{item.nombre}</span>
-                                                        <span className="text-gray-500 font-mono">{item.cantidad_g}g</span>
+                                                        <span className="text-foreground">{item.nombre}</span>
+                                                        <span className="text-muted-foreground font-mono">{item.cantidad_g}g</span>
                                                     </div>
                                                 ))}
                                             </div>

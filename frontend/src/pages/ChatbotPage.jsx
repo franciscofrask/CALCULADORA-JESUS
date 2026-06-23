@@ -240,14 +240,14 @@ export default function ChatbotPage() {
       <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
         <div className={`flex items-start gap-2 max-w-[85%] ${isUser ? 'flex-row-reverse' : ''}`}>
           <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-            isUser ? 'bg-orange-500' : 'bg-zinc-700'
+            isUser ? 'bg-orange-500' : 'bg-muted'
           }`}>
             {isUser ? <User size={16} /> : <Bot size={16} />}
           </div>
           <div className={`rounded-2xl px-4 py-2 ${
             isUser 
               ? 'bg-orange-500 text-white rounded-br-md' 
-              : 'bg-zinc-800 text-zinc-100 rounded-bl-md'
+              : 'bg-card text-foreground rounded-bl-md'
           }`}>
             <div className="whitespace-pre-wrap text-sm">
               {msg.content.split('**').map((part, i) => 
@@ -295,7 +295,7 @@ export default function ChatbotPage() {
     if (!daySummary) return null;
     
     return (
-      <div className="bg-zinc-800 rounded-xl p-4 mt-4">
+      <div className="bg-card rounded-xl p-4 mt-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-orange-500">Resumen del Día</h3>
           <button
@@ -310,34 +310,34 @@ export default function ChatbotPage() {
         </div>
         
         {daySummary.comidas?.map((comida, idx) => (
-          <div key={idx} className="mb-4 pb-4 border-b border-zinc-700 last:border-0">
-            <h4 className="font-semibold text-zinc-300 mb-2">Comida {comida.numero}</h4>
+          <div key={idx} className="mb-4 pb-4 border-b border-border last:border-0">
+            <h4 className="font-semibold text-foreground mb-2">Comida {comida.numero}</h4>
             <div className="space-y-1 text-sm">
               {comida.alimentos?.map((a, i) => (
-                <div key={i} className="text-zinc-400">
+                <div key={i} className="text-muted-foreground">
                   • {a.nombre}: {a.cantidad_display}
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-xs text-zinc-500">
+            <div className="mt-2 text-xs text-muted-foreground">
               Total: P={comida.macros?.P || 0}g | H={comida.macros?.H || 0}g | G={comida.macros?.G || 0}g
             </div>
           </div>
         ))}
         
-        <div className="mt-4 pt-4 border-t border-zinc-600">
+        <div className="mt-4 pt-4 border-t border-input">
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <div className="text-2xl font-bold text-orange-500">{daySummary.totales?.P || 0}g</div>
-              <div className="text-xs text-zinc-500">Proteínas</div>
+              <div className="text-xs text-muted-foreground">Proteínas</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-blue-500">{daySummary.totales?.H || 0}g</div>
-              <div className="text-xs text-zinc-500">Hidratos</div>
+              <div className="text-xs text-muted-foreground">Hidratos</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-yellow-500">{daySummary.totales?.G || 0}g</div>
-              <div className="text-xs text-zinc-500">Grasas</div>
+              <div className="text-xs text-muted-foreground">Grasas</div>
             </div>
           </div>
         </div>
@@ -346,16 +346,16 @@ export default function ChatbotPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-white flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Header */}
-      <header className="bg-zinc-800 border-b border-zinc-700 px-4 py-3 flex items-center justify-between">
+      <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
             <Bot size={24} />
           </div>
           <div>
             <h1 className="font-bold">Asistente de Nutrición</h1>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-muted-foreground">
               {step === 'building_meal' && `Comida ${currentMeal} • Restante: P=${macrosRestantes.P}g H=${macrosRestantes.H}g G=${macrosRestantes.G}g`}
               {step === 'complete' && '¡Día completo!'}
               {step === 'init' && 'Listo para empezar'}
@@ -365,7 +365,7 @@ export default function ChatbotPage() {
         </div>
         <button 
           onClick={resetChat}
-          className="p-2 hover:bg-zinc-700 rounded-lg transition-colors"
+          className="p-2 hover:bg-muted rounded-lg transition-colors"
           title="Reiniciar"
         >
           <RefreshCw size={20} />
@@ -381,7 +381,7 @@ export default function ChatbotPage() {
               <Bot size={40} className="text-orange-500" />
             </div>
             <h2 className="text-xl font-bold mb-2">¡Hola!</h2>
-            <p className="text-zinc-400 mb-6 max-w-md">
+            <p className="text-muted-foreground mb-6 max-w-md">
               Soy tu asistente de nutrición. Te ayudaré a montar tu dieta del día, 
               comida por comida, respetando tus macros objetivo.
             </p>
@@ -411,7 +411,7 @@ export default function ChatbotPage() {
               <button
                 onClick={() => configureDay('descanso')}
                 disabled={loading}
-                className="bg-zinc-700 hover:bg-zinc-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
+                className="bg-muted hover:bg-accent text-foreground px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
               >
                 Día de Descanso
               </button>
@@ -429,9 +429,9 @@ export default function ChatbotPage() {
 
         {loading && (
           <div className="flex justify-start mb-4">
-            <div className="flex items-center gap-2 bg-zinc-800 rounded-2xl px-4 py-2">
+            <div className="flex items-center gap-2 bg-card rounded-2xl px-4 py-2">
               <Loader2 className="animate-spin" size={16} />
-              <span className="text-sm text-zinc-400">Pensando...</span>
+              <span className="text-sm text-muted-foreground">Pensando...</span>
             </div>
           </div>
         )}
@@ -441,12 +441,12 @@ export default function ChatbotPage() {
 
       {/* Input */}
       {step === 'building_meal' && (
-        <div className="border-t border-zinc-700 p-4 bg-zinc-800 mb-12 relative z-50">
+        <div className="border-t border-border p-4 bg-card mb-12 relative z-50">
           <div className="flex gap-2">
             <button
               onClick={completeMeal}
               disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+              className="bg-green-600 hover:bg-green-700 text-foreground px-4 py-3 rounded-xl font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
               data-testid="save-meal-btn"
             >
               <Check size={20} />
@@ -459,7 +459,7 @@ export default function ChatbotPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
               placeholder="Escribe lo que quieres comer..."
-              className="flex-1 bg-zinc-700 border border-zinc-600 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+              className="flex-1 bg-muted border border-input rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
               disabled={loading}
               data-testid="chat-input"
             />

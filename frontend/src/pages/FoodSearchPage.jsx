@@ -95,7 +95,7 @@ const MACRO_DEFS = [
 const FoodRow = ({ food }) => {
     const cats = foodCats(food).map(descripcionCategoria).filter(Boolean);
     return (
-        <div className="bg-white border border-gray-100 rounded-lg p-3 shadow-sm">
+        <div className="bg-card border border-border rounded-lg p-3 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
                 <div className="min-w-0">
                     {food.url ? (
@@ -104,7 +104,7 @@ const FoodRow = ({ food }) => {
                             {food.nombre}
                         </a>
                     ) : (
-                        <span className="text-sm font-medium text-gray-900 break-words">{food.nombre}</span>
+                        <span className="text-sm font-medium text-foreground break-words">{food.nombre}</span>
                     )}
                 </div>
                 <div className="flex-shrink-0 sm:text-right">
@@ -119,26 +119,26 @@ const FoodRow = ({ food }) => {
                                     ) : null
                                 )}
                             </div>
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                                 por cada {food.unidades ? `unidad de ${food.racion}g` : '100 gramos'}
                             </p>
                         </>
                     ) : (
-                        <em className="text-xs text-gray-400">No aporta macros</em>
+                        <em className="text-xs text-muted-foreground">No aporta macros</em>
                     )}
                 </div>
             </div>
             {cats.length > 0 && (
-                <p className="text-xs text-gray-400 mt-1">{cats.join(' | ')}</p>
+                <p className="text-xs text-muted-foreground mt-1">{cats.join(' | ')}</p>
             )}
             {food.cantidad_minima != null && (
-                <p className="text-xs text-gray-400">cantidad mínima: {food.cantidad_minima}</p>
+                <p className="text-xs text-muted-foreground">cantidad mínima: {food.cantidad_minima}</p>
             )}
             {food.sugerencia && (
                 <p className="text-xs text-brand-orange">{food.sugerencia}</p>
             )}
             {food.info_etiqueta && (
-                <p className="text-xs text-gray-400">Información de etiqueta: {food.info_etiqueta}</p>
+                <p className="text-xs text-muted-foreground">Información de etiqueta: {food.info_etiqueta}</p>
             )}
         </div>
     );
@@ -194,32 +194,32 @@ const FoodSearchPage = () => {
     }, [foods, query, cats, opcion]);
 
     return (
-        <div className="min-h-screen bg-bg-page p-4 md:p-6">
+        <div className="min-h-screen bg-background p-4 md:p-6">
             <div className="max-w-3xl mx-auto">
-                <div className="bg-gray-100 rounded-xl p-4 mb-4">
-                    <h1 className="text-xl font-bold text-gray-900 mb-1">Buscador de alimentos</h1>
-                    <p className="text-gray-500 text-sm mb-4">
+                <div className="bg-card border border-border rounded-xl p-4 mb-4">
+                    <h1 className="text-xl font-bold text-foreground mb-1">Buscador de alimentos</h1>
+                    <p className="text-muted-foreground text-sm mb-4">
                         Busca entre todos los alimentos cargados en la calculadora. Ordenados por coincidencia con el nombre.
                     </p>
 
                     <div className="relative mb-3">
-                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
                             type="text"
                             value={query}
                             onChange={e => setQuery(e.target.value)}
                             placeholder="Texto en el alimento"
-                            className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+                            className="w-full bg-card text-foreground placeholder:text-muted-foreground border border-input rounded-lg pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
                         />
                         {query && (
-                            <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground">
                                 <X className="w-4 h-4" />
                             </button>
                         )}
                     </div>
 
                     {/* Categoría (cascada: añade más para afinar) */}
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Categoría</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Categoría</label>
                     <div className="space-y-2">
                         {[...cats, ''].map((sel, idx) => {
                           const otras = cats.filter((_, i) => i !== idx);
@@ -229,7 +229,7 @@ const FoodSearchPage = () => {
                                 key={idx}
                                 value={sel}
                                 onChange={e => setCatAt(idx, e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+                                className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
                             >
                                 <option value="">
                                     {idx === 0 ? 'Todas las categorías' : (sel ? 'Quitar este filtro' : 'Añade otra categoría para afinar')}
@@ -238,7 +238,7 @@ const FoodSearchPage = () => {
                                     <React.Fragment key={c.clave}>
                                     {c.esSuprema && i > 0 && <option disabled>&nbsp;</option>}
                                     <option value={c.clave}
-                                        className={c.esSuprema ? 'font-bold text-gray-900' : 'font-normal text-gray-500'}>
+                                        className={c.esSuprema ? 'font-bold text-foreground' : 'font-normal text-muted-foreground'}>
                                         {c.esSuprema ? c.valor : `  ${c.valor}`}
                                     </option>
                                     </React.Fragment>
@@ -249,18 +249,18 @@ const FoodSearchPage = () => {
                     </div>
 
                     {/* Opciones */}
-                    <label className="block text-xs font-semibold text-gray-500 mt-3 mb-1">Opciones</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mt-3 mb-1">Opciones</label>
                     <div className="flex flex-col gap-1">
-                        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                             <input type="radio" name="opcion" checked={opcion === 'genericos'} onChange={() => {}}
                                 onClick={() => setOpcion(opcion === 'genericos' ? '' : 'genericos')}
-                                className="appearance-none shrink-0 w-3.5 h-3.5 rounded-full border border-gray-300 bg-white checked:bg-brand-orange checked:border-brand-orange cursor-pointer" />
+                                className="appearance-none shrink-0 w-3.5 h-3.5 rounded-full border border-input bg-card checked:bg-brand-orange checked:border-brand-orange cursor-pointer" />
                             Mostrar sólo genéricos
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                             <input type="radio" name="opcion" checked={opcion === 'sinMacros'} onChange={() => {}}
                                 onClick={() => setOpcion(opcion === 'sinMacros' ? '' : 'sinMacros')}
-                                className="appearance-none shrink-0 w-3.5 h-3.5 rounded-full border border-gray-300 bg-white checked:bg-brand-orange checked:border-brand-orange cursor-pointer" />
+                                className="appearance-none shrink-0 w-3.5 h-3.5 rounded-full border border-input bg-card checked:bg-brand-orange checked:border-brand-orange cursor-pointer" />
                             No aportan macros
                         </label>
                     </div>
@@ -277,7 +277,7 @@ const FoodSearchPage = () => {
                                 <FoodRow key={f.id ?? i} food={f} />
                             ))}
                             {filtered.length === 0 && (
-                                <p className="text-center text-gray-400 text-sm py-12">Sin resultados</p>
+                                <p className="text-center text-muted-foreground text-sm py-12">Sin resultados</p>
                             )}
                         </div>
                     </>
