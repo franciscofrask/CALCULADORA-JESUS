@@ -66,6 +66,12 @@ class ClientProfile(BaseModel):
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None
     training_days: Optional[int] = None
+    # Cuestionario inicial obligatorio (ELM): respuestas y flag de completado.
+    questionnaire_completed: Optional[bool] = None
+    birthdate: Optional[str] = None
+    training_experience: Optional[str] = None
+    activity_level: Optional[str] = None
+    biotype: Optional[str] = None
     created_at: str
 
 class ClientProfileCreate(BaseModel):
@@ -93,6 +99,20 @@ class ClientProfileUpdate(BaseModel):
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None
     training_days: Optional[int] = None
+
+# Cuestionario inicial (ELM)
+class QuestionnaireSubmit(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    goal: str  # "volumen" | "definicion"
+    training_experience: Optional[str] = None  # cero | principiante | intermedio | avanzado
+    birthdate: Optional[str] = None  # YYYY-MM-DD
+    height: Optional[float] = None  # cm
+    weight: float  # kg
+    activity_level: Optional[str] = None  # sedentario | ligero | moderado | activo
+    biotype: Optional[str] = None
+    body_fat: float  # %
 
 # Macros Models
 class MacrosData(BaseModel):

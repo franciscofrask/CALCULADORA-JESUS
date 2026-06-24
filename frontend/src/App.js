@@ -82,6 +82,16 @@ function AppRoutes() {
                 }
             />
 
+            {/* Cuestionario inicial obligatorio (antes del plan) */}
+            <Route
+                path="/questionnaire"
+                element={
+                    <ProtectedRoute>
+                        <QuestionnairePage />
+                    </ProtectedRoute>
+                }
+            />
+
             {/* Onboarding */}
             <Route
                 path="/onboarding"
@@ -112,7 +122,6 @@ function AppRoutes() {
                 <Route path="checkins" element={<CheckInsPage />} />
                 <Route path="macro-calculator" element={<MacroCalculatorClientPage />} />
                 <Route path="foods" element={<FoodSearchPage />} />
-                <Route path="questionnaire" element={<QuestionnairePage />} />
             </Route>
 
             {/* Admin Routes */}

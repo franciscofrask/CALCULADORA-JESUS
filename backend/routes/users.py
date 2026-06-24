@@ -10,7 +10,7 @@ from core.database import db
 from core.security import get_current_user
 from models.user import (
     ClientProfile, ClientProfileCreate, ClientProfileUpdate,
-    MacrosUpdate, PLAN_TYPES
+    MacrosUpdate, PLAN_TYPES, QuestionnaireSubmit
 )
 from target_calculator import calcular_targets, targets_to_profile_macros
 
@@ -24,11 +24,11 @@ async def create_client_profile(data: ClientProfileCreate, user = Depends(get_cu
     existing = await db.client_profiles.find_one({"user_id": user["id"]})
     if existing:
         raise HTTPException(status_code=400, detail="Ya tienes un perfil de cliente")
-    
+
     plan_info = PLAN_TYPES.get(data.plan.lower())
     if not plan_info:
         raise HTTPException(status_code=400, detail="Plan no válido")
-    
+
     profile_id = str(uuid.uuid4())
     profile = {
         "id": profile_id,
@@ -112,6 +112,68 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
     if update_data:
         await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update_data})
     
+    updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    return ClientProfile(**updated)
+
+# ==================== CUESTIONARIO INICIAL (ELM) ====================
+
+def _age_from_birthdate(birthdate: Optional[str]) -> Optional[int]:
+    """Edad en años a partir de 'YYYY-MM-DD'. None si no parsea."""
+    if not birthdate:
+        return None
+    try:
+        b = datetime.strptime(birthdate[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    today = datetime.now(timezone.utc).date()
+    return today.year - b.year - ((today.month, today.day) < (b.month, b.day))
+
+@router.post("/clients/questionnaire", response_model=ClientProfile)
+async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_current_user)):
+    """Cuestionario inicial obligatorio (ELM hombre). Guarda las respuestas en el perfil,
+    marca questionnaire_completed y recalcula los macros automáticamente (peso/sexo/%graso/objetivo)."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado. Selecciona un plan primero.")
+
+    sexo = "hombre"  # cuestionario ELM hombre
+    update = {
+        "questionnaire_completed": True,
+        "goal": data.goal,
+        "weight": data.weight,
+        "height": data.height,
+        "body_fat": data.body_fat,
+        "sex": sexo,
+        "birthdate": data.birthdate,
+        "age": _age_from_birthdate(data.birthdate),
+        "training_experience": data.training_experience,
+        "activity_level": data.activity_level,
+        "biotype": data.biotype,
+    }
+
+    # Calcular y aplicar macros (no pisar si el coach ya los fijó manualmente).
+    try:
+        targets = calcular_targets(float(data.weight), sexo, float(data.body_fat), data.goal)
+        profile_macros = targets_to_profile_macros(targets)
+        if profile.get("macros_source") != "manual":
+            update["macros_training"] = profile_macros["macros_training"]
+            update["macros_rest"] = profile_macros["macros_rest"]
+            update["macros_periworkout"] = profile_macros["macros_periworkout"]
+            update["macros_source"] = "auto"
+            update["macros_multiplicadores"] = targets["multiplicadores"]
+    except (ValueError, KeyError):
+        pass  # datos fuera de tabla → guardar respuestas igual, sin macros
+
+    # Actualizar nombre/teléfono del usuario si los aportó.
+    user_update = {}
+    if data.name:
+        user_update["name"] = data.name
+    if data.phone:
+        user_update["phone"] = data.phone
+    if user_update:
+        await db.users.update_one({"id": user["id"]}, {"$set": user_update})
+
+    await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
 
