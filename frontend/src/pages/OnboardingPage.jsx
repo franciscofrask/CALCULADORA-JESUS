@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Check, ArrowRight, Loader2, Star } from 'lucide-react';
+import { Check, ArrowRight, ArrowLeft, Loader2, Star } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 
 const PLANS = [
@@ -126,6 +126,11 @@ const OnboardingPage = () => {
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#FF671F]/5 rounded-full blur-[120px]"></div>
             
             <div className="max-w-5xl mx-auto relative z-10">
+                {/* Volver */}
+                <button onClick={() => navigate('/dashboard')}
+                    className="inline-flex items-center gap-1.5 text-foreground/60 hover:text-foreground text-sm mb-6 transition-colors">
+                    <ArrowLeft className="w-4 h-4" /> Volver
+                </button>
                 {/* Header */}
                 <div className="text-center mb-10">
                     <div className="inline-flex items-center text-5xl mb-4" style={{ fontFamily: 'Barlow Condensed' }}>

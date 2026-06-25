@@ -1306,7 +1306,7 @@ const NutritionPage = () => {
                                 <span className="hidden sm:inline">Día de entrenamiento</span>
                             </button>
                             <button
-                                className={`h-full min-h-[48px] px-3 rounded-2xl text-sm font-bold transition-all ${tipoDia === 'descanso' ? 'bg-ink text-white dark:bg-card dark:text-ink shadow-sm' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
+                                className={`h-full min-h-[48px] px-3 rounded-2xl text-sm font-bold transition-all ${tipoDia === 'descanso' ? 'bg-brand text-white shadow-sm' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
                                 onClick={() => handleSetTipoDia('descanso')}
                                 data-testid="tipo-dia-descanso"
                             >
