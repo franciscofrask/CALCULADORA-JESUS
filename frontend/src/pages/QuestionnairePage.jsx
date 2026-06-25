@@ -33,6 +33,14 @@ const STEPS = [
     { type: 'email', key: 'email', title: 'Correo electrónico', desc: 'Uno que revises a diario, nos comunicaremos por ahí.', required: true },
     { type: 'tel', key: 'phone', title: 'Número de teléfono', required: true },
     {
+        type: 'choice', key: 'sex', title: '¿Cuál es tu sexo?',
+        desc: 'Lo usamos para calcular tus macros con la tabla correcta.',
+        options: [
+            { value: 'hombre', label: 'Hombre' },
+            { value: 'mujer', label: 'Mujer' },
+        ],
+    },
+    {
         type: 'choice', key: 'goal', title: 'Lo más importante de todo: ¿Cuál es tu objetivo?',
         desc: 'Una de dos: ganar masa muscular o perder grasa. Las dos a la vez, NO. Piensa, prioriza y elige.',
         options: [
@@ -118,6 +126,7 @@ const QuestionnairePage = () => {
                 email: answers.email,
                 phone: answers.phone,
                 goal: answers.goal,
+                sex: answers.sex,
                 training_experience: answers.training_experience,
                 birthdate: answers.birthdate,
                 height: answers.height ? parseFloat(answers.height) : null,

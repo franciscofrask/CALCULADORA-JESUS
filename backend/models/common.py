@@ -82,6 +82,39 @@ class PaymentResponse(BaseModel):
     amount: float
     status: str
     method: str = "card"
+    currency: Optional[str] = None
+    stripe_invoice_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    failure_code: Optional[str] = None
+    failure_message: Optional[str] = None
+    paid_at: Optional[str] = None
+    created_at: str
+
+# ---- Stripe billing ----
+class CheckoutSessionRequest(BaseModel):
+    plan: str
+    success_path: Optional[str] = "/onboarding?checkout=success"
+    cancel_path: Optional[str] = "/onboarding?checkout=canceled"
+
+class CheckoutSessionResponse(BaseModel):
+    checkout_url: str
+    session_id: Optional[str] = None
+    profile_id: Optional[str] = None
+
+class BillingPortalResponse(BaseModel):
+    url: str
+
+class AlertResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    client_id: str
+    type: str
+    severity: str
+    title: str
+    message: str
+    related_data: Optional[Dict[str, Any]] = None
+    acknowledged: bool = False
+    resolved: bool = False
     created_at: str
 
 # Food Suggestion Models

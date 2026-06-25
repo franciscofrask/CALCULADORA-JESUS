@@ -136,7 +136,9 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado. Selecciona un plan primero.")
 
-    sexo = "hombre"  # cuestionario ELM hombre
+    sexo = (data.sex or "hombre").strip().lower()
+    if sexo not in ("hombre", "mujer"):
+        sexo = "hombre"
     update = {
         "questionnaire_completed": True,
         "goal": data.goal,

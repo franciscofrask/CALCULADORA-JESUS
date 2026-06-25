@@ -11,6 +11,11 @@ from .routines import router as routines_router, admin_router as routines_admin_
 from .reports import router as reports_router
 from .messages import router as messages_router
 from .payments import router as payments_router
+from .billing import (
+    router as billing_router,
+    webhook_router as billing_webhook_router,
+    admin_router as billing_admin_router,
+)
 
 __all__ = [
     "auth_router",
@@ -23,5 +28,8 @@ __all__ = [
     "routines_admin_router",
     "reports_router",
     "messages_router",
-    "payments_router"
+    "payments_router",
+    "billing_router",
+    "billing_webhook_router",
+    "billing_admin_router",
 ]

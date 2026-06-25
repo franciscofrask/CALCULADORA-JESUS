@@ -349,8 +349,8 @@ const ClientLayout = () => {
         api.get('/messages/unread-count').then(r => setUnread(r.data.count || 0)).catch(() => {});
     }, [api, location.pathname]);
 
-    // Cuestionario inicial obligatorio: tras elegir plan (perfil creado), si no lo ha
-    // completado, forzar el quiz.
+    // Cuestionario inicial obligatorio: tras pagar (perfil activo), si no lo ha
+    // completado, forzar el quiz para calcular sus macros.
     useEffect(() => {
         if (profile && !profile.questionnaire_completed) {
             navigate('/questionnaire', { replace: true });

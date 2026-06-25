@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -75,6 +75,33 @@ const OnboardingPage = () => {
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [loading, setLoading] = useState(false);
 
+    // Retorno de Stripe Checkout: ?checkout=success&session_id=...  /  ?checkout=canceled
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const checkout = params.get('checkout');
+        if (checkout === 'success') {
+            const sessionId = params.get('session_id');
+            setLoading(true);
+            (async () => {
+                try {
+                    if (sessionId) {
+                        await api.post('/billing/checkout-session/sync', { session_id: sessionId });
+                    }
+                    await refreshProfile();
+                    toast.success('¡Pago confirmado! Tu plan está activo');
+                    navigate('/dashboard', { replace: true });
+                } catch (error) {
+                    toast.error('No pudimos confirmar el pago. Si te cobraron, recarga en unos segundos.');
+                    setLoading(false);
+                }
+            })();
+        } else if (checkout === 'canceled') {
+            toast.info('Checkout cancelado. Puedes elegir un plan cuando quieras.');
+            window.history.replaceState({}, '', '/onboarding');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- correr solo al montar
+    }, []);
+
     const handleSelectPlan = async () => {
         if (!selectedPlan) {
             toast.error('Selecciona un plan para continuar');
@@ -83,13 +110,11 @@ const OnboardingPage = () => {
 
         setLoading(true);
         try {
-            await api.post('/clients/profile', { plan: selectedPlan });
-            await refreshProfile();
-            toast.success('¡Bienvenido a JG12! Tu plan ha sido activado');
-            navigate('/dashboard');
+            const res = await api.post('/billing/checkout-session', { plan: selectedPlan });
+            // Redirige a la página de pago de Stripe (test mode).
+            window.location.href = res.data.checkout_url;
         } catch (error) {
-            toast.error(error.response?.data?.detail || 'Error al activar el plan');
-        } finally {
+            toast.error(error.response?.data?.detail || 'Error al iniciar el pago');
             setLoading(false);
         }
     };
@@ -183,10 +208,10 @@ const OnboardingPage = () => {
                         ) : (
                             <ArrowRight className="w-5 h-5 mr-2" />
                         )}
-                        {loading ? 'Activando...' : 'Continuar'}
+                        {loading ? 'Redirigiendo...' : 'Ir a pagar'}
                     </Button>
                     <p className="text-foreground/30 text-sm mt-4 uppercase tracking-wider">
-                        Pago simulado para demostración
+                        Pago seguro con Stripe · Modo prueba
                     </p>
                 </div>
             </div>
