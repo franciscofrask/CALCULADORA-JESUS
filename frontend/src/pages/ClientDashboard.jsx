@@ -349,14 +349,6 @@ const ClientLayout = () => {
         api.get('/messages/unread-count').then(r => setUnread(r.data.count || 0)).catch(() => {});
     }, [api, location.pathname]);
 
-    // Cuestionario inicial obligatorio: tras elegir plan (perfil creado), si no lo ha
-    // completado, forzar el quiz.
-    useEffect(() => {
-        if (profile && !profile.questionnaire_completed) {
-            navigate('/questionnaire', { replace: true });
-        }
-    }, [profile, navigate]);
-
     useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
     const toggleCollapsed = useCallback(() => {
