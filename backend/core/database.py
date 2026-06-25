@@ -33,6 +33,12 @@ async def create_indexes():
             partialFilterExpression={"stripe_invoice_id": {"$type": "string"}},
         )
         await db.alerts.create_index([("client_id", 1), ("type", 1), ("resolved", 1)])
+        # Check-ins (seguimiento) y fotos de progreso.
+        await db.checkins.create_index([("client_id", 1), ("created_at", -1)])
+        await db.checkins.create_index([("client_id", 1), ("type", 1), ("created_at", -1)])
+        await db.client_photos.create_index("id", unique=True)
+        await db.client_photos.create_index([("client_id", 1), ("taken_at", -1)])
+        await db.client_photos.create_index([("user_id", 1), ("taken_at", -1)])
     except Exception as e:
         print(f"Error creating indexes: {e}")
 

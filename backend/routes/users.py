@@ -135,6 +135,8 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado. Selecciona un plan primero.")
+    if profile.get("questionnaire_completed"):
+        raise HTTPException(status_code=409, detail="El cuestionario ya fue completado.")
 
     sexo = (data.sex or "hombre").strip().lower()
     if sexo not in ("hombre", "mujer"):
@@ -176,6 +178,40 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         await db.users.update_one({"id": user["id"]}, {"$set": user_update})
 
     await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
+
+    # Versionar en macro_history (Calma todosLosMacros) los macros calculados por el quiz, igual
+    # que hacen PUT /macros y el admin. Sin esto, el resolver por fecha (dietas, ajustar macros)
+    # usaría entradas antiguas o el fallback e ignoraría los macros recién calculados → desajuste.
+    if "macros_training" in update:
+        client_id = profile.get("id") or str(uuid.uuid4())
+        if not profile.get("id"):
+            await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": {"id": client_id}})
+        training = update["macros_training"]
+        rest = update["macros_rest"]
+        peri = update.get("macros_periworkout")
+        effective_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        await db.macro_history.insert_one({
+            "id": str(uuid.uuid4()),
+            "client_id": client_id,
+            "user_id": user["id"],
+            "previous_training": profile.get("macros_training"),
+            "previous_rest": profile.get("macros_rest"),
+            "new_training": training,
+            "new_rest": rest,
+            "training": training,
+            "rest": rest,
+            "peri": peri,
+            "effective_date": effective_date,
+            "note": "Cuestionario inicial",
+            "changed_by": user.get("name", user.get("email", "cliente")),
+            "client_weight": data.weight,
+            "peso": data.weight,
+            "porcentaje_graso": data.body_fat,
+            "sexo": sexo,
+            "objetivo": data.goal,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
 

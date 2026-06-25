@@ -60,6 +60,52 @@ class ReportResponse(BaseModel):
     trainer_feedback: Optional[str] = None
     created_at: str
 
+# Check-In Models (3 niveles: daily, weekly, monthly) — portado de calmajp
+class CheckInCreate(BaseModel):
+    type: str  # "daily" | "weekly" | "monthly"
+    # Daily (check-in de 10 segundos)
+    mood: Optional[int] = None              # 1-5
+    energy: Optional[int] = None            # 1-5 (o 1-10 en weekly)
+    trained: Optional[bool] = None
+    nutrition_followed: Optional[bool] = None
+    # Weekly
+    weight: Optional[float] = None
+    training_compliance: Optional[int] = None    # 0-100
+    nutrition_compliance: Optional[int] = None   # 0-100
+    sleep_quality: Optional[int] = None          # 1-10
+    stress_level: Optional[int] = None           # 1-10
+    # Monthly
+    measurements: Optional[Dict[str, float]] = None
+    body_fat_pct: Optional[float] = None
+    photos: Optional[List[str]] = None
+    goals_progress: Optional[str] = None
+    challenges: Optional[str] = None
+    # Común
+    notes: Optional[str] = None
+
+class CheckInResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    client_id: str
+    type: str
+    mood: Optional[int] = None
+    energy: Optional[int] = None
+    trained: Optional[bool] = None
+    nutrition_followed: Optional[bool] = None
+    weight: Optional[float] = None
+    training_compliance: Optional[int] = None
+    nutrition_compliance: Optional[int] = None
+    sleep_quality: Optional[int] = None
+    stress_level: Optional[int] = None
+    measurements: Optional[Dict[str, float]] = None
+    body_fat_pct: Optional[float] = None
+    photos: Optional[List[str]] = None
+    goals_progress: Optional[str] = None
+    challenges: Optional[str] = None
+    notes: Optional[str] = None
+    trainer_feedback: Optional[str] = None
+    created_at: str
+
 # Message Models
 class MessageCreate(BaseModel):
     receiver_id: str

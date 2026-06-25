@@ -349,7 +349,14 @@ const ClientLayout = () => {
         api.get('/messages/unread-count').then(r => setUnread(r.data.count || 0)).catch(() => {});
     }, [api, location.pathname]);
 
-    // Quiz inicial desactivado por ahora: no se fuerza el cuestionario al entrar.
+    // Cuestionario inicial: tras contratar un plan (perfil activo), si no lo ha
+    // completado, forzar el quiz para calcular sus macros. Mientras el pago esté
+    // pendiente (status != 'activo') no se fuerza.
+    useEffect(() => {
+        if (profile && profile.status === 'activo' && !profile.questionnaire_completed) {
+            navigate('/questionnaire', { replace: true });
+        }
+    }, [profile, navigate]);
 
     useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
