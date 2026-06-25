@@ -349,13 +349,7 @@ const ClientLayout = () => {
         api.get('/messages/unread-count').then(r => setUnread(r.data.count || 0)).catch(() => {});
     }, [api, location.pathname]);
 
-    // Cuestionario inicial obligatorio: tras pagar (perfil activo), si no lo ha
-    // completado, forzar el quiz para calcular sus macros.
-    useEffect(() => {
-        if (profile && !profile.questionnaire_completed) {
-            navigate('/questionnaire', { replace: true });
-        }
-    }, [profile, navigate]);
+    // Quiz inicial desactivado por ahora: no se fuerza el cuestionario al entrar.
 
     useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
