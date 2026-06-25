@@ -9,38 +9,40 @@ client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
 async def create_indexes():
-    """Crear índices necesarios en MongoDB."""
-    try:
-        await db.foods.create_index([("nombre", "text")])
-        await db.foods.create_index("id", unique=True)
-        await db.foods.create_index("categorias")
-        await db.diets.create_index([("user_id", 1), ("fecha", 1)], unique=True)
-        await db.users.create_index("email", unique=True)
-        await db.client_profiles.create_index("user_id", unique=True)
-        # Stripe: unique only when the field is a string (partial), so múltiples perfiles sin
-        # customer/subscription no chocan por valores null repetidos.
-        await db.client_profiles.create_index(
-            "stripe_customer_id", unique=True,
-            partialFilterExpression={"stripe_customer_id": {"$type": "string"}},
-        )
-        await db.client_profiles.create_index(
-            "stripe_subscription_id", unique=True,
-            partialFilterExpression={"stripe_subscription_id": {"$type": "string"}},
-        )
-        await db.stripe_events.create_index("id", unique=True)
-        await db.payments.create_index(
-            "stripe_invoice_id", unique=True,
-            partialFilterExpression={"stripe_invoice_id": {"$type": "string"}},
-        )
-        await db.alerts.create_index([("client_id", 1), ("type", 1), ("resolved", 1)])
-        # Check-ins (seguimiento) y fotos de progreso.
-        await db.checkins.create_index([("client_id", 1), ("created_at", -1)])
-        await db.checkins.create_index([("client_id", 1), ("type", 1), ("created_at", -1)])
-        await db.client_photos.create_index("id", unique=True)
-        await db.client_photos.create_index([("client_id", 1), ("taken_at", -1)])
-        await db.client_photos.create_index([("user_id", 1), ("taken_at", -1)])
-    except Exception as e:
-        print(f"Error creating indexes: {e}")
+    """Crear índices necesarios en MongoDB.
+
+    Cada índice se crea de forma independiente: si uno falla (p.ej. un índice
+    preexistente con opciones distintas, como stripe_invoice_id sparse vs partial),
+    se registra y se continúa con el resto en vez de abortar todos.
+    """
+    async def _ensure(collection, keys, **opts):
+        try:
+            await db[collection].create_index(keys, **opts)
+        except Exception as e:
+            print(f"[indexes] {collection} {keys}: {e}")
+
+    await _ensure("foods", [("nombre", "text")])
+    await _ensure("foods", "id", unique=True)
+    await _ensure("foods", "categorias")
+    await _ensure("diets", [("user_id", 1), ("fecha", 1)], unique=True)
+    await _ensure("users", "email", unique=True)
+    await _ensure("client_profiles", "user_id", unique=True)
+    # Stripe: unique only when the field is a string (partial), so múltiples perfiles sin
+    # customer/subscription no chocan por valores null repetidos.
+    await _ensure("client_profiles", "stripe_customer_id", unique=True,
+                  partialFilterExpression={"stripe_customer_id": {"$type": "string"}})
+    await _ensure("client_profiles", "stripe_subscription_id", unique=True,
+                  partialFilterExpression={"stripe_subscription_id": {"$type": "string"}})
+    await _ensure("stripe_events", "id", unique=True)
+    await _ensure("payments", "stripe_invoice_id", unique=True,
+                  partialFilterExpression={"stripe_invoice_id": {"$type": "string"}})
+    await _ensure("alerts", [("client_id", 1), ("type", 1), ("resolved", 1)])
+    # Check-ins (seguimiento) y fotos de progreso.
+    await _ensure("checkins", [("client_id", 1), ("created_at", -1)])
+    await _ensure("checkins", [("client_id", 1), ("type", 1), ("created_at", -1)])
+    await _ensure("client_photos", "id", unique=True)
+    await _ensure("client_photos", [("client_id", 1), ("taken_at", -1)])
+    await _ensure("client_photos", [("user_id", 1), ("taken_at", -1)])
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""
