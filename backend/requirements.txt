@@ -17,3 +17,4 @@ anthropic==0.105.2
 httpx==0.28.1
 anyio==4.12.1
 passlib==1.7.4
+stripe==14.4.0

@@ -164,6 +164,7 @@ const BuildMealModal = ({
     const [paso, setPaso] = useState(1);
     const [tempFoods, setTempFoods] = useState([]);
     const [addedOpen, setAddedOpen] = useState(false);  // collapsible "añadidos" bar (closed → list keeps space)
+    const [qtyDraft, setQtyDraft] = useState({});  // buffer del input de cantidad por índice (permite teclear libre)
 
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [categoryFoods, setCategoryFoods] = useState([]);
@@ -690,6 +691,24 @@ const BuildMealModal = ({
         setTempFoods(prev => prev.filter((_, i) => i !== index));
     };
 
+    // Recalcula macros efectivos para una cantidad (en gramos) dada.
+    const recalcFoodMacros = (f, newQty) => {
+        const isUnit = f.por_unidad ?? f.unidades;
+        const racion = f.racion || 100;
+        // For `unidades` foods the macro fields are PER UNIT, so scale by number of
+        // units (newQty/racion), NOT by grams/100 (that's only for granel).
+        const mult = isUnit ? (newQty / racion) : (newQty / 100);
+        return {
+            ...f,
+            cantidad_g: newQty,
+            macros_efectivos: {
+                P: Math.round((f.proteinas || 0) * mult * 10) / 10,
+                H: Math.round((f.hidratos || 0) * mult * 10) / 10,
+                G: Math.round((f.grasas || 0) * mult * 10) / 10
+            }
+        };
+    };
+
     const handleFoodQuantityChange = (index, delta) => {
         // Calma lets you freely increase/decrease an added food's quantity even past the
         // meal target — the macro bars just show over-target (red). No block.
@@ -700,18 +719,21 @@ const BuildMealModal = ({
             const step = isUnit ? (f.peso_unidad || racion) : 1;
             const currentQty = f.cantidad_g || f.cantidad || 0;
             const newQty = Math.max(step, currentQty + (delta * step));
-            // For `unidades` foods the macro fields are PER UNIT, so scale by number of
-            // units (newQty/racion), NOT by grams/100 (that's only for granel).
-            const mult = isUnit ? (newQty / racion) : (newQty / 100);
-            return {
-                ...f,
-                cantidad_g: newQty,
-                macros_efectivos: {
-                    P: Math.round((f.proteinas || 0) * mult * 10) / 10,
-                    H: Math.round((f.hidratos || 0) * mult * 10) / 10,
-                    G: Math.round((f.grasas || 0) * mult * 10) / 10
-                }
-            };
+            return recalcFoodMacros(f, newQty);
+        }));
+    };
+
+    // Cantidad absoluta tecleada. Para alimentos por unidad el valor es en UNIDADES
+    // (se convierte a gramos con peso_unidad/racion); para granel, en gramos.
+    const handleFoodQuantitySet = (index, rawValue) => {
+        setTempFoods(prev => prev.map((f, i) => {
+            if (i !== index) return f;
+            const isUnit = f.por_unidad ?? f.unidades;
+            const racion = f.racion || 100;
+            const factor = isUnit ? (f.peso_unidad || racion) : 1;
+            const parsed = parseFloat(rawValue);
+            if (isNaN(parsed) || parsed < 0) return recalcFoodMacros(f, 0);
+            return recalcFoodMacros(f, parsed * factor);
         }));
     };
 
@@ -973,12 +995,31 @@ const BuildMealModal = ({
                                                     >
                                                         <Minus className="w-3 h-3" />
                                                     </button>
-                                                    <span className="w-16 text-center text-xs">
-                                                        {(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
-                                                            ? `${Math.round(((food.cantidad_g || food.cantidad || 0) / (food.peso_unidad || food.racion)) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)`
-                                                            : `${food.cantidad_g || food.cantidad || 0}g`
-                                                        }
-                                                    </span>
+                                                    {(() => {
+                                                        const isUnit = (food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0;
+                                                        const grams = food.cantidad_g || food.cantidad || 0;
+                                                        const display = isUnit
+                                                            ? Math.round((grams / (food.peso_unidad || food.racion)) * 2) / 2
+                                                            : grams;
+                                                        const value = qtyDraft[idx] !== undefined ? qtyDraft[idx] : display;
+                                                        return (
+                                                            <span className="flex items-center gap-1">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step={isUnit ? '0.5' : '1'}
+                                                                    value={value}
+                                                                    onChange={(e) => { setQtyDraft(d => ({ ...d, [idx]: e.target.value })); handleFoodQuantitySet(idx, e.target.value); }}
+                                                                    onBlur={() => setQtyDraft(d => { const n = { ...d }; delete n[idx]; return n; })}
+                                                                    onFocus={(e) => e.target.select()}
+                                                                    className="w-12 text-center text-xs bg-muted rounded px-1 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-[#FF671F]"
+                                                                />
+                                                                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                                                    {isUnit ? `ud (${food.peso_unidad || food.racion}g)` : 'g'}
+                                                                </span>
+                                                            </span>
+                                                        );
+                                                    })()}
                                                     <button
                                                         onClick={() => handleFoodQuantityChange(idx, 1)}
                                                         className="w-6 h-6 flex items-center justify-center bg-muted rounded"

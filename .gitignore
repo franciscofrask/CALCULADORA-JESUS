@@ -105,3 +105,7 @@ _calma_ref/
 memory/
 test_result.md
 frontend/public/downloads/
+
+# Secrets
+backend/.env
+.env

@@ -12,6 +12,7 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
+import CoachCheckins from '../components/CoachCheckins';
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
@@ -545,31 +546,7 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB 8: SEGUIMIENTO ========== */}
                 <TabsContent value="seguimiento">
-                    {reports?.length > 0 ? (
-                        <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Evolución de peso</CardTitle></CardHeader>
-                            <CardContent>
-                                <div className="flex items-end gap-1 h-40">
-                                    {reports.slice().reverse().map((r, i) => {
-                                        const weights = reports.map(r2 => r2.weight);
-                                        const minW = Math.min(...weights) - 2;
-                                        const maxW = Math.max(...weights) + 2;
-                                        const range = maxW - minW || 1;
-                                        const pct = ((r.weight - minW) / range) * 100;
-                                        return (
-                                            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                                                <span className="text-[10px] text-white/50">{r.weight}</span>
-                                                <div className="w-full bg-[#1A1A1A] rounded-t" style={{ height: `${Math.max(pct, 10)}%` }}>
-                                                    <div className="w-full h-full bg-[#FF671F] rounded-t" />
-                                                </div>
-                                                <span className="text-[9px] text-white/30">{new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                                <p className="text-center text-white/20 text-xs mt-3">Placeholder para fotos de progreso</p>
-                            </CardContent>
-                        </Card>
-                    ) : <EmptyState icon={TrendingUp} message="Se completará con los check-ins del cliente." />}
+                    <CoachCheckins clientId={clientId} />
                 </TabsContent>
             </Tabs>
         </div>

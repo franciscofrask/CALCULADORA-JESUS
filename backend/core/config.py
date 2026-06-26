@@ -19,3 +19,13 @@ JWT_EXPIRATION_HOURS = 24
 
 # CORS
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
+
+# Stripe (billing). Test mode by default: STRIPE_SECRET_KEY must be sk_test_...
+STRIPE_API_VERSION = "2026-02-25.clover"
+STRIPE_ALLOW_LIVE_MODE = os.environ.get('STRIPE_ALLOW_LIVE_MODE', 'false').strip().lower() == 'true'
+# Frontend base URL for Stripe success/cancel redirects. Falls back to first CORS origin, else localhost:3000.
+FRONTEND_URL = (os.environ.get('FRONTEND_URL') or os.environ.get('APP_BASE_URL') or '').strip()
+
+# Billing cycle (matches calmajp: 12 weeks = 84 days). Change here if cobro mensual.
+DEFAULT_BILLING_CYCLE_WEEKS = 12
+DEFAULT_BILLING_CYCLE_DAYS = DEFAULT_BILLING_CYCLE_WEEKS * 7

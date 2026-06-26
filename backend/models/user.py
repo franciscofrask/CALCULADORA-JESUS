@@ -5,11 +5,13 @@ from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, Dict, List, Any
 
 # Plan Types
+# stripe_price_env: nombre de la variable .env que guarda el Price ID de Stripe (lo escribe setup_stripe_products.py).
+# billing_cycle_weeks: longitud del ciclo de cobro recurrente (12 = 84 días, como calmajp).
 PLAN_TYPES = {
-    "gold": {"name": "Gold", "price": 149, "features": ["rutina", "macros", "chat", "reporte_quincenal", "suplementacion", "cardio", "audio"]},
-    "silver": {"name": "Silver", "price": 99, "features": ["rutina", "macros", "chat", "reporte_mensual"]},
-    "bronze": {"name": "Bronze", "price": 69, "features": ["rutina", "macros", "chat", "reporte_mensual"]},
-    "elm": {"name": "ELM", "price": 39, "features": ["macros", "chat"]}
+    "gold": {"name": "Gold", "price": 149, "stripe_price_env": "STRIPE_PRICE_GOLD", "billing_cycle_weeks": 12, "features": ["rutina", "macros", "chat", "reporte_quincenal", "suplementacion", "cardio", "audio"]},
+    "silver": {"name": "Silver", "price": 99, "stripe_price_env": "STRIPE_PRICE_SILVER", "billing_cycle_weeks": 12, "features": ["rutina", "macros", "chat", "reporte_mensual"]},
+    "bronze": {"name": "Bronze", "price": 69, "stripe_price_env": "STRIPE_PRICE_BRONZE", "billing_cycle_weeks": 12, "features": ["rutina", "macros", "chat", "reporte_mensual"]},
+    "elm": {"name": "ELM", "price": 39, "stripe_price_env": "STRIPE_PRICE_ELM", "billing_cycle_weeks": 12, "features": ["macros", "chat"]}
 }
 
 # Auth Models
@@ -72,6 +74,23 @@ class ClientProfile(BaseModel):
     training_experience: Optional[str] = None
     activity_level: Optional[str] = None
     biotype: Optional[str] = None
+    # ---- Stripe billing (suscripción) ----
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    stripe_price_id: Optional[str] = None
+    subscription_status: Optional[str] = None        # active|trialing|past_due|canceled|incomplete|...
+    checkout_status: Optional[str] = None            # draft|created|completed|attention_required
+    current_period_start: Optional[str] = None
+    current_period_end: Optional[str] = None
+    cancel_at_period_end: Optional[bool] = None
+    billing_cycle_days: Optional[int] = None
+    payment_method_status: Optional[str] = None      # ok|caducada|actualizar_tarjeta
+    payment_method_brand: Optional[str] = None
+    payment_method_last4: Optional[str] = None
+    payment_method_exp_month: Optional[int] = None
+    payment_method_exp_year: Optional[int] = None
+    payment_failure_count: Optional[int] = None
+    last_payment_error: Optional[str] = None
     created_at: str
 
 class ClientProfileCreate(BaseModel):
@@ -106,6 +125,7 @@ class QuestionnaireSubmit(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     goal: str  # "volumen" | "definicion"
+    sex: Optional[str] = None  # "hombre" | "mujer"
     training_experience: Optional[str] = None  # cero | principiante | intermedio | avanzado
     birthdate: Optional[str] = None  # YYYY-MM-DD
     height: Optional[float] = None  # cm

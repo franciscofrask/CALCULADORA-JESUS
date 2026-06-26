@@ -20,8 +20,12 @@ from routes import (
     routines_router,
     routines_admin_router,
     reports_router,
+    checkins_router,
     messages_router,
-    payments_router
+    payments_router,
+    billing_router,
+    billing_webhook_router,
+    billing_admin_router,
 )
 from routes.leads import router as leads_router
 from models.user import PLAN_TYPES
@@ -85,8 +89,12 @@ api_router.include_router(chatbot_router)
 api_router.include_router(routines_router)
 api_router.include_router(routines_admin_router)
 api_router.include_router(reports_router)
+api_router.include_router(checkins_router)
 api_router.include_router(messages_router)
 api_router.include_router(payments_router)
+api_router.include_router(billing_router)
+api_router.include_router(billing_webhook_router)
+api_router.include_router(billing_admin_router)
 api_router.include_router(leads_router)
 
 # Mount API router

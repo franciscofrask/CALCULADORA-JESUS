@@ -1,0 +1,372 @@
+"""
+Rutas de facturación con Stripe (suscripciones, test mode).
+- Cliente: crear sesión de checkout, sincronizar al volver, portal de facturación.
+- Webhook: /api/stripe/webhooks (eventos de Stripe).
+- Admin: sincronizar con Stripe, pagos próximos, incidencias de pago, alertas.
+"""
+import os
+import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, HTTPException, Depends, Request, Body
+from typing import Any, Dict, List
+
+from core.database import db
+from core.security import get_current_user, get_admin_user
+from models.common import (
+    CheckoutSessionRequest, CheckoutSessionResponse, BillingPortalResponse,
+    PaymentResponse, AlertResponse,
+)
+from core.stripe_billing import (
+    get_stripe_module, stripe_api_call, require_stripe_test_mode,
+    get_plan_info, get_stripe_price_id_for_plan, build_frontend_url,
+    ensure_checkout_profile, get_or_create_stripe_customer,
+    sync_profile_from_subscription, upsert_payment_from_invoice,
+    update_profile_payment_method, get_payment_method_from_invoice,
+    get_payment_method_status_from_error, find_client_profile, create_alert,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/billing", tags=["billing"])
+webhook_router = APIRouter(prefix="/stripe", tags=["stripe"])
+admin_router = APIRouter(prefix="/admin/stripe", tags=["admin-stripe"])
+
+
+# ==================== CLIENTE ====================
+
+@router.post("/checkout-session", response_model=CheckoutSessionResponse)
+async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get_current_user)):
+    stripe_module = get_stripe_module()
+    require_stripe_test_mode("La creación de checkout")
+    plan_info = get_plan_info(data.plan)
+    profile = await ensure_checkout_profile(user, plan_info["code"])
+    customer_id = await get_or_create_stripe_customer(user, profile)
+
+    success_url = build_frontend_url(data.success_path, include_session_placeholder=True)
+    cancel_url = build_frontend_url(data.cancel_path)
+    stripe_price_id = get_stripe_price_id_for_plan(plan_info["code"])
+
+    session = await stripe_api_call(
+        stripe_module.checkout.Session.create,
+        mode="subscription",
+        customer=customer_id,
+        client_reference_id=profile["id"],
+        line_items=[{"price": stripe_price_id, "quantity": 1}],
+        allow_promotion_codes=True,
+        billing_address_collection="auto",
+        customer_update={"address": "auto", "name": "auto"},
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={"user_id": user["id"], "profile_id": profile["id"], "plan": plan_info["code"]},
+        subscription_data={"metadata": {"user_id": user["id"], "profile_id": profile["id"], "plan": plan_info["code"]}},
+    )
+
+    await db.client_profiles.update_one(
+        {"id": profile["id"]},
+        {"$set": {"stripe_customer_id": customer_id, "stripe_price_id": stripe_price_id, "checkout_status": "created"}},
+    )
+    return CheckoutSessionResponse(checkout_url=session["url"], session_id=session["id"], profile_id=profile["id"])
+
+
+@router.post("/checkout-session/sync")
+async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depends(get_current_user)):
+    """Llamado por el frontend al volver de Stripe (?checkout=success&session_id=...),
+    para no depender solo del webhook."""
+    stripe_module = get_stripe_module()
+    require_stripe_test_mode("La sincronización de checkout")
+
+    session_id = (payload.get("session_id") or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id es requerido")
+
+    try:
+        session = await stripe_api_call(
+            stripe_module.checkout.Session.retrieve, session_id,
+            expand=["subscription", "subscription.default_payment_method"],
+        )
+    except Exception as exc:
+        logger.exception("Error recuperando checkout session %s", session_id)
+        raise HTTPException(status_code=400, detail=f"No se pudo recuperar la sesión de Stripe: {exc}") from exc
+
+    metadata = session.get("metadata") or {}
+    profile_id = session.get("client_reference_id") or metadata.get("profile_id")
+    if metadata.get("user_id") and metadata["user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="La sesión no pertenece a este usuario")
+
+    subscription = session.get("subscription")
+    if isinstance(subscription, str):
+        try:
+            subscription = await stripe_api_call(
+                stripe_module.Subscription.retrieve, subscription, expand=["default_payment_method"])
+        except Exception:
+            logger.exception("Error recuperando subscription de session %s", session_id)
+            subscription = None
+
+    synced_profile = None
+    if subscription:
+        synced_profile = await sync_profile_from_subscription(
+            subscription, profile_id=profile_id, user_id=user["id"], customer_id=session.get("customer"))
+        default_pm = subscription.get("default_payment_method") if isinstance(subscription, dict) else None
+        if synced_profile and isinstance(default_pm, dict):
+            card = default_pm.get("card") or {}
+            await db.client_profiles.update_one(
+                {"id": synced_profile["id"]},
+                {"$set": {
+                    "payment_method_status": "ok",
+                    "payment_method_brand": card.get("brand"),
+                    "payment_method_last4": card.get("last4"),
+                    "payment_method_exp_month": card.get("exp_month"),
+                    "payment_method_exp_year": card.get("exp_year"),
+                }},
+            )
+            synced_profile = await db.client_profiles.find_one({"id": synced_profile["id"]}, {"_id": 0})
+
+    if not synced_profile and profile_id:
+        synced_profile = await db.client_profiles.find_one({"id": profile_id}, {"_id": 0})
+
+    return {
+        "session_id": session_id,
+        "payment_status": session.get("payment_status"),
+        "subscription_status": (subscription or {}).get("status") if isinstance(subscription, dict) else None,
+        "profile": synced_profile,
+    }
+
+
+@router.post("/portal", response_model=BillingPortalResponse)
+async def create_billing_portal(user=Depends(get_current_user)):
+    stripe_module = get_stripe_module()
+    require_stripe_test_mode("La apertura del portal de facturación")
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    customer_id = profile.get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="Este cliente todavía no tiene un customer de Stripe sincronizado.")
+    session = await stripe_api_call(
+        stripe_module.billing_portal.Session.create,
+        customer=customer_id, return_url=build_frontend_url("/dashboard/profile"))
+    return BillingPortalResponse(url=session["url"])
+
+
+# ==================== WEBHOOK ====================
+
+@webhook_router.post("/webhooks")
+async def stripe_webhooks(request: Request):
+    stripe_module = get_stripe_module()
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+    if not webhook_secret:
+        raise HTTPException(status_code=503, detail="Falta STRIPE_WEBHOOK_SECRET en el backend.")
+
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature")
+    if not signature:
+        raise HTTPException(status_code=400, detail="Falta Stripe-Signature")
+    try:
+        event = stripe_module.Webhook.construct_event(payload, signature, webhook_secret)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Payload de webhook inválido")
+    except stripe_module.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Firma de webhook inválida")
+
+    if await db.stripe_events.find_one({"id": event["id"]}):
+        return {"received": True, "duplicate": True}
+
+    event_type = event["type"]
+    obj = event["data"]["object"]
+
+    if event_type == "checkout.session.completed":
+        metadata = obj.get("metadata", {}) or {}
+        await db.client_profiles.update_one(
+            {"id": metadata.get("profile_id")},
+            {"$set": {
+                "stripe_customer_id": obj.get("customer"),
+                "stripe_subscription_id": obj.get("subscription"),
+                "checkout_status": "completed",
+            }},
+        )
+        if obj.get("subscription"):
+            subscription = await stripe_api_call(stripe_module.Subscription.retrieve, obj["subscription"])
+            await sync_profile_from_subscription(
+                subscription, profile_id=metadata.get("profile_id"),
+                user_id=metadata.get("user_id"), customer_id=obj.get("customer"))
+
+    elif event_type in {"customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"}:
+        await sync_profile_from_subscription(obj)
+
+    elif event_type == "invoice.payment_succeeded":
+        profile = await find_client_profile(subscription_id=obj.get("subscription"), customer_id=obj.get("customer"))
+        payment_method, _ = await get_payment_method_from_invoice(obj)
+        await upsert_payment_from_invoice(obj, profile=profile, status_override="success")
+        if profile:
+            await db.client_profiles.update_one(
+                {"id": profile["id"]},
+                {"$set": {
+                    "status": "activo", "subscription_status": "active",
+                    "payment_method_status": "ok", "last_payment_error": None,
+                    "checkout_status": "completed", "payment_failure_count": 0,
+                }},
+            )
+            await update_profile_payment_method(profile["id"], payment_method, payment_method_status="ok", last_payment_error=None)
+            await db.alerts.update_many(
+                {"client_id": profile["id"], "type": {"$in": ["payment_failure", "card_expired"]}, "resolved": False},
+                {"$set": {"resolved": True, "resolved_at": datetime.now(timezone.utc).isoformat()}},
+            )
+
+    elif event_type == "invoice.payment_failed":
+        profile = await find_client_profile(subscription_id=obj.get("subscription"), customer_id=obj.get("customer"))
+        payment_method, payment_error = await get_payment_method_from_invoice(obj)
+        error_code = (payment_error or {}).get("code")
+        error_message = (payment_error or {}).get("message") or "Stripe no pudo cobrar esta factura."
+        await upsert_payment_from_invoice(obj, profile=profile, status_override="failed",
+                                          failure_code=error_code, failure_message=error_message)
+        if profile:
+            failure_count = (profile.get("payment_failure_count") or 0) + 1
+            auto_baja = failure_count >= 3
+            await db.client_profiles.update_one(
+                {"id": profile["id"]},
+                {"$set": {
+                    "status": "baja_automatica" if auto_baja else "pago_pendiente",
+                    "subscription_status": "canceled" if auto_baja else "past_due",
+                    "checkout_status": "attention_required",
+                    "payment_method_status": get_payment_method_status_from_error(error_code),
+                    "last_payment_error": error_message,
+                    "payment_failure_count": failure_count,
+                }},
+            )
+            await update_profile_payment_method(
+                profile["id"], payment_method,
+                payment_method_status=get_payment_method_status_from_error(error_code), last_payment_error=error_message)
+            if auto_baja:
+                sub_id = profile.get("stripe_subscription_id")
+                if sub_id and not sub_id.startswith("sub_test_"):
+                    try:
+                        await stripe_api_call(stripe_module.Subscription.cancel, sub_id)
+                    except Exception as exc:
+                        logger.error("Error cancelando suscripción %s: %s", sub_id, exc)
+                await create_alert(
+                    profile["id"], "baja_automatica", "Baja automática por fallos de pago",
+                    f"Cliente dado de baja tras {failure_count} cobros fallidos. Último error: {error_message}",
+                    severity="critical", related_data={"failure_count": failure_count, "error_code": error_code})
+            else:
+                await create_alert(
+                    profile["id"], "payment_failure", f"Cobro fallido ({failure_count}/3)",
+                    f"Stripe no pudo cobrar la cuota. {error_message}",
+                    severity="critical" if failure_count >= 2 else "warning",
+                    related_data={"failure_count": failure_count, "error_code": error_code}, dedupe=False)
+
+    await db.stripe_events.insert_one(
+        {"id": event["id"], "type": event_type, "processed_at": datetime.now(timezone.utc).isoformat()})
+    return {"received": True}
+
+
+# ==================== ADMIN ====================
+
+@admin_router.post("/sync-client/{client_id}")
+async def sync_client_with_stripe(client_id: str, user=Depends(get_admin_user)):
+    stripe_module = get_stripe_module()
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    user_data = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
+    if not user_data:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if profile.get("stripe_customer_id"):
+        customers = [await stripe_api_call(stripe_module.Customer.retrieve, profile["stripe_customer_id"])]
+    else:
+        customer_list = await stripe_api_call(stripe_module.Customer.list, email=user_data["email"], limit=10)
+        customers = list(customer_list.data)
+    if not customers:
+        raise HTTPException(status_code=404, detail="No se encontró ningún customer en Stripe para este email.")
+
+    selected_customer = customers[0]
+    selected_subscription = None
+    for customer in customers:
+        subs = await stripe_api_call(stripe_module.Subscription.list, customer=customer["id"], status="all", limit=10)
+        if subs.data:
+            selected_customer = customer
+            selected_subscription = sorted(subs.data, key=lambda s: s.get("created", 0), reverse=True)[0]
+            break
+
+    await db.client_profiles.update_one({"id": client_id}, {"$set": {"stripe_customer_id": selected_customer["id"]}})
+
+    synced_payments = 0
+    if selected_subscription:
+        await sync_profile_from_subscription(
+            selected_subscription, profile_id=client_id, user_id=profile["user_id"], customer_id=selected_customer["id"])
+        invoices = await stripe_api_call(
+            stripe_module.Invoice.list, customer=selected_customer["id"], subscription=selected_subscription["id"], limit=24)
+        for invoice in invoices.data:
+            await upsert_payment_from_invoice(invoice, profile=profile)
+            synced_payments += 1
+
+    updated = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    return {
+        "success": selected_subscription is not None,
+        "customer_id": selected_customer["id"],
+        "subscription_id": selected_subscription["id"] if selected_subscription else None,
+        "synced_payments": synced_payments,
+        "profile": updated,
+    }
+
+
+@admin_router.post("/sync-pending")
+async def sync_pending_subscriptions(user=Depends(get_admin_user)):
+    """Resincroniza perfiles en estado intermedio leyendo su suscripción real de Stripe."""
+    stripe_module = get_stripe_module()
+    pending = await db.client_profiles.find(
+        {"subscription_status": {"$in": ["incomplete", "past_due", "incomplete_expired", "unpaid"]},
+         "stripe_subscription_id": {"$type": "string"}},
+        {"_id": 0, "id": 1, "stripe_subscription_id": 1},
+    ).to_list(200)
+    synced = 0
+    for p in pending:
+        try:
+            sub = await stripe_api_call(stripe_module.Subscription.retrieve, p["stripe_subscription_id"])
+            await sync_profile_from_subscription(sub, profile_id=p["id"])
+            synced += 1
+        except Exception as exc:
+            logger.warning("No se pudo sincronizar %s: %s", p.get("id"), exc)
+    return {"synced": synced, "checked": len(pending)}
+
+
+@admin_router.get("/upcoming-payments")
+async def upcoming_payments(user=Depends(get_admin_user)):
+    profiles = await db.client_profiles.find(
+        {"next_payment": {"$type": "string"}, "subscription_status": {"$in": ["active", "trialing", "past_due"]}},
+        {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "next_payment": 1, "subscription_status": 1},
+    ).sort("next_payment", 1).to_list(200)
+    return {"upcoming": profiles}
+
+
+@admin_router.get("/payment-issues")
+async def payment_issues(user=Depends(get_admin_user)):
+    profiles = await db.client_profiles.find(
+        {"$or": [
+            {"status": {"$in": ["pago_pendiente", "baja_automatica", "checkout_expirado"]}},
+            {"payment_method_status": {"$in": ["caducada", "actualizar_tarjeta"]}},
+            {"last_payment_error": {"$type": "string"}},
+        ]},
+        {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "status": 1, "subscription_status": 1,
+         "payment_method_status": 1, "last_payment_error": 1, "payment_failure_count": 1, "next_payment": 1},
+    ).to_list(200)
+    return {"issues": profiles}
+
+
+@admin_router.get("/alerts", response_model=List[AlertResponse])
+async def list_alerts(resolved: bool = False, user=Depends(get_admin_user)):
+    alerts = await db.alerts.find({"resolved": resolved}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return [AlertResponse(**a) for a in alerts]
+
+
+@admin_router.post("/alerts/{alert_id}/resolve")
+async def resolve_alert(alert_id: str, user=Depends(get_admin_user)):
+    r = await db.alerts.update_one(
+        {"id": alert_id},
+        {"$set": {"resolved": True, "resolved_at": datetime.now(timezone.utc).isoformat(),
+                  "acknowledged": True, "acknowledged_by": user.get("id"),
+                  "acknowledged_at": datetime.now(timezone.utc).isoformat()}})
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Alerta no encontrada")
+    return {"resolved": True}

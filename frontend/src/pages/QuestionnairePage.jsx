@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowRight, ArrowLeft, Loader2, Check } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Loader2, Check, ImagePlus } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import BrandArrow from '../components/BrandArrow';
 
@@ -21,17 +21,108 @@ const BIOTIPOS = [
     { value: 'endomorfo', label: 'Endomorfo (el gordo)', img: '/biotipos/endomorfo.jpg', desc: 'Tendencia clara a engordar y niveles altos de grasa casi toda la vida. Suele llevar vida muy sedentaria y malos hábitos. El abdomen es la zona más problemática (barriga prominente, grasa visceral). También acumula en muslos, caderas, brazos y espalda.' },
 ];
 
-const BF_OPTIONS = [
-    { value: 50, label: 'Más del 50%' },
-    ...[48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8].map(n => ({ value: n, label: `${n}%` })),
-];
+// Referencias de % de grasa (de mayor a menor), réplica del carrusel de la web.
+const BF_PERCENTAGES = [50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8];
+const BF_DEFAULT = 20;
+
+// Slider de % de grasa: carrusel horizontal de imágenes de referencia con la
+// foto del cliente fija en el centro. Se desliza hasta situar la foto entre dos
+// porcentajes; el valor es el de la referencia que queda centrada.
+const BodyFatSlider = ({ value, onChange }) => {
+    const scrollRef = useRef(null);
+    const [photo, setPhoto] = useState(null);
+
+    const handleScroll = useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const col = el.clientWidth / 3; // 3 columnas visibles
+        const i = Math.max(0, Math.min(BF_PERCENTAGES.length - 1, Math.round(el.scrollLeft / col)));
+        const pct = BF_PERCENTAGES[i];
+        if (pct !== value) onChange(pct);
+    }, [value, onChange]);
+
+    // Posicionar el carrusel en el valor inicial al montar.
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const start = value ?? BF_DEFAULT;
+        const i = BF_PERCENTAGES.indexOf(start);
+        el.scrollLeft = (i < 0 ? BF_PERCENTAGES.indexOf(BF_DEFAULT) : i) * (el.clientWidth / 3);
+        if (value == null) onChange(start);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const pickPhoto = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (ev) => {
+            const file = ev.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => setPhoto(e.target.result);
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    };
+
+    return (
+        <div>
+            <style>{`.bf-scroll::-webkit-scrollbar{height:6px}.bf-scroll::-webkit-scrollbar-track{background:transparent}.bf-scroll::-webkit-scrollbar-thumb{background:#FF671F;border-radius:9999px}`}</style>
+
+            <div className="text-center mb-4">
+                <span className="font-heading font-extrabold text-5xl text-brand">{value ?? BF_DEFAULT}%</span>
+            </div>
+
+            <div className="relative rounded-xl overflow-hidden border-2 border-[#222222] select-none" style={{ aspectRatio: '1800 / 933' }}>
+                {/* Foto del cliente, fija en el centro (clic para subir). */}
+                <button type="button" onClick={pickPhoto}
+                    className="absolute top-0 bottom-0 left-1/3 w-1/3 z-30 flex flex-col items-center justify-center bg-[#e9eae5] cursor-pointer overflow-hidden"
+                    style={photo ? { backgroundImage: `url(${photo})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}>
+                    {!photo && (
+                        <>
+                            <ImagePlus className="w-7 h-7 text-black/40" />
+                            <span className="text-black/50 text-xs font-bold mt-2 px-2 text-center leading-tight">Sube tu foto</span>
+                        </>
+                    )}
+                </button>
+
+                {/* Carrusel de referencias. */}
+                <div ref={scrollRef} onScroll={handleScroll}
+                    className="bf-scroll h-full flex overflow-x-scroll overflow-y-hidden scroll-smooth">
+                    <div className="flex-shrink-0 w-1/3 h-full" aria-hidden="true" />
+                    {BF_PERCENTAGES.map((n) => (
+                        <div key={n} className="relative flex-shrink-0 w-1/3 h-full border-r-4 border-white/80 last:border-r-0">
+                            <img src={`/bodyfat/frente/${n}.webp`} alt={`${n}%`} draggable="false"
+                                className="w-full h-full object-cover" />
+                            <span className="absolute inset-x-0 bottom-[8%] flex items-end justify-center font-extrabold text-3xl text-white"
+                                style={{ textShadow: '1px 1px 6px rgba(0,0,0,.9)' }}>{n}%</span>
+                        </div>
+                    ))}
+                    <div className="flex-shrink-0 w-1/3 h-full" aria-hidden="true" />
+                </div>
+            </div>
+
+            <p className="text-foreground/50 text-xs mt-3 text-center">
+                Sube tu foto y desliza el carrusel hasta situarla entre dos porcentajes.
+            </p>
+        </div>
+    );
+};
 
 // Definición de los pasos. type: statement | text | email | tel | date | number | choice | biotype | bf
 const STEPS = [
     { type: 'statement', title: 'Quiz Inicial', desc: 'Vamos a conocerte para personalizar tu plan. Tardarás un par de minutos. Responde con sinceridad.' },
     { type: 'text', key: 'name', title: 'Nombre y apellidos', required: true },
-    { type: 'email', key: 'email', title: 'Correo electrónico', desc: 'Uno que revises a diario, nos comunicaremos por ahí.', required: true },
     { type: 'tel', key: 'phone', title: 'Número de teléfono', required: true },
+    {
+        type: 'choice', key: 'sex', title: '¿Cuál es tu sexo?',
+        desc: 'Lo usamos para calcular tus macros con la tabla correcta.',
+        options: [
+            { value: 'hombre', label: 'Hombre' },
+            { value: 'mujer', label: 'Mujer' },
+        ],
+    },
     {
         type: 'choice', key: 'goal', title: 'Lo más importante de todo: ¿Cuál es tu objetivo?',
         desc: 'Una de dos: ganar masa muscular o perder grasa. Las dos a la vez, NO. Piensa, prioriza y elige.',
@@ -97,10 +188,45 @@ const Shell = ({ progress, children }) => (
 
 const QuestionnairePage = () => {
     const navigate = useNavigate();
-    const { api, refreshProfile } = useAuth();
+    const { api, refreshProfile, user, profile } = useAuth();
     const [idx, setIdx] = useState(0);
     const [answers, setAnswers] = useState({});
     const [loading, setLoading] = useState(false);
+
+    // Nombre y email ya los tenemos del login: autocompletar (el email no es editable).
+    useEffect(() => {
+        if (!user) return;
+        setAnswers(a => ({
+            ...a,
+            name: a.name ?? user.name ?? '',
+            email: user.email ?? a.email ?? '',
+        }));
+    }, [user]);
+
+    // Si ya completó el cuestionario, no puede volver a rellenarlo (ni por el link).
+    if (profile?.questionnaire_completed) {
+        return (
+            <Shell progress={100}>
+                <div className="text-center">
+                    <div className="w-16 h-16 rounded-full bg-brand/10 flex items-center justify-center mx-auto mb-6">
+                        <Check className="w-8 h-8 text-brand" />
+                    </div>
+                    <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
+                        Ya completaste el cuestionario inicial
+                    </h2>
+                    <p className="text-foreground/60 mb-8 text-sm md:text-base">
+                        Solo se rellena una vez. Tus respuestas ya están guardadas y tus macros calculados.
+                    </p>
+                    <div className="flex justify-center">
+                        <Button onClick={() => navigate('/dashboard')}
+                            className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg">
+                            Ir al inicio <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                    </div>
+                </div>
+            </Shell>
+        );
+    }
 
     const step = STEPS[idx];
     const progress = ((idx + 1) / STEPS.length) * 100;
@@ -118,6 +244,7 @@ const QuestionnairePage = () => {
                 email: answers.email,
                 phone: answers.phone,
                 goal: answers.goal,
+                sex: answers.sex,
                 training_experience: answers.training_experience,
                 birthdate: answers.birthdate,
                 height: answers.height ? parseFloat(answers.height) : null,
@@ -293,22 +420,18 @@ const QuestionnairePage = () => {
         body = (
             <div>
                 <Title />
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[50vh] overflow-y-auto pr-1">
-                    {BF_OPTIONS.map(o => {
-                        const selected = answers.body_fat === o.value;
-                        return (
-                            <button key={o.value} onClick={() => { set('body_fat', o.value); setTimeout(goNext, 150); }}
-                                className={`px-2 py-3 rounded-lg border-2 text-sm font-bold transition-all ${selected ? 'border-[#FF671F] bg-[#FF671F]/10 text-[#FF671F]' : 'border-[#222222] hover:border-white/30 text-foreground'}`}>
-                                {o.label}
-                            </button>
-                        );
-                    })}
-                </div>
-                {idx > 0 && (
-                    <Button variant="ghost" onClick={goBack} className="text-foreground/60 mt-6">
-                        <ArrowLeft className="w-4 h-4 mr-1" /> Atrás
+                <BodyFatSlider value={answers.body_fat} onChange={(v) => set('body_fat', v)} />
+                <div className="flex items-center gap-3 mt-6">
+                    {idx > 0 && (
+                        <Button variant="ghost" onClick={goBack} className="text-foreground/60">
+                            <ArrowLeft className="w-4 h-4 mr-1" /> Atrás
+                        </Button>
+                    )}
+                    <Button onClick={goNext}
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg">
+                        Continuar <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
-                )}
+                </div>
             </div>
         );
     } else {
@@ -320,12 +443,14 @@ const QuestionnairePage = () => {
                 <div className="flex items-center gap-2 mb-8">
                     <Input
                         type={inputType}
-                        autoFocus
+                        autoFocus={!step.locked}
+                        disabled={step.locked}
+                        readOnly={step.locked}
                         value={answers[step.key] ?? ''}
                         onChange={e => set(step.key, e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && inputValid()) goNext(); }}
                         placeholder="Escribe tu respuesta..."
-                        className="text-lg py-6 bg-card border-[#222222]"
+                        className={`text-lg py-6 bg-card border-[#222222] ${step.locked ? 'opacity-60 cursor-not-allowed' : ''}`}
                     />
                     {step.unit && <span className="text-foreground/50 text-lg">{step.unit}</span>}
                 </div>
