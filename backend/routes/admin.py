@@ -56,6 +56,7 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
     macro_history = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    supplement_protocol = await db.supplement_protocols.find_one({"client_id": client_id}, {"_id": 0})
 
     # Nutrition stats: recent diets + top foods
     diets = await db.diets.find(
@@ -86,6 +87,7 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
         "messages": messages,
         "macro_history": macro_history,
         "nutrition_stats": nutrition_stats,
+        "supplement_protocol": supplement_protocol,
     }
 
 @router.put("/clients/{client_id}", response_model=ClientProfile)

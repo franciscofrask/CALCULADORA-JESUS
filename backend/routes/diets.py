@@ -14,6 +14,39 @@ from pdf_generator import generate_diet_pdf
 
 router = APIRouter(prefix="/diets", tags=["diets"])
 
+
+async def upsert_diet_doc(user_id: str, data: dict) -> dict:
+    """
+    Construye el documento de dieta de un día y lo upserta en db.diets sobre
+    (user_id, fecha). Forma única compartida por save_diet y el volcado del chatbot
+    para que ambos escriban exactamente el mismo shape.
+    """
+    fecha = data.get("fecha")
+    diet_doc = {
+        "user_id": user_id,
+        "fecha": fecha,
+        "tipo_dia": data.get("tipo_dia", "entrenamiento"),
+        "num_comidas": data.get("num_comidas", 4),
+        "momento_entreno": data.get("momento_entreno", 1),
+        "opcion_peri": data.get("opcion_peri", "intra_post"),
+        "comidas": data.get("comidas", {}),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "macros_snapshot": data.get("macros_snapshot", None),
+        "distribution_targets": data.get("distribution_targets", None),
+        "is_cuadrado": data.get("is_cuadrado", False),
+        # Calma comidaConMacrosVolcadas: which meal absorbs the day's remaining macros
+        # (the others are locked). null = no volcado.
+        "comida_volcada": data.get("comida_volcada", None),
+    }
+
+    await db.diets.update_one(
+        {"user_id": user_id, "fecha": fecha},
+        {"$set": diet_doc},
+        upsert=True
+    )
+    return diet_doc
+
+
 @router.post("")
 async def save_diet(data: dict, user = Depends(get_current_user)):
     """Guardar la dieta completa de un día, o solo distribution_targets si targets_only=true."""
@@ -32,28 +65,7 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
         )
         return {"message": "Targets actualizados", "fecha": fecha}
 
-    diet_doc = {
-        "user_id": user["id"],
-        "fecha": fecha,
-        "tipo_dia": data.get("tipo_dia", "entrenamiento"),
-        "num_comidas": data.get("num_comidas", 4),
-        "momento_entreno": data.get("momento_entreno", 1),
-        "opcion_peri": data.get("opcion_peri", "intra_post"),
-        "comidas": data.get("comidas", {}),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "macros_snapshot": data.get("macros_snapshot", None),
-        "distribution_targets": data.get("distribution_targets", None),
-        "is_cuadrado": data.get("is_cuadrado", False),
-        # Calma comidaConMacrosVolcadas: which meal absorbs the day's remaining macros
-        # (the others are locked). null = no volcado.
-        "comida_volcada": data.get("comida_volcada", None),
-    }
-
-    await db.diets.update_one(
-        {"user_id": user["id"], "fecha": fecha},
-        {"$set": diet_doc},
-        upsert=True
-    )
+    await upsert_diet_doc(user["id"], data)
 
     return {"message": "Dieta guardada", "fecha": fecha}
 

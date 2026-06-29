@@ -19,6 +19,8 @@ from routes import (
     chatbot_router,
     routines_router,
     routines_admin_router,
+    supplements_router,
+    supplements_admin_router,
     reports_router,
     checkins_router,
     messages_router,
@@ -88,6 +90,8 @@ api_router.include_router(diets_router)
 api_router.include_router(chatbot_router)
 api_router.include_router(routines_router)
 api_router.include_router(routines_admin_router)
+api_router.include_router(supplements_router)
+api_router.include_router(supplements_admin_router)
 api_router.include_router(reports_router)
 api_router.include_router(checkins_router)
 api_router.include_router(messages_router)

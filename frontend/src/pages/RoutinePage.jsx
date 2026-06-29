@@ -57,8 +57,8 @@ const RoutinePage = () => {
 
     if (!routine) {
         return <Wrap>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-6">Mi rutina</h1>
-            <div className="surface p-10 text-center">
+            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-6" data-testid="routine-heading">Mi rutina</h1>
+            <div className="surface p-10 text-center" data-testid="routine-content">
                 <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Dumbbell className="w-8 h-8 text-brand/60" />
                 </div>
@@ -72,7 +72,7 @@ const RoutinePage = () => {
         <Wrap>
             {/* Header */}
             <div className="flex items-center justify-between mb-5">
-                <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none">Mi rutina</h1>
+                <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="routine-heading">Mi rutina</h1>
                 <button onClick={() => setShowHistory(!showHistory)} data-testid="toggle-history-btn"
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg hover:bg-muted transition-colors">
                     <History className="w-4 h-4" /> {showHistory ? 'Actual' : 'Historial'}

@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { OnboardingProvider } from "./context/OnboardingContext";
 import { ThemeProvider } from "./context/ThemeContext";
 
 // Pages
@@ -17,11 +18,13 @@ import { AdminDashboard, AdminClientsList, AdminLayout } from "./pages/AdminDash
 import ClientDetailPage from "./pages/ClientDetailPage";
 import LeadsPage from "./pages/LeadsPage";
 import ChatbotPage from "./pages/ChatbotPage";
+import SupplementsCatalogPage from "./pages/SupplementsCatalogPage";
 import SupplementsPage from "./pages/SupplementsPage";
 import CheckInsPage from "./pages/CheckInsPage";
 import MacroCalculatorClientPage from "./pages/MacroCalculatorClientPage";
 import FoodSearchPage from "./pages/FoodSearchPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
+import WelcomePage from "./pages/WelcomePage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -92,6 +95,16 @@ function AppRoutes() {
                 }
             />
 
+            {/* Bienvenida tras el cuestionario (muestra macros + primer paso) */}
+            <Route
+                path="/welcome"
+                element={
+                    <ProtectedRoute>
+                        <WelcomePage />
+                    </ProtectedRoute>
+                }
+            />
+
             {/* Onboarding */}
             <Route
                 path="/onboarding"
@@ -138,6 +151,7 @@ function AppRoutes() {
                 <Route path="clients/:clientId" element={<ClientDetailPage />} />
                 <Route path="leads" element={<LeadsPage />} />
                 <Route path="routines" element={<AdminClientsList />} />
+                <Route path="supplements-catalog" element={<SupplementsCatalogPage />} />
                 <Route path="payments" element={<AdminDashboard />} />
             </Route>
 
@@ -152,8 +166,10 @@ function App() {
         <ThemeProvider>
             <BrowserRouter>
                 <AuthProvider>
-                    <AppRoutes />
-                    <Toaster position="top-center" richColors />
+                    <OnboardingProvider>
+                        <AppRoutes />
+                        <Toaster position="top-center" richColors />
+                    </OnboardingProvider>
                 </AuthProvider>
             </BrowserRouter>
         </ThemeProvider>

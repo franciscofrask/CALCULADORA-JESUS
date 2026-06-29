@@ -8,7 +8,7 @@ Las cantidades se calculan dinámicamente según los macros del usuario.
 """
 
 from typing import Dict, List, Optional
-from calma_engine import calcular_macros_efectivos, _redondear_cantidad
+from calma_engine import calcular_macros_efectivos, _redondear_cantidad, parse_categories
 
 # =========================================================
 # PLANTILLAS BASE
@@ -878,268 +878,255 @@ PLANTILLAS = [
 # FUNCIÓN: Generar 3 opciones A/B/C para una comida
 # =========================================================
 
+def _item_avoided_precheck(item: dict, avoided_prefixes: set, avoided_keywords: list) -> bool:
+    """Pre-chequeo barato sobre el item del template (sin tocar BD)."""
+    buscar = (item.get("buscar", "") or "").lower()
+    for kw in (avoided_keywords or []):
+        if kw in buscar:
+            return True
+    cat = str(item.get("categoria", ""))
+    for p in (avoided_prefixes or set()):
+        if cat == p or cat.startswith(p + "."):
+            return True
+    return False
+
+
 async def generar_opciones_menu(
     db,
     momento: str,
     macros_objetivo: Dict[str, float],
     es_vegano: bool = False,
-    excluir_proteinas: list = None
+    excluir_proteinas: list = None,
+    avoided_prefixes: set = None,
+    avoided_keywords: list = None,
 ) -> List[Dict]:
     """
-    Genera 3 opciones de menú (A, B, C) para un momento dado.
-    
+    Genera hasta 3 opciones de menú (A, B, C) autoajustadas para un momento.
+
     REGLAS:
     1. Las 3 opciones usan PROTEÍNAS DIFERENTES
-    2. Las cantidades se calculan para los macros exactos del usuario
-    3. Si la comida tiene más kcal, incluir plantillas con alimentos más calóricos
-    4. Cada opción debe estar "cuadrada" (±4g por macro)
-    
-    Args:
-        db: conexión MongoDB
-        momento: "desayuno", "comida", "merienda", "cena"
-        macros_objetivo: {"P": X, "H": Y, "G": Z}
-        es_vegano: modo vegano
-        excluir_proteinas: lista de categorías de proteína a excluir
-    
-    Returns:
-        Lista de 3 opciones, cada una con los alimentos y cantidades
+    2. Las cantidades se autoajustan (mínimo + escalar) a los macros exactos
+    3. Solo se devuelven menús CUADRADOS donde TODOS los alimentos entran
+    4. Se descartan menús con alimentos evitados por el usuario
     """
-    from calma_engine import calcular_macros_efectivos, _redondear_cantidad
-    from calculator import es_media_unidad
-    
+    avoided_prefixes = avoided_prefixes or set()
+    avoided_keywords = avoided_keywords or []
+
     p_obj = float(macros_objetivo.get("P", macros_objetivo.get("proteina", 0)) or 0)
     h_obj = float(macros_objetivo.get("H", macros_objetivo.get("hidratos", 0)) or 0)
     g_obj = float(macros_objetivo.get("G", macros_objetivo.get("grasa", 0)) or 0)
     kcal_obj = p_obj * 4 + h_obj * 4 + g_obj * 9
-    
+
     excluir = set(excluir_proteinas or [])
-    
+
     # Filtrar plantillas por momento y rango de kcal
     candidatas = [
         p for p in PLANTILLAS
         if p["momento"] == momento
         and p["min_kcal"] <= kcal_obj <= p["max_kcal"]
     ]
-    
+
     if not candidatas:
         # Si no hay en rango, usar todas del momento
         candidatas = [p for p in PLANTILLAS if p["momento"] == momento]
-    
-    # Seleccionar 3 con proteínas diferentes
-    opciones = []
-    proteinas_usadas = set()
-    
+
+    # Descartar plantillas con algún item evitado (pre-chequeo barato)
+    if avoided_prefixes or avoided_keywords:
+        candidatas = [
+            p for p in candidatas
+            if not any(_item_avoided_precheck(it, avoided_prefixes, avoided_keywords) for it in p["items"])
+        ]
+
     # Priorizar: si alto calórico, preferir plantillas con tag alto_calorico
     if kcal_obj > 600:
         candidatas.sort(key=lambda p: ("alto_calorico" in p.get("tags", [])), reverse=True)
-    
+
+    # Seleccionar hasta 3 con proteínas diferentes; solo menús cuadrados
+    opciones = []
+    proteinas_usadas = set()
+
     for plantilla in candidatas:
         if len(opciones) >= 3:
             break
-        
-        # Obtener la proteína principal de esta plantilla
+
+        # Proteína principal de esta plantilla (2 niveles: 2.2 aves / 2.3 vacuno /
+        # 3.1 pescado / 10.1 legumbre... → más variedad que solo "2")
         prot_principal = None
         for item in plantilla["items"]:
             if item["rol"] == "proteina":
-                prot_principal = item["categoria"].split(".")[0]  # Cat principal: "2", "3", "4", etc.
+                prot_principal = ".".join(item["categoria"].split(".")[:2])
                 break
-        
+
         if prot_principal in proteinas_usadas:
             continue
         if prot_principal in excluir:
             continue
-        
-        # Intentar calcular cantidades para esta plantilla
-        opcion = await _calcular_plantilla(db, plantilla, macros_objetivo, es_vegano)
-        
-        if opcion and opcion.get("cuadrada", False):
+
+        opcion = await _ajustar_plantilla(
+            db, plantilla, macros_objetivo, es_vegano,
+            avoided_prefixes, avoided_keywords,
+        )
+
+        if opcion:  # _ajustar_plantilla solo devuelve menús cuadrados con todo dentro
             opciones.append(opcion)
             proteinas_usadas.add(prot_principal)
-    
-    # Si no tenemos 3, relajar criterios
-    if len(opciones) < 3:
-        for plantilla in candidatas:
-            if len(opciones) >= 3:
-                break
-            
-            # Verificar que no es una plantilla ya usada
-            if any(o["plantilla_id"] == plantilla["id"] for o in opciones):
-                continue
-            
-            opcion = await _calcular_plantilla(db, plantilla, macros_objetivo, es_vegano)
-            if opcion:
-                opciones.append(opcion)
-    
+
     # Etiquetar A, B, C
     letras = ["A", "B", "C"]
     for i, opcion in enumerate(opciones):
         opcion["letra"] = letras[i] if i < 3 else f"D{i-2}"
-    
+
     return opciones[:3]
 
 
-async def _calcular_plantilla(
+def _food_avoided(alimento: dict, avoided_prefixes: set, avoided_keywords: list) -> bool:
+    """True si el alimento debe evitarse por keyword (en el nombre) o por categoría."""
+    nombre = (alimento.get("nombre", "") or "").lower()
+    for kw in (avoided_keywords or []):
+        if kw in nombre:
+            return True
+    if not avoided_prefixes:
+        return False
+    for c in parse_categories(alimento.get("categorias", [])):
+        for p in avoided_prefixes:
+            if c == p or c.startswith(p + "."):
+                return True
+    return False
+
+
+MARGEN_MENU = 4.0  # ±4 g por macro para considerar el menú "cuadrado"
+
+
+def _driver_macro(rol: str) -> Optional[str]:
+    """Macro que ESE alimento escala según su rol en el menú."""
+    return {"proteina": "P", "hidrato": "H", "grasa": "G"}.get(rol)
+
+
+def _menu_max(rol: str, cat: str, maximo_base: float) -> float:
+    """Tope superior generoso para el autoajuste de menús (el alimento de ajuste
+    debe poder crecer; los topes del chatbot son demasiado estrictos aquí)."""
+    if cat.startswith("17.1") or cat.startswith("42"):   # aceites / grasas buenas
+        return 30.0
+    if cat.startswith("17"):                             # frutos secos, aguacate, cremas
+        return 60.0
+    return max(maximo_base, 60.0)
+
+
+async def _ajustar_plantilla(
     db,
     plantilla: dict,
     macros_objetivo: Dict[str, float],
-    es_vegano: bool = False
+    es_vegano: bool = False,
+    avoided_prefixes: set = None,
+    avoided_keywords: list = None,
 ) -> Optional[Dict]:
     """
-    Calcula las cantidades exactas de cada alimento de una plantilla
-    para cuadrar los macros objetivo.
+    Autoajuste de una plantilla a los macros de la comida.
+
+    Criterio: TODOS los alimentos del menú tienen que entrar. Se parte de la
+    cantidad MÍNIMA de cada alimento y se escalan las cantidades hasta cuadrar
+    P/H/G (±MARGEN). Si algún alimento no se puede sourcear, está evitado, o el
+    menú no cuadra (a mínimos ya se pasa, o no se llega) -> se descarta (None).
     """
-    from calma_engine import calcular_macros_efectivos, _redondear_cantidad
-    from calculator import es_media_unidad
-    
-    p_obj = float(macros_objetivo.get("P", macros_objetivo.get("proteina", 0)) or 0)
-    h_obj = float(macros_objetivo.get("H", macros_objetivo.get("hidratos", 0)) or 0)
-    g_obj = float(macros_objetivo.get("G", macros_objetivo.get("grasa", 0)) or 0)
-    
-    items_resultado = []
-    p_total = 0
-    h_total = 0
-    g_total = 0
-    
-    # Separar items normales y el item de ajuste (grasa)
-    items_normales = [i for i in plantilla["items"] if i.get("proporcion") != "ajuste"]
-    items_ajuste = [i for i in plantilla["items"] if i.get("proporcion") == "ajuste"]
-    
-    # Paso 1: Calcular cantidades de items normales
-    for item in items_normales:
-        # Buscar el alimento en MongoDB
+    from meal_builder import get_effective_macros_per_100g, get_food_limits
+    from calculator import get_food_config
+
+    avoided_prefixes = avoided_prefixes or set()
+    avoided_keywords = avoided_keywords or []
+
+    obj = {
+        "P": float(macros_objetivo.get("P", macros_objetivo.get("proteina", 0)) or 0),
+        "H": float(macros_objetivo.get("H", macros_objetivo.get("hidratos", 0)) or 0),
+        "G": float(macros_objetivo.get("G", macros_objetivo.get("grasa", 0)) or 0),
+    }
+
+    # Paso 1: resolver TODOS los alimentos por categoría (gate: todos deben existir)
+    foods = []
+    for item in plantilla["items"]:
         alimento = await _buscar_alimento_generico(db, item["buscar"], item["categoria"])
         if not alimento:
-            return None  # No se encontró el alimento, descartar esta plantilla
-        
-        racion = float(alimento.get("racion", 100) or 100)
-        P_100 = float(alimento.get("proteinas", 0) or 0) * 100.0 / racion if racion > 0 else 0
-        H_100 = float(alimento.get("hidratos", 0) or 0) * 100.0 / racion if racion > 0 else 0
-        G_100 = float(alimento.get("grasas", 0) or 0) * 100.0 / racion if racion > 0 else 0
-        
-        cat = str(alimento.get("categorias", ""))
-        # Manejar formato "2.2.2 | HAM"
-        if "|" in cat:
-            cat = cat.split("|")[0].strip()
-        proporcion = float(item.get("proporcion", 0) or 0)
-        
-        # Determinar qué macros cuentan
-        ef_100 = calcular_macros_efectivos(P_100, H_100, G_100, cat, 100.0)
-        
-        # Calcular cantidad según el rol
-        if item["rol"] == "proteina" and ef_100["proteina_cuenta"] and ef_100["proteina_efectiva"] > 0:
-            # Cantidad para cubrir X% del P objetivo
-            p_necesaria = p_obj * proporcion
-            cantidad = (p_necesaria / ef_100["proteina_efectiva"]) * 100
-        elif item["rol"] == "hidrato" and ef_100["hidratos_cuenta"] and ef_100["hidratos_efectivos"] > 0:
-            h_necesaria = h_obj * proporcion
-            cantidad = (h_necesaria / ef_100["hidratos_efectivos"]) * 100
-        elif item["rol"] == "verdura":
-            cantidad = 150  # Cantidad fija de verdura
-        elif item["rol"] == "complemento":
-            cantidad = racion  # Ración por defecto
-        else:
-            cantidad = racion
-        
-        # Redondear
-        if es_media_unidad(alimento):
-            peso_unidad = float(alimento.get("peso_unidad", racion) or racion)
-            media = peso_unidad / 2.0
-            if media > 0:
-                cantidad = round(cantidad / media) * media
-                if cantidad < media:
-                    cantidad = media
-        else:
-            cantidad = _redondear_cantidad(cantidad, cat)
-        
-        if cantidad < 5:
-            cantidad = 5
-        
-        # Recalcular macros efectivos con la cantidad final
-        ef_final = calcular_macros_efectivos(P_100, H_100, G_100, cat, cantidad)
-        
-        factor = cantidad / 100.0
-        
-        items_resultado.append({
-            "alimento_id": alimento.get("id"),
-            "nombre": alimento.get("nombre", item["buscar"]),
-            "cantidad_g": cantidad,
-            "macros_efectivos": {
-                "P": ef_final["proteina_efectiva"],
-                "H": ef_final["hidratos_efectivos"],
-                "G": ef_final["grasa_efectiva"]
-            },
-            "rol": item["rol"]
+            return None
+        if _food_avoided(alimento, avoided_prefixes, avoided_keywords):
+            return None
+        cfg = get_food_config(alimento)
+        ef = get_effective_macros_per_100g(alimento)  # {P,H,G,cat,...} efectivos por 100g
+        minimo = float(cfg.get("minimo", 5) or 5)
+        _, maximo_base = get_food_limits(alimento, cfg)
+        maximo = _menu_max(item["rol"], ef.get("cat", ""), maximo_base)
+        foods.append({
+            "item": item, "alimento": alimento, "ef": ef, "cat": ef.get("cat", ""),
+            "minimo": minimo, "maximo": max(minimo, maximo),
+            "driver": _driver_macro(item["rol"]), "cantidad": minimo,
         })
-        
-        p_total += ef_final["proteina_efectiva"]
-        h_total += ef_final["hidratos_efectivos"]
-        g_total += ef_final["grasa_efectiva"]
-    
-    # Paso 2: Calcular item de ajuste (grasa) para cuadrar
-    for item in items_ajuste:
-        g_faltante = g_obj - g_total
-        
-        if g_faltante <= 1:
-            continue  # No necesitamos más grasa
-        
-        alimento = await _buscar_alimento_generico(db, item["buscar"], item["categoria"])
-        if not alimento:
+
+    def totales():
+        T = {"P": 0.0, "H": 0.0, "G": 0.0}
+        for f in foods:
+            fac = f["cantidad"] / 100.0
+            T["P"] += f["ef"]["P"] * fac
+            T["H"] += f["ef"]["H"] * fac
+            T["G"] += f["ef"]["G"] * fac
+        return T
+
+    # Paso 2: gate de overshoot a mínimos (solo se puede escalar hacia arriba)
+    T = totales()
+    for m in ("P", "H", "G"):
+        if T[m] > obj[m] + MARGEN_MENU:
+            return None
+
+    # Paso 3: escalar cada macro con sus alimentos motor (grasa al final: absorbe
+    # la grasa incidental de proteínas)
+    for m in ("H", "P", "G"):
+        drivers = [f for f in foods if f["driver"] == m and f["ef"][m] > 1e-6]
+        if not drivers:
             continue
-        
-        racion = float(alimento.get("racion", 100) or 100)
-        G_100 = float(alimento.get("grasas", 0) or 0) * 100.0 / racion if racion > 0 else 0
-        P_100 = float(alimento.get("proteinas", 0) or 0) * 100.0 / racion if racion > 0 else 0
-        H_100 = float(alimento.get("hidratos", 0) or 0) * 100.0 / racion if racion > 0 else 0
-        
-        cat = str(alimento.get("categorias", ""))
-        if "|" in cat:
-            cat = cat.split("|")[0].strip()
-        
-        ef_100 = calcular_macros_efectivos(P_100, H_100, G_100, cat, 100.0)
-        
-        if ef_100["grasa_efectiva"] > 0:
-            cantidad = (g_faltante / ef_100["grasa_efectiva"]) * 100
-            cantidad = _redondear_cantidad(cantidad, cat)
-            
-            if cantidad >= 5:
-                ef_final = calcular_macros_efectivos(P_100, H_100, G_100, cat, cantidad)
-                
-                items_resultado.append({
-                    "alimento_id": alimento.get("id"),
-                    "nombre": alimento.get("nombre", item["buscar"]),
-                    "cantidad_g": cantidad,
-                    "macros_efectivos": {
-                        "P": ef_final["proteina_efectiva"],
-                        "H": ef_final["hidratos_efectivos"],
-                        "G": ef_final["grasa_efectiva"]
-                    },
-                    "rol": "grasa"
-                })
-                
-                p_total += ef_final["proteina_efectiva"]
-                h_total += ef_final["hidratos_efectivos"]
-                g_total += ef_final["grasa_efectiva"]
-    
-    # Verificar si está cuadrada
-    cuadrada = (
-        abs(p_total - p_obj) <= 4 and
-        abs(h_total - h_obj) <= 4 and
-        abs(g_total - g_obj) <= 4
-    )
-    
+        T = totales()
+        needed = obj[m] - T[m]
+        if needed <= 0:
+            continue
+        per = needed / len(drivers)
+        for f in drivers:
+            extra_g = per / (f["ef"][m] / 100.0)
+            nueva = min(f["maximo"], f["cantidad"] + extra_g)
+            nueva = _redondear_cantidad(nueva, f["cat"])
+            if nueva < f["minimo"]:
+                nueva = f["minimo"]
+            f["cantidad"] = nueva
+
+    # Paso 4: validar cuadrado
+    T = totales()
+    if any(abs(T[m] - obj[m]) > MARGEN_MENU for m in ("P", "H", "G")):
+        return None
+
+    # Paso 5: construir items en la forma que consume el front
+    items_resultado = []
+    for f in foods:
+        fac = f["cantidad"] / 100.0
+        items_resultado.append({
+            "alimento_id": f["alimento"].get("id"),
+            "nombre": f["alimento"].get("nombre", f["item"]["buscar"]),
+            "cantidad_g": f["cantidad"],
+            "macros_efectivos": {
+                "P": round(f["ef"]["P"] * fac, 1),
+                "H": round(f["ef"]["H"] * fac, 1),
+                "G": round(f["ef"]["G"] * fac, 1),
+            },
+            "rol": f["item"]["rol"],
+        })
+
     return {
         "plantilla_id": plantilla["id"],
         "nombre": plantilla["nombre"],
         "items": items_resultado,
         "macros_totales": {
-            "P": round(p_total, 1),
-            "H": round(h_total, 1),
-            "G": round(g_total, 1),
-            "kcal": round(p_total * 4 + h_total * 4 + g_total * 9, 1)
+            "P": round(T["P"], 1),
+            "H": round(T["H"], 1),
+            "G": round(T["G"], 1),
+            "kcal": round(T["P"] * 4 + T["H"] * 4 + T["G"] * 9, 1),
         },
-        "macros_objetivo": {"P": p_obj, "H": h_obj, "G": g_obj},
-        "cuadrada": cuadrada,
-        "tags": plantilla.get("tags", [])
+        "macros_objetivo": obj,
+        "cuadrada": True,
+        "tags": plantilla.get("tags", []),
     }
 
 

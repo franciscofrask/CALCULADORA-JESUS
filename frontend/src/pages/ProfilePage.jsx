@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,7 +15,7 @@ import {
     User, Mail, CreditCard,
     LogOut, Bell, Lock, ChevronRight, Crown,
     TrendingUp, Edit2, Camera, Check,
-    Scale, Target, Activity, Flame, Zap
+    Scale, Target, Activity, Flame, Zap, Compass
 } from 'lucide-react';
 
 const PLAN_FEATURES = {
@@ -27,6 +28,7 @@ const PLAN_FEATURES = {
 const ProfilePage = () => {
     const navigate = useNavigate();
     const { user, profile, logout, api, refreshProfile } = useAuth();
+    const { startTour } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
     const [formData, setFormData] = useState({ name: user?.name || '', phone: user?.phone || '' });
@@ -135,7 +137,7 @@ const ProfilePage = () => {
     return (
         <div className="p-4 md:p-6 pb-24 md:pb-6 animate-fade-in bg-background min-h-screen relative overflow-hidden">
             <div className="relative z-10 space-y-6 max-w-lg mx-auto">
-                <h1 className="text-2xl font-bold text-foreground tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>MI PERFIL</h1>
+                <h1 className="text-2xl font-bold text-foreground tracking-tight" style={{ fontFamily: 'Barlow Condensed' }} data-testid="profile-heading">MI PERFIL</h1>
 
                 {/* Profile Card */}
                 <Card className="bg-card border-border">
@@ -449,6 +451,16 @@ const ProfilePage = () => {
                         ))}
                     </CardContent>
                 </Card>
+
+                {/* Repetir recorrido guiado */}
+                <Button
+                    variant="outline"
+                    className="w-full bg-transparent border-brand/40 text-brand hover:bg-brand/10 hover:border-brand uppercase tracking-wider"
+                    onClick={() => { navigate('/dashboard'); startTour(); }}
+                    data-testid="replay-tour-btn"
+                >
+                    <Compass className="w-4 h-4 mr-2" /> Repetir recorrido guiado
+                </Button>
 
                 {/* Logout */}
                 <Button

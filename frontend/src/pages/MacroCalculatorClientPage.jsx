@@ -155,7 +155,7 @@ const MacroCalculatorClientPage = () => {
                     <SlidersHorizontal className="w-6 h-6 text-brand" />
                 </div>
                 <div>
-                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none">Ajustar macros</h1>
+                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="macros-heading">Ajustar macros</h1>
                     <p className="text-sm text-muted-foreground mt-1">Modifica tus macros y elige desde qué fecha aplican</p>
                 </div>
             </header>
@@ -167,7 +167,7 @@ const MacroCalculatorClientPage = () => {
                     {/* ── Calculator (helper) ── */}
                     <section className="space-y-3">
                         <p className="caption flex items-center gap-2"><Calculator className="w-4 h-4" /> Calcula tus macros</p>
-                        <div className="surface p-5 space-y-4">
+                        <div className="surface p-5 space-y-4" data-testid="macros-content">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Peso (kg)</label>
@@ -228,8 +228,8 @@ const MacroCalculatorClientPage = () => {
                         </div>
 
                         <GroupCard label="Día entrenamiento" group="training" withFat macros={macros} setMacro={setMacro} />
-                        <GroupCard label="Día descanso" group="rest" withFat macros={macros} setMacro={setMacro} />
                         <GroupCard label="Perientreno (intra + post)" group="peri" withFat={false} macros={macros} setMacro={setMacro} />
+                        <GroupCard label="Día descanso" group="rest" withFat macros={macros} setMacro={setMacro} />
 
                         <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Motivo del cambio (opcional)" className="input-light" />
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
+import NutritionIntro from '../components/nutrition/NutritionIntro';
 import BuildMealModal from '../components/nutrition/BuildMealModal';
 import RepeatMealModal from '../components/nutrition/RepeatMealModal';
 import CopyDietModal from '../components/nutrition/CopyDietModal';
@@ -108,14 +110,21 @@ const POST_CARB_CATEGORIES = [
 
 const NutritionPage = () => {
     const { token } = useAuth();
-    
+    const { notify } = useOnboarding();
+
     // Preferences state - for checking if user has configured preferences
     const [showPreferencesSetup, setShowPreferencesSetup] = useState(false);
     const [userPreferences, setUserPreferences] = useState([]);
     const [avoidedCategories, setAvoidedCategories] = useState([]);
     const [avoidedKeywords, setAvoidedKeywords] = useState([]);
     const [preferencesLoading, setPreferencesLoading] = useState(true);
-    
+    // Intro guiado de primera visita (una sola vez por dispositivo)
+    const [showIntro, setShowIntro] = useState(() => localStorage.getItem('nutrition-intro-seen') !== '1');
+    const dismissIntro = useCallback(() => {
+        localStorage.setItem('nutrition-intro-seen', '1');
+        setShowIntro(false);
+    }, []);
+
     // Date & Config state
     const [currentDate, setCurrentDate] = useState(() => {
         const n = new Date();
@@ -739,6 +748,7 @@ const NutritionPage = () => {
             setSearchQuery('');
             setSearchCategory('');
             toast.success(`${food.nombre} añadido`);
+            notify('nutrition-add-food'); // auto-avanza el tour si está en ese paso
         } catch (err) {
             toast.error('Error añadiendo alimento');
         }
@@ -1239,6 +1249,7 @@ const NutritionPage = () => {
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto pb-24 lg:pb-10 animate-fade-in" data-testid="nutrition-page">
+            {showIntro && <NutritionIntro onClose={dismissIntro} />}
             <header className="flex items-center justify-between gap-4 mb-4">
                 <div>
                     <p className="caption text-brand mb-1">Plan nutricional</p>

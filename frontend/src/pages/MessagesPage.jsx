@@ -94,7 +94,7 @@ const MessagesPage = () => {
     return (
         <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex flex-col animate-fade-in bg-background">
             {/* Header */}
-            <div className="p-4 border-b border-border flex items-center gap-3 bg-card">
+            <div className="p-4 border-b border-border flex items-center gap-3 bg-card" data-testid="messages-content">
                 <Avatar className="border-2 border-[#FF671F]">
                     <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${trainerId}`} />
                     <AvatarFallback className="bg-[#FF671F] text-white">
@@ -102,7 +102,7 @@ const MessagesPage = () => {
                     </AvatarFallback>
                 </Avatar>
                 <div>
-                    <h2 className="font-bold text-foreground uppercase tracking-wider">
+                    <h2 className="font-bold text-foreground uppercase tracking-wider" data-testid="messages-heading">
                         {profile?.trainer_id ? 'Tu Entrenador' : 'Soporte JG12'}
                     </h2>
                     <p className="text-xs text-[#FF671F]">

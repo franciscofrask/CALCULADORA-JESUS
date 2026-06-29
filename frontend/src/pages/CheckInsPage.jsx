@@ -267,13 +267,13 @@ const CheckInsPage = () => {
     const tone = healthScore && HEALTH_TONES[healthScore.score];
 
     return (
-        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1100px] mx-auto space-y-5 animate-fade-in">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1100px] mx-auto space-y-5 animate-fade-in" data-testid="checkins-page">
             <header className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-brand/10">
                     <Activity className="w-6 h-6 text-brand" />
                 </div>
                 <div>
-                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none">Seguimiento</h1>
+                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="checkins-heading">Seguimiento</h1>
                     <p className="text-sm text-muted-foreground mt-1">Tus check-ins diarios, semanales y mensuales</p>
                 </div>
             </header>
@@ -292,7 +292,7 @@ const CheckInsPage = () => {
 
             {/* Diario */}
             {todayDaily ? (
-                <Card className="p-4 border-l-4 border-l-emerald-500 flex items-start gap-3">
+                <Card className="p-4 border-l-4 border-l-emerald-500 flex items-start gap-3" data-testid="checkins-content">
                     <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                     <div>
                         <p className="font-bold text-foreground">Check-in de hoy hecho</p>
@@ -304,7 +304,7 @@ const CheckInsPage = () => {
                     </div>
                 </Card>
             ) : (
-                <Card className="overflow-hidden">
+                <Card className="overflow-hidden" data-testid="checkins-content">
                     <div className="px-5 pt-5 pb-3 flex items-center gap-2">
                         <Activity className="w-4 h-4 text-brand" />
                         <p className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Check-in diario · 10 segundos</p>

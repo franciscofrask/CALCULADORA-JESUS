@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -8,7 +9,8 @@ import {
     Home, Dumbbell, Apple, FileText, MessageCircle, User,
     LogOut, Bell, ChevronRight, CreditCard, Target, Bot,
     Flame, Activity, Scale, Search, SlidersHorizontal, Pill,
-    ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen
+    ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen,
+    CheckCircle2, Circle, Sparkles
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import ThemeToggle from '../components/ThemeToggle';
@@ -69,6 +71,61 @@ const MacroBar = ({ label, consumed, target, color }) => {
     );
 };
 
+// ===== Checklist de primeros pasos (onboarding) =====
+const OnboardingChecklist = ({ steps, onDismiss, navigate, onResume, showResume }) => {
+    const doneCount = steps.filter(s => s.done).length;
+    const pct = Math.round((doneCount / steps.length) * 100);
+    return (
+        <div className="surface p-5 relative overflow-hidden" data-testid="onboarding-checklist">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-brand/5 rounded-full blur-3xl pointer-events-none" />
+            <button onClick={onDismiss} data-testid="dismiss-checklist-btn"
+                className="absolute top-3 right-3 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Ocultar">
+                <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="w-4 h-4 text-brand" />
+                <p className="caption text-brand">Primeros pasos</p>
+            </div>
+            <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-none mb-1">Empezá acá</h2>
+            <p className="text-muted-foreground text-sm mb-4">Completá estos pasos para sacarle todo el provecho a tu plan.</p>
+
+            {/* Barra de progreso */}
+            <div className="flex items-center gap-3 mb-4">
+                <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
+                    <div className="bg-brand h-2 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-xs font-data font-bold text-muted-foreground whitespace-nowrap">{doneCount}/{steps.length}</span>
+            </div>
+
+            <div className="space-y-2">
+                {steps.map((s) => (
+                    <button key={s.label} onClick={() => !s.done && navigate(s.path)}
+                        disabled={s.done}
+                        data-testid={`step-${s.id}`}
+                        className={`w-full flex items-center gap-3 rounded-xl px-3.5 py-3 text-left transition-colors ${s.done ? 'bg-muted/50 cursor-default' : 'bg-muted/40 hover:bg-muted'}`}>
+                        {s.done
+                            ? <CheckCircle2 className="w-5 h-5 text-brand flex-shrink-0" />
+                            : <Circle className="w-5 h-5 text-muted-foreground flex-shrink-0" />}
+                        <div className="min-w-0 flex-1">
+                            <p className={`text-sm font-bold ${s.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{s.label}</p>
+                            {!s.done && s.sub && <p className="text-xs text-muted-foreground">{s.sub}</p>}
+                        </div>
+                        {!s.done && <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                    </button>
+                ))}
+            </div>
+
+            {showResume && (
+                <button onClick={onResume} data-testid="resume-tour-btn"
+                    className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-brand/10 hover:bg-brand/15 text-brand font-bold text-sm py-3 transition-colors">
+                    <Sparkles className="w-4 h-4" /> Continuar recorrido guiado
+                </button>
+            )}
+        </div>
+    );
+};
+
 const QuickCard = ({ icon: Icon, color, label, sub, path, navigate, testId, badge }) => (
     <button onClick={() => navigate(path)} data-testid={testId}
         className="surface surface-hover text-left p-4 group relative">
@@ -86,42 +143,56 @@ const QuickCard = ({ icon: Icon, color, label, sub, path, navigate, testId, badg
 
 const ClientDashboard = () => {
     const { user, profile, api } = useAuth();
+    const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
     const [routine, setRoutine] = useState(null);
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [macros, setMacros] = useState(null);
     const [todayConsumed, setTodayConsumed] = useState({ P: 0, H: 0, G: 0 });
+    const [hasPreferences, setHasPreferences] = useState(true); // optimista: evita parpadeo del checklist
+    const [hasDiet, setHasDiet] = useState(false);
+    const [checklistDismissed, setChecklistDismissed] = useState(() => localStorage.getItem('onboarding-checklist-dismissed') === '1');
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const today = new Date().toISOString().split('T')[0];
-                const [routineRes, messagesRes, macrosRes, dietRes] = await Promise.all([
+                const [routineRes, messagesRes, macrosRes, dietRes, prefsRes] = await Promise.all([
                     api.get('/routines/current').catch(() => ({ data: null })),
                     api.get('/messages/unread-count').catch(() => ({ data: { count: 0 } })),
                     api.get('/macros').catch(() => ({ data: null })),
                     api.get(`/diets/${today}`).catch(() => ({ data: { exists: false } })),
+                    api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
                 ]);
                 setRoutine(routineRes.data);
                 setUnreadMessages(messagesRes.data.count);
                 setMacros(macrosRes.data);
+                setHasPreferences(!!prefsRes.data?.has_preferences);
                 const diet = dietRes.data;
+                let dietHasFood = false;
                 if (diet && diet.exists && diet.comidas) {
                     let totalP = 0, totalH = 0, totalG = 0;
                     Object.values(diet.comidas).forEach(meal => {
                         (meal.alimentos || []).forEach(a => {
                             const ef = a.macros_efectivos || {};
                             totalP += ef.P || 0; totalH += ef.H || 0; totalG += ef.G || 0;
+                            dietHasFood = true;
                         });
                     });
                     setTodayConsumed({ P: Math.round(totalP * 10) / 10, H: Math.round(totalH * 10) / 10, G: Math.round(totalG * 10) / 10 });
                 }
+                setHasDiet(dietHasFood);
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
             }
         };
         if (profile) fetchData();
     }, [api, profile]);
+
+    const dismissChecklist = useCallback(() => {
+        localStorage.setItem('onboarding-checklist-dismissed', '1');
+        setChecklistDismissed(true);
+    }, []);
 
     if (!profile) {
         return (
@@ -150,6 +221,13 @@ const ClientDashboard = () => {
     const getH = (m) => m?.carbs || m?.hidratos || 0;
     const getG = (m) => m?.fat || m?.grasas || 0;
     const getKcal = (m) => Math.round(getP(m) * 4 + getH(m) * 4 + getG(m) * 9);
+
+    const checklistSteps = [
+        { id: 'macros', label: 'Tus macros están calculados', sub: 'Revisá tus objetivos', done: !!hasMacros, path: '/dashboard/nutrition' },
+        { id: 'preferences', label: 'Configurá tus preferencias de comida', sub: 'Qué te gusta y qué evitar', done: hasPreferences, path: '/dashboard/nutrition' },
+        { id: 'diet', label: 'Armá tu primer día de comida', sub: 'Repartí tus macros en comidas', done: hasDiet, path: '/dashboard/nutrition' },
+    ];
+    const showChecklist = !checklistDismissed && checklistSteps.some(s => !s.done);
 
     const consumedKcal = Math.round(todayConsumed.P * 4 + todayConsumed.H * 4 + todayConsumed.G * 9);
     const weekProgress = (profile.week / 4) * 100;
@@ -180,6 +258,12 @@ const ClientDashboard = () => {
                     </button>
                 )}
             </header>
+
+            {/* Checklist de primeros pasos */}
+            {showChecklist && (
+                <OnboardingChecklist steps={checklistSteps} onDismiss={dismissChecklist} navigate={navigate}
+                    onResume={resumeTour} showResume={!tourCompleted && !tourActive} />
+            )}
 
             {/* Main grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">

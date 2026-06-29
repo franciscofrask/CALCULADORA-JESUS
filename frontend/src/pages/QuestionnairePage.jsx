@@ -255,7 +255,7 @@ const QuestionnairePage = () => {
             });
             await refreshProfile();
             toast.success('¡Cuestionario enviado! Tus macros se han calculado.');
-            navigate('/dashboard');
+            navigate('/welcome');
         } catch (e) {
             toast.error(e.response?.data?.detail || 'Error al enviar el cuestionario');
         } finally {

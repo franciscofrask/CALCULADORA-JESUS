@@ -74,6 +74,9 @@ class ClientProfile(BaseModel):
     training_experience: Optional[str] = None
     activity_level: Optional[str] = None
     biotype: Optional[str] = None
+    # Onboarding guiado (tour de producto): progreso por usuario.
+    onboarding_completed: Optional[bool] = None
+    onboarding_step: Optional[str] = None
     # ---- Stripe billing (suscripción) ----
     stripe_customer_id: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
@@ -118,6 +121,11 @@ class ClientProfileUpdate(BaseModel):
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None
     training_days: Optional[int] = None
+
+# Onboarding guiado (tour de producto)
+class OnboardingUpdate(BaseModel):
+    step: Optional[str] = None          # id del paso actual donde quedó
+    completed: Optional[bool] = None    # tour finalizado/omitido
 
 # Cuestionario inicial (ELM)
 class QuestionnaireSubmit(BaseModel):

@@ -37,6 +37,7 @@ class ChatConfigRequest(BaseModel):
     num_comidas: int = 4
     momento_entreno: int = 1
     opcion_peri: str = "intra_post"
+    single_meal: bool = False
 
 class ChatMessageRequest(BaseModel):
     session_id: Optional[str] = None

@@ -34,6 +34,51 @@ from macro_distribution import distribuir_macros as dist_macros
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
+# ── Filtro de preferencias / alimentos evitados (fuente única) ───────────────
+# Mapea los IDs de categoría evitada (espejo del frontend PREFERENCE_CATEGORIES)
+# a prefijos de categoría CALMA.
+AVOIDABLE_PREFIXES = {
+    'grasas_buenas': ['42'], 'grasas_todo': ['17'], 'aperitivos': ['38'],
+    'arroces': ['21'], 'aves': ['2.2'], 'barritas': ['47'],
+    'bebidas': ['19'], 'isotonicas': ['18.1'], 'beb_vegetales': ['24'],
+    'bolleria': ['31'], 'cacao': ['37'], 'casqueria': ['40'],
+    'cerdo': ['2.4'], 'cereales': ['7'], 'chocolates': ['34'],
+    'cocina_esp': ['39'], 'comida_rapida': ['49'], 'embutidos': ['2.1'],
+    'fruta': ['11'], 'helados': ['44'], 'huevos': ['1'],
+    'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.6'],
+    'carnes_rojas': ['2.7'], 'panes': ['8'], 'pasta': ['22'],
+    'pescados': ['3'], 'pizza': ['32'], 'proteina_polvo': ['4', '29', '30'],
+    'proteina_vegetal': ['28'], 'salsas': ['16'], 'sopas': ['48'],
+    'superalimentos': ['51'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
+    'verduras': ['13'],
+}
+
+
+def build_avoided_filter(profile):
+    """Devuelve (avoided_prefixes:set, avoided_keywords:list) desde el perfil."""
+    avoided_categories = profile.get("avoided_categories", []) if profile else []
+    avoided_keywords = [kw.lower() for kw in (profile.get("avoided_keywords", []) if profile else [])]
+    avoided_prefixes = set()
+    for cat_id in avoided_categories:
+        for prefix in AVOIDABLE_PREFIXES.get(cat_id, []):
+            avoided_prefixes.add(prefix)
+    return avoided_prefixes, avoided_keywords
+
+
+def food_is_avoided(alimento, avoided_prefixes, avoided_keywords):
+    """True si el alimento debe evitarse por keyword o por categoría."""
+    nombre = (alimento.get("nombre", "") or "").lower()
+    for kw in avoided_keywords:
+        if kw in nombre:
+            return True
+    if not avoided_prefixes:
+        return False
+    for food_cat in parse_categories(alimento.get("categorias", [])):
+        for prefix in avoided_prefixes:
+            if food_cat == prefix or food_cat.startswith(prefix + "."):
+                return True
+    return False
+
 # ── Preparation filter helpers (mirrors Calma group-home-utils.js) ──────────
 #
 # Calma's $ function: new RegExp(`^((${code})[.]\d|(${code})$)`).test(token)
@@ -483,50 +528,8 @@ async def search_foods_endpoint(
 
     # Load user avoided preferences for filtering
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
-    avoided_categories = []
-    avoided_keywords = []
-    if profile:
-        avoided_categories = profile.get("avoided_categories", [])
-        avoided_keywords = [kw.lower() for kw in profile.get("avoided_keywords", [])]
-
-    # Map avoided_category IDs to category prefixes (mirrors frontend PREFERENCE_CATEGORIES)
-    AVOIDABLE_PREFIXES = {
-        'grasas_buenas': ['42'], 'grasas_todo': ['17'], 'aperitivos': ['38'],
-        'arroces': ['21'], 'aves': ['2.2'], 'barritas': ['47'],
-        'bebidas': ['19'], 'isotonicas': ['18.1'], 'beb_vegetales': ['24'],
-        'bolleria': ['31'], 'cacao': ['37'], 'casqueria': ['40'],
-        'cerdo': ['2.4'], 'cereales': ['7'], 'chocolates': ['34'],
-        'cocina_esp': ['39'], 'comida_rapida': ['49'], 'embutidos': ['2.1'],
-        'fruta': ['11'], 'helados': ['44'], 'huevos': ['1'],
-        'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.6'],
-        'carnes_rojas': ['2.7'], 'panes': ['8'], 'pasta': ['22'],
-        'pescados': ['3'], 'pizza': ['32'], 'proteina_polvo': ['4', '29', '30'],
-        'proteina_vegetal': ['28'], 'salsas': ['16'], 'sopas': ['48'],
-        'superalimentos': ['51'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
-        'verduras': ['13'],
-    }
-    avoided_prefixes = set()
-    for cat_id in avoided_categories:
-        for prefix in AVOIDABLE_PREFIXES.get(cat_id, []):
-            avoided_prefixes.add(prefix)
-
-    def is_avoided(alimento):
-        nombre = alimento.get("nombre", "").lower()
-        # Filter by keyword
-        for kw in avoided_keywords:
-            if kw in nombre:
-                return True
-        if not avoided_prefixes:
-            return False
-        # Parse numeric category parts and check against avoided prefixes
-        food_cats = parse_categories(alimento.get("categorias", []))
-        for food_cat in food_cats:
-            for prefix in avoided_prefixes:
-                if food_cat == prefix or food_cat.startswith(prefix + "."):
-                    return True
-        return False
-
-    alimentos = [a for a in alimentos if not is_avoided(a)]
+    avoided_prefixes, avoided_keywords = build_avoided_filter(profile)
+    alimentos = [a for a in alimentos if not food_is_avoided(a, avoided_prefixes, avoided_keywords)]
 
     # POSTENTRENO universe restriction (Calma Dieta.js `todosLosAlimentos`):
     #   nombre == "postentreno" ? G(getTodosLosAlimentos, ["25"]) : getTodosLosAlimentos
@@ -727,46 +730,12 @@ async def get_frequent_foods(
 
     # Load user avoided preferences
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
-    avoided_categories = profile.get("avoided_categories", []) if profile else []
-    avoided_keywords = [kw.lower() for kw in (profile.get("avoided_keywords", []) if profile else [])]
-    AVOIDABLE_PREFIXES = {
-        'grasas_buenas': ['42'], 'grasas_todo': ['17'], 'aperitivos': ['38'],
-        'arroces': ['21'], 'aves': ['2.2'], 'barritas': ['47'],
-        'bebidas': ['19'], 'isotonicas': ['18.1'], 'beb_vegetales': ['24'],
-        'bolleria': ['31'], 'cacao': ['37'], 'casqueria': ['40'],
-        'cerdo': ['2.4'], 'cereales': ['7'], 'chocolates': ['34'],
-        'cocina_esp': ['39'], 'comida_rapida': ['49'], 'embutidos': ['2.1'],
-        'fruta': ['11'], 'helados': ['44'], 'huevos': ['1'],
-        'lacteos': ['5'], 'legumbres': ['10'], 'carnes_blancas': ['2.6'],
-        'carnes_rojas': ['2.7'], 'panes': ['8'], 'pasta': ['22'],
-        'pescados': ['3'], 'pizza': ['32'], 'proteina_polvo': ['4', '29', '30'],
-        'proteina_vegetal': ['28'], 'salsas': ['16'], 'sopas': ['48'],
-        'superalimentos': ['51'], 'tuberculos': ['9'], 'vacuno': ['2.3'],
-        'verduras': ['13'],
-    }
-    avoided_prefixes = set()
-    for cat_id in avoided_categories:
-        for prefix in AVOIDABLE_PREFIXES.get(cat_id, []):
-            avoided_prefixes.add(prefix)
-
-    def is_avoided(alimento):
-        nombre = alimento.get("nombre", "").lower()
-        for kw in avoided_keywords:
-            if kw in nombre:
-                return True
-        if not avoided_prefixes:
-            return False
-        food_cats = parse_categories(alimento.get("categorias", []))
-        for food_cat in food_cats:
-            for prefix in avoided_prefixes:
-                if food_cat == prefix or food_cat.startswith(prefix + "."):
-                    return True
-        return False
+    avoided_prefixes, avoided_keywords = build_avoided_filter(profile)
 
     enriched = []
     for fid_str in top_ids_str:
         food = foods_map.get(fid_str)
-        if not food or is_avoided(food):
+        if not food or food_is_avoided(food, avoided_prefixes, avoided_keywords):
             continue
         cfg = get_food_config(food)
         enriched.append({
@@ -823,38 +792,39 @@ async def suggest_new_food(food: FoodSuggestion, user = Depends(get_current_user
 
 # ==================== MENU TEMPLATES ====================
 
-@router.get("/menu-options")
-async def get_menu_options(
-    tipo_dia: str,
-    num_comida: int,
-    macros: Optional[str] = None,
-    user = Depends(get_current_user)
-):
-    """Genera opciones de menú A/B/C para una comida."""
+@router.post("/menu-options")
+async def get_menu_options(data: dict, user = Depends(get_current_user)):
+    """Genera hasta 3 opciones de menú autoajustadas a los macros de la comida.
+
+    Body: {momento, macros_objetivo:{P,H,G}, es_vegano?, excluir_proteinas?}.
+    Respeta las preferencias/alimentos evitados del usuario.
+    """
     from meal_templates import generar_opciones_menu
-    
-    target_macros = {"P": 40, "H": 15, "G": 8}
-    if macros:
-        parts = macros.split(",")
-        if len(parts) == 3:
-            target_macros = {"P": float(parts[0]), "H": float(parts[1]), "G": float(parts[2])}
-    
-    foods_list = await db.foods.find({}, {"_id": 0}).to_list(3000)
-    options = generar_opciones_menu(tipo_dia, num_comida, target_macros, foods_list)
-    
-    return options
+
+    momento = data.get("momento", "comida")
+    macros_objetivo = data.get("macros_objetivo") or {"P": 40, "H": 15, "G": 8}
+    es_vegano = bool(data.get("es_vegano", False))
+    excluir_proteinas = data.get("excluir_proteinas") or []
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    avoided_prefixes, avoided_keywords = build_avoided_filter(profile)
+
+    opciones = await generar_opciones_menu(
+        db, momento, macros_objetivo, es_vegano, excluir_proteinas,
+        avoided_prefixes, avoided_keywords,
+    )
+    return {"opciones": opciones}
+
 
 @router.get("/test-templates")
-async def test_templates():
+async def test_templates(user = Depends(get_current_user)):
     """Test endpoint para verificar templates de menú."""
     from meal_templates import generar_opciones_menu
-    
-    foods_list = await db.foods.find({}, {"_id": 0}).to_list(3000)
-    target = {"P": 40, "H": 15, "G": 8}
-    
+
+    target = {"P": 40, "H": 45, "G": 12}
     return {
-        "entrenamiento_c1": generar_opciones_menu("entrenamiento", 1, target, foods_list),
-        "descanso_c1": generar_opciones_menu("descanso", 1, target, foods_list)
+        "desayuno": await generar_opciones_menu(db, "desayuno", target),
+        "comida": await generar_opciones_menu(db, "comida", target),
     }
 
 # ==================== CONFIG ====================

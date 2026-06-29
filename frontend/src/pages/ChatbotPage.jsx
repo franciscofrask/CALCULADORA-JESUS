@@ -1,21 +1,96 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download, ClipboardList } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Persistencia de la conversación durante la sesión (sobrevive a navegación y recargas
+// de la pestaña; se limpia al cerrar la pestaña o al reiniciar el chat).
+const PERSIST_KEY = 'chatbot_session_state';
+const loadPersisted = () => {
+  try { return JSON.parse(sessionStorage.getItem(PERSIST_KEY)) || {}; }
+  catch { return {}; }
+};
+
 export default function ChatbotPage() {
-  const [sessionId, setSessionId] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const navigate = useNavigate();
+
+  // Snapshot persistido leído una sola vez al montar
+  const persistedRef = useRef(undefined);
+  if (persistedRef.current === undefined) persistedRef.current = loadPersisted();
+  const p = persistedRef.current;
+
+  const [sessionId, setSessionId] = useState(p.sessionId ?? null);
+  const [messages, setMessages] = useState(p.messages ?? []);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState('init'); // init, config, building_meal, complete
-  const [currentMeal, setCurrentMeal] = useState(1);
-  const [macrosRestantes, setMacrosRestantes] = useState({ P: 0, H: 0, G: 0 });
-  const [distribucion, setDistribucion] = useState(null);
-  const [daySummary, setDaySummary] = useState(null);
-  
+  const [step, setStep] = useState(p.step ?? 'init'); // init, config, building_meal, complete
+  // Config conversacional híbrida: subfases mientras step === 'config'
+  const [configStage, setConfigStage] = useState(p.configStage ?? 'date'); // date, tipo, comidas
+  const [targetDate, setTargetDate] = useState(p.targetDate ?? null); // YYYY-MM-DD destino del volcado
+  const [tipoDia, setTipoDia] = useState(p.tipoDia ?? null);
+  const [numComidas, setNumComidas] = useState(p.numComidas ?? 4);
+  const [opcionPeri, setOpcionPeri] = useState(p.opcionPeri ?? 'intra_post');
+  const [momentoEntreno, setMomentoEntreno] = useState(p.momentoEntreno ?? 1);
+  const [singleMeal, setSingleMeal] = useState(p.singleMeal ?? false);
+  const [mealNombre, setMealNombre] = useState(p.mealNombre ?? 'Comida 1');
+  const [saving, setSaving] = useState(false);
+  const [currentMeal, setCurrentMeal] = useState(p.currentMeal ?? 1);
+  const [macrosRestantes, setMacrosRestantes] = useState(p.macrosRestantes ?? { P: 0, H: 0, G: 0 });
+  const [distribucion, setDistribucion] = useState(p.distribucion ?? null);
+  const [daySummary, setDaySummary] = useState(p.daySummary ?? null);
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  // Decisión (una sola vez) sobre sobrescribir el día al sincronizar con nutrición
+  const autoSyncRef = useRef(p.autoSync ?? { decided: false, enabled: true });
+
+  // Guardar la conversación en sessionStorage cada vez que cambia algo relevante
+  useEffect(() => {
+    const snapshot = {
+      sessionId, messages, step, configStage, targetDate, tipoDia, numComidas,
+      opcionPeri, momentoEntreno, singleMeal, mealNombre, currentMeal, macrosRestantes, distribucion, daySummary,
+      autoSync: autoSyncRef.current,
+    };
+    try { sessionStorage.setItem(PERSIST_KEY, JSON.stringify(snapshot)); } catch (e) {}
+  }, [sessionId, messages, step, configStage, targetDate, tipoDia, numComidas,
+      opcionPeri, momentoEntreno, singleMeal, mealNombre, currentMeal, macrosRestantes, distribucion, daySummary]);
+
+  // Al montar: si retomamos una sesión, verificar que sigue viva en el backend.
+  // Si se perdió (p. ej. reinicio del backend), reiniciar limpio.
+  useEffect(() => {
+    const sid = p.sessionId;
+    if (!sid || !p.step || p.step === 'init') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_URL}/api/chatbot/session-exists?session_id=${sid}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const d = await r.json();
+        if (!cancelled && !d.exists) {
+          try { sessionStorage.removeItem(PERSIST_KEY); } catch (e) {}
+          setSessionId(null);
+          setMessages([]);
+          setStep('init');
+          setConfigStage('date');
+          setTargetDate(null);
+          setTipoDia(null);
+          setNumComidas(4);
+          setOpcionPeri('intra_post');
+          setMomentoEntreno(1);
+          setSingleMeal(false);
+          setMealNombre('Comida 1');
+          setCurrentMeal(1);
+          setDistribucion(null);
+          setDaySummary(null);
+          autoSyncRef.current = { decided: false, enabled: true };
+        }
+      } catch (e) {}
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,6 +106,41 @@ export default function ChatbotPage() {
     setMessages(prev => [...prev, { content, isUser, data, timestamp: new Date() }]);
   };
 
+  // ── Fechas (resolución en el cliente para respetar el timezone local) ──
+  const todayLocal = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+  };
+
+  const stripAccents = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  // Convierte texto/botón en YYYY-MM-DD; null si no se entiende.
+  const parseTargetDate = (raw) => {
+    if (!raw) return null;
+    const t = stripAccents(raw.toString().trim().toLowerCase());
+    if (t === 'hoy') return todayLocal();
+    if (t === 'manana') {
+      const d = new Date(todayLocal() + 'T12:00:00');
+      d.setDate(d.getDate() + 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const dm = t.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+    if (dm) {
+      const day = +dm[1], mon = +dm[2], yr = dm[3] ? +dm[3] : new Date().getFullYear();
+      if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) {
+        return `${yr}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+    return null;
+  };
+
+  const formatDateLabel = (iso) => {
+    if (iso === todayLocal()) return 'Hoy';
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  };
+
   // Iniciar sesión de chatbot
   const startChat = async () => {
     setLoading(true);
@@ -43,11 +153,12 @@ export default function ChatbotPage() {
         }
       });
       const data = await res.json();
-      
+
       if (data.session_id) {
         setSessionId(data.session_id);
         setStep('config');
-        addMessage(data.message, false);
+        setConfigStage('date');
+        addMessage('¡Hola! Soy tu asistente de nutrición. ¿Para qué día quieres montar la dieta?', false);
       }
     } catch (error) {
       addMessage('Error al iniciar el chatbot. Por favor, recarga la página.', false);
@@ -55,8 +166,121 @@ export default function ChatbotPage() {
     setLoading(false);
   };
 
-  // Configurar el día
-  const configureDay = async (tipoDia) => {
+  // Maneja una respuesta de configuración (desde botón o texto libre)
+  const submitConfig = (rawValue) => {
+    const value = (rawValue ?? '').toString().trim();
+    if (!value || loading) return;
+
+    if (configStage === 'date') {
+      const iso = parseTargetDate(value);
+      if (!iso) {
+        addMessage(value, true);
+        addMessage('No entendí la fecha. Dime "Hoy", "Mañana" o una fecha como 2026-07-01.', false);
+        return;
+      }
+      setTargetDate(iso);
+      addMessage(formatDateLabel(iso), true);
+      addMessage('¿Es día de entrenamiento o de descanso?', false);
+      setConfigStage('tipo');
+      return;
+    }
+
+    if (configStage === 'tipo') {
+      const v = stripAccents(value.toLowerCase());
+      const tipo = v.includes('entren') ? 'entrenamiento' : v.includes('descan') ? 'descanso' : null;
+      if (!tipo) {
+        addMessage(value, true);
+        addMessage('Dime "Entrenamiento" o "Descanso".', false);
+        return;
+      }
+      setTipoDia(tipo);
+      addMessage(tipo === 'entrenamiento' ? 'Día de entrenamiento' : 'Día de descanso', true);
+      addMessage('¿Cuántas comidas vas a hacer, 3 o 4?', false);
+      setConfigStage('comidas');
+      return;
+    }
+
+    if (configStage === 'comidas') {
+      const v = stripAccents(value.toLowerCase());
+      const isSingle = v.includes('bloque') || v.includes('unic') || v.includes('una comida') || value.trim() === '1';
+      const n = isSingle ? 1 : (value.includes('3') ? 3 : value.includes('4') ? 4 : null);
+      if (!n) {
+        addMessage(value, true);
+        addMessage('Dime 3 comidas, 4 comidas o bloque único.', false);
+        return;
+      }
+      setNumComidas(n);
+      setSingleMeal(isSingle);
+      addMessage(isSingle ? 'Bloque único (1 comida)' : `${n} comidas`, true);
+      if (tipoDia === 'entrenamiento') {
+        addMessage('¿Cómo gestionas el peri-entreno (Intra/Post)?', false);
+        setConfigStage('peri');
+      } else {
+        configureDay(tipoDia, n, 'sin_peri', 1, isSingle);
+      }
+      return;
+    }
+
+    if (configStage === 'peri') {
+      const v = stripAccents(value.toLowerCase());
+      let op = null;
+      if (v.includes('intra') && v.includes('post')) op = 'intra_post';
+      else if (v.includes('solo') && v.includes('post')) op = 'solo_post';
+      else if (v.includes('solo') && v.includes('intra')) op = 'solo_intra';
+      else if (v.includes('sin') || v.includes('nada') || v.includes('ningun')) op = 'sin_peri';
+      else if (v.includes('post')) op = 'solo_post';
+      else if (v.includes('intra')) op = 'solo_intra';
+      if (!op) {
+        addMessage(value, true);
+        addMessage('Elige: "Intra + Post", "Solo Post", "Solo Intra" o "Sin peri".', false);
+        return;
+      }
+      setOpcionPeri(op);
+      addMessage(periLabel(op), true);
+      // En bloque único las peri van tras la comida única: no preguntamos el momento.
+      if (singleMeal) {
+        configureDay(tipoDia, numComidas, op, 1, true);
+      } else {
+        addMessage('¿Cuándo entrenas?', false);
+        setConfigStage('momento');
+      }
+      return;
+    }
+
+    if (configStage === 'momento') {
+      const v = stripAccents(value.toLowerCase());
+      let m = null;
+      if (v.includes('ayun')) m = 0;
+      else if (v.includes('3')) m = 3;
+      else if (v.includes('2')) m = 2;
+      else if (v.includes('1')) m = 1;
+      if (m === null) {
+        addMessage(value, true);
+        addMessage('Dime: "En ayunas", o "Después de la comida 1/2/3".', false);
+        return;
+      }
+      setMomentoEntreno(m);
+      addMessage(momentoLabel(m), true);
+      configureDay(tipoDia, numComidas, opcionPeri, m, singleMeal);
+    }
+  };
+
+  const periLabel = (op) => ({
+    intra_post: 'Intra + Post',
+    solo_post: 'Solo Post',
+    solo_intra: 'Solo Intra',
+    sin_peri: 'Sin peri',
+  }[op] || op);
+
+  const momentoLabel = (m) => ({
+    0: 'En ayunas',
+    1: 'Después de la comida 1',
+    2: 'Después de la comida 2',
+    3: 'Después de la comida 3',
+  }[m] || `Momento ${m}`);
+
+  // Configurar el día (llama al backend con tipo, nº de comidas, peri, momento y bloque único)
+  const configureDay = async (tipo, comidas, opPeri, momento = 1, single = false) => {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/chatbot/configure?session_id=${sessionId}`, {
@@ -66,20 +290,21 @@ export default function ChatbotPage() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          tipo_dia: tipoDia,
-          num_comidas: 4,
-          momento_entreno: 1,
-          opcion_peri: tipoDia === 'entrenamiento' ? 'intra_post' : 'sin_peri'
+          tipo_dia: tipo,
+          num_comidas: comidas,
+          momento_entreno: momento,
+          opcion_peri: opPeri || (tipo === 'entrenamiento' ? 'intra_post' : 'sin_peri'),
+          single_meal: single
         })
       });
       const data = await res.json();
-      
+
       if (data.distribucion) {
         setDistribucion(data.distribucion);
         setCurrentMeal(data.comida_actual);
-        setMacrosRestantes(data.distribucion.comidas.C1);
+        setMealNombre(data.meal_nombre || 'Comida 1');
+        setMacrosRestantes(data.objetivo || data.distribucion.comidas.C1);
         setStep('building_meal');
-        addMessage(`Día de ${tipoDia}`, true);
         addMessage(data.mensaje, false);
       }
     } catch (error) {
@@ -116,6 +341,7 @@ export default function ChatbotPage() {
         if (data.state) {
           setCurrentMeal(data.state.comida_actual);
           setMacrosRestantes(data.state.restante);
+          if (data.state.meal_nombre) setMealNombre(data.state.meal_nombre);
           setStep(data.state.step);
         }
         
@@ -163,13 +389,56 @@ export default function ChatbotPage() {
       } else {
         setCurrentMeal(data.comida_actual);
         setMacrosRestantes(data.objetivo);
+        if (data.meal_nombre) setMealNombre(data.meal_nombre);
         addMessage('Comida guardada ✓', true);
         addMessage(data.mensaje, false);
       }
+
+      // Sincronizar la dieta en la pestaña de nutrición tras guardar cada comida
+      await syncToDiet();
     } catch (error) {
       addMessage('Error al completar la comida.', false);
     }
     setLoading(false);
+  };
+
+  // Vuelca el progreso actual en la pestaña de nutrición del día destino.
+  // Decide UNA sola vez si sobrescribir un día que ya tuviera dieta.
+  const syncToDiet = async () => {
+    if (!sessionId || !targetDate) return;
+    try {
+      if (!autoSyncRef.current.decided) {
+        const ex = await fetch(`${API_URL}/api/diets/${targetDate}`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        }).then(r => r.json());
+        const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
+        autoSyncRef.current.decided = true;
+        if (hasFood) {
+          const ok = window.confirm(
+            `Ya tienes una dieta guardada el ${formatDateLabel(targetDate)}. ¿Quieres que el chatbot la vaya actualizando con esta?`
+          );
+          autoSyncRef.current.enabled = ok;
+          if (!ok) {
+            addMessage('Vale, no tocaré tu dieta guardada. Podrás volcarla manualmente al terminar.', false);
+            return;
+          }
+        }
+      }
+
+      if (!autoSyncRef.current.enabled) return;
+
+      const res = await fetch(
+        `${API_URL}/api/chatbot/save-to-diet?session_id=${sessionId}&fecha=${targetDate}&overwrite=true`,
+        { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } }
+      );
+      const data = await res.json();
+      if (res.ok && !data.needs_confirmation) {
+        localStorage.setItem('nutrition_last_date', targetDate);
+        addMessage(`✅ Guardado en tu pestaña de nutrición (${formatDateLabel(targetDate)}).`, false);
+      }
+    } catch (e) {
+      // Silencioso: no bloquea el flujo del chat si la sincronización falla
+    }
   };
 
   // Formatear actualización de comida
@@ -227,9 +496,19 @@ export default function ChatbotPage() {
     setSessionId(null);
     setMessages([]);
     setStep('init');
+    setConfigStage('date');
+    setTargetDate(null);
+    setTipoDia(null);
+    setNumComidas(4);
+    setOpcionPeri('intra_post');
+    setMomentoEntreno(1);
+    setSingleMeal(false);
+    setMealNombre('Comida 1');
     setCurrentMeal(1);
     setDistribucion(null);
     setDaySummary(null);
+    autoSyncRef.current = { decided: false, enabled: true };
+    try { sessionStorage.removeItem(PERSIST_KEY); } catch (e) {}
   };
 
   // Renderizar mensaje
@@ -291,6 +570,56 @@ export default function ChatbotPage() {
     setLoading(false);
   };
 
+  // Volcar la dieta construida en la pestaña de nutrición del día destino
+  const saveToDiet = async (force = false) => {
+    if (!sessionId || !targetDate || saving) return;
+    setSaving(true);
+    try {
+      // Si la auto-sincronización ya está activa, el día ya es nuestro: no re-preguntar
+      if (!force && autoSyncRef.current.decided && autoSyncRef.current.enabled) {
+        force = true;
+      }
+
+      // 1. Si no forzamos, comprobar si ese día ya tiene alimentos
+      if (!force) {
+        const exRes = await fetch(`${API_URL}/api/diets/${targetDate}`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        const ex = await exRes.json();
+        const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
+        if (hasFood) {
+          const ok = window.confirm(`Ya tienes una dieta guardada el ${formatDateLabel(targetDate)}. ¿Sobrescribirla?`);
+          if (!ok) { setSaving(false); return; }
+          force = true;
+        }
+      }
+
+      // 2. Volcar
+      const res = await fetch(
+        `${API_URL}/api/chatbot/save-to-diet?session_id=${sessionId}&fecha=${targetDate}&overwrite=${force}`,
+        { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } }
+      );
+      const data = await res.json();
+
+      if (data.needs_confirmation) {
+        const ok = window.confirm(data.message || '¿Sobrescribir la dieta existente?');
+        if (ok) { setSaving(false); return saveToDiet(true); }
+        setSaving(false);
+        return;
+      }
+
+      if (!res.ok) throw new Error(data.detail || 'Error al volcar');
+
+      // 3. Handoff a la pestaña de nutrición en ese día
+      addMessage(`✅ Dieta volcada en tu pestaña de nutrición (${formatDateLabel(targetDate)}). Abriéndola…`, false);
+      localStorage.setItem('nutrition_last_date', targetDate);
+      setTimeout(() => navigate('/dashboard/nutrition'), 600);
+    } catch (error) {
+      addMessage('Error al volcar la dieta. Inténtalo de nuevo.', false);
+    }
+    setSaving(false);
+  };
+
   const renderDaySummary = () => {
     if (!daySummary) return null;
     
@@ -298,20 +627,31 @@ export default function ChatbotPage() {
       <div className="bg-card rounded-xl p-4 mt-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-orange-500">Resumen del Día</h3>
-          <button
-            onClick={exportToPDF}
-            disabled={loading}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
-            data-testid="export-pdf-btn"
-          >
-            <Download size={18} />
-            Exportar PDF
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => saveToDiet(false)}
+              disabled={saving || loading}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+              data-testid="volcar-dieta-btn"
+            >
+              {saving ? <Loader2 className="animate-spin" size={18} /> : <ClipboardList size={18} />}
+              Volcar a mi dieta
+            </button>
+            <button
+              onClick={exportToPDF}
+              disabled={loading}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+              data-testid="export-pdf-btn"
+            >
+              <Download size={18} />
+              Exportar PDF
+            </button>
+          </div>
         </div>
         
         {daySummary.comidas?.map((comida, idx) => (
           <div key={idx} className="mb-4 pb-4 border-b border-border last:border-0">
-            <h4 className="font-semibold text-foreground mb-2">Comida {comida.numero}</h4>
+            <h4 className="font-semibold text-foreground mb-2">{comida.nombre || `Comida ${comida.numero}`}</h4>
             <div className="space-y-1 text-sm">
               {comida.alimentos?.map((a, i) => (
                 <div key={i} className="text-muted-foreground">
@@ -354,9 +694,9 @@ export default function ChatbotPage() {
             <Bot size={24} />
           </div>
           <div>
-            <h1 className="font-bold">Asistente de Nutrición</h1>
+            <h1 className="font-bold" data-testid="chatbot-heading">Asistente de Nutrición</h1>
             <p className="text-xs text-muted-foreground">
-              {step === 'building_meal' && `Comida ${currentMeal} • Restante: P=${macrosRestantes.P}g H=${macrosRestantes.H}g G=${macrosRestantes.G}g`}
+              {step === 'building_meal' && `${mealNombre} • Restante: P=${macrosRestantes.P}g H=${macrosRestantes.H}g G=${macrosRestantes.G}g`}
               {step === 'complete' && '¡Día completo!'}
               {step === 'init' && 'Listo para empezar'}
               {step === 'config' && 'Configurando día...'}
@@ -396,25 +736,81 @@ export default function ChatbotPage() {
           </div>
         )}
 
-        {/* Botones de configuración */}
+        {/* Configuración conversacional (híbrida: botones + texto libre) */}
         {step === 'config' && (
           <div className="mt-4">
             {messages.map(renderMessage)}
-            <div className="flex gap-3 justify-center mt-4">
-              <button
-                onClick={() => configureDay('entrenamiento')}
-                disabled={loading}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
-              >
-                Día de Entrenamiento
-              </button>
-              <button
-                onClick={() => configureDay('descanso')}
-                disabled={loading}
-                className="bg-muted hover:bg-accent text-foreground px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
-              >
-                Día de Descanso
-              </button>
+            <div className="flex flex-wrap gap-3 justify-center mt-4">
+              {configStage === 'date' && [
+                { label: 'Hoy', value: 'hoy' },
+                { label: 'Mañana', value: 'manana' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => submitConfig(opt.value)}
+                  disabled={loading}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
+                >
+                  {opt.label}
+                </button>
+              ))}
+              {configStage === 'tipo' && [
+                { label: 'Día de Entrenamiento', value: 'entrenamiento' },
+                { label: 'Día de Descanso', value: 'descanso' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => submitConfig(opt.value)}
+                  disabled={loading}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
+                >
+                  {opt.label}
+                </button>
+              ))}
+              {configStage === 'comidas' && [
+                { label: '3 comidas', value: '3' },
+                { label: '4 comidas', value: '4' },
+                { label: 'Bloque único', value: 'bloque unico' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => submitConfig(opt.value)}
+                  disabled={loading}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
+                >
+                  {opt.label}
+                </button>
+              ))}
+              {configStage === 'peri' && [
+                { label: 'Intra + Post', value: 'intra y post' },
+                { label: 'Solo Post', value: 'solo post' },
+                { label: 'Solo Intra', value: 'solo intra' },
+                { label: 'Sin peri', value: 'sin peri' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => submitConfig(opt.value)}
+                  disabled={loading}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
+                >
+                  {opt.label}
+                </button>
+              ))}
+              {configStage === 'momento' && [
+                { label: 'En ayunas', value: 'ayunas' },
+                ...Array.from({ length: Math.max(1, numComidas - 1) }, (_, i) => ({
+                  label: `Después de comida ${i + 1}`, value: `comida ${i + 1}`,
+                })),
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => submitConfig(opt.value)}
+                  disabled={loading}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -438,6 +834,32 @@ export default function ChatbotPage() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Input de texto libre durante la configuración (fecha, tipo, comidas) */}
+      {step === 'config' && (
+        <div className="border-t border-border p-4 bg-card mb-12 relative z-50">
+          <div className="flex gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { submitConfig(input); setInput(''); } }}
+              placeholder={configStage === 'date' ? 'O escribe una fecha (ej: 2026-07-01)…' : 'O escríbelo aquí…'}
+              className="flex-1 bg-muted border border-input rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
+              disabled={loading}
+              data-testid="config-input"
+            />
+            <button
+              onClick={() => { submitConfig(input); setInput(''); }}
+              disabled={loading || !input.trim()}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl transition-colors disabled:opacity-50"
+            >
+              <Send size={20} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       {step === 'building_meal' && (

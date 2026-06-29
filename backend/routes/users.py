@@ -10,7 +10,7 @@ from core.database import db
 from core.security import get_current_user
 from models.user import (
     ClientProfile, ClientProfileCreate, ClientProfileUpdate,
-    MacrosUpdate, PLAN_TYPES, QuestionnaireSubmit
+    MacrosUpdate, PLAN_TYPES, QuestionnaireSubmit, OnboardingUpdate
 )
 from target_calculator import calcular_targets, targets_to_profile_macros
 
@@ -76,6 +76,22 @@ async def get_client_profile(user = Depends(get_current_user)):
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
     return ClientProfile(**profile)
+
+@router.patch("/clients/onboarding", response_model=ClientProfile)
+async def update_onboarding(data: OnboardingUpdate, user = Depends(get_current_user)):
+    """Guardar el progreso del onboarding guiado (paso actual y/o completado)."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    update = {}
+    if data.step is not None:
+        update["onboarding_step"] = data.step
+    if data.completed is not None:
+        update["onboarding_completed"] = data.completed
+    if update:
+        await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
+    updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    return ClientProfile(**updated)
 
 @router.put("/clients/profile", response_model=ClientProfile)
 async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_current_user)):

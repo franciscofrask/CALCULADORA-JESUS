@@ -17,7 +17,7 @@ import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
     ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp,
-    AlertCircle, Calculator, CheckCircle2
+    AlertCircle, Calculator, CheckCircle2, Pill, Plus, X, Sparkles
 } from 'lucide-react';
 
 const ClientDetailPage = () => {
@@ -52,12 +52,21 @@ const ClientDetailPage = () => {
     const [calcApplied, setCalcApplied] = useState(false);
     const [calcNote, setCalcNote] = useState('');
 
+    // Suplementos
+    const [supProtocol, setSupProtocol] = useState({ actual: [], siguiente: [], siguiente_fecha: '', nota: '' });
+    const [supCatalog, setSupCatalog] = useState([]);
+    const [supSaving, setSupSaving] = useState(false);
+    const [supSuggesting, setSupSuggesting] = useState(false);
+
     useEffect(() => { fetchClient(); }, [clientId]); // eslint-disable-line
+    useEffect(() => { api.get('/admin/supplements/catalog').then(r => setSupCatalog(r.data || [])).catch(() => {}); }, []); // eslint-disable-line
 
     const fetchClient = async () => {
         try {
             const response = await api.get(`/admin/clients/${clientId}`);
             setClient(response.data);
+            const sp = response.data.supplement_protocol;
+            if (sp) setSupProtocol({ actual: sp.actual || [], siguiente: sp.siguiente || [], siguiente_fecha: sp.siguiente_fecha || '', nota: sp.nota || '' });
             const p = response.data.profile;
             if (p?.macros_training) {
                 setMacrosForm({
@@ -122,6 +131,36 @@ const ClientDetailPage = () => {
         } catch (error) { toast.error('Error al guardar rutina'); }
     };
 
+    // ── Suplementos ──
+    const catalogToItem = (c) => ({ catalog_id: c.id, titulo: c.titulo, imagen: c.imagen, enlaces: c.enlaces || [], cuando: c.cuando || '', cuanto: c.cuanto || '', observaciones: c.observaciones || '' });
+    const supAdd = (bloque, catId) => {
+        const c = supCatalog.find(x => x.id === catId);
+        if (!c) return;
+        setSupProtocol(prev => ({ ...prev, [bloque]: [...prev[bloque], catalogToItem(c)] }));
+    };
+    const supRemove = (bloque, idx) => setSupProtocol(prev => ({ ...prev, [bloque]: prev[bloque].filter((_, i) => i !== idx) }));
+    const supSuggest = async () => {
+        setSupSuggesting(true);
+        try {
+            const r = await api.post(`/admin/supplements/suggest?client_id=${clientId}`);
+            setSupProtocol(prev => ({ ...prev, actual: r.data.actual || [] }));
+            toast.success('Protocolo sugerido (revísalo y guarda)');
+        } catch (e) { toast.error('Error al sugerir'); }
+        finally { setSupSuggesting(false); }
+    };
+    const supSave = async () => {
+        setSupSaving(true);
+        try {
+            await api.post(`/admin/supplements/save?client_id=${clientId}`, {
+                actual: supProtocol.actual, siguiente: supProtocol.siguiente,
+                siguiente_fecha: supProtocol.siguiente_fecha || null, nota: supProtocol.nota || null,
+            });
+            toast.success('Suplementación guardada');
+            fetchClient();
+        } catch (e) { toast.error('Error al guardar suplementación'); }
+        finally { setSupSaving(false); }
+    };
+
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-48 bg-[#111] rounded-xl" /></div></div>;
     if (!client) return <div className="p-6 bg-[#0A0A0A] min-h-screen text-center text-white/50">Cliente no encontrado</div>;
 
@@ -141,6 +180,7 @@ const ClientDetailPage = () => {
         { id: 'cuestionario', label: 'Cuestionario', icon: ClipboardList },
         { id: 'entrenamiento', label: 'Entreno', icon: Dumbbell },
         { id: 'nutricion', label: 'Nutrición', icon: Utensils },
+        { id: 'suplementos', label: 'Suplementos', icon: Pill },
         { id: 'seguimiento', label: 'Seguimiento', icon: TrendingUp },
     ];
 
@@ -401,6 +441,57 @@ const ClientDetailPage = () => {
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* ========== TAB: SUPLEMENTOS ========== */}
+                <TabsContent value="suplementos" className="space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                        <p className="text-xs text-white/40 uppercase tracking-wider">Protocolo de suplementación</p>
+                        <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={supSuggest} disabled={supSuggesting} className="bg-transparent border-[#333] text-white" data-testid="suggest-supplements-btn">
+                                {supSuggesting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1 text-[#FF671F]" />}Auto-sugerir
+                            </Button>
+                            <Button size="sm" onClick={supSave} disabled={supSaving} className="bg-[#FF671F] text-white" data-testid="save-supplements-btn">
+                                {supSaving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}Guardar
+                            </Button>
+                        </div>
+                    </div>
+
+                    {[['actual', 'Suplementación actual'], ['siguiente', 'Suplementación siguiente']].map(([bloque, titulo]) => (
+                        <Card key={bloque} className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">{titulo}</CardTitle></CardHeader>
+                            <CardContent className="space-y-2">
+                                {supProtocol[bloque].length === 0 && <p className="text-white/30 text-sm">Sin suplementos.</p>}
+                                {supProtocol[bloque].map((it, i) => (
+                                    <div key={i} className="flex items-start justify-between gap-2 p-2.5 bg-[#0A0A0A] rounded-lg border border-[#222]">
+                                        <div className="min-w-0">
+                                            <p className="text-white text-sm font-medium">{it.titulo}</p>
+                                            <p className="text-white/40 text-xs">{[it.cuanto, it.cuando].filter(Boolean).join(' · ')}</p>
+                                        </div>
+                                        <button onClick={() => supRemove(bloque, i)} className="text-white/30 hover:text-red-400 flex-shrink-0"><X className="w-4 h-4" /></button>
+                                    </div>
+                                ))}
+                                {bloque === 'siguiente' && (
+                                    <div className="pt-1">
+                                        <Label className="text-white/40 text-xs">A partir del día</Label>
+                                        <Input type="date" value={supProtocol.siguiente_fecha || ''} onChange={e => setSupProtocol(p => ({ ...p, siguiente_fecha: e.target.value }))} className="bg-[#0A0A0A] border-[#333] text-white mt-1 w-48" />
+                                    </div>
+                                )}
+                                <select onChange={e => { if (e.target.value) { supAdd(bloque, e.target.value); e.target.value = ''; } }} defaultValue=""
+                                    className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-3 py-2 mt-1">
+                                    <option value="">+ Añadir del catálogo…</option>
+                                    {supCatalog.map(c => <option key={c.id} value={c.id}>{c.titulo}{c.sexo !== 'ambos' ? ` (${c.sexo})` : ''} — {c.categoria}</option>)}
+                                </select>
+                            </CardContent>
+                        </Card>
+                    ))}
+
+                    <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Nota personal</CardTitle></CardHeader>
+                        <CardContent>
+                            <Textarea value={supProtocol.nota || ''} onChange={e => setSupProtocol(p => ({ ...p, nota: e.target.value }))} placeholder="Nota para el cliente…" className="bg-[#0A0A0A] border-[#333] text-white" rows={2} />
+                        </CardContent>
+                    </Card>
+
+                    <p className="text-white/30 text-xs">El catálogo se gestiona en <button onClick={() => navigate('/admin/supplements-catalog')} className="text-[#FF671F] hover:underline">Catálogo de suplementos</button>.</p>
                 </TabsContent>
 
                 {/* ========== TAB 7: NUTRICIÓN ========== */}

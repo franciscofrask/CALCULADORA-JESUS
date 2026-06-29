@@ -148,7 +148,7 @@ const ReportsPage = () => {
                     <FileText className="w-5 h-5" style={{ color: ORANGE }} />
                 </div>
                 <div>
-                    <h1 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.05em' }}>
+                    <h1 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.05em' }} data-testid="reports-heading">
                         MIS REPORTES
                     </h1>
                     <p className="text-xs text-foreground/30">Seguimiento semanal</p>
