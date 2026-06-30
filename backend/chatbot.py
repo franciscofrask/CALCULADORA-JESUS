@@ -755,33 +755,25 @@ class NutritionChatbot:
         return efectivos
     
     def _format_cantidad(self, cantidad_g: float, alimento: dict, config: dict) -> str:
-        """Formatea la cantidad para mostrar al usuario."""
-        # FIX: usar 'por_unidad' no 'tipo'
-        if config.get("por_unidad", False):
-            peso_unidad = config.get("peso_unidad", 0)
-            if peso_unidad > 0:
-                unidades = cantidad_g / peso_unidad
-                if abs(unidades - round(unidades)) < 0.01:
-                    return f"{int(round(unidades))} ud"
-                elif config.get("permite_media", False):
-                    # Mostrar medias unidades si aplica
-                    medias = round(unidades * 2) / 2
-                    if medias == int(medias):
-                        return f"{int(medias)} ud"
-                    else:
-                        return f"{medias:.1f} ud"
-                else:
-                    return f"{int(round(unidades))} ud"
-            else:
-                # Fallback a racion
-                racion = float(alimento.get("racion", 100) or 100)
-                unidades = cantidad_g / racion
-                if abs(unidades - round(unidades)) < 0.01:
-                    return f"{int(round(unidades))} ud"
-                else:
-                    return f"{unidades:.1f} ud"
+        """Formatea la cantidad para mostrar al usuario (nunca '0 ud')."""
+        if not config.get("por_unidad", False):
+            return f"{int(round(cantidad_g))}g"
+
+        peso_unidad = config.get("peso_unidad", 0) or float(alimento.get("racion", 100) or 100)
+        if peso_unidad <= 0:
+            return f"{int(round(cantidad_g))}g"
+
+        unidades = cantidad_g / peso_unidad
+        permite_media = config.get("permite_media", False)
+        # Redondear a unidad o media unidad (sin bajar de 0.5 ud)
+        if permite_media:
+            uds = round(unidades * 2) / 2
+            uds = max(0.5, uds)
         else:
-            return f"{int(cantidad_g)}g"
+            uds = max(1, int(round(unidades)))
+        if uds == int(uds):
+            return f"{int(uds)} ud"
+        return f"{uds:.1f} ud"
     
     def complete_current_meal(self) -> dict:
         """
@@ -832,7 +824,8 @@ class NutritionChatbot:
             totales["G"] += comida.get("macros", {}).get("G", 0)
         
         objetivo_total = self.state["distribucion"]["resumen"]
-        
+        totales = {k: round(v, 1) for k, v in totales.items()}
+
         return {
             "comidas": comidas_resumen,
             "totales": totales,
@@ -903,77 +896,405 @@ class NutritionChatbot:
         targets.update(dist.get("periworkout", {}))
         return targets
 
-    async def process_message(self, user_input: str) -> dict:
-        """
-        Procesa un mensaje del usuario y devuelve la respuesta.
-        
-        Args:
-            user_input: Mensaje del usuario
-        
-        Returns:
-            dict con action, message, data (opcional)
-        """
-        # Construir contexto para Claude
-        context = self._build_context()
-        
-        # Mensaje con contexto
-        full_message = f"""CONTEXTO ACTUAL:
-{context}
+    # =====================================================
+    # FLUJO DETERMINISTA (el LLM SOLO extrae alimentos)
+    # =====================================================
 
-MENSAJE DEL USUARIO:
-{user_input}
+    def set_preferences(self, food_preferences=None, avoided_categories=None, avoided_keywords=None):
+        """Carga las preferencias del usuario para filtrar las sugerencias."""
+        self.state["food_preferences"] = food_preferences or []
+        self.state["avoided_categories"] = avoided_categories or []
+        self.state["avoided_keywords"] = [k.lower() for k in (avoided_keywords or [])]
 
-Responde en formato JSON según las instrucciones del sistema."""
-        
+    async def extract_foods(self, text: str) -> list:
+        """Usa el LLM SOLO para extraer la lista de alimentos que menciona el usuario."""
+        prompt = (
+            "Eres un extractor de alimentos. El usuario describe lo que quiere comer en una comida. "
+            "Devuelve SOLO un JSON con la lista de alimentos mencionados (en singular, sin cantidades): "
+            '{"foods": ["huevos", "pan", "claras de huevo", "chorizo"]}. '
+            'Si no menciona ningún alimento, devuelve {"foods": []}. No añadas nada más.'
+        )
+        chat = LlmChat(api_key=self.api_key, system_message=prompt).with_model(
+            "groq", os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+        ).with_json_mode()
         try:
-            # Enviar a Claude
-            user_message = UserMessage(text=full_message)
-            response = await self.chat.send_message(user_message)
-            
-            # Parsear respuesta JSON
-            response_data = self._parse_claude_response(response)
-            
-            # Procesar según la acción
-            if response_data.get("action") == "build_meal":
-                foods_requested = response_data.get("foods_requested", [])
-                return await self._process_build_meal(foods_requested, response_data.get("message", ""))
-            
-            return response_data
-            
-        except Exception as e:
-            return {
-                "action": "error",
-                "message": f"Error procesando mensaje: {str(e)}"
-            }
-    
-    def _build_context(self) -> str:
-        """Construye el contexto actual para Claude."""
-        ctx = []
-        
-        ctx.append(f"Paso: {self.state['step']}")
-        ctx.append(f"Tipo de día: {self.state['tipo_dia'] or 'No configurado'}")
-        ctx.append(f"Número de comidas: {self.state['num_comidas']}")
-        
-        if self.state["distribucion"]:
-            key = self.current_meal_key()
-            label = self.meal_label(key)
-            ctx.append(f"\nComida actual: {label}")
+            resp = await chat.send_message(UserMessage(text=text))
+            data = self._parse_claude_response(resp)
+            foods = data.get("foods", []) if isinstance(data, dict) else []
+            return [f.strip() for f in foods if isinstance(f, str) and f.strip()]
+        except Exception:
+            return []
 
-            objetivo = self.get_current_meal_macros()
-            ctx.append(f"Objetivo {label}: P={objetivo['P']}g, H={objetivo['H']}g, G={objetivo['G']}g")
+    def get_day_overview(self) -> dict:
+        """Objetivo total del día + consumido + restante, y la comida actual."""
+        dist = self.state.get("distribucion") or {}
+        resumen = dist.get("resumen", {})
+        consumido = {"P": 0.0, "H": 0.0, "G": 0.0}
+        for comida in self.state["comidas_completadas"].values():
+            m = comida.get("macros", {})
+            consumido["P"] += m.get("P", 0)
+            consumido["H"] += m.get("H", 0)
+            consumido["G"] += m.get("G", 0)
+        objetivo = {
+            "P": resumen.get("P_total", 0),
+            "H": resumen.get("H_total", 0),
+            "G": resumen.get("G_total", 0),
+        }
+        key = self.current_meal_key()
+        return {
+            "objetivo": objetivo,
+            "consumido": {k: round(v, 1) for k, v in consumido.items()},
+            "restante": {k: round(objetivo[k] - consumido[k], 1) for k in ("P", "H", "G")},
+            "comida_key": key,
+            "comida_nombre": self.meal_label(key),
+            "comida_objetivo": self.get_current_meal_macros(),
+            "comida_restante": self.get_remaining_macros(),
+            "completas": self.state["comida_actual"] - 1,
+            "total_comidas": self.total_meals(),
+            "meals": self.get_meals_status(),
+        }
 
-            restantes = self.get_remaining_macros()
-            ctx.append(f"Macros restantes: P={restantes['P']}g, H={restantes['H']}g, G={restantes['G']}g")
+    def get_meals_status(self) -> list:
+        """Estado de TODAS las comidas del día (para responder 'qué me falta y dónde'
+        y para el navegador de comidas)."""
+        out = []
+        for idx, key in enumerate(self.state.get("meal_order", []), start=1):
+            obj = self._target_for_key(key)
+            comida = self.state["comidas_completadas"].get(key, {})
+            act = comida.get("macros", {"P": 0, "H": 0, "G": 0})
+            rem = {m: round(obj.get(m, 0) - act.get(m, 0), 1) for m in ("P", "H", "G")}
+            out.append({
+                "idx": idx,
+                "key": key,
+                "nombre": self.meal_label(key),
+                "objetivo": obj,
+                "actual": {m: round(act.get(m, 0), 1) for m in ("P", "H", "G")},
+                "restante": rem,
+                "cuadrado": all(abs(rem[m]) <= 4 for m in ("P", "H", "G")),
+                "tiene_alimentos": len(comida.get("alimentos", [])) > 0,
+                "es_actual": idx == self.state["comida_actual"],
+            })
+        return out
 
-            # Alimentos ya añadidos
-            comida_actual = self.state["comidas_completadas"].get(key, {})
-            alimentos = comida_actual.get("alimentos", [])
-            if alimentos:
-                ctx.append(f"\nAlimentos ya añadidos a esta comida:")
-                for a in alimentos:
-                    ctx.append(f"  - {a['nombre']}: {a['cantidad_display']} (P={a['macros']['P']}, H={a['macros']['H']}, G={a['macros']['G']})")
-        
-        return "\n".join(ctx)
+    def go_to_meal(self, idx: int) -> bool:
+        """Salta a una comida concreta (para editar una ya guardada o volver atrás)."""
+        if 1 <= int(idx) <= self.total_meals():
+            self.state["comida_actual"] = int(idx)
+            self.state["step"] = "building_meal"
+            return True
+        return False
+
+    def remove_food_at(self, food_index: int) -> bool:
+        """Quita un alimento de la comida actual por su posición y recalcula los macros."""
+        key = self.current_meal_key()
+        comida = self.state["comidas_completadas"].get(key)
+        if not comida or food_index < 0 or food_index >= len(comida.get("alimentos", [])):
+            return False
+        f = comida["alimentos"].pop(food_index)
+        m = f.get("macros", {})
+        for k in ("P", "H", "G"):
+            comida["macros"][k] = round(comida["macros"][k] - m.get(k, 0), 1)
+        return True
+
+    def _size_food(self, alimento: dict, restante: dict):
+        """Dimensiona un alimento contra los macros restantes con el MISMO motor que la
+        calculadora (calma_suggest). Devuelve (cantidad_g, macros{P,H,G}) o None si no cabe."""
+        import copy, math
+        from calma_suggest import ajustar_cantidad, macros_at, aplicar_regla_macros, cantidad_minima
+
+        a = copy.deepcopy(alimento)
+        aplicar_regla_macros(a)
+        remaining = {
+            "proteinas": float(restante.get("P", 0)),
+            "hidratos": float(restante.get("H", 0)),
+            "grasas": float(restante.get("G", 0)),
+        }
+        cant = ajustar_cantidad(a, remaining)
+        if cant is None:
+            return None
+        if math.isinf(cant):
+            cant = cantidad_minima(a)  # alimento libre (sin macros que cuenten)
+        if cant <= 0:
+            return None
+        es_unidad = bool(a.get("unidades"))
+        racion = float(a.get("racion") or 100) or 100.0
+        cantidad_g = (cant * racion) if es_unidad else cant
+        m = macros_at(a, cant)
+        macros = {"P": round(m["proteinas"], 1), "H": round(m["hidratos"], 1), "G": round(m["grasas"], 1)}
+        return cantidad_g, macros
+
+    def _ensure_meal(self, key: str):
+        if key not in self.state["comidas_completadas"]:
+            self.state["comidas_completadas"][key] = {"alimentos": [], "macros": {"P": 0, "H": 0, "G": 0}}
+
+    def _append_food(self, key: str, alimento: dict, cantidad_g: float, macros: dict):
+        self._ensure_meal(key)
+        config = get_food_config(alimento)
+        display = self._format_cantidad(cantidad_g, alimento, config)
+        self.state["comidas_completadas"][key]["alimentos"].append({
+            "nombre": alimento.get("nombre", ""),
+            "cantidad": cantidad_g,
+            "cantidad_g": cantidad_g,
+            "cantidad_display": display,
+            "macros": macros,
+            "alimento": alimento,
+        })
+        mm = self.state["comidas_completadas"][key]["macros"]
+        mm["P"] = round(mm["P"] + macros["P"], 1)
+        mm["H"] = round(mm["H"] + macros["H"], 1)
+        mm["G"] = round(mm["G"] + macros["G"], 1)
+        return display
+
+    def _meal_response(self, foods_added: list, foods_not_found: list) -> dict:
+        key = self.current_meal_key()
+        comida = self.state["comidas_completadas"].get(key, {})
+        restante = self.get_remaining_macros()
+        cuadrado = all(abs(restante[m]) <= 4 for m in ("P", "H", "G"))
+        return {
+            "action": "meal_updated",
+            "foods_added": foods_added,
+            "foods_not_found": foods_not_found,
+            "meal_status": {
+                "comida": self.state["comida_actual"],
+                "comida_key": key,
+                "comida_nombre": self.meal_label(key),
+                "objetivo": self.get_current_meal_macros(),
+                "actual": comida.get("macros", {"P": 0, "H": 0, "G": 0}),
+                "restante": restante,
+                "alimentos": comida.get("alimentos", []),
+                "cuadrado": cuadrado,
+            },
+            "day_overview": self.get_day_overview(),
+        }
+
+    def _macros_at(self, alimento: dict, cantidad_g: float) -> dict:
+        """Macros efectivos de un alimento a una cantidad, con el MISMO motor que la
+        calculadora (calma_suggest), para paridad de los números mostrados."""
+        import copy
+        from calma_suggest import macros_at, aplicar_regla_macros
+        a = copy.deepcopy(alimento)
+        aplicar_regla_macros(a)
+        racion = float(a.get("racion") or 100) or 100.0
+        cant = (cantidad_g / racion) if bool(a.get("unidades")) else cantidad_g
+        m = macros_at(a, cant)
+        return {"P": round(m["proteinas"], 1), "H": round(m["hidratos"], 1), "G": round(m["grasas"], 1)}
+
+    async def add_foods_by_names(self, names: list) -> dict:
+        """Añade los alimentos pedidos a la comida actual.
+
+        - 1 alimento: se dimensiona contra lo que falta (igual que la calculadora).
+        - Varios alimentos: se REPARTEN las cantidades de forma equilibrada para que TODOS
+          entren (respetando sus mínimos) y cuadre la comida (meal_builder por roles).
+        Los macros mostrados se recalculan con el motor de la calculadora (paridad).
+        """
+        key = self.current_meal_key()
+        restante = self.get_remaining_macros()
+
+        # ── 1 alimento: dimensionado directo ──
+        if len(names) <= 1:
+            added, not_found = [], []
+            if names:
+                matches = await self.search_foods(names[0], limit=1)
+                if not matches:
+                    not_found.append({"buscado": names[0], "razon": "No encontrado en la base de datos"})
+                else:
+                    alimento = matches[0]
+                    sized = self._size_food(alimento, restante)
+                    if not sized:
+                        not_found.append({"buscado": names[0], "encontrado": alimento.get("nombre"),
+                                          "razon": "No cabe en lo que queda de esta comida"})
+                    else:
+                        cantidad_g, macros = sized
+                        display = self._append_food(key, alimento, cantidad_g, macros)
+                        added.append({"nombre": alimento.get("nombre"), "cantidad_display": display, "macros": macros})
+            return self._meal_response(added, not_found)
+
+        # ── Varios alimentos: repartir equilibrado (meal_builder por roles, mínimos) ──
+        from meal_builder import build_meal
+        result = await build_meal(self.db, names, restante, self.search_foods)
+
+        added = []
+        not_found = list(result.get("foods_not_found", []))
+        for f in result["foods_added"]:
+            cantidad_g = f.get("cantidad", f.get("cantidad_g", 0))
+            matches = await self.search_foods(f["nombre"], limit=1)
+            alimento = matches[0] if matches else {"nombre": f["nombre"], "racion": 100}
+            macros = self._macros_at(alimento, cantidad_g) if matches else f.get("macros", {"P": 0, "H": 0, "G": 0})
+            display = self._append_food(key, alimento, cantidad_g, macros)
+            added.append({"nombre": f["nombre"], "cantidad_display": display, "macros": macros})
+        return self._meal_response(added, not_found)
+
+    async def add_food_by_id(self, alimento_id) -> dict:
+        """Añade un alimento concreto por id (cuando el usuario toca una sugerencia)."""
+        key = self.current_meal_key()
+        alimento = await self.db.foods.find_one({"id": alimento_id}, {"_id": 0})
+        if not alimento:
+            return self._meal_response([], [{"buscado": str(alimento_id), "razon": "No encontrado"}])
+        sized = self._size_food(alimento, self.get_remaining_macros())
+        if not sized:
+            return self._meal_response([], [{"buscado": alimento.get("nombre"), "razon": "No cabe"}])
+        cantidad_g, macros = sized
+        display = self._append_food(key, alimento, cantidad_g, macros)
+        return self._meal_response([{"nombre": alimento.get("nombre"), "cantidad_display": display, "macros": macros}], [])
+
+    async def suggest_foods_for_current_meal(self, limit: int = 6) -> dict:
+        """Sugiere alimentos sueltos POR FASES, igual que la calculadora:
+        primero PROTEÍNA (pollo, carnes, huevos, pescados…), luego HIDRATOS (arroz,
+        pasta, cereales…), luego GRASA (aceites, frutos secos…). En las comidas peri
+        (Intra/Post) usa solo las categorías permitidas de peri. Respeta preferencias
+        y alimentos evitados, y añade variedad para que no salga siempre lo mismo."""
+        import random
+        from routes.calculator import AVOIDABLE_PREFIXES
+        from calculator import (
+            CATS_PROTEINA_PURAS, CATS_HIDRATOS, CATS_GRASAS, CATS_CUADRAR_GRASAS,
+            filtrar_por_tipo_comida, cat_in_list, get_categoria_principal,
+        )
+
+        restante = self.get_remaining_macros()
+        if all(abs(restante[m]) <= 4 for m in ("P", "H", "G")):
+            return {"action": "suggestions", "suggestions": [],
+                    "message": "Esta comida ya está cuadrada. Pulsa \"Guardar y siguiente\".",
+                    "day_overview": self.get_day_overview()}
+
+        # Fase según el macro que más falta (orden CALMA: proteína → hidratos → grasa)
+        if restante["P"] > 4:
+            fase, driver = "proteina", "P"
+        elif restante["H"] > 4:
+            fase, driver = "hidratos", "H"
+        else:
+            fase, driver = "grasa", "G"
+
+        key = self.current_meal_key()
+        es_peri = key in ("Intra", "Post")
+
+        # Filtros de preferencias / evitados
+        avoid_prefixes, pref_prefixes = set(), set()
+        for cid in self.state.get("avoided_categories", []):
+            avoid_prefixes.update(AVOIDABLE_PREFIXES.get(cid, []))
+        for cid in self.state.get("food_preferences", []):
+            pref_prefixes.update(AVOIDABLE_PREFIXES.get(cid, []))
+        avoid_keywords = self.state.get("avoided_keywords", [])
+
+        def cat_hit(cats_field, prefixes):
+            for c in parse_categories(cats_field):
+                for p in prefixes:
+                    if c == p or c.startswith(p + "."):
+                        return True
+            return False
+
+        all_foods = await self.db.foods.find({}, {"_id": 0}).to_list(3500)
+
+        # Universo según el tipo de comida / la fase
+        if es_peri:
+            pool = filtrar_por_tipo_comida(all_foods, "intra" if key == "Intra" else "post")
+        else:
+            cats = {
+                "proteina": CATS_PROTEINA_PURAS,
+                "hidratos": CATS_HIDRATOS,
+                "grasa": CATS_GRASAS + CATS_CUADRAR_GRASAS,
+            }[fase]
+            pool = [a for a in all_foods if cat_in_list(get_categoria_principal(a), cats)]
+
+        # Quitar SOLO los evitados (las categorías de la fase ya acotan; los preferidos
+        # solo priorizan, no excluyen — si el usuario no marcó "arroces" igual debe ver arroz)
+        pool = [a for a in pool
+                if not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
+                and not (avoid_prefixes and cat_hit(a.get("categorias"), avoid_prefixes))]
+
+        # Dimensionar; agrupar por TIPO de alimento (categoría a 2 niveles) para diversificar
+        from collections import defaultdict
+        buckets = defaultdict(list)  # coarse_cat -> [(aporte, es_pref, item)]
+        for a in pool:
+            sized = self._size_food(a, restante)
+            if not sized:
+                continue
+            cantidad_g, macros = sized
+            if macros[driver] <= 0:
+                continue
+            cats = parse_categories(a.get("categorias"))
+            coarse = ".".join(cats[0].split(".")[:2]) if cats else "?"
+            es_pref = bool(pref_prefixes and cat_hit(a.get("categorias"), pref_prefixes))
+            config = get_food_config(a)
+            buckets[coarse].append((macros[driver], es_pref, {
+                "alimento_id": a.get("id"),
+                "nombre": a.get("nombre"),
+                "cantidad_display": self._format_cantidad(cantidad_g, a, config),
+                "macros": macros,
+            }))
+
+        # Dentro de cada tipo: mejores primero, baraja los top para variedad
+        for b in buckets:
+            buckets[b].sort(key=lambda x: -x[0])
+            head = buckets[b][:5]
+            random.shuffle(head)
+            buckets[b] = head
+
+        # Orden de tipos: los que tienen alimentos preferidos primero, luego por mejor aporte
+        cat_order = sorted(
+            buckets.keys(),
+            key=lambda b: (0 if any(p for _, p, _ in buckets[b]) else 1, -buckets[b][0][0])
+        )
+
+        # Round-robin entre tipos → variedad (pollo, carne, huevo, pescado…)
+        chosen = []
+        while len(chosen) < limit and any(buckets[b] for b in cat_order):
+            for b in cat_order:
+                if buckets[b]:
+                    chosen.append(buckets[b].pop(0)[2])
+                    if len(chosen) >= limit:
+                        break
+
+        fase_lbl = {"proteina": "proteína", "hidratos": "hidratos", "grasa": "grasa"}[fase]
+        return {
+            "action": "suggestions",
+            "fase": fase,
+            "message": f"Toca un alimento de {fase_lbl} para añadirlo (es lo que más te falta):",
+            "suggestions": chosen,
+            "day_overview": self.get_day_overview(),
+        }
+
+    async def process_message(self, user_input: str) -> dict:
+        """Procesa el texto del usuario de forma DETERMINISTA. El LLM solo extrae alimentos."""
+        text = (user_input or "").strip().lower()
+        import unicodedata
+        text = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+        # Intenciones por reglas (sin LLM)
+        # Editar/ir a una comida concreta ("editar comida 2", "vamos a la comida 1", "vuelve a la 3")
+        m_edit = re.search(r"\b(edit\w*|modific\w*|cambi\w*|corregir|volver|vuelve|vamos|ir|ve)\b[^0-9]*(comida\s*)?(\d+)", text)
+        if m_edit:
+            idx = int(m_edit.group(3))
+            if self.go_to_meal(idx):
+                return self._meal_response([], [])
+        if re.search(r"\b(intra)\b", text) and "Intra" in self.state.get("meal_order", []):
+            self.go_to_meal(self.state["meal_order"].index("Intra") + 1)
+            return self._meal_response([], [])
+        if re.search(r"\b(post)\b", text) and "Post" in self.state.get("meal_order", []):
+            self.go_to_meal(self.state["meal_order"].index("Post") + 1)
+            return self._meal_response([], [])
+        # ¿Qué me falta y en qué comida? (acepta muchas formas: "cuantos macros faltan",
+        # "que me queda", "cuanto falta", "por cubrir", "macros restantes"…)
+        if re.search(r"\b(falta|faltan|queda|quedan|cubrir|restante[s]?|cuant[oa]s?|que macros|como voy|donde voy)\b", text):
+            return {"action": "status", "meals_status": self.get_meals_status(),
+                    "day_overview": self.get_day_overview()}
+        if re.search(r"\b(siguiente|guardar?|guarda|guardo|listo|completa\w*|terminar|acabar|next)\b", text):
+            return {"action": "complete_request"}
+        if re.search(r"\b(opcion\w*|sugiere\w*|sugerencia\w*|recomien\w*|menu|que pongo|que meto|no se|idea\w*)\b", text):
+            return await self.suggest_foods_for_current_meal()
+        if re.search(r"\b(resumen|del dia|dia completo|cuanto llevo|macros del dia)\b", text):
+            return {"action": "summary", "day_overview": self.get_day_overview()}
+
+        # Resto: tratar como alimentos
+        foods = await self.extract_foods(user_input)
+        if not foods:
+            rem = self.get_remaining_macros()
+            falta = ", ".join(f"{m}={rem[m]}g" for m in ("P", "H", "G") if rem[m] > 4)
+            msg = "No te entendí. "
+            if falta:
+                msg += f"En {self.meal_label(self.current_meal_key())} te falta {falta}. "
+            msg += "Dime alimentos (p.ej. \"huevos, pan, claras\"), pulsa \"Sugerir alimentos\" o \"Guardar y siguiente\"."
+            return {"action": "no_foods", "message": msg, "day_overview": self.get_day_overview()}
+        return await self.add_foods_by_names(foods)
     
     def _parse_claude_response(self, response: str) -> dict:
         """Parsea la respuesta del LLM como JSON, tolerando fences de Markdown
@@ -1002,86 +1323,6 @@ Responde en formato JSON según las instrucciones del sistema."""
                 "message": response
             }
     
-    async def _process_build_meal(self, foods_requested: list, claude_message: str) -> dict:
-        """
-        Procesa la construcción de una comida usando el nuevo meal_builder.
-        
-        REGLAS FUNDAMENTALES:
-        1. NUNCA reducir por debajo del mínimo
-        2. NUNCA exceder máximos razonables
-        3. Distribuir macros inteligentemente entre todos los alimentos
-        4. Usar macros EFECTIVOS según CALMA
-        """
-        from meal_builder import build_meal
-
-        objetivo = self.get_current_meal_macros()
-        # Construir contra los macros RESTANTES (lo que falta), no el objetivo completo.
-        # Así, al añadir alimentos a una comida que ya tiene cosas, se dimensionan y se
-        # evalúa la sugerencia sobre lo que queda — manteniendo coherencia con lo previo.
-        # (Si la comida está vacía, restante == objetivo, así que el primer mensaje no cambia.)
-        restante = self.get_remaining_macros()
-
-        # Usar el nuevo meal_builder
-        result = await build_meal(
-            db=self.db,
-            foods_requested=foods_requested,
-            objetivo=restante,
-            search_func=self.search_foods
-        )
-        
-        # Añadir los alimentos a la comida actual
-        # Usar los macros ya calculados por meal_builder
-        comida_key = self.current_meal_key()
-        for food in result["foods_added"]:
-            # Añadir directamente a la comida actual con los macros calculados
-            if comida_key not in self.state["comidas_completadas"]:
-                self.state["comidas_completadas"][comida_key] = {
-                    "alimentos": [],
-                    "macros": {"P": 0, "H": 0, "G": 0}
-                }
-            
-            # Buscar el alimento para obtener datos adicionales
-            matches = await self.search_foods(food["nombre"], limit=1)
-            alimento_data = matches[0] if matches else {"nombre": food["nombre"]}
-            
-            self.state["comidas_completadas"][comida_key]["alimentos"].append({
-                "nombre": food["nombre"],
-                "cantidad": food["cantidad"],
-                "cantidad_display": food["cantidad_display"],
-                "macros": food["macros"],
-                "alimento": alimento_data
-            })
-            
-            # Actualizar macros de la comida
-            self.state["comidas_completadas"][comida_key]["macros"]["P"] += food["macros"]["P"]
-            self.state["comidas_completadas"][comida_key]["macros"]["H"] += food["macros"]["H"]
-            self.state["comidas_completadas"][comida_key]["macros"]["G"] += food["macros"]["G"]
-        
-        # Obtener estado actualizado
-        comida_actual = self.state["comidas_completadas"].get(comida_key, {})
-        macros_actuales = comida_actual.get("macros", {"P": 0, "H": 0, "G": 0})
-        restantes_final = self.get_remaining_macros()
-
-        return {
-            "action": "meal_updated",
-            "foods_added": result["foods_added"],
-            "foods_not_found": result["foods_not_found"],
-            "meal_status": {
-                "comida": self.state["comida_actual"],
-                "comida_key": comida_key,
-                "comida_nombre": self.meal_label(comida_key),
-                "objetivo": objetivo,
-                "actual": macros_actuales,
-                "restante": restantes_final,
-                "alimentos": comida_actual.get("alimentos", []),
-                "desviacion": result["desviacion"],
-                "cuadrado": result["cuadrado"]
-            },
-            "sugerencia": result["sugerencia"],
-            "message": claude_message
-        }
-
-
 # =====================================================
 # FUNCIONES DE AYUDA PARA EL API
 # =====================================================

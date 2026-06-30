@@ -58,8 +58,16 @@ async def chatbot_start(current_user: dict = Depends(get_current_user)):
             "g_descanso": 40
         }
     
-    await get_or_create_chatbot(session_id, db, user_macros)
-    
+    chatbot = await get_or_create_chatbot(session_id, db, user_macros)
+
+    # Cargar preferencias del usuario para filtrar las sugerencias de alimentos
+    if profile:
+        chatbot.set_preferences(
+            food_preferences=profile.get("food_preferences", []),
+            avoided_categories=profile.get("avoided_categories", []),
+            avoided_keywords=profile.get("avoided_keywords", []),
+        )
+
     return {
         "session_id": session_id,
         "macros": user_macros,
@@ -105,6 +113,7 @@ async def chatbot_configure(
         "meal_order": chatbot.state["meal_order"],
         "meal_nombre": label,
         "objetivo": objetivo,
+        "day_overview": chatbot.get_day_overview(),
         "mensaje": mensaje
     }
 
@@ -120,7 +129,7 @@ async def chatbot_message(
     
     chatbot = await get_or_create_chatbot(session_id, db)
     response = await chatbot.process_message(request.message)
-    
+
     return {
         "session_id": session_id,
         "response": response,
@@ -128,9 +137,55 @@ async def chatbot_message(
             "step": chatbot.state["step"],
             "comida_actual": chatbot.state["comida_actual"],
             "meal_nombre": chatbot.meal_label(chatbot.current_meal_key()),
-            "restante": chatbot.get_remaining_macros()
-        }
+            "restante": chatbot.get_remaining_macros(),
+        },
+        "day_overview": chatbot.get_day_overview(),
     }
+
+
+@router.post("/suggest-foods")
+async def chatbot_suggest_foods(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Sugiere alimentos sueltos que cuadran con lo que falta de la comida actual."""
+    chatbot = await get_or_create_chatbot(session_id, db)
+    return {"session_id": session_id, "response": await chatbot.suggest_foods_for_current_meal()}
+
+
+@router.post("/add-food")
+async def chatbot_add_food(
+    session_id: str,
+    alimento_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Añade un alimento concreto (cuando el usuario toca una sugerencia)."""
+    chatbot = await get_or_create_chatbot(session_id, db)
+    return {"session_id": session_id, "response": await chatbot.add_food_by_id(alimento_id)}
+
+
+@router.post("/go-to-meal")
+async def chatbot_go_to_meal(
+    session_id: str,
+    idx: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Salta a una comida concreta para editarla (p.ej. una ya guardada)."""
+    chatbot = await get_or_create_chatbot(session_id, db)
+    chatbot.go_to_meal(idx)
+    return {"session_id": session_id, "response": chatbot._meal_response([], [])}
+
+
+@router.post("/remove-food")
+async def chatbot_remove_food(
+    session_id: str,
+    index: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Quita un alimento de la comida actual por su posición."""
+    chatbot = await get_or_create_chatbot(session_id, db)
+    chatbot.remove_food_at(index)
+    return {"session_id": session_id, "response": chatbot._meal_response([], [])}
 
 @router.post("/complete-meal")
 async def chatbot_complete_meal(
@@ -170,6 +225,7 @@ async def chatbot_complete_meal(
             "comida_actual": siguiente,
             "meal_nombre": label,
             "objetivo": objetivo,
+            "day_overview": chatbot.get_day_overview(),
             "mensaje": f"Comida guardada ✓. Vamos con {label}. Objetivo: P={objetivo['P']}g, H={objetivo['H']}g, G={objetivo['G']}g. ¿Qué quieres tomar?"
         }
 

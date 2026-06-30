@@ -34,6 +34,9 @@ export default function ChatbotPage() {
   const [momentoEntreno, setMomentoEntreno] = useState(p.momentoEntreno ?? 1);
   const [singleMeal, setSingleMeal] = useState(p.singleMeal ?? false);
   const [mealNombre, setMealNombre] = useState(p.mealNombre ?? 'Comida 1');
+  const [dayOverview, setDayOverview] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [currentFoods, setCurrentFoods] = useState([]);
   const [saving, setSaving] = useState(false);
   const [currentMeal, setCurrentMeal] = useState(p.currentMeal ?? 1);
   const [macrosRestantes, setMacrosRestantes] = useState(p.macrosRestantes ?? { P: 0, H: 0, G: 0 });
@@ -304,6 +307,8 @@ export default function ChatbotPage() {
         setCurrentMeal(data.comida_actual);
         setMealNombre(data.meal_nombre || 'Comida 1');
         setMacrosRestantes(data.objetivo || data.distribucion.comidas.C1);
+        if (data.day_overview) setDayOverview(data.day_overview);
+        setCurrentFoods([]);
         setStep('building_meal');
         addMessage(data.mensaje, false);
       }
@@ -335,30 +340,145 @@ export default function ChatbotPage() {
         })
       });
       const data = await res.json();
-      
-      if (data.response) {
-        // Actualizar estado
-        if (data.state) {
-          setCurrentMeal(data.state.comida_actual);
-          setMacrosRestantes(data.state.restante);
-          if (data.state.meal_nombre) setMealNombre(data.state.meal_nombre);
-          setStep(data.state.step);
-        }
-        
-        // Mostrar respuesta
-        if (data.response.action === 'meal_updated') {
-          // Mostrar alimentos añadidos
-          const foodsMsg = formatMealUpdate(data.response);
-          addMessage(foodsMsg, false, data.response);
-        } else {
-          addMessage(data.response.message || JSON.stringify(data.response), false);
-        }
-      }
+      if (data.day_overview) setDayOverview(data.day_overview);
+      if (data.state?.step) setStep(data.state.step);
+      await handleBotResponse(data.response);
     } catch (error) {
       addMessage('Error al procesar el mensaje.', false);
     }
     setLoading(false);
     inputRef.current?.focus();
+  };
+
+  // Aplica meal_status (etiqueta + restante) y resumen del día a la UI
+  const applyMealResponse = (resp) => {
+    if (resp?.meal_status) {
+      if (resp.meal_status.comida_nombre) setMealNombre(resp.meal_status.comida_nombre);
+      if (resp.meal_status.restante) setMacrosRestantes(resp.meal_status.restante);
+      setCurrentFoods(resp.meal_status.alimentos || []);
+    }
+    if (resp?.day_overview) setDayOverview(resp.day_overview);
+  };
+
+  // Despacha la respuesta determinista del backend
+  const handleBotResponse = async (resp) => {
+    if (!resp) return;
+    if (resp.day_overview) setDayOverview(resp.day_overview);
+    switch (resp.action) {
+      case 'meal_updated':
+        applyMealResponse(resp);
+        setSuggestions([]);
+        addMessage(formatMealUpdate(resp), false, resp);
+        break;
+      case 'suggestions':
+        setSuggestions(resp.suggestions || []);
+        addMessage(
+          resp.message || (resp.suggestions?.length
+            ? 'Estas opciones cuadran con lo que te falta — toca una para añadirla:'
+            : 'No encuentro alimentos que cuadren ahora mismo.'),
+          false
+        );
+        break;
+      case 'complete_request':
+        await completeMeal();
+        break;
+      case 'summary':
+        addMessage(formatDayOverview(resp.day_overview), false);
+        break;
+      case 'status':
+        addMessage(formatMealsStatus(resp.meals_status), false);
+        break;
+      case 'no_foods':
+      default:
+        addMessage(resp.message || 'No te entendí. Dime qué alimentos quieres o usa los botones.', false);
+    }
+  };
+
+  // Informe de "qué falta y en qué comida"
+  const formatMealsStatus = (meals) => {
+    if (!meals?.length) return 'Aún no has configurado el día.';
+    let msg = '**¿Qué te falta por cubrir?**\n';
+    let todoOk = true;
+    meals.forEach(m => {
+      const r = m.restante || {};
+      const faltan = ['P', 'H', 'G'].filter(k => (r[k] || 0) > 4).map(k => `${k}=${r[k]}g`);
+      if (faltan.length) {
+        todoOk = false;
+        msg += `• ${m.nombre}: falta ${faltan.join(', ')}\n`;
+      } else if (m.tiene_alimentos) {
+        msg += `• ${m.nombre}: ✅ cuadrada\n`;
+      } else {
+        todoOk = false;
+        msg += `• ${m.nombre}: vacía\n`;
+      }
+    });
+    if (todoOk) msg += '\n¡Todo cuadrado! Puedes volcar la dieta.';
+    return msg;
+  };
+
+  // Ir a una comida para editarla
+  const goToMeal = async (idx) => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/chatbot/go-to-meal?session_id=${sessionId}&idx=${idx}`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      setSuggestions([]);
+      applyMealResponse(data.response);
+      addMessage(`Editando ${data.response?.meal_status?.comida_nombre || 'comida'} — añade o quita alimentos.`, false, data.response);
+    } catch (e) { addMessage('Error al cambiar de comida.', false); }
+    setLoading(false);
+  };
+
+  // Quitar un alimento de la comida actual
+  const removeFood = async (index) => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/chatbot/remove-food?session_id=${sessionId}&index=${index}`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      applyMealResponse(data.response);
+    } catch (e) { addMessage('Error al quitar el alimento.', false); }
+    setLoading(false);
+  };
+
+  // Pedir sugerencias de alimentos sueltos para la comida actual
+  const requestSuggestions = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/chatbot/suggest-foods?session_id=${sessionId}`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      await handleBotResponse(data.response);
+    } catch (e) { addMessage('Error al sugerir alimentos.', false); }
+    setLoading(false);
+  };
+
+  // Añadir un alimento sugerido (al tocar un chip)
+  const addSuggestedFood = async (alimentoId) => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/chatbot/add-food?session_id=${sessionId}&alimento_id=${alimentoId}`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      setSuggestions([]);
+      await handleBotResponse(data.response);
+    } catch (e) { addMessage('Error al añadir el alimento.', false); }
+    setLoading(false);
+  };
+
+  const formatDayOverview = (ov) => {
+    if (!ov) return 'Aún no hay datos del día.';
+    const f = (m) => `P=${m.P}g H=${m.H}g G=${m.G}g`;
+    return `**Resumen del día**\nObjetivo: ${f(ov.objetivo)}\nLlevas: ${f(ov.consumido)}\nTe falta: ${f(ov.restante)}\nComidas guardadas: ${ov.completas}/${ov.total_comidas}`;
   };
 
   // Completar comida actual
@@ -390,6 +510,9 @@ export default function ChatbotPage() {
         setCurrentMeal(data.comida_actual);
         setMacrosRestantes(data.objetivo);
         if (data.meal_nombre) setMealNombre(data.meal_nombre);
+        if (data.day_overview) setDayOverview(data.day_overview);
+        setSuggestions([]);
+        setCurrentFoods([]);
         addMessage('Comida guardada ✓', true);
         addMessage(data.mensaje, false);
       }
@@ -464,22 +587,22 @@ export default function ChatbotPage() {
     
     if (response.meal_status) {
       const ms = response.meal_status;
-      msg += `\n**Comida ${ms.comida}:**\n`;
+      msg += `\n**${ms.comida_nombre || `Comida ${ms.comida}`}:**\n`;
       msg += `Actual: P=${ms.actual?.P || 0}g, H=${ms.actual?.H || 0}g, G=${ms.actual?.G || 0}g\n`;
       msg += `Objetivo: P=${ms.objetivo?.P || 0}g, H=${ms.objetivo?.H || 0}g, G=${ms.objetivo?.G || 0}g\n`;
       msg += `Restante: P=${ms.restante?.P || 0}g, H=${ms.restante?.H || 0}g, G=${ms.restante?.G || 0}g`;
-      
-      // Si está cuadrado, indicarlo
+
       if (ms.cuadrado) {
-        msg += '\n\n✅ **¡Comida cuadrada!** Puedes guardarla.';
+        msg += '\n\n✅ **¡Comida cuadrada!** Pulsa "Guardar y siguiente".';
+      } else {
+        const r = ms.restante || {};
+        const faltan = ['P', 'H', 'G'].filter(k => (r[k] || 0) > 4).map(k => `${k}=${r[k]}g`);
+        if (faltan.length) {
+          msg += `\n\n⚠️ Todavía te falta ${faltan.join(', ')}. Añade más alimentos, pulsa "Sugerir alimentos", o "Guardar y siguiente" si quieres dejarla así.`;
+        }
       }
     }
-    
-    // Mostrar sugerencia de lo que falta
-    if (response.sugerencia) {
-      msg += `\n\n💡 ${response.sugerencia}`;
-    }
-    
+
     return msg;
   };
 
@@ -504,6 +627,9 @@ export default function ChatbotPage() {
     setMomentoEntreno(1);
     setSingleMeal(false);
     setMealNombre('Comida 1');
+    setDayOverview(null);
+    setSuggestions([]);
+    setCurrentFoods([]);
     setCurrentMeal(1);
     setDistribucion(null);
     setDaySummary(null);
@@ -622,7 +748,8 @@ export default function ChatbotPage() {
 
   const renderDaySummary = () => {
     if (!daySummary) return null;
-    
+    const r1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
+
     return (
       <div className="bg-card rounded-xl p-4 mt-4">
         <div className="flex items-center justify-between mb-4">
@@ -660,7 +787,7 @@ export default function ChatbotPage() {
               ))}
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
-              Total: P={comida.macros?.P || 0}g | H={comida.macros?.H || 0}g | G={comida.macros?.G || 0}g
+              Total: P={r1(comida.macros?.P)}g | H={r1(comida.macros?.H)}g | G={r1(comida.macros?.G)}g
             </div>
           </div>
         ))}
@@ -668,15 +795,15 @@ export default function ChatbotPage() {
         <div className="mt-4 pt-4 border-t border-input">
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
-              <div className="text-2xl font-bold text-orange-500">{daySummary.totales?.P || 0}g</div>
+              <div className="text-2xl font-bold text-orange-500">{r1(daySummary.totales?.P)}g</div>
               <div className="text-xs text-muted-foreground">Proteínas</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-blue-500">{daySummary.totales?.H || 0}g</div>
+              <div className="text-2xl font-bold text-blue-500">{r1(daySummary.totales?.H)}g</div>
               <div className="text-xs text-muted-foreground">Hidratos</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-yellow-500">{daySummary.totales?.G || 0}g</div>
+              <div className="text-2xl font-bold text-yellow-500">{r1(daySummary.totales?.G)}g</div>
               <div className="text-xs text-muted-foreground">Grasas</div>
             </div>
           </div>
@@ -696,7 +823,12 @@ export default function ChatbotPage() {
           <div>
             <h1 className="font-bold" data-testid="chatbot-heading">Asistente de Nutrición</h1>
             <p className="text-xs text-muted-foreground">
-              {step === 'building_meal' && `${mealNombre} • Restante: P=${macrosRestantes.P}g H=${macrosRestantes.H}g G=${macrosRestantes.G}g`}
+              {step === 'building_meal' && (
+                <>
+                  {mealNombre} • Falta en esta comida: P={macrosRestantes.P}g H={macrosRestantes.H}g G={macrosRestantes.G}g
+                  {dayOverview && ` · Día: ${dayOverview.completas}/${dayOverview.total_comidas} comidas`}
+                </>
+              )}
               {step === 'complete' && '¡Día completo!'}
               {step === 'init' && 'Listo para empezar'}
               {step === 'config' && 'Configurando día...'}
@@ -861,26 +993,96 @@ export default function ChatbotPage() {
         </div>
       )}
 
-      {/* Input */}
+      {/* Input + controles de montaje */}
       {step === 'building_meal' && (
-        <div className="border-t border-border p-4 bg-card mb-12 relative z-50">
-          <div className="flex gap-2">
+        <div className="border-t border-border p-3 bg-card mb-12 relative z-50 space-y-2">
+          {/* Navegador de comidas (toca para editar una comida) */}
+          {dayOverview?.meals?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {dayOverview.meals.map((m) => (
+                <button
+                  key={m.idx}
+                  onClick={() => goToMeal(m.idx)}
+                  disabled={loading}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors disabled:opacity-50 ${
+                    m.es_actual ? 'bg-orange-500 text-white border-orange-500'
+                    : m.cuadrado ? 'bg-green-600/15 text-green-600 border-green-600/40'
+                    : m.tiene_alimentos ? 'bg-muted text-foreground border-input'
+                    : 'bg-card text-muted-foreground border-input'
+                  }`}
+                  title={`Falta P=${m.restante?.P} H=${m.restante?.H} G=${m.restante?.G}`}
+                >
+                  {m.cuadrado && m.tiene_alimentos ? '✅ ' : ''}{m.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Alimentos de la comida actual (toca la x para quitar) */}
+          {currentFoods.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {currentFoods.map((f, i) => (
+                <span key={i} className="inline-flex items-center gap-1 bg-muted border border-input text-foreground text-xs px-2.5 py-1 rounded-full">
+                  {f.nombre} · {f.cantidad_display}
+                  <button onClick={() => removeFood(i)} disabled={loading} className="text-muted-foreground hover:text-red-500 disabled:opacity-50">×</button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Chips de sugerencias (toca para añadir) */}
+          {suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => addSuggestedFood(s.alimento_id)}
+                  disabled={loading}
+                  className="bg-muted hover:bg-accent border border-input text-foreground text-xs px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                  title={`P=${s.macros?.P} H=${s.macros?.H} G=${s.macros?.G}`}
+                >
+                  + {s.nombre} · {s.cantidad_display}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Botones de control */}
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={completeMeal}
               disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-foreground px-4 py-3 rounded-xl font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl font-semibold text-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
               data-testid="save-meal-btn"
             >
-              <Check size={20} />
-              Guardar
+              <Check size={16} /> Guardar y siguiente
             </button>
+            <button
+              onClick={requestSuggestions}
+              disabled={loading}
+              className="bg-muted hover:bg-accent border border-input text-foreground px-3 py-2 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+              data-testid="suggest-foods-btn"
+            >
+              Sugerir alimentos
+            </button>
+            <button
+              onClick={() => addMessage(formatDayOverview(dayOverview), false)}
+              disabled={loading || !dayOverview}
+              className="bg-muted hover:bg-accent border border-input text-foreground px-3 py-2 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+            >
+              Resumen del día
+            </button>
+          </div>
+
+          {/* Escribir alimentos */}
+          <div className="flex gap-2">
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Escribe lo que quieres comer..."
+              placeholder="Escribe los alimentos que quieres (p.ej. huevos, pan, claras)…"
               className="flex-1 bg-muted border border-input rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
               disabled={loading}
               data-testid="chat-input"
