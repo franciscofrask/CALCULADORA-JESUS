@@ -1287,12 +1287,9 @@ class NutritionChatbot:
         # Resto: tratar como alimentos
         foods = await self.extract_foods(user_input)
         if not foods:
-            rem = self.get_remaining_macros()
-            falta = ", ".join(f"{m}={rem[m]}g" for m in ("P", "H", "G") if rem[m] > 4)
-            msg = "No te entendí. "
-            if falta:
-                msg += f"En {self.meal_label(self.current_meal_key())} te falta {falta}. "
-            msg += "Dime alimentos (p.ej. \"huevos, pan, claras\"), pulsa \"Sugerir alimentos\" o \"Guardar y siguiente\"."
+            msg = ("No reconocí ningún alimento ahí. Dime qué quieres comer (p.ej. \"huevos, pan, "
+                   "claras\"), o pregúntame \"¿qué me falta?\". También puedes pulsar \"Sugerir "
+                   "alimentos\" o \"Guardar y siguiente\".")
             return {"action": "no_foods", "message": msg, "day_overview": self.get_day_overview()}
         return await self.add_foods_by_names(foods)
     
