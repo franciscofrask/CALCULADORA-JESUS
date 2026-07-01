@@ -9,18 +9,18 @@ import { X, CalendarDays, Utensils, Gauge, ArrowRight } from 'lucide-react';
 const STEPS = [
     {
         icon: CalendarDays,
-        title: 'Elegí el día',
-        desc: 'Marcá si es día de entrenamiento o de descanso. Tus macros se ajustan solos a cada tipo de día.',
+        title: 'Elige el día',
+        desc: 'Marca si es día de entrenamiento o de descanso. Tus macros se ajustan solos a cada tipo de día.',
     },
     {
         icon: Utensils,
-        title: 'Armá tus comidas',
-        desc: 'Tocá una comida y agregá alimentos, o usá "Construir comida" para que la calculadora te guíe paso a paso.',
+        title: 'Arma tus comidas',
+        desc: 'Toca una comida y agrega alimentos, o usa "Construir comida" para que la calculadora te guíe paso a paso.',
     },
     {
         icon: Gauge,
-        title: 'Seguí tus macros',
-        desc: 'Arriba ves cuánta proteína, hidratos y grasa llevás. El objetivo es completar el día sin pasarte.',
+        title: 'Sigue tus macros',
+        desc: 'Arriba ves cuánta proteína, hidratos y grasa llevas. El objetivo es completar el día sin pasarte.',
     },
 ];
 
@@ -36,10 +36,10 @@ const NutritionIntro = ({ onClose }) => (
             <div className="p-6 pb-4 text-center">
                 <p className="caption text-brand mb-1">Cómo funciona</p>
                 <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-tight">
-                    Armá tu día en 3 pasos
+                    Arma tu día en 3 pasos
                 </h2>
                 <p className="text-muted-foreground text-sm mt-2">
-                    No hace falta tocar todo. Con esto te alcanza para empezar.
+                    No hace falta tocar todo. Con esto te basta para empezar.
                 </p>
             </div>
 

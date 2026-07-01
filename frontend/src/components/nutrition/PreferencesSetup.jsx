@@ -206,7 +206,7 @@ const PreferencesSetup = ({
                     {!isEditMode && (
                         <p className="text-muted-foreground text-sm" data-testid="preferences-intro">
                             Un último paso antes de empezar. Esto le dice a la calculadora qué
-                            alimentos sugerirte. Ya dejamos algunos marcados: podés ajustarlos o
+                            alimentos sugerirte. Ya dejamos algunos marcados: puedes ajustarlos o
                             guardar directamente y cambiarlos cuando quieras.
                         </p>
                     )}

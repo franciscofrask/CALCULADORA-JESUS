@@ -1,11 +1,11 @@
 """
-Cliente LLM mínimo sobre el SDK de Groq (API compatible con OpenAI).
+Cliente LLM mínimo sobre el SDK de OpenAI (ChatGPT).
 """
 import os
 
-from groq import AsyncGroq
+from openai import AsyncOpenAI
 
-DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+DEFAULT_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
 
 class UserMessage:
@@ -15,7 +15,7 @@ class UserMessage:
 
 class LlmChat:
     def __init__(self, api_key: str = None, session_id: str = None, system_message: str = None):
-        self.api_key = api_key or os.environ.get("GROQ_API_KEY")
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.session_id = session_id
         self.system_message = system_message
         self.model = DEFAULT_MODEL
@@ -25,20 +25,20 @@ class LlmChat:
 
     def with_model(self, provider: str, model: str):
         # Se conserva la firma (provider, model) por compatibilidad con las
-        # llamadas existentes. El provider se ignora: siempre usamos Groq.
+        # llamadas existentes. El provider se ignora: siempre usamos OpenAI.
         if model:
             self.model = model
         return self
 
     def with_json_mode(self, enabled: bool = True):
-        """Fuerza salida JSON válida (Groq response_format=json_object).
+        """Fuerza salida JSON válida (OpenAI response_format=json_object).
         Requiere que el system/prompt mencione 'json' (ya lo hace)."""
         self.response_format = {"type": "json_object"} if enabled else None
         return self
 
     def _get_client(self):
         if self._client is None:
-            self._client = AsyncGroq(api_key=self.api_key)
+            self._client = AsyncOpenAI(api_key=self.api_key)
         return self._client
 
     def _build_messages(self):

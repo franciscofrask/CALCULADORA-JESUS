@@ -101,12 +101,12 @@ La rutina debe tener este formato exacto:
 Genera una rutina completa de 7 días. Responde SOLO con el JSON."""
 
     try:
-        llm_key = os.environ.get('GROQ_API_KEY')
+        llm_key = os.environ.get('OPENAI_API_KEY')
         chat = LlmChat(
             api_key=llm_key,
             session_id=f"routine-{data.client_id}-{uuid.uuid4()}",
             system_message="Eres un entrenador personal experto. Genera rutinas en formato JSON."
-        ).with_model("groq", os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile'))
+        ).with_model("openai", os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'))
         
         response = await chat.send_message(UserMessage(text=prompt))
         

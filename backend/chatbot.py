@@ -90,7 +90,7 @@ class NutritionChatbot:
         """
         self.session_id = session_id
         self.db = db
-        self.api_key = os.environ.get('GROQ_API_KEY')
+        self.api_key = os.environ.get('OPENAI_API_KEY')
         
         # Estado de la conversación
         self.state = {
@@ -126,7 +126,7 @@ class NutritionChatbot:
             api_key=self.api_key,
             session_id=session_id,
             system_message=SYSTEM_PROMPT
-        ).with_model("groq", os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')).with_json_mode()
+        ).with_model("openai", os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')).with_json_mode()
     
     def set_user_macros(self, macros: dict):
         """Establece los macros del usuario desde su perfil."""
@@ -907,23 +907,73 @@ class NutritionChatbot:
         self.state["avoided_keywords"] = [k.lower() for k in (avoided_keywords or [])]
 
     async def extract_foods(self, text: str) -> list:
-        """Usa el LLM SOLO para extraer la lista de alimentos que menciona el usuario."""
+        """Usa el LLM SOLO para extraer los alimentos que menciona el usuario, con su
+        cantidad si la indica. Devuelve una lista de dicts:
+        [{"nombre": str, "cantidad": float|None, "unidad": "g"|"ud"|None}]."""
         prompt = (
-            "Eres un extractor de alimentos. El usuario describe lo que quiere comer en una comida. "
-            "Devuelve SOLO un JSON con la lista de alimentos mencionados (en singular, sin cantidades): "
-            '{"foods": ["huevos", "pan", "claras de huevo", "chorizo"]}. '
-            'Si no menciona ningún alimento, devuelve {"foods": []}. No añadas nada más.'
+            "Extrae TODOS los alimentos que el usuario menciona en su mensaje. "
+            'Devuelve SOLO un JSON: {"foods": [{"nombre": "...", "cantidad": <número o null>, '
+            '"unidad": "g"|"ud"|null}]}. '
+            "Incluye SIEMPRE cada alimento mencionado, tenga o no cantidad. "
+            "'nombre': el alimento en singular, sin cantidades. "
+            "'cantidad': el número que el usuario indique para ese alimento, o null si no indica ninguno. "
+            "'unidad': \"g\" para gramos o kilos, \"ud\" para unidades/piezas/lonchas, o null si no se indica. "
+            "Interpreta números pegados o mal escritos (\"yogurt100 g\" -> yogur 100 g, "
+            "\"100 de avena\" -> avena 100 g, \"4 huevos\" -> huevos 4 ud). "
+            'Ejemplo: "pollo y arroz" -> {"foods": [{"nombre": "pollo", "cantidad": null, "unidad": null}, '
+            '{"nombre": "arroz", "cantidad": null, "unidad": null}]}. '
+            'Devuelve {"foods": []} SOLO si el mensaje no menciona ningún alimento. No añadas nada más.'
         )
-        chat = LlmChat(api_key=self.api_key, system_message=prompt).with_model(
-            "groq", os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-        ).with_json_mode()
-        try:
-            resp = await chat.send_message(UserMessage(text=text))
-            data = self._parse_claude_response(resp)
-            foods = data.get("foods", []) if isinstance(data, dict) else []
-            return [f.strip() for f in foods if isinstance(f, str) and f.strip()]
-        except Exception:
+        # El modelo es estocástico y a veces devuelve {"foods": []} para un alimento claro, o falla
+        # de forma transitoria (timeout, 429). Reintentamos si sale VACÍO o hay excepción, para que
+        # un tropiezo puntual NO haga que un alimento válido caiga en "no reconocí". Cada intento usa
+        # un chat nuevo para no arrastrar el historial de un envío fallido.
+        raw = []
+        last_err = None
+        for intento in range(2):
+            chat = LlmChat(api_key=self.api_key, system_message=prompt).with_model(
+                "openai", os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+            ).with_json_mode()
+            try:
+                resp = await chat.send_message(UserMessage(text=text))
+                data = self._parse_claude_response(resp)
+                raw = data.get("foods", []) if isinstance(data, dict) else []
+                last_err = None
+                if raw:
+                    break
+            except Exception as e:
+                last_err = e
+                import asyncio as _asyncio
+                await _asyncio.sleep(0.4)
+        if last_err is not None:
+            print(f"[extract_foods] fallo tras reintentos: {type(last_err).__name__}: {last_err}")
             return []
+
+        items = []
+        for f in raw:
+            if isinstance(f, str):
+                nombre = f.strip()
+                if nombre:
+                    items.append({"nombre": nombre, "cantidad": None, "unidad": None})
+                continue
+            if not isinstance(f, dict):
+                continue
+            nombre = (f.get("nombre") or "").strip()
+            if not nombre:
+                continue
+            cant = f.get("cantidad")
+            try:
+                cant = float(cant) if cant is not None else None
+            except (TypeError, ValueError):
+                cant = None
+            unidad = f.get("unidad")
+            if unidad == "kg" and cant is not None:
+                cant *= 1000
+                unidad = "g"
+            if unidad not in ("g", "ud"):
+                unidad = None
+            items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad})
+        return items
 
     def get_day_overview(self) -> dict:
         """Objetivo total del día + consumido + restante, y la comida actual."""
@@ -995,6 +1045,109 @@ class NutritionChatbot:
         for k in ("P", "H", "G"):
             comida["macros"][k] = round(comida["macros"][k] - m.get(k, 0), 1)
         return True
+
+    # Palabras a ignorar al emparejar el nombre de un alimento dentro de una orden
+    # ("borra las aceitunas", "pon 80 g de aguacate"): verbos, unidades y relleno.
+    _MATCH_STOPWORDS = {
+        "borra", "borrar", "borrame", "quita", "quitar", "quitame", "quitale", "elimina",
+        "eliminar", "saca", "sacar", "sacame", "retira", "retirar", "remueve", "remover",
+        "pon", "poner", "ponme", "pongo", "cambia", "cambiar", "cambiame", "ajusta", "ajustar",
+        "sube", "subir", "baja", "bajar", "deja", "dejar", "mejor", "vez", "lugar", "en",
+        "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "y", "e", "con",
+        "sin", "g", "gr", "grs", "gramos", "kg", "kilo", "kilos", "ud", "uds", "unidad",
+        "unidades", "por", "favor", "esta", "este", "esa", "ese", "comida", "a", "al",
+    }
+
+    @staticmethod
+    def _norm_text(s: str) -> str:
+        import unicodedata
+        s = (s or "").lower()
+        return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+    def _match_meal_food_index(self, name: str) -> int:
+        """Índice del alimento de la comida actual que mejor coincide con `name`, o -1."""
+        key = self.current_meal_key()
+        comida = self.state["comidas_completadas"].get(key)
+        if not comida or not comida.get("alimentos"):
+            return -1
+        q_tokens = [t for t in re.findall(r"\w+", self._norm_text(name))
+                    if t not in self._MATCH_STOPWORDS and len(t) > 1 and not t.isdigit()]
+        if not q_tokens:
+            return -1
+        best_idx, best_score = -1, 0
+        for i, f in enumerate(comida["alimentos"]):
+            fn = self._norm_text(f.get("nombre", ""))
+            score = sum(1 for t in q_tokens if t in fn)
+            if score > best_score:
+                best_score, best_idx = score, i
+        return best_idx if best_score > 0 else -1
+
+    def remove_food_by_name(self, name: str):
+        """Quita de la comida actual el alimento que mejor coincide con `name`
+        (p.ej. "borra las aceitunas negras"). Devuelve el alimento quitado o None."""
+        idx = self._match_meal_food_index(name)
+        if idx < 0:
+            return None
+        comida = self.state["comidas_completadas"][self.current_meal_key()]
+        removed = comida["alimentos"][idx]
+        self.remove_food_at(idx)
+        return removed
+
+    def _update_food_at(self, key: str, idx: int, alimento: dict, cantidad_g: float, macros: dict):
+        """Cambia la cantidad/macros de un alimento ya presente en la comida y ajusta los totales."""
+        comida = self.state["comidas_completadas"][key]
+        entry = comida["alimentos"][idx]
+        old = entry.get("macros", {})
+        for k in ("P", "H", "G"):
+            comida["macros"][k] = round(comida["macros"][k] - old.get(k, 0) + macros.get(k, 0), 1)
+        config = get_food_config(alimento)
+        entry["cantidad"] = cantidad_g
+        entry["cantidad_g"] = cantidad_g
+        entry["cantidad_display"] = self._format_cantidad(cantidad_g, alimento, config)
+        entry["macros"] = macros
+        entry["alimento"] = alimento
+        return entry["cantidad_display"]
+
+    async def set_food_quantity(self, name: str, cantidad: float = None, unidad: str = None) -> dict:
+        """Fija manualmente la cantidad de un alimento, con paridad con la calculadora: NO topa
+        por los macros restantes (permite SOBREPASAR el objetivo). Si el alimento ya está en la
+        comida, actualiza su cantidad; si no, lo añade a la cantidad indicada.
+
+        `unidad`: "g" (gramos), "ud" (unidades) o None (se resuelve según el alimento:
+        unidades si es un alimento contable, gramos en caso contrario)."""
+        key = self.current_meal_key()
+        idx = self._match_meal_food_index(name)
+        if idx >= 0:
+            alimento = self.state["comidas_completadas"][key]["alimentos"][idx].get("alimento")
+            if not alimento:
+                matches = await self.search_foods(name, limit=1)
+                alimento = matches[0] if matches else None
+        else:
+            matches = await self.search_foods(name, limit=1)
+            alimento = matches[0] if matches else None
+        if not alimento:
+            return {"ok": False, "nombre": name}
+        if cantidad is None or cantidad <= 0:
+            return {"ok": False, "nombre": alimento.get("nombre", name)}
+        u = unidad
+        if u == "kg":
+            cantidad *= 1000
+            u = "g"
+        if u not in ("g", "ud"):
+            u = "ud" if alimento.get("unidades") else "g"
+        if u == "ud":
+            racion = float(alimento.get("racion") or 100) or 100.0
+            cantidad_g = cantidad * racion
+        else:
+            cantidad_g = cantidad
+        macros = self._macros_at(alimento, cantidad_g)
+        if idx >= 0:
+            display = self._update_food_at(key, idx, alimento, cantidad_g, macros)
+        else:
+            self._ensure_meal(key)
+            display = self._append_food(key, alimento, cantidad_g, macros)
+        return {"ok": True, "nombre": alimento.get("nombre"),
+                "cantidad_display": display, "macros": macros}
 
     def _size_food(self, alimento: dict, restante: dict):
         """Dimensiona un alimento contra los macros restantes con el MISMO motor que la
@@ -1079,49 +1232,63 @@ class NutritionChatbot:
         m = macros_at(a, cant)
         return {"P": round(m["proteinas"], 1), "H": round(m["hidratos"], 1), "G": round(m["grasas"], 1)}
 
-    async def add_foods_by_names(self, names: list) -> dict:
-        """Añade los alimentos pedidos a la comida actual.
+    async def add_foods(self, items: list) -> dict:
+        """Añade a la comida actual los alimentos extraídos del mensaje.
 
-        - 1 alimento: se dimensiona contra lo que falta (igual que la calculadora).
-        - Varios alimentos: se REPARTEN las cantidades de forma equilibrada para que TODOS
-          entren (respetando sus mínimos) y cuadre la comida (meal_builder por roles).
+        `items`: [{"nombre", "cantidad", "unidad"}].
+        - Los que traen cantidad EXPLÍCITA se fijan manualmente (se respeta el número aunque
+          sobrepase el objetivo, como en la calculadora).
+        - Los que NO traen cantidad se dimensionan/reparten automáticamente contra lo que
+          queda: 1 alimento con `_size_food`; varios, equilibrado con `meal_builder`.
         Los macros mostrados se recalculan con el motor de la calculadora (paridad).
         """
         key = self.current_meal_key()
-        restante = self.get_remaining_macros()
+        added, not_found = [], []
 
-        # ── 1 alimento: dimensionado directo ──
-        if len(names) <= 1:
-            added, not_found = [], []
-            if names:
-                matches = await self.search_foods(names[0], limit=1)
-                if not matches:
-                    not_found.append({"buscado": names[0], "razon": "No encontrado en la base de datos"})
+        def tiene_cantidad(it):
+            return it.get("cantidad") is not None and it.get("cantidad") > 0
+
+        explicit = [it for it in items if tiene_cantidad(it)]
+        auto_names = [it["nombre"] for it in items if not tiene_cantidad(it)]
+
+        # ── 1) Cantidades explícitas: una a una, manual (sin tope) ──
+        for it in explicit:
+            res = await self.set_food_quantity(it["nombre"], cantidad=it["cantidad"], unidad=it.get("unidad"))
+            if res.get("ok"):
+                added.append({"nombre": res["nombre"], "cantidad_display": res["cantidad_display"],
+                              "macros": res["macros"]})
+            else:
+                not_found.append({"buscado": it["nombre"], "razon": "No encontrado en la base de datos"})
+
+        # ── 2) Sin cantidad: auto-dimensionado contra lo que queda tras los explícitos ──
+        if len(auto_names) == 1:
+            restante = self.get_remaining_macros()
+            matches = await self.search_foods(auto_names[0], limit=1)
+            if not matches:
+                not_found.append({"buscado": auto_names[0], "razon": "No encontrado en la base de datos"})
+            else:
+                alimento = matches[0]
+                sized = self._size_food(alimento, restante)
+                if not sized:
+                    not_found.append({"buscado": auto_names[0], "encontrado": alimento.get("nombre"),
+                                      "razon": "No cabe en lo que queda de esta comida"})
                 else:
-                    alimento = matches[0]
-                    sized = self._size_food(alimento, restante)
-                    if not sized:
-                        not_found.append({"buscado": names[0], "encontrado": alimento.get("nombre"),
-                                          "razon": "No cabe en lo que queda de esta comida"})
-                    else:
-                        cantidad_g, macros = sized
-                        display = self._append_food(key, alimento, cantidad_g, macros)
-                        added.append({"nombre": alimento.get("nombre"), "cantidad_display": display, "macros": macros})
-            return self._meal_response(added, not_found)
+                    cantidad_g, macros = sized
+                    display = self._append_food(key, alimento, cantidad_g, macros)
+                    added.append({"nombre": alimento.get("nombre"), "cantidad_display": display, "macros": macros})
+        elif len(auto_names) >= 2:
+            from meal_builder import build_meal
+            restante = self.get_remaining_macros()
+            result = await build_meal(self.db, auto_names, restante, self.search_foods)
+            not_found.extend(result.get("foods_not_found", []))
+            for f in result["foods_added"]:
+                cantidad_g = f.get("cantidad", f.get("cantidad_g", 0))
+                matches = await self.search_foods(f["nombre"], limit=1)
+                alimento = matches[0] if matches else {"nombre": f["nombre"], "racion": 100}
+                macros = self._macros_at(alimento, cantidad_g) if matches else f.get("macros", {"P": 0, "H": 0, "G": 0})
+                display = self._append_food(key, alimento, cantidad_g, macros)
+                added.append({"nombre": f["nombre"], "cantidad_display": display, "macros": macros})
 
-        # ── Varios alimentos: repartir equilibrado (meal_builder por roles, mínimos) ──
-        from meal_builder import build_meal
-        result = await build_meal(self.db, names, restante, self.search_foods)
-
-        added = []
-        not_found = list(result.get("foods_not_found", []))
-        for f in result["foods_added"]:
-            cantidad_g = f.get("cantidad", f.get("cantidad_g", 0))
-            matches = await self.search_foods(f["nombre"], limit=1)
-            alimento = matches[0] if matches else {"nombre": f["nombre"], "racion": 100}
-            macros = self._macros_at(alimento, cantidad_g) if matches else f.get("macros", {"P": 0, "H": 0, "G": 0})
-            display = self._append_food(key, alimento, cantidad_g, macros)
-            added.append({"nombre": f["nombre"], "cantidad_display": display, "macros": macros})
         return self._meal_response(added, not_found)
 
     async def add_food_by_id(self, alimento_id) -> dict:
@@ -1253,6 +1420,117 @@ class NutritionChatbot:
             "day_overview": self.get_day_overview(),
         }
 
+    def _que_cuenta(self, alimento: dict):
+        """Determinista: qué macros CUENTAN en CALMA para el alimento (según su categoría),
+        sus macros brutos y su categoría principal. Mismo motor que la calculadora.
+        Devuelve (cuenta{P,H,G bool}, brutos{P,H,G}, categoria, base_lbl)."""
+        import copy
+        from calma_suggest import aplicar_regla_macros, macros_at
+        try:
+            from calculator import get_categoria_principal
+            cat = get_categoria_principal(alimento)
+        except Exception:
+            cats = alimento.get("categorias") or []
+            cat = cats[0] if cats else ""
+        a = copy.deepcopy(alimento)
+        aplicar_regla_macros(a)
+        es_unidad = bool(alimento.get("unidades"))
+        cant = 1.0 if es_unidad else 100.0
+        m = macros_at(a, cant)
+        cuenta = {"P": m["proteinas"] > 0.01, "H": m["hidratos"] > 0.01, "G": m["grasas"] > 0.01}
+        brutos = {
+            "P": round(float(alimento.get("proteinas") or 0), 1),
+            "H": round(float(alimento.get("hidratos") or 0), 1),
+            "G": round(float(alimento.get("grasas") or 0), 1),
+        }
+        return cuenta, brutos, cat, ("por unidad" if es_unidad else "por 100 g")
+
+    async def answer_question(self, text: str) -> dict:
+        """Responde una pregunta de nutrición/CALMA del cliente. Los HECHOS (qué macros
+        cuentan para un alimento, contexto del día) los calcula el código; el LLM solo redacta."""
+        food_facts = ""
+        try:
+            items = await self.extract_foods(text)
+        except Exception:
+            items = []
+        if items:
+            matches = await self.search_foods(items[0]["nombre"], limit=1)
+            if matches:
+                a = matches[0]
+                cuenta, brutos, cat, base = self._que_cuenta(a)
+                si = lambda b: "sí" if b else "no"
+                food_facts = (
+                    f"Alimento: {a.get('nombre')} (categoría CALMA {cat}). "
+                    f"Macros {base}: P={brutos['P']}, H={brutos['H']}, G={brutos['G']}. "
+                    f"En CALMA cuenta -> Proteína: {si(cuenta['P'])}, "
+                    f"Hidratos: {si(cuenta['H'])}, Grasa: {si(cuenta['G'])}."
+                )
+        ov = self.get_day_overview()
+        lines = []
+        if ov:
+            obj = ov.get("objetivo", {}); con = ov.get("consumido", {}); rem = ov.get("restante", {})
+            lines.append(
+                f"Día de {self.state.get('tipo_dia', '')}. "
+                f"Objetivo total del día: P={obj.get('P', 0)}g H={obj.get('H', 0)}g G={obj.get('G', 0)}g. "
+                f"Consumido: P={con.get('P', 0)}g H={con.get('H', 0)}g G={con.get('G', 0)}g. "
+                f"Falta en el día: P={rem.get('P', 0)}g H={rem.get('H', 0)}g G={rem.get('G', 0)}g."
+            )
+            lines.append("Desglose por comidas:")
+            for m in ov.get("meals", []):
+                o = m.get("objetivo", {}); r = m.get("restante", {})
+                if m.get("cuadrado"):
+                    estado = "cuadrada"
+                elif not m.get("tiene_alimentos"):
+                    estado = "vacía"
+                else:
+                    estado = "incompleta"
+                marca = " [comida actual]" if m.get("es_actual") else ""
+                comida = self.state["comidas_completadas"].get(m["key"], {})
+                foods = ", ".join(
+                    f"{a.get('nombre')} {a.get('cantidad_display', '')}".strip()
+                    for a in comida.get("alimentos", [])
+                ) or "sin alimentos"
+                lines.append(
+                    f"- {m['nombre']}{marca}: objetivo P={o.get('P', 0)} H={o.get('H', 0)} G={o.get('G', 0)}; "
+                    f"falta P={r.get('P', 0)} H={r.get('H', 0)} G={r.get('G', 0)}; {estado}. Contiene: {foods}."
+                )
+        ctx = "\n".join(lines)
+        system = (
+            "Eres el asistente del método 12en12 (CALMA) de nutrición. Respondes las dudas del "
+            "cliente de forma breve y clara, en español neutro (sin voseo), en 2-4 frases. "
+            "ÁMBITO: solo respondes sobre nutrición, dieta, macros, alimentos, entrenamiento y el "
+            "uso de esta app. Si la pregunta NO trata de eso (p.ej. política, geografía, noticias, "
+            "cultura general), NO la respondas ni la mezcles con nutrición: di brevemente que solo "
+            "puedes ayudar con su dieta y su método, y ofrécete a seguir con la comida. "
+            "NO inventes números: usa solo los DATOS que te doy (objetivo del día, consumido, y el "
+            "desglose por comidas con lo que falta en cada una). "
+            "Si preguntan en qué comida meter un macro o un alimento, mira el desglose y recomienda "
+            "la(s) comida(s) que aún necesitan ese macro (las de mayor 'falta' de ese macro), citando "
+            "su nombre. "
+            "Reglas CALMA para explicar: cada alimento se clasifica por su categoría principal y "
+            "solo cuentan los macros coherentes con ella. Fuentes de hidratos (arroz, pasta, pan, "
+            "patata, avena): cuentan SIEMPRE sus hidratos; su proteína solo cuenta si es sustancial "
+            "(más de un tercio de sus hidratos), por eso la poca proteína del arroz no cuenta. "
+            "Fuentes de proteína (pollo, huevo, pescado, carne): cuenta su proteína (y su grasa si es "
+            "alta). Fuentes de grasa (aceite, aguacate, frutos secos, aceitunas): cuenta su grasa. "
+            "La idea es cubrir cada macro con el alimento idóneo, no sumar 'relleno' de baja calidad."
+        )
+        user_msg = f"Pregunta del cliente: {text}\n\nDATOS:\n{food_facts}\n{ctx}".strip()
+        chat = LlmChat(api_key=self.api_key, system_message=system).with_model(
+            "openai", os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        )
+        try:
+            answer = await chat.send_message(UserMessage(text=user_msg))
+        except Exception:
+            answer = ("En CALMA cada alimento cuenta según su categoría principal: las fuentes de "
+                      "hidratos aportan hidratos, las de proteína aportan proteína y las de grasa "
+                      "aportan grasa, para cubrir cada macro con el alimento idóneo. ¿Sobre qué "
+                      "alimento o comida quieres saber?")
+        answer = (answer or "").strip()
+        if not answer:
+            answer = ("Solo puedo ayudarte con tu dieta y el método 12en12. ¿Seguimos con tu comida?")
+        return {"action": "message", "message": answer, "day_overview": ov}
+
     async def process_message(self, user_input: str) -> dict:
         """Procesa el texto del usuario de forma DETERMINISTA. El LLM solo extrae alimentos."""
         text = (user_input or "").strip().lower()
@@ -1277,21 +1555,54 @@ class NutritionChatbot:
         if re.search(r"\b(falta|faltan|queda|quedan|cubrir|restante[s]?|cuant[oa]s?|que macros|como voy|donde voy)\b", text):
             return {"action": "status", "meals_status": self.get_meals_status(),
                     "day_overview": self.get_day_overview()}
-        if re.search(r"\b(siguiente|guardar?|guarda|guardo|listo|completa\w*|terminar|acabar|next)\b", text):
+        if re.search(r"\b(siguiente|guardar?|guarda|guardo|guardala|listo|lista|terminar|termino|acabar|acabe|next|pasa a la siguiente)\b", text):
             return {"action": "complete_request"}
-        if re.search(r"\b(opcion\w*|sugiere\w*|sugerencia\w*|recomien\w*|menu|que pongo|que meto|no se|idea\w*)\b", text):
+        if re.search(r"\b(opcion\w*|sugiere\w*|sugerencia\w*|recomien\w*|asesor\w*|aconseja\w*|consejo\w*|ayuda\w*|complet\w*|guia\w*|orienta\w*|menu|que pongo|que meto|no se|idea\w*)\b", text):
             return await self.suggest_foods_for_current_meal()
         if re.search(r"\b(resumen|del dia|dia completo|cuanto llevo|macros del dia)\b", text):
             return {"action": "summary", "day_overview": self.get_day_overview()}
+        # Pregunta de coaching/nutrición ("por qué el arroz cuenta como hidrato", "qué es CALMA",
+        # "por qué no me cuenta la proteína del pan"). Debe ir ANTES del borrado y del extractor,
+        # porque menciona alimentos pero NO quiere añadirlos ni quitarlos.
+        if re.search(
+            r"(\?|\bpor ?que\b|\bporque\b|\bpor qu\b|\bcuenta como\b|\bcuentan como\b|\bse cuenta\b|"
+            r"\bno cuenta\b|\bno me cuenta\b|\bcomo funciona\b|\bque es\b|\bexplica\w*|\bdiferencia\b|"
+            r"\bes normal\b|\bdeberi\w*|\bconviene\b|\bes mejor\b|\bque significa\b|\bpara que sirve\b|"
+            r"\bno entiendo\b|\bque alimentos?\b|\bcuales?\b|\bque (puedo |debo )?(comer|tomar)\b|"
+            r"\bbuen[oa]s? (en|para|de|fuente)\b|\bric[oa]s? en\b|\balt[oa]s? en\b|\bfuente[s]? de\b|"
+            r"\ben que comida\b|\bquien\w*\b|\bdonde\b|\badonde\b|\bcuando\b|\bpara que\b|"
+            r"\bque hago\b|\bque hace\b)",
+            text,
+        ):
+            return await self.answer_question(user_input)
+        # Quitar un alimento por nombre ("borra las aceitunas negras", "quita el arroz")
+        if re.search(r"\b(borra\w*|quit\w*|elimina\w*|saca\w*|sacar|retira\w*|remov\w*|remueve\w*)\b", text):
+            removed = self.remove_food_by_name(text)
+            if removed:
+                resp = self._meal_response([], [])
+                resp["message"] = f"Quité {removed.get('nombre')} de esta comida."
+                return resp
+            return {
+                "action": "no_foods",
+                "message": ("No encontré ese alimento en la comida actual para quitarlo. "
+                            "Míralo en la lista de arriba y toca la × del que quieras eliminar."),
+                "day_overview": self.get_day_overview(),
+            }
 
         # Resto: tratar como alimentos
         foods = await self.extract_foods(user_input)
         if not foods:
+            # No se reconoció ningún alimento. Si el mensaje parece una frase (varias palabras),
+            # probablemente sea una duda o algo fuera de tema: lo pasamos al asistente, que
+            # responde si es de nutrición o reconduce si no lo es. Si es algo corto, pedimos
+            # que escriba alimentos.
+            if len(text.split()) >= 4:
+                return await self.answer_question(user_input)
             msg = ("No reconocí ningún alimento ahí. Dime qué quieres comer (p.ej. \"huevos, pan, "
                    "claras\"), o pregúntame \"¿qué me falta?\". También puedes pulsar \"Sugerir "
                    "alimentos\" o \"Guardar y siguiente\".")
             return {"action": "no_foods", "message": msg, "day_overview": self.get_day_overview()}
-        return await self.add_foods_by_names(foods)
+        return await self.add_foods(foods)
     
     def _parse_claude_response(self, response: str) -> dict:
         """Parsea la respuesta del LLM como JSON, tolerando fences de Markdown

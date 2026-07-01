@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -29,6 +30,15 @@ export const AuthProvider = ({ children }) => {
         (response) => response,
         (error) => {
             if (error.response?.status === 401) {
+                const url = error.config?.url || '';
+                const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+                const hadToken = !!localStorage.getItem('token');
+                // Solo avisar de sesión expirada si el usuario estaba logueado y no es un
+                // intento de login/registro (esos muestran su propio error). El id evita
+                // que varios 401 simultáneos apilen el mismo aviso.
+                if (hadToken && !isAuthEndpoint) {
+                    toast.error('Tu sesión ha expirado. Vuelve a iniciar sesión.', { id: 'session-expired' });
+                }
                 logout();
             }
             return Promise.reject(error);

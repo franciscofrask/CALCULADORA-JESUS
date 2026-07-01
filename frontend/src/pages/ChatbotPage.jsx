@@ -567,7 +567,11 @@ export default function ChatbotPage() {
   // Formatear actualización de comida
   const formatMealUpdate = (response) => {
     let msg = '';
-    
+
+    if (response.message) {
+      msg += `${response.message}\n\n`;
+    }
+
     if (response.foods_added?.length > 0) {
       msg += '**Alimentos añadidos:**\n';
       response.foods_added.forEach(f => {
@@ -597,8 +601,12 @@ export default function ChatbotPage() {
       } else {
         const r = ms.restante || {};
         const faltan = ['P', 'H', 'G'].filter(k => (r[k] || 0) > 4).map(k => `${k}=${r[k]}g`);
+        const pasado = ['P', 'H', 'G'].filter(k => (r[k] || 0) < -4).map(k => `${k} por ${Math.abs(r[k])}g`);
         if (faltan.length) {
           msg += `\n\n⚠️ Todavía te falta ${faltan.join(', ')}. Añade más alimentos, pulsa "Sugerir alimentos", o "Guardar y siguiente" si quieres dejarla así.`;
+        }
+        if (pasado.length) {
+          msg += `\n\n⚠️ Te has pasado de ${pasado.join(', ')}. Puedes bajar la cantidad o dejarlo así si lo quieres a propósito.`;
         }
       }
     }

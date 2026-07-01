@@ -28,7 +28,7 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete })
                     <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
                         <Star className="w-5 h-5 text-brand-orange" /> Dietas favoritas
                     </DialogTitle>
-                    <DialogDescription className="sr-only">Guardá y reusá días como plantillas</DialogDescription>
+                    <DialogDescription className="sr-only">Guarda y reutiliza días como plantillas</DialogDescription>
                 </DialogHeader>
 
                 {/* Guardar el día actual */}
@@ -47,12 +47,12 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete })
                         Guardar
                     </Button>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-2">Guarda la comida actual del día como plantilla reusable.</p>
+                <p className="text-xs text-muted-foreground -mt-2">Guarda la comida actual del día como plantilla reutilizable.</p>
 
                 {/* Lista */}
                 <div className="max-h-72 overflow-auto -mx-1 px-1 space-y-1">
                     {(!favorites || favorites.length === 0) ? (
-                        <p className="text-sm text-muted-foreground text-center py-6">Todavía no tenés favoritas.</p>
+                        <p className="text-sm text-muted-foreground text-center py-6">Todavía no tienes favoritas.</p>
                     ) : favorites.map(fav => {
                         const n = Object.values(fav.comidas || {}).filter(m => (m?.alimentos || []).length > 0).length;
                         return (

@@ -87,8 +87,8 @@ const OnboardingChecklist = ({ steps, onDismiss, navigate, onResume, showResume 
                 <Sparkles className="w-4 h-4 text-brand" />
                 <p className="caption text-brand">Primeros pasos</p>
             </div>
-            <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-none mb-1">Empezá acá</h2>
-            <p className="text-muted-foreground text-sm mb-4">Completá estos pasos para sacarle todo el provecho a tu plan.</p>
+            <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-none mb-1">Empieza aquí</h2>
+            <p className="text-muted-foreground text-sm mb-4">Completa estos pasos para aprovechar al máximo tu plan.</p>
 
             {/* Barra de progreso */}
             <div className="flex items-center gap-3 mb-4">
@@ -223,9 +223,9 @@ const ClientDashboard = () => {
     const getKcal = (m) => Math.round(getP(m) * 4 + getH(m) * 4 + getG(m) * 9);
 
     const checklistSteps = [
-        { id: 'macros', label: 'Tus macros están calculados', sub: 'Revisá tus objetivos', done: !!hasMacros, path: '/dashboard/nutrition' },
-        { id: 'preferences', label: 'Configurá tus preferencias de comida', sub: 'Qué te gusta y qué evitar', done: hasPreferences, path: '/dashboard/nutrition' },
-        { id: 'diet', label: 'Armá tu primer día de comida', sub: 'Repartí tus macros en comidas', done: hasDiet, path: '/dashboard/nutrition' },
+        { id: 'macros', label: 'Tus macros están calculados', sub: 'Revisa tus objetivos', done: !!hasMacros, path: '/dashboard/nutrition' },
+        { id: 'preferences', label: 'Configura tus preferencias de comida', sub: 'Qué te gusta y qué evitar', done: hasPreferences, path: '/dashboard/nutrition' },
+        { id: 'diet', label: 'Arma tu primer día de comida', sub: 'Reparte tus macros en comidas', done: hasDiet, path: '/dashboard/nutrition' },
     ];
     const showChecklist = !checklistDismissed && checklistSteps.some(s => !s.done);
 
