@@ -1034,6 +1034,19 @@ class NutritionChatbot:
             return True
         return False
 
+    def clear_meal(self, idx=None):
+        """Vacía TODA una comida (sus alimentos). Si `idx` viene, navega a esa comida y la vacía;
+        si no, vacía la actual. Devuelve el nombre de la comida vaciada, o None si el idx no es válido."""
+        if idx is not None:
+            try:
+                if not self.go_to_meal(int(idx)):
+                    return None
+            except (TypeError, ValueError):
+                return None
+        key = self.current_meal_key()
+        self.state["comidas_completadas"][key] = {"alimentos": [], "macros": {"P": 0, "H": 0, "G": 0}}
+        return self.meal_label(key)
+
     def remove_food_at(self, food_index: int) -> bool:
         """Quita un alimento de la comida actual por su posición y recalcula los macros."""
         key = self.current_meal_key()
@@ -1493,7 +1506,7 @@ class NutritionChatbot:
             pool = [a for a in all_foods if cat_in_list(get_categoria_principal(a), cats)]
 
         # Quitar SOLO los evitados (las categorías de la fase ya acotan; los preferidos
-        # solo priorizan, no excluyen — si el usuario no marcó "arroces" igual debe ver arroz)
+        # solo priorizan, no excluyen - si el usuario no marcó "arroces" igual debe ver arroz)
         pool = [a for a in pool
                 if not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
                 and not (avoid_prefixes and cat_hit(a.get("categorias"), avoid_prefixes))]
@@ -1661,58 +1674,148 @@ class NutritionChatbot:
             answer = ("Solo puedo ayudarte con tu dieta y el método 12en12. ¿Seguimos con tu comida?")
         return {"action": "message", "message": answer, "day_overview": ov}
 
-    async def process_message(self, user_input: str) -> dict:
-        """Procesa el texto del usuario de forma DETERMINISTA. El LLM solo extrae alimentos."""
-        text = (user_input or "").strip().lower()
-        import unicodedata
-        text = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+    @staticmethod
+    def _normalize_food_items(raw) -> list:
+        """Normaliza una lista de alimentos del LLM a [{nombre, cantidad, unidad}]."""
+        items = []
+        for f in raw or []:
+            if isinstance(f, str):
+                nombre = f.strip()
+                if nombre:
+                    items.append({"nombre": nombre, "cantidad": None, "unidad": None})
+                continue
+            if not isinstance(f, dict):
+                continue
+            nombre = (f.get("nombre") or "").strip()
+            if not nombre:
+                continue
+            cant = f.get("cantidad")
+            try:
+                cant = float(cant) if cant is not None else None
+            except (TypeError, ValueError):
+                cant = None
+            unidad = f.get("unidad")
+            if unidad == "kg" and cant is not None:
+                cant *= 1000
+                unidad = "g"
+            if unidad not in ("g", "ud"):
+                unidad = None
+            items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad})
+        return items
 
-        # Intenciones por reglas (sin LLM)
-        # Editar/ir a una comida concreta ("editar comida 2", "vamos a la comida 1", "vuelve a la 3")
-        m_edit = re.search(r"\b(edit\w*|modific\w*|cambi\w*|corregir|volver|vuelve|vamos|ir|ve)\b[^0-9]*(comida\s*)?(\d+)", text)
-        if m_edit:
-            idx = int(m_edit.group(3))
-            if self.go_to_meal(idx):
+    async def understand(self, text: str) -> dict:
+        """Router con LLM: clasifica la INTENCIÓN del mensaje y extrae lo necesario. El LLM solo
+        interpreta el lenguaje; el código hace toda la matemática. Devuelve
+        {intent, foods, remove, goto}."""
+        prompt = (
+            "Eres el router de un asistente de nutrición. El usuario está montando una comida. "
+            "Clasifica su mensaje en UNA intención y extrae lo necesario. Devuelve SOLO JSON: "
+            '{"intent": "add|suggest|complete|remove|clear|status|summary|rebalance|goto|question|none", '
+            '"foods": [{"nombre": "...", "cantidad": <numero o null>, "unidad": "g"|"ud"|null}], '
+            '"remove": "<alimento a quitar o null>", "goto": <numero de comida o null>}. '
+            "Intenciones: "
+            "'add' = dice qué alimentos quiere comer/añadir, con o sin cantidad "
+            "(ej: 'quiero tortilla de claras y pan', 'pon 80 g de arroz', 'cambia el arroz a 100g'). "
+            "'suggest' = pide que TÚ sugieras/recomiendes qué poner para ajustar o COMPLETAR la comida "
+            "(ej: 'qué me sugieres', 'dame opciones', 'qué pongo', 'ayúdame a terminar de ajustar la comida', 'no sé qué añadir'). "
+            "'complete' = quiere GUARDAR/cerrar esta comida y pasar a la siguiente "
+            "(ej: 'siguiente', 'guardar y siguiente', 'ya está, la dejo así', 'pasa a la siguiente'). "
+            "'remove' = quitar UN alimento ya añadido (ej: 'borra las aceitunas', 'quita el arroz'); pon el nombre en 'remove'. "
+            "'clear' = vaciar TODA una comida (ej: 'vacía la comida 1', 'borra la comida 2', 'quita todo de esta comida', 'empieza de cero'); pon el número de comida en 'goto' (o null si es la actual). "
+            "'status' = pregunta cuánto le FALTA por cubrir o cómo va de macros (ej: 'qué me falta', "
+            "'cuántos macros quedan', 'cómo voy'). "
+            "'summary' = resumen del día completo. "
+            "'rebalance' = recalcular/cuadrar las cantidades de lo que YA hay (ej: 'cuadra las cantidades', 'reparte mejor'). "
+            "'goto' = ir a una comida concreta (ej: 'vamos a la comida 2'); pon el número en 'goto'. "
+            "'question' = cualquier otra consulta informativa: qué alimentos o comidas tiene CARGADAS, "
+            "listar sus comidas/alimentos ('qué comidas tengo', 'lístame la comida 1', 'qué llevo'), "
+            "dudas de nutrición ('por qué el arroz cuenta como hidrato'), o algo fuera de tema. "
+            "'none' = saludo o ininteligible. "
+            "IMPORTANTE: 'terminar/completar/ajustar la comida' cuando PIDEN ayuda o sugerencias es 'suggest', NO 'complete'. "
+            "'complete' es solo cuando quieren guardar y avanzar. "
+            "Listar o VER el contenido de las comidas/alimentos ('qué comidas tengo cargadas', "
+            "'lístame los alimentos') es 'question', NO 'status' (status es SOLO cuánto falta). "
+            "'borra/vacía la comida N' = 'clear' (vaciar toda la comida), mientras que "
+            "'borra <alimento>' = 'remove' (quitar un alimento suelto). "
+            "Interpreta números pegados o mal escritos. Rellena 'foods' SOLO si intent='add'."
+        )
+        raw = {}
+        last_err = None
+        for _ in range(2):
+            chat = LlmChat(api_key=self.api_key, system_message=prompt).with_model(
+                "openai", os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+            ).with_json_mode()
+            try:
+                resp = await chat.send_message(UserMessage(text=text))
+                raw = self._parse_claude_response(resp)
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                import asyncio as _asyncio
+                await _asyncio.sleep(0.3)
+        if last_err is not None or not isinstance(raw, dict):
+            print(f"[understand] fallo: {last_err}")
+            return {"intent": "add", "foods": [], "remove": None, "goto": None}
+
+        intents = ("add", "suggest", "complete", "remove", "clear", "status",
+                   "summary", "rebalance", "goto", "question", "none")
+        intent = raw.get("intent")
+        if intent not in intents:
+            intent = "add"
+        remove = raw.get("remove")
+        if not isinstance(remove, str) or not remove.strip():
+            remove = None
+        goto = raw.get("goto")
+        try:
+            goto = int(goto) if goto is not None else None
+        except (TypeError, ValueError):
+            goto = None
+        return {
+            "intent": intent,
+            "foods": self._normalize_food_items(raw.get("foods") or []),
+            "remove": remove,
+            "goto": goto,
+        }
+
+    async def process_message(self, user_input: str) -> dict:
+        """Interpreta el mensaje con el LLM (router de intención) y ejecuta con código
+        determinista. El LLM solo entiende QUÉ quiere el usuario; la matemática es del código."""
+        data = await self.understand(user_input)
+        intent = data.get("intent")
+
+        if intent == "goto" and data.get("goto"):
+            if self.go_to_meal(int(data["goto"])):
                 return self._meal_response([], [])
-        if re.search(r"\b(intra)\b", text) and "Intra" in self.state.get("meal_order", []):
-            self.go_to_meal(self.state["meal_order"].index("Intra") + 1)
-            return self._meal_response([], [])
-        if re.search(r"\b(post)\b", text) and "Post" in self.state.get("meal_order", []):
-            self.go_to_meal(self.state["meal_order"].index("Post") + 1)
-            return self._meal_response([], [])
-        # ¿Qué me falta y en qué comida? (acepta muchas formas: "cuantos macros faltan",
-        # "que me queda", "cuanto falta", "por cubrir", "macros restantes"…)
-        if re.search(r"\b(falta|faltan|queda|quedan|cubrir|restante[s]?|cuant[oa]s?|que macros|como voy|donde voy)\b", text):
+
+        if intent == "status":
             return {"action": "status", "meals_status": self.get_meals_status(),
                     "day_overview": self.get_day_overview()}
-        if re.search(r"\b(siguiente|guardar?|guarda|guardo|guardala|listo|lista|terminar|termino|acabar|acabe|next|pasa a la siguiente)\b", text):
+
+        if intent == "complete":
             return {"action": "complete_request"}
-        if re.search(r"\b(opcion\w*|sugiere\w*|sugerencia\w*|recomien\w*|asesor\w*|aconseja\w*|consejo\w*|ayuda\w*|complet\w*|guia\w*|orienta\w*|menu|que pongo|que meto|no se|idea\w*)\b", text):
+
+        if intent == "suggest":
             return await self.suggest_foods_for_current_meal()
-        if re.search(r"\b(resumen|del dia|dia completo|cuanto llevo|macros del dia)\b", text):
+
+        if intent == "summary":
             return {"action": "summary", "day_overview": self.get_day_overview()}
-        # Cuadrar/reequilibrar las cantidades de la comida actual ("cuadra las cantidades",
-        # "equilibra", "reparte mejor", "ajusta las cantidades").
-        if re.search(r"\b(cuadra\w*|recuadra\w*|equilibra\w*|balancea\w*|reajusta\w*|reparte\w*|"
-                     r"ajusta las cantidades|ajusta la cantidad|reajusta las cantidades)\b", text):
+
+        if intent == "rebalance":
             return await self.rebalance_current_meal()
-        # Pregunta de coaching/nutrición ("por qué el arroz cuenta como hidrato", "qué es CALMA",
-        # "por qué no me cuenta la proteína del pan"). Debe ir ANTES del borrado y del extractor,
-        # porque menciona alimentos pero NO quiere añadirlos ni quitarlos.
-        if re.search(
-            r"(\?|\bpor ?que\b|\bporque\b|\bpor qu\b|\bcuenta como\b|\bcuentan como\b|\bse cuenta\b|"
-            r"\bno cuenta\b|\bno me cuenta\b|\bcomo funciona\b|\bque es\b|\bexplica\w*|\bdiferencia\b|"
-            r"\bes normal\b|\bdeberi\w*|\bconviene\b|\bes mejor\b|\bque significa\b|\bpara que sirve\b|"
-            r"\bno entiendo\b|\bque alimentos?\b|\bcuales?\b|\bque (puedo |debo )?(comer|tomar)\b|"
-            r"\bbuen[oa]s? (en|para|de|fuente)\b|\bric[oa]s? en\b|\balt[oa]s? en\b|\bfuente[s]? de\b|"
-            r"\ben que comida\b|\bquien\w*\b|\bdonde\b|\badonde\b|\bcuando\b|\bpara que\b|"
-            r"\bque hago\b|\bque hace\b)",
-            text,
-        ):
-            return await self.answer_question(user_input)
-        # Quitar un alimento por nombre ("borra las aceitunas negras", "quita el arroz")
-        if re.search(r"\b(borra\w*|quit\w*|elimina\w*|saca\w*|sacar|retira\w*|remov\w*|remueve\w*)\b", text):
-            removed = self.remove_food_by_name(text)
+
+        if intent == "clear":
+            nombre = self.clear_meal(data.get("goto"))
+            if nombre:
+                resp = self._meal_response([], [])
+                resp["message"] = f"Vacié {nombre}. Puedes empezarla de nuevo."
+                return resp
+            return {"action": "no_foods",
+                    "message": "No pude identificar qué comida vaciar. Dime, p.ej., \"vacía la comida 2\".",
+                    "day_overview": self.get_day_overview()}
+
+        if intent == "remove":
+            removed = self.remove_food_by_name(data.get("remove") or user_input)
             if removed:
                 resp = self._meal_response([], [])
                 resp["message"] = f"Quité {removed.get('nombre')} de esta comida."
@@ -1724,20 +1827,21 @@ class NutritionChatbot:
                 "day_overview": self.get_day_overview(),
             }
 
-        # Resto: tratar como alimentos
-        foods = await self.extract_foods(user_input)
-        if not foods:
-            # No se reconoció ningún alimento. Si el mensaje parece una frase (varias palabras),
-            # probablemente sea una duda o algo fuera de tema: lo pasamos al asistente, que
-            # responde si es de nutrición o reconduce si no lo es. Si es algo corto, pedimos
-            # que escriba alimentos.
-            if len(text.split()) >= 4:
-                return await self.answer_question(user_input)
-            msg = ("No reconocí ningún alimento ahí. Dime qué quieres comer (p.ej. \"huevos, pan, "
-                   "claras\"), o pregúntame \"¿qué me falta?\". También puedes pulsar \"Sugerir "
-                   "alimentos\" o \"Guardar y siguiente\".")
-            return {"action": "no_foods", "message": msg, "day_overview": self.get_day_overview()}
-        return await self.add_foods(foods)
+        if intent == "question":
+            return await self.answer_question(user_input)
+
+        # intent == "add" (o fallback): añadir los alimentos que dijo
+        foods = data.get("foods") or []
+        if foods:
+            return await self.add_foods(foods)
+
+        # Sin alimentos claros: si parece una frase, tratar como duda; si no, pedir alimentos.
+        if len(user_input.split()) >= 4:
+            return await self.answer_question(user_input)
+        msg = ("No reconocí ningún alimento ahí. Dime qué quieres comer (p.ej. \"huevos, pan, "
+               "claras\"), o pregúntame \"¿qué me falta?\". También puedes pulsar \"Sugerir "
+               "alimentos\" o \"Guardar y siguiente\".")
+        return {"action": "no_foods", "message": msg, "day_overview": self.get_day_overview()}
     
     def _parse_claude_response(self, response: str) -> dict:
         """Parsea la respuesta del LLM como JSON, tolerando fences de Markdown

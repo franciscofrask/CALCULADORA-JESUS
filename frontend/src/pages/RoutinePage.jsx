@@ -165,7 +165,7 @@ const RoutinePage = () => {
                                     </div>
                                     <div>
                                         <p className="font-bold text-foreground text-sm uppercase">Cardio · {dayRoutine.cardio.type}</p>
-                                        <p className="text-xs text-muted-foreground">{dayRoutine.cardio.duration}{dayRoutine.cardio.notes && ` — ${dayRoutine.cardio.notes}`}</p>
+                                        <p className="text-xs text-muted-foreground">{dayRoutine.cardio.duration}{dayRoutine.cardio.notes && ` - ${dayRoutine.cardio.notes}`}</p>
                                     </div>
                                 </div>
                             )}

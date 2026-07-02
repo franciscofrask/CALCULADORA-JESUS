@@ -60,7 +60,7 @@ class ReportResponse(BaseModel):
     trainer_feedback: Optional[str] = None
     created_at: str
 
-# Check-In Models (3 niveles: daily, weekly, monthly) — portado de calmajp
+# Check-In Models (3 niveles: daily, weekly, monthly) - portado de calmajp
 class CheckInCreate(BaseModel):
     type: str  # "daily" | "weekly" | "monthly"
     # Daily (check-in de 10 segundos)

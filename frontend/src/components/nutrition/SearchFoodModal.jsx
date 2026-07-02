@@ -139,9 +139,14 @@ const MenuOptionsModal = ({ open, mealKey, onClose, mealInfo, menuOptionsLoading
                         <p className="text-muted-foreground">Calculando opciones...</p>
                     </div>
                 ) : menuOptions.length === 0 ? (
-                    <div className="text-center py-16">
-                        <span className="text-4xl mb-3 block">🤷</span>
-                        <p className="text-muted-foreground">No hay opciones disponibles</p>
+                    <div className="text-center py-14 px-6">
+                        <span className="text-4xl mb-3 block">🍽️</span>
+                        <p className="font-semibold text-foreground mb-1.5">Ningún menú preestablecido encaja con estos macros</p>
+                        <p className="text-sm text-muted-foreground">
+                            Los menús sugeridos están pensados para comidas más equilibradas. Para esta comida,
+                            arma tú los alimentos con <span className="font-semibold text-foreground">"Lo hago yo"</span> o
+                            pídeselo al <span className="font-semibold text-foreground">asistente IA</span>.
+                        </p>
                     </div>
                 ) : (
                     <div className="p-4 space-y-4">
@@ -155,7 +160,9 @@ const MenuOptionsModal = ({ open, mealKey, onClose, mealInfo, menuOptionsLoading
                                         <div className="flex-1">
                                             <div className="flex items-center justify-between mb-2">
                                                 <h3 className="font-bold text-foreground">{option.nombre}</h3>
-                                                {option.cuadrada && <span className="bg-carbs-green text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><Check className="w-3 h-3" /> Cuadrada</span>}
+                                                {option.cuadrada
+                                                    ? <span className="bg-carbs-green text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><Check className="w-3 h-3" /> Cuadrada</span>
+                                                    : <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full whitespace-nowrap">≈ Aproximada</span>}
                                             </div>
                                             <div className="space-y-1 mb-3">
                                                 {option.items.map((item, i) => (

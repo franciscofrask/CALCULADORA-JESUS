@@ -292,7 +292,7 @@ def _efectivos_calma(alimento: dict, cantidad_g: float):
     add path (calma_suggest), so editing a food's quantity stays consistent with how it
     was first added. The legacy calcular_macros_efectivos divided granel macros by `racion`
     instead of 100 (broke any food with racion != 100, e.g. prepared dishes), and used a
-    different regla — switching quantity replaced correct macros with garbage. Here:
+    different regla - switching quantity replaced correct macros with garbage. Here:
       - apply aplicar_regla_macros (regla 25% + _ajuste) on a copy,
       - granel: scale by cantidad_g/100; unidades: macros are per-unit, scale by units
         (cantidad_g / racion), which macros_at expects.
@@ -504,7 +504,7 @@ async def search_foods_endpoint(
         base_order = {fid: i for i, fid in enumerate(top_int)}
         alimentos.sort(key=lambda a: base_order.get(a.get("id"), 9999))
     else:
-        # Fetch ALL matches for both category browse AND text search — Calma ranks the full
+        # Fetch ALL matches for both category browse AND text search - Calma ranks the full
         # filtered set by diferencia and shows it. Capping to `limit` BEFORE the engine sort
         # truncated in DB order, dropping the best-fitting foods (e.g. searching "arroz" lost
         # Pollo tikka / Crema de lentejas because they sat past the first 50 DB matches).
@@ -534,7 +534,7 @@ async def search_foods_endpoint(
     # POSTENTRENO universe restriction (Calma Dieta.js `todosLosAlimentos`):
     #   nombre == "postentreno" ? G(getTodosLosAlimentos, ["25"]) : getTodosLosAlimentos
     # i.e. for postentreno the WHOLE food universe is restricted to category "25" = "Postentreno"
-    # (utils_ I map: ["25","Postentreno"]) — fast-digesting recovery foods. Intersected with the
+    # (utils_ I map: ["25","Postentreno"]) - fast-digesting recovery foods. Intersected with the
     # picked category this is why e.g. the Salsas/Siropes/Konjac category in postentreno shows
     # ONLY the siropes (the only cat-16 foods also tagged 25). Intraentreno is NOT restricted.
     if peri == "post":
@@ -543,7 +543,7 @@ async def search_foods_endpoint(
     # Collect available preparations using Calma-equivalent test functions (before filtering).
     available_preps = [p for p in _PREPS_ORDER if any(_PREP_TESTS[p](a) for a in alimentos)]
 
-    # Apply preparation filter — supports comma-separated multiple tags (OR logic).
+    # Apply preparation filter - supports comma-separated multiple tags (OR logic).
     if tag:
         tag_list = [t.strip().upper() for t in tag.split(',') if t.strip()]
         def matches_tag(alimento, tag_upper):

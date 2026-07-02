@@ -1,5 +1,5 @@
 /**
- * FavoritesModal — Dietas favoritas (Calma guardarFavorita / favoritas).
+ * FavoritesModal - Dietas favoritas (Calma guardarFavorita / favoritas).
  * Guardar el día actual como plantilla con nombre, listarlas, aplicarlas a la fecha, borrar.
  */
 import React, { useState } from 'react';

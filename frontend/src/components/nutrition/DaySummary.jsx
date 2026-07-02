@@ -71,7 +71,7 @@ const DaySummary = ({
                 </div>
             </button>
 
-            {/* Macro bars — vertical en móvil, 3 columnas en desktop */}
+            {/* Macro bars - vertical en móvil, 3 columnas en desktop */}
             <div className="px-4 sm:px-5 pb-3 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-2">
                 {macros.map(({ key, label, val, tgt, color }) => {
                     const over = val > (tgt || 0) + 4;
@@ -124,7 +124,7 @@ const DaySummary = ({
                                         <td className="py-1.5 text-foreground">{mealInfo[mealKey].name}</td>
                                         <td className="text-right font-data text-muted-foreground">{served.P.toFixed(0)}</td>
                                         <td className="text-right font-data text-muted-foreground">{served.H.toFixed(0)}</td>
-                                        <td className="text-right font-data text-muted-foreground">{isPeri ? '—' : served.G.toFixed(0)}</td>
+                                        <td className="text-right font-data text-muted-foreground">{isPeri ? '-' : served.G.toFixed(0)}</td>
                                     </tr>
                                 );
                             })}

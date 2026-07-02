@@ -217,16 +217,16 @@ const ClientDetailPage = () => {
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                             <InfoItem icon={User} label="Nombre" value={user?.name} />
                             <InfoItem icon={Mail} label="Email" value={user?.email} />
-                            <InfoItem icon={Phone} label="Teléfono" value={user?.phone || '—'} />
+                            <InfoItem icon={Phone} label="Teléfono" value={user?.phone || '-'} />
                             <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} />} />
                             <InfoItem icon={Activity} label="Estado" value={profile?.status} />
                             <InfoItem icon={Calendar} label="Semana" value={`${profile?.week || 1}/4`} />
                             <InfoItem icon={Dumbbell} label="Entrenador" value={profile?.trainer_id || 'Sin asignar'} />
                             <InfoItem icon={Target} label="Rutina" value={activeRoutine ? `${activeRoutine.days?.filter(d => !d.is_rest).length || 0} días` : 'Sin rutina'} />
-                            <InfoItem icon={CreditCard} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '—'} />
-                            <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '—'} />
-                            <InfoItem icon={Scale} label="Peso" value={profile?.weight ? `${profile.weight} kg` : '—'} />
-                            <InfoItem icon={Target} label="Objetivo" value={profile?.goal || '—'} />
+                            <InfoItem icon={CreditCard} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'} />
+                            <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
+                            <InfoItem icon={Scale} label="Peso" value={profile?.weight ? `${profile.weight} kg` : '-'} />
+                            <InfoItem icon={Target} label="Objetivo" value={profile?.goal || '-'} />
                         </div>
                     </CardContent></Card>
                 </TabsContent>
@@ -335,8 +335,8 @@ const ClientDetailPage = () => {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} />} />
                             <InfoItem icon={CreditCard} label="Precio" value={`${profile?.price || 0}€/ciclo`} />
-                            <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '—'} />
-                            <InfoItem icon={Calendar} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES') : '—'} />
+                            <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
+                            <InfoItem icon={Calendar} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES') : '-'} />
                         </div>
                     </CardContent></Card>
                     <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Historial de pagos</CardTitle></CardHeader>
@@ -377,12 +377,12 @@ const ClientDetailPage = () => {
                     {(profile?.goal || profile?.weight || profile?.equipment?.length) ? (
                         <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <InfoItem icon={Target} label="Objetivo" value={profile?.goal || '—'} />
-                                <InfoItem icon={Scale} label="Peso inicial" value={profile?.weight ? `${profile.weight} kg` : '—'} />
-                                <InfoItem icon={User} label="Sexo" value={profile?.sex || '—'} />
-                                <InfoItem icon={Activity} label="% Graso" value={profile?.body_fat ? `${profile.body_fat}%` : '—'} />
-                                <InfoItem icon={Calendar} label="Edad" value={profile?.age || '—'} />
-                                <InfoItem icon={Scale} label="Altura" value={profile?.height ? `${profile.height} cm` : '—'} />
+                                <InfoItem icon={Target} label="Objetivo" value={profile?.goal || '-'} />
+                                <InfoItem icon={Scale} label="Peso inicial" value={profile?.weight ? `${profile.weight} kg` : '-'} />
+                                <InfoItem icon={User} label="Sexo" value={profile?.sex || '-'} />
+                                <InfoItem icon={Activity} label="% Graso" value={profile?.body_fat ? `${profile.body_fat}%` : '-'} />
+                                <InfoItem icon={Calendar} label="Edad" value={profile?.age || '-'} />
+                                <InfoItem icon={Scale} label="Altura" value={profile?.height ? `${profile.height} cm` : '-'} />
                             </div>
                             {profile?.equipment?.length > 0 && (
                                 <div className="mt-4"><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Equipamiento</p>
@@ -479,7 +479,7 @@ const ClientDetailPage = () => {
                                 <select onChange={e => { if (e.target.value) { supAdd(bloque, e.target.value); e.target.value = ''; } }} defaultValue=""
                                     className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-3 py-2 mt-1">
                                     <option value="">+ Añadir del catálogo…</option>
-                                    {supCatalog.map(c => <option key={c.id} value={c.id}>{c.titulo}{c.sexo !== 'ambos' ? ` (${c.sexo})` : ''} — {c.categoria}</option>)}
+                                    {supCatalog.map(c => <option key={c.id} value={c.id}>{c.titulo}{c.sexo !== 'ambos' ? ` (${c.sexo})` : ''} - {c.categoria}</option>)}
                                 </select>
                             </CardContent>
                         </Card>
@@ -521,7 +521,7 @@ const ClientDetailPage = () => {
                 {/* ========== TAB CALCULADORA ========== */}
                 <TabsContent value="calculadora" className="space-y-4">
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5 space-y-4">
-                        <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Calcular macros — Método JG</p>
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Calcular macros - Método JG</p>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs text-white/40 uppercase mb-1">Peso (kg)</label>

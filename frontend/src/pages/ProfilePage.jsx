@@ -344,7 +344,7 @@ const ProfilePage = () => {
                     </CardContent>
                 </Card>
 
-                {/* Perientreno (Calma quiereIntraentrenamiento) — post siempre presente, intra opcional */}
+                {/* Perientreno (Calma quiereIntraentrenamiento) - post siempre presente, intra opcional */}
                 <Card className="bg-card border-border">
                     <CardHeader className="pb-2">
                         <CardTitle className="flex items-center gap-2 text-foreground uppercase tracking-wider text-base">

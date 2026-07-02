@@ -70,7 +70,7 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
     return {"message": "Dieta guardada", "fecha": fecha}
 
 
-# ── Dietas favoritas (Calma guardarFavorita / favoritas) — plantillas de día con NOMBRE ──
+# ── Dietas favoritas (Calma guardarFavorita / favoritas) - plantillas de día con NOMBRE ──
 # Declaradas ANTES de /{fecha} para que "/favorites" no caiga en el path param.
 @router.post("/favorites")
 async def save_favorite(data: dict, user = Depends(get_current_user)):

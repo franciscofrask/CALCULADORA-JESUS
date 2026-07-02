@@ -113,7 +113,7 @@ const MacroCalculatorClientPage = () => {
         }
     };
 
-    // ── Calculator (helper) — fills the editor above ─────────────────────────
+    // ── Calculator (helper) - fills the editor above ─────────────────────────
     const [form, setForm] = useState({ peso: '', porcentaje_graso: '', sexo: 'hombre', objetivo: 'volumen' });
     const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -124,8 +124,8 @@ const MacroCalculatorClientPage = () => {
     const handleCalculate = async () => {
         const peso = parseFloat(form.peso);
         const bf = parseFloat(form.porcentaje_graso);
-        if (!peso || peso < 30 || peso > 200) { toast.error('Peso inválido (30–200 kg)'); return; }
-        if (isNaN(bf) || bf < 5 || bf > 60) { toast.error('% graso inválido (5–60%)'); return; }
+        if (!peso || peso < 30 || peso > 200) { toast.error('Peso inválido (30-200 kg)'); return; }
+        if (isNaN(bf) || bf < 5 || bf > 60) { toast.error('% graso inválido (5-60%)'); return; }
         setLoading(true);
         try {
             const res = await api.post('/calculator/targets', { peso, porcentaje_graso: bf, sexo: form.sexo, objetivo: form.objetivo });
@@ -143,7 +143,7 @@ const MacroCalculatorClientPage = () => {
             rest: { protein: Math.round(d.proteina), carbs: Math.round(d.hidratos), fat: Math.round(d.grasa) },
             peri: { protein: Math.round(pe.proteina), carbs: Math.round(pe.hidratos) },
         });
-        toast.success('Valores cargados en el editor — elige fecha y guarda');
+        toast.success('Valores cargados en el editor - elige fecha y guarda');
         editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 

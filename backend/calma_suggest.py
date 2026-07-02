@@ -191,7 +191,7 @@ def _raw(food: dict) -> Dict[str, float]:
 
 def macros_at(food: dict, cantidad: float) -> Dict[str, float]:
     """Calma K(): macros contributed at `cantidad` (units if unidades else grams).
-    Honors `_ajuste` (ajustePorCantidad) — quantity-dependent macro zeroing for
+    Honors `_ajuste` (ajustePorCantidad) - quantity-dependent macro zeroing for
     cereals/breads/nuts: below the gram threshold the flagged macros don't count."""
     s = cantidad if food.get("unidades") else cantidad / 100.0
     r = _raw(food)

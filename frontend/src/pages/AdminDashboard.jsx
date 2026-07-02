@@ -150,7 +150,7 @@ const AdminDashboard = () => {
                                             </div>
                                             <div>
                                                 <p className="text-white text-sm font-medium">{u.name}</p>
-                                                <p className="text-white/40 text-xs">{payDate ? payDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '—'}</p>
+                                                <p className="text-white/40 text-xs">{payDate ? payDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">

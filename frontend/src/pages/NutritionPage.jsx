@@ -297,7 +297,7 @@ const NutritionPage = () => {
         setExportingPdf(false);
     };
 
-    // Load distribution — accepts optional overrides to avoid stale closure on init
+    // Load distribution - accepts optional overrides to avoid stale closure on init
     const loadDistribution = useCallback(async (overrides = {}) => {
         try {
             const result = await api('/api/calculator/distribute', {
@@ -317,7 +317,7 @@ const NutritionPage = () => {
         }
     }, [api, tipoDia, numComidas, momentoEntreno, opcionPeri, currentDate]);
 
-    // Load saved diet — returns { targets, config } where config has the diet's day values
+    // Load saved diet - returns { targets, config } where config has the diet's day values
     const loadDiet = useCallback(async (date) => {
         try {
             const diet = await api(`/api/diets/${date}`);
@@ -381,7 +381,7 @@ const NutritionPage = () => {
     // Calma auto-saves the diet you are LEAVING when the date changes and on page unmount
     // (no per-keystroke save). An empty day is deleted (borrarDieta). autoSaveRef holds the
     // latest savable snapshot; loadedDateRef guards against saving/deleting a date whose
-    // diet never loaded (or failed to load) — preventing accidental deletion on a race.
+    // diet never loaded (or failed to load) - preventing accidental deletion on a race.
     const autoSaveRef = useRef({});
     const loadedDateRef = useRef(null);
 
@@ -443,10 +443,10 @@ const NutritionPage = () => {
         init();
     }, [currentDate]); // eslint-disable-line
 
-    // Auto-save the date being LEFT (cleanup runs on date change and on unmount) — mirrors
+    // Auto-save the date being LEFT (cleanup runs on date change and on unmount) - mirrors
     // Calma's `watch fecha` + `unmounted` -> autoGuardadoEnFecha. Guarded by loadedDateRef so
     // a not-yet-loaded date is never persisted/deleted. autoSaveDiet is kept in a ref so the
-    // effect depends ONLY on currentDate (not on autoSaveDiet/api identity) — otherwise an
+    // effect depends ONLY on currentDate (not on autoSaveDiet/api identity) - otherwise an
     // unstable `api` would re-fire the cleanup on every render and save constantly.
     const autoSaveDietRef = useRef(autoSaveDiet);
     autoSaveDietRef.current = autoSaveDiet;
@@ -487,7 +487,7 @@ const NutritionPage = () => {
         if (!loading) loadDistribution();
     }, [tipoDia, numComidas, momentoEntreno, opcionPeri]); // eslint-disable-line
 
-    // Wrappers for user-initiated config changes — persist to profile (cross-device)
+    // Wrappers for user-initiated config changes - persist to profile (cross-device)
     const handleSetTipoDia = (v) => { setTipoDia(v); };
     const handleSetMomentoEntreno = (v) => {
         setMomentoEntreno(v);
@@ -589,7 +589,7 @@ const NutritionPage = () => {
 
     const getMealTarget = (mealKey) => {
         // Volcado (Calma comidaConMacrosVolcadas): the chosen meal absorbs the day's remaining
-        // macros — but ONLY over the REGULAR comidas budget; peri (intra/post) is excluded from
+        // macros - but ONLY over the REGULAR comidas budget; peri (intra/post) is excluded from
         // the volcado (Calma's "Macros para las comidas" = 190/130/60 ≠ day total incl. peri).
         if (activeVolcado) {
             const isPeriMeal = mealKey === 'Intra' || mealKey === 'Post';
@@ -695,7 +695,7 @@ const NutritionPage = () => {
         const mealKey = addFoodModal.mealKey;
         const alreadyInMeal = (mealsData[mealKey]?.alimentos || []).some(f => f.alimento_id === food.id);
         if (alreadyInMeal) {
-            toast.error(`${food.nombre} ya está en esta comida — ajusta su cantidad directamente.`);
+            toast.error(`${food.nombre} ya está en esta comida - ajusta su cantidad directamente.`);
             return;
         }
         const remaining = getMealRemaining(mealKey);
@@ -715,7 +715,7 @@ const NutritionPage = () => {
             if (!isFreeFood) {
                 const mealStatus = getMealStatus(mealKey);
                 if (mealStatus === 'cuadrada' || mealStatus === 'sobra') {
-                    toast.error('Esta comida ya está completa — no hay espacio para más alimentos.');
+                    toast.error('Esta comida ya está completa - no hay espacio para más alimentos.');
                     return;
                 }
                 const target = getMealTarget(mealKey);
@@ -724,7 +724,7 @@ const NutritionPage = () => {
                 if ((ef.P > 0 && served.P + ef.P > target.P + margin) ||
                     (ef.H > 0 && served.H + ef.H > target.H + margin) ||
                     (ef.G > 0 && served.G + ef.G > target.G + margin)) {
-                    toast.error(`${food.nombre} no cabe — superaría los macros de esta comida.`);
+                    toast.error(`${food.nombre} no cabe - superaría los macros de esta comida.`);
                     return;
                 }
             }
@@ -756,7 +756,7 @@ const NutritionPage = () => {
 
     // Calma computes a food's macros synchronously on the client (K() = raw post-regla
     // macros × quantity), never per-keystroke server calls. We do the same: scale the
-    // stored raw fields locally. This is race-free (no await between read and write) — the
+    // stored raw fields locally. This is race-free (no await between read and write) - the
     // old version read mealsData from the render closure and awaited an API call, so rapid
     // clicks overwrote each other and left cantidad_g out of sync with macros_efectivos
     // (the "suma de a poco" lag). Calma also lets you set ANY quantity past the target
@@ -801,7 +801,7 @@ const NutritionPage = () => {
         }));
     };
 
-    // Reordenar ingrediente hacia arriba — replica Calma Dieta.subir = mover(e, -1):
+    // Reordenar ingrediente hacia arriba - replica Calma Dieta.subir = mover(e, -1):
     // saca el elemento en i-1 y lo reinserta en i (swap adyacente con el anterior).
     const moveFoodUp = (mealKey, foodIndex) => {
         if (foodIndex <= 0) return;
@@ -1102,13 +1102,13 @@ const NutritionPage = () => {
         if (['Intra', 'Post'].includes(mealKey)) return;
         setVolcadoMeal(mealKey);
         persistVolcado(mealKey);
-        toast.success(`Macros volcados en ${mealInfo[mealKey]?.name} — las demás comidas quedan bloqueadas`);
+        toast.success(`Macros volcados en ${mealInfo[mealKey]?.name} - las demás comidas quedan bloqueadas`);
     };
 
     const handleEliminarVolcado = () => {
         setVolcadoMeal(null);
         persistVolcado(null);
-        toast.info('Volcado eliminado — reparto normal restaurado');
+        toast.info('Volcado eliminado - reparto normal restaurado');
     };
     const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + comidasG * 9;  // peri grasas excluded (match G_total)
     const targetKcal = dayTarget.kcal_total || 0;
@@ -1367,7 +1367,7 @@ const NutritionPage = () => {
                     <p className="hidden lg:block caption mb-2.5">Comidas del día</p>
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
-                        {/* Selector de comidas (columna) — desktop lg+ */}
+                        {/* Selector de comidas (columna) - desktop lg+ */}
                         <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 lg:sticky lg:top-6 self-start space-y-2" data-testid="meal-selector">
                             {getMealOrder().map(mealKey => (
                                 <MealSelectorItem

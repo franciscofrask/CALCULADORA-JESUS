@@ -186,8 +186,8 @@ const LeadsPage = () => {
                                         return (
                                             <tr key={lead.id} className="border-b border-[#1A1A1A] hover:bg-white/5 cursor-pointer" onClick={() => setDetailLead(lead)} data-testid={`table-row-${lead.id}`}>
                                                 <td className="px-4 py-3 text-white text-sm font-medium">{lead.name}</td>
-                                                <td className="px-4 py-3 text-white/50 text-sm">{lead.email || '—'}</td>
-                                                <td className="px-4 py-3 text-white/50 text-sm">{lead.phone || '—'}</td>
+                                                <td className="px-4 py-3 text-white/50 text-sm">{lead.email || '-'}</td>
+                                                <td className="px-4 py-3 text-white/50 text-sm">{lead.phone || '-'}</td>
                                                 <td className="px-4 py-3"><Badge className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-[10px]">{src.label}</Badge></td>
                                                 <td className="px-4 py-3">
                                                     <select value={lead.status} onChange={e => { e.stopPropagation(); handleUpdateStatus(lead.id, e.target.value); }} onClick={e => e.stopPropagation()} className="bg-[#0A0A0A] border border-[#333] text-white text-xs rounded px-2 py-1" data-testid={`status-select-${lead.id}`}>
@@ -195,7 +195,7 @@ const LeadsPage = () => {
                                                     </select>
                                                 </td>
                                                 <td className="px-4 py-3 text-white/30 text-xs">{new Date(lead.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</td>
-                                                <td className="px-4 py-3 text-white/30 text-xs truncate max-w-[150px]">{lead.notes || '—'}</td>
+                                                <td className="px-4 py-3 text-white/30 text-xs truncate max-w-[150px]">{lead.notes || '-'}</td>
                                             </tr>
                                         );
                                     })}
@@ -243,8 +243,8 @@ const LeadsPage = () => {
                         </DialogHeader>
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="flex items-center gap-2 text-white/60 text-sm"><Mail className="w-3.5 h-3.5" />{detailLead.email || '—'}</div>
-                                <div className="flex items-center gap-2 text-white/60 text-sm"><Phone className="w-3.5 h-3.5" />{detailLead.phone || '—'}</div>
+                                <div className="flex items-center gap-2 text-white/60 text-sm"><Mail className="w-3.5 h-3.5" />{detailLead.email || '-'}</div>
+                                <div className="flex items-center gap-2 text-white/60 text-sm"><Phone className="w-3.5 h-3.5" />{detailLead.phone || '-'}</div>
                                 <div className="flex items-center gap-2 text-white/60 text-sm"><Calendar className="w-3.5 h-3.5" />{new Date(detailLead.created_at).toLocaleDateString('es-ES')}</div>
                                 <div className="flex items-center gap-2 text-white/60 text-sm"><Badge className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{getSourceObj(detailLead.source).label}</Badge></div>
                             </div>

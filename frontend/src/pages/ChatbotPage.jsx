@@ -103,6 +103,13 @@ export default function ChatbotPage() {
     scrollToBottom();
   }, [messages]);
 
+  // Mantener el foco en el input al terminar cada acción: cuando `loading` vuelve a false,
+  // el input ya está re-habilitado, así que el foco funciona (llamarlo justo tras setLoading
+  // no servía porque el input seguía disabled en ese instante).
+  useEffect(() => {
+    if (!loading) inputRef.current?.focus();
+  }, [loading]);
+
   const getToken = () => localStorage.getItem('token');
 
   const addMessage = (content, isUser = false, data = null) => {
@@ -374,7 +381,7 @@ export default function ChatbotPage() {
         setSuggestions(resp.suggestions || []);
         addMessage(
           resp.message || (resp.suggestions?.length
-            ? 'Estas opciones cuadran con lo que te falta — toca una para añadirla:'
+            ? 'Estas opciones cuadran con lo que te falta - toca una para añadirla:'
             : 'No encuentro alimentos que cuadren ahora mismo.'),
           false
         );
@@ -427,7 +434,7 @@ export default function ChatbotPage() {
       const data = await res.json();
       setSuggestions([]);
       applyMealResponse(data.response);
-      addMessage(`Editando ${data.response?.meal_status?.comida_nombre || 'comida'} — añade o quita alimentos.`, false, data.response);
+      addMessage(`Editando ${data.response?.meal_status?.comida_nombre || 'comida'} - añade o quita alimentos.`, false, data.response);
     } catch (e) { addMessage('Error al cambiar de comida.', false); }
     setLoading(false);
   };
@@ -1026,32 +1033,38 @@ export default function ChatbotPage() {
             </div>
           )}
 
-          {/* Alimentos de la comida actual (toca la x para quitar) */}
+          {/* Alimentos de la comida actual (toca la × para quitar) */}
           {currentFoods.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {currentFoods.map((f, i) => (
-                <span key={i} className="inline-flex items-center gap-1 bg-muted border border-input text-foreground text-xs px-2.5 py-1 rounded-full">
-                  {f.nombre} · {f.cantidad_display}
-                  <button onClick={() => removeFood(i)} disabled={loading} className="text-muted-foreground hover:text-red-500 disabled:opacity-50">×</button>
-                </span>
-              ))}
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">En esta comida</p>
+              <div className="flex flex-wrap gap-1.5">
+                {currentFoods.map((f, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5 bg-muted border border-input text-foreground text-xs px-2.5 py-1 rounded-full">
+                    {f.nombre} · {f.cantidad_display}
+                    <button onClick={() => removeFood(i)} disabled={loading} className="text-muted-foreground hover:text-red-500 disabled:opacity-50 font-bold leading-none">×</button>
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Chips de sugerencias (toca para añadir) */}
+          {/* Chips de sugerencias (caja aparte, naranja, toca para añadir) */}
           {suggestions.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => addSuggestedFood(s.alimento_id)}
-                  disabled={loading}
-                  className="bg-muted hover:bg-accent border border-input text-foreground text-xs px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
-                  title={`P=${s.macros?.P} H=${s.macros?.H} G=${s.macros?.G}`}
-                >
-                  + {s.nombre} · {s.cantidad_display}
-                </button>
-              ))}
+            <div className="rounded-xl border border-dashed border-brand/50 bg-brand/5 p-2.5">
+              <p className="text-[11px] font-bold text-brand uppercase tracking-wide mb-1.5">Sugerencias · toca para añadir</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => addSuggestedFood(s.alimento_id)}
+                    disabled={loading}
+                    className="inline-flex items-center gap-1 bg-card hover:bg-brand hover:text-white border border-brand/50 text-brand text-xs px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                    title={`P=${s.macros?.P} H=${s.macros?.H} G=${s.macros?.G}`}
+                  >
+                    <span className="font-bold">+</span> {s.nombre} · {s.cantidad_display}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

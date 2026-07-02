@@ -196,7 +196,7 @@ ALLOWED_PHOTO_TYPES = {
 
 
 def _photo_meta(doc: dict) -> dict:
-    """Quita el binario del documento — para respuestas de listado."""
+    """Quita el binario del documento - para respuestas de listado."""
     return {
         "id":           doc.get("id"),
         "client_id":    doc.get("client_id"),

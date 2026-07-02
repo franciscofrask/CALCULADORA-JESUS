@@ -130,48 +130,53 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
     setEditingQuantity, formatFoodQuantity }) => {
     const macros = food.macros_efectivos || {};
     return (
-        <div className="flex items-center gap-2 sm:gap-3 rounded-xl border border-border bg-muted/40 p-2 sm:p-2.5">
-            {/* Reorder (prioridad) — distinto y separado */}
-            <button
-                className="flex flex-col items-center justify-center h-10 w-7 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex-shrink-0"
-                disabled={idx === 0 || isLocked} onClick={() => moveFoodUp(mealKey, idx)} title="Subir prioridad"
-                data-testid={`reorder-${mealKey}-${idx}`}
-            >
-                <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
-                <span className="text-[9px] font-data leading-none mt-0.5">{idx + 1}</span>
-            </button>
-
-            {/* Nombre + macros */}
-            <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{food.nombre}</p>
+        <div className="rounded-xl border border-border bg-muted/40 p-2.5">
+            {/* Nombre completo (ya no se recorta) + macros */}
+            <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground leading-snug">{food.nombre}</p>
                 <p className="text-[11px] text-muted-foreground font-data mt-0.5">{macrosLine(macros)}</p>
             </div>
 
-            {/* Cantidad (gramos) — stepper conectado, claramente agrupado */}
-            <div className="inline-flex items-stretch rounded-lg border border-border bg-card overflow-hidden flex-shrink-0" title="Cantidad en gramos">
-                <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, -increment)} aria-label="Menos gramos">
-                    <Minus className="w-3.5 h-3.5" />
-                </button>
-                {isEditing ? (
-                    <input type="number" defaultValue={food.cantidad_g || 0} autoFocus
-                        className="w-14 text-center text-sm font-bold font-data bg-transparent border-x border-border text-foreground focus:outline-none"
-                        onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value); if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null }); }} />
-                ) : (
-                    <button className="min-w-[58px] px-2 text-sm font-bold font-data text-center text-foreground border-x border-border hover:text-brand disabled:opacity-50 transition-colors" disabled={isLocked}
-                        onClick={() => !isLocked && setEditingQuantity({ mealKey, foodIndex: idx })} data-testid={`qty-${mealKey}-${idx}`}>
-                        {formatFoodQuantity ? formatFoodQuantity(food) : `${food.cantidad_g || 0}g`}
+            {/* Controles debajo: prioridad + cantidad a la izquierda, eliminar a la derecha */}
+            <div className="flex items-center justify-between gap-2 mt-2">
+                <div className="flex items-center gap-2">
+                    {/* Reorder (prioridad) */}
+                    <button
+                        className="flex flex-col items-center justify-center h-10 w-8 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                        disabled={idx === 0 || isLocked} onClick={() => moveFoodUp(mealKey, idx)} title="Subir prioridad"
+                        data-testid={`reorder-${mealKey}-${idx}`}
+                    >
+                        <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
+                        <span className="text-[9px] font-data leading-none mt-0.5">{idx + 1}</span>
                     </button>
-                )}
-                <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, increment)} aria-label="Más gramos">
-                    <Plus className="w-3.5 h-3.5" />
+
+                    {/* Cantidad (gramos) - stepper conectado */}
+                    <div className="inline-flex items-stretch rounded-lg border border-border bg-card overflow-hidden flex-shrink-0" title="Cantidad en gramos">
+                        <button className="px-2.5 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, -increment)} aria-label="Menos gramos">
+                            <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        {isEditing ? (
+                            <input type="number" defaultValue={food.cantidad_g || 0} autoFocus
+                                className="w-14 text-center text-sm font-bold font-data bg-transparent border-x border-border text-foreground focus:outline-none"
+                                onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value); if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null }); }} />
+                        ) : (
+                            <button className="min-w-[64px] px-2 text-sm font-bold font-data text-center text-foreground border-x border-border hover:text-brand disabled:opacity-50 transition-colors" disabled={isLocked}
+                                onClick={() => !isLocked && setEditingQuantity({ mealKey, foodIndex: idx })} data-testid={`qty-${mealKey}-${idx}`}>
+                                {formatFoodQuantity ? formatFoodQuantity(food) : `${food.cantidad_g || 0}g`}
+                            </button>
+                        )}
+                        <button className="px-2.5 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, increment)} aria-label="Más gramos">
+                            <Plus className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Eliminar */}
+                <button className="h-9 w-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 transition-colors flex-shrink-0" disabled={isLocked} onClick={() => removeFood(mealKey, idx)} aria-label="Eliminar alimento" data-testid={`remove-${mealKey}-${idx}`}>
+                    <Trash2 className="w-4 h-4" />
                 </button>
             </div>
-
-            {/* Eliminar */}
-            <button className="h-9 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 transition-colors flex-shrink-0" disabled={isLocked} onClick={() => removeFood(mealKey, idx)} aria-label="Eliminar alimento" data-testid={`remove-${mealKey}-${idx}`}>
-                <Trash2 className="w-4 h-4" />
-            </button>
         </div>
     );
 };
@@ -250,7 +255,7 @@ const MealCard = ({
                     {isLocked && (
                         <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 rounded-xl px-3 py-2">
                             <Lock className="w-3.5 h-3.5 shrink-0" />
-                            <span>Bloqueada — los macros del día están volcados en otra comida. Quita el volcado para editar.</span>
+                            <span>Bloqueada - los macros del día están volcados en otra comida. Quita el volcado para editar.</span>
                         </div>
                     )}
 

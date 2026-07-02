@@ -1,5 +1,5 @@
 """
-Distribución de Macros por Comida — Método Jesús Gallego
+Distribución de Macros por Comida - Método Jesús Gallego
 =========================================================
 Toma los macros totales del día y los reparte entre las comidas
 según el escenario (cantidad de H, momento de entreno, tipo de día).
@@ -23,7 +23,7 @@ def _round_comidas_half(comidas: Dict[str, Dict[str, float]]) -> None:
 
 
 # =====================================================
-# 16 TABLAS DE DISTRIBUCIÓN — DÍA DE ENTRENAMIENTO
+# 16 TABLAS DE DISTRIBUCIÓN - DÍA DE ENTRENAMIENTO
 # =====================================================
 # Formato: { momento_entreno: { "C1": [P%, H%, G%], "C2": [...], "C3": [...], "C4": [...] } }
 # Momento: 0=En ayunas, 1=Después C1, 2=Después C2, 3=Después C3
@@ -270,7 +270,7 @@ def distribuir_macros(
     single_meal: bool = False
 ) -> Dict:
     """
-    FUNCIÓN PRINCIPAL — Distribuye los macros totales del día entre las comidas.
+    FUNCIÓN PRINCIPAL - Distribuye los macros totales del día entre las comidas.
 
     Args:
         p_entreno, h_entreno, g_entreno: macros de día de entrenamiento
@@ -524,7 +524,7 @@ def run_tests():
     test("Post P = 40 (100%)", r["periworkout"]["Post"]["P"], 40.0)
     test("Post H = 30 (100%)", r["periworkout"]["Post"]["H"], 30.0)
 
-    # (solo_intra / sin_peri eliminados — no existen en Calma)
+    # (solo_intra / sin_peri eliminados - no existen en Calma)
 
     # --- TEST 7: Escenario 3 (50-100H) ---
     print("\n--- Escenario 3: 80H, momento 1 ---")
@@ -615,9 +615,9 @@ def run_tests():
     print("=" * 60)
 
     if failed > 0:
-        print("\n⚠️  HAY TESTS FALLIDOS — REVISAR")
+        print("\n⚠️  HAY TESTS FALLIDOS - REVISAR")
     else:
-        print("\n✅ TODOS LOS TESTS PASAN — Distribución OK")
+        print("\n✅ TODOS LOS TESTS PASAN - Distribución OK")
 
     return failed == 0
 

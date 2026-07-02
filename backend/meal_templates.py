@@ -1,6 +1,6 @@
 """
-Meal Templates — Plantillas de menú para "Elige tu menú"
-Método Jesús Gallego — 12en12
+Meal Templates - Plantillas de menú para "Elige tu menú"
+Método Jesús Gallego - 12en12
 
 60 plantillas: 15 desayuno, 15 comida, 15 merienda, 15 cena
 Cada plantilla define: tipo proteína, fuente HC, verduras, grasa de ajuste
@@ -941,24 +941,17 @@ async def generar_opciones_menu(
     if kcal_obj > 600:
         candidatas.sort(key=lambda p: ("alto_calorico" in p.get("tags", [])), reverse=True)
 
-    # Seleccionar hasta 3 con proteínas diferentes; solo menús cuadrados
-    opciones = []
-    proteinas_usadas = set()
-
+    # Ajustar TODAS las candidatas y quedarnos con las que entran (cuadradas o aproximadas).
+    ajustadas = []
     for plantilla in candidatas:
-        if len(opciones) >= 3:
-            break
-
-        # Proteína principal de esta plantilla (2 niveles: 2.2 aves / 2.3 vacuno /
-        # 3.1 pescado / 10.1 legumbre... → más variedad que solo "2")
+        # Proteína principal (2 niveles: 2.2 aves / 2.3 vacuno / 3.1 pescado / 10.1 legumbre…)
+        # para exigir variedad entre las 3 opciones.
         prot_principal = None
         for item in plantilla["items"]:
             if item["rol"] == "proteina":
                 prot_principal = ".".join(item["categoria"].split(".")[:2])
                 break
 
-        if prot_principal in proteinas_usadas:
-            continue
         if prot_principal in excluir:
             continue
 
@@ -966,10 +959,26 @@ async def generar_opciones_menu(
             db, plantilla, macros_objetivo, es_vegano,
             avoided_prefixes, avoided_keywords,
         )
+        if opcion:
+            mt = opcion.get("macros_totales", {})
+            err = (abs(float(mt.get("P", 0)) - p_obj)
+                   + abs(float(mt.get("H", 0)) - h_obj)
+                   + abs(float(mt.get("G", 0)) - g_obj))
+            ajustadas.append((opcion, prot_principal, err))
 
-        if opcion:  # _ajustar_plantilla solo devuelve menús cuadrados con todo dentro
-            opciones.append(opcion)
-            proteinas_usadas.add(prot_principal)
+    # Priorizar: primero las CUADRADAS exactas, luego las más cercanas al objetivo.
+    ajustadas.sort(key=lambda x: (not x[0].get("cuadrada", False), x[2]))
+
+    # Elegir hasta 3 con proteínas diferentes.
+    opciones = []
+    proteinas_usadas = set()
+    for opcion, prot_principal, _ in ajustadas:
+        if len(opciones) >= 3:
+            break
+        if prot_principal in proteinas_usadas:
+            continue
+        opciones.append(opcion)
+        proteinas_usadas.add(prot_principal)
 
     # Etiquetar A, B, C
     letras = ["A", "B", "C"]
@@ -994,7 +1003,11 @@ def _food_avoided(alimento: dict, avoided_prefixes: set, avoided_keywords: list)
     return False
 
 
-MARGEN_MENU = 4.0  # ±4 g por macro para considerar el menú "cuadrado"
+MARGEN_MENU = 4.0  # ±4 g por macro para considerar el menú "cuadrado" (badge "Cuadrada")
+# Margen más laxo, SOLO para los menús preestablecidos (no toca la calculadora ni CALMA):
+# se aceptan menús que se acercan aunque no cuadren perfecto, para no dejar al usuario sin
+# opciones. Los que no cuadran a ±MARGEN_MENU se devuelven marcados como aproximados.
+MARGEN_MENU_RELAX = 12.0
 
 
 def _driver_macro(rol: str) -> Optional[str]:
@@ -1068,10 +1081,11 @@ async def _ajustar_plantilla(
             T["G"] += f["ef"]["G"] * fac
         return T
 
-    # Paso 2: gate de overshoot a mínimos (solo se puede escalar hacia arriba)
+    # Paso 2: gate de overshoot a mínimos (solo se puede escalar hacia arriba). Usa el margen
+    # laxo para no descartar menús que a mínimos se pasan un poco.
     T = totales()
     for m in ("P", "H", "G"):
-        if T[m] > obj[m] + MARGEN_MENU:
+        if T[m] > obj[m] + MARGEN_MENU_RELAX:
             return None
 
     # Paso 3: escalar cada macro con sus alimentos motor (grasa al final: absorbe
@@ -1093,10 +1107,13 @@ async def _ajustar_plantilla(
                 nueva = f["minimo"]
             f["cantidad"] = nueva
 
-    # Paso 4: validar cuadrado
+    # Paso 4: validar. Se ACEPTA si está dentro del margen laxo; se marca "cuadrada" solo si
+    # está dentro del margen estricto (±MARGEN_MENU). Así salen más opciones y el usuario ve
+    # cuáles son exactas y cuáles aproximadas (para afinar a mano).
     T = totales()
-    if any(abs(T[m] - obj[m]) > MARGEN_MENU for m in ("P", "H", "G")):
+    if any(abs(T[m] - obj[m]) > MARGEN_MENU_RELAX for m in ("P", "H", "G")):
         return None
+    es_cuadrada = all(abs(T[m] - obj[m]) <= MARGEN_MENU for m in ("P", "H", "G"))
 
     # Paso 5: construir items en la forma que consume el front
     items_resultado = []
@@ -1125,7 +1142,7 @@ async def _ajustar_plantilla(
             "kcal": round(T["P"] * 4 + T["H"] * 4 + T["G"] * 9, 1),
         },
         "macros_objetivo": obj,
-        "cuadrada": True,
+        "cuadrada": es_cuadrada,
         "tags": plantilla.get("tags", []),
     }
 

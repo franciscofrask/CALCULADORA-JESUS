@@ -19,12 +19,12 @@ const HEALTH = {
 };
 
 const fmt = (iso) => {
-    if (!iso) return '—';
+    if (!iso) return '-';
     try {
         const d = new Date(iso);
         return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) +
             ' · ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    } catch { return '—'; }
+    } catch { return '-'; }
 };
 
 const percentTone = (v) => v == null ? 'muted' : (v >= 80 ? 'green' : v >= 50 ? 'amber' : 'red');
@@ -48,7 +48,7 @@ const MONTHLY_COLS = [
     { key: 'bf', label: '% Grasa', r: e => ({ v: e.body_fat_pct != null ? `${e.body_fat_pct}%` : null }) },
     { key: 'meas', label: 'Medidas (P/C/Cad/Br/M)', r: e => {
         const m = e.measurements || {};
-        return { v: ['chest', 'waist', 'hip', 'arm', 'thigh'].map(k => m[k] != null ? m[k] : '—').join(' / ') };
+        return { v: ['chest', 'waist', 'hip', 'arm', 'thigh'].map(k => m[k] != null ? m[k] : '-').join(' / ') };
     } },
     { key: 'goals', label: 'Progreso objetivos', r: e => ({ v: txt(e.goals_progress), t: e.goals_progress ? 'green' : 'muted' }) },
     { key: 'chal', label: 'Retos', r: e => ({ v: txt(e.challenges), t: e.challenges ? 'amber' : 'muted' }) },

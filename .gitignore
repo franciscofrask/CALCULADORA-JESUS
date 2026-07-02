@@ -116,3 +116,8 @@ MANUAL_CALCULADORA.*
 # Secrets
 backend/.env
 .env
+
+# Firebase service account (clave de admin - NUNCA subir)
+serviceAccountKey.json
+**/serviceAccountKey.json
+*firebase-adminsdk*.json

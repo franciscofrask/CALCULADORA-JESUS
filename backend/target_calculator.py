@@ -1,5 +1,5 @@
 """
-CAPA DE TARGETS — Motor de cálculo de macros objetivo del cliente
+CAPA DE TARGETS - Motor de cálculo de macros objetivo del cliente
 ================================================================
 Dado (peso, sexo, %graso, objetivo), devuelve los macros objetivo
 para los tres tipos de día: entrenamiento, perientreno y descanso.

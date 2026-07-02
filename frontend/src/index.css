@@ -4,8 +4,8 @@
 
 @layer base {
     :root {
-        /* 12EN12 — Light theme (vigente) */
-        --background: 0 0% 94%;          /* #F0F0F0 page — más gris para que las cards resalten */
+        /* 12EN12 - Light theme (vigente) */
+        --background: 0 0% 94%;          /* #F0F0F0 page - más gris para que las cards resalten */
         --foreground: 0 0% 4%;           /* #0A0A0A ink */
         --card: 0 0% 100%;               /* white cards */
         --card-foreground: 0 0% 4%;
@@ -75,6 +75,17 @@
         @apply border-border;
     }
 
+    /* Tipografía base (en rem): 18px en móvil para que se lea mejor, y 17px en tablet/escritorio.
+       El breakpoint 768px separa móvil del resto. */
+    html {
+        font-size: 18px;
+    }
+    @media (min-width: 768px) {
+        html {
+            font-size: 17px;
+        }
+    }
+
     body {
         @apply bg-background text-foreground antialiased;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -93,7 +104,10 @@
 @layer components {
     /* ---- Tipografía de marca ---- */
     .font-display { font-family: 'Barlow Condensed', 'Impact', sans-serif; }
-    .font-data { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    /* Números: Inter con cifras tabulares y cero PLANO (sin barra ni punto). Antes usaba
+       JetBrains Mono, cuyo cero decorado se confundía con el 8. font-feature-settings 'tnum'
+       resetea el 'ss01'/'cv11' heredado del body para que los dígitos salgan limpios. */
+    .font-data { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
 
     .heading-1 { @apply font-heading text-4xl md:text-5xl font-bold tracking-tight uppercase; }
     .heading-2 { @apply font-heading text-3xl md:text-4xl font-bold tracking-tight uppercase; }
@@ -166,7 +180,7 @@
 
 [data-debug-wrapper="true"] { display: contents !important; }
 
-/* ===== Onboarding guiado (driver.js) — estilo de marca 12EN12 ===== */
+/* ===== Onboarding guiado (driver.js) - estilo de marca 12EN12 ===== */
 .driver-popover.jg-tour {
     background: hsl(var(--card));
     color: hsl(var(--foreground));

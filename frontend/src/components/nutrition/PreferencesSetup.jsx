@@ -279,7 +279,7 @@ const PreferencesSetup = ({
                     {activeTab === 'avoid' && (
                         <>
                             <p className="text-muted-foreground text-sm mb-3">
-                                Estos alimentos nunca aparecerán en ninguna sugerencia — alergias, intolerancias o simplemente lo que no te gusta.
+                                Estos alimentos nunca aparecerán en ninguna sugerencia - alergias, intolerancias o simplemente lo que no te gusta.
                             </p>
 
                             {/* Keyword section */}

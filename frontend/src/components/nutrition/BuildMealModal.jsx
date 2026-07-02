@@ -37,7 +37,7 @@ const FREQUENT_CATEGORY = {
 import CategoryRail from './CategoryRail';
 import { PREFERENCE_CATEGORIES } from './PreferencesSetup';
 
-// Categories - Step 1 (Proteínas) — EXACT Calma T.categorias.categoriasProteinas order:
+// Categories - Step 1 (Proteínas) - EXACT Calma T.categorias.categoriasProteinas order:
 // ["1","2.1","2.2","2.3","2.4","45","3","5","30","28","10"] (single-code chips).
 const PROTEIN_CATEGORIES = [
     { id: 'huevos',           value: 'huevos',           label: 'Huevos y derivados',                    emoji: '🥚', icon: faEgg,           prefixes: ['1'] },
@@ -53,7 +53,7 @@ const PROTEIN_CATEGORIES = [
     { id: 'legumbres',        value: 'legumbres',        label: 'Legumbres',                             emoji: '🫘', icon: faSeedling,      prefixes: ['10'] },
 ];
 
-// Categories - Step 2 (Acompañamientos) — EXACT Calma T.categorias.categoriasHidratos order:
+// Categories - Step 2 (Acompañamientos) - EXACT Calma T.categorias.categoriasHidratos order:
 // ["21","8","7","22","9","11","13","10","5","24","19","27","32","43","44","37","38","39","16","17"].
 const SIDE_CATEGORIES = [
     { id: 'arroces',       value: 'arroces',       label: 'Arroces y derivados',                                      emoji: '🍚', icon: faBowlRice,          prefixes: ['21'] },
@@ -86,13 +86,13 @@ const FAT_CATEGORIES = [
     { id: 'huevos',        value: 'huevos',        label: 'Huevos',                  icon: faEgg,           prefixes: ['1'] },
 ];
 
-// INTRA categories — Calma categoriasIntraentreno: ["18","41"] (chips hidden, pre-active)
+// INTRA categories - Calma categoriasIntraentreno: ["18","41"] (chips hidden, pre-active)
 const INTRA_CATEGORIES = [
     { id: 'isotonicas',  value: 'isotonicas',  label: 'Intraentrenamiento',       emoji: '💧', icon: faBottleWater, prefixes: ['18'] },
     { id: 'aminoacidos', value: 'aminoacidos', label: 'Aminoacidos para entrenar', emoji: '⚡', icon: faTrowelBricks, prefixes: ['41'] },
 ];
 
-// POST categories — single list, Calma categoriasPostentreno order:
+// POST categories - single list, Calma categoriasPostentreno order:
 // ["4","5","46","7","8","11","27","24","19","37","36","16"]
 const POST_CATEGORIES = [
     { id: 'proteina',      value: 'proteina',      label: 'Proteínas en polvo',                                        emoji: '💪', icon: faJar,        prefixes: ['4'] },
@@ -216,8 +216,9 @@ const BuildMealModal = ({
         const c = foodContrib(f);
         return { P: a.P + c.P, H: a.H + c.H, G: a.G + c.G };
     }, acc);
-    const existingServed = sumContrib(mealsData[mealKey]?.alimentos || [], { P: 0, H: 0, G: 0 });
-    const served = sumContrib(tempFoods, { ...existingServed });
+    // tempFoods se precarga con los alimentos ya guardados de la comida (ver efecto de apertura),
+    // así que ya representa el TOTAL de la comida; no sumamos los existentes aparte (se duplicarían).
+    const served = sumContrib(tempFoods, { P: 0, H: 0, G: 0 });
     const remaining = {
         P: Math.max(0, target.P - served.P),
         H: Math.max(0, target.H - served.H),
@@ -283,13 +284,13 @@ const BuildMealModal = ({
         if (isPeriMode) return null;
         const margin = 4;
         if (macrosEf.P > 0 && served.P + macrosEf.P > target.P + margin) {
-            return 'No cabe — superaría la proteína objetivo de esta comida.';
+            return 'No cabe - superaría la proteína objetivo de esta comida.';
         }
         if (macrosEf.H > 0 && served.H + macrosEf.H > target.H + margin) {
-            return 'No cabe — superaría los hidratos objetivo de esta comida.';
+            return 'No cabe - superaría los hidratos objetivo de esta comida.';
         }
         if (macrosEf.G > 0 && served.G + macrosEf.G > target.G + margin) {
-            return 'No cabe — superaría las grasas objetivo de esta comida.';
+            return 'No cabe - superaría las grasas objetivo de esta comida.';
         }
         return null;
     };
@@ -333,7 +334,7 @@ const BuildMealModal = ({
         if (isIntraMode) {
             base = INTRA_CATEGORIES;
         } else if (isPostMode) {
-            // Calma: post is a single phase — all 12 categoriasPostentreno at once (no split).
+            // Calma: post is a single phase - all 12 categoriasPostentreno at once (no split).
             base = POST_CATEGORIES;
         } else if (paso === 1) {
             base = filterAvoided(PROTEIN_CATEGORIES);
@@ -359,7 +360,12 @@ const BuildMealModal = ({
 
     useEffect(() => {
         if (open && mealKey) {
-            setTempFoods([]);
+            // Precargar los alimentos ya guardados de la comida, para que al reabrir el modal
+            // se sigan viendo (y se puedan editar/quitar) en lugar de empezar vacío.
+            const yaGuardados = (mealsData[mealKey]?.alimentos || []).map(f => ({ ...f }));
+            setTempFoods(yaGuardados);
+            // Si la comida ya tenía alimentos, abrir la barra "añadidos" para que se vean al entrar.
+            setAddedOpen(yaGuardados.length > 0);
             // Calma: intra has its category chips hidden and pre-activated (c(e, true)),
             // so foods load immediately. Auto-select the intra categories on open.
             setSelectedCategories(isIntraMode ? INTRA_CATEGORIES.map(c => ({ ...c, value: c.id })) : []);
@@ -401,12 +407,12 @@ const BuildMealModal = ({
     }, [isManual, open]);
 
     // Calma filtroParaAplicar is REACTIVE: the phase is recomputed from the current served macros
-    // every change — NOT a one-way advance. So removing the food that supplied the carbs drops you
+    // every change - NOT a one-way advance. So removing the food that supplied the carbs drops you
     // back from paso 3 to paso 2. haySuficientes = served/target > 0.8 (porcentajeSuficienteMacros,
     // STRICT >). target==0 -> that macro counts as sufficient (nothing to add there).
     useEffect(() => {
         if (!open) return;       // modal stays mounted while closed; don't react to day switches
-        if (isPeriMode) return;  // peri (intra/post) is a single phase — no paso split
+        if (isPeriMode) return;  // peri (intra/post) is a single phase - no paso split
         if (isManual) return;    // manual: no 80% progression at all
         const pOk = !(target.P > 0) || (served.P / target.P) > 0.8;
         const hOk = !(target.H > 0) || (served.H / target.H) > 0.8;
@@ -425,7 +431,7 @@ const BuildMealModal = ({
     }, [open, served.P, served.H, target.P, target.H, paso, isPeriMode, isManual]);
 
     // Calma: filtrosActivacionPorDefecto = false. In paso 3 (cuadrarMacros / "últimos
-    // toques") the preference category chips are shown but start INACTIVE — the user
+    // toques") the preference category chips are shown but start INACTIVE - the user
     // picks which to finish with. We previously auto-selected all of them, which was a
     // bug (every chip appeared selected and the whole catalog loaded). No pre-activation.
 
@@ -436,7 +442,7 @@ const BuildMealModal = ({
         const hasFrequent = selectedCategories.some(c => c.id === '__frequent__');
         if (hasFrequent) {
             setLoadingFoods(true);
-            // Calma: frequent foods (top-20 by raw count) go through the SAME engine —
+            // Calma: frequent foods (top-20 by raw count) go through the SAME engine -
             // suggested quantity + macro rule + diferencia ordering, using the meal remaining.
             const params = new URLSearchParams({ frequent: 'true', limit: '20' });
             const mp = getMacrosParams();
@@ -469,7 +475,7 @@ const BuildMealModal = ({
                     params.set('peri', isIntraMode ? 'intra' : 'post');
                     params.set('g_rest', target.G - served.G + MARGEN_VALIDO);
                 }
-                // cuadrar = prioridad FASE (good fats), once P&H >80% — independent of meal type.
+                // cuadrar = prioridad FASE (good fats), once P&H >80% - independent of meal type.
                 if (sufP && sufH || paso === 3) params.set('cuadrar', 'true');
             }
             if (selectedPreparations.length > 0) params.set('tag', selectedPreparations.join(','));
@@ -587,7 +593,7 @@ const BuildMealModal = ({
             const alreadyInMeal = (mealsData[mealKey]?.alimentos || []).some(f => f.alimento_id === foodId);
             const alreadyInTemp = tempFoods.some(f => f.alimento_id === foodId);
             if (alreadyInMeal || alreadyInTemp) {
-                toast.error(`${food.nombre} ya está en esta comida — ajusta su cantidad directamente.`);
+                toast.error(`${food.nombre} ya está en esta comida - ajusta su cantidad directamente.`);
                 return;
             }
 
@@ -711,7 +717,7 @@ const BuildMealModal = ({
 
     const handleFoodQuantityChange = (index, delta) => {
         // Calma lets you freely increase/decrease an added food's quantity even past the
-        // meal target — the macro bars just show over-target (red). No block.
+        // meal target - the macro bars just show over-target (red). No block.
         setTempFoods(prev => prev.map((f, i) => {
             if (i !== index) return f;
             const isUnit = f.por_unidad ?? f.unidades;
@@ -740,15 +746,17 @@ const BuildMealModal = ({
     const handleSaveAndClose = () => {
         if (!mealKey || tempFoods.length === 0) return;
 
+        // tempFoods ya incluye los alimentos que había en la comida (precargados al abrir) más los
+        // nuevos, así que REEMPLAZAMOS la lista (no concatenamos, o se duplicarían los existentes).
         setMealsData(prev => ({
             ...prev,
             [mealKey]: {
                 ...prev[mealKey],
-                alimentos: [...(prev[mealKey]?.alimentos || []), ...tempFoods]
+                alimentos: [...tempFoods]
             }
         }));
 
-        toast.success(`✅ ${tempFoods.length} alimento(s) añadido(s)`);
+        toast.success(`✅ Comida guardada (${tempFoods.length} alimento(s))`);
         onClose();
     };
 
@@ -756,7 +764,7 @@ const BuildMealModal = ({
 
     // Calma consejoParaEscogerAlimento: phase guidance text (not "Paso 1/2/3").
     const getPasoLabel = () => {
-        if (isManual) return 'Modo manual — cantidad libre, sin autoajuste';
+        if (isManual) return 'Modo manual - cantidad libre, sin autoajuste';
         if (isIntraMode) return 'Alimentos Intra-entreno';
         if (isPostMode) return 'Alimentos Post-entreno';
         if (paso === 1) return 'Definiendo base de proteínas...';
@@ -771,9 +779,17 @@ const BuildMealModal = ({
     // the remaining is tiny). filterAvoided() already applied the allergy removal upstream.
     const categories = getCurrentCategories();
     const rawFoods = isSearching ? searchResults : categoryFoods;
-    // Manual: no suggestion ranking, so list alphabetically.
+    // Manual: no suggestion ranking, so list alphabetically. Además, en manual ocultamos los
+    // alimentos que ya están en la comida o ya añadidos en esta sesión del modal, para que no
+    // vuelvan a aparecer en la lista (ya no se pueden volver a añadir, solo ajustar cantidad).
+    const addedFoodIds = new Set([
+        ...(mealsData[mealKey]?.alimentos || []).map(f => f.alimento_id),
+        ...tempFoods.map(f => f.alimento_id),
+    ]);
     const displayFoods = isManual
-        ? [...rawFoods].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+        ? [...rawFoods]
+            .filter(f => !addedFoodIds.has(f.id || f._id))
+            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
         : rawFoods;
 
     // Preparations available for the selected category
@@ -783,7 +799,9 @@ const BuildMealModal = ({
         <Dialog open={open} onOpenChange={() => onClose()}>
             <DialogContent className="max-w-2xl h-[90vh] p-0 flex flex-col bg-card">
                 <DialogHeader className="flex-shrink-0 px-4 py-3 border-b">
-                    <div className="flex items-center justify-between gap-2">
+                    {/* pr-8: deja hueco a la derecha para la cruz de cerrar (absolute right-4),
+                        si no el switch Automático/Manual queda superpuesto a ella. */}
+                    <div className="flex items-center justify-between gap-2 pr-8">
                         <DialogTitle className="text-lg font-bold text-foreground">
                             {mealInfo?.label || `Comida ${mealKey?.replace('C', '')}`}
                         </DialogTitle>
@@ -813,30 +831,30 @@ const BuildMealModal = ({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                     {/* Macros summary */}
-                    <div className="flex-shrink-0 p-4 bg-muted border-b">
-                        <div className="text-sm font-medium text-muted-foreground mb-2">{getPasoLabel()}</div>
-                        {/* Peri (intra/post) carry only P+H — Calma shows no Grasas column for them. */}
-                        <div className={`grid ${isPeriMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-center`}>
+                    <div className="flex-shrink-0 px-4 py-2 bg-muted border-b">
+                        <div className="text-[11px] font-medium text-muted-foreground mb-1 leading-tight">{getPasoLabel()}</div>
+                        {/* Peri (intra/post) carry only P+H - Calma shows no Grasas column for them. */}
+                        <div className={`grid ${isPeriMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-center leading-tight`}>
                             {(() => { const c = macroCell(served.P, target.P); return (
                                 <div>
-                                    <div className="text-xs text-muted-foreground">Proteína</div>
-                                    <div className={`font-bold ${c.over ? 'text-red-500' : 'text-orange-500'}`}>{c.num}</div>
+                                    <div className="text-[11px] text-muted-foreground">Proteína</div>
+                                    <div className={`text-sm font-bold ${c.over ? 'text-red-500' : 'text-orange-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
                             {(() => { const c = macroCell(served.H, target.H); return (
                                 <div>
-                                    <div className="text-xs text-muted-foreground">Hidratos</div>
-                                    <div className={`font-bold ${c.over ? 'text-red-500' : 'text-blue-500'}`}>{c.num}</div>
+                                    <div className="text-[11px] text-muted-foreground">Hidratos</div>
+                                    <div className={`text-sm font-bold ${c.over ? 'text-red-500' : 'text-blue-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
                             {!isPeriMode && (() => { const c = macroCell(served.G, target.G); return (
                                 <div>
-                                    <div className="text-xs text-muted-foreground">Grasas</div>
-                                    <div className={`font-bold ${c.over ? 'text-red-500' : 'text-yellow-500'}`}>{c.num}</div>
+                                    <div className="text-[11px] text-muted-foreground">Grasas</div>
+                                    <div className={`text-sm font-bold ${c.over ? 'text-red-500' : 'text-yellow-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
@@ -864,7 +882,7 @@ const BuildMealModal = ({
                         </div>
                     </div>
 
-                    {/* Category + Preparation Rails — hidden for intra (Calma: chips hidden) */}
+                    {/* Category + Preparation Rails - hidden for intra (Calma: chips hidden) */}
                     {(isManual || !isCuadrada) && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-card space-y-2">
                         <CategoryRail
                             label="Categorías:"
@@ -872,6 +890,8 @@ const BuildMealModal = ({
                             value={selectedCategories.map(c => c.id)}
                             onChange={handleCategoriesChange}
                             size="sm"
+                            collapsible
+                            maxRows={1}
                         />
                         {selectedCategories.length > 0 && availablePreparations.length > 0 && (
                             <CategoryRail
@@ -885,7 +905,7 @@ const BuildMealModal = ({
                     </div>}
 
                     {/* Food list */}
-                    <ScrollArea className="flex-1">
+                    <ScrollArea className="flex-1 min-h-0">
                         <div className="p-3">
                             {!isSearching && selectedCategories.length === 0 ? (
                                 <div className="text-center py-10 text-muted-foreground text-sm">
@@ -900,7 +920,7 @@ const BuildMealModal = ({
                                             {isSearching
                                                 ? 'No se encontraron alimentos'
                                                 : selectedCategories.some(c => c.id === '__frequent__')
-                                                    ? 'Aún no tienes alimentos frecuentes — guarda algunas dietas primero'
+                                                    ? 'Aún no tienes alimentos frecuentes - guarda algunas dietas primero'
                                                     : 'No hay alimentos en esta categoría'}
                                         </div>
                                     ) : (
@@ -960,7 +980,7 @@ const BuildMealModal = ({
                         </div>
                     </ScrollArea>
 
-                    {/* Added foods — collapsible bar (closed by default so the list keeps the space) */}
+                    {/* Added foods - collapsible bar (closed by default so the list keeps the space) */}
                     {tempFoods.length > 0 && (() => {
                         const tot = tempFoods.reduce((a, f) => ({
                             P: a.P + (f.macros_efectivos?.P || 0),
@@ -969,11 +989,11 @@ const BuildMealModal = ({
                         }), { P: 0, H: 0, G: 0 });
                         const fmt = v => Math.round(v);
                         return (
-                            <div className="flex-shrink-0 border-t bg-muted">
+                            <div className={`border-t bg-muted flex flex-col ${addedOpen ? 'min-h-0 max-h-52' : 'flex-shrink-0'}`}>
                                 <button
                                     type="button"
                                     onClick={() => setAddedOpen(o => !o)}
-                                    className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-foreground"
+                                    className="flex-shrink-0 w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-foreground"
                                     data-testid="added-bar-toggle"
                                 >
                                     <span className="flex items-center gap-2">
@@ -981,10 +1001,13 @@ const BuildMealModal = ({
                                         <span>añadidos</span>
                                         <span className="text-xs font-normal">· <span className="font-semibold text-orange-500">P {fmt(tot.P)}</span> · <span className="font-semibold text-blue-500">H {fmt(tot.H)}</span> · <span className="font-semibold text-yellow-500">G {fmt(tot.G)}</span></span>
                                     </span>
-                                    <ChevronUp className={`w-4 h-4 text-muted-foreground transition-transform ${addedOpen ? '' : 'rotate-180'}`} />
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand flex-shrink-0">
+                                        {addedOpen ? 'Ocultar' : 'Ver'}
+                                        <ChevronUp className={`w-3.5 h-3.5 transition-transform ${addedOpen ? '' : 'rotate-180'}`} />
+                                    </span>
                                 </button>
                                 {addedOpen && (
-                                    <div className="px-3 pb-3 max-h-56 overflow-auto space-y-1">
+                                    <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 space-y-1">
                                         {tempFoods.map((food, idx) => (
                                             <div key={idx} className="flex items-center gap-2 bg-card rounded p-2 text-sm">
                                                 <span className="flex-1 truncate text-foreground">{food.nombre}</span>

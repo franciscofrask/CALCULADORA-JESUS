@@ -220,7 +220,6 @@ const ClientDashboard = () => {
     const getP = (m) => m?.protein || m?.proteinas || 0;
     const getH = (m) => m?.carbs || m?.hidratos || 0;
     const getG = (m) => m?.fat || m?.grasas || 0;
-    const getKcal = (m) => Math.round(getP(m) * 4 + getH(m) * 4 + getG(m) * 9);
 
     const checklistSteps = [
         { id: 'macros', label: 'Tus macros están calculados', sub: 'Revisa tus objetivos', done: !!hasMacros, path: '/dashboard/nutrition' },
@@ -229,7 +228,6 @@ const ClientDashboard = () => {
     ];
     const showChecklist = !checklistDismissed && checklistSteps.some(s => !s.done);
 
-    const consumedKcal = Math.round(todayConsumed.P * 4 + todayConsumed.H * 4 + todayConsumed.G * 9);
     const weekProgress = (profile.week / 4) * 100;
     const todayRoutine = routine?.days?.find(d =>
         d.day.toLowerCase() === new Date().toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase());
@@ -276,10 +274,6 @@ const ClientDashboard = () => {
                                     {isRestDay ? <Activity className="w-4 h-4 text-emerald-500" /> : <Flame className="w-4 h-4 text-brand" />}
                                     <span className="text-xs font-bold text-foreground uppercase tracking-wider">Hoy · {isRestDay ? 'Descanso' : 'Entreno'}</span>
                                 </div>
-                                <div className="text-right">
-                                    <span className="font-data font-bold text-2xl" style={{ color: isRestDay ? '#10B981' : MACRO.protein }} data-testid="kcal-consumed">{consumedKcal}</span>
-                                    <span className="text-muted-foreground text-sm font-data"> / {getKcal(activeTarget)} kcal</span>
-                                </div>
                             </div>
                             <div className="px-5 pb-5 pt-1">
                                 <div className="flex items-center justify-around">
@@ -295,8 +289,6 @@ const ClientDashboard = () => {
                             </div>
                             <div className="border-t border-border px-5 py-3 flex items-center justify-between">
                                 <div className="flex items-center gap-4 text-[11px] text-muted-foreground uppercase tracking-wider font-data">
-                                    <span>Entreno {getKcal(mt)}</span>
-                                    <span>Descanso {getKcal(mr)}</span>
                                     {mp && getP(mp) > 0 && <span>Peri {getP(mp)}/{getH(mp)}</span>}
                                 </div>
                                 {source && (

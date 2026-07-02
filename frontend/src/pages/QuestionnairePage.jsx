@@ -8,7 +8,7 @@ import { ArrowRight, ArrowLeft, Loader2, Check, ImagePlus } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import BrandArrow from '../components/BrandArrow';
 
-// Cuestionario inicial obligatorio — réplica del Typeform "[ELM] Cuestionario inicial - hombre".
+// Cuestionario inicial obligatorio - réplica del Typeform "[ELM] Cuestionario inicial - hombre".
 // Estilo paso a paso (una pregunta por pantalla).
 
 const BIOTIPOS = [
