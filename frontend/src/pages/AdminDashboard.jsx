@@ -11,10 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { PlanBadge, JG12Logo } from './ClientDashboard';
 import { 
-    LayoutDashboard, Users, CreditCard, Dumbbell, 
+    LayoutDashboard, Users, CreditCard, Dumbbell,
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
-    AlertTriangle, UserCheck, UserMinus, UserPlus
+    AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils
 } from 'lucide-react';
 
 // Admin Dashboard Home
@@ -375,6 +375,7 @@ const AdminLayout = () => {
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
         { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
         { path: '/admin/routines', icon: Dumbbell, label: 'Rutinas' },
+        { path: '/admin/menus', icon: Utensils, label: 'Menús' },
         { path: '/admin/payments', icon: CreditCard, label: 'Pagos' },
     ];
 

@@ -54,7 +54,9 @@ const CategoryRail = ({
     const [expanded, setExpanded] = useState(false);
     const [overflowing, setOverflowing] = useState(false);
     const btnPx = size === 'sm' ? 32 : 36;
-    const collapsedMaxH = maxRows * btnPx + (maxRows - 1) * 6;
+    // +8: deja aire para el anillo (ring) de la pill seleccionada, que se dibuja FUERA del
+    // círculo; sin este margen el overflow:hidden del recorte lo cortaba por arriba/abajo.
+    const collapsedMaxH = maxRows * btnPx + (maxRows - 1) * 6 + 8;
 
     useEffect(() => {
         if (!collapsible) return;
@@ -70,7 +72,7 @@ const CategoryRail = ({
     const clampStyle = (collapsible && !expanded) ? { maxHeight: collapsedMaxH, overflow: 'hidden' } : undefined;
 
     const pills = (
-        <div ref={wrapRef} style={clampStyle} className="flex items-center gap-1.5 flex-wrap">
+        <div ref={wrapRef} style={clampStyle} className="flex items-center gap-1.5 flex-wrap py-1">
             {categories.map((cat) => {
                 const selected = isSelected(cat.value);
                 const iconNode = renderIcon(cat.icon, 'w-4 h-4');

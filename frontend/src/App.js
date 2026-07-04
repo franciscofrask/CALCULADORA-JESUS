@@ -19,6 +19,7 @@ import ClientDetailPage from "./pages/ClientDetailPage";
 import LeadsPage from "./pages/LeadsPage";
 import ChatbotPage from "./pages/ChatbotPage";
 import SupplementsCatalogPage from "./pages/SupplementsCatalogPage";
+import AdminMenusPage from "./pages/AdminMenusPage";
 import SupplementsPage from "./pages/SupplementsPage";
 import CheckInsPage from "./pages/CheckInsPage";
 import MacroCalculatorClientPage from "./pages/MacroCalculatorClientPage";
@@ -152,6 +153,7 @@ function AppRoutes() {
                 <Route path="leads" element={<LeadsPage />} />
                 <Route path="routines" element={<AdminClientsList />} />
                 <Route path="supplements-catalog" element={<SupplementsCatalogPage />} />
+                <Route path="menus" element={<AdminMenusPage />} />
                 <Route path="payments" element={<AdminDashboard />} />
             </Route>
 

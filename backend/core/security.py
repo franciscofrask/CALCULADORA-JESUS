@@ -3,12 +3,20 @@ Seguridad: JWT y hashing de contraseñas.
 """
 import jwt
 import bcrypt
+import os
+import base64
+import hashlib
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from .config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 from .database import db
+
+try:
+    from Crypto.Cipher import AES  # pycryptodome
+except ImportError:
+    AES = None
 
 security = HTTPBearer()
 
@@ -19,6 +27,30 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+def _b64url(s: str) -> bytes:
+    s = (s or "").strip()
+    s += "=" * (-len(s) % 4)
+    return base64.urlsafe_b64decode(s)
+
+def verify_firebase_password(password: str, hash_b64url: str, salt_b64url: str) -> bool:
+    """Verifica una contraseña contra el hash scrypt de Firebase (usuarios importados de Calma).
+    Reproduce el algoritmo de Firebase: scrypt(password, salt+salt_separator) y luego AES-256-CTR
+    del signer_key con la clave derivada. True si coincide con el hash almacenado."""
+    signer = os.environ.get("FIREBASE_SCRYPT_SIGNER_KEY", "")
+    if not (password and hash_b64url and salt_b64url and signer and AES is not None):
+        return False
+    try:
+        salt_sep = os.environ.get("FIREBASE_SCRYPT_SALT_SEP", "")
+        rounds = int(os.environ.get("FIREBASE_SCRYPT_ROUNDS", "8") or 8)
+        mem_cost = int(os.environ.get("FIREBASE_SCRYPT_MEM_COST", "14") or 14)
+        dk = hashlib.scrypt(password.encode("utf-8"),
+                            salt=_b64url(salt_b64url) + base64.b64decode(salt_sep),
+                            n=2 ** mem_cost, r=rounds, p=1, dklen=64, maxmem=2 ** 26)
+        cipher = AES.new(dk[:32], AES.MODE_CTR, nonce=b"", initial_value=0)
+        return cipher.encrypt(base64.b64decode(signer)) == _b64url(hash_b64url)
+    except Exception:
+        return False
 
 def create_token(user_id: str, role: str) -> str:
     """Create a JWT token."""

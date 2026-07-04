@@ -833,28 +833,28 @@ const BuildMealModal = ({
 
                 <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                     {/* Macros summary */}
-                    <div className="flex-shrink-0 px-4 py-2 bg-muted border-b">
-                        <div className="text-[11px] font-medium text-muted-foreground mb-1 leading-tight">{getPasoLabel()}</div>
+                    <div className="flex-shrink-0 px-4 py-2.5 bg-muted border-b">
+                        <div className="text-xs font-medium text-muted-foreground mb-1.5 leading-tight">{getPasoLabel()}</div>
                         {/* Peri (intra/post) carry only P+H - Calma shows no Grasas column for them. */}
                         <div className={`grid ${isPeriMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-center leading-tight`}>
                             {(() => { const c = macroCell(served.P, target.P); return (
                                 <div>
-                                    <div className="text-[11px] text-muted-foreground">Proteína</div>
-                                    <div className={`text-sm font-bold ${c.over ? 'text-red-500' : 'text-orange-500'}`}>{c.num}</div>
+                                    <div className="text-xs text-muted-foreground">Proteína</div>
+                                    <div className={`text-lg font-bold ${c.over ? 'text-red-500' : 'text-orange-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
                             {(() => { const c = macroCell(served.H, target.H); return (
                                 <div>
-                                    <div className="text-[11px] text-muted-foreground">Hidratos</div>
-                                    <div className={`text-sm font-bold ${c.over ? 'text-red-500' : 'text-blue-500'}`}>{c.num}</div>
+                                    <div className="text-xs text-muted-foreground">Hidratos</div>
+                                    <div className={`text-lg font-bold ${c.over ? 'text-red-500' : 'text-blue-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
                             {!isPeriMode && (() => { const c = macroCell(served.G, target.G); return (
                                 <div>
-                                    <div className="text-[11px] text-muted-foreground">Grasas</div>
-                                    <div className={`text-sm font-bold ${c.over ? 'text-red-500' : 'text-yellow-500'}`}>{c.num}</div>
+                                    <div className="text-xs text-muted-foreground">Grasas</div>
+                                    <div className={`text-lg font-bold ${c.over ? 'text-red-500' : 'text-yellow-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
