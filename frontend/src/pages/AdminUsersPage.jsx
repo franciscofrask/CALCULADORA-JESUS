@@ -7,14 +7,12 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Search, Pencil, UserX, RotateCcw, Loader2, Shield } from 'lucide-react';
+import { Search, Pencil, UserX, RotateCcw, Loader2, Shield, KeyRound } from 'lucide-react';
 
 const ROLES = [
     { value: 'client', label: 'Cliente' },
     { value: 'trainer', label: 'Entrenador' },
-    { value: 'operations', label: 'Operaciones' },
     { value: 'admin', label: 'Admin' },
-    { value: 'ceo', label: 'CEO' },
 ];
 const ROLE_LABEL = Object.fromEntries(ROLES.map(r => [r.value, r.label]));
 const STAFF_ROLES = ROLES.filter(r => r.value !== 'client');  // esta lista es solo equipo (admin/coach)
@@ -36,7 +34,7 @@ const AdminUsersPage = () => {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const params = { staff: true };  // solo equipo (admin/coach/operaciones/ceo)
+            const params = { staff: true };  // solo equipo (admin/coach)
             if (q.trim()) params.q = q.trim();
             if (roleFilter) params.role = roleFilter;
             if (showDeleted) params.include_deleted = true;
@@ -75,6 +73,22 @@ const AdminUsersPage = () => {
     const restore = async (u) => {
         try { await api.post(`/admin/users/${u.id}/restore`); toast.success('Usuario reactivado'); load(); }
         catch { toast.error('No se pudo reactivar'); }
+    };
+
+    // Restablecer contraseña: genera una temporal y la muestra una sola vez
+    const [resetResult, setResetResult] = useState(null);
+    const resetPassword = async (u) => {
+        if (!window.confirm(`¿Generar una contraseña nueva para ${u.name || u.email}? La actual dejará de funcionar.`)) return;
+        try {
+            const r = await api.post(`/admin/users/${u.id}/reset-password`);
+            setResetResult({ user: u, temp_password: r.data.temp_password });
+        } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo restablecer'); }
+    };
+    const copyResetPassword = () => {
+        if (!resetResult) return;
+        navigator.clipboard.writeText(resetResult.temp_password)
+            .then(() => toast.success('Contraseña copiada'))
+            .catch(() => toast.error('No se pudo copiar'));
     };
 
     return (
@@ -135,6 +149,7 @@ const AdminUsersPage = () => {
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1">
                                                     <button onClick={() => openEdit(u)} title="Editar" className="p-1.5 rounded text-white/40 hover:text-white hover:bg-white/10"><Pencil className="w-4 h-4" /></button>
+                                                    {!u.deleted && <button onClick={() => resetPassword(u)} title="Restablecer contraseña" className="p-1.5 rounded text-white/40 hover:text-yellow-400 hover:bg-yellow-500/10" data-testid={`reset-pwd-${u.id}`}><KeyRound className="w-4 h-4" /></button>}
                                                     {u.deleted
                                                         ? <button onClick={() => restore(u)} title="Reactivar" className="p-1.5 rounded text-white/40 hover:text-green-400 hover:bg-green-500/10"><RotateCcw className="w-4 h-4" /></button>
                                                         : <button onClick={() => softDelete(u)} title="Baja lógica" disabled={u.id === me?.id} className="p-1.5 rounded text-white/40 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed"><UserX className="w-4 h-4" /></button>}
@@ -149,6 +164,25 @@ const AdminUsersPage = () => {
                     </CardContent>
                 </Card>
             )}
+
+            <Dialog open={!!resetResult} onOpenChange={(o) => !o && setResetResult(null)}>
+                {resetResult && (
+                    <DialogContent className="bg-[#111] border-[#333] max-w-md text-white" data-testid="reset-pwd-dialog">
+                        <DialogHeader><DialogTitle className="uppercase tracking-wider flex items-center gap-2"><KeyRound className="w-5 h-5 text-yellow-400" /> Contraseña restablecida</DialogTitle></DialogHeader>
+                        <div className="space-y-3">
+                            <p className="text-white/60 text-sm">Nueva contraseña temporal de <span className="text-white font-semibold">{resetResult.user.name || resetResult.user.email}</span>:</p>
+                            <div className="bg-[#0A0A0A] border border-[#333] rounded-xl p-4 text-center">
+                                <span className="text-[#FF671F] font-mono font-bold text-lg" data-testid="reset-temp-password">{resetResult.temp_password}</span>
+                            </div>
+                            <p className="text-yellow-400/80 text-xs">Solo se muestra ahora: cópiala y pásasela por WhatsApp. Recomiéndale cambiarla al entrar (Perfil, Cambiar contraseña).</p>
+                        </div>
+                        <DialogFooter>
+                            <Button onClick={copyResetPassword} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white">Copiar</Button>
+                            <Button variant="outline" onClick={() => setResetResult(null)} className="bg-transparent border-[#333] text-white">Cerrar</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                )}
+            </Dialog>
 
             <Dialog open={modal.open} onOpenChange={(o) => !o && setModal({ open: false, user: null })}>
                 <DialogContent className="bg-[#111] border-[#333] max-w-md text-white">

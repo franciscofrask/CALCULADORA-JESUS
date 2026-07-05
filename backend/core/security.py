@@ -24,6 +24,14 @@ def hash_password(password: str) -> str:
     """Hash a password using bcrypt."""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
+# Sin caracteres ambiguos (0/O, 1/l/I) para poder dictarla por telefono
+_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+
+def generate_temp_password() -> str:
+    """Contraseña temporal legible: Abcd-Efg2-Hjk9."""
+    import secrets
+    return "-".join("".join(secrets.choice(_PASSWORD_ALPHABET) for _ in range(4)) for _ in range(3))
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -82,6 +90,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 async def get_admin_user(user: dict = Depends(get_current_user)) -> dict:
     """Verify that the current user is an admin."""
-    if user.get("role") not in ["admin", "trainer", "ceo", "operations"]:
+    if user.get("role") not in ["admin", "trainer"]:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     return user

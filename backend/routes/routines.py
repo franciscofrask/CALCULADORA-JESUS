@@ -52,6 +52,42 @@ async def get_routine_history(user = Depends(get_current_user)):
 
 admin_router = APIRouter(prefix="/admin/routines", tags=["admin-routines"])
 
+
+@admin_router.get("/overview")
+async def routines_overview(user = Depends(get_admin_user)):
+    """Vista general para el panel: cada cliente activo y si tiene rutina activa o no."""
+    profiles = await db.client_profiles.find(
+        {"status": {"$ne": "baja"}}, {"_id": 0, "id": 1, "user_id": 1, "plan": 1}
+    ).to_list(2000)
+    uids = [p["user_id"] for p in profiles]
+    users = await db.users.find(
+        {"id": {"$in": uids}, "deleted_at": None}, {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(2000)
+    umap = {u["id"]: u for u in users}
+    routines = await db.routines.find(
+        {"status": "active"}, {"_id": 0, "client_id": 1, "days": 1, "created_at": 1}
+    ).to_list(2000)
+    rmap = {r["client_id"]: r for r in routines}
+
+    out = []
+    for p in profiles:
+        u = umap.get(p["user_id"])
+        if not u:
+            continue
+        r = rmap.get(p["id"])
+        out.append({
+            "client_id": p["id"],
+            "name": u.get("name"),
+            "email": u.get("email"),
+            "plan": p.get("plan"),
+            "has_routine": bool(r),
+            "training_days": len([d for d in r.get("days", []) if not d.get("is_rest")]) if r else 0,
+            "routine_created_at": r.get("created_at") if r else None,
+        })
+    # Primero los que NO tienen rutina (los que necesitan trabajo), luego alfabetico
+    out.sort(key=lambda c: (c["has_routine"], (c["name"] or "").lower()))
+    return out
+
 @admin_router.post("/generate")
 async def generate_routine_ai(data: RoutineCreate, user = Depends(get_admin_user)):
     """Generar rutina con IA."""
@@ -105,7 +141,9 @@ Genera una rutina completa de 7 días. Responde SOLO con el JSON."""
         chat = LlmChat(
             api_key=llm_key,
             session_id=f"routine-{data.client_id}-{uuid.uuid4()}",
-            system_message="Eres un entrenador personal experto. Genera rutinas en formato JSON."
+            system_message=("Eres un entrenador personal experto. Genera rutinas en formato JSON. "
+                            "Escribe los nombres de ejercicios y notas en español neutro con tuteo "
+                            "(prohibido el voseo y los regionalismos).")
         ).with_model("openai", os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'))
         
         response = await chat.send_message(UserMessage(text=prompt))

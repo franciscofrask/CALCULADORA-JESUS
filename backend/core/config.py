@@ -17,6 +17,12 @@ JWT_SECRET = os.environ.get('JWT_SECRET', '12en12-secret-key')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+if JWT_SECRET in ('12en12-secret-key', '12en12-super-secret-jwt-key-2024') or len(JWT_SECRET) < 32:
+    import logging
+    logging.getLogger("uvicorn.error").warning(
+        "JWT_SECRET debil o por defecto: configura una clave aleatoria de 32+ caracteres en el .env / variables de Render"
+    )
+
 # CORS
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
 

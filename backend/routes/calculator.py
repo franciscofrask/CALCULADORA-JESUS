@@ -393,7 +393,7 @@ async def get_macros_comida(data: dict, user = Depends(get_current_user)):
     }
 
 @router.get("/test-calma")
-async def test_calma():
+async def test_calma(user = Depends(get_current_user)):
     """Ejecuta los tests del motor CALMA v2."""
     results = calma_run_tests()
     return results
@@ -1007,6 +1007,6 @@ async def calculate_and_apply_targets(data: dict, user = Depends(get_current_use
 
 
 @router.get("/test-targets")
-async def test_targets():
+async def test_targets(user = Depends(get_current_user)):
     """Ejecuta los tests del motor de targets."""
     return target_run_tests()

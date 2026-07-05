@@ -14,8 +14,8 @@ const STEPS = [
     },
     {
         icon: Utensils,
-        title: 'Arma tus comidas',
-        desc: 'Toca una comida y agrega alimentos, o usa "Construir comida" para que la calculadora te guíe paso a paso.',
+        title: 'Prepara tus comidas',
+        desc: 'Toca una comida y añade alimentos, o usa "Construir comida" para que la calculadora te guíe paso a paso.',
     },
     {
         icon: Gauge,
@@ -36,7 +36,7 @@ const NutritionIntro = ({ onClose }) => (
             <div className="p-6 pb-4 text-center">
                 <p className="caption text-brand mb-1">Cómo funciona</p>
                 <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-tight">
-                    Arma tu día en 3 pasos
+                    Prepara tu día en 3 pasos
                 </h2>
                 <p className="text-muted-foreground text-sm mt-2">
                     No hace falta tocar todo. Con esto te basta para empezar.

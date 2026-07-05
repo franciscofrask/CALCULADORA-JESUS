@@ -122,6 +122,10 @@ class ClientProfileUpdate(BaseModel):
     injuries: Optional[List[str]] = None
     training_days: Optional[int] = None
 
+# Asignación de coach (trainer_id=None quita el coach)
+class TrainerAssign(BaseModel):
+    trainer_id: Optional[str] = None
+
 # Onboarding guiado (tour de producto)
 class OnboardingUpdate(BaseModel):
     step: Optional[str] = None          # id del paso actual donde quedó

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -26,6 +26,10 @@ const AdminDashboard = () => {
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    // Campana: novedades reales (leads nuevos sin gestionar + mensajes sin leer)
+    const [notif, setNotif] = useState({ leads: 0, messages: 0 });
+    const [notifOpen, setNotifOpen] = useState(false);
+
     useEffect(() => {
         const fetchAll = async () => {
             try {
@@ -45,6 +49,18 @@ const AdminDashboard = () => {
             }
         };
         fetchAll();
+        const fetchNotif = async () => {
+            try {
+                const [leadsRes, msgsRes] = await Promise.all([
+                    api.get('/leads/stats/summary'),
+                    api.get('/messages/unread-count'),
+                ]);
+                setNotif({ leads: leadsRes.data?.nuevo || 0, messages: msgsRes.data?.count || 0 });
+            } catch { /* silencioso */ }
+        };
+        fetchNotif();
+        const id = setInterval(fetchNotif, 60000);
+        return () => clearInterval(id);
     }, [api]);
 
     if (loading) {
@@ -72,9 +88,40 @@ const AdminDashboard = () => {
                     <h1 className="text-3xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>PANEL DE CONTROL</h1>
                     <p className="text-white/40 text-sm">Estado del negocio en tiempo real</p>
                 </div>
-                <Button variant="outline" size="icon" className="bg-transparent border-white/20 hover:border-[#FF671F]">
-                    <Bell className="w-4 h-4 text-white" />
-                </Button>
+                <div className="relative">
+                    <Button variant="outline" size="icon" onClick={() => setNotifOpen(o => !o)}
+                        className="bg-transparent border-white/20 hover:border-[#FF671F]" data-testid="notif-bell">
+                        <Bell className="w-4 h-4 text-white" />
+                    </Button>
+                    {(notif.leads + notif.messages) > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center pointer-events-none">
+                            {notif.leads + notif.messages > 99 ? '99+' : notif.leads + notif.messages}
+                        </span>
+                    )}
+                    {notifOpen && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                            <div className="absolute right-0 top-11 z-50 w-72 bg-[#111] border border-[#333] rounded-xl shadow-xl overflow-hidden" data-testid="notif-dropdown">
+                                <p className="px-4 py-2.5 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-[#222]">Novedades</p>
+                                <button onClick={() => { setNotifOpen(false); navigate('/admin/leads'); }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left">
+                                    <UserPlus className="w-4 h-4 text-[#FF671F]" />
+                                    <span className="text-white text-sm flex-1">Leads nuevos sin gestionar</span>
+                                    <span className={`text-xs font-bold ${notif.leads > 0 ? 'text-red-400' : 'text-white/30'}`}>{notif.leads}</span>
+                                </button>
+                                <button onClick={() => { setNotifOpen(false); navigate('/admin/messages'); }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left border-t border-[#1A1A1A]">
+                                    <MessageCircle className="w-4 h-4 text-[#FF671F]" />
+                                    <span className="text-white text-sm flex-1">Mensajes sin leer</span>
+                                    <span className={`text-xs font-bold ${notif.messages > 0 ? 'text-red-400' : 'text-white/30'}`}>{notif.messages}</span>
+                                </button>
+                                {(notif.leads + notif.messages) === 0 && (
+                                    <p className="px-4 py-3 text-white/30 text-xs border-t border-[#1A1A1A]">Todo al día</p>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* KPI Row */}
@@ -230,9 +277,10 @@ const KpiCard = ({ value, label, icon: Icon, color, testId }) => (
 
 // Admin Clients List
 const AdminClientsList = () => {
-    const { api } = useAuth();
+    const { api, user } = useAuth();
     const navigate = useNavigate();
     const [clients, setClients] = useState([]);
+    const [trainers, setTrainers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [planFilter, setPlanFilter] = useState('all');
@@ -241,6 +289,25 @@ const AdminClientsList = () => {
         fetchClients();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- correr al montar y al cambiar planFilter
     }, [planFilter]);
+
+    useEffect(() => {
+        api.get('/admin/trainers').then(r => setTrainers(r.data || [])).catch(() => {});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const trainerName = (id) => trainers.find(t => t.id === id)?.name || id;
+
+    // Un coach solo puede asignarse clientes sin coach (el backend tambien lo valida)
+    const assignMe = async (e, clientId) => {
+        e.stopPropagation();
+        try {
+            await api.put(`/admin/clients/${clientId}/trainer`, { trainer_id: user.id });
+            toast.success('Cliente asignado');
+            fetchClients();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'No se pudo asignar el cliente');
+        }
+    };
 
     const fetchClients = async () => {
         try {
@@ -310,6 +377,7 @@ const AdminClientsList = () => {
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Plan</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Precio</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Semana</TableHead>
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs">Coach</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Estado</TableHead>
                                     <TableHead className="text-right text-white/50 uppercase tracking-wider text-xs">Acciones</TableHead>
                                 </TableRow>
@@ -339,6 +407,19 @@ const AdminClientsList = () => {
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
+                                            {client.trainer_id ? (
+                                                <span className="text-sm text-white/70">{trainerName(client.trainer_id)}</span>
+                                            ) : user?.role === 'trainer' ? (
+                                                <Button size="sm" onClick={(e) => assignMe(e, client.id)}
+                                                    className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs h-7 px-2"
+                                                    data-testid={`assign-me-${client.id}`}>
+                                                    Asignarme
+                                                </Button>
+                                            ) : (
+                                                <span className="text-sm text-white/30">Sin asignar</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
                                             <Badge className={client.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-[#333] text-white/50 border-0'}>
                                                 {client.status}
                                             </Badge>
@@ -366,15 +447,46 @@ const AdminClientsList = () => {
 
 // Admin Layout
 const AdminLayout = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, api } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
+
+    // Aviso de leads nuevos y mensajes sin leer: sondeo cada 60s; badges en el menu
+    const [newLeadsCount, setNewLeadsCount] = useState(0);
+    const [unreadMessages, setUnreadMessages] = useState(0);
+    const prevLeadsCount = useRef(null);
+    useEffect(() => {
+        let active = true;
+        const poll = async () => {
+            try {
+                const r = await api.get('/leads/stats/summary');
+                if (!active) return;
+                const count = r.data?.nuevo || 0;
+                setNewLeadsCount(count);
+                if (prevLeadsCount.current !== null && count > prevLeadsCount.current) {
+                    toast.info(`Lead nuevo recibido · ${count} sin gestionar`, {
+                        action: { label: 'Ver', onClick: () => navigate('/admin/leads') },
+                    });
+                }
+                prevLeadsCount.current = count;
+            } catch { /* silencioso: sin red o sesion caducada */ }
+            try {
+                const m = await api.get('/messages/unread-count');
+                if (active) setUnreadMessages(m.data?.count || 0);
+            } catch { /* silencioso */ }
+        };
+        poll();
+        const id = setInterval(poll, 60000);
+        return () => { active = false; clearInterval(id); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api]);
 
     const navItems = [
         { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
         { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios' },
         { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
+        { path: '/admin/messages', icon: MessageCircle, label: 'Mensajes' },
         { path: '/admin/routines', icon: Dumbbell, label: 'Rutinas' },
         { path: '/admin/menus', icon: Utensils, label: 'Menús' },
         { path: '/admin/payments', icon: CreditCard, label: 'Pagos' },
@@ -414,6 +526,16 @@ const AdminLayout = () => {
                             >
                                 <item.icon className="w-5 h-5" />
                                 <span className="font-medium uppercase tracking-wider text-sm">{item.label}</span>
+                                {item.path === '/admin/leads' && newLeadsCount > 0 && (
+                                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" data-testid="new-leads-badge">
+                                        {newLeadsCount > 99 ? '99+' : newLeadsCount}
+                                    </span>
+                                )}
+                                {item.path === '/admin/messages' && unreadMessages > 0 && (
+                                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" data-testid="unread-messages-badge">
+                                        {unreadMessages > 99 ? '99+' : unreadMessages}
+                                    </span>
+                                )}
                             </Link>
                         ))}
                     </nav>
@@ -461,10 +583,20 @@ const AdminLayout = () => {
                         const active = isActive(item.path, item.exact);
                         return (
                             <Link key={item.path} to={item.path}
-                                className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all ${active ? 'text-[#FF671F]' : 'text-white/40'}`}
+                                className={`relative flex flex-col items-center justify-center flex-1 py-1.5 transition-all ${active ? 'text-[#FF671F]' : 'text-white/40'}`}
                             >
                                 <item.icon className={`w-5 h-5 mb-0.5 ${active ? 'text-[#FF671F]' : ''}`} strokeWidth={active ? 2.5 : 2} />
                                 <span className={`text-[9px] uppercase tracking-wider ${active ? 'font-bold' : ''}`}>{item.label}</span>
+                                {item.path === '/admin/leads' && newLeadsCount > 0 && (
+                                    <span className="absolute top-0.5 right-[calc(50%-16px)] bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
+                                        {newLeadsCount > 99 ? '99+' : newLeadsCount}
+                                    </span>
+                                )}
+                                {item.path === '/admin/messages' && unreadMessages > 0 && (
+                                    <span className="absolute top-0.5 right-[calc(50%-16px)] bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
+                                        {unreadMessages > 99 ? '99+' : unreadMessages}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

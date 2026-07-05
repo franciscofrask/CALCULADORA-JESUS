@@ -35,8 +35,8 @@ const STEPS = [
     {
         id: 'nut-meals', route: '/dashboard/nutrition',
         element: '[data-testid="meal-selector"], [data-testid="meals-accordion"]',
-        title: 'Arma tus comidas', side: 'right', gate: 'nutrition-add-food',
-        description: 'Aquí están tus comidas del día. Toca una y agrega un alimento. Si lo haces ahora, te llevo solo al siguiente paso (o sigue con "Siguiente").',
+        title: 'Prepara tus comidas', side: 'right', gate: 'nutrition-add-food',
+        description: 'Aquí están tus comidas del día. Toca una y añade un alimento. Si lo haces ahora, te llevo solo al siguiente paso (o sigue con "Siguiente").',
     },
     {
         id: 'nut-prefs', route: '/dashboard/nutrition',
@@ -60,7 +60,7 @@ const STEPS = [
         id: 'ai', route: '/dashboard/chatbot',
         element: '[data-testid="chat-input"]',
         title: 'Asistente IA', side: 'top', align: 'start',
-        description: 'El Asistente IA arma tu dieta conversando: te propone comidas según tus macros y preferencias.',
+        description: 'El Asistente IA prepara tu dieta conversando: te propone comidas según tus macros y preferencias.',
     },
     {
         id: 'chat', route: '/dashboard/messages',
@@ -90,7 +90,7 @@ const STEPS = [
         id: 'done', route: '/dashboard', side: 'bottom',
         element: '[data-testid="onboarding-checklist"], [data-testid="macro-trackers-card"], [data-testid="setup-macros-card"], [data-testid="client-dashboard"]',
         title: '¡Listo! 🎉',
-        description: 'Ya conoces tu app. Tu siguiente paso es armar tu primer día de comida. Puedes repetir este recorrido cuando quieras desde tu perfil.',
+        description: 'Ya conoces tu app. Tu siguiente paso es preparar tu primer día de comidas. Puedes repetir este recorrido cuando quieras desde tu perfil.',
     },
 ];
 

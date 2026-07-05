@@ -7,8 +7,8 @@ from typing import Dict, List, Any, Optional
 import uuid
 
 from core.database import db
-from core.security import get_admin_user
-from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate
+from core.security import get_admin_user, hash_password, generate_temp_password
+from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate, TrainerAssign
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -113,11 +113,46 @@ async def update_client_admin(client_id: str, data: ClientProfileUpdate, user = 
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    # El coach se cambia solo por PUT /clients/{id}/trainer (ahí viven las reglas de permisos)
+    update_data.pop("trainer_id", None)
     if update_data:
         await db.client_profiles.update_one({"id": client_id}, {"$set": update_data})
-    
+
     updated = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
     return ClientProfile(**updated)
+
+
+@router.put("/clients/{client_id}/trainer")
+async def assign_client_trainer(client_id: str, data: TrainerAssign, user = Depends(get_admin_user)):
+    """Asignar, traspasar o quitar el coach de un cliente.
+    Reglas: admin asigna libremente; un coach solo puede asignarse
+    a si mismo clientes sin coach; si el cliente ya tiene coach, solo ese coach
+    puede traspasarlo a otro o liberarlo."""
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    current_trainer = profile.get("trainer_id") or None
+    new_trainer = data.trainer_id or None
+
+    if user.get("role") == "trainer":
+        if current_trainer and current_trainer != user["id"]:
+            raise HTTPException(status_code=403, detail="Este cliente ya tiene coach; solo su coach actual puede cambiarlo")
+        if not current_trainer and new_trainer != user["id"]:
+            raise HTTPException(status_code=403, detail="Solo puedes asignarte a ti mismo clientes sin coach")
+
+    trainer_doc = None
+    if new_trainer:
+        trainer_doc = await db.users.find_one(
+            {"id": new_trainer, "deleted_at": None}, {"_id": 0, "id": 1, "name": 1, "role": 1}
+        )
+        if not trainer_doc or trainer_doc.get("role") not in ["trainer", "admin"]:
+            raise HTTPException(status_code=400, detail="Entrenador no válido")
+
+    # trainer_id vive en client_profiles y users: se actualizan juntos
+    await db.client_profiles.update_one({"id": client_id}, {"$set": {"trainer_id": new_trainer}})
+    await db.users.update_one({"id": profile["user_id"]}, {"$set": {"trainer_id": new_trainer}})
+    return {"ok": True, "trainer_id": new_trainer, "trainer_name": trainer_doc.get("name") if trainer_doc else None}
 
 @router.put("/clients/{client_id}/macros")
 async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depends(get_admin_user)):
@@ -289,17 +324,17 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
 
 # ==================== DASHBOARD ====================
 
-VALID_ROLES = {"client", "trainer", "admin", "operations", "ceo"}
+VALID_ROLES = {"client", "trainer", "admin"}
 
 
-STAFF_ROLES = ["admin", "trainer", "operations", "ceo"]
+STAFF_ROLES = ["admin", "trainer"]
 
 
 @router.get("/users")
 async def admin_list_users(role: Optional[str] = None, staff: bool = False, include_deleted: bool = False,
                            q: Optional[str] = None, user=Depends(get_admin_user)):
     """Lista de usuarios para gestión (roles, plan, baja lógica). Con staff=true muestra solo
-    el equipo (admin/coach/operaciones/ceo). Excluye los dados de baja salvo include_deleted."""
+    el equipo (admin/coach). Excluye los dados de baja salvo include_deleted."""
     query = {}
     if role:
         query["role"] = role
@@ -362,6 +397,21 @@ async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_use
         await db.client_profiles.update_one({"user_id": user_id}, {"$set": set_prof})
     return await db.users.find_one(
         {"id": user_id}, {"_id": 0, "password": 0, "firebase_password_hash": 0, "firebase_password_salt": 0})
+
+
+@router.post("/users/{user_id}/reset-password")
+async def admin_reset_password(user_id: str, user=Depends(get_admin_user)):
+    """Genera una contraseña temporal nueva para un usuario (para cuando la olvida).
+    Se devuelve UNA vez; el staff se la pasa al cliente por WhatsApp."""
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    temp = generate_temp_password()
+    await db.users.update_one({"id": user_id}, {
+        "$set": {"password": hash_password(temp)},
+        "$unset": {"firebase_password_hash": "", "firebase_password_salt": ""},
+    })
+    return {"ok": True, "temp_password": temp, "name": target.get("name")}
 
 
 @router.delete("/users/{user_id}")
@@ -498,7 +548,7 @@ async def get_dashboard_stats(user = Depends(get_admin_user)):
 async def get_trainers(user = Depends(get_admin_user)):
     """Obtener lista de entrenadores."""
     trainers = await db.users.find(
-        {"role": {"$in": ["trainer", "admin"]}},
+        {"role": {"$in": ["trainer", "admin"]}, "deleted_at": None},
         {"_id": 0, "password": 0}
     ).to_list(100)
     return trainers

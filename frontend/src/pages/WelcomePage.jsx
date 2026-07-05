@@ -9,7 +9,7 @@ import BrandArrow from '../components/BrandArrow';
 
 // Pantalla de bienvenida tras completar el cuestionario inicial.
 // Le "devuelve" al usuario el resultado de su esfuerzo (sus macros calculados)
-// y lo empuja a su primer paso útil: armar su día de comida.
+// y lo empuja a su primer paso útil: preparar su día de comidas.
 
 const MACRO = { protein: '#FF671F', carbs: '#2196F3', fat: '#FFA500' };
 
@@ -87,7 +87,7 @@ const WelcomePage = () => {
 
                     <p className="text-muted-foreground mb-5 text-sm">
                         Te hacemos un recorrido rápido por la app para que sepas dónde está
-                        cada cosa y cómo armar tu primer día. Son un par de minutos.
+                        cada cosa y cómo preparar tu primer día. Son un par de minutos.
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-3 justify-center">

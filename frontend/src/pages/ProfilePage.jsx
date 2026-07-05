@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
@@ -12,10 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
 import {
-    User, Mail, CreditCard,
-    LogOut, Bell, Lock, ChevronRight, Crown,
+    User, Mail,
+    LogOut, Lock, ChevronRight, Crown,
     TrendingUp, Edit2, Camera, Check,
-    Scale, Target, Activity, Flame, Zap, Compass
+    Compass
 } from 'lucide-react';
 
 const PLAN_FEATURES = {
@@ -27,65 +27,45 @@ const PLAN_FEATURES = {
 
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const { user, profile, logout, api, refreshProfile } = useAuth();
+    const { user, profile, logout, api, refreshUser } = useAuth();
     const { startTour } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
     const [formData, setFormData] = useState({ name: user?.name || '', phone: user?.phone || '' });
     const [saving, setSaving] = useState(false);
 
-    // Body data form
-    const [bodyData, setBodyData] = useState({
-        peso: profile?.weight || '',
-        sexo: profile?.sex || 'hombre',
-        porcentaje_graso: profile?.body_fat || '',
-        objetivo: profile?.goal || 'volumen',
-    });
-    const [calculatedMacros, setCalculatedMacros] = useState(null);
-    const [calculating, setCalculating] = useState(false);
-    const [showMacrosResult, setShowMacrosResult] = useState(false);
-
-    // Perientreno: 4 modos oficiales (intra_post | solo_post | solo_intra | sin_peri). Persisted in
-    // diet-config (same setting the daily diet page reads/writes), so both stay in sync.
-    const [periOption, setPeriOption] = useState('intra_post');
-    useEffect(() => {
-        api('/api/user/diet-config').then(cfg => {
-            const v = cfg?.opcion_peri;
-            if (v) setPeriOption(['intra_post', 'solo_post', 'solo_intra', 'sin_peri'].includes(v) ? v : 'intra_post');
-        }).catch(() => {});
-    }, []); // eslint-disable-line
-
-    const handleSetPeri = async (v) => {
-        setPeriOption(v);
-        try {
-            await api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ opcion_peri: v }) });
-            toast.success('Perientreno actualizado');
-        } catch { toast.error('Error guardando'); }
-    };
-
-    useEffect(() => {
-        if (profile) {
-            setBodyData({
-                peso: profile.weight || '',
-                sexo: profile.sex || 'hombre',
-                porcentaje_graso: profile.body_fat || '',
-                objetivo: profile.goal || 'volumen',
-            });
-            if (profile.macros_training && profile.macros_source === 'auto') {
-                setShowMacrosResult(true);
-            }
-        }
-    }, [profile]);
-
     const handleSave = async () => {
+        if (!formData.name.trim()) { toast.error('El nombre no puede estar vacío'); return; }
         setSaving(true);
         try {
+            await api.put('/auth/me', { name: formData.name.trim(), phone: formData.phone });
+            await refreshUser();
             toast.success('Perfil actualizado');
             setEditing(false);
         } catch (error) {
-            toast.error('Error al actualizar el perfil');
+            toast.error(error.response?.data?.detail || 'Error al actualizar el perfil');
         } finally {
             setSaving(false);
+        }
+    };
+
+    // Cambio de contraseña
+    const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+    const [pwdForm, setPwdForm] = useState({ current: '', next: '', confirm: '' });
+    const [changingPwd, setChangingPwd] = useState(false);
+    const handleChangePassword = async () => {
+        if (pwdForm.next.length < 8) { toast.error('La nueva contraseña debe tener al menos 8 caracteres'); return; }
+        if (pwdForm.next !== pwdForm.confirm) { toast.error('Las contraseñas nuevas no coinciden'); return; }
+        setChangingPwd(true);
+        try {
+            await api.post('/auth/change-password', { current_password: pwdForm.current, new_password: pwdForm.next });
+            toast.success('Contraseña cambiada');
+            setShowPasswordDialog(false);
+            setPwdForm({ current: '', next: '', confirm: '' });
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Error al cambiar la contraseña');
+        } finally {
+            setChangingPwd(false);
         }
     };
 
@@ -95,44 +75,7 @@ const ProfilePage = () => {
         toast.success('Sesión cerrada');
     };
 
-    const handleCalculateTargets = async () => {
-        const { peso, sexo, porcentaje_graso, objetivo } = bodyData;
-        if (!peso || !porcentaje_graso) {
-            toast.error('Introduce tu peso y % graso');
-            return;
-        }
-        if (peso < 40 || peso > 200) {
-            toast.error('Peso debe estar entre 40 y 200 kg');
-            return;
-        }
-        if (porcentaje_graso < 5 || porcentaje_graso > 60) {
-            toast.error('% graso debe estar entre 5 y 60');
-            return;
-        }
-
-        setCalculating(true);
-        try {
-            const res = await api.post('/calculator/targets/apply', {
-                peso: parseFloat(peso),
-                sexo,
-                porcentaje_graso: parseFloat(porcentaje_graso),
-                objetivo,
-            });
-            setCalculatedMacros(res.data.targets);
-            setShowMacrosResult(true);
-            await refreshProfile();
-            toast.success('Macros calculados y aplicados');
-        } catch (err) {
-            toast.error(err.response?.data?.detail || 'Error calculando macros');
-        } finally {
-            setCalculating(false);
-        }
-    };
-
     const currentPlanFeatures = PLAN_FEATURES[profile?.plan] || [];
-    const mt = profile?.macros_training;
-    const mr = profile?.macros_rest;
-    const mp = profile?.macros_periworkout;
 
     return (
         <div className="p-4 md:p-6 pb-24 md:pb-6 animate-fade-in bg-background min-h-screen relative overflow-hidden">
@@ -184,185 +127,6 @@ const ProfilePage = () => {
                                 </div>
                             </div>
                         )}
-                    </CardContent>
-                </Card>
-
-                {/* Body Data + Targets Calculator */}
-                <Card className="bg-card border-[#FF671F]/30 overflow-hidden" data-testid="body-data-card">
-                    <CardHeader className="pb-3 bg-gradient-to-r from-[#FF671F]/10 to-transparent">
-                        <CardTitle className="flex items-center gap-2 text-foreground text-base uppercase tracking-wider">
-                            <Scale className="w-5 h-5 text-[#FF671F]" />
-                            Mis Datos Corporales
-                        </CardTitle>
-                        <p className="text-foreground/40 text-xs mt-1">Calcula tus macros automáticamente según tu composición</p>
-                    </CardHeader>
-                    <CardContent className="space-y-4 pt-2">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <Label className="text-foreground/60 text-xs uppercase tracking-wider">Peso (kg)</Label>
-                                <Input
-                                    type="number"
-                                    value={bodyData.peso}
-                                    onChange={(e) => setBodyData({ ...bodyData, peso: e.target.value })}
-                                    placeholder="80"
-                                    className="bg-background border-input text-foreground mt-1 text-lg font-bold text-center"
-                                    data-testid="body-peso-input"
-                                />
-                            </div>
-                            <div>
-                                <Label className="text-foreground/60 text-xs uppercase tracking-wider">% Graso</Label>
-                                <Input
-                                    type="number"
-                                    value={bodyData.porcentaje_graso}
-                                    onChange={(e) => setBodyData({ ...bodyData, porcentaje_graso: e.target.value })}
-                                    placeholder="20"
-                                    className="bg-background border-input text-foreground mt-1 text-lg font-bold text-center"
-                                    data-testid="body-bf-input"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <Label className="text-foreground/60 text-xs uppercase tracking-wider">Sexo</Label>
-                                <div className="flex gap-2 mt-1">
-                                    {['hombre', 'mujer'].map((s) => (
-                                        <button
-                                            key={s}
-                                            onClick={() => setBodyData({ ...bodyData, sexo: s })}
-                                            className={`flex-1 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all ${
-                                                bodyData.sexo === s
-                                                    ? 'bg-[#FF671F] text-white'
-                                                    : 'bg-muted text-foreground/40 hover:text-foreground/70 border border-input'
-                                            }`}
-                                            data-testid={`body-sexo-${s}`}
-                                        >
-                                            {s === 'hombre' ? 'H' : 'M'}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <Label className="text-foreground/60 text-xs uppercase tracking-wider">Objetivo</Label>
-                                <div className="flex gap-2 mt-1">
-                                    {[{ v: 'volumen', l: 'Vol' }, { v: 'definicion', l: 'Def' }].map(({ v, l }) => (
-                                        <button
-                                            key={v}
-                                            onClick={() => setBodyData({ ...bodyData, objetivo: v })}
-                                            className={`flex-1 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all ${
-                                                bodyData.objetivo === v
-                                                    ? 'bg-[#FF671F] text-white'
-                                                    : 'bg-muted text-foreground/40 hover:text-foreground/70 border border-input'
-                                            }`}
-                                            data-testid={`body-obj-${v}`}
-                                        >
-                                            {l}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        <Button
-                            className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold uppercase tracking-wider h-12"
-                            onClick={handleCalculateTargets}
-                            disabled={calculating}
-                            data-testid="calculate-targets-btn"
-                        >
-                            {calculating ? (
-                                <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Calculando...
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2">
-                                    <Target className="w-4 h-4" />
-                                    Calcular mis macros
-                                </div>
-                            )}
-                        </Button>
-
-                        {/* Macros Result */}
-                        {showMacrosResult && mt && (
-                            <div className="space-y-3 pt-2" data-testid="macros-result">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-xs font-bold text-foreground/50 uppercase tracking-wider">Tus macros</p>
-                                    <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${
-                                        profile?.macros_source === 'auto'
-                                            ? 'bg-green-500/20 text-green-400'
-                                            : 'bg-yellow-500/20 text-yellow-400'
-                                    }`} data-testid="macros-source-badge">
-                                        {profile?.macros_source === 'auto' ? 'Auto' : 'Manual'}
-                                    </span>
-                                </div>
-
-                                {/* Training day */}
-                                <div className="bg-background rounded-xl p-3 border border-border">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Flame className="w-4 h-4 text-[#FF671F]" />
-                                        <span className="text-xs font-bold text-foreground uppercase tracking-wider">Día Entreno</span>
-                                        <span className="ml-auto text-xs text-foreground/40">{Math.round((mt.protein || mt.proteinas || 0) * 4 + (mt.carbs || mt.hidratos || 0) * 4 + (mt.fat || mt.grasas || 0) * 9)} kcal</span>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <MacroPill label="P" value={mt.protein || mt.proteinas} color="#3B82F6" />
-                                        <MacroPill label="H" value={mt.carbs || mt.hidratos} color="#F59E0B" />
-                                        <MacroPill label="G" value={mt.fat || mt.grasas} color="#EF4444" />
-                                    </div>
-                                </div>
-
-                                {/* Periworkout */}
-                                {mp && (
-                                    <div className="bg-background rounded-xl p-3 border border-border">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Zap className="w-4 h-4 text-yellow-400" />
-                                            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Perientreno</span>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <MacroPill label="P" value={mp.protein || mp.proteinas} color="#3B82F6" />
-                                            <MacroPill label="H" value={mp.carbs || mp.hidratos} color="#F59E0B" />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Rest day */}
-                                {mr && (
-                                    <div className="bg-background rounded-xl p-3 border border-border">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Activity className="w-4 h-4 text-green-400" />
-                                            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Día Descanso</span>
-                                            <span className="ml-auto text-xs text-foreground/40">{Math.round((mr.protein || mr.proteinas || 0) * 4 + (mr.carbs || mr.hidratos || 0) * 4 + (mr.fat || mr.grasas || 0) * 9)} kcal</span>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <MacroPill label="P" value={mr.protein || mr.proteinas} color="#3B82F6" />
-                                            <MacroPill label="H" value={mr.carbs || mr.hidratos} color="#F59E0B" />
-                                            <MacroPill label="G" value={mr.fat || mr.grasas} color="#EF4444" />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Perientreno (Calma quiereIntraentrenamiento) - post siempre presente, intra opcional */}
-                <Card className="bg-card border-border">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-2 text-foreground uppercase tracking-wider text-base">
-                            <Zap className="w-5 h-5 text-yellow-400" />
-                            Perientreno
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-foreground/40 text-xs mb-3">Elige cómo se reparte el perientreno.</p>
-                        <div className="grid grid-cols-2 gap-2">
-                            {[{ v: 'intra_post', l: 'Intra + Post' }, { v: 'solo_post', l: 'Solo Post' }, { v: 'solo_intra', l: 'Solo Intra' }, { v: 'sin_peri', l: 'Sin peri' }].map(o => (
-                                <button
-                                    key={o.v}
-                                    onClick={() => handleSetPeri(o.v)}
-                                    className={`py-2 rounded-lg text-sm font-bold transition-all ${periOption === o.v ? 'bg-[#FF671F] text-white' : 'bg-muted text-white/60 border border-border hover:text-white'}`}
-                                >{o.l}</button>
-                            ))}
-                        </div>
                     </CardContent>
                 </Card>
 
@@ -426,15 +190,14 @@ const ProfilePage = () => {
                 <Card className="bg-card border-border">
                     <CardContent className="p-0">
                         {[
-                            { icon: CreditCard, title: 'Método de pago', sub: 'Gestionar tarjeta' },
-                            { icon: Bell, title: 'Notificaciones', sub: 'Configurar alertas' },
-                            { icon: Lock, title: 'Cambiar contraseña', sub: 'Seguridad de la cuenta' },
+                            { icon: Lock, title: 'Cambiar contraseña', sub: 'Seguridad de la cuenta', onClick: () => setShowPasswordDialog(true) },
                         ].map((item, i) => (
                             <React.Fragment key={item.title}>
                                 {i > 0 && <Separator className="bg-border" />}
                                 <button
                                     className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
-                                    onClick={() => toast.info('Funcionalidad próximamente')}
+                                    onClick={item.onClick}
+                                    data-testid={`setting-${i}`}
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
@@ -472,6 +235,35 @@ const ProfilePage = () => {
                     <LogOut className="w-4 h-4 mr-2" /> Cerrar sesión
                 </Button>
 
+                {/* Change Password Dialog */}
+                <Dialog open={showPasswordDialog} onOpenChange={o => { setShowPasswordDialog(o); if (!o) setPwdForm({ current: '', next: '', confirm: '' }); }}>
+                    <DialogContent className="bg-card border-input" data-testid="change-password-dialog">
+                        <DialogHeader>
+                            <DialogTitle className="text-foreground uppercase tracking-wider">Cambiar contraseña</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                            <div>
+                                <Label className="text-foreground/60 text-xs">Contraseña actual</Label>
+                                <Input type="password" value={pwdForm.current} onChange={e => setPwdForm({ ...pwdForm, current: e.target.value })} className="bg-background border-input text-foreground mt-1" data-testid="pwd-current" />
+                            </div>
+                            <div>
+                                <Label className="text-foreground/60 text-xs">Nueva contraseña (mínimo 8 caracteres)</Label>
+                                <Input type="password" value={pwdForm.next} onChange={e => setPwdForm({ ...pwdForm, next: e.target.value })} className="bg-background border-input text-foreground mt-1" data-testid="pwd-new" />
+                            </div>
+                            <div>
+                                <Label className="text-foreground/60 text-xs">Repite la nueva contraseña</Label>
+                                <Input type="password" value={pwdForm.confirm} onChange={e => setPwdForm({ ...pwdForm, confirm: e.target.value })} className="bg-background border-input text-foreground mt-1" data-testid="pwd-confirm" />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowPasswordDialog(false)} className="bg-transparent border-input text-foreground">Cancelar</Button>
+                            <Button onClick={handleChangePassword} disabled={changingPwd || !pwdForm.current || !pwdForm.next || !pwdForm.confirm} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white" data-testid="pwd-save">
+                                {changingPwd ? 'Guardando...' : 'Cambiar contraseña'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
                 {/* Upgrade Dialog */}
                 <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
                     <DialogContent className="bg-card border-input">
@@ -500,12 +292,5 @@ const ProfilePage = () => {
         </div>
     );
 };
-
-const MacroPill = ({ label, value, color }) => (
-    <div className="bg-card rounded-lg p-2 text-center border border-border">
-        <div className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color }}>{label}</div>
-        <div className="text-foreground font-bold text-lg" style={{ fontFamily: 'Barlow Condensed' }}>{Math.round(value || 0)}g</div>
-    </div>
-);
 
 export default ProfilePage;

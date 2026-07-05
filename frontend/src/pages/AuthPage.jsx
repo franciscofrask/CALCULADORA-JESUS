@@ -59,10 +59,8 @@ const AuthPage = () => {
                 const user = await login(formData.email, formData.password);
                 toast.success(`¡Bienvenido, ${user.name}!`);
                 
-                if (user.role === 'admin' || user.role === 'operations') {
+                if (user.role === 'admin' || user.role === 'trainer') {
                     navigate('/admin');
-                } else if (user.role === 'trainer') {
-                    navigate('/trainer');
                 } else {
                     navigate('/dashboard');
                 }
@@ -164,7 +162,7 @@ const AuthPage = () => {
                         <button 
                             type="button"
                             className="text-brand text-sm hover:underline w-full text-right"
-                            onClick={() => toast.info('Contacta al administrador para recuperar tu contraseña')}
+                            onClick={() => toast.info('Escribe a tu entrenador por WhatsApp y te generará una contraseña nueva en un minuto')}
                         >
                             ¿Olvidaste tu contraseña?
                         </button>

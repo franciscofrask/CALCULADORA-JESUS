@@ -7,7 +7,7 @@ from typing import List
 import uuid
 
 from core.database import db
-from core.security import get_current_user
+from core.security import get_current_user, get_admin_user
 from models.common import ReportCreate, ReportResponse
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -85,3 +85,15 @@ async def get_evolution_data(user = Depends(get_current_user)):
         "weight": weight_data,
         "measurements": measurements_data
     }
+
+
+@router.put("/{report_id}/feedback")
+async def set_report_feedback(report_id: str, data: dict, user = Depends(get_admin_user)):
+    """El coach escribe (o edita) el feedback de un reporte del cliente."""
+    feedback = (data.get("feedback") or "").strip()
+    result = await db.reports.update_one(
+        {"id": report_id}, {"$set": {"trainer_feedback": feedback or None}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    return {"ok": True}

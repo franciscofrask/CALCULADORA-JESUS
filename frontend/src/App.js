@@ -21,6 +21,8 @@ import ChatbotPage from "./pages/ChatbotPage";
 import SupplementsCatalogPage from "./pages/SupplementsCatalogPage";
 import AdminMenusPage from "./pages/AdminMenusPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
+import AdminMessagesPage from "./pages/AdminMessagesPage";
+import AdminRoutinesPage from "./pages/AdminRoutinesPage";
 import SupplementsPage from "./pages/SupplementsPage";
 import CheckInsPage from "./pages/CheckInsPage";
 import MacroCalculatorClientPage from "./pages/MacroCalculatorClientPage";
@@ -64,7 +66,7 @@ const PublicRoute = ({ children }) => {
     }
 
     if (isAuthenticated) {
-        if (user?.role === 'admin' || user?.role === 'operations') {
+        if (user?.role === 'admin' || user?.role === 'trainer') {
             return <Navigate to="/admin" replace />;
         }
         return <Navigate to="/dashboard" replace />;
@@ -143,7 +145,7 @@ function AppRoutes() {
             <Route
                 path="/admin"
                 element={
-                    <ProtectedRoute allowedRoles={['admin', 'operations', 'trainer']}>
+                    <ProtectedRoute allowedRoles={['admin', 'trainer']}>
                         <AdminLayout />
                     </ProtectedRoute>
                 }
@@ -152,7 +154,8 @@ function AppRoutes() {
                 <Route path="clients" element={<AdminClientsList />} />
                 <Route path="clients/:clientId" element={<ClientDetailPage />} />
                 <Route path="leads" element={<LeadsPage />} />
-                <Route path="routines" element={<AdminClientsList />} />
+                <Route path="messages" element={<AdminMessagesPage />} />
+                <Route path="routines" element={<AdminRoutinesPage />} />
                 <Route path="supplements-catalog" element={<SupplementsCatalogPage />} />
                 <Route path="menus" element={<AdminMenusPage />} />
                 <Route path="usuarios" element={<AdminUsersPage />} />

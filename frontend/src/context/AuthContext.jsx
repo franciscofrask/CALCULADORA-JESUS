@@ -54,16 +54,14 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await api.get('/auth/me');
             setUser(response.data);
-            
-            // Fetch profile if client
-            if (response.data.role === 'client') {
-                try {
-                    const profileRes = await api.get('/clients/profile');
-                    setProfile(profileRes.data);
-                } catch (e) {
-                    // No profile yet
-                    setProfile(null);
-                }
+
+            // Cargar perfil de cliente si existe (el staff tambien puede tener uno, p.ej. con plan)
+            try {
+                const profileRes = await api.get('/clients/profile');
+                setProfile(profileRes.data);
+            } catch (e) {
+                // No profile yet
+                setProfile(null);
             }
         } catch (error) {
             console.error('Error fetching user:', error);
@@ -86,16 +84,14 @@ export const AuthProvider = ({ children }) => {
         setToken(access_token);
         setUser(userData);
         
-        // Fetch profile
-        if (userData.role === 'client') {
-            try {
-                const profileRes = await axios.get(`${API}/clients/profile`, {
-                    headers: { Authorization: `Bearer ${access_token}` }
-                });
-                setProfile(profileRes.data);
-            } catch (e) {
-                setProfile(null);
-            }
+        // Cargar perfil de cliente si existe (staff incluido)
+        try {
+            const profileRes = await axios.get(`${API}/clients/profile`, {
+                headers: { Authorization: `Bearer ${access_token}` }
+            });
+            setProfile(profileRes.data);
+        } catch (e) {
+            setProfile(null);
         }
         
         return userData;
@@ -144,9 +140,10 @@ export const AuthProvider = ({ children }) => {
         logout,
         updateProfile,
         refreshProfile,
+        refreshUser: fetchUser,
         api,
         isAuthenticated: !!token && !!user,
-        isAdmin: user?.role === 'admin' || user?.role === 'operations',
+        isAdmin: user?.role === 'admin',
         isTrainer: user?.role === 'trainer',
         isClient: user?.role === 'client'
     };

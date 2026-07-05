@@ -24,9 +24,7 @@ import {
 const USER_ROLES = [
     { value: 'client', label: 'Cliente' },
     { value: 'trainer', label: 'Entrenador' },
-    { value: 'operations', label: 'Operaciones' },
     { value: 'admin', label: 'Admin' },
-    { value: 'ceo', label: 'CEO' },
 ];
 
 const ClientDetailPage = () => {
@@ -83,8 +81,24 @@ const ClientDetailPage = () => {
         }
     };
 
+    // Asignación de coach
+    const [trainers, setTrainers] = useState([]);
+    const [assigningTrainer, setAssigningTrainer] = useState(false);
+    const changeTrainer = async (value) => {
+        setAssigningTrainer(true);
+        try {
+            const trainerId = value === 'none' ? null : value;
+            await api.put(`/admin/clients/${clientId}/trainer`, { trainer_id: trainerId });
+            toast.success(trainerId ? 'Coach asignado' : 'Coach quitado');
+            fetchClient();
+        } catch (e) {
+            toast.error(e.response?.data?.detail || 'No se pudo cambiar el coach');
+        } finally { setAssigningTrainer(false); }
+    };
+
     useEffect(() => { fetchClient(); }, [clientId]); // eslint-disable-line
     useEffect(() => { api.get('/admin/supplements/catalog').then(r => setSupCatalog(r.data || [])).catch(() => {}); }, []); // eslint-disable-line
+    useEffect(() => { api.get('/admin/trainers').then(r => setTrainers(r.data || [])).catch(() => {}); }, []); // eslint-disable-line
 
     const fetchClient = async () => {
         try {
@@ -302,7 +316,29 @@ const ClientDetailPage = () => {
                             <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} />} />
                             <InfoItem icon={Activity} label="Estado" value={profile?.status} />
                             <InfoItem icon={Calendar} label="Semana" value={`${profile?.week || 1}/4`} />
-                            <InfoItem icon={Dumbbell} label="Entrenador" value={profile?.trainer_id || 'Sin asignar'} />
+                            <InfoItem icon={Dumbbell} label="Entrenador" value={(() => {
+                                const trainerId = profile?.trainer_id || null;
+                                const trainerName = trainers.find(t => t.id === trainerId)?.name || trainerId;
+                                const isCoach = adminUser?.role === 'trainer';
+                                // Coach viendo un cliente de otro coach: solo lectura
+                                if (isCoach && trainerId && trainerId !== adminUser?.id) return trainerName;
+                                // Coach y cliente sin coach: solo puede asignarse a si mismo
+                                if (isCoach && !trainerId) return (
+                                    <Button size="sm" disabled={assigningTrainer} onClick={() => changeTrainer(adminUser.id)}
+                                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs h-7 px-2" data-testid="assign-me-trainer">
+                                        Asignarme
+                                    </Button>
+                                );
+                                // Admin, o el coach actual: puede asignar, traspasar o quitar
+                                return (
+                                    <select value={trainerId || 'none'} disabled={assigningTrainer} onChange={e => changeTrainer(e.target.value)}
+                                        className="bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-1" data-testid="trainer-select">
+                                        <option value="none">Sin asignar</option>
+                                        {trainerId && !trainers.some(t => t.id === trainerId) && <option value={trainerId}>{trainerName}</option>}
+                                        {trainers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                    </select>
+                                );
+                            })()} />
                             <InfoItem icon={Target} label="Rutina" value={activeRoutine ? `${activeRoutine.days?.filter(d => !d.is_rest).length || 0} días` : 'Sin rutina'} />
                             <InfoItem icon={CreditCard} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'} />
                             <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
@@ -737,10 +773,11 @@ const ClientDetailPage = () => {
                     </Card>
                 </TabsContent>
 
-                {/* ========== TAB: SEGUIMIENTO (evolución de peso + check-ins) ========== */}
+                {/* ========== TAB: SEGUIMIENTO (evolución de peso + check-ins + reportes) ========== */}
                 <TabsContent value="seguimiento" className="space-y-4">
                     <WeightEvolution reports={reports} />
                     <CoachCheckins clientId={clientId} />
+                    <ReportsFeedbackList initialReports={reports} />
                 </TabsContent>
             </Tabs>
         </div>
@@ -860,6 +897,73 @@ const WeightEvolution = ({ reports }) => {
 
 const MEAL_ORDER = { C1: 1, C2: 2, C3: 3, C4: 4, C5: 5, C6: 6, Intra: 7, Post: 8 };
 const MEAL_LABEL = { Intra: 'Intra-entreno', Post: 'Post-entreno', C1: 'Comida 1', C2: 'Comida 2', C3: 'Comida 3', C4: 'Comida 4', C5: 'Comida 5', C6: 'Comida 6' };
+
+// Reportes del cliente con feedback editable por el coach (cierra el circuito de ReportsPage)
+const ReportsFeedbackList = ({ initialReports }) => {
+    const { api } = useAuth();
+    const [reports, setReports] = useState(initialReports || []);
+    const [drafts, setDrafts] = useState({});
+    const [savingId, setSavingId] = useState(null);
+    const [showAll, setShowAll] = useState(false);
+
+    const saveFeedback = async (reportId) => {
+        const text = (drafts[reportId] ?? '').trim();
+        setSavingId(reportId);
+        try {
+            await api.put(`/reports/${reportId}/feedback`, { feedback: text });
+            setReports(prev => prev.map(r => r.id === reportId ? { ...r, trainer_feedback: text || null } : r));
+            setDrafts(prev => { const d = { ...prev }; delete d[reportId]; return d; });
+            toast.success('Feedback guardado');
+        } catch {
+            toast.error('Error guardando el feedback');
+        } finally { setSavingId(null); }
+    };
+
+    if (!reports.length) return null;
+    const visible = showAll ? reports : reports.slice(0, 5);
+
+    return (
+        <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Reportes del cliente</p>
+                <span className="text-white/25 text-xs">{reports.length} en total</span>
+            </div>
+            <div className="space-y-3">
+                {visible.map(r => {
+                    const draft = drafts[r.id] ?? (r.trainer_feedback || '');
+                    const dirty = draft !== (r.trainer_feedback || '');
+                    return (
+                        <div key={r.id} className="bg-[#0A0A0A] rounded-xl p-3 border border-[#222]" data-testid={`report-${r.id}`}>
+                            <div className="flex items-center gap-3 text-sm">
+                                <span className="text-white/40 text-xs">{new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                {r.weight != null && <span className="text-white font-bold">{r.weight} kg</span>}
+                                {r.training_compliance != null && <span className="text-white/40 text-xs">Entreno {r.training_compliance}%</span>}
+                                {r.nutrition_compliance != null && <span className="text-white/40 text-xs">Nutrición {r.nutrition_compliance}%</span>}
+                            </div>
+                            {r.notes && <p className="text-white/50 text-xs mt-1.5">"{r.notes}"</p>}
+                            <div className="flex items-end gap-2 mt-2">
+                                <Textarea value={draft} onChange={e => setDrafts(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                    placeholder="Escribe feedback para el cliente..." rows={1}
+                                    className="bg-[#111] border-[#222] text-white text-xs flex-1 min-h-[34px]" />
+                                {dirty && (
+                                    <Button size="sm" onClick={() => saveFeedback(r.id)} disabled={savingId === r.id}
+                                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs h-8">
+                                        {savingId === r.id ? '...' : 'Guardar'}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            {reports.length > 5 && (
+                <button onClick={() => setShowAll(v => !v)} className="text-[#FF671F] text-xs mt-3 hover:underline">
+                    {showAll ? 'Ver menos' : `Ver los ${reports.length}`}
+                </button>
+            )}
+        </CardContent></Card>
+    );
+};
 
 const DietDetail = ({ diet }) => {
     const comidas = diet?.comidas || {};

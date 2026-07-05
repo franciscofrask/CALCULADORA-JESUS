@@ -279,7 +279,7 @@ async def get_photo(photo_id: str, user = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Foto no encontrada")
 
     is_owner = photo.get("user_id") == user["id"]
-    is_staff = user.get("role") in ("admin", "operations", "trainer")
+    is_staff = user.get("role") in ("admin", "trainer")
     if not (is_owner or is_staff):
         raise HTTPException(status_code=403, detail="Sin permiso para ver esta foto")
 
@@ -304,7 +304,7 @@ async def delete_photo(photo_id: str, user = Depends(get_current_user)):
     if not photo:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     is_owner = photo.get("user_id") == user["id"]
-    is_staff = user.get("role") in ("admin", "operations", "trainer")
+    is_staff = user.get("role") in ("admin", "trainer")
     if not (is_owner or is_staff):
         raise HTTPException(status_code=403, detail="Sin permiso para borrar esta foto")
     await db.client_photos.delete_one({"id": photo_id})

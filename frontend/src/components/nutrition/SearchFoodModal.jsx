@@ -144,7 +144,7 @@ const MenuOptionsModal = ({ open, mealKey, onClose, mealInfo, menuOptionsLoading
                         <p className="font-semibold text-foreground mb-1.5">Ningún menú preestablecido encaja con estos macros</p>
                         <p className="text-sm text-muted-foreground">
                             Los menús sugeridos están pensados para comidas más equilibradas. Para esta comida,
-                            arma tú los alimentos con <span className="font-semibold text-foreground">"Lo hago yo"</span> o
+                            elige tú los alimentos con <span className="font-semibold text-foreground">"Lo hago yo"</span> o
                             pídeselo al <span className="font-semibold text-foreground">asistente IA</span>.
                         </p>
                     </div>

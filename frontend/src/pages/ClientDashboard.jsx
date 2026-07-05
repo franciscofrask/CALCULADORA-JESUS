@@ -224,7 +224,7 @@ const ClientDashboard = () => {
     const checklistSteps = [
         { id: 'macros', label: 'Tus macros están calculados', sub: 'Revisa tus objetivos', done: !!hasMacros, path: '/dashboard/nutrition' },
         { id: 'preferences', label: 'Configura tus preferencias de comida', sub: 'Qué te gusta y qué evitar', done: hasPreferences, path: '/dashboard/nutrition' },
-        { id: 'diet', label: 'Arma tu primer día de comida', sub: 'Reparte tus macros en comidas', done: hasDiet, path: '/dashboard/nutrition' },
+        { id: 'diet', label: 'Prepara tu primer día de comidas', sub: 'Reparte tus macros en comidas', done: hasDiet, path: '/dashboard/nutrition' },
     ];
     const showChecklist = !checklistDismissed && checklistSteps.some(s => !s.done);
 
@@ -441,7 +441,7 @@ const ClientLayout = () => {
     }, []);
 
     const handleLogout = () => { logout(); navigate('/auth'); toast.success('Sesión cerrada'); };
-    const isStaff = ['admin', 'operations', 'trainer'].includes(user?.role);
+    const isStaff = ['admin', 'trainer'].includes(user?.role);
 
     const UserChip = ({ compact }) => (
         <div className={`flex items-center gap-3 ${compact ? 'justify-center' : ''}`}>
