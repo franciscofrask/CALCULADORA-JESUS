@@ -76,6 +76,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
+    if user.get("deleted_at"):
+        raise HTTPException(status_code=403, detail="Cuenta desactivada")
     return user
 
 async def get_admin_user(user: dict = Depends(get_current_user)) -> dict:

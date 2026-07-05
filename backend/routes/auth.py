@@ -43,6 +43,8 @@ async def login(data: UserLogin):
     user = await db.users.find_one({"email": data.email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
+    if user.get("deleted_at"):
+        raise HTTPException(status_code=403, detail="Cuenta desactivada. Contacta con tu entrenador.")
 
     stored = user.get("password")
     ok = bool(stored) and verify_password(data.password, stored)

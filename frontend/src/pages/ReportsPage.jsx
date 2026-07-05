@@ -319,16 +319,18 @@ const ReportsPage = () => {
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-foreground/20 mt-1" />
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-muted rounded-xl px-3 py-2 flex items-center gap-2">
-                                    <Activity className="w-3.5 h-3.5" style={{ color: ORANGE }} />
-                                    <span className="text-xs text-foreground/60">Entreno <span className="text-foreground font-bold">{report.training_compliance}%</span></span>
+                            {(report.training_compliance != null || report.nutrition_compliance != null) && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-muted rounded-xl px-3 py-2 flex items-center gap-2">
+                                        <Activity className="w-3.5 h-3.5" style={{ color: ORANGE }} />
+                                        <span className="text-xs text-foreground/60">Entreno <span className="text-foreground font-bold">{report.training_compliance != null ? `${report.training_compliance}%` : '-'}</span></span>
+                                    </div>
+                                    <div className="bg-muted rounded-xl px-3 py-2 flex items-center gap-2">
+                                        <Activity className="w-3.5 h-3.5 text-green-400" />
+                                        <span className="text-xs text-foreground/60">Nutrición <span className="text-foreground font-bold">{report.nutrition_compliance != null ? `${report.nutrition_compliance}%` : '-'}</span></span>
+                                    </div>
                                 </div>
-                                <div className="bg-muted rounded-xl px-3 py-2 flex items-center gap-2">
-                                    <Activity className="w-3.5 h-3.5 text-green-400" />
-                                    <span className="text-xs text-foreground/60">Nutrición <span className="text-foreground font-bold">{report.nutrition_compliance}%</span></span>
-                                </div>
-                            </div>
+                            )}
                             {report.trainer_feedback && (
                                 <div className="mt-3 p-3 rounded-xl border" style={{ backgroundColor: `${ORANGE}10`, borderColor: `${ORANGE}30` }}>
                                     <p className="text-xs font-bold mb-1" style={{ color: ORANGE }}>Feedback del entrenador</p>

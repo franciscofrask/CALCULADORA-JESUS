@@ -13,12 +13,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
 import CoachCheckins from '../components/CoachCheckins';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
     ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp,
-    AlertCircle, Calculator, CheckCircle2, Pill, Plus, X, Sparkles
+    AlertCircle, Calculator, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw
 } from 'lucide-react';
+
+const USER_ROLES = [
+    { value: 'client', label: 'Cliente' },
+    { value: 'trainer', label: 'Entrenador' },
+    { value: 'operations', label: 'Operaciones' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'ceo', label: 'CEO' },
+];
 
 const ClientDetailPage = () => {
     const { clientId } = useParams();
@@ -58,6 +67,22 @@ const ClientDetailPage = () => {
     const [supSaving, setSupSaving] = useState(false);
     const [supSuggesting, setSupSuggesting] = useState(false);
 
+    // Visor de dietas (pestaña Nutrición)
+    const [selectedDietDate, setSelectedDietDate] = useState(null);
+    const [selectedDiet, setSelectedDiet] = useState(null);
+    const [dietLoading, setDietLoading] = useState(false);
+    const openDiet = async (fecha) => {
+        setSelectedDietDate(fecha); setSelectedDiet(null); setDietLoading(true);
+        try {
+            const r = await api.get(`/admin/clients/${clientId}/diet`, { params: { fecha } });
+            setSelectedDiet(r.data);
+        } catch {
+            toast.error('No se pudo cargar la dieta de esa fecha');
+        } finally {
+            setDietLoading(false);
+        }
+    };
+
     useEffect(() => { fetchClient(); }, [clientId]); // eslint-disable-line
     useEffect(() => { api.get('/admin/supplements/catalog').then(r => setSupCatalog(r.data || [])).catch(() => {}); }, []); // eslint-disable-line
 
@@ -83,22 +108,79 @@ const ClientDetailPage = () => {
         } finally { setLoading(false); }
     };
 
+    // Editar/eliminar/repetir entradas del historial de macros
+    const [editingEntryId, setEditingEntryId] = useState(null);
+    const _g = (m, a, b) => { const v = m?.[a] ?? m?.[b]; return v == null ? '' : v; };
+    const macroFormFromEntry = (h, opts = {}) => ({
+        training: { protein: _g(h.training, 'protein', 'proteinas'), carbs: _g(h.training, 'carbs', 'hidratos'), fat: _g(h.training, 'fat', 'grasas') },
+        rest: { protein: _g(h.rest, 'protein', 'proteinas'), carbs: _g(h.rest, 'carbs', 'hidratos'), fat: _g(h.rest, 'fat', 'grasas') },
+        peri: { protein: _g(h.peri, 'protein', 'proteinas'), carbs: _g(h.peri, 'carbs', 'hidratos') },
+        effective_date: opts.today ? new Date().toISOString().slice(0, 10) : (h.effective_date || new Date().toISOString().slice(0, 10)),
+        note: opts.note != null ? opts.note : (h.note || ''),
+    });
+    const openNewMacros = () => { setEditingEntryId(null); setMacrosModalOpen(true); };
+    const openEditEntry = (h) => { setEditingEntryId(h.id); setMacrosForm(macroFormFromEntry(h)); setMacrosModalOpen(true); };
+    const openRepeatEntry = (h) => {
+        const d = h.effective_date ? new Date(h.effective_date + 'T12:00:00') : new Date(h.created_at);
+        setEditingEntryId(null);
+        setMacrosForm(macroFormFromEntry(h, { today: true, note: `Repetición de los macros del ${d.toLocaleDateString('es-ES')}` }));
+        setMacrosModalOpen(true);
+    };
+    const deleteMacroEntry = async (h) => {
+        if (!window.confirm('¿Eliminar esta entrada del historial de macros? No cambia los macros actuales del cliente.')) return;
+        try { await api.delete(`/admin/clients/${clientId}/macro-history/${h.id}`); toast.success('Entrada eliminada'); fetchClient(); }
+        catch { toast.error('No se pudo eliminar la entrada'); }
+    };
+
+    // Gestión de usuario (rol, plan cortesía, baja lógica) desde la ficha del cliente
+    const [savingMgmt, setSavingMgmt] = useState(false);
+    const changeUserRole = async (role) => {
+        const uid = client?.user?.id; if (!uid) return;
+        setSavingMgmt(true);
+        try { await api.put(`/admin/users/${uid}`, { role }); toast.success('Rol actualizado'); fetchClient(); }
+        catch (e) { toast.error(e?.response?.data?.detail || 'Error al cambiar el rol'); }
+        finally { setSavingMgmt(false); }
+    };
+    const setUserPlan = async (plan, comp) => {
+        const uid = client?.user?.id; if (!uid) return;
+        try { await api.put(`/admin/users/${uid}`, { plan: plan || null, comp_plan: comp }); toast.success('Plan actualizado'); fetchClient(); }
+        catch { toast.error('Error al actualizar el plan'); }
+    };
+    const toggleUserBaja = async () => {
+        const uid = client?.user?.id; if (!uid) return;
+        if (client.user.deleted_at) {
+            try { await api.post(`/admin/users/${uid}/restore`); toast.success('Usuario reactivado'); fetchClient(); }
+            catch { toast.error('No se pudo reactivar'); }
+            return;
+        }
+        if (!window.confirm('¿Dar de baja a este usuario? No podrá entrar, pero los datos se conservan y se puede reactivar.')) return;
+        try { await api.delete(`/admin/users/${uid}`); toast.success('Usuario dado de baja'); fetchClient(); }
+        catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo dar de baja'); }
+    };
+
     const handleSaveMacros = async () => {
-        if (!macrosForm.note.trim()) { toast.error('El motivo es obligatorio'); return; }
+        if (!editingEntryId && !macrosForm.note.trim()) { toast.error('El motivo es obligatorio'); return; }
         setSavingMacros(true);
         try {
-            await api.put(`/admin/clients/${clientId}/macros`, {
+            const body = {
                 training: { protein: parseFloat(macrosForm.training.protein), carbs: parseFloat(macrosForm.training.carbs), fat: parseFloat(macrosForm.training.fat) },
                 rest: { protein: parseFloat(macrosForm.rest.protein), carbs: parseFloat(macrosForm.rest.carbs), fat: parseFloat(macrosForm.rest.fat) },
                 peri: { protein: parseFloat(macrosForm.peri.protein) || 0, carbs: parseFloat(macrosForm.peri.carbs) || 0 },
                 note: macrosForm.note,
                 effective_date: macrosForm.effective_date,
-            });
-            toast.success('Macros actualizados');
+            };
+            if (editingEntryId) {
+                await api.put(`/admin/clients/${clientId}/macro-history/${editingEntryId}`, body);
+                toast.success('Entrada del historial actualizada');
+            } else {
+                await api.put(`/admin/clients/${clientId}/macros`, body);
+                toast.success('Macros actualizados');
+            }
             setMacrosModalOpen(false);
+            setEditingEntryId(null);
             setMacrosForm(prev => ({ ...prev, note: '' }));
             fetchClient();
-        } catch (error) { toast.error('Error al actualizar macros'); }
+        } catch (error) { toast.error('Error al guardar'); }
         finally { setSavingMacros(false); }
     };
 
@@ -176,7 +258,6 @@ const ClientDetailPage = () => {
         { id: 'macros', label: 'Macros', icon: Apple },
         { id: 'calculadora', label: 'Calculadora', icon: Calculator },
         { id: 'membresia', label: 'Membresía', icon: CreditCard },
-        { id: 'reportes', label: 'Reportes', icon: FileText },
         { id: 'cuestionario', label: 'Cuestionario', icon: ClipboardList },
         { id: 'entrenamiento', label: 'Entreno', icon: Dumbbell },
         { id: 'nutricion', label: 'Nutrición', icon: Utensils },
@@ -239,7 +320,7 @@ const ClientDetailPage = () => {
                                 <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Macros actuales</p>
                                 <div className="flex items-center gap-2">
                                     <Badge className={`border-0 text-[10px] ${profile?.macros_source === 'auto' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-400'}`}>{profile?.macros_source || 'manual'}</Badge>
-                                    <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs" onClick={() => setMacrosModalOpen(true)} data-testid="change-macros-btn">Cambiar macros</Button>
+                                    <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs" onClick={openNewMacros} data-testid="change-macros-btn">Cambiar macros</Button>
                                 </div>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
@@ -259,7 +340,7 @@ const ClientDetailPage = () => {
                                 ]} />
                             </div>
                         </CardContent></Card>
-                    ) : <EmptyState icon={Apple} message="Sin macros asignados. Usa 'Cambiar macros' para asignar." action={<Button size="sm" className="bg-[#FF671F] text-white mt-2" onClick={() => setMacrosModalOpen(true)}>Asignar macros</Button>} />}
+                    ) : <EmptyState icon={Apple} message="Sin macros asignados. Usa 'Cambiar macros' para asignar." action={<Button size="sm" className="bg-[#FF671F] text-white mt-2" onClick={openNewMacros}>Asignar macros</Button>} />}
 
                     {/* Estructura de dieta (Calma quiereRepartoDeComidas) */}
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
@@ -279,14 +360,14 @@ const ClientDetailPage = () => {
                     {/* Macro History */}
                     <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><History className="w-4 h-4" />Historial de cambios</CardTitle></CardHeader>
                         <CardContent>{macro_history?.length > 0 ? (
-                            <div className="space-y-2">{macro_history.map((h, i) => <MacroHistoryItem key={h.id || i} item={h} />)}</div>
+                            <div className="space-y-2">{macro_history.map((h, i) => <MacroHistoryItem key={h.id || i} item={h} onEdit={openEditEntry} onRepeat={openRepeatEntry} onDelete={deleteMacroEntry} />)}</div>
                         ) : <p className="text-white/30 text-sm text-center py-4">Sin cambios registrados</p>}</CardContent>
                     </Card>
 
                     {/* Macros Modal */}
-                    <Dialog open={macrosModalOpen} onOpenChange={setMacrosModalOpen}>
+                    <Dialog open={macrosModalOpen} onOpenChange={(o) => { setMacrosModalOpen(o); if (!o) setEditingEntryId(null); }}>
                         <DialogContent className="bg-[#111] border-[#333] max-w-lg" data-testid="macros-modal">
-                            <DialogHeader><DialogTitle className="text-white uppercase tracking-wider">Cambiar macros</DialogTitle></DialogHeader>
+                            <DialogHeader><DialogTitle className="text-white uppercase tracking-wider">{editingEntryId ? 'Editar entrada del historial' : 'Cambiar macros'}</DialogTitle></DialogHeader>
                             <div className="space-y-4">
                                 <div>
                                     <p className="text-xs text-white/40 uppercase tracking-wider mb-2">Entrenamiento</p>
@@ -317,7 +398,7 @@ const ClientDetailPage = () => {
                                     <p className="text-[10px] text-white/30 mt-1">Las dietas anteriores a esta fecha conservan los macros previos.</p>
                                 </div>
                                 <div>
-                                    <Label className="text-white/60 text-xs">Motivo del cambio (obligatorio)</Label>
+                                    <Label className="text-white/60 text-xs">Motivo del cambio {editingEntryId ? '(opcional)' : '(obligatorio)'}</Label>
                                     <Textarea value={macrosForm.note} onChange={e => setMacrosForm({...macrosForm, note: e.target.value})} placeholder="Ej: Ajuste semanal por pérdida de peso..." className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-note" />
                                 </div>
                             </div>
@@ -331,6 +412,34 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB 3: MEMBRESÍA ========== */}
                 <TabsContent value="membresia" className="space-y-4">
+                    {/* Gestión de usuario: rol, plan (cortesía) y baja lógica */}
+                    <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><Shield className="w-4 h-4" />Gestión de usuario</CardTitle></CardHeader>
+                        <CardContent className="space-y-3">
+                            {user?.deleted_at && <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2">Usuario dado de baja: no puede entrar en la app.</div>}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div><Label className="text-white/60 text-xs">Rol</Label>
+                                    <select value={user?.role || 'client'} onChange={e => changeUserRole(e.target.value)} disabled={savingMgmt} className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
+                                        {USER_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                    </select>
+                                </div>
+                                <div><Label className="text-white/60 text-xs">Plan</Label>
+                                    <select value={profile?.plan || ''} onChange={e => setUserPlan(e.target.value, !!profile?.comp_plan)} className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
+                                        <option value="">Sin plan</option>
+                                        {['gold', 'silver', 'bronze', 'elm'].map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <label className="flex items-center gap-2 text-sm text-white/70 cursor-pointer select-none">
+                                <input type="checkbox" checked={!!profile?.comp_plan} onChange={e => setUserPlan(profile?.plan || '', e.target.checked)} className="accent-[#FF671F] w-4 h-4" />
+                                Plan de cortesía (sin pago)
+                            </label>
+                            <div className="pt-1">
+                                {user?.deleted_at
+                                    ? <Button onClick={toggleUserBaja} className="bg-green-600 hover:bg-green-700 text-white text-sm"><RotateCcw className="w-4 h-4 mr-1" /> Reactivar usuario</Button>
+                                    : <Button onClick={toggleUserBaja} variant="outline" className="bg-transparent border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm"><Trash2 className="w-4 h-4 mr-1" /> Dar de baja (lógica)</Button>}
+                            </div>
+                        </CardContent>
+                    </Card>
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} />} />
@@ -352,25 +461,6 @@ const ClientDetailPage = () => {
                 </TabsContent>
 
                 {/* ========== TAB 4: REPORTES ========== */}
-                <TabsContent value="reportes">
-                    {reports?.length > 0 ? (
-                        <div className="space-y-3">{reports.map(r => (
-                            <Card key={r.id} className="bg-[#111] border-[#222]"><CardContent className="p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                    <p className="text-white text-sm font-bold">{new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                                    <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Barlow Condensed' }}>{r.weight} kg</span>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                    <MiniStat label="Entreno" value={`${r.training_compliance}%`} />
-                                    <MiniStat label="Nutrición" value={`${r.nutrition_compliance}%`} />
-                                    <MiniStat label="Sueño" value={`${r.sleep_quality}/10`} />
-                                    <MiniStat label="Energía" value={`${r.energy_level}/10`} />
-                                </div>
-                                {r.notes && <p className="text-white/30 text-xs mt-2 italic">{r.notes}</p>}
-                            </CardContent></Card>
-                        ))}</div>
-                    ) : <EmptyState icon={FileText} message="Sin reportes aún." />}
-                </TabsContent>
 
                 {/* ========== TAB 5: CUESTIONARIO ========== */}
                 <TabsContent value="cuestionario">
@@ -384,12 +474,12 @@ const ClientDetailPage = () => {
                                 <InfoItem icon={Calendar} label="Edad" value={profile?.age || '-'} />
                                 <InfoItem icon={Scale} label="Altura" value={profile?.height ? `${profile.height} cm` : '-'} />
                             </div>
-                            {profile?.equipment?.length > 0 && (
+                            {Array.isArray(profile?.equipment) && profile.equipment.length > 0 && (
                                 <div className="mt-4"><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Equipamiento</p>
                                     <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{e}</Badge>)}</div>
                                 </div>
                             )}
-                            {profile?.injuries?.length > 0 && (
+                            {Array.isArray(profile?.injuries) && profile.injuries.length > 0 && (
                                 <div className="mt-4"><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Lesiones</p>
                                     <div className="flex flex-wrap gap-1.5">{profile.injuries.map((l, i) => <Badge key={i} className="bg-red-500/10 text-red-400 border-0 text-xs">{l}</Badge>)}</div>
                                 </div>
@@ -404,10 +494,10 @@ const ClientDetailPage = () => {
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Equipamiento</p>
-                                {profile?.equipment?.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{e}</Badge>)}</div> : <p className="text-white/30 text-sm">No especificado</p>}
+                                {Array.isArray(profile?.equipment) && profile.equipment.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{e}</Badge>)}</div> : <p className="text-white/30 text-sm">No especificado</p>}
                             </div>
                             <div><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Lesiones activas</p>
-                                {profile?.injuries?.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.injuries.map((l, i) => <Badge key={i} className="bg-red-500/10 text-red-400 border-0 text-xs">{l}</Badge>)}</div> : <p className="text-white/30 text-sm">Sin lesiones</p>}
+                                {Array.isArray(profile?.injuries) && profile.injuries.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.injuries.map((l, i) => <Badge key={i} className="bg-red-500/10 text-red-400 border-0 text-xs">{l}</Badge>)}</div> : <p className="text-white/30 text-sm">Sin lesiones</p>}
                             </div>
                         </div>
                     </CardContent></Card>
@@ -497,22 +587,34 @@ const ClientDetailPage = () => {
                 {/* ========== TAB 7: NUTRICIÓN ========== */}
                 <TabsContent value="nutricion" className="space-y-4">
                     {nutrition_stats?.total_diets > 0 ? (<>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Top 5 alimentos</CardTitle></CardHeader>
-                                <CardContent><div className="space-y-2">{nutrition_stats.top_foods?.map((f, i) => (
-                                    <div key={i} className="flex items-center justify-between p-2.5 bg-[#0A0A0A] rounded-lg">
-                                        <span className="text-white text-sm truncate flex-1">{f.nombre}</span>
-                                        <Badge className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs ml-2">{f.count}x</Badge>
-                                    </div>
-                                ))}</div></CardContent>
+                        <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Top 5 alimentos</CardTitle></CardHeader>
+                            <CardContent><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">{nutrition_stats.top_foods?.map((f, i) => (
+                                <div key={i} className="flex items-center justify-between p-2.5 bg-[#0A0A0A] rounded-lg">
+                                    <span className="text-white text-sm truncate flex-1">{f.nombre}</span>
+                                    <Badge className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs ml-2">{f.count}x</Badge>
+                                </div>
+                            ))}</div></CardContent>
+                        </Card>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Card className="bg-[#111] border-[#222] md:col-span-1"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Dietas ({nutrition_stats.total_diets})</CardTitle></CardHeader>
+                                <CardContent>
+                                    <ScrollArea className="h-[28rem] pr-2">
+                                        <div className="space-y-1">{nutrition_stats.diet_dates?.map((d, i) => (
+                                            <button key={i} onClick={() => openDiet(d.fecha)}
+                                                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left transition-colors ${selectedDietDate === d.fecha ? 'bg-[#FF671F]/15 border border-[#FF671F]/40' : 'bg-[#0A0A0A] border border-transparent hover:bg-[#1a1a1a]'}`}>
+                                                <span className="text-white text-sm">{new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                                <Badge className={d.tipo_dia === 'entrenamiento' ? 'bg-[#FF671F]/10 text-[#FF671F] border-0 text-[10px]' : 'bg-green-500/10 text-green-500 border-0 text-[10px]'}>{d.tipo_dia}</Badge>
+                                            </button>
+                                        ))}</div>
+                                    </ScrollArea>
+                                </CardContent>
                             </Card>
-                            <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Dietas recientes ({nutrition_stats.total_diets})</CardTitle></CardHeader>
-                                <CardContent><div className="space-y-2">{nutrition_stats.recent_diets?.map((d, i) => (
-                                    <div key={i} className="flex items-center justify-between p-2.5 bg-[#0A0A0A] rounded-lg">
-                                        <span className="text-white text-sm">{new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
-                                        <Badge className={d.tipo_dia === 'entrenamiento' ? 'bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs' : 'bg-green-500/10 text-green-500 border-0 text-xs'}>{d.tipo_dia}</Badge>
-                                    </div>
-                                ))}</div></CardContent>
+                            <Card className="bg-[#111] border-[#222] md:col-span-2"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">{selectedDietDate ? `Dieta del ${new Date(selectedDietDate + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}` : 'Dieta'}</CardTitle></CardHeader>
+                                <CardContent>
+                                    {dietLoading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-[#FF671F]" /></div>
+                                        : selectedDiet ? <DietDetail diet={selectedDiet} />
+                                            : <p className="text-white/30 text-sm text-center py-10">Elige una fecha de la lista para ver la dieta de ese día.</p>}
+                                </CardContent>
                             </Card>
                         </div>
                     </>) : <EmptyState icon={Utensils} message="Sin datos de nutrición aún." />}
@@ -635,8 +737,9 @@ const ClientDetailPage = () => {
                     </Card>
                 </TabsContent>
 
-                {/* ========== TAB 8: SEGUIMIENTO ========== */}
-                <TabsContent value="seguimiento">
+                {/* ========== TAB: SEGUIMIENTO (evolución de peso + check-ins) ========== */}
+                <TabsContent value="seguimiento" className="space-y-4">
+                    <WeightEvolution reports={reports} />
                     <CoachCheckins clientId={clientId} />
                 </TabsContent>
             </Tabs>
@@ -665,19 +768,55 @@ const MacroGroup = ({ title, icon: Icon, color, items }) => (
     </div>
 );
 
-const MacroHistoryItem = ({ item }) => (
-    <div className="p-3 bg-[#0A0A0A] rounded-lg border border-[#222]">
-        <div className="flex items-center justify-between mb-1">
-            <span className="text-white/40 text-xs">{new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-            <span className="text-white/30 text-[10px]">{item.changed_by || 'admin'}</span>
+const _mv = (m, keys) => { for (const k of keys) if (m && m[k] != null) return Math.round(m[k]); return 0; };
+const _mkcal = (m) => Math.round(_mv(m, ['protein', 'proteinas']) * 4 + _mv(m, ['carbs', 'hidratos']) * 4 + _mv(m, ['fat', 'grasas']) * 9);
+
+const MacroRow = ({ label, color, m, showG = true }) => {
+    if (!m) return null;
+    const P = _mv(m, ['protein', 'proteinas']), H = _mv(m, ['carbs', 'hidratos']), G = _mv(m, ['fat', 'grasas']);
+    return (
+        <div className="flex items-center gap-3 py-1">
+            <span className="w-24 shrink-0 flex items-center gap-1.5 text-white/50 text-xs uppercase tracking-wide">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />{label}
+            </span>
+            <span className="text-orange-400 font-bold text-sm tabular-nums">P {P}</span>
+            <span className="text-blue-400 font-bold text-sm tabular-nums">H {H}</span>
+            {showG && <span className="text-yellow-400 font-bold text-sm tabular-nums">G {G}</span>}
+            <span className="text-white/30 text-xs ml-auto tabular-nums">{_mkcal(m)} kcal</span>
         </div>
-        {item.note && <p className="text-white/60 text-xs italic mb-1">{item.note}</p>}
-        <div className="text-[10px] text-white/30">
-            E: P={Math.round(item.training?.protein || item.training?.proteinas || 0)} H={Math.round(item.training?.carbs || item.training?.hidratos || 0)} G={Math.round(item.training?.fat || item.training?.grasas || 0)}
-            {' · '}D: P={Math.round(item.rest?.protein || item.rest?.proteinas || 0)} H={Math.round(item.rest?.carbs || item.rest?.hidratos || 0)} G={Math.round(item.rest?.fat || item.rest?.grasas || 0)}
+    );
+};
+
+const MacroHistoryItem = ({ item, onEdit, onRepeat, onDelete }) => {
+    const peso = item.peso ?? item.client_weight;
+    const peri = item.peri || item.macros_periworkout;
+    const hasPeri = peri && (peri.protein || peri.proteinas || peri.carbs || peri.hidratos);
+    const fecha = item.effective_date ? item.effective_date + 'T12:00:00' : item.created_at;
+    const hasActions = onEdit || onRepeat || onDelete;
+    return (
+        <div className="p-3.5 bg-[#0A0A0A] rounded-xl border border-[#222]">
+            <div className="flex items-center justify-between mb-2.5">
+                <span className="text-white text-sm font-semibold">{new Date(fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                <div className="flex items-center gap-2.5">
+                    {peso != null && <span className="text-[#FF671F] font-bold text-base" style={{ fontFamily: 'Barlow Condensed' }}>{peso} kg</span>}
+                    {hasActions && (
+                        <div className="flex items-center gap-0.5">
+                            {onRepeat && <button onClick={() => onRepeat(item)} title="Repetir estos macros (aplicar hoy)" className="p-1 rounded text-white/40 hover:text-[#FF671F] hover:bg-[#FF671F]/10"><RotateCcw className="w-3.5 h-3.5" /></button>}
+                            {onEdit && <button onClick={() => onEdit(item)} title="Editar esta entrada" className="p-1 rounded text-white/40 hover:text-white hover:bg-white/10"><Pencil className="w-3.5 h-3.5" /></button>}
+                            {onDelete && <button onClick={() => onDelete(item)} title="Eliminar esta entrada" className="p-1 rounded text-white/40 hover:text-red-400 hover:bg-red-500/10"><Trash2 className="w-3.5 h-3.5" /></button>}
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="space-y-0.5">
+                <MacroRow label="Entreno" color="#FF671F" m={item.training} />
+                <MacroRow label="Descanso" color="#22C55E" m={item.rest} />
+                {hasPeri && <MacroRow label="Peri" color="#818CF8" m={peri} showG={false} />}
+            </div>
+            {item.note && item.note !== 'Importado de Calma' && <p className="text-white/40 text-xs italic mt-2">{item.note}</p>}
         </div>
-    </div>
-);
+    );
+};
 
 const MiniStat = ({ label, value }) => (
     <div className="bg-[#0A0A0A] rounded p-2 border border-[#222]">
@@ -685,6 +824,88 @@ const MiniStat = ({ label, value }) => (
         <span className="text-white font-bold text-sm ml-1">{value}</span>
     </div>
 );
+
+const WeightEvolution = ({ reports }) => {
+    const data = (reports || [])
+        .filter(r => r.weight != null)
+        .map(r => ({ ts: new Date(r.created_at).getTime(), date: new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: '2-digit' }), peso: r.weight }))
+        .sort((a, b) => a.ts - b.ts);
+    if (!data.length) return null;
+    const first = data[0].peso, last = data[data.length - 1].peso;
+    const diff = Math.round((last - first) * 10) / 10;
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><Scale className="w-4 h-4" />Evolución del peso ({data.length})</CardTitle></CardHeader>
+            <CardContent>
+                <div className="flex items-center gap-5 mb-3 text-sm">
+                    <div><span className="text-white/40 text-xs mr-1">Inicio</span><span className="text-white font-bold">{first} kg</span></div>
+                    <div><span className="text-white/40 text-xs mr-1">Actual</span><span className="text-white font-bold">{last} kg</span></div>
+                    <div><span className="text-white/40 text-xs mr-1">Cambio</span><span className="text-white font-bold">{diff > 0 ? '+' : ''}{diff} kg</span></div>
+                </div>
+                <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={data} margin={{ top: 5, right: 8, bottom: 0, left: -8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                            <XAxis dataKey="date" tick={{ fill: '#ffffff66', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={28} />
+                            <YAxis domain={['auto', 'auto']} tick={{ fill: '#ffffff66', fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
+                            <Tooltip contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #333', borderRadius: 12, color: '#fff' }} labelStyle={{ color: '#fff' }} formatter={(v) => [`${v} kg`, 'Peso']} />
+                            <Line type="monotone" dataKey="peso" stroke="#FF671F" strokeWidth={2} dot={{ fill: '#FF671F', r: 2 }} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+const MEAL_ORDER = { C1: 1, C2: 2, C3: 3, C4: 4, C5: 5, C6: 6, Intra: 7, Post: 8 };
+const MEAL_LABEL = { Intra: 'Intra-entreno', Post: 'Post-entreno', C1: 'Comida 1', C2: 'Comida 2', C3: 'Comida 3', C4: 'Comida 4', C5: 'Comida 5', C6: 'Comida 6' };
+
+const DietDetail = ({ diet }) => {
+    const comidas = diet?.comidas || {};
+    const keys = Object.keys(comidas).sort((a, b) => (MEAL_ORDER[a] || 99) - (MEAL_ORDER[b] || 99));
+    const dayTotal = { P: 0, H: 0, G: 0 };
+    const meals = keys.map((k) => {
+        const foods = comidas[k]?.alimentos || [];
+        const mt = { P: 0, H: 0, G: 0 };
+        foods.forEach((a) => {
+            const e = a.macros_efectivos || {};
+            mt.P += e.P || 0; mt.H += e.H || 0; mt.G += e.G || 0;
+            dayTotal.P += e.P || 0; dayTotal.H += e.H || 0; dayTotal.G += e.G || 0;
+        });
+        return { k, foods, mt };
+    });
+    return (
+        <div className="space-y-2.5">
+            {meals.map(({ k, foods, mt }) => (
+                <div key={k} className="bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
+                    <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-white text-sm font-semibold">{MEAL_LABEL[k] || k}</span>
+                        <span className="text-[11px]"><span className="text-orange-400">P{Math.round(mt.P)}</span> <span className="text-blue-400">H{Math.round(mt.H)}</span> <span className="text-yellow-400">G{Math.round(mt.G)}</span></span>
+                    </div>
+                    <div className="space-y-1">
+                        {foods.length ? foods.map((a, i) => {
+                            const e = a.macros_efectivos || {};
+                            return (
+                                <div key={i} className="flex items-center gap-2 text-xs">
+                                    <span className="text-white/80 flex-1 min-w-0 truncate">{a.nombre}</span>
+                                    <span className="text-white/40 whitespace-nowrap w-12 text-right">{Math.round(a.cantidad_g)} g</span>
+                                    <span className="whitespace-nowrap tabular-nums w-24 text-right">
+                                        <span className="text-orange-400">P{Math.round(e.P || 0)}</span> <span className="text-blue-400">H{Math.round(e.H || 0)}</span> <span className="text-yellow-400">G{Math.round(e.G || 0)}</span>
+                                    </span>
+                                </div>
+                            );
+                        }) : <span className="text-white/30 text-xs">Vacía</span>}
+                    </div>
+                </div>
+            ))}
+            <div className="flex items-center justify-between pt-2 border-t border-[#222]">
+                <span className="text-white/60 text-sm font-semibold">Total del día</span>
+                <span className="text-sm font-bold"><span className="text-orange-400">P{Math.round(dayTotal.P)}</span> · <span className="text-blue-400">H{Math.round(dayTotal.H)}</span> · <span className="text-yellow-400">G{Math.round(dayTotal.G)}</span></span>
+            </div>
+        </div>
+    );
+};
 
 const EmptyState = ({ icon: Icon, message, action }) => (
     <Card className="bg-[#111] border-[#222]"><CardContent className="p-8 text-center">

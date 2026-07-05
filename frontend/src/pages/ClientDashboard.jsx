@@ -10,7 +10,7 @@ import {
     LogOut, Bell, ChevronRight, CreditCard, Target, Bot,
     Flame, Activity, Scale, Search, SlidersHorizontal, Pill,
     ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen,
-    CheckCircle2, Circle, Sparkles
+    CheckCircle2, Circle, Sparkles, LayoutDashboard
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import ThemeToggle from '../components/ThemeToggle';
@@ -441,6 +441,7 @@ const ClientLayout = () => {
     }, []);
 
     const handleLogout = () => { logout(); navigate('/auth'); toast.success('Sesión cerrada'); };
+    const isStaff = ['admin', 'operations', 'trainer'].includes(user?.role);
 
     const UserChip = ({ compact }) => (
         <div className={`flex items-center gap-3 ${compact ? 'justify-center' : ''}`}>
@@ -475,6 +476,12 @@ const ClientLayout = () => {
                     {collapsed
                         ? <div className="flex justify-center"><ThemeToggle variant="icon" testId="theme-toggle-sidebar" /></div>
                         : <ThemeToggle variant="sidebar" testId="theme-toggle-sidebar" />}
+                    {isStaff && (
+                        <button onClick={() => navigate('/admin')} data-testid="go-admin-btn"
+                            className={`flex items-center gap-2 w-full rounded-lg text-white/50 hover:text-brand hover:bg-brand/10 transition-colors ${collapsed ? 'justify-center py-2.5' : 'px-3 py-2.5'}`}>
+                            <LayoutDashboard className="w-4 h-4" /> {!collapsed && <span className="text-sm">Volver al panel</span>}
+                        </button>
+                    )}
                     <button onClick={handleLogout} data-testid="logout-btn"
                         className={`flex items-center gap-2 w-full rounded-lg text-white/50 hover:text-red-400 hover:bg-red-500/10 transition-colors ${collapsed ? 'justify-center py-2.5' : 'px-3 py-2.5'}`}>
                         <LogOut className="w-4 h-4" /> {!collapsed && <span className="text-sm">Cerrar sesión</span>}
@@ -545,6 +552,12 @@ const ClientLayout = () => {
                         <div className="p-3 border-t border-white/10 space-y-2">
                             <UserChip />
                             <ThemeToggle variant="sidebar" testId="theme-toggle-drawer" />
+                            {isStaff && (
+                                <button onClick={() => navigate('/admin')}
+                                    className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-white/50 hover:text-brand hover:bg-brand/10 transition-colors">
+                                    <LayoutDashboard className="w-4 h-4" /> <span className="text-sm">Volver al panel</span>
+                                </button>
+                            )}
                             <button onClick={handleLogout}
                                 className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-white/50 hover:text-red-400 hover:bg-red-500/10 transition-colors">
                                 <LogOut className="w-4 h-4" /> <span className="text-sm">Cerrar sesión</span>

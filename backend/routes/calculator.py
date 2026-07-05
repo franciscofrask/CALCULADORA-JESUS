@@ -748,6 +748,80 @@ async def get_frequent_foods(
     return {"alimentos": enriched}
 
 
+@router.post("/refit-diet")
+async def refit_diet(data: dict, user = Depends(get_current_user)):
+    """Re-ajusta las cantidades de una dieta (p.ej. una favorita al aplicarla) a los macros del
+    día indicado, SIN pasarse y respetando el mínimo de cada alimento. Reutiliza el reparto por
+    comida de /distribute (macros de hoy) y la misma función de dimensionado del constructor
+    (ajustar_cantidad). Los alimentos que no caben ni a su cantidad mínima se quitan y se
+    devuelven en 'excluidos'. NO inventa lógica: solo aplica la existente a alimentos fijos."""
+    dist = await distribute_macros({
+        "fecha": data.get("fecha"),
+        "tipo_dia": data.get("tipo_dia", "entrenamiento"),
+        "num_comidas": data.get("num_comidas", 4),
+        "momento_entreno": data.get("momento_entreno", 1),
+        "opcion_peri": data.get("opcion_peri", "intra_post"),
+        "single_meal": (data.get("num_comidas", 4) == 1),
+    }, user)
+    targets = dist.get("comidas", {}) if isinstance(dist, dict) else {}
+
+    def _target(mk):
+        t = targets.get(mk) or {}
+        return {
+            "proteinas": float(t.get("P", t.get("proteinas", 0)) or 0),
+            "hidratos": float(t.get("H", t.get("hidratos", 0)) or 0),
+            "grasas": float(t.get("G", t.get("grasas", 0)) or 0),
+        }
+
+    comidas_in = data.get("comidas") or {}
+    out_comidas = {}
+    excluidos = []
+    for meal_key, meal in comidas_in.items():
+        meal = meal if isinstance(meal, dict) else {}
+        if meal_key not in targets:
+            # Sin objetivo para esa comida: la dejamos como estaba (no vaciar por seguridad).
+            out_comidas[meal_key] = meal
+            continue
+        remaining = _target(meal_key)
+        refit_foods = []
+        for it in (meal.get("alimentos") or []):
+            aid = it.get("alimento_id")
+            if aid in (None, ""):
+                continue
+            try:
+                food = await db.foods.find_one({"id": int(aid)}, {"_id": 0})
+            except (TypeError, ValueError):
+                food = None
+            if not food:
+                continue
+            aplicar_regla_macros_calma(food)
+            cant = ajustar_cantidad_calma(food, remaining)
+            if cant <= 0 or math.isinf(cant):
+                excluidos.append({"meal": meal_key, "nombre": food.get("nombre") or it.get("nombre")})
+                continue
+            contrib = macros_at_calma(food, cant)
+            for k in ("proteinas", "hidratos", "grasas"):
+                if not math.isinf(remaining[k]):
+                    remaining[k] = max(0.0, remaining[k] - contrib[k])
+            es_unidad = bool(food.get("unidades"))
+            racion = float(food.get("racion") or 100)
+            refit_foods.append({
+                **it,
+                "alimento_id": int(aid),
+                "nombre": food.get("nombre") or it.get("nombre"),
+                "cantidad_g": round((cant * racion) if es_unidad else cant, 1),
+                "macros_efectivos": {
+                    "P": round(contrib["proteinas"], 1),
+                    "H": round(contrib["hidratos"], 1),
+                    "G": round(contrib["grasas"], 1),
+                },
+                "racion": food.get("racion"),
+                "unidades": es_unidad,
+            })
+        out_comidas[meal_key] = {**meal, "alimentos": refit_foods}
+    return {"comidas": out_comidas, "distribution": dist, "excluidos": excluidos}
+
+
 @router.post("/suggest")
 async def suggest_foods_endpoint(
     data: dict,

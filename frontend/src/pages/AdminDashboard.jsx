@@ -373,6 +373,7 @@ const AdminLayout = () => {
     const navItems = [
         { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
+        { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios' },
         { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
         { path: '/admin/routines', icon: Dumbbell, label: 'Rutinas' },
         { path: '/admin/menus', icon: Utensils, label: 'Menús' },
@@ -428,8 +429,17 @@ const AdminLayout = () => {
                             <Badge className="bg-[#FF671F]/20 text-[#FF671F] border-0 text-xs uppercase">{user?.role}</Badge>
                         </div>
                     </div>
-                    <Button 
-                        variant="ghost" 
+                    <Button
+                        variant="ghost"
+                        className="w-full justify-start text-white/60 hover:text-[#FF671F] hover:bg-[#FF671F]/10 mb-1"
+                        onClick={() => navigate('/dashboard')}
+                        data-testid="use-app-btn"
+                    >
+                        <Utensils className="w-4 h-4 mr-2" />
+                        Usar app (modo cliente)
+                    </Button>
+                    <Button
+                        variant="ghost"
                         className="w-full justify-start text-white/50 hover:text-red-500 hover:bg-red-500/10"
                         onClick={handleLogout}
                     >

@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
     ChevronLeft, ChevronRight,
-    Copy, Calendar, FileDown, SlidersHorizontal
+    Copy, Calendar, FileDown, SlidersHorizontal, Star
 } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
@@ -1024,24 +1024,66 @@ const NutritionPage = () => {
         } catch (err) { toast.error('Error guardando favorita'); }
     };
 
-    const applyDietFavorite = (fav) => {
-        // Load the favorite's meals + config into the current day (does NOT auto-save; the
-        // user saves/auto-saves the day after). Foods keep their stored macros_efectivos + raw.
-        setTipoDia(fav.tipo_dia || 'entrenamiento');
-        setNumComidas(fav.num_comidas || 4);
-        setMomentoEntreno(fav.momento_entreno ?? 1);
-        setOpcionPeri(normPeri(fav.opcion_peri));
-        setMealsData(fav.comidas || {});
-        setDistribTargetsOverlay(fav.distribution_targets || null);
-        setVolcadoMeal(null);
-        setFavoritesModalOpen(false);
-        toast.success(`Aplicada: ${fav.name}`);
-        loadDistribution({
+    const applyDietFavorite = async (fav) => {
+        // Aplica la favorita RE-AJUSTANDO sus cantidades a los macros de HOY (no arrastra los
+        // objetivos guardados): reusa /refit-diet, que redimensiona cada alimento con la lógica
+        // CALMA sin pasarse y respetando el mínimo. No auto-guarda; el día se guarda después.
+        const cfg = {
             tipoDia: fav.tipo_dia || 'entrenamiento',
-            numComidas: (fav.num_comidas === 3) ? 4 : (fav.num_comidas || 4),
+            numComidas: fav.num_comidas || 4,
             momentoEntreno: fav.momento_entreno ?? 1,
             opcionPeri: normPeri(fav.opcion_peri),
-        });
+        };
+        setTipoDia(cfg.tipoDia);
+        setNumComidas(cfg.numComidas);
+        setMomentoEntreno(cfg.momentoEntreno);
+        setOpcionPeri(cfg.opcionPeri);
+        setVolcadoMeal(null);
+        setDistribTargetsOverlay(null);   // usar los macros de HOY, no los objetivos guardados
+        setFavoritesModalOpen(false);
+        try {
+            const res = await api('/api/calculator/refit-diet', {
+                method: 'POST',
+                body: JSON.stringify({
+                    fecha: currentDate,
+                    tipo_dia: cfg.tipoDia,
+                    num_comidas: (fav.num_comidas === 3) ? 4 : cfg.numComidas,
+                    momento_entreno: cfg.momentoEntreno,
+                    opcion_peri: cfg.opcionPeri,
+                    comidas: fav.comidas || {},
+                }),
+            });
+            setMealsData(res.comidas || {});
+            if (res.distribution) setDistribution(res.distribution);
+            const nEx = res.excluidos?.length || 0;
+            if (nEx) toast.warning(`Aplicada "${fav.name}" y ajustada a tus macros. ${nEx} alimento(s) no cabían ni al mínimo y se quitaron.`);
+            else toast.success(`Aplicada "${fav.name}" y ajustada a tus macros`);
+        } catch (err) {
+            toast.error('Error al aplicar la favorita');
+        }
+    };
+
+    // Cuadrar una comida a demanda: re-ajusta sus alimentos a los macros de HOY, sin pasarse y
+    // respetando el mínimo de cada uno (reusa /refit-diet solo para esa comida).
+    const cuadrarComida = async (mealKey) => {
+        try {
+            const res = await api('/api/calculator/refit-diet', {
+                method: 'POST',
+                body: JSON.stringify({
+                    fecha: currentDate,
+                    tipo_dia: tipoDia, num_comidas: numComidas,
+                    momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
+                    comidas: { [mealKey]: mealsData[mealKey] || { alimentos: [] } },
+                }),
+            });
+            const refit = res.comidas?.[mealKey];
+            if (!refit) { toast.error('No se pudo cuadrar la comida'); return; }
+            setMealsData(prev => ({ ...prev, [mealKey]: refit }));
+            setDistribTargetsOverlay(null);   // pasa a mostrar los macros de hoy
+            const nEx = res.excluidos?.length || 0;
+            if (nEx) toast.warning(`Comida cuadrada. ${nEx} alimento(s) no cabían ni al mínimo y se quitaron.`);
+            else toast.success('Comida cuadrada a tus macros');
+        } catch { toast.error('No se pudo cuadrar la comida'); }
     };
 
     const deleteDietFavorite = async (id) => {
@@ -1232,17 +1274,21 @@ const NutritionPage = () => {
             isLocked={isMealLocked(mealKey)}
             canVolcar={mealKey === volcarTargetMeal}
             onVolcar={handleVolcarToMeal}
+            onCuadrar={cuadrarComida}
             mealMode={mealsData[mealKey]?.modo === 'manual' ? 'manual' : 'auto'}
         />
     );
 
     const renderActions = (suffix = '') => (
-        <div className="surface p-3 grid grid-cols-2 gap-2">
+        <div className="surface p-3 grid grid-cols-3 gap-2">
             <button onClick={exportPdf} disabled={exportingPdf} data-testid={`export-pdf-btn${suffix}`} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
                 {exportingPdf ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <FileDown className="w-4 h-4" />} PDF
             </button>
             <button onClick={() => setCopyModalOpen(true)} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
                 <Copy className="w-4 h-4" /> Copiar
+            </button>
+            <button onClick={() => { loadDietFavorites(); setFavoritesModalOpen(true); }} data-testid={`favorites-btn${suffix}`} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
+                <Star className="w-4 h-4" /> Favoritas
             </button>
         </div>
     );
@@ -1263,6 +1309,10 @@ const NutritionPage = () => {
                     <button onClick={() => setCopyModalOpen(true)}
                         className="hidden sm:inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Copiar dieta a otro día">
                         <Copy size={16} /> Copiar
+                    </button>
+                    <button onClick={() => { loadDietFavorites(); setFavoritesModalOpen(true); }} data-testid="open-favorites-btn"
+                        className="inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Dietas favoritas">
+                        <Star size={16} /> <span className="hidden sm:inline">Favoritas</span>
                     </button>
                     <button onClick={() => setShowPreferencesSetup(true)} data-testid="open-preferences-btn"
                         className="inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Preferencias alimentarias">

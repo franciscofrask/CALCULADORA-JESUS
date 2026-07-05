@@ -189,7 +189,7 @@ const MealCard = ({
     removeFood, moveFoodUp, updateFoodQuantity, updateFoodQuantityDirect,
     editingQuantity, setEditingQuantity, getQuantityIncrement,
     clearMeal, formatFoodQuantity,
-    isLocked = false, canVolcar = false, onVolcar,
+    isLocked = false, canVolcar = false, onVolcar, onCuadrar,
     mealMode = 'auto', setMealMode, forceExpanded = false,
 }) => {
     const isExpanded = forceExpanded ? true : expandedMeals[mealKey];
@@ -314,6 +314,7 @@ const MealCard = ({
                                 <button className="flex-1 py-2.5 rounded-xl border border-dashed border-border text-brand font-semibold text-sm hover:bg-brand/5 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transition-colors" disabled={isLocked} onClick={() => setBuildMealModal({ open: true, mealKey, startStep: 2 })}>
                                     <Plus className="w-4 h-4" /> Añadir ingrediente
                                 </button>
+                                {!isLocked && onCuadrar && <button className="text-xs font-semibold text-brand border border-brand rounded-xl px-3 py-2.5 hover:bg-brand hover:text-white transition-colors" onClick={() => onCuadrar(mealKey)} title="Ajustar las cantidades a tus macros sin pasarse (respetando el mínimo de cada alimento)">Cuadrar</button>}
                                 {!isLocked && <button className="text-xs text-muted-foreground hover:text-red-500 px-3 py-2.5 transition-colors" onClick={() => clearMeal(mealKey)}>Vaciar</button>}
                             </div>
                         </div>
