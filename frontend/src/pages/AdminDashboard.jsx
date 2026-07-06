@@ -311,7 +311,7 @@ const AdminClientsList = () => {
 
     const fetchClients = async () => {
         try {
-            const params = planFilter !== 'all' ? `?plan=${planFilter}` : '';
+            const params = planFilter !== 'all' ? `?plan=${planFilter}` : '?include_incomplete=true';
             const response = await api.get(`/admin/clients${params}`);
             setClients(response.data);
         } catch (error) {
@@ -384,10 +384,12 @@ const AdminClientsList = () => {
                             </TableHeader>
                             <TableBody>
                                 {filteredClients.map((client) => (
-                                    <TableRow 
-                                        key={client.id} 
-                                        className="border-[#222] cursor-pointer hover:bg-[#1A1A1A]" 
-                                        onClick={() => navigate(`/admin/clients/${client.id}`)}
+                                    <TableRow
+                                        key={client.id || client.user_id}
+                                        className={`border-[#222] cursor-pointer hover:bg-[#1A1A1A] ${!client.id ? 'opacity-70' : ''}`}
+                                        onClick={() => client.id
+                                            ? navigate(`/admin/clients/${client.id}`)
+                                            : toast.info(`${client.user?.name || client.user?.email} se registró pero no completó el alta (no eligió plan). Aún no tiene ficha.`)}
                                     >
                                         <TableCell>
                                             <div>
@@ -396,20 +398,22 @@ const AdminClientsList = () => {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <PlanBadge plan={client.plan} />
+                                            {client.id ? <PlanBadge plan={client.plan} /> : <span className="text-white/30 text-sm">-</span>}
                                         </TableCell>
                                         <TableCell className="font-bold text-[#FF671F]" style={{ fontFamily: 'Barlow Condensed' }}>
-                                            {client.price}€
+                                            {client.id ? `${client.price}€` : '-'}
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className="border-[#333] text-white">
-                                                Sem {client.week}
-                                            </Badge>
+                                            {client.id ? (
+                                                <Badge variant="outline" className="border-[#333] text-white">
+                                                    Sem {client.week}
+                                                </Badge>
+                                            ) : <span className="text-white/30 text-sm">-</span>}
                                         </TableCell>
                                         <TableCell>
                                             {client.trainer_id ? (
                                                 <span className="text-sm text-white/70">{trainerName(client.trainer_id)}</span>
-                                            ) : user?.role === 'trainer' ? (
+                                            ) : client.id && user?.role === 'trainer' ? (
                                                 <Button size="sm" onClick={(e) => assignMe(e, client.id)}
                                                     className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs h-7 px-2"
                                                     data-testid={`assign-me-${client.id}`}>
@@ -420,9 +424,13 @@ const AdminClientsList = () => {
                                             )}
                                         </TableCell>
                                         <TableCell>
-                                            <Badge className={client.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-[#333] text-white/50 border-0'}>
-                                                {client.status}
-                                            </Badge>
+                                            {client.status === 'registro_incompleto' ? (
+                                                <Badge className="bg-yellow-500/15 text-yellow-400 border-0">Registro incompleto</Badge>
+                                            ) : (
+                                                <Badge className={client.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-[#333] text-white/50 border-0'}>
+                                                    {client.status}
+                                                </Badge>
+                                            )}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="sm" className="text-white/50 hover:text-[#FF671F]">

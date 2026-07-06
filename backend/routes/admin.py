@@ -19,9 +19,11 @@ async def get_all_clients(
     plan: Optional[str] = None,
     status: Optional[str] = None,
     trainer_id: Optional[str] = None,
+    include_incomplete: bool = False,
     user = Depends(get_admin_user)
 ):
-    """Obtener todos los clientes con filtros opcionales."""
+    """Obtener todos los clientes con filtros opcionales. Con include_incomplete=true añade
+    también los usuarios rol client SIN perfil (se registraron pero no completaron el alta)."""
     query = {}
     if plan:
         query["plan"] = plan.lower()
@@ -29,15 +31,35 @@ async def get_all_clients(
         query["status"] = status
     if trainer_id:
         query["trainer_id"] = trainer_id
-    
+
     profiles = await db.client_profiles.find(query, {"_id": 0}).to_list(1000)
-    
+
     result = []
     for profile in profiles:
         user_data = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
         if user_data:
             result.append({**profile, "user": user_data})
-    
+
+    # Registros incompletos: solo sin filtros (no tienen plan/estado/coach que filtrar)
+    if include_incomplete and not (plan or status or trainer_id):
+        with_profile = {p["user_id"] for p in await db.client_profiles.find({}, {"_id": 0, "user_id": 1}).to_list(5000)}
+        orphans = await db.users.find(
+            {"role": "client", "deleted_at": None, "id": {"$nin": list(with_profile)}},
+            {"_id": 0, "password": 0, "firebase_password_hash": 0, "firebase_password_salt": 0}
+        ).to_list(1000)
+        for u in orphans:
+            result.append({
+                "id": None,
+                "user_id": u["id"],
+                "plan": None,
+                "price": None,
+                "week": None,
+                "status": "registro_incompleto",
+                "trainer_id": None,
+                "created_at": u.get("created_at"),
+                "user": u,
+            })
+
     return result
 
 @router.get("/clients/{client_id}")
