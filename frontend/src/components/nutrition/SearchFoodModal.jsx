@@ -3,6 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
 import { Check, Star } from 'lucide-react';
+
+// Alimentos favoritos OCULTOS (petición 2026-07-06): la estrella alteraba el orden de los
+// alimentos y no se quiere. Poner a true para reactivar la UI de favoritos.
+export const FOOD_FAVORITES_UI = false;
 import { Search, X } from 'lucide-react';
 
 const CATEGORY_CHIPS = [
@@ -90,7 +94,7 @@ const SearchFoodModal = ({
                             const isFav = favorites.has(String(food.id));
                             return (
                                 <div key={food.id} className="flex items-start gap-1 bg-card rounded-xl shadow-sm hover:shadow-md transition-all">
-                                    {onToggleFavorite && (
+                                    {FOOD_FAVORITES_UI && onToggleFavorite && (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onToggleFavorite(food.id); }}
                                             className={`flex-shrink-0 p-3 pt-4 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-muted-foreground hover:text-yellow-300'}`}
@@ -99,7 +103,7 @@ const SearchFoodModal = ({
                                             <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
                                         </button>
                                     )}
-                                    <button className="flex-1 text-left p-4 pl-0 active:scale-[0.98]"
+                                    <button className={`flex-1 text-left p-4 active:scale-[0.98] ${FOOD_FAVORITES_UI ? 'pl-0' : ''}`}
                                         onClick={() => onAddFood(food)}>
                                         <div className="flex items-start gap-3">
                                             <span className="text-2xl">{getFoodEmoji(food.categorias)}</span>

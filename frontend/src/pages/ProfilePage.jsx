@@ -18,6 +18,10 @@ import {
     Compass
 } from 'lucide-react';
 
+// "Mejorar mi plan" OCULTO (petición 2026-07-06): el checkout de upgrade no existe aún
+// (pagos reales pospuestos). Poner a true cuando se habiliten pagos.
+const UPGRADE_PLAN_UI = false;
+
 const PLAN_FEATURES = {
     gold: ['Rutina personalizada semanal', 'Macros individualizados', 'Chat directo con entrenador', 'Reporte quincenal', 'Cardio personalizado', 'Audio de Jesús', 'Suplementación guiada'],
     silver: ['Rutina personalizada semanal', 'Macros individualizados', 'Chat directo con entrenador', 'Reporte mensual'],
@@ -173,7 +177,7 @@ const ProfilePage = () => {
                                     ))}
                                 </ul>
                             </div>
-                            {profile.plan !== 'gold' && (
+                            {UPGRADE_PLAN_UI && profile.plan !== 'gold' && (
                                 <Button
                                     className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold uppercase tracking-wider"
                                     onClick={() => setShowUpgradeDialog(true)}

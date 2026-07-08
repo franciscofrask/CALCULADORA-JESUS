@@ -10,6 +10,7 @@ import json
 
 from core.database import db
 from core.security import get_current_user, get_admin_user
+from routes.notifications import notify
 from models.common import RoutineResponse, RoutineCreate
 from models.user import PLAN_TYPES
 from llm_client import LlmChat, UserMessage
@@ -189,7 +190,9 @@ async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(g
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.routines.insert_one(routine_doc)
-    
+
+    await notify(profile["user_id"], "rutina", "Tu coach te ha preparado una rutina nueva", "/dashboard/routine")
+
     return RoutineResponse(**routine_doc)
 
 

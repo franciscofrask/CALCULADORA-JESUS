@@ -8,6 +8,8 @@ import uuid
 
 from core.database import db
 from core.security import get_admin_user, hash_password, generate_temp_password
+from routes.notifications import notify
+from routes.audit import audit
 from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate, TrainerAssign
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -32,11 +34,22 @@ async def get_all_clients(
     if trainer_id:
         query["trainer_id"] = trainer_id
 
-    profiles = await db.client_profiles.find(query, {"_id": 0}).to_list(1000)
+    # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
+    # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).
+    LIST_FIELDS = {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "week": 1,
+                   "status": 1, "trainer_id": 1, "created_at": 1}
+    profiles = await db.client_profiles.find(query, LIST_FIELDS).to_list(1000)
+
+    uids = [p["user_id"] for p in profiles]
+    users = await db.users.find(
+        {"id": {"$in": uids}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "role": 1}
+    ).to_list(len(uids) or 1)
+    umap = {u["id"]: u for u in users}
 
     result = []
     for profile in profiles:
-        user_data = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
+        user_data = umap.get(profile["user_id"])
         if user_data:
             result.append({**profile, "user": user_data})
 
@@ -80,19 +93,24 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     macro_history = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).sort("effective_date", -1).to_list(500)
     supplement_protocol = await db.supplement_protocols.find_one({"client_id": client_id}, {"_id": 0})
 
-    # Nutrition stats: todo el histórico de dietas del cliente (fechas + top alimentos)
+    # Nutrition stats: fechas con proyección ligera (sin las comidas, que es lo que pesa)
+    # y el top de alimentos calculado EN MongoDB con agregación (antes venían hasta 3000
+    # dietas completas a Python solo para contar).
     diets = await db.diets.find(
         {"user_id": profile["user_id"]},
-        {"_id": 0, "fecha": 1, "comidas": 1, "tipo_dia": 1}
+        {"_id": 0, "fecha": 1, "tipo_dia": 1}
     ).sort("fecha", -1).to_list(3000)
 
-    food_counts = {}
-    for diet in diets:
-        for meal_data in (diet.get("comidas") or {}).values():
-            for a in (meal_data.get("alimentos") or []):
-                name = a.get("nombre", "?")
-                food_counts[name] = food_counts.get(name, 0) + 1
-    top_foods = sorted(food_counts.items(), key=lambda x: -x[1])[:5]
+    top_rows = await db.diets.aggregate([
+        {"$match": {"user_id": profile["user_id"]}},
+        {"$project": {"meals": {"$objectToArray": {"$ifNull": ["$comidas", {}]}}}},
+        {"$unwind": "$meals"},
+        {"$unwind": "$meals.v.alimentos"},
+        {"$group": {"_id": "$meals.v.alimentos.nombre", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 5},
+    ]).to_list(5)
+    top_foods = [(r["_id"] or "?", r["count"]) for r in top_rows]
 
     nutrition_stats = {
         "total_diets": len(diets),
@@ -174,7 +192,16 @@ async def assign_client_trainer(client_id: str, data: TrainerAssign, user = Depe
     # trainer_id vive en client_profiles y users: se actualizan juntos
     await db.client_profiles.update_one({"id": client_id}, {"$set": {"trainer_id": new_trainer}})
     await db.users.update_one({"id": profile["user_id"]}, {"$set": {"trainer_id": new_trainer}})
-    return {"ok": True, "trainer_id": new_trainer, "trainer_name": trainer_doc.get("name") if trainer_doc else None}
+
+    trainer_name = trainer_doc.get("name") if trainer_doc else None
+    if new_trainer != current_trainer:
+        await notify(profile["user_id"], "coach",
+                     f"Tu coach ahora es {trainer_name}" if trainer_name else "Tu asignación de coach ha cambiado",
+                     "/dashboard/messages")
+        client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+        client_name = (client_user or {}).get("name") or (client_user or {}).get("email") or client_id
+        await audit(user, "coach", f"Coach de {client_name}: {trainer_name or 'sin asignar'}")
+    return {"ok": True, "trainer_id": new_trainer, "trainer_name": trainer_name}
 
 @router.put("/clients/{client_id}/macros")
 async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depends(get_admin_user)):
@@ -235,6 +262,10 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.macro_history.insert_one(macro_log)
+
+    await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition")
+    client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+    await audit(user, "macros", f"Actualizó macros de {(client_user or {}).get('name') or client_id} (manual)")
 
     return {"training": training, "rest": rest}
 
@@ -342,6 +373,10 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
     }
     await db.macro_history.insert_one(macro_log)
 
+    await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition")
+    client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+    await audit(user, "macros", f"Aplicó macros por calculadora a {(client_user or {}).get('name') or client_id}")
+
     return {"applied": True, "targets": targets, "training": training, "rest": rest, "peri": peri}
 
 # ==================== DASHBOARD ====================
@@ -417,6 +452,9 @@ async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_use
         await db.users.update_one({"id": user_id}, {"$set": set_user})
     if set_prof:
         await db.client_profiles.update_one({"user_id": user_id}, {"$set": set_prof})
+    if set_user or set_prof:
+        cambios = ", ".join(sorted(set(list(set_user.keys()) + list(set_prof.keys()))))
+        await audit(user, "usuario", f"Editó a {target.get('name') or target.get('email')} ({cambios})")
     return await db.users.find_one(
         {"id": user_id}, {"_id": 0, "password": 0, "firebase_password_hash": 0, "firebase_password_salt": 0})
 
@@ -433,6 +471,7 @@ async def admin_reset_password(user_id: str, user=Depends(get_admin_user)):
         "$set": {"password": hash_password(temp)},
         "$unset": {"firebase_password_hash": "", "firebase_password_salt": ""},
     })
+    await audit(user, "password", f"Restableció la contraseña de {target.get('name') or user_id}")
     return {"ok": True, "temp_password": temp, "name": target.get("name")}
 
 
@@ -449,6 +488,7 @@ async def admin_soft_delete_user(user_id: str, user=Depends(get_admin_user)):
         "deleted_by": user.get("email") or user.get("id"),
     }})
     await db.client_profiles.update_one({"user_id": user_id}, {"$set": {"status": "baja"}})
+    await audit(user, "baja", f"Dio de baja al usuario {user_id}")
     return {"ok": True, "soft_deleted": user_id}
 
 
@@ -459,6 +499,7 @@ async def admin_restore_user(user_id: str, user=Depends(get_admin_user)):
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     await db.client_profiles.update_one({"user_id": user_id}, {"$set": {"status": "activo"}})
+    await audit(user, "alta", f"Reactivó al usuario {user_id}")
     return {"ok": True, "restored": user_id}
 
 
@@ -472,41 +513,40 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     active = await db.client_profiles.count_documents({"status": "activo"})
     inactive = await db.client_profiles.count_documents({"status": {"$in": ["inactivo", "baja", "cancelado"]}})
 
-    # At-risk: active but week >= 3 and no report in last 14 days
+    # At-risk: active but week >= 3 and no report in last 14 days.
+    # UNA consulta distinct sobre reports en vez de una por cliente (N+1).
     fourteen_ago = (now - timedelta(days=14)).isoformat()
     active_profiles = await db.client_profiles.find(
-        {"status": "activo", "week": {"$gte": 3}}, {"_id": 0, "id": 1, "user_id": 1}
-    ).to_list(500)
-    at_risk = 0
-    for p in active_profiles:
-        recent_report = await db.reports.find_one(
-            {"client_id": p["id"], "created_at": {"$gte": fourteen_ago}}
-        )
-        if not recent_report:
-            at_risk += 1
+        {"status": "activo", "week": {"$gte": 3}}, {"_id": 0, "id": 1}
+    ).to_list(2000)
+    ids = [p["id"] for p in active_profiles]
+    with_recent = set(await db.reports.distinct(
+        "client_id", {"client_id": {"$in": ids}, "created_at": {"$gte": fourteen_ago}}
+    )) if ids else set()
+    at_risk = len([i for i in ids if i not in with_recent])
 
     # Bajas del mes
     bajas_mes = await db.client_profiles.count_documents({
         "status": {"$in": ["baja", "cancelado", "inactivo"]},
     })
 
-    # Plan distribution
-    plans = {}
-    for plan in ["gold", "silver", "bronze", "elm"]:
-        plans[plan] = await db.client_profiles.count_documents({"plan": plan, "status": "activo"})
-
-    # MRR (Monthly Recurring Revenue)
+    # Plan distribution + MRR en una sola agregación (antes: 4 counts + fetch de precios)
+    plans = {p: 0 for p in ["gold", "silver", "bronze", "elm"]}
     mrr = 0
-    active_for_mrr = await db.client_profiles.find(
-        {"status": "activo"}, {"_id": 0, "price": 1}
-    ).to_list(500)
-    mrr = sum(p.get("price", 0) for p in active_for_mrr)
+    async for row in db.client_profiles.aggregate([
+        {"$match": {"status": "activo"}},
+        {"$group": {"_id": "$plan", "count": {"$sum": 1}, "mrr": {"$sum": {"$ifNull": ["$price", 0]}}}},
+    ]):
+        if row["_id"] in plans:
+            plans[row["_id"]] = row["count"]
+        mrr += row["mrr"]
 
-    # Revenue this month
-    payments = await db.payments.find(
-        {"status": "success"}, {"_id": 0, "amount": 1}
-    ).to_list(1000)
-    total_revenue = sum(p.get("amount", 0) for p in payments)
+    # Revenue: suma en la base de datos, no en Python
+    rev = await db.payments.aggregate([
+        {"$match": {"status": "success"}},
+        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}},
+    ]).to_list(1)
+    total_revenue = rev[0]["total"] if rev else 0
 
     return {
         "total_clients": total,
@@ -536,9 +576,16 @@ async def get_upcoming_payments(user = Depends(get_admin_user)):
         {"_id": 0}
     ).sort("next_payment", 1).to_list(100)
 
+    # Usuarios en una consulta batch (antes: una por perfil)
+    uids = [p["user_id"] for p in profiles]
+    users = await db.users.find(
+        {"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(len(uids) or 1)
+    umap = {u["id"]: u for u in users}
+
     results = []
     for p in profiles:
-        user_data = await db.users.find_one({"id": p["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+        user_data = umap.get(p["user_id"])
         results.append({
             "client_id": p["id"],
             "name": user_data.get("name", "?") if user_data else "?",

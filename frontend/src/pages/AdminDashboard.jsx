@@ -375,9 +375,9 @@ const AdminClientsList = () => {
                                 <TableRow className="border-[#333] hover:bg-transparent">
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Cliente</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Plan</TableHead>
-                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs">Precio</TableHead>
-                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs">Semana</TableHead>
-                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs">Coach</TableHead>
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Precio</TableHead>
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Semana</TableHead>
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden sm:table-cell">Coach</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Estado</TableHead>
                                     <TableHead className="text-right text-white/50 uppercase tracking-wider text-xs">Acciones</TableHead>
                                 </TableRow>
@@ -400,17 +400,17 @@ const AdminClientsList = () => {
                                         <TableCell>
                                             {client.id ? <PlanBadge plan={client.plan} /> : <span className="text-white/30 text-sm">-</span>}
                                         </TableCell>
-                                        <TableCell className="font-bold text-[#FF671F]" style={{ fontFamily: 'Barlow Condensed' }}>
+                                        <TableCell className="font-bold text-[#FF671F] hidden md:table-cell" style={{ fontFamily: 'Barlow Condensed' }}>
                                             {client.id ? `${client.price}€` : '-'}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="hidden md:table-cell">
                                             {client.id ? (
                                                 <Badge variant="outline" className="border-[#333] text-white">
                                                     Sem {client.week}
                                                 </Badge>
                                             ) : <span className="text-white/30 text-sm">-</span>}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="hidden sm:table-cell">
                                             {client.trainer_id ? (
                                                 <span className="text-sm text-white/70">{trainerName(client.trainer_id)}</span>
                                             ) : client.id && user?.role === 'trainer' ? (

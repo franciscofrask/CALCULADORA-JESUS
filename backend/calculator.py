@@ -995,6 +995,24 @@ def validar_comida(
 # FUNCIÓN: Buscar alimentos en MongoDB
 # =========================================================
 
+# ── Cache en memoria del catálogo de alimentos (rendimiento 2026-07-06) ───────
+# La colección foods (~3.2k docs) cambia muy poco; bajarla entera de Atlas en cada
+# búsqueda era el mayor coste del buscador. TTL corto para recoger altas/ediciones
+# de alimentos sin reiniciar el backend.
+_FOODS_CACHE = {"ts": 0.0, "data": None}
+_FOODS_CACHE_TTL = 300  # segundos
+
+async def get_all_foods_cached(db) -> list:
+    import time as _time
+    now = _time.monotonic()
+    if _FOODS_CACHE["data"] is None or (now - _FOODS_CACHE["ts"]) > _FOODS_CACHE_TTL:
+        _FOODS_CACHE["data"] = await db.foods.find({}, {"_id": 0}).to_list(5000)
+        _FOODS_CACHE["ts"] = now
+    # Copia superficial por petición: el motor anota campos sobre cada dict
+    # (_diferencia, macros_efectivos, is_favorite...) y no debe contaminar el cache.
+    return [dict(a) for a in _FOODS_CACHE["data"]]
+
+
 async def buscar_alimentos(
     db,
     query: str = "",
@@ -1020,34 +1038,20 @@ async def buscar_alimentos(
         calcular_efectivos: si True, calcula macros efectivos para cada alimento
         tag_filter: filtrar por tag (ej: "GEN" para genéricos)
     """
-    filtro = {}
-    
-    # Filtro por categoría específica (soporta múltiples categorías separadas por coma)
-    # Las categorías en la BD tienen formato "2.1 | YA | 2.4.3" con pipes
+    # Catálogo desde el cache en memoria (mismo orden natural que devolvía find()).
+    # El filtro de categoría replica en Python el $regex que antes se enviaba a Mongo:
+    # la categoría al inicio o tras " | ", seguida de fin, espacio, punto o " |".
+    alimentos = await get_all_foods_cached(db)
+
     if categoria:
         categorias_list = [c.strip() for c in categoria.split(',') if c.strip()]
-        if len(categorias_list) == 1:
-            # Una sola categoría - buscar que CONTENGA la categoría (puede estar al inicio o después de " | ")
-            cat = categorias_list[0]
-            # Regex: categoría al inicio O después de " | ", seguida de fin, espacio, punto o " |"
-            filtro["categorias"] = {"$regex": f"(^|\\| ){re.escape(cat)}(\\.|\\s|\\||$)"}
-        else:
-            # Múltiples categorías - crear OR de todas
-            or_conditions = []
-            for cat in categorias_list:
-                or_conditions.append({"categorias": {"$regex": f"(^|\\| ){re.escape(cat)}(\\.|\\s|\\||$)"}})
-            filtro["$or"] = or_conditions
-    
-    # Determinar límite de búsqueda en MongoDB
-    # Si hay query de texto, necesitamos traer más porque filtramos en Python
-    if query and len(query) >= 2:
-        # Traer todos los alimentos (o los filtrados por categoría) para buscar por texto
-        search_limit = 4000  # Suficiente para cubrir toda la BD
-    else:
-        search_limit = limit * 3
-    
-    cursor = db.foods.find(filtro, {"_id": 0}).limit(search_limit)
-    alimentos = await cursor.to_list(length=search_limit)
+        patterns = [re.compile(f"(^|\\| ){re.escape(cat)}(\\.|\\s|\\||$)") for cat in categorias_list]
+        alimentos = [a for a in alimentos if any(p.search(a.get("categorias") or "") for p in patterns)]
+
+    # Mismos límites que la consulta antigua: con query de texto se evalúa el set completo
+    # (search_limit=4000 cubría toda la BD); sin query, se corta a limit*3 como antes.
+    if not (query and len(query) >= 2):
+        alimentos = alimentos[: limit * 3]
     
     # Filtrar por texto - Calma `alimentosFiltradosConCategoriasYNombre`:
     #   filter(s => Ye(s.nombre, nombre.split(" "), true))  con Ye = P/E:

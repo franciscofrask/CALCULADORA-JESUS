@@ -20,7 +20,7 @@ from calma_engine import (
     run_tests as calma_run_tests,
     parse_categories,
 )
-from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal
+from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal, get_all_foods_cached
 from calma_suggest import (
     ajustar_cantidad as ajustar_cantidad_calma,
     macros_at as macros_at_calma,
@@ -33,6 +33,10 @@ from target_calculator import calcular_targets, targets_to_profile_macros, run_t
 from macro_distribution import distribuir_macros as dist_macros
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
+
+# Alimentos favoritos OCULTOS (petición 2026-07-06): el orden favoritos-primero alteraba cómo
+# se muestran los alimentos y no se quiere. La lógica se conserva; True para reactivar.
+FOOD_FAVORITES_FIRST = False
 
 # ── Filtro de preferencias / alimentos evitados (fuente única) ───────────────
 # Mapea los IDs de categoría evitada (espejo del frontend PREFERENCE_CATEGORIES)
@@ -225,7 +229,7 @@ async def get_foods_listado(user = Depends(get_current_user)):
     """Lista completa de alimentos enriquecida para el Buscador (réplica de Calma
     `getTodosLosAlimentos`): macros efectivos tras la regla, info de etiqueta con los
     originales, cantidad mínima y si 'siempre puede ser sugerido'."""
-    foods = await db.foods.find({}, {"_id": 0}).to_list(5000)
+    foods = await get_all_foods_cached(db)
     out = []
     for f in foods:
         orig = {"proteinas": float(f.get("proteinas") or 0),
@@ -605,7 +609,8 @@ async def search_foods_endpoint(
             procesados.append(a)
         alimentos = procesados
 
-        # Get favorites to keep them first (our product feature, layered on top).
+        # Get favorites (feature OCULTA 2026-07-06: la estrella alteraba el orden y no se quiere;
+        # FOOD_FAVORITES_FIRST=True para reactivar el orden favoritos-primero).
         fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
         fav_ids = set(str(fid) for fid in (fav_doc.get("food_ids", []) if fav_doc else []))
         for a in alimentos:
@@ -652,13 +657,13 @@ async def search_foods_endpoint(
                     return (idx - 0.5) if _is_pro(f) else idx
             return float('inf')
         alimentos.sort(key=lambda f: (
-            0 if f.get("is_favorite") else 1,
+            (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
             _prioridad(f),
             _diff(f),
             f.get("nombre", "")
         ))
     else:
-        # Default sort: favorites > frequency > alphabetical
+        # Default sort: (favorites si FOOD_FAVORITES_FIRST) > frequency > alphabetical
         fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
         fav_ids = set(str(fid) for fid in (fav_doc.get("food_ids", []) if fav_doc else []))
         food_freq = await _get_food_frequency(user["id"])
@@ -667,7 +672,7 @@ async def search_foods_endpoint(
             a["is_favorite"] = str(a.get("id", "")) in fav_ids
 
         alimentos.sort(key=lambda f: (
-            0 if f.get("is_favorite") else 1,
+            (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
             -food_freq.get(str(f.get("id", "")), 0),
             f.get("nombre", "")
         ))
@@ -680,26 +685,42 @@ async def search_foods_endpoint(
     return {"alimentos": alimentos, "total": len(alimentos), "available_preps": available_preps}
 
 
+# Cache breve por usuario de la frecuencia de alimentos (rendimiento 2026-07-06):
+# antes cada búsqueda recargaba TODAS las dietas del usuario con sus comidas (>1 s
+# en clientes con años de histórico). La frecuencia solo cambia al guardar dieta,
+# así que 60 s de cache no altera el comportamiento percibido.
+_FREQ_CACHE: dict = {}
+_FREQ_CACHE_TTL = 60  # segundos
+
+
 async def _get_food_frequency(user_id: str) -> dict:
     """Raw appearance count of each food across ALL the user's saved diets, mirroring
     Calma's `alimentosFrecuentes` = Ge(Pe(dietas).ingredientes): repeticiones++ per
     occurrence, no time decay. Returns {food_id_str: count}.
+    Calculado EN MongoDB con agregación (antes venían las dietas completas a Python).
     """
-    diets = await db.diets.find(
-        {"user_id": user_id},
-        {"_id": 0, "comidas": 1}
-    ).to_list(2000)
+    import time as _time
+    now = _time.monotonic()
+    cached = _FREQ_CACHE.get(user_id)
+    if cached and (now - cached[0]) < _FREQ_CACHE_TTL:
+        return cached[1]
 
-    if not diets:
-        return {}
+    rows = await db.diets.aggregate([
+        {"$match": {"user_id": user_id}},
+        {"$project": {"meals": {"$objectToArray": {"$ifNull": ["$comidas", {}]}}}},
+        {"$unwind": "$meals"},
+        {"$unwind": "$meals.v.alimentos"},
+        {"$group": {
+            "_id": {"$toString": {"$ifNull": [
+                "$meals.v.alimentos.id",
+                {"$ifNull": ["$meals.v.alimentos.alimento_id", ""]},
+            ]}},
+            "count": {"$sum": 1},
+        }},
+    ]).to_list(10000)
 
-    counts = {}
-    for diet in diets:
-        for meal_data in (diet.get("comidas") or {}).values():
-            for alimento in (meal_data.get("alimentos") or []):
-                fid = str(alimento.get("id", alimento.get("alimento_id", "")))
-                if fid:
-                    counts[fid] = counts.get(fid, 0) + 1
+    counts = {r["_id"]: r["count"] for r in rows if r["_id"]}
+    _FREQ_CACHE[user_id] = (now, counts)
     return counts
 
 @router.get("/frequent-foods")
@@ -833,8 +854,8 @@ async def suggest_foods_endpoint(
     paso = data.get("paso")
     limit = data.get("limit", 5)
     
-    foods_list = await db.foods.find({}, {"_id": 0}).to_list(3000)
-    
+    foods_list = await get_all_foods_cached(db)
+
     sugerencias = sugerir_alimentos(
         alimentos_disponibles=foods_list,
         macros_restantes=restante,

@@ -46,17 +46,17 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     return ReportResponse(**report)
 
 @router.get("", response_model=List[ReportResponse])
-async def get_reports(user = Depends(get_current_user)):
-    """Obtener reportes del cliente."""
+async def get_reports(skip: int = 0, limit: int = 50, user = Depends(get_current_user)):
+    """Obtener reportes del cliente (paginado con skip/limit para 'cargar más')."""
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
+
     reports = await db.reports.find(
         {"client_id": profile["id"]},
         {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
-    
+    ).sort("created_at", -1).skip(max(0, skip)).to_list(min(max(1, limit), 100))
+
     return [ReportResponse(**r) for r in reports]
 
 @router.get("/evolution")
@@ -91,9 +91,17 @@ async def get_evolution_data(user = Depends(get_current_user)):
 async def set_report_feedback(report_id: str, data: dict, user = Depends(get_admin_user)):
     """El coach escribe (o edita) el feedback de un reporte del cliente."""
     feedback = (data.get("feedback") or "").strip()
-    result = await db.reports.update_one(
+    report = await db.reports.find_one({"id": report_id}, {"_id": 0, "client_id": 1})
+    if not report:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    await db.reports.update_one(
         {"id": report_id}, {"$set": {"trainer_feedback": feedback or None}}
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+
+    if feedback:
+        profile = await db.client_profiles.find_one({"id": report["client_id"]}, {"_id": 0, "user_id": 1})
+        if profile:
+            from routes.notifications import notify
+            await notify(profile["user_id"], "feedback", "Tu coach ha comentado tu reporte", "/dashboard/reports")
+
     return {"ok": True}

@@ -421,9 +421,35 @@ const ClientLayout = () => {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [unread, setUnread] = useState(0);
 
+    // Campanita: novedades del coach (rutina, macros, feedback, suplementos, coach)
+    const [notifCount, setNotifCount] = useState(0);
+    const [notifOpen, setNotifOpen] = useState(false);
+    const [notifItems, setNotifItems] = useState([]);
+
     useEffect(() => {
         api.get('/messages/unread-count').then(r => setUnread(r.data.count || 0)).catch(() => {});
+        api.get('/notifications/unread-count').then(r => setNotifCount(r.data.count || 0)).catch(() => {});
     }, [api, location.pathname]);
+
+    const openNotifications = async () => {
+        setNotifOpen(true);
+        try {
+            const res = await api.get('/notifications');
+            setNotifItems(res.data.notifications || []);
+            if (notifCount > 0) {
+                await api.put('/notifications/read-all');
+                setNotifCount(0);
+            }
+        } catch { /* silencioso */ }
+    };
+
+    const notifTime = (iso) => {
+        const d = new Date(iso);
+        const days = Math.floor((new Date() - d) / 86400000);
+        if (days === 0) return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        if (days === 1) return 'Ayer';
+        return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    };
 
     // Cuestionario inicial: tras contratar un plan (perfil activo), si no lo ha
     // completado, forzar el quiz para calcular sus macros. Mientras el pago esté
@@ -469,6 +495,17 @@ const ClientLayout = () => {
                     </button>
                 </div>
                 <nav className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-1">
+                    <button onClick={openNotifications} data-testid="client-bell-desktop"
+                        title={collapsed ? 'Novedades' : undefined}
+                        className={`relative flex items-center gap-3 rounded-xl w-full transition-all text-white/60 hover:text-white hover:bg-white/[0.07] ${collapsed ? 'justify-center px-0 py-3' : 'px-3.5 py-2.5'}`}>
+                        <span className="relative flex-shrink-0">
+                            <Bell className="w-5 h-5" strokeWidth={2} />
+                            {(notifCount + unread) > 0 && (
+                                <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 bg-brand text-white text-[10px] rounded-full flex items-center justify-center font-bold border border-ink">{notifCount + unread}</span>
+                            )}
+                        </span>
+                        {!collapsed && <span className="text-sm">Novedades</span>}
+                    </button>
                     {NAV_ITEMS.map(item => <SidebarLink key={item.path} item={item} collapsed={collapsed} unread={unread} />)}
                 </nav>
                 <div className="p-3 border-t border-white/10 space-y-2">
@@ -500,10 +537,10 @@ const ClientLayout = () => {
                     <Logo12EN12 size="sm" tone="dark" />
                     <div className="flex items-center -mr-2">
                         <ThemeToggle variant="icon" testId="theme-toggle-topbar" />
-                        <button onClick={() => navigate('/dashboard/messages')}
+                        <button onClick={openNotifications} data-testid="client-bell"
                             className="relative w-10 h-10 rounded-lg flex items-center justify-center text-white/80 hover:bg-white/10">
                             <Bell className="w-5 h-5" />
-                            {unread > 0 && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-brand rounded-full" />}
+                            {(notifCount + unread) > 0 && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-brand rounded-full" />}
                         </button>
                     </div>
                 </header>
@@ -533,6 +570,45 @@ const ClientLayout = () => {
                     </button>
                 </div>
             </nav>
+
+            {/* ===== Panel de novedades (campanita) ===== */}
+            {notifOpen && (
+                <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 pt-16 lg:pt-24" data-testid="notif-panel">
+                    <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={() => setNotifOpen(false)} />
+                    <div className="relative bg-card border border-border rounded-2xl shadow-xl w-full max-w-sm max-h-[70vh] flex flex-col animate-slide-up">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                            <p className="font-bold text-foreground uppercase tracking-wider text-sm">Novedades</p>
+                            <button onClick={() => setNotifOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            {unread > 0 && (
+                                <button onClick={() => { setNotifOpen(false); navigate('/dashboard/messages'); }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted border-b border-border">
+                                    <Bell className="w-4 h-4 text-brand flex-shrink-0" />
+                                    <span className="text-sm text-foreground flex-1">Tienes {unread} mensaje{unread > 1 ? 's' : ''} sin leer de tu coach</span>
+                                </button>
+                            )}
+                            {notifItems.map(n => (
+                                <button key={n.id} onClick={() => { setNotifOpen(false); if (n.link) navigate(n.link); }}
+                                    className="w-full px-4 py-3 text-left hover:bg-muted border-b border-border last:border-0">
+                                    <div className="flex items-start gap-2">
+                                        {!n.read && <span className="w-2 h-2 rounded-full bg-brand mt-1.5 flex-shrink-0" />}
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm ${n.read ? 'text-muted-foreground' : 'text-foreground font-medium'}`}>{n.title}</p>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">{notifTime(n.created_at)}</p>
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                            {notifItems.length === 0 && unread === 0 && (
+                                <p className="text-muted-foreground text-sm text-center py-10">No tienes novedades</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ===== Mobile drawer ===== */}
             {drawerOpen && (

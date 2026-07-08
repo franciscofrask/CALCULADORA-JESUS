@@ -43,6 +43,28 @@ async def create_indexes():
     await _ensure("client_photos", "id", unique=True)
     await _ensure("client_photos", [("client_id", 1), ("taken_at", -1)])
     await _ensure("client_photos", [("user_id", 1), ("taken_at", -1)])
+    # Rendimiento (auditoría 2026-07-06): índices para las consultas reales más frecuentes.
+    await _ensure("client_profiles", "status")                          # dashboard, listados
+    await _ensure("client_profiles", [("status", 1), ("next_payment", 1)])  # próximos cobros
+    await _ensure("leads", "status")                                    # kanban, stats, badge
+    # Único parcial: no puede haber dos leads con el mismo email (solo si el email no está
+    # vacío). Cierra la carrera de dos webhooks simultáneos del mismo contacto.
+    await _ensure("leads", "email", unique=True,
+                  partialFilterExpression={"email": {"$type": "string", "$gt": ""}})
+    await _ensure("leads", "assigned_to")                               # filtro responsable
+    await _ensure("messages", [("receiver_id", 1), ("read", 1)])        # unread-count (badge)
+    await _ensure("messages", [("sender_id", 1), ("created_at", -1)])   # conversaciones
+    await _ensure("messages", [("receiver_id", 1), ("created_at", -1)])
+    await _ensure("reports", [("client_id", 1), ("created_at", -1)])    # ficha, at-risk
+    await _ensure("macro_history", [("client_id", 1), ("effective_date", -1)])  # macros por fecha
+    await _ensure("routines", [("client_id", 1), ("status", 1)])        # rutina activa, overview
+    await _ensure("diet_favorites", "user_id")                          # dietas favoritas
+    await _ensure("food_favorites", "user_id", unique=True)             # alimentos favoritos
+    await _ensure("payments", [("client_id", 1), ("created_at", -1)])   # historial de pagos
+    await _ensure("users", "role")                                      # trainers, staff
+    await _ensure("notifications", [("user_id", 1), ("read", 1)])       # campanita cliente
+    await _ensure("notifications", [("user_id", 1), ("created_at", -1)])
+    await _ensure("audit_log", [("created_at", -1)])                    # registro de auditoría
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""

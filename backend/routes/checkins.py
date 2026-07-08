@@ -120,7 +120,7 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
 
 
 @router.get("/checkins", response_model=List[CheckInResponse])
-async def get_my_checkins(type: Optional[str] = None, limit: int = 30, user = Depends(get_current_user)):
+async def get_my_checkins(type: Optional[str] = None, limit: int = 30, skip: int = 0, user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
@@ -131,7 +131,7 @@ async def get_my_checkins(type: Optional[str] = None, limit: int = 30, user = De
             raise HTTPException(status_code=400, detail="Tipo invalido")
         query["type"] = type
 
-    checkins = await db.checkins.find(query, {"_id": 0}).sort("created_at", -1).to_list(min(limit, 100))
+    checkins = await db.checkins.find(query, {"_id": 0}).sort("created_at", -1).skip(max(0, skip)).to_list(min(limit, 100))
     return [CheckInResponse(**c) for c in checkins]
 
 
@@ -155,6 +155,13 @@ async def admin_set_checkin_feedback(client_id: str, checkin_id: str, data: dict
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Check-in no encontrado")
+
+    if feedback.strip():
+        profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "user_id": 1})
+        if profile:
+            from routes.notifications import notify
+            await notify(profile["user_id"], "feedback", "Tu coach ha comentado tu check-in", "/dashboard/checkins")
+
     return {"success": True}
 
 

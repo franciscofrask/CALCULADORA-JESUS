@@ -9,6 +9,7 @@ import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
+import { FOOD_FAVORITES_UI } from './SearchFoodModal';
 import {
     faStopwatch20,
     faEgg, faBacon, faBurger, faDove, faCow, faPiggyBank, faDrumstickBite,
@@ -232,7 +233,7 @@ const BuildMealModal = ({
                 setFavorites(new Set((res.favorites || []).map(String)));
             } catch (e) { /* ignore */ }
         };
-        if (open) loadFavorites();
+        if (open && FOOD_FAVORITES_UI) loadFavorites();
     }, [open]); // eslint-disable-line
 
     const toggleFavorite = async (foodId) => {
@@ -929,13 +930,15 @@ const BuildMealModal = ({
                                                 const isFav = favorites.has(String(food.id));
                                                 return (
                                                     <div key={food.id || idx} className="flex items-center gap-1">
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); toggleFavorite(food.id); }}
-                                                            className={`flex-shrink-0 p-1 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-muted-foreground hover:text-yellow-300'}`}
-                                                            data-testid={`fav-toggle-${food.id}`}
-                                                        >
-                                                            <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
-                                                        </button>
+                                                        {FOOD_FAVORITES_UI && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); toggleFavorite(food.id); }}
+                                                                className={`flex-shrink-0 p-1 rounded transition-colors ${isFav ? 'text-yellow-400' : 'text-muted-foreground hover:text-yellow-300'}`}
+                                                                data-testid={`fav-toggle-${food.id}`}
+                                                            >
+                                                                <Star className="w-4 h-4" fill={isFav ? 'currentColor' : 'none'} />
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => handleSelectFood(food)}
                                                             className="flex-1 flex items-center gap-2 p-2 rounded-lg text-left transition-colors hover:bg-muted"

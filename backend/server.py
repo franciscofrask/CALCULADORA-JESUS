@@ -31,6 +31,8 @@ from routes import (
 )
 from routes.leads import router as leads_router
 from routes.menu_templates import router as menu_templates_router
+from routes.notifications import router as notifications_router
+from routes.audit import router as audit_router
 from models.user import PLAN_TYPES
 
 # Configure logging
@@ -102,6 +104,8 @@ api_router.include_router(billing_webhook_router)
 api_router.include_router(billing_admin_router)
 api_router.include_router(leads_router)
 api_router.include_router(menu_templates_router)
+api_router.include_router(notifications_router)
+api_router.include_router(audit_router)
 
 # Mount API router
 app.include_router(api_router)

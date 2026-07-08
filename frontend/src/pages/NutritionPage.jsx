@@ -135,9 +135,9 @@ const NutritionPage = () => {
     const [momentoEntreno, setMomentoEntreno] = useState(1);
     const [opcionPeri, setOpcionPeri] = useState('intra_post');
 
-    // Favorites state
+    // Favorites state (alimentos favoritos; UI oculta via FOOD_FAVORITES_UI, se conserva la logica)
     const [favorites, setFavorites] = useState(new Set());
-    
+
     // Data state
     const [distribution, setDistribution] = useState(null);
     const [distribTargetsOverlay, setDistribTargetsOverlay] = useState(null);
@@ -243,7 +243,7 @@ const NutritionPage = () => {
             }
         } catch (e) { /* ignore */ }
     };
-    
+
     // Handle preferences saved
     const handlePreferencesSaved = (preferences, avoidedCats, avoidedKws) => {
         setUserPreferences(preferences);

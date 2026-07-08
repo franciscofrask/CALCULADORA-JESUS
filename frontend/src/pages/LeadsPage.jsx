@@ -89,13 +89,22 @@ const LeadsPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Metricas (se cargan al entrar en esa vista)
+    // Metricas (se cargan al entrar en esa vista); filtros por periodo/origen/responsable
     const [metrics, setMetrics] = useState(null);
+    const [metricsFilter, setMetricsFilter] = useState({ period: 'all', source: '', assigned_to: '' });
     useEffect(() => {
         if (view !== 'metricas') return;
-        api.get('/leads/stats/metrics').then(r => setMetrics(r.data)).catch(() => toast.error('Error cargando métricas'));
+        const params = {};
+        if (metricsFilter.period !== 'all') {
+            const d = new Date();
+            d.setDate(d.getDate() - Number(metricsFilter.period));
+            params.from_date = d.toISOString().slice(0, 10);
+        }
+        if (metricsFilter.source) params.source = metricsFilter.source;
+        if (metricsFilter.assigned_to) params.assigned_to = metricsFilter.assigned_to;
+        api.get('/leads/stats/metrics', { params }).then(r => setMetrics(r.data)).catch(() => toast.error('Error cargando métricas'));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [view, leads]);
+    }, [view, leads, metricsFilter]);
 
     // Actualizacion generica de un campo del lead (responsable, seguimiento...)
     const handleUpdateField = async (leadId, field, value) => {
@@ -308,7 +317,7 @@ const LeadsPage = () => {
                                 <thead>
                                     <tr className="border-b border-[#222]">
                                         {['Nombre', 'Email', 'Teléfono', 'Origen', 'Estado', 'Asignado', 'Seguimiento', 'Fecha', 'Notas'].map(h => (
-                                            <th key={h} className="text-left text-[10px] text-white/40 uppercase tracking-wider px-4 py-3">{h}</th>
+                                            <th key={h} className={`text-left text-[10px] text-white/40 uppercase tracking-wider px-4 py-3 ${['Teléfono', 'Fecha', 'Notas'].includes(h) ? 'hidden md:table-cell' : ''} ${['Email', 'Asignado'].includes(h) ? 'hidden sm:table-cell' : ''}`}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -319,21 +328,21 @@ const LeadsPage = () => {
                                         return (
                                             <tr key={lead.id} className="border-b border-[#1A1A1A] hover:bg-white/5 cursor-pointer" onClick={() => setDetailLead(lead)} data-testid={`table-row-${lead.id}`}>
                                                 <td className="px-4 py-3 text-white text-sm font-medium">{lead.name}</td>
-                                                <td className="px-4 py-3 text-white/50 text-sm">{lead.email || '-'}</td>
-                                                <td className="px-4 py-3 text-white/50 text-sm">{lead.phone || '-'}</td>
+                                                <td className="px-4 py-3 text-white/50 text-sm hidden sm:table-cell">{lead.email || '-'}</td>
+                                                <td className="px-4 py-3 text-white/50 text-sm hidden md:table-cell">{lead.phone || '-'}</td>
                                                 <td className="px-4 py-3"><Badge className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-[10px]">{src.label}</Badge></td>
                                                 <td className="px-4 py-3">
                                                     <select value={lead.status} onChange={e => { e.stopPropagation(); handleUpdateStatus(lead.id, e.target.value); }} onClick={e => e.stopPropagation()} className="bg-[#0A0A0A] border border-[#333] text-white text-xs rounded px-2 py-1" data-testid={`status-select-${lead.id}`}>
                                                         {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                                                     </select>
                                                 </td>
-                                                <td className="px-4 py-3 text-white/50 text-xs">{staffName(lead.assigned_to) || <span className="text-white/25">Sin asignar</span>}</td>
+                                                <td className="px-4 py-3 text-white/50 text-xs hidden sm:table-cell">{staffName(lead.assigned_to) || <span className="text-white/25">Sin asignar</span>}</td>
                                                 <td className={`px-4 py-3 text-xs ${isOverdue(lead) ? 'text-red-400 font-bold' : 'text-white/50'}`}>
                                                     {lead.next_action_date ? new Date(lead.next_action_date + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'}
                                                     {isOverdue(lead) && ' ⚠'}
                                                 </td>
-                                                <td className="px-4 py-3 text-white/30 text-xs">{new Date(lead.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</td>
-                                                <td className="px-4 py-3 text-white/30 text-xs truncate max-w-[150px]">{lead.notes || '-'}</td>
+                                                <td className="px-4 py-3 text-white/30 text-xs hidden md:table-cell">{new Date(lead.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</td>
+                                                <td className="px-4 py-3 text-white/30 text-xs truncate max-w-[150px] hidden md:table-cell">{lead.notes || '-'}</td>
                                             </tr>
                                         );
                                     })}
@@ -348,6 +357,28 @@ const LeadsPage = () => {
             {/* ========== METRICS VIEW ========== */}
             {view === 'metricas' && metrics && (
                 <div className="space-y-4" data-testid="leads-metrics">
+                    {/* Filtros */}
+                    <div className="flex flex-wrap items-center gap-2" data-testid="metrics-filters">
+                        <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#222]">
+                            {[{ v: 'all', l: 'Todo' }, { v: '30', l: '30 días' }, { v: '90', l: '90 días' }].map(p => (
+                                <button key={p.v} onClick={() => setMetricsFilter(f => ({ ...f, period: p.v }))}
+                                    className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${metricsFilter.period === p.v ? 'bg-[#FF671F] text-white' : 'text-white/40 hover:text-white'}`}>
+                                    {p.l}
+                                </button>
+                            ))}
+                        </div>
+                        <select value={metricsFilter.source} onChange={e => setMetricsFilter(f => ({ ...f, source: e.target.value }))}
+                            className="bg-[#111] border border-[#222] text-white text-sm rounded-lg px-3 py-2">
+                            <option value="">Todos los orígenes</option>
+                            {SOURCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </select>
+                        <select value={metricsFilter.assigned_to} onChange={e => setMetricsFilter(f => ({ ...f, assigned_to: e.target.value }))}
+                            className="bg-[#111] border border-[#222] text-white text-sm rounded-lg px-3 py-2">
+                            <option value="">Todos los responsables</option>
+                            {staff.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                    </div>
+
                     {/* KPIs */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {[
@@ -480,7 +511,7 @@ const LeadsPage = () => {
             {/* ========== DETAIL MODAL ========== */}
             <Dialog open={!!detailLead} onOpenChange={o => !o && setDetailLead(null)}>
                 {detailLead && (
-                    <DialogContent className="bg-[#111] border-[#333] max-w-lg" data-testid="lead-detail-modal">
+                    <DialogContent className="bg-[#111] border-[#333] max-w-lg max-h-[88vh] overflow-y-auto" data-testid="lead-detail-modal">
                         <DialogHeader>
                             <DialogTitle className="text-white flex items-center gap-2">
                                 {detailLead.name}

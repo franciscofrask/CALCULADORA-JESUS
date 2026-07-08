@@ -31,6 +31,14 @@ const AdminUsersPage = () => {
     const [form, setForm] = useState(EMPTY_EDIT);
     const [saving, setSaving] = useState(false);
 
+    // Pestaña Equipo | Actividad (registro de auditoría)
+    const [tab, setTab] = useState('equipo');
+    const [auditEntries, setAuditEntries] = useState([]);
+    useEffect(() => {
+        if (tab !== 'actividad') return;
+        api.get('/admin/audit').then(r => setAuditEntries(r.data.entries || [])).catch(() => toast.error('Error cargando la actividad'));
+    }, [tab, api]);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -99,9 +107,45 @@ const AdminUsersPage = () => {
                     <h1 className="text-2xl font-bold uppercase">Usuarios</h1>
                     <p className="text-white/40 text-sm">Equipo: admins y coaches. Los clientes se gestionan desde su ficha.</p>
                 </div>
-                <Badge className="bg-[#111] border border-[#222] text-white/60">{users.length}</Badge>
+                <div className="flex items-center gap-3">
+                    <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#222]">
+                        {[{ v: 'equipo', l: 'Equipo' }, { v: 'actividad', l: 'Actividad' }].map(t => (
+                            <button key={t.v} onClick={() => setTab(t.v)}
+                                className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${tab === t.v ? 'bg-[#FF671F] text-white' : 'text-white/40 hover:text-white'}`}
+                                data-testid={`users-tab-${t.v}`}>
+                                {t.l}
+                            </button>
+                        ))}
+                    </div>
+                    <Badge className="bg-[#111] border border-[#222] text-white/60">{users.length}</Badge>
+                </div>
             </div>
 
+            {tab === 'actividad' && (
+                <Card className="bg-[#111] border-[#222]">
+                    <CardContent className="p-0">
+                        {auditEntries.length === 0 ? (
+                            <p className="text-white/30 text-sm text-center py-10">Sin actividad registrada todavía. Aquí quedará quién cambió macros, coaches, roles, contraseñas y leads.</p>
+                        ) : (
+                            <div className="divide-y divide-[#1a1a1a]">
+                                {auditEntries.map(e => (
+                                    <div key={e.id} className="flex items-start gap-3 px-4 py-3">
+                                        <Badge className="bg-[#0A0A0A] border border-[#333] text-white/60 text-[10px] uppercase flex-shrink-0 mt-0.5">{e.action}</Badge>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-white/80">{e.detail}</p>
+                                            <p className="text-[11px] text-white/30 mt-0.5">
+                                                {e.actor_name} · {new Date(e.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {tab === 'equipo' && (<>
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <div className="relative flex-1">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
@@ -164,6 +208,7 @@ const AdminUsersPage = () => {
                     </CardContent>
                 </Card>
             )}
+            </>)}
 
             <Dialog open={!!resetResult} onOpenChange={(o) => !o && setResetResult(null)}>
                 {resetResult && (

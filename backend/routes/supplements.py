@@ -95,6 +95,10 @@ async def save_protocol(client_id: str, data: SupplementProtocolSave, user=Depen
     await db.supplement_protocols.update_one(
         {"client_id": client_id}, {"$set": doc}, upsert=True
     )
+
+    from routes.notifications import notify
+    await notify(profile["user_id"], "suplementos", "Tu protocolo de suplementos se ha actualizado", "/dashboard/supplements")
+
     return SupplementProtocolResponse(**doc)
 
 

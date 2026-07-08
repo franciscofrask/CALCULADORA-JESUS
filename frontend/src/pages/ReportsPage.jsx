@@ -68,12 +68,26 @@ const ReportsPage = () => {
                 api.get('/reports/evolution')
             ]);
             setReports(reportsRes.data);
+            setHasMore(reportsRes.data.length === 50);
             setEvolution(evolutionRes.data);
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
             setLoading(false);
         }
+    };
+
+    // Paginación del historial: "Cargar más" trae el siguiente bloque
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const loadMore = async () => {
+        setLoadingMore(true);
+        try {
+            const res = await api.get('/reports', { params: { skip: reports.length } });
+            setReports(prev => [...prev, ...res.data]);
+            setHasMore(res.data.length === 50);
+        } catch { /* silencioso */ }
+        finally { setLoadingMore(false); }
     };
 
     const handleSubmit = async (e) => {
@@ -343,6 +357,12 @@ const ReportsPage = () => {
                             <Calendar className="w-10 h-10 text-foreground/20 mx-auto mb-3" />
                             <p className="text-foreground/40 text-sm">No hay reportes anteriores.</p>
                         </div>
+                    )}
+                    {hasMore && (
+                        <button onClick={loadMore} disabled={loadingMore} data-testid="reports-load-more"
+                            className="w-full py-3 rounded-2xl border border-border text-sm text-foreground/60 hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
+                            {loadingMore ? 'Cargando...' : 'Cargar más reportes'}
+                        </button>
                     )}
                 </div>
             )}

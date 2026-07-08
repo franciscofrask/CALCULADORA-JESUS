@@ -7,9 +7,11 @@ from typing import Optional
 import os
 import uuid
 import bcrypt
+from pymongo.errors import DuplicateKeyError
 
 from core.database import db
 from core.security import get_admin_user, generate_temp_password
+from routes.audit import audit
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
@@ -182,9 +184,11 @@ async def delete_lead_activity(lead_id: str, entry_id: str, user=Depends(get_adm
 @router.delete("/{lead_id}")
 async def delete_lead(lead_id: str, user=Depends(get_admin_user)):
     """Eliminar un lead."""
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1, "email": 1})
     result = await db.leads.delete_one({"id": lead_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Lead no encontrado")
+    await audit(user, "lead", f"Eliminó el lead {(lead or {}).get('name') or (lead or {}).get('email') or lead_id}")
     return {"message": "Lead eliminado"}
 
 
@@ -284,6 +288,8 @@ async def convert_lead_to_client(lead_id: str, data: dict, user=Depends(get_admi
         "created_at": converted_at,
     }}})
 
+    await audit(user, "lead", f"Convirtió el lead {lead.get('name') or email} a cliente (plan {plan})")
+
     return {
         "message": f"Lead convertido a cliente ({plan})",
         "user_id": new_user["id"],
@@ -310,10 +316,30 @@ async def get_lead_stats(user=Depends(get_admin_user)):
 
 
 @router.get("/stats/metrics")
-async def get_lead_metrics(user=Depends(get_admin_user)):
-    """Métricas del embudo: conversión, tiempos, origenes, motivos de descarte y evolución semanal."""
+async def get_lead_metrics(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    source: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    user=Depends(get_admin_user),
+):
+    """Métricas del embudo: conversión, tiempos, origenes, motivos de descarte y evolución
+    semanal. Filtros opcionales: rango de fechas de creación (YYYY-MM-DD), origen y responsable."""
+    query = {}
+    if from_date or to_date:
+        rng = {}
+        if from_date:
+            rng["$gte"] = from_date
+        if to_date:
+            rng["$lte"] = to_date + "T23:59:59"
+        query["created_at"] = rng
+    if source:
+        query["source"] = source
+    if assigned_to:
+        query["assigned_to"] = assigned_to
+
     leads = await db.leads.find(
-        {}, {"_id": 0, "status": 1, "source": 1, "created_at": 1, "converted_at": 1, "discard_reason": 1}
+        query, {"_id": 0, "status": 1, "source": 1, "created_at": 1, "converted_at": 1, "discard_reason": 1}
     ).to_list(10000)
 
     total = len(leads)
@@ -361,7 +387,9 @@ async def get_lead_metrics(user=Depends(get_admin_user)):
         "avg_days_to_convert": round(sum(conv_days) / len(conv_days), 1) if conv_days else None,
         "by_source": by_source,
         "discard_reasons": discard_reasons,
-        "weekly": [{"week": w, "count": weekly[w]} for w in sorted(weekly.keys())[-8:]],
+        # Con rango de fechas explícito se muestran todas sus semanas; sin él, las últimas 8
+        "weekly": [{"week": w, "count": weekly[w]}
+                   for w in (sorted(weekly.keys()) if (from_date or to_date) else sorted(weekly.keys())[-8:])],
     }
 
 
@@ -397,9 +425,8 @@ async def ghl_webhook(request: Request):
     if email and await db.users.find_one({"email": email, "deleted_at": None}):
         return {"status": "ok", "skipped": "already_client"}
 
-    # Dedup: si ya existe un lead con ese email/telefono, actualizarlo en vez de duplicar
-    existing = await _find_lead_by_contact(email, phone)
-    if existing:
+    async def _apply_reentry(existing: dict) -> dict:
+        """Actualiza un lead existente con los datos de la reentrada (dedup)."""
         update = {"updated_at": now, "ghl_raw": body}
         if name and not existing.get("name"):
             update["name"] = name
@@ -421,6 +448,11 @@ async def ghl_webhook(request: Request):
         await db.leads.update_one({"id": existing["id"]}, {"$set": update, "$push": {"activity": entry}})
         return {"status": "ok", "lead_id": existing["id"], "deduped": True}
 
+    # Dedup: si ya existe un lead con ese email/telefono, actualizarlo en vez de duplicar
+    existing = await _find_lead_by_contact(email, phone)
+    if existing:
+        return await _apply_reentry(existing)
+
     lead = {
         "id": str(uuid.uuid4()),
         "name": name,
@@ -435,5 +467,13 @@ async def ghl_webhook(request: Request):
         "ghl_raw": body,
     }
 
-    await db.leads.insert_one(lead)
+    try:
+        await db.leads.insert_one(lead)
+    except DuplicateKeyError:
+        # Carrera: otro webhook simultáneo insertó el mismo email entre la comprobación
+        # y este insert. El índice único parcial lo bloquea; tratamos como reentrada.
+        existing = await _find_lead_by_contact(email, phone)
+        if existing:
+            return await _apply_reentry(existing)
+        raise
     return {"status": "ok", "lead_id": lead["id"]}

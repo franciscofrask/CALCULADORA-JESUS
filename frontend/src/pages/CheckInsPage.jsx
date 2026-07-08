@@ -176,6 +176,11 @@ const CheckInsPage = () => {
     const [weekly, setWeekly] = useState({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
     const [monthly, setMonthly] = useState({ weight: '', body_fat_pct: '', chest: '', waist: '', hip: '', arm: '', thigh: '', goals_progress: '', challenges: '', notes: '' });
 
+    // Historial paginado: se muestran 12, "Cargar más" amplía y pide más al backend si hace falta
+    const [histShown, setHistShown] = useState(12);
+    const [histHasMore, setHistHasMore] = useState(false);
+    const [histLoadingMore, setHistLoadingMore] = useState(false);
+
     const fetchAll = useCallback(async () => {
         try {
             const [hsRes, ciRes] = await Promise.all([
@@ -183,13 +188,29 @@ const CheckInsPage = () => {
                 api.get('/checkins?limit=30'),
             ]);
             setHealthScore(hsRes.data);
-            setCheckins(Array.isArray(ciRes.data) ? ciRes.data : []);
+            const list = Array.isArray(ciRes.data) ? ciRes.data : [];
+            setCheckins(list);
+            setHistHasMore(list.length === 30);
         } catch {
             toast.error('Error al cargar check-ins');
         } finally {
             setLoading(false);
         }
     }, [api]);
+
+    const loadMoreHistory = async () => {
+        if (histShown < checkins.length) { setHistShown(s => s + 12); return; }
+        if (!histHasMore) return;
+        setHistLoadingMore(true);
+        try {
+            const res = await api.get(`/checkins?limit=30&skip=${checkins.length}`);
+            const more = Array.isArray(res.data) ? res.data : [];
+            setCheckins(prev => [...prev, ...more]);
+            setHistHasMore(more.length === 30);
+            setHistShown(s => s + 12);
+        } catch { /* silencioso */ }
+        finally { setHistLoadingMore(false); }
+    };
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -401,7 +422,7 @@ const CheckInsPage = () => {
                     <p className="text-foreground/40 text-center py-8 text-sm">Aún no tienes check-ins</p>
                 ) : (
                     <ul className="space-y-3">
-                        {checkins.slice(0, 12).map(c => (
+                        {checkins.slice(0, histShown).map(c => (
                             <li key={c.id} className="rounded-xl border border-border bg-muted p-3">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-card border border-border text-foreground/60">{c.type}</span>
@@ -432,6 +453,12 @@ const CheckInsPage = () => {
                             </li>
                         ))}
                     </ul>
+                )}
+                {(histShown < checkins.length || histHasMore) && (
+                    <button onClick={loadMoreHistory} disabled={histLoadingMore} data-testid="checkins-load-more"
+                        className="w-full mt-3 py-2.5 rounded-xl border border-border text-sm text-foreground/60 hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
+                        {histLoadingMore ? 'Cargando...' : 'Cargar más'}
+                    </button>
                 )}
             </Card>
         </div>
