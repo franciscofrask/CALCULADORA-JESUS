@@ -51,7 +51,9 @@ async def create_indexes():
     # vacío). Cierra la carrera de dos webhooks simultáneos del mismo contacto.
     await _ensure("leads", "email", unique=True,
                   partialFilterExpression={"email": {"$type": "string", "$gt": ""}})
-    await _ensure("leads", "assigned_to")                               # filtro responsable
+    # sparse: coincide con el índice preexistente en Atlas (evita IndexKeySpecsConflict).
+    # Filtramos por un assigned_to concreto (staff id), nunca por null, así que sparse es correcto.
+    await _ensure("leads", "assigned_to", sparse=True)                  # filtro responsable
     await _ensure("messages", [("receiver_id", 1), ("read", 1)])        # unread-count (badge)
     await _ensure("messages", [("sender_id", 1), ("created_at", -1)])   # conversaciones
     await _ensure("messages", [("receiver_id", 1), ("created_at", -1)])
