@@ -359,7 +359,7 @@ const ClientDetailPage = () => {
                                     <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs" onClick={openNewMacros} data-testid="change-macros-btn">Cambiar macros</Button>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <MacroGroup title="Entrenamiento" icon={Zap} color="#FF671F" items={[
                                     { label: 'Proteína', value: getV(mt, 'protein', 'proteinas') },
                                     { label: 'Hidratos', value: getV(mt, 'carbs', 'hidratos') },
@@ -599,7 +599,7 @@ const ClientDetailPage = () => {
                                 {bloque === 'siguiente' && (
                                     <div className="pt-1">
                                         <Label className="text-white/40 text-xs">A partir del día</Label>
-                                        <Input type="date" value={supProtocol.siguiente_fecha || ''} onChange={e => setSupProtocol(p => ({ ...p, siguiente_fecha: e.target.value }))} className="bg-[#0A0A0A] border-[#333] text-white mt-1 w-48" />
+                                        <Input type="date" value={supProtocol.siguiente_fecha || ''} onChange={e => setSupProtocol(p => ({ ...p, siguiente_fecha: e.target.value }))} className="bg-[#0A0A0A] border-[#333] text-white mt-1 w-full sm:w-48" />
                                     </div>
                                 )}
                                 <select onChange={e => { if (e.target.value) { supAdd(bloque, e.target.value); e.target.value = ''; } }} defaultValue=""

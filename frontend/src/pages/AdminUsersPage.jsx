@@ -100,14 +100,14 @@ const AdminUsersPage = () => {
     };
 
     return (
-        <div className="p-6 bg-[#0A0A0A] min-h-screen text-white">
-            <div className="flex items-center justify-between mb-5">
+        <div className="p-4 md:p-6 bg-[#0A0A0A] min-h-screen text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
                 <div>
                     <p className="text-xs text-[#FF671F] uppercase tracking-wider mb-1">Administración</p>
                     <h1 className="text-2xl font-bold uppercase">Usuarios</h1>
                     <p className="text-white/40 text-sm">Equipo: admins y coaches. Los clientes se gestionan desde su ficha.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#222]">
                         {[{ v: 'equipo', l: 'Equipo' }, { v: 'actividad', l: 'Actividad' }].map(t => (
                             <button key={t.v} onClick={() => setTab(t.v)}
@@ -173,9 +173,9 @@ const AdminUsersPage = () => {
                                 <thead>
                                     <tr className="text-left text-white/40 text-xs uppercase border-b border-[#222]">
                                         <th className="px-4 py-3">Nombre</th>
-                                        <th className="px-4 py-3">Email</th>
+                                        <th className="px-4 py-3 hidden md:table-cell">Email</th>
                                         <th className="px-4 py-3">Rol</th>
-                                        <th className="px-4 py-3">Plan</th>
+                                        <th className="px-4 py-3 hidden sm:table-cell">Plan</th>
                                         <th className="px-4 py-3">Estado</th>
                                         <th className="px-4 py-3 text-right">Acciones</th>
                                     </tr>
@@ -183,10 +183,13 @@ const AdminUsersPage = () => {
                                 <tbody>
                                     {users.map(u => (
                                         <tr key={u.id} className={`border-b border-[#1a1a1a] ${u.deleted ? 'opacity-50' : ''}`}>
-                                            <td className="px-4 py-3 font-medium">{u.name || '-'}</td>
-                                            <td className="px-4 py-3 text-white/60">{u.email}</td>
+                                            <td className="px-4 py-3 font-medium">
+                                                {u.name || '-'}
+                                                <span className="block md:hidden text-white/40 text-xs font-normal truncate max-w-[180px]">{u.email}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-white/60 hidden md:table-cell">{u.email}</td>
                                             <td className="px-4 py-3"><Badge className="bg-[#0A0A0A] border border-[#333] text-white/70">{ROLE_LABEL[u.role] || u.role}</Badge></td>
-                                            <td className="px-4 py-3">
+                                            <td className="px-4 py-3 hidden sm:table-cell">
                                                 {u.plan ? <span className="font-semibold" style={{ color: PLAN_COLORS[u.plan] || '#fff' }}>{u.plan}{u.comp_plan && <span className="text-white/30 text-xs ml-1">(cortesía)</span>}</span> : <span className="text-white/30">-</span>}
                                             </td>
                                             <td className="px-4 py-3">{u.deleted ? <Badge className="bg-red-500/15 text-red-400 border-0">Baja</Badge> : <Badge className="bg-green-500/15 text-green-500 border-0">Activo</Badge>}</td>

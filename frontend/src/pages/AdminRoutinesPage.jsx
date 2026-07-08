@@ -63,10 +63,10 @@ const AdminRoutinesPage = () => {
                             <thead>
                                 <tr className="text-left text-white/40 text-xs uppercase border-b border-[#222]">
                                     <th className="px-4 py-3">Cliente</th>
-                                    <th className="px-4 py-3">Plan</th>
+                                    <th className="px-4 py-3 hidden sm:table-cell">Plan</th>
                                     <th className="px-4 py-3">Rutina</th>
-                                    <th className="px-4 py-3">Días de entreno</th>
-                                    <th className="px-4 py-3">Generada</th>
+                                    <th className="px-4 py-3 hidden md:table-cell">Días de entreno</th>
+                                    <th className="px-4 py-3 hidden lg:table-cell">Generada</th>
                                     <th className="px-4 py-3 text-right"></th>
                                 </tr>
                             </thead>
@@ -78,14 +78,14 @@ const AdminRoutinesPage = () => {
                                             <p className="text-white font-medium">{r.name || '-'}</p>
                                             <p className="text-white/40 text-xs">{r.email}</p>
                                         </td>
-                                        <td className="px-4 py-3"><PlanBadge plan={r.plan} /></td>
+                                        <td className="px-4 py-3 hidden sm:table-cell"><PlanBadge plan={r.plan} /></td>
                                         <td className="px-4 py-3">
                                             {r.has_routine
                                                 ? <Badge className="bg-green-500/15 text-green-500 border-0">Activa</Badge>
                                                 : <Badge className="bg-yellow-500/15 text-yellow-400 border-0">Sin rutina</Badge>}
                                         </td>
-                                        <td className="px-4 py-3 text-white/60">{r.has_routine ? `${r.training_days} días` : '-'}</td>
-                                        <td className="px-4 py-3 text-white/40 text-xs">
+                                        <td className="px-4 py-3 text-white/60 hidden md:table-cell">{r.has_routine ? `${r.training_days} días` : '-'}</td>
+                                        <td className="px-4 py-3 text-white/40 text-xs hidden lg:table-cell">
                                             {r.routine_created_at ? new Date(r.routine_created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
                                         </td>
                                         <td className="px-4 py-3 text-right"><ChevronRight className="w-4 h-4 text-white/30 inline" /></td>
