@@ -165,11 +165,42 @@ class AlertResponse(BaseModel):
 
 # Food Suggestion Models
 class FoodSuggestion(BaseModel):
-    name: str
-    calories_per_100g: Optional[float] = None
-    protein_per_100g: Optional[float] = None
-    carbs_per_100g: Optional[float] = None
-    fat_per_100g: Optional[float] = None
+    """Datos que rellena el cliente al sugerir un alimento (formulario del proceso).
+    Los nombres de campo replican los del documento de `db.foods` para que la
+    aprobación por el admin sea una copia directa al catálogo."""
+    nombre: str
+    por_unidad: bool = False          # False = valores por 100 g; True = por unidad
+    racion: float = 100.0             # gramos de la ración (100 si por 100 g; peso de la unidad si por_unidad)
+    peso_tipo: str = "neto"           # "neto" | "escurrido" (informativo; el admin lo revisa a mano)
+    proteinas: float = 0.0
+    hidratos: float = 0.0
+    grasas: float = 0.0
+    url: Optional[str] = None         # enlace a la fuente de los datos nutricionales
+
+class FoodSuggestionUpdate(BaseModel):
+    """Campos que el admin puede editar de una sugerencia durante la revisión."""
+    model_config = ConfigDict(extra="ignore")
+    nombre: Optional[str] = None
+    por_unidad: Optional[bool] = None
+    racion: Optional[float] = None
+    proteinas: Optional[float] = None
+    hidratos: Optional[float] = None
+    grasas: Optional[float] = None
+    url: Optional[str] = None
+    categorias: Optional[str] = None   # categorías asignadas por el admin (pipe: "2.2|FRE")
+    admin_notes: Optional[str] = None
+
+class AdminFoodCreate(BaseModel):
+    """Alta directa de un alimento en el catálogo desde el panel admin."""
+    model_config = ConfigDict(extra="ignore")
+    nombre: str
+    por_unidad: bool = False
+    racion: float = 100.0
+    proteinas: float = 0.0
+    hidratos: float = 0.0
+    grasas: float = 0.0
+    url: Optional[str] = None
+    categorias: Optional[str] = None
 
 class FoodSuggestionResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -178,3 +209,6 @@ class FoodSuggestionResponse(BaseModel):
     food: FoodSuggestion
     status: str = "pending"
     created_at: str
+    categorias: Optional[str] = None
+    admin_notes: Optional[str] = None
+    photos: List[str] = []            # tipos de foto subidos: "frontal" y/o "reverso"

@@ -1002,6 +1002,12 @@ def validar_comida(
 _FOODS_CACHE = {"ts": 0.0, "data": None}
 _FOODS_CACHE_TTL = 300  # segundos
 
+def invalidate_foods_cache():
+    """Fuerza recargar el catálogo en la próxima búsqueda. Llamar tras dar de alta,
+    editar o borrar un alimento para que el cambio se vea sin esperar al TTL."""
+    _FOODS_CACHE["data"] = None
+    _FOODS_CACHE["ts"] = 0.0
+
 async def get_all_foods_cached(db) -> list:
     import time as _time
     now = _time.monotonic()

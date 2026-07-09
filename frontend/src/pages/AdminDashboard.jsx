@@ -14,7 +14,7 @@ import {
     LayoutDashboard, Users, CreditCard, Dumbbell,
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
-    AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils
+    AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple
 } from 'lucide-react';
 
 // Admin Dashboard Home
@@ -497,6 +497,7 @@ const AdminLayout = () => {
         { path: '/admin/messages', icon: MessageCircle, label: 'Mensajes' },
         { path: '/admin/routines', icon: Dumbbell, label: 'Rutinas' },
         { path: '/admin/menus', icon: Utensils, label: 'Menús' },
+        { path: '/admin/alimentos', icon: Apple, label: 'Alimentos' },
         { path: '/admin/payments', icon: CreditCard, label: 'Pagos' },
     ];
 

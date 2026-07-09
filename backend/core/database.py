@@ -65,6 +65,11 @@ async def create_indexes():
     await _ensure("notifications", [("user_id", 1), ("read", 1)])       # campanita cliente
     await _ensure("notifications", [("user_id", 1), ("created_at", -1)])
     await _ensure("audit_log", [("created_at", -1)])                    # registro de auditoría
+    # Sugerencias de alimentos por clientes y sus fotos (frontal/reverso).
+    await _ensure("food_suggestions", "id", unique=True)
+    await _ensure("food_suggestions", [("status", 1), ("created_at", -1)])   # panel admin por estado
+    await _ensure("food_suggestions", [("client_id", 1), ("created_at", -1)])  # límite semanal + mis sugerencias
+    await _ensure("food_suggestion_photos", [("suggestion_id", 1), ("kind", 1)])
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""

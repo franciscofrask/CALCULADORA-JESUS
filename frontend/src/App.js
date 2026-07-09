@@ -27,6 +27,7 @@ import SupplementsPage from "./pages/SupplementsPage";
 import CheckInsPage from "./pages/CheckInsPage";
 import MacroCalculatorClientPage from "./pages/MacroCalculatorClientPage";
 import FoodSearchPage from "./pages/FoodSearchPage";
+import AdminFoodSuggestionsPage from "./pages/AdminFoodSuggestionsPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 import WelcomePage from "./pages/WelcomePage";
 
@@ -158,6 +159,7 @@ function AppRoutes() {
                 <Route path="routines" element={<AdminRoutinesPage />} />
                 <Route path="supplements-catalog" element={<SupplementsCatalogPage />} />
                 <Route path="menus" element={<AdminMenusPage />} />
+                <Route path="alimentos" element={<AdminFoodSuggestionsPage />} />
                 <Route path="usuarios" element={<AdminUsersPage />} />
                 <Route path="payments" element={<AdminDashboard />} />
             </Route>

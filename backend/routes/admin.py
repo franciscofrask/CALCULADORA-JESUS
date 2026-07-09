@@ -11,6 +11,8 @@ from core.security import get_admin_user, hash_password, generate_temp_password
 from routes.notifications import notify
 from routes.audit import audit
 from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate, TrainerAssign
+from models.common import FoodSuggestionUpdate, AdminFoodCreate
+from calculator import invalidate_foods_cache
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -621,3 +623,240 @@ async def get_trainers(user = Depends(get_admin_user)):
         {"_id": 0, "password": 0}
     ).to_list(100)
     return trainers
+
+
+# ==================== SUGERENCIAS DE ALIMENTOS ====================
+#
+# Revisión y aprobación de los alimentos sugeridos por clientes. Al aprobar, el
+# alimento se carga en el catálogo (db.foods) con las categorías asignadas.
+
+def _food_doc_from_fields(f: dict, categorias: Optional[str]) -> dict:
+    """Construye un documento de db.foods a partir de los campos de una sugerencia/alta."""
+    por_unidad = bool(f.get("por_unidad"))
+    racion = float(f.get("racion") or 100) or 100.0
+    proteinas = float(f.get("proteinas") or 0)
+    hidratos = float(f.get("hidratos") or 0)
+    grasas = float(f.get("grasas") or 0)
+    url = (f.get("url") or "").strip() or None
+    return {
+        "id": str(uuid.uuid4()),
+        "nombre": (f.get("nombre") or "").strip(),
+        "categorias": (categorias or "").strip() or None,
+        "proteinas": proteinas,
+        "hidratos": hidratos,
+        "grasas": grasas,
+        "racion": racion,
+        "unidades": por_unidad,
+        "url": url,
+        "tiene_macros": any(v > 0 for v in (proteinas, hidratos, grasas)),
+        "tags": "",
+    }
+
+
+async def _suggestions_with_client(query: dict) -> List[Dict[str, Any]]:
+    """Sugerencias que cumplen `query`, enriquecidas con nombre y correo del cliente."""
+    docs = await db.food_suggestions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    cids = list({d["client_id"] for d in docs})
+    profiles = await db.client_profiles.find(
+        {"id": {"$in": cids}}, {"_id": 0, "id": 1, "user_id": 1}
+    ).to_list(len(cids) or 1)
+    uid_by_cid = {p["id"]: p["user_id"] for p in profiles}
+    users = await db.users.find(
+        {"id": {"$in": list(uid_by_cid.values())}}, {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(len(uid_by_cid) or 1)
+    umap = {u["id"]: u for u in users}
+    for d in docs:
+        u = umap.get(uid_by_cid.get(d["client_id"]))
+        d["client"] = {"name": u.get("name"), "email": u.get("email")} if u else None
+        d["photos"] = d.get("photos") or []
+    return docs
+
+
+@router.get("/food-suggestions")
+async def list_food_suggestions(status: Optional[str] = None, user = Depends(get_admin_user)):
+    """Lista sugerencias de alimentos. `status`: pending | approved | rejected (o vacío = todas)."""
+    query = {}
+    if status:
+        query["status"] = status
+    return await _suggestions_with_client(query)
+
+
+@router.get("/food-suggestions/{suggestion_id}")
+async def get_food_suggestion(suggestion_id: str, user = Depends(get_admin_user)):
+    """Detalle de una sugerencia concreta."""
+    result = await _suggestions_with_client({"id": suggestion_id})
+    if not result:
+        raise HTTPException(status_code=404, detail="Sugerencia no encontrada")
+    return result[0]
+
+
+@router.put("/food-suggestions/{suggestion_id}")
+async def update_food_suggestion(suggestion_id: str, data: FoodSuggestionUpdate, user = Depends(get_admin_user)):
+    """Edita los datos de una sugerencia (corrección del admin) y/o asigna categorías.
+    No modifica las fotos. Si el alimento ya estaba aprobado, sincroniza el alimento del catálogo."""
+    doc = await db.food_suggestions.find_one({"id": suggestion_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Sugerencia no encontrada")
+
+    payload = data.model_dump(exclude_unset=True)
+    food = dict(doc.get("food") or {})
+    for k in ("nombre", "por_unidad", "racion", "proteinas", "hidratos", "grasas", "url"):
+        if k in payload and payload[k] is not None:
+            food[k] = payload[k]
+
+    set_fields = {"food": food}
+    if "categorias" in payload:
+        set_fields["categorias"] = payload["categorias"]
+    if "admin_notes" in payload:
+        set_fields["admin_notes"] = payload["admin_notes"]
+
+    await db.food_suggestions.update_one({"id": suggestion_id}, {"$set": set_fields})
+
+    # Si ya estaba aprobado, reflejar los cambios en el alimento del catálogo
+    if doc.get("status") == "approved" and doc.get("food_id"):
+        new_doc = _food_doc_from_fields(food, set_fields.get("categorias", doc.get("categorias")))
+        await db.foods.update_one(
+            {"id": doc["food_id"]},
+            {"$set": {k: v for k, v in new_doc.items() if k != "id"}},
+        )
+        invalidate_foods_cache()
+
+    await audit(user, "editar", f"Editó la sugerencia de alimento {suggestion_id}")
+    return {"ok": True}
+
+
+@router.post("/food-suggestions/{suggestion_id}/approve")
+async def approve_food_suggestion(suggestion_id: str, user = Depends(get_admin_user)):
+    """Aprueba la sugerencia: crea el alimento en el catálogo y marca la sugerencia como aprobada."""
+    doc = await db.food_suggestions.find_one({"id": suggestion_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Sugerencia no encontrada")
+    if doc.get("status") == "approved":
+        raise HTTPException(status_code=409, detail="Esta sugerencia ya está aprobada")
+
+    food_doc = _food_doc_from_fields(doc.get("food") or {}, doc.get("categorias"))
+    await db.foods.insert_one(food_doc)
+    invalidate_foods_cache()
+
+    await db.food_suggestions.update_one(
+        {"id": suggestion_id},
+        {"$set": {
+            "status": "approved",
+            "food_id": food_doc["id"],
+            "reviewed_at": datetime.now(timezone.utc).isoformat(),
+            "reviewed_by": user["id"],
+        }},
+    )
+
+    # Avisar al cliente que sugirió el alimento (campanita in-app)
+    profile = await db.client_profiles.find_one({"id": doc["client_id"]}, {"_id": 0, "user_id": 1})
+    if profile:
+        await notify(
+            profile["user_id"],
+            "alimento",
+            f"Tu alimento sugerido '{food_doc['nombre']}' ha sido aprobado y ya está en la calculadora",
+            "/dashboard/foods",
+        )
+
+    await audit(user, "alta", f"Aprobó el alimento sugerido '{food_doc['nombre']}' ({food_doc['id']})")
+    return {"ok": True, "food_id": food_doc["id"]}
+
+
+@router.post("/food-suggestions/{suggestion_id}/reject")
+async def reject_food_suggestion(suggestion_id: str, data: Optional[dict] = None, user = Depends(get_admin_user)):
+    """Rechaza la sugerencia. Opcional: {motivo} guardado en las notas del admin."""
+    doc = await db.food_suggestions.find_one({"id": suggestion_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Sugerencia no encontrada")
+
+    set_fields = {
+        "status": "rejected",
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
+        "reviewed_by": user["id"],
+    }
+    motivo = (data or {}).get("motivo")
+    if motivo:
+        set_fields["admin_notes"] = motivo
+    await db.food_suggestions.update_one({"id": suggestion_id}, {"$set": set_fields})
+
+    # Avisar al cliente que sugirió el alimento (campanita in-app)
+    nombre = (doc.get("food") or {}).get("nombre") or "el alimento"
+    profile = await db.client_profiles.find_one({"id": doc["client_id"]}, {"_id": 0, "user_id": 1})
+    if profile:
+        titulo = f"Tu alimento sugerido '{nombre}' no se ha aprobado"
+        if motivo:
+            titulo += f". Motivo: {motivo}"
+        await notify(profile["user_id"], "alimento", titulo, "/dashboard/foods")
+
+    await audit(user, "editar", f"Rechazó la sugerencia de alimento {suggestion_id}")
+    return {"ok": True}
+
+
+@router.delete("/food-suggestions/{suggestion_id}")
+async def delete_food_suggestion(suggestion_id: str, user = Depends(get_admin_user)):
+    """Elimina una sugerencia y sus fotos. No borra el alimento del catálogo si ya fue aprobado."""
+    doc = await db.food_suggestions.find_one({"id": suggestion_id}, {"_id": 0, "id": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Sugerencia no encontrada")
+    await db.food_suggestion_photos.delete_many({"suggestion_id": suggestion_id})
+    await db.food_suggestions.delete_one({"id": suggestion_id})
+    await audit(user, "editar", f"Eliminó la sugerencia de alimento {suggestion_id}")
+    return {"ok": True}
+
+
+# ==================== ALTA / EDICIÓN DIRECTA DE ALIMENTOS ====================
+
+@router.post("/foods")
+async def admin_create_food(data: AdminFoodCreate, user = Depends(get_admin_user)):
+    """Alta directa de un alimento en el catálogo desde el panel admin."""
+    if not data.nombre.strip():
+        raise HTTPException(status_code=400, detail="El nombre es obligatorio")
+    racion = 100.0 if not data.por_unidad else max(float(data.racion or 0), 1.0)
+    food_doc = _food_doc_from_fields(
+        {**data.model_dump(), "racion": racion}, data.categorias
+    )
+    await db.foods.insert_one(food_doc)
+    invalidate_foods_cache()
+    await audit(user, "alta", f"Creó el alimento '{food_doc['nombre']}' ({food_doc['id']})")
+    return {"ok": True, "food_id": food_doc["id"]}
+
+
+@router.put("/foods/{food_id}")
+async def admin_update_food(food_id: str, data: FoodSuggestionUpdate, user = Depends(get_admin_user)):
+    """Edita un alimento del catálogo (incluye categorías)."""
+    existing = await db.foods.find_one({"id": food_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Alimento no encontrado")
+
+    payload = data.model_dump(exclude_unset=True)
+    updates: Dict[str, Any] = {}
+    for k in ("nombre", "proteinas", "hidratos", "grasas", "url", "categorias"):
+        if k in payload and payload[k] is not None:
+            updates[k] = payload[k]
+    if "por_unidad" in payload and payload["por_unidad"] is not None:
+        updates["unidades"] = payload["por_unidad"]
+    if "racion" in payload and payload["racion"] is not None:
+        updates["racion"] = payload["racion"]
+    if any(k in updates for k in ("proteinas", "hidratos", "grasas")):
+        p = updates.get("proteinas", existing.get("proteinas") or 0)
+        h = updates.get("hidratos", existing.get("hidratos") or 0)
+        g = updates.get("grasas", existing.get("grasas") or 0)
+        updates["tiene_macros"] = any(float(v or 0) > 0 for v in (p, h, g))
+
+    if not updates:
+        return {"ok": True}
+    await db.foods.update_one({"id": food_id}, {"$set": updates})
+    invalidate_foods_cache()
+    await audit(user, "editar", f"Editó el alimento {food_id}")
+    return {"ok": True}
+
+
+@router.delete("/foods/{food_id}")
+async def admin_delete_food(food_id: str, user = Depends(get_admin_user)):
+    """Elimina un alimento del catálogo (uso excepcional, no recuperable)."""
+    res = await db.foods.delete_one({"id": food_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Alimento no encontrado")
+    invalidate_foods_cache()
+    await audit(user, "baja", f"Eliminó el alimento {food_id}")
+    return {"ok": True}

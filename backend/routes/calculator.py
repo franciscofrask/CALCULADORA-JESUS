@@ -1,8 +1,9 @@
 """
 Rutas del calculador de macros y búsqueda de alimentos.
 """
-from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timezone, date
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Response
+from bson import Binary
+from datetime import datetime, timezone, timedelta, date
 import math
 import copy
 from typing import List, Dict, Any, Optional
@@ -866,24 +867,163 @@ async def suggest_foods_endpoint(
     return {"suggestions": sugerencias, "count": len(sugerencias)}
 
 # ==================== FOOD SUGGESTIONS (user submitted) ====================
+#
+# Proceso "Sugerencia e inclusión de alimentos": el cliente propone un alimento
+# con sus macros, el enlace de la fuente y dos fotos (frontal + reverso). El admin
+# lo revisa en su panel y, si lo aprueba, se carga en el catálogo (db.foods).
+
+MAX_SUGGEST_PHOTO_BYTES = 6 * 1024 * 1024  # 6 MB por foto
+ALLOWED_SUGGEST_PHOTO_TYPES = {
+    "image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif",
+}
+WEEKLY_SUGGESTION_LIMIT = 2  # máximo de alimentos que un cliente puede sugerir por semana
+
+
+def _week_start_iso() -> str:
+    """ISO del lunes 00:00 UTC de la semana actual (para el límite semanal)."""
+    now = datetime.now(timezone.utc)
+    monday = now - timedelta(days=now.weekday())
+    return monday.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+
+async def _store_suggestion_photo(suggestion_id: str, kind: str, file: UploadFile):
+    """Valida y guarda una foto de la sugerencia como binario en food_suggestion_photos."""
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_SUGGEST_PHOTO_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Formato de imagen no admitido ({content_type or 'desconocido'}). Usa JPEG, PNG, WebP o HEIC.",
+        )
+    contents = await file.read()
+    if len(contents) > MAX_SUGGEST_PHOTO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"La foto pesa {len(contents) // 1024} KB; el máximo permitido es {MAX_SUGGEST_PHOTO_BYTES // (1024 * 1024)} MB.",
+        )
+    await db.food_suggestion_photos.insert_one({
+        "id": str(uuid.uuid4()),
+        "suggestion_id": suggestion_id,
+        "kind": kind,  # "frontal" | "reverso"
+        "filename": file.filename or f"{kind}.jpg",
+        "content_type": content_type,
+        "size": len(contents),
+        "data": Binary(contents),
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+    })
+
 
 @router.post("/suggest-food", response_model=FoodSuggestionResponse)
-async def suggest_new_food(food: FoodSuggestion, user = Depends(get_current_user)):
-    """Usuario sugiere añadir un nuevo alimento."""
+async def suggest_new_food(
+    nombre: str = Form(...),
+    por_unidad: bool = Form(False),
+    racion: float = Form(100.0),
+    peso_tipo: str = Form("neto"),
+    proteinas: float = Form(0.0),
+    hidratos: float = Form(0.0),
+    grasas: float = Form(0.0),
+    url: Optional[str] = Form(None),
+    foto_frontal: Optional[UploadFile] = File(None),
+    foto_reverso: Optional[UploadFile] = File(None),
+    user = Depends(get_current_user),
+):
+    """El cliente sugiere un nuevo alimento (nombre, tipo de ración, macros, enlace y,
+    opcionalmente, fotos frontal y del reverso). Se registra como 'pendiente' hasta que
+    el admin lo revise. Cada cliente puede sugerir un máximo de 2 alimentos por semana."""
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
+
+    # Límite semanal (lunes-domingo)
+    used = await db.food_suggestions.count_documents({
+        "client_id": profile["id"],
+        "created_at": {"$gte": _week_start_iso()},
+    })
+    if used >= WEEKLY_SUGGESTION_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Solo puedes sugerir {WEEKLY_SUGGESTION_LIMIT} alimentos por semana. Vuelve a intentarlo la próxima semana.",
+        )
+
+    # racion: por 100 g -> 100; por unidad -> peso indicado (mínimo 1 g)
+    racion_g = 100.0 if not por_unidad else max(float(racion or 0), 1.0)
+    food = FoodSuggestion(
+        nombre=nombre.strip(),
+        por_unidad=por_unidad,
+        racion=racion_g,
+        peso_tipo=("escurrido" if peso_tipo == "escurrido" else "neto"),
+        proteinas=float(proteinas or 0),
+        hidratos=float(hidratos or 0),
+        grasas=float(grasas or 0),
+        url=(url.strip() if url and url.strip() else None),
+    )
+
+    suggestion_id = str(uuid.uuid4())
+
+    # Las fotos son opcionales: se guardan solo las que el cliente adjunte.
+    photos = []
+    if foto_frontal is not None and foto_frontal.filename:
+        await _store_suggestion_photo(suggestion_id, "frontal", foto_frontal)
+        photos.append("frontal")
+    if foto_reverso is not None and foto_reverso.filename:
+        await _store_suggestion_photo(suggestion_id, "reverso", foto_reverso)
+        photos.append("reverso")
+
     suggestion = {
-        "id": str(uuid.uuid4()),
+        "id": suggestion_id,
         "client_id": profile["id"],
         "food": food.model_dump(),
         "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "categorias": None,
+        "admin_notes": None,
+        "photos": photos,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
     await db.food_suggestions.insert_one(suggestion)
-    
     return FoodSuggestionResponse(**suggestion)
+
+
+@router.get("/my-food-suggestions", response_model=List[FoodSuggestionResponse])
+async def my_food_suggestions(user = Depends(get_current_user)):
+    """Sugerencias propias del cliente (para que vea el estado de cada una)."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        return []
+    docs = await db.food_suggestions.find(
+        {"client_id": profile["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return [FoodSuggestionResponse(**d) for d in docs]
+
+
+@router.get("/food-suggestions/{suggestion_id}/photo/{kind}")
+async def get_suggestion_photo(suggestion_id: str, kind: str, user = Depends(get_current_user)):
+    """Sirve la foto (frontal/reverso) de una sugerencia. El dueño o el staff pueden verla."""
+    suggestion = await db.food_suggestions.find_one(
+        {"id": suggestion_id}, {"_id": 0, "client_id": 1}
+    )
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Sugerencia no encontrada")
+
+    is_staff = user.get("role") in ("admin", "trainer")
+    if not is_staff:
+        profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+        if not profile or profile["id"] != suggestion["client_id"]:
+            raise HTTPException(status_code=403, detail="Sin permiso para ver esta foto")
+
+    photo = await db.food_suggestion_photos.find_one(
+        {"suggestion_id": suggestion_id, "kind": kind}, {"_id": 0}
+    )
+    if not photo or not photo.get("data"):
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+
+    return Response(
+        content=bytes(photo["data"]),
+        media_type=photo.get("content_type") or "application/octet-stream",
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "Content-Disposition": f'inline; filename="{photo.get("filename") or kind}"',
+        },
+    )
 
 # ==================== MENU TEMPLATES ====================
 

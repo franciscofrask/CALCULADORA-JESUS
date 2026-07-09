@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { descripcionCategoria, CATEGORIA_NOMBRES } from '../components/nutrition/calmaCategorias';
+import SuggestFoodModal from '../components/nutrition/SuggestFoodModal';
 
 // Calma $() token match: token === code OR token starts with `${code}.<digit>`.
 const tokenMatchesCode = (token, code) =>
@@ -151,6 +152,7 @@ const FoodSearchPage = () => {
     const [query, setQuery] = useState('');
     const [cats, setCats] = useState([]);            // categoriasEscogidas (cascada)
     const [opcion, setOpcion] = useState('');        // '' | 'genericos' | 'sinMacros' (excluyentes)
+    const [suggestOpen, setSuggestOpen] = useState(false);
 
     const setCatAt = (idx, value) => setCats(prev => {
         const next = [...prev];
@@ -197,7 +199,16 @@ const FoodSearchPage = () => {
         <div className="min-h-screen bg-background p-4 md:p-6">
             <div className="max-w-3xl mx-auto">
                 <div className="bg-card border border-border rounded-xl p-4 mb-4">
-                    <h1 className="text-xl font-bold text-foreground mb-1">Buscador de alimentos</h1>
+                    <div className="flex items-start justify-between gap-3 mb-1">
+                        <h1 className="text-xl font-bold text-foreground">Buscador de alimentos</h1>
+                        <button
+                            onClick={() => setSuggestOpen(true)}
+                            className="flex-shrink-0 inline-flex items-center gap-1.5 bg-brand-orange hover:bg-brand-orange/90 text-white text-sm font-medium rounded-lg px-3 py-2 transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Sugerir alimento
+                        </button>
+                    </div>
                     <p className="text-muted-foreground text-sm mb-4">
                         Busca entre todos los alimentos cargados en la calculadora. Ordenados por coincidencia con el nombre.
                     </p>
@@ -283,6 +294,7 @@ const FoodSearchPage = () => {
                     </>
                 )}
             </div>
+            <SuggestFoodModal open={suggestOpen} onClose={() => setSuggestOpen(false)} />
         </div>
     );
 };
