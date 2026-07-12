@@ -171,6 +171,8 @@ const NutritionPage = () => {
     // Menu options
     const [menuOptions, setMenuOptions] = useState([]);
     const [menuOptionsLoading, setMenuOptionsLoading] = useState(false);
+    const [menuFoodFilter, setMenuFoodFilter] = useState([]);   // filtro "con estos alimentos"
+    const [menuRelajado, setMenuRelajado] = useState(false);    // aviso: AND relajado
     
     // Summary expanded state
     const [summaryExpanded, setSummaryExpanded] = useState(false);
@@ -910,33 +912,52 @@ const NutritionPage = () => {
         toast.success(`Copiada ${mealInfo[sourceMealKey]?.name || sourceMealKey} del ${formatDate(sourceDiet.fecha)}`);
     };
 
-    // Menu options
-    const loadMenuOptions = async (mealKey) => {
-        const target = getMealTarget(mealKey);
-        const momentoMap = { 'C1': 'desayuno', 'C2': 'comida', 'C3': numComidas === 3 ? 'cena' : 'merienda', 'C4': 'cena' };
+    // Menu options: catálogo COMPLETO de menús (ligero); las cantidades se cuadran
+    // al seleccionar uno (menu-apply). El flujo antiguo de opciones pre-ajustadas
+    // (menu-options) sigue vivo para el buscador del coach.
+    const loadMenuOptions = async (mealKey, foods = []) => {
         setMenuOptionsLoading(true);
         setMenuOptionsModal({ open: true, mealKey });
+        setMenuFoodFilter(foods);
         try {
-            const result = await api('/api/calculator/menu-options', {
-                method: 'POST',
-                body: JSON.stringify({
-                    momento: momentoMap[mealKey] || 'comida',
-                    macros_objetivo: { P: target.P, H: target.H, G: target.G },
-                    es_vegano: false,
-                    excluir_proteinas: []
-                })
-            });
-            setMenuOptions(result.opciones || []);
+            const result = await api('/api/calculator/menu-catalog');
+            setMenuOptions(result.menus || []);
+            setMenuRelajado(false);
         } catch (err) {
-            toast.error('Error cargando opciones');
+            toast.error('Error cargando menús');
             setMenuOptions([]);
         }
         setMenuOptionsLoading(false);
     };
 
+    // Filtro "con estos alimentos" del modal de sugerencias (desactivado para el
+    // cliente 2026-07-12; se conserva para reactivar junto a las props del modal)
+    // eslint-disable-next-line no-unused-vars
+    const changeMenuFoodFilter = (foods) => {
+        if (menuOptionsModal.mealKey) loadMenuOptions(menuOptionsModal.mealKey, foods);
+    };
+
     const applyMenuOption = async (option) => {
         const mealKey = menuOptionsModal.mealKey;
-        const foods = option.items.map(item => ({
+        // El catálogo es ligero: al seleccionar, el backend cuadra las cantidades
+        // a los macros de ESTA comida (best effort: siempre devuelve el menú).
+        const target = getMealTarget(mealKey);
+        setMenuOptionsLoading(true);
+        let ajustado;
+        try {
+            ajustado = await api('/api/calculator/menu-apply', {
+                method: 'POST',
+                body: JSON.stringify({
+                    plantilla_id: option.id || option.plantilla_id,
+                    macros_objetivo: { P: target.P, H: target.H, G: target.G },
+                })
+            });
+        } catch (err) {
+            setMenuOptionsLoading(false);
+            toast.error('No se pudo montar ese menú');
+            return;
+        }
+        const foods = ajustado.items.map(item => ({
             alimento_id: item.alimento_id,
             nombre: item.nombre,
             cantidad_g: item.cantidad_g,
@@ -945,8 +966,11 @@ const NutritionPage = () => {
             que_cuenta: { P: true, H: true, G: true }
         }));
         setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
+        setMenuOptionsLoading(false);
         setMenuOptionsModal({ open: false, mealKey: null });
-        toast.success(`Menú "${option.nombre}" aplicado`);
+        toast.success(ajustado.cuadrada
+            ? `Menú "${ajustado.nombre}" aplicado y cuadrado`
+            : `Menú "${ajustado.nombre}" aplicado (aproximado: afina cantidades si quieres)`);
     };
 
     // Save & Copy
@@ -1480,6 +1504,12 @@ const NutritionPage = () => {
                 menuOptionsLoading={menuOptionsLoading}
                 menuOptions={menuOptions}
                 onApplyOption={applyMenuOption}
+                // Filtro "con estos alimentos" (biblioteca real) DESACTIVADO para el cliente
+                // a petición del usuario (2026-07-12). Para reactivarlo, descomentar:
+                // api={api}
+                // foodFilter={menuFoodFilter}
+                // onFoodFilterChange={changeMenuFoodFilter}
+                // relajado={menuRelajado}
             />
 
             {/* Build Meal Modal */}

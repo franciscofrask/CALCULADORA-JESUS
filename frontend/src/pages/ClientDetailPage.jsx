@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
 import CoachCheckins from '../components/CoachCheckins';
+import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
@@ -26,6 +27,127 @@ const USER_ROLES = [
     { value: 'trainer', label: 'Entrenador' },
     { value: 'admin', label: 'Admin' },
 ];
+
+// ===== Buscador de menús para el coach (biblioteca real de clientes + recetario) =====
+const MenuFinder = ({ api, clientId }) => {
+    const [macros, setMacros] = useState({ P: '', H: '', G: '' });
+    const [momento, setMomento] = useState('comida');
+    const [fuente, setFuente] = useState('ambas');
+    const [foods, setFoods] = useState([]);
+    const [resultados, setResultados] = useState(null);
+    const [relajado, setRelajado] = useState(false);
+    const [buscando, setBuscando] = useState(false);
+
+    // FoodFilterBar espera el api estilo fetch del área cliente; adaptamos el axios del admin
+    const fetchApi = React.useCallback(
+        (endpoint) => api.get(endpoint.replace(/^\/api/, '')).then(r => r.data),
+        [api]
+    );
+
+    const buscar = async (foodsOverride) => {
+        const P = parseFloat(macros.P), H = parseFloat(macros.H), G = parseFloat(macros.G);
+        if ([P, H, G].some(v => isNaN(v))) { toast.error('Indica los tres macros objetivo'); return; }
+        const f = foodsOverride ?? foods;
+        setBuscando(true);
+        try {
+            const res = await api.post('/calculator/menu-options', {
+                momento,
+                macros_objetivo: { P, H, G },
+                alimento_ids: f.map(x => x.id),
+                fuentes: fuente === 'ambas' ? ['recetario', 'clientes'] : [fuente],
+                client_id: clientId,
+            });
+            setResultados(res.data.opciones || []);
+            setRelajado(!!res.data.relajado);
+        } catch { toast.error('Error buscando menús'); }
+        setBuscando(false);
+    };
+
+    const cambiarFoods = (f) => { setFoods(f); if (resultados !== null) buscar(f); };
+
+    return (
+        <div className="space-y-4">
+            <Card className="bg-[#111] border-[#222]"><CardContent className="p-5 space-y-4">
+                <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Buscar menús para este cliente</p>
+                <div className="grid grid-cols-3 gap-3">
+                    {['P', 'H', 'G'].map(m => (
+                        <div key={m}>
+                            <Label className="text-white/50 text-xs">{{ P: 'Proteína (g)', H: 'Hidratos (g)', G: 'Grasas (g)' }[m]}</Label>
+                            <Input type="number" value={macros[m]} onChange={e => setMacros(v => ({ ...v, [m]: e.target.value }))}
+                                placeholder="0" className="bg-[#1A1A1A] border-[#333] text-white mt-1" data-testid={`menufinder-${m}`} />
+                        </div>
+                    ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <Label className="text-white/50 text-xs">Momento (para el recetario)</Label>
+                        <select value={momento} onChange={e => setMomento(e.target.value)}
+                            className="w-full mt-1 h-10 rounded-md bg-[#1A1A1A] border border-[#333] text-white text-sm px-3">
+                            {['desayuno', 'comida', 'merienda', 'cena'].map(x => <option key={x} value={x}>{x}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <Label className="text-white/50 text-xs">Fuente</Label>
+                        <select value={fuente} onChange={e => setFuente(e.target.value)}
+                            className="w-full mt-1 h-10 rounded-md bg-[#1A1A1A] border border-[#333] text-white text-sm px-3" data-testid="menufinder-fuente">
+                            <option value="ambas">Ambas fuentes</option>
+                            <option value="clientes">Solo menús reales (clientes)</option>
+                            <option value="recetario">Solo recetario</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="rounded-xl border border-[#222]">
+                    <FoodFilterBar api={fetchApi} selected={foods} onChange={cambiarFoods} />
+                </div>
+                <Button onClick={() => buscar()} disabled={buscando}
+                    className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold" data-testid="menufinder-buscar">
+                    {buscando ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Buscar menús
+                </Button>
+            </CardContent></Card>
+
+            {resultados !== null && (
+                <Card className="bg-[#111] border-[#222]"><CardContent className="p-5 space-y-3">
+                    {relajado && (
+                        <p className="text-xs text-amber-500 font-medium">
+                            No hay menús con todos esos alimentos a la vez: se muestran los que más se acercan.
+                        </p>
+                    )}
+                    {resultados.length === 0 ? (
+                        <p className="text-white/40 text-sm text-center py-6">Ningún menú encaja con esos macros y alimentos.</p>
+                    ) : resultados.map((op) => (
+                        <div key={op.biblioteca_id || op.plantilla_id || op.letra} className="border border-[#222] rounded-xl p-4 space-y-2" data-testid={`menufinder-result-${op.letra}`}>
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <p className="font-semibold text-white text-sm flex-1 min-w-0 truncate">{op.nombre}</p>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    {op.fuente === 'clientes'
+                                        ? <Badge className="bg-[#FF671F]/15 text-[#FF671F] border border-[#FF671F]/30 text-[10px]">REAL · {op.popularidad?.clientes || 0} clientes · {op.popularidad?.usos || 0} usos</Badge>
+                                        : <Badge className="bg-white/10 text-white/60 border-0 text-[10px]">RECETARIO</Badge>}
+                                    {op.cuadrada
+                                        ? <Badge className="bg-green-500/15 text-green-400 border-0 text-[10px]">Cuadrada</Badge>
+                                        : <Badge className="bg-amber-500/15 text-amber-400 border-0 text-[10px]">≈ Aproximada</Badge>}
+                                </div>
+                            </div>
+                            <div className="space-y-0.5">
+                                {op.items.map((it, i) => (
+                                    <div key={i} className="flex justify-between text-sm">
+                                        <span className="text-white/70">{it.nombre}</span>
+                                        <span className="text-white/40 font-mono">{it.cantidad_g}g</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-500/15 text-green-400">{op.macros_totales?.P?.toFixed(0)}P</span>
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/15 text-blue-400">{op.macros_totales?.H?.toFixed(0)}H</span>
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-400">{op.macros_totales?.G?.toFixed(0)}G</span>
+                                <span className="px-2 py-0.5 rounded-full text-[11px] text-white/40">{op.macros_totales?.kcal} kcal</span>
+                            </div>
+                        </div>
+                    ))}
+                </CardContent></Card>
+            )}
+        </div>
+    );
+};
 
 const ClientDetailPage = () => {
     const { clientId } = useParams();
@@ -277,6 +399,7 @@ const ClientDetailPage = () => {
         { id: 'cuestionario', label: 'Cuestionario', icon: ClipboardList },
         { id: 'entrenamiento', label: 'Entreno', icon: Dumbbell },
         { id: 'nutricion', label: 'Nutrición', icon: Utensils },
+        { id: 'menus', label: 'Menús', icon: ClipboardList },
         { id: 'suplementos', label: 'Suplementos', icon: Pill },
         { id: 'seguimiento', label: 'Seguimiento', icon: TrendingUp },
     ];
@@ -668,6 +791,11 @@ const ClientDetailPage = () => {
                             </Card>
                         </div>
                     </>) : <EmptyState icon={Utensils} message="Sin datos de nutrición aún." />}
+                </TabsContent>
+
+                {/* ========== TAB MENÚS (buscador biblioteca + recetario) ========== */}
+                <TabsContent value="menus" className="space-y-4">
+                    <MenuFinder api={api} clientId={clientId} />
                 </TabsContent>
 
                 {/* ========== TAB CALCULADORA ========== */}

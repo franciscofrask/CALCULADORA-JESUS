@@ -91,13 +91,13 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
 
     const macroState = (servedVal, tgtVal) => {
-        if (!(servedVal > 0)) return { label: null, cls: '', over: false };
+        if (!(servedVal > 0)) return { label: null, cls: '', over: false, barColor: undefined };
         const r = tgtVal - servedVal;
-        if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false };
-        if (Math.abs(r) < 4) return { label: 'Válido', cls: 'text-amber-500', over: false };
+        if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false, barColor: '#10B981' };
+        if (Math.abs(r) < 4) return { label: 'Válido', cls: 'text-amber-500', over: false, barColor: '#F59E0B' };
         return r > 0
-            ? { label: `faltan ${fmt1(r)}g`, cls: 'text-red-500', over: false }
-            : { label: `sobran ${fmt1(-r)}g`, cls: 'text-red-500', over: true };
+            ? { label: `faltan ${fmt1(r)}g`, cls: 'text-red-500', over: false, barColor: '#EF4444' }
+            : { label: `sobran ${fmt1(-r)}g`, cls: 'text-red-500', over: true, barColor: '#EF4444' };
     };
 
     const bars = [
@@ -114,7 +114,7 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                         <span className="text-xs font-bold w-16 flex-shrink-0 hidden sm:inline" style={{ color }}>{name}</span>
                         <span className="text-xs font-bold w-3 flex-shrink-0 sm:hidden" style={{ color }}>{label}</span>
-                        <div className="flex-1 min-w-0"><ProgressBar value={val} max={tgt} color={color} height={9} showCheck /></div>
+                        <div className="flex-1 min-w-0"><ProgressBar value={val} max={tgt} color={color} height={9} showCheck statusColor={hasFoods ? st.barColor : undefined} /></div>
                         <span className={`text-xs font-data w-[72px] text-right ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
                     </div>
                     {hasFoods && st.label && <div className={`text-[10px] font-semibold text-right ${st.cls}`}>{st.label}</div>}

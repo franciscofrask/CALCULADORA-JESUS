@@ -806,6 +806,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             continue
         remaining = _target(meal_key)
         refit_foods = []
+        food_docs = []
         for it in (meal.get("alimentos") or []):
             aid = it.get("alimento_id")
             if aid in (None, ""):
@@ -840,6 +841,42 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                 "racion": food.get("racion"),
                 "unidades": es_unidad,
             })
+            food_docs.append(food)
+
+        # Pasada final de afinado (mismo optimizador que los menús): el dimensionado
+        # secuencial "sin pasarse" deja macros cortos que solo se arreglan aceptando
+        # pasarse un poco o intercambiando cantidades entre alimentos (p.ej. el único
+        # alimento con grasa va por unidades: 1 huevo = 6G y faltan 4G -> 2 huevos).
+        if refit_foods:
+            from meal_templates import afinar_cantidades, _menu_max
+            from meal_builder import get_effective_macros_per_100g, get_food_limits
+            from calculator import get_food_config
+            tgt = _target(meal_key)
+            obj_fino = {"P": tgt["proteinas"], "H": tgt["hidratos"], "G": tgt["grasas"]}
+            opt_foods = []
+            for rf, food in zip(refit_foods, food_docs):
+                cfg = get_food_config(food)
+                ef = get_effective_macros_per_100g(food)
+                minimo = float(cfg.get("minimo", 5) or 5)
+                _, maximo_base = get_food_limits(food, cfg)
+                peso_unidad = float(food.get("peso_unidad") or food.get("racion") or 0)
+                es_unidad = bool(food.get("unidades") or food.get("por_unidad") or cfg.get("por_unidad"))
+                opt_foods.append({
+                    "cantidad": float(rf["cantidad_g"]),
+                    "minimo": minimo,
+                    "maximo": max(minimo, _menu_max("", ef.get("cat", ""), maximo_base)),
+                    "ef": ef, "cat": ef.get("cat", ""),
+                    "paso_unidad": peso_unidad if (es_unidad and peso_unidad > 0) else None,
+                })
+            afinar_cantidades(opt_foods, obj_fino)
+            for rf, of in zip(refit_foods, opt_foods):
+                fac = of["cantidad"] / 100.0
+                rf["cantidad_g"] = round(of["cantidad"], 1)
+                rf["macros_efectivos"] = {
+                    "P": round((of["ef"].get("P", 0) or 0) * fac, 1),
+                    "H": round((of["ef"].get("H", 0) or 0) * fac, 1),
+                    "G": round((of["ef"].get("G", 0) or 0) * fac, 1),
+                }
         out_comidas[meal_key] = {**meal, "alimentos": refit_foods}
     return {"comidas": out_comidas, "distribution": dist, "excluidos": excluidos}
 
@@ -1036,19 +1073,162 @@ async def get_menu_options(data: dict, user = Depends(get_current_user)):
     """
     from meal_templates import generar_opciones_menu
 
+    # Biblioteca real en las sugerencias del CLIENTE: DESACTIVADA (petición 2026-07-12).
+    # El coach la sigue usando desde su buscador (envía `fuentes` explícitamente).
+    BIBLIOTECA_EN_SUGERENCIAS_CLIENTE = False
+
     momento = data.get("momento", "comida")
     macros_objetivo = data.get("macros_objetivo") or {"P": 40, "H": 15, "G": 8}
     es_vegano = bool(data.get("es_vegano", False))
     excluir_proteinas = data.get("excluir_proteinas") or []
+    if data.get("fuentes"):
+        fuentes = set(data["fuentes"])
+    else:
+        fuentes = {"recetario", "clientes"} if BIBLIOTECA_EN_SUGERENCIAS_CLIENTE else {"recetario"}
+    tipo = "peri" if (data.get("tipo") or "").strip().lower() == "peri" else "comida"
 
-    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    # El coach puede buscar PARA un cliente: se usan las preferencias de ese cliente
+    profile = None
+    client_id = (data.get("client_id") or "").strip()
+    if client_id and user.get("role") in ("admin", "trainer"):
+        profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    if not profile:
+        profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     avoided_prefixes, avoided_keywords = build_avoided_filter(profile)
 
-    opciones = await generar_opciones_menu(
-        db, momento, macros_objetivo, es_vegano, excluir_proteinas,
-        avoided_prefixes, avoided_keywords,
+    from meal_library import buscar_en_biblioteca
+
+    alimento_ids = data.get("alimento_ids") or []
+    relajado = False
+    opciones = []
+
+    if alimento_ids:
+        # Filtro "con estos alimentos" (AND estricto en ambas fuentes)
+        if "clientes" in fuentes:
+            opciones += await buscar_en_biblioteca(
+                db, macros_objetivo, alimento_ids=alimento_ids, tipo=tipo, limit=6,
+            )
+        if "recetario" in fuentes:
+            plantillas = await generar_opciones_menu(
+                db, momento, macros_objetivo, es_vegano, excluir_proteinas,
+                avoided_prefixes, avoided_keywords, required_food_ids=alimento_ids,
+            )
+            for p in plantillas:
+                p["fuente"] = "recetario"
+            opciones += plantillas
+        if not opciones and len(alimento_ids) > 1 and "clientes" in fuentes:
+            vistos = set()
+            for i in range(len(alimento_ids)):
+                subset = alimento_ids[:i] + alimento_ids[i + 1:]
+                for r in await buscar_en_biblioteca(db, macros_objetivo, alimento_ids=subset, tipo=tipo, limit=6):
+                    if r["biblioteca_id"] not in vistos:
+                        vistos.add(r["biblioteca_id"])
+                        opciones.append(r)
+            relajado = bool(opciones)
+    else:
+        # Sin filtro de alimentos: TODAS las plantillas del recetario que encajen
+        # (y biblioteca real solo si la fuente está activa: hoy, solo el coach).
+        if "recetario" in fuentes:
+            plantillas = await generar_opciones_menu(
+                db, momento, macros_objetivo, es_vegano, excluir_proteinas,
+                avoided_prefixes, avoided_keywords,
+                max_opciones=40, variar_proteinas=False,
+            )
+            for p in plantillas:
+                p["fuente"] = "recetario"
+            opciones += plantillas
+        if "clientes" in fuentes:
+            opciones += await buscar_en_biblioteca(db, macros_objetivo, tipo=tipo, limit=6)
+
+    # Orden global: cuadradas primero, luego cercanía al objetivo
+    obj = {m: float(macros_objetivo.get(m, 0) or 0) for m in ("P", "H", "G")}
+    def _err(o):
+        mt = o.get("macros_totales", {})
+        return sum(abs(obj[m] - float(mt.get(m, 0) or 0)) for m in ("P", "H", "G"))
+    opciones.sort(key=lambda o: (not o.get("cuadrada", False), _err(o)))
+    opciones = opciones[:40]
+    abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i, o in enumerate(opciones):
+        o["letra"] = abc[i] if i < len(abc) else str(i + 1)
+    return {"opciones": opciones, "relajado": relajado}
+
+
+@router.get("/menu-catalog")
+async def menu_catalog(user = Depends(get_current_user)):
+    """Listado ligero de TODOS los menús del recetario para "Sugiéreme un menú".
+    Sin cálculos: solo nombre y alimentos. Las cantidades se cuadran al seleccionar
+    (POST /calculator/menu-apply). Deduplicado por nombre (comida/cena duplicados)."""
+    docs = await db.menu_templates.find(
+        {}, {"_id": 0, "id": 1, "nombre": 1, "momento": 1, "items": 1}
+    ).to_list(2000)
+    vistos = {}
+    for d in docs:
+        key = (d.get("nombre") or "").strip().lower()
+        if not key or key in vistos:
+            continue
+        vistos[key] = {
+            "id": d["id"],
+            "nombre": d["nombre"],
+            "momento": d.get("momento"),
+            "alimentos": [it.get("buscar", "") for it in d.get("items", []) if it.get("buscar")],
+        }
+    menus = sorted(vistos.values(), key=lambda x: x["nombre"].lower())
+    return {"menus": menus, "total": len(menus)}
+
+
+@router.post("/menu-apply")
+async def menu_apply(data: dict, user = Depends(get_current_user)):
+    """Cuadra UN menú del recetario a los macros objetivo (se llama al seleccionarlo).
+
+    Body: {plantilla_id, macros_objetivo: {P,H,G}}. Devuelve items con cantidades
+    ajustadas + macros_totales + cuadrada (best effort: nunca rechaza el menú elegido).
+    """
+    from meal_templates import _ajustar_plantilla
+
+    plantilla_id = (data.get("plantilla_id") or "").strip()
+    macros_objetivo = data.get("macros_objetivo") or {}
+    plantilla = await db.menu_templates.find_one({"id": plantilla_id}, {"_id": 0})
+    if not plantilla:
+        raise HTTPException(status_code=404, detail="Menú no encontrado")
+
+    opcion = await _ajustar_plantilla(db, plantilla, macros_objetivo, best_effort=True)
+    if not opcion:
+        raise HTTPException(status_code=422, detail="No se pudo montar el menú (algún alimento ya no existe)")
+    return opcion
+
+
+@router.post("/library-search")
+async def library_search(data: dict, user = Depends(get_current_user)):
+    """Busca menús REALES (biblioteca minada de clientes, db.meal_library) que
+    contengan los alimentos indicados y cuadren/ajusten a los macros objetivo.
+
+    Body: {macros_objetivo: {P,H,G}, alimento_ids?: [int], tipo?: 'comida'|'peri', limit?: int}
+    """
+    from meal_library import buscar_en_biblioteca
+
+    macros_objetivo = data.get("macros_objetivo") or {}
+    alimento_ids = data.get("alimento_ids") or []
+    tipo = (data.get("tipo") or "comida").strip().lower()
+    if tipo not in ("comida", "peri"):
+        tipo = "comida"
+    limit = min(int(data.get("limit") or 5), 15)
+
+    resultados = await buscar_en_biblioteca(
+        db, macros_objetivo, alimento_ids=alimento_ids, tipo=tipo, limit=limit,
     )
-    return {"opciones": opciones}
+    relajado = False
+    if not resultados and len(alimento_ids) > 1:
+        # AND estricto sin resultados: relajar a n-1 alimentos (se avisa al front)
+        for i in range(len(alimento_ids)):
+            subset = alimento_ids[:i] + alimento_ids[i + 1:]
+            parciales = await buscar_en_biblioteca(
+                db, macros_objetivo, alimento_ids=subset, tipo=tipo, limit=limit,
+            )
+            resultados.extend(r for r in parciales if r["biblioteca_id"] not in {x["biblioteca_id"] for x in resultados})
+        resultados.sort(key=lambda r: (not r["cuadrada"], -r["popularidad"]["clientes"]))
+        resultados = resultados[:limit]
+        relajado = bool(resultados)
+    return {"resultados": resultados, "relajado": relajado}
 
 
 @router.get("/test-templates")

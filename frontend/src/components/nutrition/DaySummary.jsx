@@ -4,11 +4,13 @@ import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
 // Progress Bar Component
-export const ProgressBar = ({ value, max, color, height = 6, showCheck = false }) => {
+export const ProgressBar = ({ value, max, color, height = 6, showCheck = false, statusColor }) => {
     const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
     const isOver = value > max;
     const isOk = Math.abs(value - max) <= 0;
-    const actualColor = isOver ? '#EF4444' : color;
+    // statusColor (opcional): color según estado Cuadrado/Válido/fuera, calculado por
+    // el llamador con sus umbrales. Sin él, comportamiento clásico (rojo si se pasa).
+    const actualColor = statusColor || (isOver ? '#EF4444' : color);
 
     return (
         <div className="flex items-center gap-2 w-full">
