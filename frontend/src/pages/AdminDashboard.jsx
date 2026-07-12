@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { PlanBadge, JG12Logo } from './ClientDashboard';
-import { 
+import {
     LayoutDashboard, Users, CreditCard, Dumbbell,
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
@@ -65,10 +65,10 @@ const AdminDashboard = () => {
 
     if (loading) {
         return (
-            <div className="p-6 bg-[#0A0A0A] min-h-screen">
+            <div className="p-4 md:p-6 bg-[#0A0A0A] min-h-screen">
                 <div className="animate-pulse space-y-4">
-                    <div className="h-8 bg-[#222] rounded w-1/4" />
-                    <div className="grid grid-cols-5 gap-4">
+                    <div className="h-8 bg-[#222] rounded w-1/2 md:w-1/4" />
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                         {[1,2,3,4,5].map(i => <div key={i} className="h-28 bg-[#111] rounded-xl" />)}
                     </div>
                     <div className="h-48 bg-[#111] rounded-xl" />
@@ -81,14 +81,14 @@ const AdminDashboard = () => {
     const totalPlanActive = Object.values(stats?.plans || {}).reduce((a, b) => a + b, 0);
 
     return (
-        <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen" data-testid="admin-dashboard">
+        <div className="p-4 md:p-6 space-y-5 md:space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen" data-testid="admin-dashboard">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>PANEL DE CONTROL</h1>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>PANEL DE CONTROL</h1>
                     <p className="text-white/40 text-sm">Estado del negocio en tiempo real</p>
                 </div>
-                <div className="relative">
+                <div className="relative flex-shrink-0">
                     <Button variant="outline" size="icon" onClick={() => setNotifOpen(o => !o)}
                         className="bg-transparent border-white/20 hover:border-[#FF671F]" data-testid="notif-bell">
                         <Bell className="w-4 h-4 text-white" />
@@ -137,9 +137,9 @@ const AdminDashboard = () => {
             <Card className="bg-[#111111] border-[#222]" data-testid="plan-distribution">
                 <CardContent className="p-5">
                     <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-4">Distribución por plan</p>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         {/* Bar */}
-                        <div className="flex-1 flex h-8 rounded-lg overflow-hidden bg-[#1A1A1A]">
+                        <div className="w-full sm:flex-1 flex h-8 rounded-lg overflow-hidden bg-[#1A1A1A]">
                             {['gold', 'silver', 'bronze', 'elm'].map(plan => {
                                 const count = stats?.plans?.[plan] || 0;
                                 const pct = totalPlanActive > 0 ? (count / totalPlanActive) * 100 : 0;
@@ -157,7 +157,7 @@ const AdminDashboard = () => {
                             })}
                         </div>
                         {/* Legend */}
-                        <div className="flex gap-3 flex-shrink-0">
+                        <div className="flex flex-wrap gap-x-3 gap-y-1.5 flex-shrink-0">
                             {['gold', 'silver', 'bronze', 'elm'].map(plan => (
                                 <div key={plan} className="flex items-center gap-1.5">
                                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: planColors[plan] }} />
@@ -190,17 +190,17 @@ const AdminDashboard = () => {
                                 const payDate = u.next_payment ? new Date(u.next_payment) : null;
                                 const daysLeft = payDate ? Math.ceil((payDate - new Date()) / (1000 * 60 * 60 * 24)) : '?';
                                 return (
-                                    <div key={i} className="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-lg border border-[#222] hover:border-[#FF671F]/30 transition-colors" data-testid={`upcoming-${i}`}>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 bg-[#FF671F]/10 rounded-lg flex items-center justify-center">
+                                    <div key={i} className="flex items-center justify-between gap-2 p-3 bg-[#0A0A0A] rounded-lg border border-[#222] hover:border-[#FF671F]/30 transition-colors" data-testid={`upcoming-${i}`}>
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-9 h-9 bg-[#FF671F]/10 rounded-lg flex items-center justify-center flex-shrink-0">
                                                 <span className="text-[#FF671F] font-bold text-sm" style={{ fontFamily: 'Barlow Condensed' }}>{daysLeft}d</span>
                                             </div>
-                                            <div>
-                                                <p className="text-white text-sm font-medium">{u.name}</p>
+                                            <div className="min-w-0">
+                                                <p className="text-white text-sm font-medium truncate">{u.name}</p>
                                                 <p className="text-white/40 text-xs">{payDate ? payDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'}</p>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                                             <PlanBadge plan={u.plan} />
                                             <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Barlow Condensed' }}>{u.price != null ? `${u.price}€` : '-'}</span>
                                         </div>
@@ -230,20 +230,20 @@ const AdminDashboard = () => {
                         {clients.slice(0, 8).map(c => (
                             <div
                                 key={c.id}
-                                className="flex items-center justify-between p-2.5 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
+                                className="flex items-center justify-between gap-2 p-2.5 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
                                 onClick={() => navigate(`/admin/clients/${c.id}`)}
                                 data-testid={`client-row-${c.id}`}
                             >
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-[#222] rounded-lg flex items-center justify-center">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-8 h-8 bg-[#222] rounded-lg flex items-center justify-center flex-shrink-0">
                                         <span className="text-[#FF671F] font-bold text-xs">{c.user?.name?.charAt(0)}</span>
                                     </div>
-                                    <div>
-                                        <p className="text-white text-sm font-medium">{c.user?.name}</p>
-                                        <p className="text-white/30 text-xs">{c.user?.email}</p>
+                                    <div className="min-w-0">
+                                        <p className="text-white text-sm font-medium truncate">{c.user?.name}</p>
+                                        <p className="text-white/30 text-xs truncate">{c.user?.email}</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-shrink-0">
                                     <PlanBadge plan={c.plan} />
                                     <Badge className={c.status === 'activo' ? 'bg-green-500/10 text-green-500 border-0 text-[10px]' : 'bg-red-500/10 text-red-400 border-0 text-[10px]'}>
                                         {c.status || 'sin estado'}
@@ -462,7 +462,11 @@ const AdminLayout = () => {
     // Aviso de leads nuevos y mensajes sin leer: sondeo cada 60s; badges en el menu
     const [newLeadsCount, setNewLeadsCount] = useState(0);
     const [unreadMessages, setUnreadMessages] = useState(0);
+    const [moreOpen, setMoreOpen] = useState(false); // drawer "Más" en movil
     const prevLeadsCount = useRef(null);
+
+    // Cerrar el drawer "Más" al navegar entre secciones
+    useEffect(() => { setMoreOpen(false); }, [location.pathname]);
     useEffect(() => {
         let active = true;
         const poll = async () => {
@@ -500,6 +504,11 @@ const AdminLayout = () => {
         { path: '/admin/menus', icon: Utensils, label: 'Menús' },
         { path: '/admin/alimentos', icon: Apple, label: 'Alimentos' },
     ];
+
+    // En movil la barra inferior muestra 4 accesos + boton "Mas" (el resto va al drawer).
+    const primaryPaths = ['/admin', '/admin/clients', '/admin/leads', '/admin/messages'];
+    const primaryNav = navItems.filter((i) => primaryPaths.includes(i.path));
+    const secondaryNav = navItems.filter((i) => !primaryPaths.includes(i.path));
 
     const isActive = (path, exact = false) => {
         if (exact) return location.pathname === path;
