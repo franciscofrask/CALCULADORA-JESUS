@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
-import { ScrollArea } from '../components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
@@ -14,7 +13,8 @@ import {
     LayoutDashboard, Users, CreditCard, Dumbbell,
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
-    AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple
+    AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple, Layers,
+    Menu, X
 } from 'lucide-react';
 
 // Admin Dashboard Home
@@ -202,7 +202,7 @@ const AdminDashboard = () => {
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <PlanBadge plan={u.plan} />
-                                            <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Barlow Condensed' }}>{u.price}€</span>
+                                            <span className="text-[#FF671F] font-bold text-lg" style={{ fontFamily: 'Barlow Condensed' }}>{u.price != null ? `${u.price}€` : '-'}</span>
                                         </div>
                                     </div>
                                 );
@@ -246,7 +246,7 @@ const AdminDashboard = () => {
                                 <div className="flex items-center gap-2">
                                     <PlanBadge plan={c.plan} />
                                     <Badge className={c.status === 'activo' ? 'bg-green-500/10 text-green-500 border-0 text-[10px]' : 'bg-red-500/10 text-red-400 border-0 text-[10px]'}>
-                                        {c.status}
+                                        {c.status || 'sin estado'}
                                     </Badge>
                                 </div>
                             </div>
@@ -401,7 +401,7 @@ const AdminClientsList = () => {
                                             {client.id ? <PlanBadge plan={client.plan} /> : <span className="text-white/30 text-sm">-</span>}
                                         </TableCell>
                                         <TableCell className="font-bold text-[#FF671F] hidden md:table-cell" style={{ fontFamily: 'Barlow Condensed' }}>
-                                            {client.id ? `${client.price}€` : '-'}
+                                            {client.id && client.price != null ? `${client.price}€` : '-'}
                                         </TableCell>
                                         <TableCell className="hidden md:table-cell">
                                             {client.id ? (
@@ -428,7 +428,7 @@ const AdminClientsList = () => {
                                                 <Badge className="bg-yellow-500/15 text-yellow-400 border-0">Registro incompleto</Badge>
                                             ) : (
                                                 <Badge className={client.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-[#333] text-white/50 border-0'}>
-                                                    {client.status}
+                                                    {client.status || 'sin estado'}
                                                 </Badge>
                                             )}
                                         </TableCell>
@@ -492,18 +492,32 @@ const AdminLayout = () => {
     const navItems = [
         { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
+        { path: '/admin/planes', icon: Layers, label: 'Planes' },
         { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios' },
         { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
         { path: '/admin/messages', icon: MessageCircle, label: 'Mensajes' },
         { path: '/admin/routines', icon: Dumbbell, label: 'Rutinas' },
         { path: '/admin/menus', icon: Utensils, label: 'Menús' },
         { path: '/admin/alimentos', icon: Apple, label: 'Alimentos' },
-        { path: '/admin/payments', icon: CreditCard, label: 'Pagos' },
     ];
 
     const isActive = (path, exact = false) => {
         if (exact) return location.pathname === path;
         return location.pathname.startsWith(path);
+    };
+
+    // Drawer móvil (menú hamburguesa), como en modo cliente
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+
+    // Barra inferior móvil: solo los 4 accesos principales; el resto va en el drawer
+    const bottomItems = navItems.filter(i =>
+        ['/admin', '/admin/clients', '/admin/leads', '/admin/messages'].includes(i.path));
+
+    const badgeFor = (item) => {
+        if (item.path === '/admin/leads' && newLeadsCount > 0) return newLeadsCount;
+        if (item.path === '/admin/messages' && unreadMessages > 0) return unreadMessages;
+        return 0;
     };
 
     const handleLogout = () => {
@@ -514,103 +528,165 @@ const AdminLayout = () => {
 
     return (
         <div className="min-h-screen bg-[#0A0A0A] flex">
-            {/* Sidebar (desktop) */}
-            <aside className="w-64 border-r border-white/10 bg-[#0A0A0A] h-screen sticky top-0 hidden lg:flex flex-col">
-                <div className="p-6 border-b border-white/10">
-                    <JG12Logo size="md" />
-                    <p className="text-white/40 text-xs uppercase tracking-wider mt-1">Panel Admin</p>
+            {/* Sidebar (desktop) - misma estructura y estilo que el sidebar del modo cliente */}
+            <aside className="w-64 bg-[#0A0A0A] border-r border-white/10 h-screen sticky top-0 hidden lg:flex flex-col flex-shrink-0">
+                <div className="flex items-center justify-between h-16 px-4 border-b border-white/10">
+                    <JG12Logo size="sm" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF671F] bg-[#FF671F]/10 border border-[#FF671F]/25 rounded-md px-2 py-0.5">Admin</span>
                 </div>
-                
-                <ScrollArea className="flex-1 p-4">
-                    <nav className="space-y-1">
-                        {navItems.map((item) => (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                                    isActive(item.path, item.exact)
-                                        ? 'bg-[#FF671F] text-white'
-                                        : 'text-white/60 hover:text-white hover:bg-white/5'
-                                }`}
-                            >
-                                <item.icon className="w-5 h-5" />
-                                <span className="font-medium uppercase tracking-wider text-sm">{item.label}</span>
-                                {item.path === '/admin/leads' && newLeadsCount > 0 && (
-                                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" data-testid="new-leads-badge">
-                                        {newLeadsCount > 99 ? '99+' : newLeadsCount}
-                                    </span>
-                                )}
-                                {item.path === '/admin/messages' && unreadMessages > 0 && (
-                                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" data-testid="unread-messages-badge">
-                                        {unreadMessages > 99 ? '99+' : unreadMessages}
-                                    </span>
-                                )}
-                            </Link>
-                        ))}
-                    </nav>
-                </ScrollArea>
-                
-                <div className="p-4 border-t border-white/10">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 bg-[#222] rounded-lg flex items-center justify-center">
-                            <span className="font-bold text-[#FF671F]">{user?.name?.charAt(0)}</span>
+
+                <nav className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-1">
+                    {navItems.map((item) => (
+                        <Link
+                            key={item.path}
+                            to={item.path}
+                            className={`relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
+                                isActive(item.path, item.exact)
+                                    ? 'bg-[#FF671F] text-white font-semibold'
+                                    : 'text-white/60 hover:text-white hover:bg-white/[0.07]'
+                            }`}
+                        >
+                            <item.icon className="w-5 h-5 flex-shrink-0" strokeWidth={2} />
+                            <span className="text-sm">{item.label}</span>
+                            {item.path === '/admin/leads' && newLeadsCount > 0 && (
+                                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" data-testid="new-leads-badge">
+                                    {newLeadsCount > 99 ? '99+' : newLeadsCount}
+                                </span>
+                            )}
+                            {item.path === '/admin/messages' && unreadMessages > 0 && (
+                                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center" data-testid="unread-messages-badge">
+                                    {unreadMessages > 99 ? '99+' : unreadMessages}
+                                </span>
+                            )}
+                        </Link>
+                    ))}
+                </nav>
+
+                <div className="p-3 border-t border-white/10 space-y-2">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#FF671F]/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <span className="text-[#FF671F] font-bold font-heading text-lg">{user?.name?.charAt(0)?.toUpperCase()}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="font-medium text-white text-sm truncate">{user?.name}</p>
+                            <p className="font-semibold text-white text-sm truncate">{user?.name}</p>
                             <Badge className="bg-[#FF671F]/20 text-[#FF671F] border-0 text-xs uppercase">{user?.role}</Badge>
                         </div>
                     </div>
-                    <Button
-                        variant="ghost"
-                        className="w-full justify-start text-white/60 hover:text-[#FF671F] hover:bg-[#FF671F]/10 mb-1"
+                    <button
                         onClick={() => navigate('/dashboard')}
                         data-testid="use-app-btn"
+                        className="flex items-center gap-2 w-full rounded-lg px-3 py-2.5 text-white/50 hover:text-[#FF671F] hover:bg-[#FF671F]/10 transition-colors"
                     >
-                        <Utensils className="w-4 h-4 mr-2" />
-                        Usar app (modo cliente)
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        className="w-full justify-start text-white/50 hover:text-red-500 hover:bg-red-500/10"
+                        <Utensils className="w-4 h-4" /> <span className="text-sm">Usar app (modo cliente)</span>
+                    </button>
+                    <button
                         onClick={handleLogout}
+                        className="flex items-center gap-2 w-full rounded-lg px-3 py-2.5 text-white/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                     >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Cerrar sesión
-                    </Button>
+                        <LogOut className="w-4 h-4" /> <span className="text-sm">Cerrar sesión</span>
+                    </button>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-auto pb-16 lg:pb-0">
-                <Outlet />
-            </main>
+            {/* Main Content: scrollea la página entera (como en modo cliente),
+                con barra superior móvil de hamburguesa */}
+            <div className="flex-1 min-w-0 flex flex-col">
+                <header className="lg:hidden sticky top-0 z-40 bg-[#0A0A0A] border-b border-white/10 h-14 flex items-center justify-between px-4">
+                    <button onClick={() => setDrawerOpen(true)} data-testid="admin-mobile-menu-btn"
+                        className="w-10 h-10 -ml-2 rounded-lg flex items-center justify-center text-white/80 hover:bg-white/10">
+                        <Menu className="w-6 h-6" />
+                    </button>
+                    <JG12Logo size="sm" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF671F] bg-[#FF671F]/10 border border-[#FF671F]/25 rounded-md px-2 py-0.5">Admin</span>
+                </header>
+                <main className="flex-1 min-w-0 pb-20 lg:pb-0">
+                    <Outlet />
+                </main>
+            </div>
 
-            {/* Mobile Bottom Nav */}
-            <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#111] border-t border-[#222] lg:hidden" data-testid="admin-mobile-nav">
-                <div className="flex items-center justify-around h-14 px-1">
-                    {navItems.map((item) => {
+            {/* Mobile bottom nav: 4 accesos principales + "Más" (drawer), como en modo cliente */}
+            <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0A0A0A] border-t border-white/10" data-testid="admin-mobile-nav">
+                <div className="flex items-stretch h-16">
+                    {bottomItems.map((item) => {
                         const active = isActive(item.path, item.exact);
+                        const badge = badgeFor(item);
                         return (
                             <Link key={item.path} to={item.path}
-                                className={`relative flex flex-col items-center justify-center flex-1 py-1.5 transition-all ${active ? 'text-[#FF671F]' : 'text-white/40'}`}
+                                className={`relative flex flex-col items-center justify-center flex-1 gap-1 transition-colors ${active ? 'text-[#FF671F]' : 'text-white/55'}`}
                             >
-                                <item.icon className={`w-5 h-5 mb-0.5 ${active ? 'text-[#FF671F]' : ''}`} strokeWidth={active ? 2.5 : 2} />
-                                <span className={`text-[9px] uppercase tracking-wider ${active ? 'font-bold' : ''}`}>{item.label}</span>
-                                {item.path === '/admin/leads' && newLeadsCount > 0 && (
-                                    <span className="absolute top-0.5 right-[calc(50%-16px)] bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
-                                        {newLeadsCount > 99 ? '99+' : newLeadsCount}
-                                    </span>
-                                )}
-                                {item.path === '/admin/messages' && unreadMessages > 0 && (
-                                    <span className="absolute top-0.5 right-[calc(50%-16px)] bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center">
-                                        {unreadMessages > 99 ? '99+' : unreadMessages}
-                                    </span>
-                                )}
+                                <span className="relative">
+                                    <item.icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.5 : 2} />
+                                    {badge > 0 && (
+                                        <span className="absolute -top-1.5 -right-2 min-w-4 h-4 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                                            {badge > 99 ? '99+' : badge}
+                                        </span>
+                                    )}
+                                </span>
+                                <span className={`text-[10px] ${active ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
                             </Link>
                         );
                     })}
+                    <button onClick={() => setDrawerOpen(true)} data-testid="admin-bottomnav-mas"
+                        className="flex flex-col items-center justify-center flex-1 gap-1 text-white/55">
+                        <Menu className="w-[22px] h-[22px]" strokeWidth={2} />
+                        <span className="text-[10px] font-medium">Más</span>
+                    </button>
                 </div>
             </nav>
+
+            {/* Mobile drawer (hamburguesa), como en modo cliente */}
+            {drawerOpen && (
+                <div className="lg:hidden fixed inset-0 z-[60]" data-testid="admin-mobile-drawer">
+                    <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={() => setDrawerOpen(false)} />
+                    <div className="absolute inset-y-0 left-0 w-[82%] max-w-xs bg-[#0A0A0A] flex flex-col animate-slide-up">
+                        <div className="flex items-center justify-between h-14 px-4 border-b border-white/10">
+                            <JG12Logo size="sm" />
+                            <button onClick={() => setDrawerOpen(false)} data-testid="admin-drawer-close"
+                                className="w-9 h-9 rounded-lg flex items-center justify-center text-white/60 hover:bg-white/10">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <nav className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-1">
+                            {navItems.map((item) => {
+                                const active = isActive(item.path, item.exact);
+                                const badge = badgeFor(item);
+                                return (
+                                    <Link key={item.path} to={item.path} onClick={() => setDrawerOpen(false)}
+                                        className={`relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${active ? 'bg-[#FF671F] text-white font-semibold' : 'text-white/60 hover:text-white hover:bg-white/[0.07]'}`}
+                                    >
+                                        <item.icon className="w-5 h-5 flex-shrink-0" strokeWidth={2} />
+                                        <span className="text-sm">{item.label}</span>
+                                        {badge > 0 && (
+                                            <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                                                {badge > 99 ? '99+' : badge}
+                                            </span>
+                                        )}
+                                    </Link>
+                                );
+                            })}
+                        </nav>
+                        <div className="p-3 border-t border-white/10 space-y-2">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-[#FF671F]/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                                    <span className="text-[#FF671F] font-bold font-heading text-lg">{user?.name?.charAt(0)?.toUpperCase()}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-white text-sm truncate">{user?.name}</p>
+                                    <Badge className="bg-[#FF671F]/20 text-[#FF671F] border-0 text-xs uppercase">{user?.role}</Badge>
+                                </div>
+                            </div>
+                            <button onClick={() => navigate('/dashboard')}
+                                className="flex items-center gap-2 w-full rounded-lg px-3 py-2.5 text-white/50 hover:text-[#FF671F] hover:bg-[#FF671F]/10 transition-colors">
+                                <Utensils className="w-4 h-4" /> <span className="text-sm">Usar app (modo cliente)</span>
+                            </button>
+                            <button onClick={handleLogout}
+                                className="flex items-center gap-2 w-full rounded-lg px-3 py-2.5 text-white/50 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                <LogOut className="w-4 h-4" /> <span className="text-sm">Cerrar sesión</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

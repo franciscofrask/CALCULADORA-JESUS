@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { deriveCapabilities } from '../lib/planAccess';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -20,6 +21,7 @@ export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(localStorage.getItem('token'));
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState(null);
+    const [planCatalog, setPlanCatalog] = useState({});
 
     const api = axios.create({
         baseURL: API,
@@ -76,6 +78,13 @@ export const AuthProvider = ({ children }) => {
         fetchUser();
     }, [fetchUser]);
 
+    // Catálogo de planes (público): fuente única de habilitaciones/ciclos/precios.
+    useEffect(() => {
+        axios.get(`${API}/plans`)
+            .then((res) => setPlanCatalog(res.data || {}))
+            .catch(() => setPlanCatalog({}));
+    }, []);
+
     const login = async (email, password) => {
         const response = await api.post('/auth/login', { email, password });
         const { access_token, user: userData } = response.data;
@@ -130,6 +139,23 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Plan del usuario actual (entrada del catálogo), sus habilitaciones y capacidades.
+    const myPlan = useMemo(
+        () => (profile?.plan ? planCatalog[profile.plan] || null : null),
+        [profile?.plan, planCatalog]
+    );
+    const habilitaciones = myPlan?.habilitaciones || null;
+    const capabilities = useMemo(() => deriveCapabilities(habilitaciones), [habilitaciones]);
+    // can(cap): ¿el plan del usuario habilita esta capacidad? Si aún no hay plan
+    // o catálogo cargado, devolvemos true para no ocultar nada por error de carga.
+    const can = useCallback(
+        (cap) => {
+            if (!myPlan) return true;
+            return !!capabilities[cap];
+        },
+        [myPlan, capabilities]
+    );
+
     const value = {
         user,
         token,
@@ -142,6 +168,11 @@ export const AuthProvider = ({ children }) => {
         refreshProfile,
         refreshUser: fetchUser,
         api,
+        planCatalog,
+        myPlan,
+        habilitaciones,
+        capabilities,
+        can,
         isAuthenticated: !!token && !!user,
         isAdmin: user?.role === 'admin',
         isTrainer: user?.role === 'trainer',

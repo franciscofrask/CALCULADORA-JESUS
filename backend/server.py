@@ -33,7 +33,7 @@ from routes.leads import router as leads_router
 from routes.menu_templates import router as menu_templates_router
 from routes.notifications import router as notifications_router
 from routes.audit import router as audit_router
-from models.user import PLAN_TYPES
+from routes.plans import router as plans_router, admin_router as plans_admin_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -80,10 +80,6 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
-@api_router.get("/plans")
-async def get_plans():
-    return PLAN_TYPES
-
 # Include all routers
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
@@ -106,6 +102,8 @@ api_router.include_router(leads_router)
 api_router.include_router(menu_templates_router)
 api_router.include_router(notifications_router)
 api_router.include_router(audit_router)
+api_router.include_router(plans_router)
+api_router.include_router(plans_admin_router)
 
 # Mount API router
 app.include_router(api_router)

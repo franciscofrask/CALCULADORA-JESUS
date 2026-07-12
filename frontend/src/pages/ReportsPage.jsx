@@ -208,7 +208,7 @@ const ReportsPage = () => {
                                 onChange={(e) => set('weight', e.target.value)}
                                 placeholder="75.5"
                                 data-testid="weight-input"
-                                className="flex-1 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors"
+                                className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors"
                             />
                             <span className="text-lg text-foreground/40 font-bold">kg</span>
                         </div>

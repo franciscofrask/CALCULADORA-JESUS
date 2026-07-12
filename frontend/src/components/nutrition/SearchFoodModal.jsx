@@ -1,7 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Input } from '../ui/input';
-import { ScrollArea } from '../ui/scroll-area';
 import { Check, Star } from 'lucide-react';
 
 // Alimentos favoritos OCULTOS (petición 2026-07-06): la estrella alteraba el orden de los
@@ -73,7 +72,7 @@ const SearchFoodModal = ({
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto bg-muted">
+            <div className="flex-1 min-h-0 overflow-y-auto bg-muted">
                 {searchLoading ? (
                     <div className="flex items-center justify-center py-12">
                         <div className="animate-spin rounded-full h-8 w-8 border-4 border-brand-orange border-t-transparent" />
@@ -136,7 +135,9 @@ const MenuOptionsModal = ({ open, mealKey, onClose, mealInfo, menuOptionsLoading
                 <DialogTitle className="text-white">Elige tu menú</DialogTitle>
                 <DialogDescription className="text-muted-foreground">{mealKey && mealInfo[mealKey]?.name}</DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 bg-muted">
+            {/* div con overflow en vez de ScrollArea: el viewport de Radix no respeta
+                el alto del flex container aquí y las opciones B/C quedaban cortadas sin scroll */}
+            <div className="flex-1 min-h-0 overflow-y-auto bg-muted">
                 {menuOptionsLoading ? (
                     <div className="flex flex-col items-center justify-center py-16">
                         <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent mb-4" />
@@ -188,7 +189,7 @@ const MenuOptionsModal = ({ open, mealKey, onClose, mealInfo, menuOptionsLoading
                         })}
                     </div>
                 )}
-            </ScrollArea>
+            </div>
         </DialogContent>
     </Dialog>
 );

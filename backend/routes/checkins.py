@@ -52,13 +52,16 @@ def _compute_health_score(checkins: List[dict], profile: dict) -> dict:
 
     if profile.get("status") == "baja_automatica":
         level = "red"
-        factors.append("Baja automatica por fallos de pago")
+        factors.append("Baja automática por fallos de pago")
+    elif last_checkin_date is None:
+        level = "red"
+        factors.append("Sin ningún check-in registrado todavía")
     elif days_since >= 14:
         level = "red"
-        factors.append(f"Sin check-in hace {days_since} dias")
+        factors.append(f"Sin check-in hace {days_since} días")
     elif days_since >= 7:
         level = "yellow"
-        factors.append(f"Ultimo check-in hace {days_since} dias")
+        factors.append(f"Último check-in hace {days_since} días")
 
     weekly = [c for c in checkins if c.get("type") == "weekly"][:4]
     if weekly:

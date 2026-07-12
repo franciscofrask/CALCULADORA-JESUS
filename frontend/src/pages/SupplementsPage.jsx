@@ -12,15 +12,21 @@ const formatDate = (iso) => {
     return new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
-const SupplementCard = ({ item }) => (
+const SupplementCard = ({ item }) => {
+    const [imgError, setImgError] = useState(false);
+    return (
     <div className="surface p-0 overflow-hidden flex flex-col sm:flex-row" data-testid="supplement-card">
-        <div className="sm:w-32 flex items-center justify-center bg-muted/40 p-3 flex-shrink-0">
-            <img
-                src={item.imagen || '/imgs/tarro.webp'}
-                alt={item.titulo}
-                className="max-h-24 object-contain"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
+        <div className="hidden sm:flex sm:w-32 items-center justify-center bg-muted/40 p-3 flex-shrink-0">
+            {item.imagen && !imgError ? (
+                <img
+                    src={item.imagen}
+                    alt={item.titulo}
+                    className="max-h-24 object-contain"
+                    onError={() => setImgError(true)}
+                />
+            ) : (
+                <Pill className="w-8 h-8 text-brand/50" />
+            )}
         </div>
         <div className="flex-1 p-4">
             <h3 className="font-semibold text-foreground mb-2">{item.titulo}</h3>
@@ -51,7 +57,8 @@ const SupplementCard = ({ item }) => (
             )}
         </div>
     </div>
-);
+    );
+};
 
 const SupplementsPage = () => {
     const { api } = useAuth();

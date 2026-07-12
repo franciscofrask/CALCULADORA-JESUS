@@ -10,7 +10,8 @@ from core.database import db
 from core.security import get_admin_user, hash_password, generate_temp_password
 from routes.notifications import notify
 from routes.audit import audit
-from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate, TrainerAssign
+from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate, TrainerAssign, PLAN_CATALOG
+from core.cycle import enrich_cycle, compute_cycle
 from models.common import FoodSuggestionUpdate, AdminFoodCreate
 from calculator import invalidate_foods_cache
 
@@ -39,7 +40,7 @@ async def get_all_clients(
     # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
     # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).
     LIST_FIELDS = {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "week": 1,
-                   "status": 1, "trainer_id": 1, "created_at": 1}
+                   "cycle_start": 1, "status": 1, "trainer_id": 1, "created_at": 1}
     profiles = await db.client_profiles.find(query, LIST_FIELDS).to_list(1000)
 
     uids = [p["user_id"] for p in profiles]
@@ -53,7 +54,7 @@ async def get_all_clients(
     for profile in profiles:
         user_data = umap.get(profile["user_id"])
         if user_data:
-            result.append({**profile, "user": user_data})
+            result.append({**enrich_cycle(profile), "user": user_data})
 
     # Registros incompletos: solo sin filtros (no tienen plan/estado/coach que filtrar)
     if include_incomplete and not (plan or status or trainer_id):
@@ -83,7 +84,8 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
+    enrich_cycle(profile)
+
     user_data = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
     routines = await db.routines.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(10)
     reports = await db.reports.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
@@ -442,8 +444,17 @@ async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_use
             raise HTTPException(status_code=400, detail=f"Rol inválido. Usa: {', '.join(sorted(VALID_ROLES))}")
         set_user["role"] = data["role"]
     if "plan" in data:
-        set_user["plan"] = data["plan"]
-        set_prof["plan"] = data["plan"]
+        plan_code = (data["plan"] or "").lower().strip()
+        plan_entry = PLAN_CATALOG.get(plan_code)
+        if not plan_entry:
+            raise HTTPException(status_code=400, detail="Plan no válido")
+        if not plan_entry.get("asignable"):
+            raise HTTPException(status_code=400, detail=f"El plan '{plan_entry['name']}' no es asignable como membresía")
+        set_user["plan"] = plan_code
+        set_prof["plan"] = plan_code
+        # Cambiar de plan reinicia el ciclo (nueva duración, semana 1).
+        if plan_code != (target.get("plan") or ""):
+            set_prof["cycle_start"] = datetime.now(timezone.utc).isoformat()
         if data.get("comp_plan"):
             set_user["comp_plan"] = True
             set_prof.update({"comp_plan": True, "price": 0.0, "status": "activo"})
@@ -515,13 +526,14 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     active = await db.client_profiles.count_documents({"status": "activo"})
     inactive = await db.client_profiles.count_documents({"status": {"$in": ["inactivo", "baja", "cancelado"]}})
 
-    # At-risk: active but week >= 3 and no report in last 14 days.
+    # At-risk: active but week >= 3 (calculada) and no report in last 14 days.
     # UNA consulta distinct sobre reports en vez de una por cliente (N+1).
     fourteen_ago = (now - timedelta(days=14)).isoformat()
     active_profiles = await db.client_profiles.find(
-        {"status": "activo", "week": {"$gte": 3}}, {"_id": 0, "id": 1}
+        {"status": "activo"},
+        {"_id": 0, "id": 1, "plan": 1, "created_at": 1, "cycle_start": 1},
     ).to_list(2000)
-    ids = [p["id"] for p in active_profiles]
+    ids = [p["id"] for p in active_profiles if compute_cycle(p)["week"] >= 3]
     with_recent = set(await db.reports.distinct(
         "client_id", {"client_id": {"$in": ids}, "created_at": {"$gte": fourteen_ago}}
     )) if ids else set()

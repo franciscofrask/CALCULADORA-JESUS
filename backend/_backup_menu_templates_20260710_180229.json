@@ -1,0 +1,2016 @@
+[
+  {
+    "id": "D01",
+    "nombre": "Tostadas con pavo y aceite",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pavo",
+        "categoria": "2.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de barra integral",
+        "categoria": "8.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "rapido"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 600,
+    "origen": "seed"
+  },
+  {
+    "id": "D02",
+    "nombre": "Avena con whey y fruta",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Aislado de suero",
+        "categoria": "4.1.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Avena",
+        "categoria": "7.1",
+        "proporcion": 0.7
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Plátano",
+        "categoria": "11.1",
+        "proporcion": 0.3
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Almendras",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "fitness"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "D03",
+    "nombre": "Tortitas de avena con claras",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Clara de huevo",
+        "categoria": "1.1",
+        "proporcion": 0.7
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Huevo entero",
+        "categoria": "1.2",
+        "proporcion": 0.3
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Harina de avena",
+        "categoria": "7.2.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "fitness"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 650,
+    "origen": "seed"
+  },
+  {
+    "id": "D04",
+    "nombre": "Yogur griego con cereales y frutos secos",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Yogur griego",
+        "categoria": "5.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Cereales integrales",
+        "categoria": "7.1.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Nueces",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "D05",
+    "nombre": "Tostadas con huevos revueltos",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Huevo entero",
+        "categoria": "1.2",
+        "proporcion": 0.4
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Clara de huevo",
+        "categoria": "1.1",
+        "proporcion": 0.6
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de molde integral",
+        "categoria": "8.7",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 600,
+    "origen": "seed"
+  },
+  {
+    "id": "D06",
+    "nombre": "Batido de proteínas con avena y plátano",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Aislado de suero",
+        "categoria": "4.1.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Avena",
+        "categoria": "7.1",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Plátano",
+        "categoria": "11.1",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Crema de cacahuete",
+        "categoria": "17.2.4",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "batido"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "D07",
+    "nombre": "Queso batido con fruta y avena",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Queso batido 0%",
+        "categoria": "5.2.3",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Avena",
+        "categoria": "7.1",
+        "proporcion": 0.6
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Fresas",
+        "categoria": "11.1",
+        "proporcion": 0.4
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Almendras",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 550,
+    "origen": "seed"
+  },
+  {
+    "id": "D08",
+    "nombre": "Sandwich de atún con aguacate",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Atún en conserva",
+        "categoria": "3.8",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de molde integral",
+        "categoria": "8.7",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aguacate",
+        "categoria": "17.6",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 550,
+    "origen": "seed"
+  },
+  {
+    "id": "D09",
+    "nombre": "Porridge de avena con whey",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Concentrado de suero",
+        "categoria": "4.1.3",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Avena",
+        "categoria": "7.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Nueces",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "fitness",
+      "invierno"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "D10",
+    "nombre": "Tostada con jamón serrano",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Jamón serrano",
+        "categoria": "2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de barra",
+        "categoria": "8.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "español"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "D11",
+    "nombre": "Bowl de yogur proteico con granola",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Yogur proteico",
+        "categoria": "5.2.3",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Cereales",
+        "categoria": "7.1.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Almendras",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "D12",
+    "nombre": "Crepes de avena con queso batido",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Queso batido 0%",
+        "categoria": "5.2.3",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Clara de huevo",
+        "categoria": "1.1",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Harina de avena",
+        "categoria": "7.2.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "fitness"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 600,
+    "origen": "seed"
+  },
+  {
+    "id": "D13",
+    "nombre": "Leche con cereales y whey",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Aislado de suero",
+        "categoria": "4.1.1",
+        "proporcion": 0.7
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Cereales integrales",
+        "categoria": "7.1.2",
+        "proporcion": 1.0
+      }
+    ],
+    "tags": [
+      "rapido",
+      "clasico"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "D14",
+    "nombre": "Tostada de pavo con queso fresco",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pavo",
+        "categoria": "2.2",
+        "proporcion": 0.7
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Queso fresco",
+        "categoria": "5.3",
+        "proporcion": 0.3
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de barra integral",
+        "categoria": "8.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 550,
+    "origen": "seed"
+  },
+  {
+    "id": "D15",
+    "nombre": "Gachas de avena con huevo y fruta",
+    "momento": "desayuno",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Huevo entero",
+        "categoria": "1.2",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Clara de huevo",
+        "categoria": "1.1",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Avena",
+        "categoria": "7.1",
+        "proporcion": 0.7
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Manzana",
+        "categoria": "11.1",
+        "proporcion": 0.3
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "invierno"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "C01",
+    "nombre": "Pollo con arroz",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "gym"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "C02",
+    "nombre": "Merluza con patata",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Merluza",
+        "categoria": "3.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Patata cocida",
+        "categoria": "9",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "pescado"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 750,
+    "origen": "seed"
+  },
+  {
+    "id": "C03",
+    "nombre": "Ternera con pasta",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Ternera",
+        "categoria": "2.3.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pasta",
+        "categoria": "22.1.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 900,
+    "origen": "seed"
+  },
+  {
+    "id": "C04",
+    "nombre": "Salmón con boniato",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Salmón",
+        "categoria": "3.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Boniato",
+        "categoria": "9",
+        "proporcion": 1.0
+      }
+    ],
+    "tags": [
+      "alto_calorico",
+      "pescado_graso"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 900,
+    "origen": "seed"
+  },
+  {
+    "id": "C05",
+    "nombre": "Pollo con quinoa y aguacate",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Quinoa",
+        "categoria": "22.5",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aguacate",
+        "categoria": "17.6",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "fitness",
+      "variado"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "C06",
+    "nombre": "Lentejas con arroz",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Lentejas cocidas",
+        "categoria": "10.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "español",
+      "legumbres"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 900,
+    "origen": "seed"
+  },
+  {
+    "id": "C07",
+    "nombre": "Pavo con arroz integral",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pavo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz integral",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "gym"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "C08",
+    "nombre": "Gambas con pasta",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Gambas",
+        "categoria": "3.9.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pasta",
+        "categoria": "22.1.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "pescado",
+      "italiano"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "C09",
+    "nombre": "Pollo con patata y judías verdes",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Patata cocida",
+        "categoria": "9",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "español"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "C10",
+    "nombre": "Atún con arroz",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Atún en conserva",
+        "categoria": "3.8",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "conserva"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 750,
+    "origen": "seed"
+  },
+  {
+    "id": "C11",
+    "nombre": "Huevos con arroz y aguacate",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Huevo entero",
+        "categoria": "1.2",
+        "proporcion": 0.4
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Clara de huevo",
+        "categoria": "1.1",
+        "proporcion": 0.6
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aguacate",
+        "categoria": "17.6",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "economico"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "C12",
+    "nombre": "Cerdo con boniato",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Lomo de cerdo",
+        "categoria": "2.4.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Boniato",
+        "categoria": "9",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "variado"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 850,
+    "origen": "seed"
+  },
+  {
+    "id": "C13",
+    "nombre": "Garbanzos con pollo",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2.1",
+        "proporcion": 0.6
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Garbanzos cocidos",
+        "categoria": "10.1",
+        "proporcion": 0.4
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "legumbres",
+      "español"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 850,
+    "origen": "seed"
+  },
+  {
+    "id": "C14",
+    "nombre": "Lubina con patata",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Lubina",
+        "categoria": "3.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Patata cocida",
+        "categoria": "9",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "pescado",
+      "clasico"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 750,
+    "origen": "seed"
+  },
+  {
+    "id": "C15",
+    "nombre": "Pollo con cous cous",
+    "momento": "comida",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Cous cous",
+        "categoria": "22.4",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "variado"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "M01",
+    "nombre": "Batido de proteínas con fruta",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Aislado de suero",
+        "categoria": "4.1.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Plátano",
+        "categoria": "11.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Almendras",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "batido"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "M02",
+    "nombre": "Yogur con frutos secos y fruta",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Yogur griego",
+        "categoria": "5.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Manzana",
+        "categoria": "11.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Nueces",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "M03",
+    "nombre": "Tostada con pavo y queso fresco",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pavo",
+        "categoria": "2.2",
+        "proporcion": 0.7
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Queso fresco",
+        "categoria": "5.3",
+        "proporcion": 0.3
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de molde integral",
+        "categoria": "8.7",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "M04",
+    "nombre": "Queso batido con avena y fruta",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Queso batido 0%",
+        "categoria": "5.2.3",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Avena",
+        "categoria": "7.1",
+        "proporcion": 0.6
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Fresas",
+        "categoria": "11.1",
+        "proporcion": 0.4
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Crema de cacahuete",
+        "categoria": "17.2.4",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "fitness",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 550,
+    "origen": "seed"
+  },
+  {
+    "id": "M05",
+    "nombre": "Sandwich de atún",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Atún en conserva",
+        "categoria": "3.8",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de molde integral",
+        "categoria": "8.7",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "M06",
+    "nombre": "Tortitas de arroz con pavo y aguacate",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pavo",
+        "categoria": "2.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Tortas de arroz",
+        "categoria": "21.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aguacate",
+        "categoria": "17.6",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 150,
+    "max_kcal": 450,
+    "origen": "seed"
+  },
+  {
+    "id": "M07",
+    "nombre": "Batido de caseína con avena",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Caseína",
+        "categoria": "4.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Avena",
+        "categoria": "7.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Almendras",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "fitness",
+      "batido"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 600,
+    "origen": "seed"
+  },
+  {
+    "id": "M08",
+    "nombre": "Huevos cocidos con pan",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Huevo entero",
+        "categoria": "1.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de barra",
+        "categoria": "8.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "español"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "M09",
+    "nombre": "Yogur proteico con cereales",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Yogur proteico",
+        "categoria": "5.2.3",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Cereales integrales",
+        "categoria": "7.1.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Nueces",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "M10",
+    "nombre": "Batido de proteínas con crema de cacahuete",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Aislado de suero",
+        "categoria": "4.1.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Plátano",
+        "categoria": "11.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Crema de cacahuete",
+        "categoria": "17.2.4",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "batido",
+      "alto_calorico"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "M11",
+    "nombre": "Tostada con salmón ahumado y queso",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Salmón ahumado",
+        "categoria": "3.7",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de molde integral",
+        "categoria": "8.7",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Queso fresco",
+        "categoria": "5.3",
+        "proporcion": 0.2
+      }
+    ],
+    "tags": [
+      "gourmet"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "M12",
+    "nombre": "Queso batido con frutos secos",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Queso batido 0%",
+        "categoria": "5.2.3",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Almendras",
+        "categoria": "17.2.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar",
+      "bajo_calorico"
+    ],
+    "min_kcal": 100,
+    "max_kcal": 350,
+    "origen": "seed"
+  },
+  {
+    "id": "M13",
+    "nombre": "Wrap de pollo",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Tortilla de trigo",
+        "categoria": "8.5",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 550,
+    "origen": "seed"
+  },
+  {
+    "id": "M14",
+    "nombre": "Leche con cacao y avena",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Leche desnatada",
+        "categoria": "5.1",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Concentrado de suero",
+        "categoria": "4.1.3",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Avena",
+        "categoria": "7.1",
+        "proporcion": 1.0
+      }
+    ],
+    "tags": [
+      "clasico",
+      "invierno"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 600,
+    "origen": "seed"
+  },
+  {
+    "id": "M15",
+    "nombre": "Fruta con yogur y semillas",
+    "momento": "merienda",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Yogur griego",
+        "categoria": "5.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Plátano",
+        "categoria": "11.1",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Fresas",
+        "categoria": "11.1",
+        "proporcion": 0.5
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Semillas de chía",
+        "categoria": "17.2.3",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "sin_cocinar"
+    ],
+    "min_kcal": 200,
+    "max_kcal": 500,
+    "origen": "seed"
+  },
+  {
+    "id": "N01",
+    "nombre": "Pollo a la plancha con arroz",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "gym"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 750,
+    "origen": "seed"
+  },
+  {
+    "id": "N02",
+    "nombre": "Merluza al horno con patata",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Merluza",
+        "categoria": "3.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Patata cocida",
+        "categoria": "9",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "pescado"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "N03",
+    "nombre": "Tortilla francesa con pan",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Huevo entero",
+        "categoria": "1.2",
+        "proporcion": 0.4
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Clara de huevo",
+        "categoria": "1.1",
+        "proporcion": 0.6
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de barra",
+        "categoria": "8.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "rapido",
+      "español"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 650,
+    "origen": "seed"
+  },
+  {
+    "id": "N04",
+    "nombre": "Pavo con boniato",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pavo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Boniato",
+        "categoria": "9",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "saludable"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 750,
+    "origen": "seed"
+  },
+  {
+    "id": "N05",
+    "nombre": "Salmón con arroz",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Salmón",
+        "categoria": "3.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      }
+    ],
+    "tags": [
+      "pescado_graso",
+      "alto_calorico"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "N06",
+    "nombre": "Revuelto de gambas con arroz",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Gambas",
+        "categoria": "3.9.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "variado",
+      "marisco"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "N07",
+    "nombre": "Pollo con pasta integral",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pasta integral",
+        "categoria": "22.1.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "N08",
+    "nombre": "Atún con patata",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Atún en conserva",
+        "categoria": "3.8",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Patata cocida",
+        "categoria": "9",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "rapido",
+      "conserva"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "N09",
+    "nombre": "Ternera con arroz",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Ternera",
+        "categoria": "2.3.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "gym"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 850,
+    "origen": "seed"
+  },
+  {
+    "id": "N10",
+    "nombre": "Lentejas",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Lentejas cocidas",
+        "categoria": "10.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "legumbres",
+      "español"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "N11",
+    "nombre": "Dorada con patata y judías verdes",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Dorada",
+        "categoria": "3.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Patata cocida",
+        "categoria": "9",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "pescado",
+      "clasico"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 700,
+    "origen": "seed"
+  },
+  {
+    "id": "N12",
+    "nombre": "Huevos revueltos con pan",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Huevo entero",
+        "categoria": "1.2",
+        "proporcion": 0.4
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Clara de huevo",
+        "categoria": "1.1",
+        "proporcion": 0.6
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Pan de barra integral",
+        "categoria": "8.2",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "clasico",
+      "rapido"
+    ],
+    "min_kcal": 250,
+    "max_kcal": 650,
+    "origen": "seed"
+  },
+  {
+    "id": "N13",
+    "nombre": "Pollo con cous cous",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Pechuga de pollo",
+        "categoria": "2.2.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Cous cous",
+        "categoria": "22.4",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "variado"
+    ],
+    "min_kcal": 300,
+    "max_kcal": 750,
+    "origen": "seed"
+  },
+  {
+    "id": "N14",
+    "nombre": "Cerdo con arroz",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Lomo de cerdo",
+        "categoria": "2.4.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "hidrato",
+        "buscar": "Arroz blanco",
+        "categoria": "21.1",
+        "proporcion": 1.0
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "variado"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "N15",
+    "nombre": "Garbanzos con bacalao",
+    "momento": "cena",
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Bacalao",
+        "categoria": "3.1",
+        "proporcion": 0.6
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Garbanzos cocidos",
+        "categoria": "10.1",
+        "proporcion": 0.4
+      },
+      {
+        "rol": "grasa",
+        "buscar": "Aceite de oliva virgen",
+        "categoria": "17.1.1",
+        "proporcion": "ajuste"
+      }
+    ],
+    "tags": [
+      "legumbres",
+      "pescado"
+    ],
+    "min_kcal": 350,
+    "max_kcal": 800,
+    "origen": "seed"
+  },
+  {
+    "id": "M23927DDE",
+    "nombre": "Queso batido con proteina y arandanos",
+    "momento": "merienda",
+    "min_kcal": 0.0,
+    "max_kcal": 99999.0,
+    "tags": [],
+    "items": [
+      {
+        "rol": "proteina",
+        "buscar": "Queso fresco batido 0 %",
+        "categoria": "5.2.3",
+        "proporcion": 1.0,
+        "alimento_id": 1678
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Aislado de suero - Whey Isolate",
+        "categoria": "4.1.1",
+        "proporcion": 1.0,
+        "alimento_id": 2014
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Arándanos",
+        "categoria": "11.1",
+        "proporcion": 1.0,
+        "alimento_id": 1665
+      },
+      {
+        "rol": "proteina",
+        "buscar": "Nueces",
+        "categoria": "17.2.1",
+        "proporcion": 1.0,
+        "alimento_id": 425
+      }
+    ],
+    "origen": "custom",
+    "created_by": "francisco@test.com",
+    "created_at": "2026-07-09T16:59:03.126541+00:00"
+  }
+]

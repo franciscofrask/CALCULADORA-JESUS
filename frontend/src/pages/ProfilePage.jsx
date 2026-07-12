@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
+import { habilitacionesToList } from '../lib/planAccess';
 import {
     User, Mail,
     LogOut, Lock, ChevronRight, Crown,
@@ -22,16 +23,9 @@ import {
 // (pagos reales pospuestos). Poner a true cuando se habiliten pagos.
 const UPGRADE_PLAN_UI = false;
 
-const PLAN_FEATURES = {
-    gold: ['Rutina personalizada semanal', 'Macros individualizados', 'Chat directo con entrenador', 'Reporte quincenal', 'Cardio personalizado', 'Audio de Jesús', 'Suplementación guiada'],
-    silver: ['Rutina personalizada semanal', 'Macros individualizados', 'Chat directo con entrenador', 'Reporte mensual'],
-    bronze: ['Rutina básica mensual', 'Macros calculados', 'Chat con soporte', 'Reporte mensual'],
-    elm: ['Calculadora de macros', 'Chat con soporte']
-};
-
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const { user, profile, logout, api, refreshUser } = useAuth();
+    const { user, profile, logout, api, refreshUser, myPlan } = useAuth();
     const { startTour } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
@@ -79,7 +73,8 @@ const ProfilePage = () => {
         toast.success('Sesión cerrada');
     };
 
-    const currentPlanFeatures = PLAN_FEATURES[profile?.plan] || [];
+    // "Tu plan incluye" derivado del catálogo del backend (habilitaciones del plan).
+    const currentPlanFeatures = habilitacionesToList(myPlan?.habilitaciones);
 
     return (
         <div className="p-4 md:p-6 pb-24 md:pb-6 animate-fade-in bg-background min-h-screen relative overflow-hidden">
@@ -143,7 +138,7 @@ const ProfilePage = () => {
                                     <Crown className="w-5 h-5 text-[#FF671F]" />
                                     Mi Plan
                                 </span>
-                                <PlanBadge plan={profile.plan} />
+                                <PlanBadge plan={profile.plan} planName={myPlan?.name} />
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -151,8 +146,11 @@ const ProfilePage = () => {
                                 <div>
                                     <p className="text-sm text-foreground/50 uppercase tracking-wider">Precio</p>
                                     <p className="text-3xl font-bold text-[#FF671F]" style={{ fontFamily: 'Barlow Condensed' }}>
-                                        {profile.price}<span className="text-sm font-normal text-foreground/50">/ciclo</span>
+                                        {profile.price != null ? `${profile.price}€` : '-'}<span className="text-sm font-normal text-foreground/50">/ciclo</span>
                                     </p>
+                                    {myPlan?.precio_nota && (
+                                        <p className="text-xs text-foreground/50 mt-1">{myPlan.precio_nota}</p>
+                                    )}
                                 </div>
                                 <div>
                                     <p className="text-sm text-foreground/50 uppercase tracking-wider">Próxima renovación</p>
@@ -280,7 +278,7 @@ const ProfilePage = () => {
                                     <CardContent className="p-4">
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-600 text-foreground font-bold px-3 py-1 rounded text-sm uppercase">Gold</span>
-                                            <span className="font-bold text-foreground text-xl" style={{ fontFamily: 'Barlow Condensed' }}>149/ciclo</span>
+                                            <span className="font-bold text-foreground text-xl" style={{ fontFamily: 'Barlow Condensed' }}>149€/ciclo</span>
                                         </div>
                                         <p className="text-sm text-foreground/50">Incluye todo: rutina semanal, reporte quincenal, cardio, audio y suplementación.</p>
                                     </CardContent>

@@ -28,6 +28,7 @@ import CheckInsPage from "./pages/CheckInsPage";
 import MacroCalculatorClientPage from "./pages/MacroCalculatorClientPage";
 import FoodSearchPage from "./pages/FoodSearchPage";
 import AdminFoodSuggestionsPage from "./pages/AdminFoodSuggestionsPage";
+import AdminPlansPage from "./pages/AdminPlansPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 import WelcomePage from "./pages/WelcomePage";
 
@@ -51,6 +52,15 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
         return <Navigate to="/dashboard" replace />;
     }
 
+    return children;
+};
+
+// Capability Route - gate a page by a plan capability (ver lib/planAccess.js).
+// Si el plan del usuario no la habilita, redirige al inicio del panel.
+const CapabilityRoute = ({ cap, children }) => {
+    const { can, loading } = useAuth();
+    if (loading) return null;
+    if (!can(cap)) return <Navigate to="/dashboard" replace />;
     return children;
 };
 
@@ -130,13 +140,13 @@ function AppRoutes() {
                 }
             >
                 <Route index element={<ClientDashboard />} />
-                <Route path="routine" element={<RoutinePage />} />
+                <Route path="routine" element={<CapabilityRoute cap="rutina"><RoutinePage /></CapabilityRoute>} />
                 <Route path="nutrition" element={<NutritionPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="messages" element={<MessagesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="chatbot" element={<ChatbotPage />} />
-                <Route path="supplements" element={<SupplementsPage />} />
+                <Route path="supplements" element={<CapabilityRoute cap="suplementacion"><SupplementsPage /></CapabilityRoute>} />
                 <Route path="checkins" element={<CheckInsPage />} />
                 <Route path="macro-calculator" element={<MacroCalculatorClientPage />} />
                 <Route path="foods" element={<FoodSearchPage />} />
@@ -152,6 +162,7 @@ function AppRoutes() {
                 }
             >
                 <Route index element={<AdminDashboard />} />
+                <Route path="planes" element={<AdminPlansPage />} />
                 <Route path="clients" element={<AdminClientsList />} />
                 <Route path="clients/:clientId" element={<ClientDetailPage />} />
                 <Route path="leads" element={<LeadsPage />} />
@@ -161,7 +172,6 @@ function AppRoutes() {
                 <Route path="menus" element={<AdminMenusPage />} />
                 <Route path="alimentos" element={<AdminFoodSuggestionsPage />} />
                 <Route path="usuarios" element={<AdminUsersPage />} />
-                <Route path="payments" element={<AdminDashboard />} />
             </Route>
 
             {/* Catch all */}

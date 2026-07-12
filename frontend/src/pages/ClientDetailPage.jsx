@@ -30,7 +30,9 @@ const USER_ROLES = [
 const ClientDetailPage = () => {
     const { clientId } = useParams();
     const navigate = useNavigate();
-    const { api, user: adminUser } = useAuth();
+    const { api, user: adminUser, planCatalog } = useAuth();
+    // Planes asignables del catálogo (excluye complementos), para el selector de plan.
+    const assignablePlans = Object.values(planCatalog || {}).filter(p => p.asignable);
     const [client, setClient] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('resumen');
@@ -313,9 +315,12 @@ const ClientDetailPage = () => {
                             <InfoItem icon={User} label="Nombre" value={user?.name} />
                             <InfoItem icon={Mail} label="Email" value={user?.email} />
                             <InfoItem icon={Phone} label="Teléfono" value={user?.phone || '-'} />
-                            <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} />} />
+                            <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} planName={planCatalog?.[profile?.plan]?.name} />} />
                             <InfoItem icon={Activity} label="Estado" value={profile?.status} />
-                            <InfoItem icon={Calendar} label="Semana" value={`${profile?.week || 1}/4`} />
+                            <InfoItem icon={Calendar} label="Semana" value={(() => {
+                                const sem = planCatalog?.[profile?.plan]?.ciclo?.semanas;
+                                return sem ? `${profile?.week || 1}/${sem}` : `${profile?.week || 1}`;
+                            })()} />
                             <InfoItem icon={Dumbbell} label="Entrenador" value={(() => {
                                 const trainerId = profile?.trainer_id || null;
                                 const trainerName = trainers.find(t => t.id === trainerId)?.name || trainerId;
@@ -461,7 +466,16 @@ const ClientDetailPage = () => {
                                 <div><Label className="text-white/60 text-xs">Plan</Label>
                                     <select value={profile?.plan || ''} onChange={e => setUserPlan(e.target.value, !!profile?.comp_plan)} className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
                                         <option value="">Sin plan</option>
-                                        {['gold', 'silver', 'bronze', 'elm'].map(p => <option key={p} value={p}>{p}</option>)}
+                                        {['activo', 'legacy', 'especial'].map(estado => {
+                                            const grupo = assignablePlans.filter(p => p.estado === estado);
+                                            if (!grupo.length) return null;
+                                            const gl = { activo: 'Activos', legacy: 'Legacy', especial: 'Especiales' }[estado];
+                                            return (
+                                                <optgroup key={estado} label={gl}>
+                                                    {grupo.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
+                                                </optgroup>
+                                            );
+                                        })}
                                     </select>
                                 </div>
                             </div>

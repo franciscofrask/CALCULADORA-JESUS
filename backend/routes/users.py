@@ -10,9 +10,10 @@ from core.database import db
 from core.security import get_current_user
 from models.user import (
     ClientProfile, ClientProfileCreate, ClientProfileUpdate,
-    MacrosUpdate, PLAN_TYPES, QuestionnaireSubmit, OnboardingUpdate
+    MacrosUpdate, PLAN_TYPES, PLAN_CATALOG, QuestionnaireSubmit, OnboardingUpdate
 )
 from target_calculator import calcular_targets, targets_to_profile_macros
+from core.cycle import enrich_cycle
 
 router = APIRouter(tags=["users"])
 
@@ -25,10 +26,15 @@ async def create_client_profile(data: ClientProfileCreate, user = Depends(get_cu
     if existing:
         raise HTTPException(status_code=400, detail="Ya tienes un perfil de cliente")
 
-    plan_info = PLAN_TYPES.get(data.plan.lower())
-    if not plan_info:
+    plan_entry = PLAN_CATALOG.get(data.plan.lower())
+    if not plan_entry:
         raise HTTPException(status_code=400, detail="Plan no válido")
+    if not plan_entry.get("asignable"):
+        raise HTTPException(status_code=400, detail=f"El plan '{plan_entry['name']}' no es asignable como membresía")
+    plan_info = PLAN_TYPES[data.plan.lower()]
 
+    now = datetime.now(timezone.utc)
+    cycle_days = (plan_info.get("billing_cycle_weeks") or 4) * 7  # ciclo del plan
     profile_id = str(uuid.uuid4())
     profile = {
         "id": profile_id,
@@ -36,9 +42,10 @@ async def create_client_profile(data: ClientProfileCreate, user = Depends(get_cu
         "plan": data.plan.lower(),
         "price": data.price or plan_info["price"],
         "week": 1,
+        "cycle_start": now.isoformat(),
         "status": "activo",
         "trainer_id": data.trainer_id,
-        "next_payment": (datetime.now(timezone.utc) + timedelta(days=28)).isoformat(),
+        "next_payment": (now + timedelta(days=cycle_days)).isoformat(),
         "macros_training": None,
         "macros_rest": None,
         "weight": None,
@@ -71,11 +78,11 @@ async def create_client_profile(data: ClientProfileCreate, user = Depends(get_cu
 
 @router.get("/clients/profile", response_model=ClientProfile)
 async def get_client_profile(user = Depends(get_current_user)):
-    """Obtener perfil del cliente actual."""
+    """Obtener perfil del cliente actual (con la semana del ciclo calculada)."""
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    return ClientProfile(**profile)
+    return ClientProfile(**enrich_cycle(profile))
 
 @router.patch("/clients/onboarding", response_model=ClientProfile)
 async def update_onboarding(data: OnboardingUpdate, user = Depends(get_current_user)):
@@ -88,6 +95,8 @@ async def update_onboarding(data: OnboardingUpdate, user = Depends(get_current_u
         update["onboarding_step"] = data.step
     if data.completed is not None:
         update["onboarding_completed"] = data.completed
+    if data.checklist_dismissed is not None:
+        update["checklist_dismissed"] = data.checklist_dismissed
     if update:
         await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})

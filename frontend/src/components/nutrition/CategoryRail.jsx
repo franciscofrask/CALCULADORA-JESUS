@@ -49,25 +49,34 @@ const CategoryRail = ({
         }
     };
 
-    // Recorte a `maxRows` filas: altura = filas*altoPill + (filas-1)*gap (gap-1.5 = 6px).
+    // Recorte a `maxRows` filas: altura = filas*altoPill + (filas-1)*gap.
+    // La pill se mide en el DOM (w-8/w-9 son rem y el html usa font-size 17/18px,
+    // así que hardcodear 32/36px cortaba el anillo de la seleccionada por abajo).
     const wrapRef = useRef(null);
     const [expanded, setExpanded] = useState(false);
     const [overflowing, setOverflowing] = useState(false);
-    const btnPx = size === 'sm' ? 32 : 36;
+    const fallbackBtnPx = size === 'sm' ? 36 : 41;
     // +8: deja aire para el anillo (ring) de la pill seleccionada, que se dibuja FUERA del
     // círculo; sin este margen el overflow:hidden del recorte lo cortaba por arriba/abajo.
-    const collapsedMaxH = maxRows * btnPx + (maxRows - 1) * 6 + 8;
+    const [collapsedMaxH, setCollapsedMaxH] = useState(maxRows * fallbackBtnPx + (maxRows - 1) * 7 + 8);
 
     useEffect(() => {
         if (!collapsible) return;
         const el = wrapRef.current;
         if (!el) return;
-        const check = () => setOverflowing(el.scrollHeight > collapsedMaxH + 2);
+        const check = () => {
+            const pill = el.querySelector('button');
+            const btnPx = pill ? pill.offsetHeight : fallbackBtnPx;
+            const gap = parseFloat(getComputedStyle(el).rowGap) || 7;
+            const maxH = maxRows * btnPx + (maxRows - 1) * gap + 8;
+            setCollapsedMaxH(maxH);
+            setOverflowing(el.scrollHeight > maxH + 2);
+        };
         check();
         const ro = new ResizeObserver(check);
         ro.observe(el);
         return () => ro.disconnect();
-    }, [collapsible, collapsedMaxH, categories]);
+    }, [collapsible, fallbackBtnPx, maxRows, categories]);
 
     const clampStyle = (collapsible && !expanded) ? { maxHeight: collapsedMaxH, overflow: 'hidden' } : undefined;
 

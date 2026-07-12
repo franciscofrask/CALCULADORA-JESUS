@@ -798,7 +798,7 @@ const BuildMealModal = ({
 
     return (
         <Dialog open={open} onOpenChange={() => onClose()}>
-            <DialogContent className="max-w-2xl h-[90vh] p-0 flex flex-col bg-card">
+            <DialogContent className="max-w-2xl h-[90dvh] p-0 flex flex-col bg-card overflow-hidden">
                 <DialogHeader className="flex-shrink-0 px-4 py-3 border-b">
                     {/* pr-8: deja hueco a la derecha para la cruz de cerrar (absolute right-4),
                         si no el switch Automático/Manual queda superpuesto a ella. */}
@@ -832,7 +832,9 @@ const BuildMealModal = ({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                {/* La lista de alimentos tiene altura mínima garantizada; si las secciones fijas
+                    no caben (móvil o ventana baja), la columna entera hace scroll. */}
+                <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
                     {/* Macros summary */}
                     <div className="flex-shrink-0 px-4 py-2.5 bg-muted border-b">
                         <div className="text-xs font-medium text-muted-foreground mb-1.5 leading-tight">{getPasoLabel()}</div>
@@ -906,7 +908,7 @@ const BuildMealModal = ({
                     </div>}
 
                     {/* Food list */}
-                    <ScrollArea className="flex-1 min-h-0">
+                    <ScrollArea className="flex-1 min-h-[38vh]">
                         <div className="p-3">
                             {!isSearching && selectedCategories.length === 0 ? (
                                 <div className="text-center py-10 text-muted-foreground text-sm">
@@ -983,8 +985,10 @@ const BuildMealModal = ({
                         </div>
                     </ScrollArea>
 
-                    {/* Added foods - collapsible bar (closed by default so the list keeps the space) */}
-                    {tempFoods.length > 0 && (() => {
+                </div>
+
+                {/* Added foods - barra SIEMPRE visible, anclada fuera del scroll (encima del botón de guardar) */}
+                {tempFoods.length > 0 && (() => {
                         const tot = tempFoods.reduce((a, f) => ({
                             P: a.P + (f.macros_efectivos?.P || 0),
                             H: a.H + (f.macros_efectivos?.H || 0),
@@ -1065,8 +1069,7 @@ const BuildMealModal = ({
                                 )}
                             </div>
                         );
-                    })()}
-                </div>
+                })()}
 
                 {/* Footer */}
                 <div className="flex-shrink-0 bg-card border-t p-4">

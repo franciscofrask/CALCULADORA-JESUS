@@ -16,12 +16,14 @@ const ROLES = [
 ];
 const ROLE_LABEL = Object.fromEntries(ROLES.map(r => [r.value, r.label]));
 const STAFF_ROLES = ROLES.filter(r => r.value !== 'client');  // esta lista es solo equipo (admin/coach)
-const PLANS = ['gold', 'silver', 'bronze', 'elm'];
 const PLAN_COLORS = { gold: '#EAB308', silver: '#9CA3AF', bronze: '#C2410C', elm: '#FF671F' };
+const ESTADO_GRUPO = { activo: 'Activos', legacy: 'Legacy', especial: 'Especiales' };
 const EMPTY_EDIT = { name: '', email: '', phone: '', role: 'client', plan: '', comp_plan: false };
 
 const AdminUsersPage = () => {
-    const { api, user: me } = useAuth();
+    const { api, user: me, planCatalog } = useAuth();
+    const assignablePlans = Object.values(planCatalog || {}).filter(p => p.asignable);
+    const planName = (code) => planCatalog?.[code]?.name || code;
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [q, setQ] = useState('');
@@ -187,7 +189,7 @@ const AdminUsersPage = () => {
                                             <td className="px-4 py-3 text-white/60">{u.email}</td>
                                             <td className="px-4 py-3"><Badge className="bg-[#0A0A0A] border border-[#333] text-white/70">{ROLE_LABEL[u.role] || u.role}</Badge></td>
                                             <td className="px-4 py-3">
-                                                {u.plan ? <span className="font-semibold" style={{ color: PLAN_COLORS[u.plan] || '#fff' }}>{u.plan}{u.comp_plan && <span className="text-white/30 text-xs ml-1">(cortesía)</span>}</span> : <span className="text-white/30">-</span>}
+                                                {u.plan ? <span className="font-semibold" style={{ color: PLAN_COLORS[u.plan] || '#FF671F' }}>{planName(u.plan)}{u.comp_plan && <span className="text-white/30 text-xs ml-1">(cortesía)</span>}</span> : <span className="text-white/30">-</span>}
                                             </td>
                                             <td className="px-4 py-3">{u.deleted ? <Badge className="bg-red-500/15 text-red-400 border-0">Baja</Badge> : <Badge className="bg-green-500/15 text-green-500 border-0">Activo</Badge>}</td>
                                             <td className="px-4 py-3">
@@ -245,7 +247,15 @@ const AdminUsersPage = () => {
                             <div><Label className="text-white/60 text-xs">Plan</Label>
                                 <select value={form.plan} onChange={e => setForm(f => ({ ...f, plan: e.target.value }))} className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
                                     <option value="">Sin plan</option>
-                                    {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+                                    {['activo', 'legacy', 'especial'].map(estado => {
+                                        const grupo = assignablePlans.filter(p => p.estado === estado);
+                                        if (!grupo.length) return null;
+                                        return (
+                                            <optgroup key={estado} label={ESTADO_GRUPO[estado]}>
+                                                {grupo.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
+                                            </optgroup>
+                                        );
+                                    })}
                                 </select>
                             </div>
                         </div>

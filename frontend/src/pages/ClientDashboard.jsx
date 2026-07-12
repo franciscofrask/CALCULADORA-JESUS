@@ -24,11 +24,14 @@ const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,
 // ===== Shared brand bits =====
 const JG12Logo = ({ size = 'md', tone = 'dark' }) => <Logo12EN12 size={size} tone={tone} />;
 
-const PlanBadge = ({ plan }) => {
+const PlanBadge = ({ plan, planName }) => {
+    const label = planName || plan?.toUpperCase();
+    if (!label) return <span className="badge-silver opacity-70" data-testid="plan-badge">Sin plan</span>;
     const cls = {
         gold: 'badge-gold', silver: 'badge-silver', bronze: 'badge-bronze', elm: 'badge-elm',
-    }[plan] || 'badge-silver';
-    return <span className={cls} data-testid="plan-badge">{plan?.toUpperCase()}</span>;
+        reto12en12_gold: 'badge-gold', reto12en12_silver: 'badge-silver',
+    }[plan] || 'badge-elm';
+    return <span className={cls} data-testid="plan-badge">{label}</span>;
 };
 
 // ===== Circular tracker (light) =====
@@ -142,7 +145,7 @@ const QuickCard = ({ icon: Icon, color, label, sub, path, navigate, testId, badg
 // =============== CLIENT DASHBOARD ===============
 
 const ClientDashboard = () => {
-    const { user, profile, api } = useAuth();
+    const { user, profile, api, myPlan } = useAuth();
     const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
     const [routine, setRoutine] = useState(null);
@@ -152,6 +155,15 @@ const ClientDashboard = () => {
     const [hasPreferences, setHasPreferences] = useState(true); // optimista: evita parpadeo del checklist
     const [hasDiet, setHasDiet] = useState(false);
     const [checklistDismissed, setChecklistDismissed] = useState(() => localStorage.getItem('onboarding-checklist-dismissed') === '1');
+    const [dashDataLoaded, setDashDataLoaded] = useState(false);
+
+    // El cierre/completado vive en el perfil (backend); localStorage es solo caché local.
+    useEffect(() => {
+        if (profile?.checklist_dismissed) {
+            localStorage.setItem('onboarding-checklist-dismissed', '1');
+            setChecklistDismissed(true);
+        }
+    }, [profile?.checklist_dismissed]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -182,6 +194,7 @@ const ClientDashboard = () => {
                     setTodayConsumed({ P: Math.round(totalP * 10) / 10, H: Math.round(totalH * 10) / 10, G: Math.round(totalG * 10) / 10 });
                 }
                 setHasDiet(dietHasFood);
+                setDashDataLoaded(true);
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
             }
@@ -192,7 +205,17 @@ const ClientDashboard = () => {
     const dismissChecklist = useCallback(() => {
         localStorage.setItem('onboarding-checklist-dismissed', '1');
         setChecklistDismissed(true);
-    }, []);
+        api.patch('/clients/onboarding', { checklist_dismissed: true }).catch(() => {});
+    }, [api]);
+
+    // Al completar los 3 pasos una vez, el checklist queda cerrado para siempre
+    // (si no, el paso "primer día de comidas" volvería a salir incompleto cada día).
+    useEffect(() => {
+        if (!dashDataLoaded || checklistDismissed || !profile) return;
+        const mt0 = macros?.training || profile?.macros_training;
+        const done = !!(mt0 && (mt0.protein || mt0.proteinas)) && hasPreferences && hasDiet;
+        if (done) dismissChecklist();
+    }, [dashDataLoaded, checklistDismissed, profile, macros, hasPreferences, hasDiet, dismissChecklist]);
 
     if (!profile) {
         return (
@@ -228,7 +251,9 @@ const ClientDashboard = () => {
     ];
     const showChecklist = !checklistDismissed && checklistSteps.some(s => !s.done);
 
-    const weekProgress = (profile.week / 4) * 100;
+    // Ciclo del plan: nº de semanas (null si es mensual indefinido / variable).
+    const cicloSemanas = myPlan?.ciclo?.semanas ?? null;
+    const weekProgress = cicloSemanas ? Math.min((profile.week / cicloSemanas) * 100, 100) : null;
     const todayRoutine = routine?.days?.find(d =>
         d.day.toLowerCase() === new Date().toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase());
     const isRestDay = todayRoutine?.is_rest;
@@ -244,8 +269,10 @@ const ClientDashboard = () => {
                         Hola, {user?.name?.split(' ')[0]}
                     </h1>
                     <div className="flex items-center gap-3 mt-2">
-                        <PlanBadge plan={profile.plan} />
-                        <span className="text-muted-foreground text-sm">Semana {profile.week}/4</span>
+                        <PlanBadge plan={profile.plan} planName={myPlan?.name} />
+                        <span className="text-muted-foreground text-sm">
+                            {cicloSemanas ? `Semana ${profile.week}/${cicloSemanas}` : `Semana ${profile.week}`}
+                        </span>
                     </div>
                 </div>
                 {unreadMessages > 0 && (
@@ -312,12 +339,25 @@ const ClientDashboard = () => {
                     <div className="surface p-4">
                         <div className="flex items-center justify-between mb-2">
                             <span className="caption">Ciclo</span>
-                            <span className="text-xs text-muted-foreground font-data">{profile.week}/4</span>
+                            <span className="text-xs text-muted-foreground font-data">
+                                {cicloSemanas ? `${profile.week}/${cicloSemanas}` : `Semana ${profile.week}`}
+                            </span>
                         </div>
-                        <div className="w-full bg-muted rounded-full h-2">
-                            <div className="bg-brand h-2 rounded-full transition-all duration-500" style={{ width: `${weekProgress}%` }} />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-2">Semana {profile.week} de tu ciclo de 4 semanas</p>
+                        {cicloSemanas ? (
+                            <>
+                                <div className="w-full bg-muted rounded-full h-2">
+                                    <div className="bg-brand h-2 rounded-full transition-all duration-500" style={{ width: `${weekProgress}%` }} />
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">Semana {profile.week} de tu ciclo de {cicloSemanas} semanas</p>
+                            </>
+                        ) : (
+                            <p className="text-xs text-muted-foreground mt-1">Plan mensual · semana {profile.week}</p>
+                        )}
+                        {(myPlan?.habilitaciones?.reportes?.length > 0) && (
+                            <p className="text-[11px] text-muted-foreground mt-2 capitalize">
+                                Reportes: {myPlan.habilitaciones.reportes.join(' + ')}
+                            </p>
+                        )}
                     </div>
                     {/* Next payment */}
                     {profile.next_payment && (
@@ -375,13 +415,15 @@ const ClientDashboard = () => {
 
 // =============== NAV CONFIG ===============
 
+// `cap`: capacidad del plan requerida para ver el ítem (ver lib/planAccess.js).
+// Sin `cap` = siempre visible.
 const NAV_ITEMS = [
     { path: '/dashboard', icon: Home, label: 'Inicio', end: true },
-    { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
+    { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina', cap: 'rutina' },
     { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
     { path: '/dashboard/foods', icon: Search, label: 'Alimentos' },
     { path: '/dashboard/macro-calculator', icon: SlidersHorizontal, label: 'Ajustar macros' },
-    { path: '/dashboard/supplements', icon: Pill, label: 'Suplementos' },
+    { path: '/dashboard/supplements', icon: Pill, label: 'Suplementos', cap: 'suplementacion' },
     { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
     { path: '/dashboard/reports', icon: FileText, label: 'Reportes' },
     { path: '/dashboard/checkins', icon: ClipboardCheck, label: 'Check-ins' },
@@ -392,7 +434,7 @@ const NAV_ITEMS = [
 const BOTTOM_ITEMS = [
     { path: '/dashboard', icon: Home, label: 'Inicio', end: true },
     { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
-    { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' },
+    { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina', cap: 'rutina' },
     { path: '/dashboard/macro-calculator', icon: SlidersHorizontal, label: 'Macros' },
 ];
 
@@ -414,7 +456,9 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
 // =============== CLIENT LAYOUT ===============
 
 const ClientLayout = () => {
-    const { user, logout, profile, api } = useAuth();
+    const { user, logout, profile, api, can } = useAuth();
+    const navItems = NAV_ITEMS.filter(i => !i.cap || can(i.cap));
+    const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
     const navigate = useNavigate();
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === '1');
@@ -506,7 +550,7 @@ const ClientLayout = () => {
                         </span>
                         {!collapsed && <span className="text-sm">Novedades</span>}
                     </button>
-                    {NAV_ITEMS.map(item => <SidebarLink key={item.path} item={item} collapsed={collapsed} unread={unread} />)}
+                    {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={collapsed} unread={unread} />)}
                 </nav>
                 <div className="p-3 border-t border-white/10 space-y-2">
                     <UserChip compact={collapsed} />
@@ -553,7 +597,7 @@ const ClientLayout = () => {
             {/* ===== Mobile bottom nav ===== */}
             <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-ink border-t border-white/10" data-testid="mobile-bottom-nav">
                 <div className="flex items-stretch h-16">
-                    {BOTTOM_ITEMS.map(item => (
+                    {bottomItems.map(item => (
                         <NavLink key={item.path} to={item.path} end={item.end}
                             className={({ isActive }) => `flex flex-col items-center justify-center flex-1 gap-1 transition-colors ${isActive ? 'text-brand' : 'text-white/55'}`}
                             data-testid={`bottomnav-${slug(item.label)}`}>
@@ -623,7 +667,7 @@ const ClientLayout = () => {
                             </button>
                         </div>
                         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-                            {NAV_ITEMS.map(item => <SidebarLink key={item.path} item={item} collapsed={false} unread={unread} onClick={() => setDrawerOpen(false)} />)}
+                            {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={false} unread={unread} onClick={() => setDrawerOpen(false)} />)}
                         </nav>
                         <div className="p-3 border-t border-white/10 space-y-2">
                             <UserChip />
