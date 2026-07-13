@@ -139,10 +139,17 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Un checkout de Stripe iniciado y nunca pagado deja el perfil en pendiente_pago
+    // con checkout_status draft/created: NO cuenta como plan contratado en toda la app.
+    // Los perfiles antiguos de pagos manuales no tienen checkout_status y no entran aquí.
+    const planUnpaid = !!(profile
+        && profile.status === 'pendiente_pago'
+        && ['draft', 'created'].includes(profile.checkout_status));
+
     // Plan del usuario actual (entrada del catálogo), sus habilitaciones y capacidades.
     const myPlan = useMemo(
-        () => (profile?.plan ? planCatalog[profile.plan] || null : null),
-        [profile?.plan, planCatalog]
+        () => (profile?.plan && !planUnpaid ? planCatalog[profile.plan] || null : null),
+        [profile?.plan, planUnpaid, planCatalog]
     );
     const habilitaciones = myPlan?.habilitaciones || null;
     const capabilities = useMemo(() => deriveCapabilities(habilitaciones), [habilitaciones]);
@@ -170,6 +177,7 @@ export const AuthProvider = ({ children }) => {
         api,
         planCatalog,
         myPlan,
+        planUnpaid,
         habilitaciones,
         capabilities,
         can,

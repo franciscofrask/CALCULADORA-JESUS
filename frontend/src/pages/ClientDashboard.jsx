@@ -145,7 +145,7 @@ const QuickCard = ({ icon: Icon, color, label, sub, path, navigate, testId, badg
 // =============== CLIENT DASHBOARD ===============
 
 const ClientDashboard = () => {
-    const { user, profile, api, myPlan } = useAuth();
+    const { user, profile, api, myPlan, planUnpaid } = useAuth();
     const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
     const [routine, setRoutine] = useState(null);
@@ -217,7 +217,7 @@ const ClientDashboard = () => {
         if (done) dismissChecklist();
     }, [dashDataLoaded, checklistDismissed, profile, macros, hasPreferences, hasDiet, dismissChecklist]);
 
-    if (!profile) {
+    if (!profile || planUnpaid) {
         return (
             <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto animate-fade-in">
                 <div className="surface p-8 text-center">
@@ -225,7 +225,11 @@ const ClientDashboard = () => {
                         <Target className="w-8 h-8 text-brand" />
                     </div>
                     <h2 className="heading-2 text-foreground mb-2">Bienvenido a 12EN12</h2>
-                    <p className="text-muted-foreground mb-6 text-sm">Para comenzar tu transformación, selecciona un plan.</p>
+                    <p className="text-muted-foreground mb-6 text-sm">
+                        {planUnpaid
+                            ? 'El pago de tu plan no llegó a completarse. Elige un plan para terminar la compra.'
+                            : 'Para comenzar tu transformación, selecciona un plan.'}
+                    </p>
                     <button onClick={() => navigate('/onboarding')} className="btn-brand inline-flex items-center gap-2" data-testid="onboarding-btn">
                         Seleccionar plan <ChevronRight className="w-4 h-4" />
                     </button>
@@ -456,7 +460,7 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
 // =============== CLIENT LAYOUT ===============
 
 const ClientLayout = () => {
-    const { user, logout, profile, api, can } = useAuth();
+    const { user, logout, profile, api, can, planUnpaid } = useAuth();
     const navItems = NAV_ITEMS.filter(i => !i.cap || can(i.cap));
     const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
     const navigate = useNavigate();
@@ -521,7 +525,7 @@ const ClientLayout = () => {
             {!compact && (
                 <div className="flex-1 min-w-0">
                     <p className="font-semibold text-white text-sm truncate">{user?.name}</p>
-                    {profile && <PlanBadge plan={profile.plan} />}
+                    {profile && !planUnpaid && <PlanBadge plan={profile.plan} />}
                 </div>
             )}
         </div>

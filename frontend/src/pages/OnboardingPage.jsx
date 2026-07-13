@@ -114,7 +114,10 @@ const OnboardingPage = () => {
             // Redirige a la página de pago de Stripe (test mode).
             window.location.href = res.data.checkout_url;
         } catch (error) {
-            toast.error(error.response?.data?.detail || 'Error al iniciar el pago');
+            // Los errores de configuración del servidor (5xx) no se enseñan en crudo al usuario
+            const status = error.response?.status || 0;
+            const detail = error.response?.data?.detail;
+            toast.error(status >= 500 || !detail ? 'No se pudo iniciar el pago. Inténtalo en un momento.' : detail);
             setLoading(false);
         }
     };
