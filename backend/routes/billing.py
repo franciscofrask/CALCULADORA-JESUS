@@ -17,11 +17,13 @@ from models.common import (
     CheckoutSessionRequest, CheckoutSessionResponse, BillingPortalResponse,
     PaymentResponse, AlertResponse,
 )
+from models.user import PLAN_CATALOG
 from core.stripe_billing import (
     get_stripe_module, stripe_api_call, require_stripe_test_mode,
     get_plan_info, get_stripe_price_id_for_plan, build_frontend_url,
     ensure_checkout_profile, get_or_create_stripe_customer,
-    sync_profile_from_subscription, upsert_payment_from_invoice,
+    sync_profile_from_subscription, sync_profile_from_one_time_session,
+    upsert_payment_from_invoice,
     update_profile_payment_method, get_payment_method_from_invoice,
     get_payment_method_status_from_error, find_client_profile, create_alert,
 )
@@ -40,6 +42,15 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     stripe_module = get_stripe_module()
     require_stripe_test_mode("La creación de checkout")
     plan_info = get_plan_info(data.plan)
+
+    # Solo se venden online los planes comercialmente activos (los legacy se respetan
+    # a quien ya los tiene, pero no se contratan de nuevo; especiales → alta manual).
+    override = await db.plan_overrides.find_one({"code": plan_info["code"]}, {"_id": 0, "fields": 1})
+    estado = ((override or {}).get("fields", {}).get("estado")
+              or PLAN_CATALOG.get(plan_info["code"], {}).get("estado"))
+    if estado != "activo":
+        raise HTTPException(status_code=400, detail="Este plan ya no está disponible para nuevas contrataciones.")
+
     profile = await ensure_checkout_profile(user, plan_info["code"])
     customer_id = await get_or_create_stripe_customer(user, profile)
 
@@ -47,9 +58,8 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     cancel_url = build_frontend_url(data.cancel_path)
     stripe_price_id = get_stripe_price_id_for_plan(plan_info["code"])
 
-    session = await stripe_api_call(
-        stripe_module.checkout.Session.create,
-        mode="subscription",
+    checkout_metadata = {"user_id": user["id"], "profile_id": profile["id"], "plan": plan_info["code"]}
+    session_kwargs = dict(
         customer=customer_id,
         client_reference_id=profile["id"],
         line_items=[{"price": stripe_price_id, "quantity": 1}],
@@ -58,9 +68,18 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
         customer_update={"address": "auto", "name": "auto"},
         success_url=success_url,
         cancel_url=cancel_url,
-        metadata={"user_id": user["id"], "profile_id": profile["id"], "plan": plan_info["code"]},
-        subscription_data={"metadata": {"user_id": user["id"], "profile_id": profile["id"], "plan": plan_info["code"]}},
+        metadata=checkout_metadata,
     )
+    if plan_info.get("one_time"):
+        # Pago único (p.ej. reto60): un solo cobro, sin suscripción. La factura se genera
+        # para que invoice.payment_succeeded registre el pago igual que en suscripciones.
+        session_kwargs["mode"] = "payment"
+        session_kwargs["invoice_creation"] = {"enabled": True}
+        session_kwargs["payment_intent_data"] = {"metadata": checkout_metadata}
+    else:
+        session_kwargs["mode"] = "subscription"
+        session_kwargs["subscription_data"] = {"metadata": checkout_metadata}
+    session = await stripe_api_call(stripe_module.checkout.Session.create, **session_kwargs)
 
     await db.client_profiles.update_one(
         {"id": profile["id"]},
@@ -121,6 +140,10 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
                 }},
             )
             synced_profile = await db.client_profiles.find_one({"id": synced_profile["id"]}, {"_id": 0})
+
+    if not synced_profile and session.get("mode") == "payment":
+        # Checkout de pago único (p.ej. reto60): no hay suscripción que sincronizar.
+        synced_profile = await sync_profile_from_one_time_session(session, user_id=user["id"])
 
     if not synced_profile and profile_id:
         synced_profile = await db.client_profiles.find_one({"id": profile_id}, {"_id": 0})
@@ -190,6 +213,9 @@ async def stripe_webhooks(request: Request):
             await sync_profile_from_subscription(
                 subscription, profile_id=metadata.get("profile_id"),
                 user_id=metadata.get("user_id"), customer_id=obj.get("customer"))
+        elif obj.get("mode") == "payment":
+            # Pago único (p.ej. reto60): activa el perfil con acceso hasta fin de ciclo.
+            await sync_profile_from_one_time_session(obj)
 
     elif event_type in {"customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"}:
         await sync_profile_from_subscription(obj)
@@ -199,14 +225,16 @@ async def stripe_webhooks(request: Request):
         payment_method, _ = await get_payment_method_from_invoice(obj)
         await upsert_payment_from_invoice(obj, profile=profile, status_override="success")
         if profile:
-            await db.client_profiles.update_one(
-                {"id": profile["id"]},
-                {"$set": {
-                    "status": "activo", "subscription_status": "active",
-                    "payment_method_status": "ok", "last_payment_error": None,
-                    "checkout_status": "completed", "payment_failure_count": 0,
-                }},
-            )
+            paid_update = {
+                "status": "activo",
+                "payment_method_status": "ok", "last_payment_error": None,
+                "checkout_status": "completed", "payment_failure_count": 0,
+            }
+            # Solo las facturas de suscripción marcan subscription_status; la factura de un
+            # pago único (invoice_creation) no debe simular una suscripción activa.
+            if obj.get("subscription"):
+                paid_update["subscription_status"] = "active"
+            await db.client_profiles.update_one({"id": profile["id"]}, {"$set": paid_update})
             await update_profile_payment_method(profile["id"], payment_method, payment_method_status="ok", last_payment_error=None)
             await db.alerts.update_many(
                 {"client_id": profile["id"], "type": {"$in": ["payment_failure", "card_expired"]}, "resolved": False},

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -7,73 +7,72 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { Check, ArrowRight, ArrowLeft, Loader2, Star } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
+import { habilitacionesToList } from '../lib/planAccess';
 
-const PLANS = [
-    {
-        id: 'gold',
-        name: 'Gold',
-        price: 149,
+// Presentación de cada plan (orden, badge, descripción comercial). Los datos reales
+// (nombre, precios, qué incluye) vienen del catálogo del backend (GET /api/plans),
+// que es la fuente única — misma que usa Stripe para cobrar.
+const PLAN_UI = {
+    reto12en12_gold: {
+        order: 1, recommended: true,
         badgeClass: 'bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-600 text-foreground',
-        description: 'El plan más completo para resultados máximos',
-        features: [
-            'Rutina personalizada semanal',
-            'Macros 100% individualizados',
-            'Chat directo con tu entrenador',
-            'Reporte quincenal con feedback',
-            'Cardio personalizado',
-            'Audio motivacional de Jesús',
-            'Guía de suplementación'
-        ],
-        recommended: true
+        description: 'Acompañamiento completo y personalizado durante 12 semanas',
     },
-    {
-        id: 'silver',
-        name: 'Silver',
-        price: 99,
+    reto12en12_silver: {
+        order: 2,
         badgeClass: 'bg-gradient-to-r from-gray-300 via-gray-200 to-gray-400 text-foreground',
-        description: 'Balance perfecto entre servicio y precio',
-        features: [
-            'Rutina personalizada semanal',
-            'Macros individualizados',
-            'Chat directo con tu entrenador',
-            'Reporte mensual'
-        ],
-        recommended: false
+        description: 'Macros y suplementación personalizados con rutina del mes',
     },
-    {
-        id: 'bronze',
-        name: 'Bronze',
-        price: 69,
-        badgeClass: 'bg-gradient-to-r from-orange-700 via-orange-600 to-orange-800 text-white',
-        description: 'Ideal para empezar tu transformación',
-        features: [
-            'Rutina básica mensual',
-            'Macros calculados',
-            'Chat con soporte',
-            'Reporte mensual'
-        ],
-        recommended: false
-    },
-    {
-        id: 'elm',
-        name: 'ELM',
-        price: 39,
+    elm: {
+        order: 3,
         badgeClass: 'bg-[#FF671F] text-white',
-        description: 'Solo macros, para quienes ya tienen rutina',
-        features: [
-            'Acceso a calculadora de macros',
-            'Macros personalizados',
-            'Chat con soporte'
-        ],
-        recommended: false
-    }
-];
+        description: 'La membresía mensual estándar, seguimiento mes a mes',
+    },
+    reto60: {
+        order: 4,
+        badgeClass: 'bg-gradient-to-r from-orange-700 via-orange-600 to-orange-800 text-white',
+        description: 'Programa de 8 semanas enfocado en pérdida de grasa',
+    },
+    mantenimiento: {
+        order: 5,
+        badgeClass: 'bg-white/10 text-foreground',
+        description: 'Conserva tu acceso a la calculadora sin seguimiento activo',
+    },
+    calculadora_jp: {
+        order: 6,
+        badgeClass: 'bg-white/10 text-foreground',
+        description: 'Solo la calculadora de macros, en autogestión',
+    },
+};
+
+// "1500" -> "1.500" (formato es-ES, sin decimales si es entero).
+const formatEuros = (n) =>
+    Number(n).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+// Etiqueta del periodo del precio principal ("mes" -> "/mes", "único" -> "pago único").
+const periodoLabel = (periodo) => (periodo === 'único' ? ' · pago único' : `/${periodo}`);
 
 const OnboardingPage = () => {
     const navigate = useNavigate();
-    const { api, refreshProfile } = useAuth();
+    const { api, refreshProfile, planCatalog } = useAuth();
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [loading, setLoading] = useState(false);
+
+    // Planes comercialmente activos del catálogo, con su capa de presentación.
+    // Solo se muestra el precio principal (precios[0]): es el único que existe en Stripe.
+    const plans = useMemo(() => (
+        Object.entries(planCatalog || {})
+            .filter(([, p]) => p.estado === 'activo' && p.stripe_price_env)
+            .map(([code, p]) => ({
+                id: code,
+                name: p.name,
+                precio: p.precios?.[0] || { importe: p.precio, periodo: 'mes' },
+                features: habilitacionesToList(p.habilitaciones),
+                order: 99, badgeClass: 'bg-white/10 text-foreground', description: '',
+                ...(PLAN_UI[code] || {}),
+            }))
+            .sort((a, b) => a.order - b.order)
+    ), [planCatalog]);
 
     // Retorno de Stripe Checkout: ?checkout=success&session_id=...  /  ?checkout=canceled
     useEffect(() => {
@@ -148,8 +147,13 @@ const OnboardingPage = () => {
                 </div>
 
                 {/* Plans Grid */}
+                {plans.length === 0 && (
+                    <div className="flex justify-center py-16">
+                        <Loader2 className="w-8 h-8 animate-spin text-[#FF671F]" />
+                    </div>
+                )}
                 <div className="grid md:grid-cols-2 gap-4 mb-8">
-                    {PLANS.map((plan) => (
+                    {plans.map((plan) => (
                         <Card 
                             key={plan.id}
                             className={`bg-card border-2 cursor-pointer transition-all duration-300 ${
@@ -181,9 +185,9 @@ const OnboardingPage = () => {
                                 </div>
                                 <CardTitle className="mt-4">
                                     <span className="text-5xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed' }}>
-                                        {plan.price}
+                                        {formatEuros(plan.precio.importe)}
                                     </span>
-                                    <span className="text-foreground/50 text-lg ml-1">€/ciclo</span>
+                                    <span className="text-foreground/50 text-lg ml-1">€{periodoLabel(plan.precio.periodo)}</span>
                                 </CardTitle>
                                 <p className="text-sm text-foreground/50">{plan.description}</p>
                             </CardHeader>

@@ -10,7 +10,7 @@ import {
     LogOut, Bell, ChevronRight, CreditCard, Target, Bot,
     Flame, Activity, Scale, Search, SlidersHorizontal, Pill,
     ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen,
-    CheckCircle2, Circle, Sparkles, LayoutDashboard
+    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import ThemeToggle from '../components/ThemeToggle';
@@ -156,6 +156,7 @@ const ClientDashboard = () => {
     const [hasDiet, setHasDiet] = useState(false);
     const [checklistDismissed, setChecklistDismissed] = useState(() => localStorage.getItem('onboarding-checklist-dismissed') === '1');
     const [dashDataLoaded, setDashDataLoaded] = useState(false);
+    const [dueReports, setDueReports] = useState([]);
 
     // El cierre/completado vive en el perfil (backend); localStorage es solo caché local.
     useEffect(() => {
@@ -169,15 +170,17 @@ const ClientDashboard = () => {
         const fetchData = async () => {
             try {
                 const today = new Date().toISOString().split('T')[0];
-                const [routineRes, messagesRes, macrosRes, dietRes, prefsRes] = await Promise.all([
+                const [routineRes, messagesRes, macrosRes, dietRes, prefsRes, dueRes] = await Promise.all([
                     api.get('/routines/current').catch(() => ({ data: null })),
                     api.get('/messages/unread-count').catch(() => ({ data: { count: 0 } })),
                     api.get('/macros').catch(() => ({ data: null })),
                     api.get(`/diets/${today}`).catch(() => ({ data: { exists: false } })),
                     api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
+                    api.get('/reports/due').catch(() => ({ data: { items: [] } })),
                 ]);
                 setRoutine(routineRes.data);
                 setUnreadMessages(messagesRes.data.count);
+                setDueReports(dueRes.data.items || []);
                 setMacros(macrosRes.data);
                 setHasPreferences(!!prefsRes.data?.has_preferences);
                 const diet = dietRes.data;
@@ -287,6 +290,38 @@ const ClientDashboard = () => {
                     </button>
                 )}
             </header>
+
+            {/* Reporte pendiente esta semana (amarillo en plazo, rojo vencido) */}
+            {dueReports.map((r) => (
+                <div key={r.tipo}
+                    className={`surface p-4 flex flex-col sm:flex-row sm:items-center gap-3 border ${
+                        r.overdue ? 'border-red-500/40 bg-red-500/5' : 'border-yellow-500/40 bg-yellow-500/5'
+                    }`}
+                    data-testid={`due-report-${r.tipo}`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                        r.overdue ? 'bg-red-500/15' : 'bg-yellow-500/15'
+                    }`}>
+                        <AlertTriangle className={`w-5 h-5 ${r.overdue ? 'text-red-500' : 'text-yellow-500'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-foreground font-semibold text-sm">
+                            {r.overdue
+                                ? `Tu ${r.tipo_label.toLowerCase()} está fuera de plazo`
+                                : `Tienes tu ${r.tipo_label.toLowerCase()} pendiente`}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                            {r.overdue
+                                ? 'El plazo ya pasó — respóndelo cuanto antes para que tu coach pueda ajustar tu plan.'
+                                : `Respóndelo antes del ${r.deadline_label}.`}
+                        </p>
+                    </div>
+                    <button onClick={() => navigate('/dashboard/reports')}
+                        className="btn-brand flex items-center gap-1.5 text-sm flex-shrink-0 self-start sm:self-auto"
+                        data-testid={`due-report-btn-${r.tipo}`}>
+                        Hacer reporte <ChevronRight className="w-4 h-4" />
+                    </button>
+                </div>
+            ))}
 
             {/* Checklist de primeros pasos */}
             {showChecklist && (

@@ -17,14 +17,40 @@ import {
     Menu, X
 } from 'lucide-react';
 
+// Colores para el desglose por plan (cualquier plan sin color cae en el gris).
+const PLAN_COLORS = {
+    reto12en12_gold: '#EAB308', gold: '#EAB308',
+    reto12en12_silver: '#9CA3AF', silver: '#9CA3AF',
+    bronze: '#C2410C', elm: '#FF671F', reto60: '#22C55E',
+    calculadora_jp: '#3B82F6', mantenimiento: '#8B5CF6',
+    premium: '#EC4899', plan_6m: '#14B8A6', sin_plan: '#555555',
+};
+
 // Admin Dashboard Home
 const AdminDashboard = () => {
-    const { api } = useAuth();
+    const { api, planCatalog } = useAuth();
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [upcoming, setUpcoming] = useState([]);
     const [clients, setClients] = useState([]);
+    const [cadence, setCadence] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const markReport = async (item, enviado) => {
+        try {
+            await api.post('/admin/report-cadence/mark', {
+                client_id: item.client_id, tipo: item.tipo, due_date: item.due_date, enviado,
+            });
+            setCadence(prev => prev.map(i =>
+                i.client_id === item.client_id && i.tipo === item.tipo && i.due_date === item.due_date
+                    ? { ...i, status: enviado ? 'enviado' : 'pendiente' }
+                    : i
+            ));
+            toast.success(enviado ? 'Reporte marcado como enviado' : 'Marca de envío quitada');
+        } catch {
+            toast.error('No se pudo actualizar el reporte');
+        }
+    };
 
     // Campana: novedades reales (leads nuevos sin gestionar + mensajes sin leer)
     const [notif, setNotif] = useState({ leads: 0, messages: 0 });
@@ -33,14 +59,16 @@ const AdminDashboard = () => {
     useEffect(() => {
         const fetchAll = async () => {
             try {
-                const [statsRes, upcomingRes, clientsRes] = await Promise.all([
+                const [statsRes, upcomingRes, clientsRes, cadenceRes] = await Promise.all([
                     api.get('/admin/dashboard-stats'),
                     api.get('/admin/upcoming-payments'),
                     api.get('/admin/clients'),
+                    api.get('/admin/report-cadence'),
                 ]);
                 setStats(statsRes.data);
                 setUpcoming(upcomingRes.data.upcoming || []);
                 setClients(clientsRes.data || []);
+                setCadence(cadenceRes.data.items || []);
             } catch (error) {
                 console.error('Error fetching dashboard:', error);
                 toast.error('Error al cargar dashboard');
@@ -77,8 +105,12 @@ const AdminDashboard = () => {
         );
     }
 
-    const planColors = { gold: '#EAB308', silver: '#9CA3AF', bronze: '#C2410C', elm: '#FF671F' };
-    const totalPlanActive = Object.values(stats?.plans || {}).reduce((a, b) => a + b, 0);
+    // Todos los planes con clientes activos, mayor a menor.
+    const planEntries = Object.entries(stats?.plans || {}).sort((a, b) => b[1] - a[1]);
+    const totalPlanActive = planEntries.reduce((a, [, n]) => a + n, 0);
+    const planLabel = (code) => planCatalog?.[code]?.name || (code === 'sin_plan' ? 'Sin plan' : code);
+    const planColor = (code) => PLAN_COLORS[code] || '#666666';
+    const pendingReports = cadence.filter(i => i.status !== 'enviado');
 
     return (
         <div className="p-4 md:p-6 space-y-5 md:space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen" data-testid="admin-dashboard">
@@ -137,19 +169,18 @@ const AdminDashboard = () => {
             <Card className="bg-[#111111] border-[#222]" data-testid="plan-distribution">
                 <CardContent className="p-5">
                     <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-4">Distribución por plan</p>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex flex-col gap-3">
                         {/* Bar */}
-                        <div className="w-full sm:flex-1 flex h-8 rounded-lg overflow-hidden bg-[#1A1A1A]">
-                            {['gold', 'silver', 'bronze', 'elm'].map(plan => {
-                                const count = stats?.plans?.[plan] || 0;
+                        <div className="w-full flex h-8 rounded-lg overflow-hidden bg-[#1A1A1A]">
+                            {planEntries.map(([plan, count]) => {
                                 const pct = totalPlanActive > 0 ? (count / totalPlanActive) * 100 : 0;
                                 if (pct === 0) return null;
                                 return (
                                     <div
                                         key={plan}
                                         className="h-full flex items-center justify-center text-xs font-bold transition-all"
-                                        style={{ width: `${pct}%`, backgroundColor: planColors[plan], color: plan === 'silver' ? '#000' : '#fff', minWidth: count > 0 ? '40px' : 0 }}
-                                        title={`${plan}: ${count}`}
+                                        style={{ width: `${pct}%`, backgroundColor: planColor(plan), color: '#fff', minWidth: '40px' }}
+                                        title={`${planLabel(plan)}: ${count}`}
                                     >
                                         {count}
                                     </div>
@@ -157,16 +188,74 @@ const AdminDashboard = () => {
                             })}
                         </div>
                         {/* Legend */}
-                        <div className="flex flex-wrap gap-x-3 gap-y-1.5 flex-shrink-0">
-                            {['gold', 'silver', 'bronze', 'elm'].map(plan => (
+                        <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                            {planEntries.map(([plan, count]) => (
                                 <div key={plan} className="flex items-center gap-1.5">
-                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: planColors[plan] }} />
-                                    <span className="text-xs text-white/50 uppercase">{plan}</span>
-                                    <span className="text-xs font-bold text-white">{stats?.plans?.[plan] || 0}</span>
+                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: planColor(plan) }} />
+                                    <span className="text-xs text-white/50 uppercase">{planLabel(plan)}</span>
+                                    <span className="text-xs font-bold text-white">{count}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Reportes del coach que tocan esta semana */}
+            <Card className="bg-[#111111] border-[#222]" data-testid="report-cadence">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="text-base text-white uppercase tracking-wider flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-[#FF671F]" />
+                            Reportes de esta semana
+                        </span>
+                        <Badge className={`border-0 text-xs ${pendingReports.length > 0 ? 'bg-[#FF671F]/20 text-[#FF671F]' : 'bg-green-500/10 text-green-500'}`}>
+                            {pendingReports.length > 0 ? `${pendingReports.length} por enviar` : 'Al día'}
+                        </Badge>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    {cadence.length === 0 ? (
+                        <p className="text-white/30 text-sm text-center py-4">Ningún cliente tiene reporte programado esta semana</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {cadence.map((item, i) => (
+                                <div key={`${item.client_id}-${item.tipo}-${item.due_date}`}
+                                    className="flex items-center justify-between gap-2 p-3 bg-[#0A0A0A] rounded-lg border border-[#222] hover:border-[#FF671F]/30 transition-colors"
+                                    data-testid={`cadence-${i}`}>
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <Badge className={`border-0 text-[10px] flex-shrink-0 ${
+                                            item.status === 'vencido' ? 'bg-red-500/15 text-red-400'
+                                            : item.status === 'enviado' ? 'bg-green-500/10 text-green-500'
+                                            : 'bg-yellow-500/10 text-yellow-500'
+                                        }`}>
+                                            {item.status}
+                                        </Badge>
+                                        <div className="min-w-0 cursor-pointer" onClick={() => navigate(`/admin/clients/${item.client_id}`)}>
+                                            <p className="text-white text-sm font-medium truncate">{item.client_name || item.client_email}</p>
+                                            <p className="text-white/40 text-xs truncate">
+                                                {item.tipo_label} · {item.due_label} {new Date(item.due_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · semana {item.week}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                                        <span className="hidden sm:inline"><PlanBadge plan={item.plan} planName={item.plan_name} /></span>
+                                        {item.status === 'enviado' ? (
+                                            <Button variant="ghost" size="sm" className="text-white/40 hover:text-white text-xs uppercase"
+                                                onClick={() => markReport(item, false)}>
+                                                Desmarcar
+                                            </Button>
+                                        ) : (
+                                            <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs uppercase"
+                                                onClick={() => markReport(item, true)} data-testid={`mark-sent-${i}`}>
+                                                Marcar enviado
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

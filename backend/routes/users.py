@@ -21,60 +21,18 @@ router = APIRouter(tags=["users"])
 
 @router.post("/clients/profile", response_model=ClientProfile)
 async def create_client_profile(data: ClientProfileCreate, user = Depends(get_current_user)):
-    """Crear perfil de cliente."""
-    existing = await db.client_profiles.find_one({"user_id": user["id"]})
-    if existing:
-        raise HTTPException(status_code=400, detail="Ya tienes un perfil de cliente")
+    """Alta de membresía. El self-service directo está deshabilitado: activarse un plan
+    aquí creaba un perfil `activo` con un pago falso, saltándose Stripe por completo.
 
-    plan_entry = PLAN_CATALOG.get(data.plan.lower())
-    if not plan_entry:
-        raise HTTPException(status_code=400, detail="Plan no válido")
-    if not plan_entry.get("asignable"):
-        raise HTTPException(status_code=400, detail=f"El plan '{plan_entry['name']}' no es asignable como membresía")
-    plan_info = PLAN_TYPES[data.plan.lower()]
-
-    now = datetime.now(timezone.utc)
-    cycle_days = (plan_info.get("billing_cycle_weeks") or 4) * 7  # ciclo del plan
-    profile_id = str(uuid.uuid4())
-    profile = {
-        "id": profile_id,
-        "user_id": user["id"],
-        "plan": data.plan.lower(),
-        "price": data.price or plan_info["price"],
-        "week": 1,
-        "cycle_start": now.isoformat(),
-        "status": "activo",
-        "trainer_id": data.trainer_id,
-        "next_payment": (now + timedelta(days=cycle_days)).isoformat(),
-        "macros_training": None,
-        "macros_rest": None,
-        "weight": None,
-        "height": None,
-        "age": None,
-        "sex": None,
-        "goal": None,
-        "equipment": None,
-        "injuries": None,
-        "training_days": None,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.client_profiles.insert_one(profile)
-    
-    # Update user plan
-    await db.users.update_one({"id": user["id"]}, {"$set": {"plan": data.plan.lower()}})
-    
-    # Create mock payment
-    payment = {
-        "id": str(uuid.uuid4()),
-        "client_id": profile_id,
-        "amount": profile["price"],
-        "status": "success",
-        "method": "card",
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.payments.insert_one(payment)
-    
-    return ClientProfile(**profile)
+    El alta real es: iniciar el checkout de Stripe (POST /billing/checkout-session) y que
+    el webhook active la suscripción al confirmarse el pago. El admin puede dar de alta
+    manualmente (plan cortesía) desde el panel.
+    """
+    raise HTTPException(
+        status_code=403,
+        detail="El alta de plan se realiza mediante el checkout de pago. "
+               "Inicia el proceso desde tu panel; el plan se activa al confirmarse el pago.",
+    )
 
 @router.get("/clients/profile", response_model=ClientProfile)
 async def get_client_profile(user = Depends(get_current_user)):

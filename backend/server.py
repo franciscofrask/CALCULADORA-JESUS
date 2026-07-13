@@ -34,6 +34,10 @@ from routes.menu_templates import router as menu_templates_router
 from routes.notifications import router as notifications_router
 from routes.audit import router as audit_router
 from routes.plans import router as plans_router, admin_router as plans_admin_router
+from routes.report_cadence import (
+    router as report_cadence_router,
+    client_router as report_due_router,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -104,6 +108,8 @@ api_router.include_router(notifications_router)
 api_router.include_router(audit_router)
 api_router.include_router(plans_router)
 api_router.include_router(plans_admin_router)
+api_router.include_router(report_cadence_router)
+api_router.include_router(report_due_router)
 
 # Mount API router
 app.include_router(api_router)

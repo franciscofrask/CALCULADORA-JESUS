@@ -212,6 +212,8 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
             "cancel_at_period_end": False,
             "billing_cycle_days": plan_info["billing_cycle_weeks"] * 7,
             "last_payment_error": None,
+            # Limpia la caducidad de una compra única anterior (p.ej. reto60 → ELM).
+            "access_until": None,
         }
         if trainer_id is not None:
             update_data["trainer_id"] = trainer_id
@@ -249,7 +251,10 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
         }
         await db.client_profiles.insert_one(profile)
 
-    await db.users.update_one({"id": user["id"]}, {"$set": {"plan": plan_info["code"]}})
+    # OJO: NO se setea users.plan aquí. El plan del usuario (lo que la UI usa para mostrar
+    # capacidades) solo debe reflejarse cuando el pago se confirma; lo hace
+    # sync_profile_from_subscription al activarse la suscripción. Setearlo antes de pagar
+    # concedía el plan por el mero hecho de iniciar (y abandonar) el checkout.
     return profile
 
 
@@ -339,6 +344,8 @@ async def sync_profile_from_subscription(subscription, *, profile_id=None, user_
         "next_payment": stripe_timestamp_to_iso(subscription.get("current_period_end")),
         "cancel_at_period_end": bool(subscription.get("cancel_at_period_end")),
         "billing_cycle_days": profile.get("billing_cycle_days", DEFAULT_BILLING_CYCLE_DAYS),
+        # Perfil gestionado por suscripción: no aplica la caducidad de compra única.
+        "access_until": None,
     }
     if status in {"active", "trialing"}:
         update["last_payment_error"] = None
@@ -346,12 +353,57 @@ async def sync_profile_from_subscription(subscription, *, profile_id=None, user_
         plan_info = get_plan_info(plan_code)
         update["plan"] = plan_info["code"]
         update["price"] = plan_info["price"]
-        await db.users.update_one({"id": profile["user_id"]}, {"$set": {"plan": plan_info["code"]}})
+        # users.plan (capacidades en la UI) solo se refleja con la suscripción activa;
+        # con incomplete/past_due/canceled el usuario no debe "tener" el plan.
+        if status in {"active", "trialing"}:
+            await db.users.update_one({"id": profile["user_id"]}, {"$set": {"plan": plan_info["code"]}})
+        elif status in {"canceled", "unpaid", "incomplete_expired"}:
+            await db.users.update_one({"id": profile["user_id"]}, {"$set": {"plan": None}})
     if status in {"canceled", "unpaid", "incomplete_expired"}:
         update["next_payment"] = None
         update["current_period_end"] = stripe_timestamp_to_iso(subscription.get("ended_at")) or update["current_period_end"]
 
     await db.client_profiles.update_one({"id": profile["id"]}, {"$set": update})
+    return await db.client_profiles.find_one({"id": profile["id"]}, {"_id": 0})
+
+
+async def sync_profile_from_one_time_session(session, *, user_id=None):
+    """Activa el perfil tras un checkout de pago único (mode='payment', p.ej. reto60).
+    No hay suscripción: el acceso dura el ciclo del plan (access_until) y no se renueva."""
+    if session.get("payment_status") != "paid":
+        return None
+    metadata = session.get("metadata", {}) or {}
+    profile = await find_client_profile(
+        profile_id=session.get("client_reference_id") or metadata.get("profile_id"),
+        customer_id=session.get("customer"),
+        user_id=user_id or metadata.get("user_id"),
+    )
+    if not profile:
+        logger.warning("No se encontró perfil para checkout de pago único %s", session.get("id"))
+        return None
+
+    plan_info = get_plan_info(metadata.get("plan") or profile.get("plan"))
+    now = datetime.now(timezone.utc)
+    end = now + timedelta(days=plan_info["billing_cycle_weeks"] * 7)
+    await db.client_profiles.update_one(
+        {"id": profile["id"]},
+        {"$set": {
+            "stripe_customer_id": session.get("customer") or profile.get("stripe_customer_id"),
+            "plan": plan_info["code"],
+            "price": plan_info["price"],
+            "status": "activo",
+            "subscription_status": None,
+            "checkout_status": "completed",
+            "current_period_start": now.isoformat(),
+            "current_period_end": end.isoformat(),
+            "access_until": end.isoformat(),
+            "next_payment": None,
+            "cancel_at_period_end": False,
+            "billing_cycle_days": plan_info["billing_cycle_weeks"] * 7,
+            "last_payment_error": None,
+        }},
+    )
+    await db.users.update_one({"id": profile["user_id"]}, {"$set": {"plan": plan_info["code"]}})
     return await db.client_profiles.find_one({"id": profile["id"]}, {"_id": 0})
 
 

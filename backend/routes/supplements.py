@@ -11,6 +11,7 @@ from typing import List, Optional
 
 from core.database import db
 from core.security import get_current_user, get_admin_user
+from core.plan_access import require_access
 from models.supplements import (
     SupplementCatalogItem, SupplementProtocolSave, SupplementProtocolResponse,
     ProtocolItem,
@@ -21,11 +22,9 @@ router = APIRouter(prefix="/supplements", tags=["supplements"])
 
 
 @router.get("/current", response_model=Optional[SupplementProtocolResponse])
-async def get_current_protocol(user=Depends(get_current_user)):
-    """Protocolo de suplementación asignado al cliente (actual + siguiente + nota)."""
-    profile = await db.client_profiles.find_one({"user_id": user["id"]})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+async def get_current_protocol(ctx=Depends(require_access("suplementacion"))):
+    """Protocolo de suplementación del cliente (requiere plan con suplementación y suscripción activa)."""
+    profile = ctx["profile"]
 
     protocol = await db.supplement_protocols.find_one(
         {"client_id": profile["id"]}, {"_id": 0}

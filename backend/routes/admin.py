@@ -544,15 +544,15 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         "status": {"$in": ["baja", "cancelado", "inactivo"]},
     })
 
-    # Plan distribution + MRR en una sola agregación (antes: 4 counts + fetch de precios)
-    plans = {p: 0 for p in ["gold", "silver", "bronze", "elm"]}
+    # Plan distribution + MRR en una sola agregación. Cubre TODOS los planes del
+    # catálogo (activos, legacy, especiales), no solo los cuatro históricos.
+    plans = {}
     mrr = 0
     async for row in db.client_profiles.aggregate([
         {"$match": {"status": "activo"}},
         {"$group": {"_id": "$plan", "count": {"$sum": 1}, "mrr": {"$sum": {"$ifNull": ["$price", 0]}}}},
     ]):
-        if row["_id"] in plans:
-            plans[row["_id"]] = row["count"]
+        plans[row["_id"] or "sin_plan"] = row["count"]
         mrr += row["mrr"]
 
     # Revenue: suma en la base de datos, no en Python

@@ -206,6 +206,8 @@ PLAN_TYPES = {
         "price": p["precio"],
         "stripe_price_env": p.get("stripe_price_env", ""),
         "billing_cycle_weeks": p.get("billing_cycle_weeks", 4),
+        # Pago único (p.ej. reto60): cobra una vez y el acceso dura el ciclo, sin renovar.
+        "one_time": (p.get("precios") or [{}])[0].get("periodo") == "único",
         "features": derive_features(p.get("habilitaciones", {})),
     }
     for code, p in PLAN_CATALOG.items()

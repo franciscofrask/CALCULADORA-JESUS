@@ -10,6 +10,7 @@ import json
 
 from core.database import db
 from core.security import get_current_user, get_admin_user
+from core.plan_access import require_access
 from routes.notifications import notify
 from models.common import RoutineResponse, RoutineCreate
 from models.user import PLAN_TYPES
@@ -18,29 +19,25 @@ from llm_client import LlmChat, UserMessage
 router = APIRouter(prefix="/routines", tags=["routines"])
 
 @router.get("/current", response_model=Optional[RoutineResponse])
-async def get_current_routine(user = Depends(get_current_user)):
-    """Obtener rutina actual del cliente."""
-    profile = await db.client_profiles.find_one({"user_id": user["id"]})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
+async def get_current_routine(ctx = Depends(require_access("rutina"))):
+    """Obtener rutina actual del cliente (requiere plan con rutina y suscripción activa)."""
+    profile = ctx["profile"]
+
     routine = await db.routines.find_one(
         {"client_id": profile["id"], "status": "active"},
         {"_id": 0}
     )
-    
+
     if not routine:
         return None
-    
+
     return RoutineResponse(**routine)
 
 @router.get("/history", response_model=List[RoutineResponse])
-async def get_routine_history(user = Depends(get_current_user)):
-    """Obtener historial de rutinas."""
-    profile = await db.client_profiles.find_one({"user_id": user["id"]})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
+async def get_routine_history(ctx = Depends(require_access("rutina"))):
+    """Obtener historial de rutinas (requiere plan con rutina y suscripción activa)."""
+    profile = ctx["profile"]
+
     routines = await db.routines.find(
         {"client_id": profile["id"]},
         {"_id": 0}

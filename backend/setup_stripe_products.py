@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """
 Crea Products + Prices en Stripe para los planes JG12 (idempotente por lookup_key).
-Ciclo de cobro: 84 días (12 semanas) recurrente, EUR.
 
-Re-ejecutar es seguro: busca precios existentes por lookup_key antes de crear.
-Tras correr, escribe los Price IDs en backend/.env (STRIPE_PRICE_GOLD, etc).
+Fuente única: PLAN_CATALOG (models/user.py). Crea un precio recurrente por cada plan que
+tenga `stripe_price_env` configurado, usando su `precio` (EUR) y su ciclo de cobro
+(`billing_cycle_weeks` × 7 días). Así importes e intervalos coinciden con el catálogo.
+
+Re-ejecutar es seguro: busca precios existentes por lookup_key antes de crear. El
+lookup_key incluye el intervalo, así que cambiar el ciclo crea un precio nuevo; cambiar
+solo el importe NO actualiza el precio existente (Stripe no permite editar importes; habría
+que archivar el viejo y crear otro).
 
 Uso:
     1. Pon STRIPE_SECRET_KEY=sk_test_... en backend/.env
     2. python setup_stripe_products.py
     3. Reinicia el backend
+
+Los planes de "pago único" del catálogo (p.ej. reto60) se crean como Price one-time
+(sin recurring); el checkout los cobra con mode="payment" y el acceso dura su ciclo.
 """
 import os
 import sys
@@ -17,6 +25,10 @@ from pathlib import Path
 
 import stripe
 from dotenv import load_dotenv, set_key
+
+# Catálogo como fuente única de importes/ciclos.
+sys.path.insert(0, str(Path(__file__).parent))
+from models.user import PLAN_CATALOG, PLAN_TYPES
 
 ROOT_DIR = Path(__file__).parent
 ENV_PATH = ROOT_DIR / ".env"
@@ -35,20 +47,37 @@ print(f"Usando Stripe en modo {mode}")
 if mode == "LIVE":
     print("[!] Estás en LIVE. Cancela (Ctrl+C) si no era la intención.")
 
-# Planes (precio en EUR, amount en céntimos)
-PLANS = [
-    {"key": "gold",   "env": "STRIPE_PRICE_GOLD",   "name": "JG12 Gold",   "amount": 14900, "description": "Plan Gold - El más completo. Rutina, macros, chat directo, reportes quincenales, cardio, audio, suplementación."},
-    {"key": "silver", "env": "STRIPE_PRICE_SILVER", "name": "JG12 Silver", "amount": 9900,  "description": "Plan Silver - Balance servicio/precio. Rutina personalizada, macros, chat, reporte mensual."},
-    {"key": "bronze", "env": "STRIPE_PRICE_BRONZE", "name": "JG12 Bronze", "amount": 6900,  "description": "Plan Bronze - Para empezar. Rutina básica, macros, chat, reporte mensual."},
-    {"key": "elm",    "env": "STRIPE_PRICE_ELM",    "name": "JG12 ELM",    "amount": 3900,  "description": "Plan ELM - Solo macros, para quienes ya tienen rutina."},
-]
-
 CURRENCY = "eur"
-INTERVAL_DAYS = 84  # 12 semanas
+
+
+def build_plans() -> list:
+    """Deriva del catálogo la lista de planes con Price en Stripe (los que tienen
+    stripe_price_env). Cada uno: key, env, name, amount(céntimos), interval_days, desc."""
+    plans = []
+    for code, p in PLAN_CATALOG.items():
+        env = (p.get("stripe_price_env") or "").strip()
+        if not env:
+            continue  # premium/6m/complementos: sin cobro por Stripe
+        precio = float(p.get("precio") or 0)
+        if precio <= 0:
+            print(f"  [SKIP] {code}: precio 0/indefinido, no se crea Price")
+            continue
+        weeks = p.get("billing_cycle_weeks") or 4
+        plans.append({
+            "key": code,
+            "env": env,
+            "name": f"JG12 {p['name']}",
+            "amount": round(precio * 100),
+            "interval_days": weeks * 7,
+            "one_time": PLAN_TYPES[code]["one_time"],
+            "description": (p.get("precio_nota") or p.get("name") or code)[:250],
+        })
+    return plans
 
 
 def find_or_create_price(plan: dict) -> str:
-    lookup_key = f"jg12_{plan['key']}_84d_eur"
+    lookup_key = (f"jg12_{plan['key']}_onetime_eur" if plan["one_time"]
+                  else f"jg12_{plan['key']}_{plan['interval_days']}d_eur")
     try:
         existing = stripe.Price.list(lookup_keys=[lookup_key], limit=1, active=True)
         if existing.data:
@@ -61,19 +90,26 @@ def find_or_create_price(plan: dict) -> str:
         name=plan["name"], description=plan["description"], metadata={"jg12_plan": plan["key"]})
     print(f"  [PRODUCT] {plan['name']}: {product.id}")
 
-    price = stripe.Price.create(
+    price_kwargs = dict(
         product=product.id, unit_amount=plan["amount"], currency=CURRENCY,
-        recurring={"interval": "day", "interval_count": INTERVAL_DAYS},
-        lookup_key=lookup_key, nickname=f"{plan['name']} - 84 días",
-        metadata={"jg12_plan": plan["key"], "cycle_days": str(INTERVAL_DAYS)})
-    print(f"  [PRICE]   {plan['name']}: {price.id}  (EUR {plan['amount']/100:.2f} / {INTERVAL_DAYS} días)")
+        lookup_key=lookup_key,
+        metadata={"jg12_plan": plan["key"], "cycle_days": str(plan["interval_days"])})
+    if plan["one_time"]:
+        price_kwargs["nickname"] = f"{plan['name']} - pago único"
+    else:
+        price_kwargs["recurring"] = {"interval": "day", "interval_count": plan["interval_days"]}
+        price_kwargs["nickname"] = f"{plan['name']} - {plan['interval_days']} días"
+    price = stripe.Price.create(**price_kwargs)
+    tipo = "pago único" if plan["one_time"] else f"cada {plan['interval_days']} días"
+    print(f"  [PRICE]   {plan['name']}: {price.id}  (EUR {plan['amount']/100:.2f} {tipo})")
     return price.id
 
 
 def main() -> None:
-    print(f"\nCreando 4 products + prices (EUR, cada {INTERVAL_DAYS} días)...\n")
+    plans = build_plans()
+    print(f"\nCreando {len(plans)} products + prices (EUR)...\n")
     created = {}
-    for plan in PLANS:
+    for plan in plans:
         try:
             created[plan["env"]] = find_or_create_price(plan)
         except Exception as e:

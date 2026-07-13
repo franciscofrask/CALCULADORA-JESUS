@@ -1,10 +1,12 @@
 """
-Rutas de pagos (MOCKED).
+Rutas de pagos: historial de pagos del cliente (solo lectura).
+
+Los pagos reales los registra el circuito de Stripe (core/stripe_billing.py vía webhook).
+El endpoint /simulate de creación de pagos falsos fue eliminado: permitía a cualquier
+usuario autenticado insertar pagos "success" arbitrarios y falsear el historial.
 """
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timezone
 from typing import List
-import uuid
 
 from core.database import db
 from core.security import get_current_user
@@ -18,29 +20,10 @@ async def get_payments(user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
+
     payments = await db.payments.find(
         {"client_id": profile["id"]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
-    
-    return [PaymentResponse(**p) for p in payments]
 
-@router.post("/simulate")
-async def simulate_payment(amount: float, user = Depends(get_current_user)):
-    """Simular un pago (para testing)."""
-    profile = await db.client_profiles.find_one({"user_id": user["id"]})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
-    payment = {
-        "id": str(uuid.uuid4()),
-        "client_id": profile["id"],
-        "amount": amount,
-        "status": "success",
-        "method": "card",
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.payments.insert_one(payment)
-    
-    return PaymentResponse(**payment)
+    return [PaymentResponse(**p) for p in payments]

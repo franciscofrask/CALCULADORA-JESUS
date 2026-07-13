@@ -72,6 +72,8 @@ async def create_indexes():
     await _ensure("food_suggestions", [("status", 1), ("created_at", -1)])   # panel admin por estado
     await _ensure("food_suggestions", [("client_id", 1), ("created_at", -1)])  # límite semanal + mis sugerencias
     await _ensure("food_suggestion_photos", [("suggestion_id", 1), ("kind", 1)])
+    # Envíos de reportes del coach (cadencia quincenal/mensual/semanal por plan).
+    await _ensure("coach_reports", [("client_id", 1), ("tipo", 1), ("due_date", 1)], unique=True)
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""
