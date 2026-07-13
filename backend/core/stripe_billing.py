@@ -383,8 +383,12 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
         return None
 
     plan_info = get_plan_info(metadata.get("plan") or profile.get("plan"))
-    now = datetime.now(timezone.utc)
-    end = now + timedelta(days=plan_info["billing_cycle_weeks"] * 7)
+    # El acceso se ancla a la FECHA DEL PAGO (created de la sesión), no a cuándo se
+    # procesa: recuperar una sesión antigua vía admin sync no regala ciclo extra.
+    created_ts = session.get("created")
+    start = (datetime.fromtimestamp(created_ts, tz=timezone.utc)
+             if created_ts else datetime.now(timezone.utc))
+    end = start + timedelta(days=plan_info["billing_cycle_weeks"] * 7)
     await db.client_profiles.update_one(
         {"id": profile["id"]},
         {"$set": {
@@ -394,7 +398,7 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
             "status": "activo",
             "subscription_status": None,
             "checkout_status": "completed",
-            "current_period_start": now.isoformat(),
+            "current_period_start": start.isoformat(),
             "current_period_end": end.isoformat(),
             "access_until": end.isoformat(),
             "next_payment": None,

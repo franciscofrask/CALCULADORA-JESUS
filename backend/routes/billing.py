@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Body
 from typing import Any, Dict, List
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from core.database import db
 from core.security import get_current_user, get_admin_user
@@ -195,9 +197,27 @@ async def stripe_webhooks(request: Request):
     except stripe_module.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Firma de webhook inválida")
 
-    if await db.stripe_events.find_one({"id": event["id"]}):
+    # Reclama el evento ANTES de procesarlo (insert con índice único): dos entregas
+    # simultáneas del mismo evento no pueden procesarse dos veces. Si el procesado
+    # falla, se libera la reclamación para que el reintento automático de Stripe
+    # vuelva a intentarlo (marcarlo al final dejaría eventos a medio procesar).
+    try:
+        await db.stripe_events.insert_one(
+            {"id": event["id"], "type": event["type"],
+             "processed_at": datetime.now(timezone.utc).isoformat()})
+    except DuplicateKeyError:
         return {"received": True, "duplicate": True}
 
+    try:
+        await _process_stripe_event(event)
+    except Exception:
+        await db.stripe_events.delete_one({"id": event["id"]})
+        raise
+    return {"received": True}
+
+
+async def _process_stripe_event(event: Dict[str, Any]) -> None:
+    stripe_module = get_stripe_module()
     event_type = event["type"]
     obj = event["data"]["object"]
 
@@ -255,7 +275,19 @@ async def stripe_webhooks(request: Request):
         # Igual que en payment_succeeded: una factura suelta fallida (ajena a la suscripción)
         # no debe cortar el acceso ni disparar la baja automática de la membresía.
         if profile and obj.get("subscription"):
-            failure_count = (profile.get("payment_failure_count") or 0) + 1
+            # Contador atómico ($inc): reintentos concurrentes de Stripe no pierden
+            # incrementos. Primero se normaliza a número (un null heredado rompería $inc).
+            await db.client_profiles.update_one(
+                {"id": profile["id"], "payment_failure_count": {"$not": {"$type": "number"}}},
+                {"$set": {"payment_failure_count": 0}},
+            )
+            counted = await db.client_profiles.find_one_and_update(
+                {"id": profile["id"]},
+                {"$inc": {"payment_failure_count": 1}},
+                return_document=ReturnDocument.AFTER,
+                projection={"_id": 0, "payment_failure_count": 1},
+            )
+            failure_count = (counted or {}).get("payment_failure_count") or 1
             auto_baja = failure_count >= 3
             await db.client_profiles.update_one(
                 {"id": profile["id"]},
@@ -265,7 +297,6 @@ async def stripe_webhooks(request: Request):
                     "checkout_status": "attention_required",
                     "payment_method_status": get_payment_method_status_from_error(error_code),
                     "last_payment_error": error_message,
-                    "payment_failure_count": failure_count,
                 }},
             )
             await update_profile_payment_method(
@@ -288,11 +319,6 @@ async def stripe_webhooks(request: Request):
                     f"Stripe no pudo cobrar la cuota. {error_message}",
                     severity="critical" if failure_count >= 2 else "warning",
                     related_data={"failure_count": failure_count, "error_code": error_code}, dedupe=False)
-
-    await db.stripe_events.insert_one(
-        {"id": event["id"], "type": event_type, "processed_at": datetime.now(timezone.utc).isoformat()})
-    return {"received": True}
-
 
 # ==================== ADMIN ====================
 
@@ -326,6 +352,7 @@ async def sync_client_with_stripe(client_id: str, user=Depends(get_admin_user)):
     await db.client_profiles.update_one({"id": client_id}, {"$set": {"stripe_customer_id": selected_customer["id"]}})
 
     synced_payments = 0
+    one_time_session_id = None
     if selected_subscription:
         await sync_profile_from_subscription(
             selected_subscription, profile_id=client_id, user_id=profile["user_id"], customer_id=selected_customer["id"])
@@ -334,12 +361,24 @@ async def sync_client_with_stripe(client_id: str, user=Depends(get_admin_user)):
         for invoice in invoices.data:
             await upsert_payment_from_invoice(invoice, profile=profile)
             synced_payments += 1
+    else:
+        # Sin suscripción: puede ser un pago único (reto60) cuyo webhook/sync se perdió.
+        # Se busca un checkout pagado en mode=payment que referencie a este perfil.
+        sessions = await stripe_api_call(
+            stripe_module.checkout.Session.list, customer=selected_customer["id"], limit=10)
+        for s in sessions.data:
+            refs = {s.get("client_reference_id"), (s.get("metadata") or {}).get("profile_id")}
+            if s.get("mode") == "payment" and s.get("payment_status") == "paid" and client_id in refs:
+                if await sync_profile_from_one_time_session(s):
+                    one_time_session_id = s["id"]
+                break
 
     updated = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
     return {
-        "success": selected_subscription is not None,
+        "success": selected_subscription is not None or one_time_session_id is not None,
         "customer_id": selected_customer["id"],
         "subscription_id": selected_subscription["id"] if selected_subscription else None,
+        "one_time_session_id": one_time_session_id,
         "synced_payments": synced_payments,
         "profile": updated,
     }
@@ -347,7 +386,8 @@ async def sync_client_with_stripe(client_id: str, user=Depends(get_admin_user)):
 
 @admin_router.post("/sync-pending")
 async def sync_pending_subscriptions(user=Depends(get_admin_user)):
-    """Resincroniza perfiles en estado intermedio leyendo su suscripción real de Stripe."""
+    """Resincroniza perfiles en estado intermedio: suscripciones leyendo su estado real
+    de Stripe, y checkouts de pago único ya pagados cuyo webhook/sync se perdió."""
     stripe_module = get_stripe_module()
     pending = await db.client_profiles.find(
         {"subscription_status": {"$in": ["incomplete", "past_due", "incomplete_expired", "unpaid"]},
@@ -362,7 +402,30 @@ async def sync_pending_subscriptions(user=Depends(get_admin_user)):
             synced += 1
         except Exception as exc:
             logger.warning("No se pudo sincronizar %s: %s", p.get("id"), exc)
-    return {"synced": synced, "checked": len(pending)}
+
+    # Pagos únicos a medias: perfil quedó "incomplete" sin suscripción pero con customer;
+    # si en Stripe hay un checkout mode=payment PAGADO que lo referencia, se activa.
+    pending_one_time = await db.client_profiles.find(
+        {"subscription_status": "incomplete",
+         "stripe_subscription_id": {"$not": {"$type": "string"}},
+         "stripe_customer_id": {"$type": "string"}},
+        {"_id": 0, "id": 1, "stripe_customer_id": 1},
+    ).to_list(200)
+    recovered = 0
+    for p in pending_one_time:
+        try:
+            sessions = await stripe_api_call(
+                stripe_module.checkout.Session.list, customer=p["stripe_customer_id"], limit=10)
+            for s in sessions.data:
+                refs = {s.get("client_reference_id"), (s.get("metadata") or {}).get("profile_id")}
+                if s.get("mode") == "payment" and s.get("payment_status") == "paid" and p["id"] in refs:
+                    if await sync_profile_from_one_time_session(s):
+                        recovered += 1
+                    break
+        except Exception as exc:
+            logger.warning("No se pudo recuperar pago único de %s: %s", p.get("id"), exc)
+    return {"synced": synced, "checked": len(pending),
+            "one_time_recovered": recovered, "one_time_checked": len(pending_one_time)}
 
 
 @admin_router.get("/upcoming-payments")
