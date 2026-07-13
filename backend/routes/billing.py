@@ -110,7 +110,10 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
 
     metadata = session.get("metadata") or {}
     profile_id = session.get("client_reference_id") or metadata.get("profile_id")
-    if metadata.get("user_id") and metadata["user_id"] != user["id"]:
+    # La sesión debe llevar el user_id del que sincroniza (todas las que crea la app lo
+    # llevan). Sin esta exigencia, una sesión creada fuera de la app (sin metadata) podría
+    # ser sincronizada por cualquier usuario y activarle el perfil con un pago ajeno.
+    if metadata.get("user_id") != user["id"]:
         raise HTTPException(status_code=403, detail="La sesión no pertenece a este usuario")
 
     subscription = session.get("subscription")
@@ -200,14 +203,14 @@ async def stripe_webhooks(request: Request):
 
     if event_type == "checkout.session.completed":
         metadata = obj.get("metadata", {}) or {}
-        await db.client_profiles.update_one(
-            {"id": metadata.get("profile_id")},
-            {"$set": {
-                "stripe_customer_id": obj.get("customer"),
-                "stripe_subscription_id": obj.get("subscription"),
-                "checkout_status": "completed",
-            }},
-        )
+        base_update = {"checkout_status": "completed"}
+        if obj.get("customer"):
+            base_update["stripe_customer_id"] = obj["customer"]
+        # Solo se escribe si existe: un checkout de pago único no debe pisar con None
+        # la suscripción de un perfil.
+        if obj.get("subscription"):
+            base_update["stripe_subscription_id"] = obj["subscription"]
+        await db.client_profiles.update_one({"id": metadata.get("profile_id")}, {"$set": base_update})
         if obj.get("subscription"):
             subscription = await stripe_api_call(stripe_module.Subscription.retrieve, obj["subscription"])
             await sync_profile_from_subscription(
@@ -224,17 +227,18 @@ async def stripe_webhooks(request: Request):
         profile = await find_client_profile(subscription_id=obj.get("subscription"), customer_id=obj.get("customer"))
         payment_method, _ = await get_payment_method_from_invoice(obj)
         await upsert_payment_from_invoice(obj, profile=profile, status_override="success")
-        if profile:
-            paid_update = {
-                "status": "activo",
-                "payment_method_status": "ok", "last_payment_error": None,
-                "checkout_status": "completed", "payment_failure_count": 0,
-            }
-            # Solo las facturas de suscripción marcan subscription_status; la factura de un
-            # pago único (invoice_creation) no debe simular una suscripción activa.
-            if obj.get("subscription"):
-                paid_update["subscription_status"] = "active"
-            await db.client_profiles.update_one({"id": profile["id"]}, {"$set": paid_update})
+        # El estado del perfil SOLO lo gobiernan las facturas de la suscripción. Una factura
+        # suelta pagada (formaciones, rutina del mes, invoice_creation de un pago único) se
+        # registra como pago pero no puede reactivar un perfil de baja ni simular membresía.
+        if profile and obj.get("subscription"):
+            await db.client_profiles.update_one(
+                {"id": profile["id"]},
+                {"$set": {
+                    "status": "activo", "subscription_status": "active",
+                    "payment_method_status": "ok", "last_payment_error": None,
+                    "checkout_status": "completed", "payment_failure_count": 0,
+                }},
+            )
             await update_profile_payment_method(profile["id"], payment_method, payment_method_status="ok", last_payment_error=None)
             await db.alerts.update_many(
                 {"client_id": profile["id"], "type": {"$in": ["payment_failure", "card_expired"]}, "resolved": False},
@@ -248,7 +252,9 @@ async def stripe_webhooks(request: Request):
         error_message = (payment_error or {}).get("message") or "Stripe no pudo cobrar esta factura."
         await upsert_payment_from_invoice(obj, profile=profile, status_override="failed",
                                           failure_code=error_code, failure_message=error_message)
-        if profile:
+        # Igual que en payment_succeeded: una factura suelta fallida (ajena a la suscripción)
+        # no debe cortar el acceso ni disparar la baja automática de la membresía.
+        if profile and obj.get("subscription"):
             failure_count = (profile.get("payment_failure_count") or 0) + 1
             auto_baja = failure_count >= 3
             await db.client_profiles.update_one(
