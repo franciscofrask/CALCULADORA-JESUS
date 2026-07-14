@@ -35,7 +35,6 @@ export default function ChatbotPage() {
   const [singleMeal, setSingleMeal] = useState(p.singleMeal ?? false);
   const [mealNombre, setMealNombre] = useState(p.mealNombre ?? 'Comida 1');
   const [dayOverview, setDayOverview] = useState(null);
-  const [suggestions, setSuggestions] = useState([]);
   const [currentFoods, setCurrentFoods] = useState([]);
   const [saving, setSaving] = useState(false);
   const [currentMeal, setCurrentMeal] = useState(p.currentMeal ?? 1);
@@ -372,22 +371,15 @@ export default function ChatbotPage() {
     if (!resp) return;
     if (resp.day_overview) setDayOverview(resp.day_overview);
     switch (resp.action) {
-      case 'meal_updated': {
+      case 'meal_updated':
         applyMealResponse(resp);
-        // Términos ambiguos (p.ej. "lomo"): el backend devuelve opciones para elegir.
-        const choiceOpts = (resp.choices || []).flatMap(c => c.opciones || []);
-        setSuggestions(choiceOpts);
+        // Si hay términos ambiguos (p.ej. "lomo"), el backend ya numera las opciones
+        // en resp.message y el usuario elige por texto ("la 1", "el de salmón").
         addMessage(formatMealUpdate(resp), false, resp);
         break;
-      }
       case 'suggestions':
-        setSuggestions(resp.suggestions || []);
-        addMessage(
-          resp.message || (resp.suggestions?.length
-            ? 'Estas opciones cuadran con lo que te falta - toca una para añadirla:'
-            : 'No encuentro alimentos que cuadren ahora mismo.'),
-          false
-        );
+        // Las sugerencias van numeradas en el propio mensaje; se elige por texto.
+        addMessage(resp.message || 'No encuentro alimentos que cuadren ahora mismo.', false);
         break;
       case 'complete_request':
         await completeMeal();
@@ -426,22 +418,6 @@ export default function ChatbotPage() {
     return msg;
   };
 
-  // Ir a una comida para editarla
-  const goToMeal = async (idx) => {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/chatbot/go-to-meal?session_id=${sessionId}&idx=${idx}`, {
-        method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      const data = await res.json();
-      setSuggestions([]);
-      applyMealResponse(data.response);
-      addMessage(`Editando ${data.response?.meal_status?.comida_nombre || 'comida'} - añade o quita alimentos.`, false, data.response);
-    } catch (e) { addMessage('Error al cambiar de comida.', false); }
-    setLoading(false);
-  };
-
   // Quitar un alimento de la comida actual
   const removeFood = async (index) => {
     if (loading) return;
@@ -467,21 +443,6 @@ export default function ChatbotPage() {
       const data = await res.json();
       await handleBotResponse(data.response);
     } catch (e) { addMessage('Error al sugerir alimentos.', false); }
-    setLoading(false);
-  };
-
-  // Añadir un alimento sugerido (al tocar un chip)
-  const addSuggestedFood = async (alimentoId) => {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/chatbot/add-food?session_id=${sessionId}&alimento_id=${alimentoId}`, {
-        method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      const data = await res.json();
-      setSuggestions([]);
-      await handleBotResponse(data.response);
-    } catch (e) { addMessage('Error al añadir el alimento.', false); }
     setLoading(false);
   };
 
@@ -520,7 +481,6 @@ export default function ChatbotPage() {
         setMacrosRestantes(data.objetivo);
         if (data.meal_nombre) setMealNombre(data.meal_nombre);
         if (data.day_overview) setDayOverview(data.day_overview);
-        setSuggestions([]);
         setCurrentFoods([]);
         addMessage('Comida guardada ✓', true);
         addMessage(data.mensaje, false);
@@ -650,7 +610,6 @@ export default function ChatbotPage() {
     setSingleMeal(false);
     setMealNombre('Comida 1');
     setDayOverview(null);
-    setSuggestions([]);
     setCurrentFoods([]);
     setCurrentMeal(1);
     setDistribucion(null);
@@ -835,7 +794,9 @@ export default function ChatbotPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    // Altura fija de viewport (en móvil descontando top bar y nav inferior del layout):
+    // el header y el input quedan fijos y solo la zona de mensajes hace scroll.
+    <div className="h-[calc(100dvh-8.5rem)] lg:h-screen bg-background text-foreground flex flex-col">
       {/* Header */}
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -991,7 +952,7 @@ export default function ChatbotPage() {
 
       {/* Input de texto libre durante la configuración (fecha, tipo, comidas) */}
       {step === 'config' && (
-        <div className="border-t border-border p-4 bg-card mb-12 relative z-50">
+        <div className="border-t border-border p-4 bg-card relative z-40">
           <div className="flex gap-2">
             <input
               ref={inputRef}
@@ -1017,29 +978,7 @@ export default function ChatbotPage() {
 
       {/* Input + controles de montaje */}
       {step === 'building_meal' && (
-        <div className="border-t border-border p-3 bg-card mb-12 relative z-50 space-y-2">
-          {/* Navegador de comidas (toca para editar una comida) */}
-          {dayOverview?.meals?.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {dayOverview.meals.map((m) => (
-                <button
-                  key={m.idx}
-                  onClick={() => goToMeal(m.idx)}
-                  disabled={loading}
-                  className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors disabled:opacity-50 ${
-                    m.es_actual ? 'bg-orange-500 text-white border-orange-500'
-                    : m.cuadrado ? 'bg-green-600/15 text-green-600 border-green-600/40'
-                    : m.tiene_alimentos ? 'bg-muted text-foreground border-input'
-                    : 'bg-card text-muted-foreground border-input'
-                  }`}
-                  title={`Falta proteína ${m.restante?.P} g · hidratos ${m.restante?.H} g · grasa ${m.restante?.G} g`}
-                >
-                  {m.cuadrado && m.tiene_alimentos ? '✅ ' : ''}{m.nombre}
-                </button>
-              ))}
-            </div>
-          )}
-
+        <div className="border-t border-border p-3 bg-card relative z-40 space-y-2">
           {/* Alimentos de la comida actual (toca la × para quitar) */}
           {currentFoods.length > 0 && (
             <div>
@@ -1050,26 +989,6 @@ export default function ChatbotPage() {
                     {f.nombre} · {f.cantidad_display}
                     <button onClick={() => removeFood(i)} disabled={loading} className="text-muted-foreground hover:text-red-500 disabled:opacity-50 font-bold leading-none">×</button>
                   </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Chips de sugerencias (caja aparte, naranja, toca para añadir) */}
-          {suggestions.length > 0 && (
-            <div className="rounded-xl border border-dashed border-brand/50 bg-brand/5 p-2.5">
-              <p className="text-[11px] font-bold text-brand uppercase tracking-wide mb-1.5">Sugerencias · toca para añadir</p>
-              <div className="flex flex-wrap gap-2">
-                {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => addSuggestedFood(s.alimento_id)}
-                    disabled={loading}
-                    className="inline-flex items-center gap-1 bg-card hover:bg-brand hover:text-white border border-brand/50 text-brand text-xs px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
-                    title={`Proteína ${s.macros?.P} g · Hidratos ${s.macros?.H} g · Grasa ${s.macros?.G} g`}
-                  >
-                    <span className="font-bold">+</span> {s.nombre} · {s.cantidad_display}
-                  </button>
                 ))}
               </div>
             </div>
@@ -1110,7 +1029,7 @@ export default function ChatbotPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Escribe los alimentos que quieres (p.ej. huevos, pan, claras)…"
+              placeholder='Escribe qué quieres comer, o pídeme cosas como "edita la comida 2" o "vacía el post-entreno"…'
               className="flex-1 bg-muted border border-input rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
               disabled={loading}
               data-testid="chat-input"

@@ -215,8 +215,21 @@ async def chatbot_complete_meal(
     """Marca la comida actual como completa."""
     _assert_session_owner(session_id, current_user)
     chatbot = await get_or_create_chatbot(session_id, db)
+
+    # Aviso si se guarda una comida sin cuadrar (se permite, pero se dice)
+    label_guardada = chatbot.meal_label(chatbot.current_meal_key())
+    rem = chatbot.get_remaining_macros()
+    nombres_m = {"P": "proteína", "H": "hidratos", "G": "grasa"}
+    faltan = [f"{rem[k]} g de {nombres_m[k]}" for k in ("P", "H", "G") if rem.get(k, 0) > 4]
+    pasan = [f"{abs(rem[k])} g de {nombres_m[k]}" for k in ("P", "H", "G") if rem.get(k, 0) < -4]
+    aviso = ""
+    if faltan:
+        aviso += f"\n⚠️ Ojo: {label_guardada} quedó sin cuadrar (faltan {' y '.join(faltan)})."
+    if pasan:
+        aviso += f"\n⚠️ En {label_guardada} te pasas {' y '.join(pasan)}."
+
     resultado = chatbot.complete_current_meal()
-    
+
     if resultado.get("vacia"):
         return {
             "session_id": session_id,
@@ -233,7 +246,7 @@ async def chatbot_complete_meal(
             "comida_completada": resultado,
             "dia_completo": True,
             "resumen": summary,
-            "mensaje": "¡Día completo! Aquí tienes el resumen de tu dieta."
+            "mensaje": "¡Día completo! Aquí tienes el resumen de tu dieta." + aviso
         }
     else:
         siguiente = chatbot.state["comida_actual"]
@@ -247,7 +260,7 @@ async def chatbot_complete_meal(
             "meal_nombre": label,
             "objetivo": objetivo,
             "day_overview": chatbot.get_day_overview(),
-            "mensaje": (f"Comida guardada ✓. Vamos con {label}. Tu objetivo es:\n"
+            "mensaje": (f"Comida guardada ✓.{aviso}\nVamos con {label}. Tu objetivo es:\n"
                         f"• Proteína: {objetivo['P']} g\n"
                         f"• Hidratos: {objetivo['H']} g\n"
                         f"• Grasa: {objetivo['G']} g\n\n¿Qué quieres tomar?")
