@@ -25,7 +25,8 @@ const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,
 const JG12Logo = ({ size = 'md', tone = 'dark' }) => <Logo12EN12 size={size} tone={tone} />;
 
 const PlanBadge = ({ plan, planName }) => {
-    const label = planName || plan?.toUpperCase();
+    // Quitar el sufijo "(legacy)" de la insignia: es info interna, no de cara al usuario.
+    const label = (planName || plan?.toUpperCase() || '').replace(/\s*\(legacy\)/i, '').trim();
     if (!label) return <span className="badge-silver opacity-70" data-testid="plan-badge">Sin plan</span>;
     const cls = {
         gold: 'badge-gold', silver: 'badge-silver', bronze: 'badge-bronze', elm: 'badge-elm',
@@ -145,7 +146,7 @@ const QuickCard = ({ icon: Icon, color, label, sub, path, navigate, testId, badg
 // =============== CLIENT DASHBOARD ===============
 
 const ClientDashboard = () => {
-    const { user, profile, api, myPlan, planUnpaid } = useAuth();
+    const { user, profile, api, myPlan, planUnpaid, can } = useAuth();
     const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
     const [routine, setRoutine] = useState(null);
@@ -415,7 +416,8 @@ const ClientDashboard = () => {
                 </div>
             </div>
 
-            {/* Today routine highlight */}
+            {/* Today routine highlight (solo si el plan incluye rutina) */}
+            {can('rutina') && (
             <button onClick={() => navigate('/dashboard/routine')} data-testid="routine-card"
                 className="surface surface-hover w-full p-5 flex items-center justify-between group">
                 <div className="flex items-center gap-4">
@@ -433,6 +435,7 @@ const ClientDashboard = () => {
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
             </button>
+            )}
 
             {/* Quick actions */}
             <div>
@@ -441,10 +444,10 @@ const ClientDashboard = () => {
                     <QuickCard icon={Apple} color="#16A34A" label="Nutrición" sub="Montar dieta" path="/dashboard/nutrition" navigate={navigate} testId="nutrition-quick" />
                     <QuickCard icon={SlidersHorizontal} color={MACRO.protein} label="Macros" sub="Ajustar valores" path="/dashboard/macro-calculator" navigate={navigate} testId="macros-card" />
                     <QuickCard icon={Bot} color="#7C3AED" label="Asistente IA" sub="Dieta con IA" path="/dashboard/chatbot" navigate={navigate} testId="chatbot-card" />
-                    <QuickCard icon={FileText} color="#CA8A04" label="Reportes" sub="Ver evolución" path="/dashboard/reports" navigate={navigate} testId="reports-card" />
+                    {can('reportes') && <QuickCard icon={FileText} color="#CA8A04" label="Reportes" sub="Ver evolución" path="/dashboard/reports" navigate={navigate} testId="reports-card" />}
                     <QuickCard icon={Search} color="#0891B2" label="Alimentos" sub="Buscador" path="/dashboard/foods" navigate={navigate} testId="foods-card" />
-                    <QuickCard icon={Pill} color="#DB2777" label="Suplementos" sub="Tu protocolo" path="/dashboard/supplements" navigate={navigate} testId="supplements-card" />
-                    <QuickCard icon={ClipboardCheck} color="#2563EB" label="Check-ins" sub="Seguimiento" path="/dashboard/checkins" navigate={navigate} testId="checkins-card" />
+                    {can('suplementacion') && <QuickCard icon={Pill} color="#DB2777" label="Suplementos" sub="Tu protocolo" path="/dashboard/supplements" navigate={navigate} testId="supplements-card" />}
+                    {can('reportes') && <QuickCard icon={ClipboardCheck} color="#2563EB" label="Check-ins" sub="Seguimiento" path="/dashboard/checkins" navigate={navigate} testId="checkins-card" />}
                     <QuickCard icon={MessageCircle} color="#9333EA" label="Chat" sub={unreadMessages > 0 ? `${unreadMessages} sin leer` : 'Tu entrenador'} path="/dashboard/messages" navigate={navigate} testId="messages-card" badge={unreadMessages} />
                 </div>
             </div>
@@ -464,8 +467,8 @@ const NAV_ITEMS = [
     { path: '/dashboard/macro-calculator', icon: SlidersHorizontal, label: 'Ajustar macros' },
     { path: '/dashboard/supplements', icon: Pill, label: 'Suplementos', cap: 'suplementacion' },
     { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
-    { path: '/dashboard/reports', icon: FileText, label: 'Reportes' },
-    { path: '/dashboard/checkins', icon: ClipboardCheck, label: 'Check-ins' },
+    { path: '/dashboard/reports', icon: FileText, label: 'Reportes', cap: 'reportes' },
+    { path: '/dashboard/checkins', icon: ClipboardCheck, label: 'Check-ins', cap: 'reportes' },
     { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat' },
     { path: '/dashboard/profile', icon: User, label: 'Mi perfil' },
 ];
@@ -495,7 +498,7 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
 // =============== CLIENT LAYOUT ===============
 
 const ClientLayout = () => {
-    const { user, logout, profile, api, can, planUnpaid } = useAuth();
+    const { user, logout, profile, api, can, planUnpaid, myPlan } = useAuth();
     const navItems = NAV_ITEMS.filter(i => !i.cap || can(i.cap));
     const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
     const navigate = useNavigate();
@@ -560,7 +563,7 @@ const ClientLayout = () => {
             {!compact && (
                 <div className="flex-1 min-w-0">
                     <p className="font-semibold text-white text-sm truncate">{user?.name}</p>
-                    {profile && !planUnpaid && <PlanBadge plan={profile.plan} />}
+                    {profile && !planUnpaid && <PlanBadge plan={profile.plan} planName={myPlan?.name} />}
                 </div>
             )}
         </div>

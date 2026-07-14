@@ -155,7 +155,7 @@ const ReportsPage = () => {
     }
 
     return (
-        <div className="px-4 pt-6 pb-28 max-w-md mx-auto space-y-4">
+        <div className="px-4 pt-6 pb-28 max-w-2xl mx-auto space-y-4">
             {/* Header */}
             <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${ORANGE}20` }}>

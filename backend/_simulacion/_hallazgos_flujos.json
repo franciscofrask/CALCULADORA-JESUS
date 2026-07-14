@@ -1,0 +1,10 @@
+[
+  {
+    "categoria": "BUG",
+    "severidad": "baja",
+    "titulo": "MessageCreate.receiver_id obligatorio pese a resolver que acepta None",
+    "detalle": "POST /api/messages sin receiver_id -> 422 (Field required); el resolver _resolve_receiver tiene una rama para None/'support' que queda muerta. Hacer receiver_id Optional en el modelo.",
+    "endpoint": "POST /messages",
+    "reproducir": ""
+  }
+]

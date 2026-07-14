@@ -12,6 +12,7 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
+import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel } from '../lib/labels';
 import CoachCheckins from '../components/CoachCheckins';
 import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -471,7 +472,7 @@ const ClientDetailPage = () => {
                             <InfoItem icon={CreditCard} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'} />
                             <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
                             <InfoItem icon={Scale} label="Peso" value={profile?.weight ? `${profile.weight} kg` : '-'} />
-                            <InfoItem icon={Target} label="Objetivo" value={profile?.goal || '-'} />
+                            <InfoItem icon={Target} label="Objetivo" value={objetivoLabel(profile?.goal)} />
                         </div>
                     </CardContent></Card>
                 </TabsContent>
@@ -640,16 +641,16 @@ const ClientDetailPage = () => {
                     {(profile?.goal || profile?.weight || profile?.equipment?.length) ? (
                         <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <InfoItem icon={Target} label="Objetivo" value={profile?.goal || '-'} />
+                                <InfoItem icon={Target} label="Objetivo" value={objetivoLabel(profile?.goal)} />
                                 <InfoItem icon={Scale} label="Peso inicial" value={profile?.weight ? `${profile.weight} kg` : '-'} />
-                                <InfoItem icon={User} label="Sexo" value={profile?.sex || '-'} />
+                                <InfoItem icon={User} label="Sexo" value={sexoLabel(profile?.sex)} />
                                 <InfoItem icon={Activity} label="% Graso" value={profile?.body_fat ? `${profile.body_fat}%` : '-'} />
                                 <InfoItem icon={Calendar} label="Edad" value={profile?.age || '-'} />
                                 <InfoItem icon={Scale} label="Altura" value={profile?.height ? `${profile.height} cm` : '-'} />
                             </div>
                             {Array.isArray(profile?.equipment) && profile.equipment.length > 0 && (
                                 <div className="mt-4"><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Equipamiento</p>
-                                    <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{e}</Badge>)}</div>
+                                    <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{equipamientoLabel(e)}</Badge>)}</div>
                                 </div>
                             )}
                             {Array.isArray(profile?.injuries) && profile.injuries.length > 0 && (
@@ -667,7 +668,7 @@ const ClientDetailPage = () => {
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Equipamiento</p>
-                                {Array.isArray(profile?.equipment) && profile.equipment.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{e}</Badge>)}</div> : <p className="text-white/30 text-sm">No especificado</p>}
+                                {Array.isArray(profile?.equipment) && profile.equipment.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{equipamientoLabel(e)}</Badge>)}</div> : <p className="text-white/30 text-sm">No especificado</p>}
                             </div>
                             <div><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Lesiones activas</p>
                                 {Array.isArray(profile?.injuries) && profile.injuries.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.injuries.map((l, i) => <Badge key={i} className="bg-red-500/10 text-red-400 border-0 text-xs">{l}</Badge>)}</div> : <p className="text-white/30 text-sm">Sin lesiones</p>}
@@ -742,7 +743,7 @@ const ClientDetailPage = () => {
                                 <select onChange={e => { if (e.target.value) { supAdd(bloque, e.target.value); e.target.value = ''; } }} defaultValue=""
                                     className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-3 py-2 mt-1">
                                     <option value="">+ Añadir del catálogo…</option>
-                                    {supCatalog.map(c => <option key={c.id} value={c.id}>{c.titulo}{c.sexo !== 'ambos' ? ` (${c.sexo})` : ''} - {c.categoria}</option>)}
+                                    {supCatalog.map(c => <option key={c.id} value={c.id}>{c.titulo}{c.sexo !== 'ambos' ? ` (${sexoLabel(c.sexo)})` : ''} - {suplementoCatLabel(c.categoria)}</option>)}
                                 </select>
                             </CardContent>
                         </Card>

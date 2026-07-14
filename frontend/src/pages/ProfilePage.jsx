@@ -25,7 +25,7 @@ const UPGRADE_PLAN_UI = false;
 
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const { user, profile, logout, api, refreshUser, myPlan } = useAuth();
+    const { user, profile, logout, api, refreshUser, myPlan, planUnpaid } = useAuth();
     const { startTour } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
@@ -96,7 +96,7 @@ const ProfilePage = () => {
                             <div className="flex-1">
                                 <h2 className="font-bold text-foreground text-lg">{user?.name?.toUpperCase()}</h2>
                                 <p className="text-foreground/50 text-sm">{user?.email}</p>
-                                {profile && <div className="mt-1"><PlanBadge plan={profile.plan} /></div>}
+                                {profile && <div className="mt-1"><PlanBadge plan={planUnpaid ? null : profile.plan} /></div>}
                             </div>
                             <Button
                                 variant="ghost" size="icon"
@@ -129,8 +129,24 @@ const ProfilePage = () => {
                     </CardContent>
                 </Card>
 
-                {/* Plan Info */}
-                {profile && (
+                {/* Checkout iniciado pero no pagado: ofrecer terminar la compra */}
+                {profile && planUnpaid && (
+                    <Card className="bg-card border-[#FF671F]/30">
+                        <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                            <div className="flex-1">
+                                <p className="font-bold text-foreground uppercase tracking-wider text-sm mb-1">Sin plan activo</p>
+                                <p className="text-sm text-foreground/60">El pago de tu plan no llegó a completarse. Elige un plan para terminar la compra.</p>
+                            </div>
+                            <Button className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold uppercase tracking-wider"
+                                onClick={() => navigate('/onboarding')} data-testid="finish-checkout-btn">
+                                Elegir plan
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Plan Info (un checkout sin pagar no cuenta como plan contratado) */}
+                {profile && !planUnpaid && (
                     <Card className="bg-gradient-to-br from-[#FF671F]/10 to-[#FF671F]/5 border-[#FF671F]/30">
                         <CardHeader className="pb-2">
                             <CardTitle className="flex items-center justify-between">
@@ -148,7 +164,10 @@ const ProfilePage = () => {
                                     <p className="text-3xl font-bold text-[#FF671F]" style={{ fontFamily: 'Barlow Condensed' }}>
                                         {profile.price != null ? `${profile.price}€` : '-'}<span className="text-sm font-normal text-foreground/50">/ciclo</span>
                                     </p>
-                                    {myPlan?.precio_nota && (
+                                    {/* La nota de precio del catálogo (un rango general del plan) solo se
+                                        muestra si el cliente no tiene un precio propio, para no dar dos cifras
+                                        contradictorias (p.ej. "149€/ciclo" y "450-847€/trimestre"). */}
+                                    {profile.price == null && myPlan?.precio_nota && (
                                         <p className="text-xs text-foreground/50 mt-1">{myPlan.precio_nota}</p>
                                     )}
                                 </div>

@@ -17,12 +17,29 @@ import uuid
 from bson import Binary
 
 from core.database import db
-from core.security import get_current_user, get_admin_user
+from core.security import get_current_user, get_admin_user, assert_client_access
+from core.plan_access import plan_grants_feature
 from models.common import CheckInCreate, CheckInResponse
 
 router = APIRouter(tags=["checkins"])
 
 VALID_CHECKIN_TYPES = {"daily", "weekly", "monthly"}
+
+
+async def _assert_staff_client_access(user: dict, client_id: str) -> dict:
+    """Carga el perfil del cliente por su id y aplica la regla de acceso staff
+    (admin = todos; trainer = solo asignados). Devuelve el perfil."""
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    assert_client_access(user, profile)
+    return profile
+
+
+async def _assert_staff_photo_access(user: dict, owner_user_id: str) -> None:
+    """Un trainer solo ve fotos de SUS clientes; el admin, de todos."""
+    if user.get("role") == "admin":
+        return
+    profile = await db.client_profiles.find_one({"user_id": owner_user_id}, {"_id": 0, "trainer_id": 1})
+    assert_client_access(user, profile)
 
 
 # ==================== HEALTH SCORE ====================
@@ -102,6 +119,8 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    if not plan_grants_feature(profile.get("plan"), "reportes"):
+        raise HTTPException(status_code=403, detail="Tu plan no incluye check-ins de seguimiento.")
 
     checkin = {
         "id": str(uuid.uuid4()),
@@ -140,6 +159,7 @@ async def get_my_checkins(type: Optional[str] = None, limit: int = 30, skip: int
 
 @router.get("/admin/clients/{client_id}/checkins", response_model=List[CheckInResponse])
 async def admin_get_client_checkins(client_id: str, type: Optional[str] = None, limit: int = 60, user = Depends(get_admin_user)):
+    await _assert_staff_client_access(user, client_id)
     query: Dict[str, Any] = {"client_id": client_id}
     if type:
         if type not in VALID_CHECKIN_TYPES:
@@ -151,6 +171,7 @@ async def admin_get_client_checkins(client_id: str, type: Optional[str] = None, 
 
 @router.post("/admin/clients/{client_id}/checkins/{checkin_id}/feedback")
 async def admin_set_checkin_feedback(client_id: str, checkin_id: str, data: dict, user = Depends(get_admin_user)):
+    await _assert_staff_client_access(user, client_id)
     feedback = (data or {}).get("feedback", "")
     result = await db.checkins.update_one(
         {"id": checkin_id, "client_id": client_id},
@@ -171,8 +192,7 @@ async def admin_set_checkin_feedback(client_id: str, checkin_id: str, data: dict
 @router.get("/admin/clients/{client_id}/health-score")
 async def admin_get_health_score(client_id: str, user = Depends(get_admin_user)):
     profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    assert_client_access(user, profile)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     checkins = await db.checkins.find(
         {"client_id": client_id, "created_at": {"$gte": cutoff}},
@@ -288,10 +308,9 @@ async def get_photo(photo_id: str, user = Depends(get_current_user)):
     if not photo:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
 
-    is_owner = photo.get("user_id") == user["id"]
-    is_staff = user.get("role") in ("admin", "trainer")
-    if not (is_owner or is_staff):
-        raise HTTPException(status_code=403, detail="Sin permiso para ver esta foto")
+    if photo.get("user_id") != user["id"]:
+        # No es el dueño: solo el admin, o el entrenador ASIGNADO a ese cliente.
+        await _assert_staff_photo_access(user, photo.get("user_id"))
 
     data = photo.get("data")
     if not data:
@@ -313,17 +332,16 @@ async def delete_photo(photo_id: str, user = Depends(get_current_user)):
     photo = await db.client_photos.find_one({"id": photo_id}, {"_id": 0, "user_id": 1, "client_id": 1})
     if not photo:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
-    is_owner = photo.get("user_id") == user["id"]
-    is_staff = user.get("role") in ("admin", "trainer")
-    if not (is_owner or is_staff):
-        raise HTTPException(status_code=403, detail="Sin permiso para borrar esta foto")
+    if photo.get("user_id") != user["id"]:
+        await _assert_staff_photo_access(user, photo.get("user_id"))
     await db.client_photos.delete_one({"id": photo_id})
     return {"ok": True}
 
 
 @router.get("/admin/clients/{client_id}/photos")
 async def admin_list_client_photos(client_id: str, user = Depends(get_admin_user)):
-    """Admin: lista las fotos de un cliente (metadatos, más recientes primero)."""
+    """Admin/coach: lista las fotos de un cliente (metadatos, más recientes primero)."""
+    await _assert_staff_client_access(user, client_id)
     cursor = db.client_photos.find({"client_id": client_id}, {"_id": 0, "data": 0}).sort("taken_at", -1)
     photos = await cursor.to_list(length=500)
     return {"photos": photos, "count": len(photos)}

@@ -21,7 +21,7 @@ const COMIDAS_OPTIONS = [
     { value: 4, label: '4 comidas' },
 ];
 
-const selectCls = "w-full h-11 text-sm text-foreground bg-card border border-border rounded-xl px-3 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 transition-all";
+const selectCls = "w-full h-11 text-sm text-foreground bg-card border border-border rounded-xl pl-3 pr-9 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 transition-all";
 const labelCls = "text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2";
 
 const Field = ({ label, children, className = '' }) => (

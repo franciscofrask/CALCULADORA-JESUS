@@ -421,7 +421,7 @@ const AdminClientsList = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="heading-2 text-white">CLIENTES</h1>
-                    <p className="text-white/50 uppercase tracking-wider text-sm">{clients.length} clientes activos</p>
+                    <p className="text-white/50 uppercase tracking-wider text-sm">{clients.length} {clients.length === 1 ? 'cliente' : 'clientes'}</p>
                 </div>
             </div>
 

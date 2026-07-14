@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from core.database import db
-from core.security import get_current_user, get_admin_user
+from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import require_access
 from models.supplements import (
     SupplementCatalogItem, SupplementProtocolSave, SupplementProtocolResponse,
@@ -80,8 +80,7 @@ async def delete_catalog_item(item_id: str, user=Depends(get_admin_user)):
 async def save_protocol(client_id: str, data: SupplementProtocolSave, user=Depends(get_admin_user)):
     """Asigna/actualiza el protocolo de un cliente (upsert por client_id)."""
     profile = await db.client_profiles.find_one({"id": client_id})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    assert_client_access(user, profile)
 
     doc = {
         "client_id": client_id,
@@ -119,8 +118,7 @@ async def suggest_protocol(client_id: str, user=Depends(get_admin_user)):
     """Propone un protocolo inicial según el perfil (sexo y objetivo).
     No guarda nada: el entrenador lo revisa/edita antes de guardar."""
     profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    assert_client_access(user, profile)
 
     # Sexo y objetivo (tolerante a distintos nombres de campo)
     sexo_raw = str(profile.get("sexo") or profile.get("sex") or profile.get("genero") or "").lower()

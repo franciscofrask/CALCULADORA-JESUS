@@ -255,16 +255,17 @@ class NutritionChatbot:
             "G": round(objetivo["G"] - macros_usados.get("G", 0), 1)
         }
     
-    async def search_foods(self, query: str, limit: int = 5) -> list:
+    async def search_foods(self, query: str, limit: int = 5, _remap: bool = True) -> list:
         """
         Busca alimentos en la base de datos.
         Usa MongoDB text search para búsquedas de múltiples palabras.
         Prioriza coincidencias exactas y genéricos.
-        
+
         Args:
             query: Texto de búsqueda (ej: "queso batido", "nueces")
             limit: Máximo de resultados
-        
+            _remap: uso interno; False evita reintentar el remap por palabra (anti-recursión).
+
         Returns:
             Lista de alimentos encontrados, ordenados por relevancia
         """
@@ -282,6 +283,11 @@ class NutritionChatbot:
             # Proteínas
             "huevos": "huevos enteros L",
             "huevo": "huevos enteros L",
+            "huevo frito": "huevos enteros L",
+            "huevos fritos": "huevos enteros L",
+            "huevo cocido": "huevos enteros L",
+            "huevos cocidos": "huevos enteros L",
+            "huevos revueltos": "huevos enteros L",
             "claras": "claras de huevo pasteurizadas",
             "clara": "claras de huevo pasteurizadas",
             "pavo": "fiambre pechuga pavo",
@@ -360,19 +366,27 @@ class NutritionChatbot:
             "tortita": "tortita de arroz",
             "tortitas de arroz": "tortita de arroz",
         }
-        
-        # Usar mapeo si existe (buscar primero el query completo, luego palabras individuales)
+        # Cachear en la clase los términos con elección canónica: la desambiguación NO debe
+        # preguntar por ellos (para "arroz" ya sabemos que es arroz blanco, etc.).
+        NutritionChatbot._CANONICAL_TERMS = frozenset(query_mappings)
+
+        # Palabras significativas de la consulta (sin preposiciones/artículos):
+        # se usan para decidir mapeos y para exigir cobertura en los resultados.
+        _STOP = {"de", "del", "la", "el", "los", "las", "con", "sin", "al", "a",
+                 "en", "un", "una", "unos", "unas", "y", "o", "u", "por", "para"}
+        sig_words = [w for w in query_norm.split() if w not in _STOP and len(w) > 1]
+
+        # Usar mapeo si existe. El mapeo POR PALABRA solo aplica a consultas de una
+        # única palabra significativa: si no, "leche de avena" acabaría en leche de
+        # vaca porque la palabra "leche" secuestra la búsqueda.
         search_term = query_mappings.get(query_norm, None)
-        if not search_term:
-            # Intentar con palabras individuales
-            words = query_norm.split()
-            for w in words:
-                if w in query_mappings:
-                    search_term = query_mappings[w]
-                    break
+        mapeado = search_term is not None
+        if not search_term and len(sig_words) == 1 and sig_words[0] in query_mappings:
+            search_term = query_mappings[sig_words[0]]
+            mapeado = True
         if not search_term:
             search_term = query_norm
-        
+
         search_norm = normalize(search_term)
         
         # ESTRATEGIA DE BÚSQUEDA MEJORADA:
@@ -515,11 +529,39 @@ class NutritionChatbot:
             if fid not in seen_ids:
                 seen_ids.add(fid)
                 unique_scored.append((score, food))
-        
+
         # Ordenar por score descendente
         unique_scored.sort(key=lambda x: x[0], reverse=True)
-        
-        return [food for score, food in unique_scored[:limit]]
+
+        # COBERTURA: si la consulta tiene varias palabras significativas y NO vino
+        # de un mapeo, exigir que el resultado las contenga (todas si son 2; todas
+        # menos una si son 3+). Evita falsos positivos silenciosos tipo
+        # "filete de unicornio" -> "Filete de pechuga empanado".
+        resultados = [food for _, food in unique_scored[:limit]]
+        if _remap and not mapeado and len(sig_words) >= 2:
+            necesarias = len(sig_words) if len(sig_words) == 2 else len(sig_words) - 1
+            con_cobertura = [
+                food for _, food in unique_scored
+                if sum(1 for w in sig_words if w in normalize(food.get("nombre", ""))) >= necesarias
+            ]
+            if con_cobertura:
+                resultados = con_cobertura[:limit]
+            else:
+                # Sin cobertura: reintentar con el mapeo de alguna palabra suelta
+                # ("batido de proteina" -> whey). _remap=False evita recursión.
+                for w in sig_words:
+                    if w in query_mappings:
+                        remap = await self.search_foods(query_mappings[w], limit=limit, _remap=False)
+                        if remap:
+                            resultados = remap
+                            break
+                # Ninguna palabra cubre el término: marcar PARCIAL para que el
+                # asistente avise ("no tengo X tal cual, he usado Y") en vez de
+                # colar un alimento silenciosamente ("filete de unicornio" -> empanado).
+                resultados = [dict(f) for f in resultados]
+                for f in resultados:
+                    f["_match_parcial"] = query.strip()
+        return resultados
     
     def calculate_food_amount(self, alimento: dict, macros_restantes: dict) -> dict:
         """
@@ -666,31 +708,36 @@ class NutritionChatbot:
             else:
                 return peso_unidad * 3
         
-        # Límites por categoría (en gramos)
+        # Límites por categoría (en gramos), calibrados con las cantidades que
+        # aparecen en las dietas reales de los clientes.
         limites = {
-            "1.1": 150,   # Claras: máximo 150g (es más razonable)
-            "1.2": 165,   # Huevos enteros: máximo 3 (55g * 3)
-            "2.1": 100,   # Embutidos/Fiambres: máximo 100g
-            "2.2": 200,   # Aves: máximo 200g
-            "2.3": 200,   # Vacuno: máximo 200g
-            "2.4": 200,   # Cerdo: máximo 200g
-            "2.6": 200,   # Otras carnes: máximo 200g
-            "3": 200,     # Pescado: máximo 200g
-            "4": 50,      # Proteína en polvo: máximo 50g
-            "5.1": 300,   # Leche: máximo 300ml
-            "5.2": 250,   # Yogures: máximo 250g
-            "5.3": 100,   # Quesos: máximo 100g
-            "7": 100,     # Cereales: máximo 100g
-            "8": 120,     # Panes: máximo 120g
-            "9": 300,     # Tubérculos: máximo 300g
-            "10": 200,    # Legumbres: máximo 200g
-            "11": 300,    # Frutas: máximo 300g
-            "13": 400,    # Verduras: máximo 400g
-            "17.1": 30,   # Aceites: máximo 30g
-            "17.2": 50,   # Frutos secos: máximo 50g
-            "17.6": 100,  # Aguacate: máximo 100g
-            "21": 150,    # Arroces: máximo 150g (en seco)
-            "22": 150,    # Pasta: máximo 150g (en seco)
+            "1.1": 300,   # Claras: en dietas reales se usan 200-300g
+            "1.2": 190,   # Huevos enteros: máximo 3 (63g L * 3)
+            "2.1": 150,   # Embutidos/Fiambres
+            "2.2": 300,   # Aves
+            "2.3": 300,   # Vacuno
+            "2.4": 300,   # Cerdo
+            "2.6": 300,   # Otras carnes
+            "3": 300,     # Pescado
+            "4": 60,      # Proteína en polvo
+            "5.1": 400,   # Leche (un vaso grande / bol)
+            "5.2.3": 500, # Queso fresco batido (tarrina)
+            "5.2": 250,   # Yogures
+            "5.3": 100,   # Quesos
+            "7": 120,     # Cereales
+            "8": 150,     # Panes
+            "9": 350,     # Tubérculos
+            "10": 250,    # Legumbres
+            "11": 300,    # Frutas
+            "13": 400,    # Verduras
+            "16": 30,     # Salsas y condimentos: nunca son "el plato"
+            "17.1": 30,   # Aceites
+            "17.2": 60,   # Frutos secos
+            "17.6": 150,  # Aguacate
+            "18": 500,    # Bebidas deportivas / refrescos (una botella)
+            "19": 400,    # Otras bebidas (cerveza 0%, vegetales...)
+            "21": 150,    # Arroces (en seco)
+            "22": 150,    # Pasta (en seco)
         }
         
         # Buscar límite para la categoría (soporta subcategorías)
@@ -912,10 +959,14 @@ class NutritionChatbot:
         cantidad si la indica. Devuelve una lista de dicts:
         [{"nombre": str, "cantidad": float|None, "unidad": "g"|"ud"|None}]."""
         prompt = (
-            "Extrae TODOS los alimentos que el usuario menciona en su mensaje. "
+            "Extrae los alimentos que el usuario QUIERE COMER en su mensaje. "
             'Devuelve SOLO un JSON: {"foods": [{"nombre": "...", "cantidad": <número o null>, '
             '"unidad": "g"|"ud"|null}]}. '
-            "Incluye SIEMPRE cada alimento mencionado, tenga o no cantidad. "
+            "Incluye cada alimento que el usuario quiera, tenga o no cantidad. "
+            "MUY IMPORTANTE: NO incluyas alimentos que el usuario está NEGANDO o EXCLUYENDO "
+            "(\"sin pan\" -> el pan NO va; \"no quiero pescado\" -> el pescado NO va; "
+            "\"nada de arroz\" -> el arroz NO va; \"sin el pan\" -> el pan NO va). "
+            "Tampoco incluyas alimentos mencionados solo como referencia o comparación. "
             "'nombre': el alimento en singular, sin cantidades. "
             "'cantidad': el número que el usuario indique para ese alimento, o null si no indica ninguno. "
             "'unidad': \"g\" para gramos o kilos, \"ud\" para unidades/piezas/lonchas, o null si no se indica. "
@@ -923,7 +974,9 @@ class NutritionChatbot:
             "\"100 de avena\" -> avena 100 g, \"4 huevos\" -> huevos 4 ud). "
             'Ejemplo: "pollo y arroz" -> {"foods": [{"nombre": "pollo", "cantidad": null, "unidad": null}, '
             '{"nombre": "arroz", "cantidad": null, "unidad": null}]}. '
-            'Devuelve {"foods": []} SOLO si el mensaje no menciona ningún alimento. No añadas nada más.'
+            'Ejemplo: "lo mismo que ayer pero sin el pan" -> {"foods": []} (el pan está excluido '
+            "y \"lo mismo que ayer\" no nombra alimentos concretos). "
+            'Devuelve {"foods": []} SOLO si el mensaje no menciona ningún alimento que el usuario quiera. No añadas nada más.'
         )
         # El modelo es estocástico y a veces devuelve {"foods": []} para un alimento claro, o falla
         # de forma transitoria (timeout, 429). Reintentamos si sale VACÍO o hay excepción, para que
@@ -1170,11 +1223,25 @@ class NutritionChatbot:
             self._ensure_meal(key)
             display = self._append_food(key, alimento, cantidad_g, macros)
         return {"ok": True, "nombre": alimento.get("nombre"),
-                "cantidad_display": display, "macros": macros}
+                "cantidad_display": display, "macros": macros,
+                "cantidad_g": cantidad_g,
+                "parcial": alimento.get("_match_parcial"),
+                "max_razonable": self._max_auto_g(alimento)}
+
+    def _max_auto_g(self, alimento: dict) -> float:
+        """Tope de gramos con sentido humano para el dimensionado AUTOMÁTICO de un
+        alimento (no aplica a cantidades que el usuario fija explícitamente)."""
+        config = get_food_config(alimento)
+        cats = parse_categories(alimento.get("categorias", []))
+        cat = cats[0] if cats else "0"
+        racion = float(alimento.get("racion", 100) or 100)
+        return self._get_max_cantidad_razonable(cat, config, racion)
 
     def _size_food(self, alimento: dict, restante: dict):
         """Dimensiona un alimento contra los macros restantes con el MISMO motor que la
-        calculadora (calma_suggest). Devuelve (cantidad_g, macros{P,H,G}) o None si no cabe."""
+        calculadora (calma_suggest), TOPADO a una cantidad con sentido humano (nadie se
+        toma 500 g de salsa de soja para llegar a la proteína).
+        Devuelve (cantidad_g, macros{P,H,G}) o None si no cabe."""
         import copy, math
         from calma_suggest import ajustar_cantidad, macros_at, aplicar_regla_macros, cantidad_minima
 
@@ -1195,9 +1262,117 @@ class NutritionChatbot:
         es_unidad = bool(a.get("unidades"))
         racion = float(a.get("racion") or 100) or 100.0
         cantidad_g = (cant * racion) if es_unidad else cant
+
+        # Tope de sensatez: si el cálculo pide más de lo que una persona se pondría
+        # en el plato, recortar (la comida quedará "faltan X" y se completa con otro alimento).
+        max_g = self._max_auto_g(alimento)
+        minimo_g = cantidad_minima(a) * (racion if es_unidad else 1)
+        if cantidad_g > max_g >= minimo_g:
+            if es_unidad:
+                cant = max(1.0, math.floor(max_g / racion))
+                cantidad_g = cant * racion
+            else:
+                from calma_suggest import step_granel, _round_step
+                cant = _round_step(max_g, step_granel(a), floor=True) or max_g
+                cantidad_g = cant
+
         m = macros_at(a, cant)
         macros = {"P": round(m["proteinas"], 1), "H": round(m["hidratos"], 1), "G": round(m["grasas"], 1)}
         return cantidad_g, macros
+
+    def _razon_no_cabe(self, alimento: dict, restante: dict) -> str:
+        """Explica en lenguaje humano por qué un alimento no entra en lo que queda
+        de la comida (en vez del críptico 'Mínimo excede G restante')."""
+        import copy
+        from calma_suggest import aplicar_regla_macros, macros_at, cantidad_minima
+        a = copy.deepcopy(alimento)
+        aplicar_regla_macros(a)
+        cant_min = cantidad_minima(a)
+        m = macros_at(a, cant_min)
+        aportes = {"P": m["proteinas"], "H": m["hidratos"], "G": m["grasas"]}
+        nombres = {"P": "proteína", "H": "hidratos", "G": "grasa"}
+        es_unidad = bool(a.get("unidades"))
+        racion = float(a.get("racion") or 100) or 100.0
+        min_g = int(round(cant_min * racion)) if es_unidad else int(round(cant_min))
+        for k in ("G", "H", "P"):  # primero el bloqueo más habitual (grasa en peri)
+            resta = float(restante.get(k, 0))
+            if aportes[k] > 0.5 and resta < aportes[k]:
+                queda = f"solo quedan {max(0.0, resta):.0f} g" if resta > 0.5 else "ya no queda nada"
+                return (f"Lo encontré, pero no cabe: su mínimo ({min_g} g) aporta "
+                        f"{aportes[k]:.0f} g de {nombres[k]} y en esta comida {queda} de {nombres[k]}")
+        return "Lo encontré, pero no cabe en lo que queda de esta comida"
+
+    # Preposiciones/artículos que no cuentan como "palabra significativa" del alimento.
+    _STOP_TERMINO = {"de", "del", "la", "el", "los", "las", "con", "sin", "al", "a",
+                     "en", "un", "una", "y", "o", "para"}
+
+    async def _opciones_ambiguas(self, nombre: str, restante: dict, max_op: int = 6):
+        """Si `nombre` es un término GENÉRICO (p.ej. 'lomo') que en la base corresponde a
+        alimentos de categorías dispares (lomo embuchado vs lomo de cerdo vs lomo de salmón),
+        devuelve una lista de OPCIONES para que el usuario elija, en vez de adivinar una.
+        Devuelve None si el término es específico o homogéneo (entonces se auto-elige)."""
+        sig = [w for w in self._norm_text(nombre).split()
+               if w not in self._STOP_TERMINO and len(w) > 1]
+        # Solo desambiguamos términos de UNA palabra significativa ("lomo", "filete").
+        # Si el usuario ya concretó ("lomo embuchado", "lomo de salmón"), se respeta.
+        if len(sig) != 1:
+            return None
+        termino = sig[0]
+
+        cands = await self.search_foods(nombre, limit=30)  # también rellena _CANONICAL_TERMS
+        # Términos con elección por defecto (arroz, atún, tomate, pollo…): no se pregunta.
+        if termino in getattr(NutritionChatbot, "_CANONICAL_TERMS", frozenset()):
+            return None
+        # Solo candidatos que REALMENTE contienen el término (evita que "arroz" arrastre
+        # "azúcar blanco"/"pescado blanco" por compartir la palabra "blanco").
+        cands = [c for c in cands if termino in self._norm_text(c.get("nombre", ""))]
+        if len(cands) < 2:
+            return None
+        # ¿Coincidencia parcial? (search no tenía el término tal cual). No forzamos opciones.
+        if any(c.get("_match_parcial") for c in cands):
+            return None
+
+        # Categorías de nivel 1 distintas entre los candidatos: si hay 2+, es ambiguo de verdad
+        # (p.ej. carne 2 vs pescado 3). Si todos son de la misma familia, se auto-elige.
+        cats1 = set()
+        for c in cands:
+            cc = parse_categories(c.get("categorias"))
+            if cc:
+                cats1.add(cc[0].split(".")[0])
+        if len(cats1) < 2:
+            return None
+
+        # Construir opciones: una por TIPO real, con variedad. Agrupamos por las 2 primeras
+        # palabras SIGNIFICATIVAS del nombre sin marca (así "lomo embuchado (Navidul)" y
+        # "lomo embuchado bajo en grasa" caen juntas, pero "cinta de lomo", "lomo de cerdo",
+        # "lomo de salmón" y "lomo de wagyu" quedan como tipos distintos). Preferimos el
+        # representante GENÉRICO (sin marca) de cada grupo.
+        def clave_tipo(nombre_al):
+            base = self._norm_text((nombre_al or "").split("(")[0])
+            sig_w = [w for w in base.split() if w not in self._STOP_TERMINO and len(w) > 1]
+            return " ".join(sig_w[:2])
+
+        # Genéricos primero para que sean el representante de su grupo (orden estable).
+        cands_ord = sorted(cands, key=lambda c: 0 if "(" not in (c.get("nombre") or "") else 1)
+        vistos, opciones = set(), []
+        for c in cands_ord:
+            clave = clave_tipo(c.get("nombre"))
+            if not clave or clave in vistos:
+                continue
+            vistos.add(clave)
+            sized = self._size_food(c, restante)
+            if sized:
+                cantidad_g, macros = sized
+                disp = self._format_cantidad(cantidad_g, c, get_food_config(c))
+            else:
+                disp, macros = "", {"P": 0, "H": 0, "G": 0}
+            opciones.append({
+                "alimento_id": c.get("id"), "nombre": c.get("nombre"),
+                "cantidad_display": disp, "macros": macros,
+            })
+            if len(opciones) >= max_op:
+                break
+        return opciones if len(opciones) >= 2 else None
 
     def _ensure_meal(self, key: str):
         if key not in self.state["comidas_completadas"]:
@@ -1221,7 +1396,7 @@ class NutritionChatbot:
         mm["G"] = round(mm["G"] + macros["G"], 1)
         return display
 
-    def _meal_response(self, foods_added: list, foods_not_found: list) -> dict:
+    def _meal_response(self, foods_added: list, foods_not_found: list, choices: list = None) -> dict:
         key = self.current_meal_key()
         comida = self.state["comidas_completadas"].get(key, {})
         restante = self.get_remaining_macros()
@@ -1230,6 +1405,7 @@ class NutritionChatbot:
             "action": "meal_updated",
             "foods_added": foods_added,
             "foods_not_found": foods_not_found,
+            "choices": choices or [],
             "meal_status": {
                 "comida": self.state["comida_actual"],
                 "comida_key": key,
@@ -1266,7 +1442,7 @@ class NutritionChatbot:
         Los macros mostrados se recalculan con el motor de la calculadora (paridad).
         """
         key = self.current_meal_key()
-        added, not_found = [], []
+        added, not_found, avisos = [], [], []
 
         def tiene_cantidad(it):
             return it.get("cantidad") is not None and it.get("cantidad") > 0
@@ -1285,12 +1461,34 @@ class NutritionChatbot:
         explicit = [it for it in real_items if tiene_cantidad(it)]
         auto_names = [it["nombre"] for it in real_items if not tiene_cantidad(it)]
 
-        # ── 1) Cantidades explícitas: una a una, manual (sin tope) ──
+        # ── 0) Desambiguación: términos GENÉRICOS sin cantidad (p.ej. "lomo") que en la base
+        #     corresponden a alimentos muy distintos (embutido / cerdo / salmón) NO se adivinan;
+        #     se ofrecen OPCIONES para que el usuario elija. Los específicos siguen su curso. ──
+        choices = []
+        restante_amb = self.get_remaining_macros()
+        auto_clear = []
+        for nombre in auto_names:
+            opciones = await self._opciones_ambiguas(nombre, restante_amb)
+            if opciones:
+                choices.append({"termino": nombre, "opciones": opciones})
+            else:
+                auto_clear.append(nombre)
+        auto_names = auto_clear
+
+        # ── 1) Cantidades explícitas: una a una, manual (sin tope, se respeta lo pedido) ──
         for it in explicit:
             res = await self.set_food_quantity(it["nombre"], cantidad=it["cantidad"], unidad=it.get("unidad"))
             if res.get("ok"):
                 added.append({"nombre": res["nombre"], "cantidad_display": res["cantidad_display"],
                               "macros": res["macros"]})
+                if res.get("parcial"):
+                    avisos.append(f"No tengo \"{res['parcial']}\" tal cual; he usado {res['nombre']}.")
+                maxr = res.get("max_razonable") or 0
+                if maxr and res.get("cantidad_g", 0) > 3 * maxr:
+                    avisos.append(
+                        f"Ojo: {res['cantidad_display']} de {res['nombre']} es una cantidad enorme "
+                        f"(lo habitual es no pasar de {int(maxr)} g). Lo dejo porque lo has pedido tú."
+                    )
             else:
                 not_found.append({"buscado": it["nombre"], "razon": "No encontrado en la base de datos"})
 
@@ -1305,11 +1503,13 @@ class NutritionChatbot:
                 sized = self._size_food(alimento, restante)
                 if not sized:
                     not_found.append({"buscado": auto_names[0], "encontrado": alimento.get("nombre"),
-                                      "razon": "No cabe en lo que queda de esta comida"})
+                                      "razon": self._razon_no_cabe(alimento, restante)})
                 else:
                     cantidad_g, macros = sized
                     display = self._append_food(key, alimento, cantidad_g, macros)
                     added.append({"nombre": alimento.get("nombre"), "cantidad_display": display, "macros": macros})
+                    if alimento.get("_match_parcial"):
+                        avisos.append(f"No tengo \"{alimento['_match_parcial']}\" tal cual; he usado {alimento.get('nombre')}.")
         elif len(auto_names) >= 2:
             from meal_builder import build_meal
             restante = self.get_remaining_macros()
@@ -1322,6 +1522,12 @@ class NutritionChatbot:
                 macros = self._macros_at(alimento, cantidad_g) if matches else f.get("macros", {"P": 0, "H": 0, "G": 0})
                 display = self._append_food(key, alimento, cantidad_g, macros)
                 added.append({"nombre": f["nombre"], "cantidad_display": display, "macros": macros})
+            # Avisar si algún nombre pedido se resolvió con una coincidencia parcial
+            for nombre_pedido in auto_names:
+                m = await self.search_foods(nombre_pedido, limit=1)
+                if m and m[0].get("_match_parcial") and any(
+                        f["nombre"] == m[0].get("nombre") for f in result["foods_added"]):
+                    avisos.append(f"No tengo \"{nombre_pedido}\" tal cual; he usado {m[0].get('nombre')}.")
 
         # ── 3) Macros genéricos: elegir un alimento real de ese macro que quepa ──
         for gm in generic_macros:
@@ -1335,12 +1541,26 @@ class NutritionChatbot:
                 not_found.append({"buscado": f"algo de {macro_lbl}",
                                   "razon": f"No encontré un alimento de {macro_lbl} que quepa en lo que queda"})
 
-        return self._meal_response(added, not_found)
+        resp = self._meal_response(added, not_found, choices)
+        msgs = list(avisos)
+        if choices:
+            terms = ", ".join(f'"{c["termino"]}"' for c in choices)
+            msgs.append(f"Tengo varios tipos de {terms}. Toca cuál quieres para añadirlo:")
+        if msgs:
+            resp["message"] = "\n".join(msgs)
+        return resp
+
+    # Categorías que NUNCA deben resolver una petición genérica de macro
+    # ("algo de proteína" no puede acabar en salsa de soja, refrescos, dulces
+    # o fast food, aunque técnicamente aporten ese macro).
+    CATS_NO_PLATO = ("16", "18", "19", "35", "36", "38", "39", "43", "44",
+                     "45", "46", "47", "48", "49")
 
     async def _pick_food_for_macro(self, macro: str):
         """Elige un alimento real de un macro genérico ('una grasa', 'algo de proteína') que
-        quepa en lo que falta de la comida, respetando lo evitado. Prioriza el que más aporta
-        de ese macro. Devuelve (alimento, cantidad_g, macros) o None."""
+        quepa en lo que falta de la comida, respetando lo evitado. Entre lo que más aporta
+        de ese macro, prefiere el que lo hace con MENOS gramos (comida de verdad, no medio
+        litro de batido comercial). Devuelve (alimento, cantidad_g, macros) o None."""
         from routes.calculator import AVOIDABLE_PREFIXES
         from calculator import (
             CATS_PROTEINA_PURAS, CATS_HIDRATOS, CATS_GRASAS, CATS_CUADRAR_GRASAS,
@@ -1373,11 +1593,15 @@ class NutritionChatbot:
             pool = filtrar_por_tipo_comida(all_foods, "intra" if key == "Intra" else "post")
         else:
             pool = [a for a in all_foods if cat_in_list(get_categoria_principal(a), cats)]
+        # En peri el filtro de tipo de comida ya define qué es legítimo (Aquarius en
+        # el intra lo es); ahí solo vetamos salsas. En comidas de plato, veto completo.
+        veto = ("16",) if es_peri else self.CATS_NO_PLATO
         pool = [a for a in pool
-                if not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
+                if not cat_hit(a.get("categorias"), veto)
+                and not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
                 and not (avoid_prefixes and cat_hit(a.get("categorias"), avoid_prefixes))]
 
-        best = None
+        candidatos = []
         for a in pool:
             sized = self._size_food(a, restante)
             if not sized:
@@ -1385,11 +1609,14 @@ class NutritionChatbot:
             cantidad_g, macros = sized
             if macros.get(macro, 0) <= 0:
                 continue
-            if best is None or macros[macro] > best[0]:
-                best = (macros[macro], a, cantidad_g, macros)
-        if best is None:
+            candidatos.append((macros[macro], cantidad_g, a, macros))
+        if not candidatos:
             return None
-        _, a, cantidad_g, macros = best
+        # Mejor aporte primero; a igual aporte (±2g), el que necesita menos gramos.
+        mejor_aporte = max(c[0] for c in candidatos)
+        finalistas = [c for c in candidatos if c[0] >= mejor_aporte - 2]
+        finalistas.sort(key=lambda c: c[1])
+        _, cantidad_g, a, macros = finalistas[0]
         return a, cantidad_g, macros
 
     async def rebalance_current_meal(self) -> dict:
@@ -1443,7 +1670,8 @@ class NutritionChatbot:
             return self._meal_response([], [{"buscado": str(alimento_id), "razon": "No encontrado"}])
         sized = self._size_food(alimento, self.get_remaining_macros())
         if not sized:
-            return self._meal_response([], [{"buscado": alimento.get("nombre"), "razon": "No cabe"}])
+            return self._meal_response([], [{"buscado": alimento.get("nombre"),
+                                             "razon": self._razon_no_cabe(alimento, self.get_remaining_macros())}])
         cantidad_g, macros = sized
         display = self._append_food(key, alimento, cantidad_g, macros)
         return self._meal_response([{"nombre": alimento.get("nombre"), "cantidad_display": display, "macros": macros}], [])
@@ -1739,7 +1967,10 @@ class NutritionChatbot:
             "'lístame los alimentos') es 'question', NO 'status' (status es SOLO cuánto falta). "
             "'borra/vacía la comida N' = 'clear' (vaciar toda la comida), mientras que "
             "'borra <alimento>' = 'remove' (quitar un alimento suelto). "
-            "Interpreta números pegados o mal escritos. Rellena 'foods' SOLO si intent='add'."
+            "Interpreta números pegados o mal escritos. Rellena 'foods' SOLO si intent='add'. "
+            "En 'foods' NUNCA incluyas alimentos negados o excluidos (\"sin pan\", \"no quiero pescado\"). "
+            "Si el mensaje MEZCLA quitar y añadir (\"quítame el arroz y pon más pollo\"), usa intent='add', "
+            "pon el alimento a quitar en 'remove' Y los alimentos a añadir en 'foods'."
         )
         raw = {}
         last_err = None
@@ -1832,10 +2063,23 @@ class NutritionChatbot:
         if intent == "question":
             return await self.answer_question(user_input)
 
-        # intent == "add" (o fallback): añadir los alimentos que dijo
+        # intent == "add" (o fallback): añadir los alimentos que dijo.
+        # Si el mensaje también pedía quitar algo ("quítame el arroz y pon más pollo"),
+        # primero se quita y luego se añade.
         foods = data.get("foods") or []
+        quitado = None
+        if data.get("remove"):
+            quitado = self.remove_food_by_name(data["remove"])
         if foods:
-            return await self.add_foods(foods)
+            resp = await self.add_foods(foods)
+            if quitado:
+                nota = f"Quité {quitado.get('nombre')} de esta comida."
+                resp["message"] = (nota + "\n" + resp["message"]) if resp.get("message") else nota
+            return resp
+        if quitado:
+            resp = self._meal_response([], [])
+            resp["message"] = f"Quité {quitado.get('nombre')} de esta comida."
+            return resp
 
         # Sin alimentos claros: si parece una frase, tratar como duda; si no, pedir alimentos.
         if len(user_input.split()) >= 4:

@@ -9,7 +9,7 @@ import os
 import json
 
 from core.database import db
-from core.security import get_current_user, get_admin_user
+from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import require_access
 from routes.notifications import notify
 from models.common import RoutineResponse, RoutineCreate
@@ -90,9 +90,8 @@ async def routines_overview(user = Depends(get_admin_user)):
 async def generate_routine_ai(data: RoutineCreate, user = Depends(get_admin_user)):
     """Generar rutina con IA."""
     profile = await db.client_profiles.find_one({"id": data.client_id}, {"_id": 0})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
+    assert_client_access(user, profile)
+
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
     
     reports = await db.reports.find({"client_id": data.client_id}, {"_id": 0}).sort("created_at", -1).to_list(3)
@@ -169,9 +168,8 @@ Genera una rutina completa de 7 días. Responde SOLO con el JSON."""
 async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(get_admin_user)):
     """Guardar rutina para un cliente."""
     profile = await db.client_profiles.find_one({"id": client_id})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
+    assert_client_access(user, profile)
+
     await db.routines.update_many(
         {"client_id": client_id, "status": "active"},
         {"$set": {"status": "inactive"}}

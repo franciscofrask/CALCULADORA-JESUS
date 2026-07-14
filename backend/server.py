@@ -72,6 +72,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Manejadores globales de errores de entrada que, si no, saldrían como 500.
+# Un número entero enorme (> int64) revienta al escribir en MongoDB (OverflowError);
+# lo convertimos en un 400 limpio para TODOS los endpoints de una vez, en vez de
+# validar el rango campo por campo. Igual para documentos con claves inválidas.
+from fastapi.responses import JSONResponse
+from bson.errors import InvalidDocument
+
+
+@app.exception_handler(OverflowError)
+async def _overflow_handler(request, exc):
+    return JSONResponse(status_code=400, content={"detail": "Valor numérico fuera de rango."})
+
+
+@app.exception_handler(InvalidDocument)
+async def _invalid_document_handler(request, exc):
+    return JSONResponse(status_code=400, content={"detail": "Datos con formato no válido."})
+
 # Main API router
 api_router = APIRouter(prefix="/api")
 

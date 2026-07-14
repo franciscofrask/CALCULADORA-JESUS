@@ -31,7 +31,7 @@ const PLAN_UI = {
     reto60: {
         order: 4,
         badgeClass: 'bg-gradient-to-r from-orange-700 via-orange-600 to-orange-800 text-white',
-        description: 'Programa de 8 semanas enfocado en pérdida de grasa',
+        description: 'Programa intensivo enfocado en pérdida de grasa',
     },
     mantenimiento: {
         order: 5,

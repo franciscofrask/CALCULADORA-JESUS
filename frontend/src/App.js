@@ -142,12 +142,12 @@ function AppRoutes() {
                 <Route index element={<ClientDashboard />} />
                 <Route path="routine" element={<CapabilityRoute cap="rutina"><RoutinePage /></CapabilityRoute>} />
                 <Route path="nutrition" element={<NutritionPage />} />
-                <Route path="reports" element={<ReportsPage />} />
+                <Route path="reports" element={<CapabilityRoute cap="reportes"><ReportsPage /></CapabilityRoute>} />
                 <Route path="messages" element={<MessagesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="chatbot" element={<ChatbotPage />} />
                 <Route path="supplements" element={<CapabilityRoute cap="suplementacion"><SupplementsPage /></CapabilityRoute>} />
-                <Route path="checkins" element={<CheckInsPage />} />
+                <Route path="checkins" element={<CapabilityRoute cap="reportes"><CheckInsPage /></CapabilityRoute>} />
                 <Route path="macro-calculator" element={<MacroCalculatorClientPage />} />
                 <Route path="foods" element={<FoodSearchPage />} />
             </Route>

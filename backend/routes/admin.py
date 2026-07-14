@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Optional
 import uuid
 
 from core.database import db
-from core.security import get_admin_user, hash_password, generate_temp_password
+from core.security import get_admin_user, assert_client_access, hash_password, generate_temp_password
 from routes.notifications import notify
 from routes.audit import audit
 from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate, TrainerAssign, PLAN_CATALOG
@@ -36,6 +36,10 @@ async def get_all_clients(
         query["status"] = status
     if trainer_id:
         query["trainer_id"] = trainer_id
+    # Un entrenador solo ve a SUS clientes asignados; el admin ve a todos.
+    es_trainer = user.get("role") == "trainer"
+    if es_trainer:
+        query["trainer_id"] = user["id"]
 
     # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
     # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).
@@ -56,8 +60,8 @@ async def get_all_clients(
         if user_data:
             result.append({**enrich_cycle(profile), "user": user_data})
 
-    # Registros incompletos: solo sin filtros (no tienen plan/estado/coach que filtrar)
-    if include_incomplete and not (plan or status or trainer_id):
+    # Registros incompletos: solo el admin sin filtros (no tienen plan/estado/coach que filtrar)
+    if include_incomplete and not es_trainer and not (plan or status or trainer_id):
         with_profile = {p["user_id"] for p in await db.client_profiles.find({}, {"_id": 0, "user_id": 1}).to_list(5000)}
         orphans = await db.users.find(
             {"role": "client", "deleted_at": None, "id": {"$nin": list(with_profile)}},
@@ -82,8 +86,7 @@ async def get_all_clients(
 async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     """Obtener detalle completo de un cliente (8 pestañas)."""
     profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    assert_client_access(user, profile)
     enrich_cycle(profile)
 
     user_data = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
@@ -138,9 +141,8 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
 @router.get("/clients/{client_id}/diet")
 async def get_client_diet(client_id: str, fecha: str, user = Depends(get_admin_user)):
     """Dieta de un cliente en una fecha concreta (visor de dietas del admin)."""
-    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "user_id": 1})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "user_id": 1, "trainer_id": 1})
+    assert_client_access(user, profile)
     diet = await db.diets.find_one(
         {"user_id": profile["user_id"], "fecha": fecha}, {"_id": 0}
     )
@@ -153,9 +155,8 @@ async def get_client_diet(client_id: str, fecha: str, user = Depends(get_admin_u
 async def update_client_admin(client_id: str, data: ClientProfileUpdate, user = Depends(get_admin_user)):
     """Actualizar perfil de cliente (admin)."""
     profile = await db.client_profiles.find_one({"id": client_id})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
+    assert_client_access(user, profile)
+
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     # El coach se cambia solo por PUT /clients/{id}/trainer (ahí viven las reglas de permisos)
     update_data.pop("trainer_id", None)
@@ -211,9 +212,8 @@ async def assign_client_trainer(client_id: str, data: TrainerAssign, user = Depe
 async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depends(get_admin_user)):
     """Actualizar macros de un cliente (admin). Marca como override manual."""
     profile = await db.client_profiles.find_one({"id": client_id})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
+    assert_client_access(user, profile)
+
     training = data.training.model_dump()
     rest = data.rest.model_dump()
     training["calories"] = training["protein"] * 4 + training["carbs"] * 4 + training["fat"] * 9
@@ -277,6 +277,8 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
 @router.put("/clients/{client_id}/macro-history/{entry_id}")
 async def update_macro_history_entry(client_id: str, entry_id: str, data: MacrosUpdate, user = Depends(get_admin_user)):
     """Editar una entrada concreta del historial de macros (corrige ese registro; no cambia los macros ACTUALES del cliente)."""
+    prof = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "trainer_id": 1, "user_id": 1})
+    assert_client_access(user, prof)
     entry = await db.macro_history.find_one({"id": entry_id, "client_id": client_id}, {"_id": 0})
     if not entry:
         raise HTTPException(status_code=404, detail="Entrada de historial no encontrada")
@@ -307,6 +309,8 @@ async def update_macro_history_entry(client_id: str, entry_id: str, data: Macros
 @router.delete("/clients/{client_id}/macro-history/{entry_id}")
 async def delete_macro_history_entry(client_id: str, entry_id: str, user = Depends(get_admin_user)):
     """Eliminar una entrada del historial de macros."""
+    prof = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "trainer_id": 1, "user_id": 1})
+    assert_client_access(user, prof)
     result = await db.macro_history.delete_one({"id": entry_id, "client_id": client_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Entrada de historial no encontrada")
@@ -318,8 +322,7 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
     from target_calculator import calcular_targets, targets_to_profile_macros
 
     profile = await db.client_profiles.find_one({"id": client_id})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    assert_client_access(user, profile)
 
     peso = data.get("peso")
     sexo = data.get("sexo")

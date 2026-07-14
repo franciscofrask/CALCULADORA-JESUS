@@ -14,6 +14,24 @@ from pdf_generator import generate_diet_pdf
 
 router = APIRouter(prefix="/diets", tags=["diets"])
 
+import re as _re
+_FECHA_RE = _re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validar_fecha(fecha: str) -> str:
+    """Exige YYYY-MM-DD real. Evita 500 (y posible inyección) por fechas basura."""
+    if not isinstance(fecha, str) or not _FECHA_RE.match(fecha):
+        raise HTTPException(status_code=400, detail="Fecha inválida. Usa el formato YYYY-MM-DD.")
+    try:
+        datetime.strptime(fecha, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fecha inválida. Usa el formato YYYY-MM-DD.")
+    return fecha
+
+
+def _as_dict(v):
+    return v if isinstance(v, dict) else {}
+
 
 async def upsert_diet_doc(user_id: str, data: dict) -> dict:
     """
@@ -50,9 +68,11 @@ async def upsert_diet_doc(user_id: str, data: dict) -> dict:
 @router.post("")
 async def save_diet(data: dict, user = Depends(get_current_user)):
     """Guardar la dieta completa de un día, o solo distribution_targets si targets_only=true."""
-    fecha = data.get("fecha")
-    if not fecha:
-        raise HTTPException(status_code=400, detail="Fecha requerida")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+    # Validar la fecha (YYYY-MM-DD) evita el 500 y cierra la inyección NoSQL de pasar
+    # un objeto con operadores ($gt/$where/$regex) que acabaría en el filtro de Mongo.
+    fecha = _validar_fecha(data.get("fecha"))
 
     if data.get("targets_only"):
         await db.diets.update_one(
@@ -75,7 +95,10 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
 @router.post("/favorites")
 async def save_favorite(data: dict, user = Depends(get_current_user)):
     """Guardar el día actual como plantilla favorita con un nombre."""
-    name = (data.get("name") or "").strip()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+    name = data.get("name")
+    name = name.strip() if isinstance(name, str) else ""
     if not name:
         raise HTTPException(status_code=400, detail="Nombre requerido")
     fav = {
@@ -86,9 +109,9 @@ async def save_favorite(data: dict, user = Depends(get_current_user)):
         "num_comidas": data.get("num_comidas", 4),
         "momento_entreno": data.get("momento_entreno", 1),
         "opcion_peri": data.get("opcion_peri", "intra_post"),
-        "comidas": data.get("comidas", {}),
+        "comidas": _as_dict(data.get("comidas")),
         "macros_snapshot": data.get("macros_snapshot"),
-        "distribution_targets": data.get("distribution_targets"),
+        "distribution_targets": _as_dict(data.get("distribution_targets")) or None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.diet_favorites.insert_one(dict(fav))
@@ -148,6 +171,8 @@ async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
 @router.get("/calendar/{year}/{month}")
 async def get_diet_calendar(year: int, month: int, user = Depends(get_current_user)):
     """Obtener calendario de dietas del mes."""
+    if not (1 <= month <= 12) or not (1900 <= year <= 2200):
+        raise HTTPException(status_code=400, detail="Año o mes fuera de rango.")
     start_date = f"{year}-{month:02d}-01"
     last_day = calendar.monthrange(year, month)[1]
     end_date = f"{year}-{month:02d}-{last_day}"
@@ -201,10 +226,16 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
 @router.patch("/{fecha}/targets")
 async def update_diet_targets(fecha: str, data: dict, user = Depends(get_current_user)):
     """Actualizar solo distribution_targets sin tocar comidas."""
+    _validar_fecha(fecha)
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+    targets = data.get("distribution_targets")
+    if targets is not None and not isinstance(targets, dict):
+        raise HTTPException(status_code=400, detail="distribution_targets debe ser un objeto.")
     await db.diets.update_one(
         {"user_id": user["id"], "fecha": fecha},
         {"$set": {
-            "distribution_targets": data.get("distribution_targets"),
+            "distribution_targets": targets,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }},
         upsert=True
@@ -214,10 +245,10 @@ async def update_diet_targets(fecha: str, data: dict, user = Depends(get_current
 @router.post("/copy-day")
 async def copy_day(data: dict, user = Depends(get_current_user)):
     """Copiar el día completo (todas las comidas) de una fecha a otra."""
-    source_date = data.get("fecha_origen")
-    target_date = data.get("fecha_destino")
-    if not source_date or not target_date:
-        raise HTTPException(status_code=400, detail="Faltan fecha_origen y fecha_destino")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+    source_date = _validar_fecha(data.get("fecha_origen"))
+    target_date = _validar_fecha(data.get("fecha_destino"))
 
     source_diet = await db.diets.find_one({"user_id": user["id"], "fecha": source_date}, {"_id": 0})
     if not source_diet:
@@ -259,12 +290,14 @@ async def get_diet(fecha: str, user = Depends(get_current_user)):
 @router.post("/copy")
 async def copy_diet(data: dict, user = Depends(get_current_user)):
     """Copiar una comida de otro día."""
-    source_date = data.get("source_date")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+    source_date = _validar_fecha(data.get("source_date"))
+    target_date = _validar_fecha(data.get("target_date"))
     source_meal = data.get("source_meal")
-    target_date = data.get("target_date")
     target_meal = data.get("target_meal")
-    
-    if not all([source_date, source_meal, target_date, target_meal]):
+
+    if not (isinstance(source_meal, str) and isinstance(target_meal, str) and source_meal and target_meal):
         raise HTTPException(status_code=400, detail="Faltan parámetros")
     
     source_diet = await db.diets.find_one(

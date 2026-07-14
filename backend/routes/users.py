@@ -218,10 +218,14 @@ async def get_user_preferences(user = Depends(get_current_user)):
 @router.post("/user/preferences")
 async def save_user_preferences(data: dict, user = Depends(get_current_user)):
     """Guardar preferencias y alimentos a evitar del usuario."""
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
     preferences = data.get("food_preferences", [])
     avoided_categories = data.get("avoided_categories", [])
     avoided_keywords = data.get("avoided_keywords", [])
 
+    if not all(isinstance(x, list) for x in (preferences, avoided_categories, avoided_keywords)):
+        raise HTTPException(status_code=400, detail="Las preferencias deben ser listas.")
     if len(preferences) < 3:
         raise HTTPException(status_code=400, detail="Debes seleccionar al menos 3 categorías")
 

@@ -372,11 +372,14 @@ export default function ChatbotPage() {
     if (!resp) return;
     if (resp.day_overview) setDayOverview(resp.day_overview);
     switch (resp.action) {
-      case 'meal_updated':
+      case 'meal_updated': {
         applyMealResponse(resp);
-        setSuggestions([]);
+        // Términos ambiguos (p.ej. "lomo"): el backend devuelve opciones para elegir.
+        const choiceOpts = (resp.choices || []).flatMap(c => c.opciones || []);
+        setSuggestions(choiceOpts);
         addMessage(formatMealUpdate(resp), false, resp);
         break;
+      }
       case 'suggestions':
         setSuggestions(resp.suggestions || []);
         addMessage(
@@ -484,8 +487,7 @@ export default function ChatbotPage() {
 
   const formatDayOverview = (ov) => {
     if (!ov) return 'Aún no hay datos del día.';
-    const f = (m) => `P=${m.P}g H=${m.H}g G=${m.G}g`;
-    return `**Resumen del día**\nObjetivo: ${f(ov.objetivo)}\nLlevas: ${f(ov.consumido)}\nTe falta: ${f(ov.restante)}\nComidas guardadas: ${ov.completas}/${ov.total_comidas}`;
+    return `**Resumen del día**\nObjetivo: ${macrosLinea(ov.objetivo)}\nLlevas: ${macrosLinea(ov.consumido)}\nTe falta: ${macrosLinea(ov.restante)}\nComidas guardadas: ${ov.completas}/${ov.total_comidas}`;
   };
 
   // Completar comida actual
@@ -571,7 +573,12 @@ export default function ChatbotPage() {
     }
   };
 
-  // Formatear actualización de comida
+  // Formatear actualización de comida (siempre con los macros por su nombre:
+  // Proteína/Hidratos/Grasa, nunca las iniciales P/H/G)
+  const MACRO_NOMBRE = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+  const macrosLinea = (m) =>
+    `Proteína ${m?.P || 0} g · Hidratos ${m?.H || 0} g · Grasa ${m?.G || 0} g`;
+
   const formatMealUpdate = (response) => {
     let msg = '';
 
@@ -582,12 +589,12 @@ export default function ChatbotPage() {
     if (response.foods_added?.length > 0) {
       msg += '**Alimentos añadidos:**\n';
       response.foods_added.forEach(f => {
-        msg += `• ${f.nombre}: ${f.cantidad_display} (P=${f.macros?.P || 0}, H=${f.macros?.H || 0}, G=${f.macros?.G || 0})\n`;
+        msg += `• ${f.nombre}: ${f.cantidad_display} (${macrosLinea(f.macros)})\n`;
       });
     }
-    
+
     if (response.foods_not_found?.length > 0) {
-      msg += '\n**No encontrados/No caben:**\n';
+      msg += '\n**No he podido añadir:**\n';
       response.foods_not_found.forEach(f => {
         msg += `• "${f.buscado}": ${f.razon}\n`;
         if (f.sugerencia) {
@@ -595,25 +602,25 @@ export default function ChatbotPage() {
         }
       });
     }
-    
+
     if (response.meal_status) {
       const ms = response.meal_status;
       msg += `\n**${ms.comida_nombre || `Comida ${ms.comida}`}:**\n`;
-      msg += `Actual: P=${ms.actual?.P || 0}g, H=${ms.actual?.H || 0}g, G=${ms.actual?.G || 0}g\n`;
-      msg += `Objetivo: P=${ms.objetivo?.P || 0}g, H=${ms.objetivo?.H || 0}g, G=${ms.objetivo?.G || 0}g\n`;
-      msg += `Restante: P=${ms.restante?.P || 0}g, H=${ms.restante?.H || 0}g, G=${ms.restante?.G || 0}g`;
+      msg += `Llevas: ${macrosLinea(ms.actual)}\n`;
+      msg += `Objetivo: ${macrosLinea(ms.objetivo)}\n`;
+      msg += `Te falta: ${macrosLinea(ms.restante)}`;
 
       if (ms.cuadrado) {
         msg += '\n\n✅ **¡Comida cuadrada!** Pulsa "Guardar y siguiente".';
       } else {
         const r = ms.restante || {};
-        const faltan = ['P', 'H', 'G'].filter(k => (r[k] || 0) > 4).map(k => `${k}=${r[k]}g`);
-        const pasado = ['P', 'H', 'G'].filter(k => (r[k] || 0) < -4).map(k => `${k} por ${Math.abs(r[k])}g`);
+        const faltan = ['P', 'H', 'G'].filter(k => (r[k] || 0) > 4).map(k => `${r[k]} g de ${MACRO_NOMBRE[k]}`);
+        const pasado = ['P', 'H', 'G'].filter(k => (r[k] || 0) < -4).map(k => `${Math.abs(r[k])} g de ${MACRO_NOMBRE[k]}`);
         if (faltan.length) {
-          msg += `\n\n⚠️ Todavía te falta ${faltan.join(', ')}. Añade más alimentos, pulsa "Sugerir alimentos", o "Guardar y siguiente" si quieres dejarla así.`;
+          msg += `\n\n⚠️ Todavía te faltan ${faltan.join(' y ')}. Añade más alimentos, pulsa "Sugerir alimentos", o "Guardar y siguiente" si quieres dejarla así.`;
         }
         if (pasado.length) {
-          msg += `\n\n⚠️ Te has pasado de ${pasado.join(', ')}. Puedes bajar la cantidad o dejarlo así si lo quieres a propósito.`;
+          msg += `\n\n⚠️ Te has pasado ${pasado.join(' y ')}. Puedes bajar la cantidad o dejarlo así si lo quieres a propósito.`;
         }
       }
     }
@@ -802,7 +809,7 @@ export default function ChatbotPage() {
               ))}
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
-              Total: P={r1(comida.macros?.P)}g | H={r1(comida.macros?.H)}g | G={r1(comida.macros?.G)}g
+              Total: Proteína {r1(comida.macros?.P)} g · Hidratos {r1(comida.macros?.H)} g · Grasa {r1(comida.macros?.G)} g
             </div>
           </div>
         ))}
@@ -840,7 +847,7 @@ export default function ChatbotPage() {
             <p className="text-xs text-muted-foreground">
               {step === 'building_meal' && (
                 <>
-                  {mealNombre} • Falta en esta comida: P={macrosRestantes.P}g H={macrosRestantes.H}g G={macrosRestantes.G}g
+                  {mealNombre} • Falta: proteína {macrosRestantes.P} g · hidratos {macrosRestantes.H} g · grasa {macrosRestantes.G} g
                   {dayOverview && ` · Día: ${dayOverview.completas}/${dayOverview.total_comidas} comidas`}
                 </>
               )}
@@ -1025,7 +1032,7 @@ export default function ChatbotPage() {
                     : m.tiene_alimentos ? 'bg-muted text-foreground border-input'
                     : 'bg-card text-muted-foreground border-input'
                   }`}
-                  title={`Falta P=${m.restante?.P} H=${m.restante?.H} G=${m.restante?.G}`}
+                  title={`Falta proteína ${m.restante?.P} g · hidratos ${m.restante?.H} g · grasa ${m.restante?.G} g`}
                 >
                   {m.cuadrado && m.tiene_alimentos ? '✅ ' : ''}{m.nombre}
                 </button>
@@ -1059,7 +1066,7 @@ export default function ChatbotPage() {
                     onClick={() => addSuggestedFood(s.alimento_id)}
                     disabled={loading}
                     className="inline-flex items-center gap-1 bg-card hover:bg-brand hover:text-white border border-brand/50 text-brand text-xs px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
-                    title={`P=${s.macros?.P} H=${s.macros?.H} G=${s.macros?.G}`}
+                    title={`Proteína ${s.macros?.P} g · Hidratos ${s.macros?.H} g · Grasa ${s.macros?.G} g`}
                   >
                     <span className="font-bold">+</span> {s.nombre} · {s.cantidad_display}
                   </button>

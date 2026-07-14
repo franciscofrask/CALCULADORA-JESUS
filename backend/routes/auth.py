@@ -74,11 +74,17 @@ async def get_me(user = Depends(get_current_user)):
 @router.put("/me", response_model=UserResponse)
 async def update_me(data: dict, user = Depends(get_current_user)):
     """Actualizar los datos propios (nombre y teléfono)."""
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
     update = {}
-    if data.get("name") and str(data["name"]).strip():
-        update["name"] = str(data["name"]).strip()
+    name = data.get("name")
+    if isinstance(name, str) and name.strip():
+        update["name"] = name.strip()
     if "phone" in data:
-        update["phone"] = data["phone"]
+        phone = data["phone"]
+        if phone is not None and not isinstance(phone, str):
+            raise HTTPException(status_code=400, detail="El teléfono debe ser texto.")
+        update["phone"] = phone
     if update:
         await db.users.update_one({"id": user["id"]}, {"$set": update})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
@@ -88,8 +94,12 @@ async def update_me(data: dict, user = Depends(get_current_user)):
 @router.post("/change-password")
 async def change_password(data: dict, user = Depends(get_current_user)):
     """Cambiar la contraseña propia verificando la actual."""
-    current = data.get("current_password") or ""
-    new = data.get("new_password") or ""
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+    current = data.get("current_password")
+    new = data.get("new_password")
+    if not isinstance(current, str) or not isinstance(new, str):
+        raise HTTPException(status_code=400, detail="Las contraseñas deben ser texto.")
     if len(new) < 8:
         raise HTTPException(status_code=400, detail="La nueva contraseña debe tener al menos 8 caracteres")
     stored = user.get("password")

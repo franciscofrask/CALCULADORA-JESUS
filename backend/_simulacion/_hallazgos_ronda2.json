@@ -1,0 +1,10 @@
+[
+  {
+    "categoria": "BUG",
+    "severidad": "media",
+    "titulo": "Sin respuesta / caída en POST /diets/favorites",
+    "detalle": "agente=trainer0; EXCEPCION: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=30)",
+    "endpoint": "POST /diets/favorites",
+    "reproducir": ""
+  }
+]

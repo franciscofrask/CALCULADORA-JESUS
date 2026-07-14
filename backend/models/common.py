@@ -108,7 +108,9 @@ class CheckInResponse(BaseModel):
 
 # Message Models
 class MessageCreate(BaseModel):
-    receiver_id: str
+    # Opcional: si no se indica (o "support"), el backend lo resuelve al coach del
+    # cliente o al primer admin (ver _resolve_receiver en routes/messages.py).
+    receiver_id: Optional[str] = None
     content: str
 
 class MessageResponse(BaseModel):

@@ -80,8 +80,8 @@ PLAN_CATALOG = {
     "calculadora_jp": {
         "name": "Calculadora JP", "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
-        "precio": 60.5, "precio_nota": "60,50€/mes",
-        "precios": [{"label": "Mensual", "importe": 60.5, "periodo": "mes"}],
+        "precio": 60.0, "precio_nota": "60€/mes",
+        "precios": [{"label": "Mensual", "importe": 60.0, "periodo": "mes"}],
         "responsable": "Ninguno (autogestión)",
         "habilitaciones": {"calculadora": "autogestion", "rutina": "ninguna",
                             "reportes": [], "suplementacion": False, "harbiz": False},
@@ -183,6 +183,8 @@ def derive_features(habilitaciones: Dict[str, Any]) -> List[str]:
     features: List[str] = ["macros", "chat"]
     if h.get("rutina") in ("del_mes", "personalizada", "opcional"):
         features.append("rutina")
+    if reportes:
+        features.append("reportes")  # feature genérica: el plan incluye algún reporte/check-in
     if "quincenal" in reportes:
         features.append("reporte_quincenal")
     if "mensual" in reportes:

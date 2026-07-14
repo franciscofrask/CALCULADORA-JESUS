@@ -97,7 +97,8 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
     stripe_module = get_stripe_module()
     require_stripe_test_mode("La sincronización de checkout")
 
-    session_id = (payload.get("session_id") or "").strip()
+    session_id = payload.get("session_id") if isinstance(payload, dict) else None
+    session_id = session_id.strip() if isinstance(session_id, str) else ""
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id es requerido")
 

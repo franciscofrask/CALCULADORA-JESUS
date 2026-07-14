@@ -8,6 +8,13 @@ import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { Pill, Plus, Pencil, Trash2, Loader2, Save } from 'lucide-react';
+import { suplementoCatLabel, sexoLabel, objetivoLabel } from '../lib/labels';
+
+// Etiqueta legible por campo del catálogo (evita "sueno · ambos · ambos").
+const catalogoLabel = (campo, v) =>
+    campo === 'categoria' ? suplementoCatLabel(v)
+    : campo === 'sexo' ? sexoLabel(v)
+    : objetivoLabel(v);
 
 const SEXOS = ['ambos', 'hombre', 'mujer'];
 const CATEGORIAS = ['base', 'intra', 'rendimiento', 'quemador', 'salud', 'sueno', 'otro'];
@@ -73,7 +80,7 @@ const SupplementsCatalogPage = () => {
                         <Card key={it.id} className={`bg-[#111] border-[#222] ${!it.activo ? 'opacity-50' : ''}`}><CardContent className="p-4 flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <p className="text-white font-medium">{it.titulo} {!it.activo && <span className="text-red-400 text-xs">(inactivo)</span>}</p>
-                                <p className="text-white/40 text-xs mt-0.5">{it.categoria} · {it.sexo} · {it.objetivo}</p>
+                                <p className="text-white/40 text-xs mt-0.5">{suplementoCatLabel(it.categoria)} · {sexoLabel(it.sexo)} · {objetivoLabel(it.objetivo)}</p>
                                 <p className="text-white/50 text-xs mt-1">{[it.cuanto, it.cuando].filter(Boolean).join(' · ')}</p>
                             </div>
                             <div className="flex gap-1 flex-shrink-0">
@@ -95,7 +102,7 @@ const SupplementsCatalogPage = () => {
                             {[['sexo', SEXOS], ['categoria', CATEGORIAS], ['objetivo', OBJETIVOS]].map(([k, opts]) => (
                                 <div key={k}><Label className="text-white/60 text-xs capitalize">{k}</Label>
                                     <select value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2">
-                                        {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                                        {opts.map(o => <option key={o} value={o}>{catalogoLabel(k, o)}</option>)}
                                     </select>
                                 </div>
                             ))}

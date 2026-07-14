@@ -8,6 +8,7 @@ import uuid
 
 from core.database import db
 from core.security import get_current_user, get_admin_user
+from core.plan_access import plan_grants_feature
 from models.common import ReportCreate, ReportResponse
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -18,7 +19,9 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
+    if not plan_grants_feature(profile.get("plan"), "reportes"):
+        raise HTTPException(status_code=403, detail="Tu plan no incluye reportes de seguimiento.")
+
     report_id = str(uuid.uuid4())
     report = {
         "id": report_id,

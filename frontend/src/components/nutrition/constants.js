@@ -62,9 +62,9 @@ export const CATEGORY_CHIPS = [
 // Momento entreno options
 export const MOMENTO_OPTIONS = [
     { value: 0, label: 'En ayunas' },
-    { value: 1, label: 'Después de Comida 1' },
-    { value: 2, label: 'Después de Comida 2' },
-    { value: 3, label: 'Después de Comida 3' },
+    { value: 1, label: 'Tras Comida 1' },
+    { value: 2, label: 'Tras Comida 2' },
+    { value: 3, label: 'Tras Comida 3' },
 ];
 
 // Periworkout options  

@@ -1,0 +1,4 @@
+# artefactos transitorios de las simulaciones/auditorías
+_hallazgos_*.json
+_r2_*.log
+*.log

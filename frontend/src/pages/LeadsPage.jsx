@@ -257,7 +257,10 @@ const LeadsPage = () => {
                 <div>
                     <h1 className="text-2xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>LEADS</h1>
                     <p className="text-white/40 text-sm">
-                        {leads.length} prospectos
+                        {/* Contamos los que se ven en el tablero (activos): los convertidos/descartados
+                            no salen en las columnas, así que no deben inflar el contador. */}
+                        {filtered.length} {filtered.length === 1 ? 'prospecto activo' : 'prospectos activos'}
+                        {leads.length !== filtered.length && <span className="text-white/30"> · {leads.length} en total</span>}
                         {leads.filter(isOverdue).length > 0 && <span className="text-red-400 font-medium"> · {leads.filter(isOverdue).length} seguimientos vencidos</span>}
                     </p>
                 </div>

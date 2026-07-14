@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useRef, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
@@ -12,7 +12,9 @@ import { useAuth } from './AuthContext';
 // ============================================================================
 
 // Cada paso: id, ruta donde vive, selector del elemento a resaltar, textos, y
-// opcionalmente `gate` = id de acción que, al ocurrir, auto-avanza el tour.
+// opcionalmente `gate` = id de acción que, al ocurrir, auto-avanza el tour, y
+// `cap` = capacidad del plan requerida (los pasos de secciones que el plan no
+// incluye se omiten del recorrido; ver lib/planAccess.js).
 const STEPS = [
     {
         id: 'dash-macros', route: '/dashboard',
@@ -51,7 +53,7 @@ const STEPS = [
         description: 'Si tu entrenador lo indica, desde aquí puedes afinar tus macros manualmente. Por defecto los calculamos por ti.',
     },
     {
-        id: 'reports', route: '/dashboard/reports',
+        id: 'reports', route: '/dashboard/reports', cap: 'reportes',
         element: '[data-testid="weight-input"]',
         title: 'Tus reportes', side: 'bottom', align: 'start',
         description: 'En Reportes registras tu peso y medidas cada semana. Ves tu evolución en gráficos y tu entrenador te da feedback.',
@@ -69,13 +71,13 @@ const STEPS = [
         description: 'En Chat hablas directo con tu entrenador. Te responde y te acompaña durante todo el plan.',
     },
     {
-        id: 'routine', route: '/dashboard/routine',
+        id: 'routine', route: '/dashboard/routine', cap: 'rutina',
         element: '[data-testid="day-selector"], [data-testid="routine-content"]',
         title: 'Tu rutina', side: 'bottom', align: 'start',
         description: 'En Rutina tienes tu plan de entrenamiento semana a semana, día por día, con los ejercicios programados.',
     },
     {
-        id: 'checkins', route: '/dashboard/checkins',
+        id: 'checkins', route: '/dashboard/checkins', cap: 'reportes',
         element: '[data-testid="checkins-content"]',
         title: 'Check-ins', side: 'bottom', align: 'start',
         description: 'En Check-ins registras cómo te sientes: energía, sueño, estrés y fotos de progreso. Ayuda a ajustar tu plan.',
@@ -130,7 +132,11 @@ const waitForEl = (selector, timeout = 3500) => new Promise((resolve) => {
 export const OnboardingProvider = ({ children }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { api, profile, isClient, refreshProfile } = useAuth();
+    const { api, profile, isClient, refreshProfile, can } = useAuth();
+
+    // Pasos visibles según el plan: se omiten las secciones que el plan no incluye
+    // (si no, el tour navegaría a una ruta bloqueada y entraría en bucle de redirección).
+    const steps = useMemo(() => STEPS.filter((s) => !s.cap || can(s.cap)), [can]);
 
     const [active, setActive] = useState(false);
     const [index, setIndex] = useState(-1);
@@ -164,9 +170,9 @@ export const OnboardingProvider = ({ children }) => {
 
     const goNext = useCallback(() => {
         const i = indexRef.current;
-        if (i >= STEPS.length - 1) { finish(true); return; }
+        if (i >= steps.length - 1) { finish(true); return; }
         setIdx(i + 1);
-    }, [finish, setIdx]);
+    }, [finish, setIdx, steps]);
 
     const goPrev = useCallback(() => {
         const i = indexRef.current;
@@ -196,11 +202,11 @@ export const OnboardingProvider = ({ children }) => {
             onCloseClick: () => handlersRef.current.close?.(),
         });
         return driverRef.current;
-    }, []);
+    }, [steps]);
 
     const renderPopover = useCallback((step, el, i) => {
         const d = ensureDriver();
-        const isLast = i === STEPS.length - 1;
+        const isLast = i === steps.length - 1;
         const isFirst = i === 0;
         const buttons = [];
         if (!isFirst) buttons.push('previous');
@@ -229,7 +235,7 @@ export const OnboardingProvider = ({ children }) => {
     // luego resalta el elemento (esperando a que aparezca tras navegar).
     useEffect(() => {
         if (!active || index < 0) return;
-        const step = STEPS[index];
+        const step = steps[index];
         if (!step) return;
         if (step.route && location.pathname !== step.route) {
             navigate(step.route);
@@ -243,18 +249,18 @@ export const OnboardingProvider = ({ children }) => {
             persistStep(step.id);
         });
         return () => { cancelled = true; };
-    }, [active, index, location.pathname, navigate, goNext, renderPopover, persistStep]);
+    }, [active, index, location.pathname, navigate, goNext, renderPopover, persistStep, steps]);
 
     const startTour = useCallback((fromStepId) => {
         let i = 0;
         if (fromStepId) {
-            const found = STEPS.findIndex((s) => s.id === fromStepId);
-            if (found >= 0 && found < STEPS.length - 1) i = found;
+            const found = steps.findIndex((s) => s.id === fromStepId);
+            if (found >= 0 && found < steps.length - 1) i = found;
         }
         dismissedRef.current = false;
         setIdx(i);
         setActive(true);
-    }, [setIdx]);
+    }, [setIdx, steps]);
 
     // "Explorar por mi cuenta": no arranca el tour en esta carga de página.
     const skipTour = useCallback(() => { dismissedRef.current = true; }, []);
@@ -265,9 +271,9 @@ export const OnboardingProvider = ({ children }) => {
 
     const notify = useCallback((actionId) => {
         if (!active) return;
-        const step = STEPS[indexRef.current];
+        const step = steps[indexRef.current];
         if (step?.gate === actionId) goNext();
-    }, [active, goNext]);
+    }, [active, goNext, steps]);
 
     // Auto-arranque SOLO la primera vez: cliente que ya hizo el cuestionario,
     // nunca empezó el tour (sin onboarding_step) y no lo completó. Una vez que

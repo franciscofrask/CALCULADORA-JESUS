@@ -7,6 +7,7 @@ import os
 import base64
 import hashlib
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -89,7 +90,31 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     return user
 
 async def get_admin_user(user: dict = Depends(get_current_user)) -> dict:
-    """Verify that the current user is an admin."""
+    """Verify that the current user is staff (admin OR trainer).
+
+    OJO: concede acceso a admin Y trainer. Para endpoints que operan sobre UN cliente
+    concreto, NO basta con esto: hay que llamar además a `assert_client_access` para que
+    un entrenador solo toque a SUS clientes asignados (los admin acceden a todos)."""
     if user.get("role") not in ["admin", "trainer"]:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     return user
+
+
+def assert_client_access(user: dict, profile: Optional[dict]) -> None:
+    """Autorización a nivel de recurso para endpoints staff que operan sobre un cliente.
+
+    - admin: acceso a cualquier cliente.
+    - trainer: SOLO a los clientes que tiene asignados (client_profiles.trainer_id == su id).
+    - resto: denegado.
+
+    `profile` es el documento de client_profiles del cliente objetivo (o None si no existe).
+    Lanza 404 si el perfil no existe y 403 si el entrenador no es el coach asignado.
+    """
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    role = (user or {}).get("role")
+    if role == "admin":
+        return
+    if role == "trainer" and profile.get("trainer_id") == user.get("id"):
+        return
+    raise HTTPException(status_code=403, detail="No tienes acceso a este cliente")

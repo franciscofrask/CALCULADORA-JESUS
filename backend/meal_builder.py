@@ -23,6 +23,17 @@ from calculator import get_food_config
 
 MARGEN_CALMA = 4.0  # ±4g de margen permitido
 
+MACRO_NOMBRE = {"P": "proteína", "H": "hidratos", "G": "grasa"}
+
+
+def razon_minimo_no_cabe(minimo_g: float, aporte: float, macro: str, restante: float) -> str:
+    """Mensaje en lenguaje humano para 'el mínimo de este alimento ya se pasa
+    de lo que queda de ese macro en la comida'."""
+    nombre = MACRO_NOMBRE.get(macro, macro)
+    queda = f"solo quedan {max(0.0, restante):.0f} g" if restante > 0.5 else "ya no queda nada"
+    return (f"No cabe: su mínimo ({int(round(minimo_g))} g) aporta {aporte:.0f} g de {nombre} "
+            f"y en esta comida {queda} de {nombre}")
+
 # Mínimos por tipo de alimento (en gramos)
 MINIMOS = {
     "carnes_pescados": 50,
@@ -452,7 +463,7 @@ async def build_meal(
             not_found.append({
                 "buscado": info["buscado"],
                 "encontrado": alimento.get("nombre"),
-                "razon": f"Mínimo ({int(minimo)}g = {min_g:.0f}g G) excede G restante ({g_remaining:.0f}g)",
+                "razon": razon_minimo_no_cabe(minimo, min_g, "G", g_remaining),
                 "alternativas": info["alternativas"]
             })
             continue
@@ -544,7 +555,7 @@ async def build_meal(
                 not_found.append({
                     "buscado": info["buscado"],
                     "encontrado": alimento.get("nombre"),
-                    "razon": f"Mínimo ({int(minimo)}g = {min_h:.0f}g H) excede H restantes ({h_remaining:.0f}g)",
+                    "razon": razon_minimo_no_cabe(minimo, min_h, "H", h_remaining),
                     "alternativas": info["alternativas"]
                 })
                 continue
@@ -593,7 +604,7 @@ async def build_meal(
             not_found.append({
                 "buscado": info["buscado"],
                 "encontrado": alimento.get("nombre"),
-                "razon": f"Mínimo ({int(cantidad_g)}g = {min_h:.0f}g H) excede H restantes ({h_remaining:.0f}g)",
+                "razon": razon_minimo_no_cabe(cantidad_g, min_h, "H", h_remaining),
                 "alternativas": info["alternativas"]
             })
             continue
@@ -641,7 +652,7 @@ async def build_meal(
                 not_found.append({
                     "buscado": info["buscado"],
                     "encontrado": alimento.get("nombre"),
-                    "razon": f"Mínimo ({int(minimo)}g = {min_h:.0f}g H) excede H restantes ({h_remaining:.0f}g)",
+                    "razon": razon_minimo_no_cabe(minimo, min_h, "H", h_remaining),
                     "alternativas": info["alternativas"]
                 })
                 continue
@@ -691,7 +702,7 @@ async def build_meal(
                 not_found.append({
                     "buscado": info["buscado"],
                     "encontrado": alimento.get("nombre"),
-                    "razon": f"Mínimo ({int(minimo)}g = {min_p:.0f}g P) excede P restantes ({p_remaining:.0f}g)",
+                    "razon": razon_minimo_no_cabe(minimo, min_p, "P", p_remaining),
                     "alternativas": info["alternativas"]
                 })
                 continue
@@ -745,7 +756,9 @@ async def build_meal(
                 not_found.append({
                     "buscado": info["buscado"],
                     "encontrado": alimento.get("nombre"),
-                    "razon": f"Mínimo ({min_g_efectivo:.0f}g G) excede G restantes ({g_remaining:.0f}g)",
+                    "razon": razon_minimo_no_cabe(
+                        peso_unidad if (config.get("por_unidad", False) or alimento.get("unidades", False)) else minimo,
+                        min_g_efectivo, "G", g_remaining),
                     "alternativas": info["alternativas"]
                 })
                 continue

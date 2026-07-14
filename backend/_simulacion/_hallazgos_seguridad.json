@@ -1,0 +1,10 @@
+[
+  {
+    "categoria": "SEGURIDAD",
+    "severidad": "media",
+    "titulo": "Trainer se auto-asigna un cliente que no tenía coach",
+    "detalle": "sim.trainer1@jg12-sim.com se asignó a sim.cliente8@jg12-sim.com sin intervención del admin; status=200",
+    "endpoint": "PUT /admin/clients/{id}/trainer",
+    "reproducir": "login sim.trainer1@jg12-sim.com y PUT /api/admin/clients/1eb00bce-10b5-4f63-ad0e-647708ce69cb/trainer {'trainer_id': self}"
+  }
+]
