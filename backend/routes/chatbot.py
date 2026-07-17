@@ -174,12 +174,15 @@ async def chatbot_suggest_foods(
 async def chatbot_add_food(
     session_id: str,
     alimento_id: int,
+    cantidad_g: Optional[float] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Añade un alimento concreto (cuando el usuario toca una sugerencia)."""
+    """Añade un alimento concreto (cuando el usuario toca una sugerencia).
+    `cantidad_g` llega cuando la opción tenía cantidad fijada por el usuario
+    (desambiguación de "150g de pavo"): se respeta tal cual."""
     _assert_session_owner(session_id, current_user)
     chatbot = await get_or_create_chatbot(session_id, db)
-    return {"session_id": session_id, "response": await chatbot.add_food_by_id(alimento_id)}
+    return {"session_id": session_id, "response": await chatbot.add_food_by_id(alimento_id, cantidad_g)}
 
 
 @router.post("/go-to-meal")

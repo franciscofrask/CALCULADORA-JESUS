@@ -470,12 +470,14 @@ export default function ChatbotPage() {
     setLoading(false);
   };
 
-  // Añadir un alimento sugerido (al tocar un chip)
-  const addSuggestedFood = async (alimentoId) => {
+  // Añadir un alimento sugerido (al tocar un chip). Si la opción venía con cantidad
+  // fijada por el usuario ("150g de pavo"), se envía para respetarla tal cual.
+  const addSuggestedFood = async (alimentoId, cantidadG = null) => {
     if (loading) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/add-food?session_id=${sessionId}&alimento_id=${alimentoId}`, {
+      const extra = cantidadG ? `&cantidad_g=${cantidadG}` : '';
+      const res = await fetch(`${API_URL}/api/chatbot/add-food?session_id=${sessionId}&alimento_id=${alimentoId}${extra}`, {
         method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
       });
       const data = await res.json();
@@ -1063,7 +1065,7 @@ export default function ChatbotPage() {
                 {suggestions.map((s, i) => (
                   <button
                     key={i}
-                    onClick={() => addSuggestedFood(s.alimento_id)}
+                    onClick={() => addSuggestedFood(s.alimento_id, s.cantidad_fija ? s.cantidad_g : null)}
                     disabled={loading}
                     className="inline-flex items-center gap-1 bg-card hover:bg-brand hover:text-white border border-brand/50 text-brand text-xs px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
                     title={`Proteína ${s.macros?.P} g · Hidratos ${s.macros?.H} g · Grasa ${s.macros?.G} g`}
