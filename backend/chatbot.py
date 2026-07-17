@@ -1597,12 +1597,62 @@ class NutritionChatbot:
 
         resp = self._meal_response(added, not_found, choices)
         msgs = list(avisos)
+        # Las opciones de desambiguación viven en el CHAT (petición 2026-07-17): el mensaje
+        # las lista numeradas y el usuario elige respondiendo ("la 2", "el fiambre") o
+        # tocando un chip. Se guardan en el estado para resolver la respuesta siguiente.
+        self.state["pending_choices"] = choices
         if choices:
             terms = ", ".join(f'"{c["termino"]}"' for c in choices)
-            msgs.append(f"Tengo varios tipos de {terms}. Toca cuál quieres para añadirlo:")
+            lineas, n = [], 0
+            for ch in choices:
+                for o in ch["opciones"]:
+                    n += 1
+                    mac = o.get("macros") or {}
+                    cant = f" · {o['cantidad_display']}" if o.get("cantidad_display") else ""
+                    lineas.append(f"{n}. {o['nombre']}{cant} "
+                                  f"(P {mac.get('P', 0):g} · H {mac.get('H', 0):g} · G {mac.get('G', 0):g})")
+            msgs.append(f"Tengo varios tipos de {terms}. Dime cuál quieres (por número o nombre):\n"
+                        + "\n".join(lineas))
         if msgs:
             resp["message"] = "\n".join(msgs)
         return resp
+
+    # Palabras que pueden acompañar a un número al elegir una opción ("la 2", "quiero la 3").
+    _PALABRAS_ELECCION = {"la", "el", "opcion", "numero", "n", "quiero", "pon", "ponme",
+                          "dame", "anade", "añade", "agrega", "esa", "ese", "esta", "este",
+                          "mejor", "vale", "ok"}
+
+    def _eleccion_pendiente(self, texto: str):
+        """Si hay opciones de desambiguación pendientes y `texto` elige una (por número
+        o por nombre), devuelve esa opción. None si no es una elección clara."""
+        pend = self.state.get("pending_choices") or []
+        flat = [o for ch in pend for o in (ch.get("opciones") or [])]
+        if not flat:
+            return None
+        t = self._norm_text(texto).strip()
+        palabras = t.split()
+
+        # Por NÚMERO: solo si el mensaje es únicamente la elección ("2", "la 2", "quiero la 3").
+        # Nunca si hay otras palabras ("añade 2 huevos" NO es elegir la opción 2).
+        numeros = [w for w in palabras if w.isdigit()]
+        resto = [w for w in palabras if not w.isdigit()]
+        if len(numeros) == 1 and all(w in self._PALABRAS_ELECCION for w in resto):
+            i = int(numeros[0])
+            if 1 <= i <= len(flat):
+                return flat[i - 1]
+            return None
+
+        # Por NOMBRE: todas las palabras significativas del mensaje están en el nombre
+        # de exactamente UNA opción ("el fiambre", "pechuga de pavo").
+        sig = [w for w in palabras
+               if w not in self._STOP_TERMINO and w not in self._PALABRAS_ELECCION and len(w) > 1]
+        if not sig:
+            return None
+        matches = [o for o in flat
+                   if all(w in self._norm_text(o.get("nombre", "")) for w in sig)]
+        if len(matches) == 1:
+            return matches[0]
+        return None
 
     # Categorías que NUNCA deben resolver una petición genérica de macro
     # ("algo de proteína" no puede acabar en salsa de soja, refrescos, dulces
@@ -1721,6 +1771,7 @@ class NutritionChatbot:
 
         `cantidad_g`: si viene (opción de desambiguación con cantidad fijada por el
         usuario, p.ej. "150g de pavo"), se respeta tal cual, sin autodimensionar."""
+        self.state["pending_choices"] = []  # elegir por chip también resuelve la pregunta
         key = self.current_meal_key()
         alimento = await self.db.foods.find_one({"id": alimento_id}, {"_id": 0})
         if not alimento:
@@ -2074,6 +2125,16 @@ class NutritionChatbot:
     async def process_message(self, user_input: str) -> dict:
         """Interpreta el mensaje con el LLM (router de intención) y ejecuta con código
         determinista. El LLM solo entiende QUÉ quiere el usuario; la matemática es del código."""
+        # Respuesta a una desambiguación pendiente ("la 2", "el fiambre"): se resuelve
+        # aquí, por CHAT, sin pasar por el LLM.
+        elegido = self._eleccion_pendiente(user_input)
+        if elegido:
+            self.state["pending_choices"] = []
+            return await self.add_food_by_id(
+                elegido["alimento_id"],
+                elegido.get("cantidad_g") if elegido.get("cantidad_fija") else None,
+            )
+
         data = await self.understand(user_input)
         intent = data.get("intent")
 
