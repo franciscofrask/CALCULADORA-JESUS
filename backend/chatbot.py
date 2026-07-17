@@ -777,7 +777,7 @@ class NutritionChatbot:
         if cat_principal.startswith("7") or cat_principal.startswith("8"):
             self.state["acumulado_cereales_panes"] += cantidad_g
         
-        if cat_principal.startswith("17.2.1") or cat_principal.startswith("17.2.3") or cat_principal.startswith("17.2.4"):
+        if cat_principal.startswith(("17.2.1", "17.2.3", "17.2.4", "17.2.6")):
             self.state["acumulado_frutos_secos"] += cantidad_g
         
         # Añadir a la comida

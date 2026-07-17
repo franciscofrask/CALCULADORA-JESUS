@@ -423,6 +423,65 @@ class TestBloque3CalibracionFrutosSecos:
         # P efectiva = 21 * 10/100 * 1.0 = 2.1
         assert abs(r3["proteina_efectiva"] - 2.1) < 0.5
 
+    def test_3_3_hidratos_tambien_se_calibran(self):
+        """Test 3.3 - La calibracion aplica tambien a los hidratos (no solo a P)."""
+        # Anacardos: por 100g P=18, H=27, G=44
+        # P: 18 > 44/3=14.7 -> SI | H: 27 > 14.7 -> SI. Ambos con calibracion.
+
+        # Comida 1: 15g. Acumulado=15g (0-20g). P y H al 0%.
+        r1 = calcular_macros_efectivos(18, 27, 44, "17.2.1", 15, acumulado_frutos_secos=0)
+        assert r1["hidratos_cuenta"] == True, "H pasa regla G/3"
+        assert r1["proteina_efectiva"] == 0
+        assert r1["hidratos_efectivos"] == 0, "H tambien va al 0% en tramo 0-20g"
+        assert abs(r1["grasa_efectiva"] - 6.6) < 0.5, "G siempre cuenta"
+
+        # Comida 2: 10g. Acumulado=25g (20-40g). P y H al 50%.
+        r2 = calcular_macros_efectivos(18, 27, 44, "17.2.1", 10, acumulado_frutos_secos=15)
+        # H efectiva = 27 * 10/100 * 0.5 = 1.35
+        assert abs(r2["hidratos_efectivos"] - 1.35) < 0.2
+        # P efectiva = 18 * 10/100 * 0.5 = 0.9
+        assert abs(r2["proteina_efectiva"] - 0.9) < 0.2
+
+        # Comida 3: 20g. Acumulado=45g (>40g). P y H al 100%.
+        r3 = calcular_macros_efectivos(18, 27, 44, "17.2.1", 20, acumulado_frutos_secos=25)
+        assert abs(r3["hidratos_efectivos"] - 5.4) < 0.2
+        assert abs(r3["proteina_efectiva"] - 3.6) < 0.2
+
+    def test_3_4_hidratos_calibrados_aunque_p_no_pase(self):
+        """Test 3.4 - H se calibra por el acumulado aunque P no pase su regla G/3."""
+        # Hipotetico fruto seco: P=10, H=20, G=45
+        # P: 10 no > 15 -> NUNCA cuenta | H: 20 > 15 -> SI, con calibracion
+        r1 = calcular_macros_efectivos(10, 20, 45, "17.2.3", 15, acumulado_frutos_secos=0)
+        assert r1["proteina_cuenta"] == False
+        assert r1["proteina_efectiva"] == 0
+        assert r1["hidratos_efectivos"] == 0, "Tramo 0-20g -> H al 0%"
+
+        r2 = calcular_macros_efectivos(10, 20, 45, "17.2.3", 10, acumulado_frutos_secos=15)
+        assert r2["proteina_efectiva"] == 0, "P sigue sin contar (no pasa G/3)"
+        # H efectiva = 20 * 10/100 * 0.5 = 1.0
+        assert abs(r2["hidratos_efectivos"] - 1.0) < 0.2
+
+    def test_3_5_cacahuete_desgrasado_17_2_6(self):
+        """Test 3.5 - Cat 17.2.6 funciona como fruto seco natural (P y H calibrados)."""
+        # Cacahuete desgrasado: por 100g P=50, H=12, G=11
+        # P: 50 > 11/3=3.7 -> SI | H: 12 > 3.7 -> SI
+        r1 = calcular_macros_efectivos(50, 12, 11, "17.2.6", 15, acumulado_frutos_secos=0)
+        assert r1["calibracion_p"] == 0.0, "Acumulado 15g -> 0%"
+        assert r1["proteina_efectiva"] == 0
+        assert r1["hidratos_efectivos"] == 0
+
+        r2 = calcular_macros_efectivos(50, 12, 11, "17.2.6", 20, acumulado_frutos_secos=30)
+        assert r2["calibracion_p"] == 1.0, "Acumulado 50g -> 100%"
+        # P efectiva = 50 * 20/100 = 10 | H efectiva = 12 * 20/100 = 2.4
+        assert abs(r2["proteina_efectiva"] - 10.0) < 0.2
+        assert abs(r2["hidratos_efectivos"] - 2.4) < 0.2
+
+    def test_3_6_cereales_h_no_se_calibra(self):
+        """Test 3.6 - En cereales/panes H sigue contando al 100% (calibracion solo P)."""
+        r = calcular_macros_efectivos(25, 55, 0, "7", 40, acumulado_cereales_panes=0)
+        assert r["calibracion_p"] == 0.0
+        assert abs(r["hidratos_efectivos"] - 22.0) < 0.5, "H de cereal nunca se calibra"
+
 
 # =========================================================
 # BLOQUE 4: REGLA DE DOBLE CATEGORIA (4 tests)

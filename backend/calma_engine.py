@@ -95,8 +95,13 @@ def calcular_macros_efectivos(
     g_bruta = grasa_100g * factor
     
     # Paso 4: Aplicar calibracion si corresponde (cereales, panes, frutos secos)
+    # En frutos secos naturales la calibracion aplica a P y a H;
+    # en cereales/panes solo a P (H cuenta siempre al 100%).
+    es_fruto_seco = _es_fruto_seco_natural(categoria) or \
+        (categoria_secundaria is not None and _es_fruto_seco_natural(categoria_secundaria))
+    calibracion_h = calibracion_p if es_fruto_seco else 1.0
     p_efectiva = p_bruta * calibracion_p if p_cuenta else 0.0
-    h_efectiva = h_bruta if h_cuenta else 0.0
+    h_efectiva = h_bruta * calibracion_h if h_cuenta else 0.0
     g_efectiva = g_bruta if g_cuenta else 0.0
     
     # Paso 5: Reglas especiales postentreno
@@ -314,24 +319,13 @@ def _aplicar_reglas_categoria(
     
     # 17.2.1, 17.2.3, 17.2.4 - Frutos secos naturales, semillas, cremas sin azucar
     # G: SIEMPRE | P: si > G/3 + calibracion | H: si > G/3 + calibracion
+    # La calibracion se calcula siempre por el acumulado del dia: aplica tanto
+    # a P como a H (cada uno solo si pasa su regla G/3).
     if _cat_matches(cat, "17.2.1") or _cat_matches(cat, "17.2.3") or _cat_matches(cat, "17.2.4"):
         g_cuenta = True
-        
-        # P cuenta si > G/3
-        if g100 > 0 and p100 > g100 / 3.0:
-            p_cuenta = True
-            calibracion = _calibracion_frutos_secos(acumulado_frutos_secos + cantidad_g)
-        else:
-            p_cuenta = False
-            calibracion = 0.0
-        
-        # H cuenta si > G/3 (raro pero posible)
-        if g100 > 0 and h100 > g100 / 3.0:
-            h_cuenta = True
-            # Usa la misma calibracion que P
-        else:
-            h_cuenta = False
-        
+        calibracion = _calibracion_frutos_secos(acumulado_frutos_secos + cantidad_g)
+        p_cuenta = g100 > 0 and p100 > g100 / 3.0
+        h_cuenta = g100 > 0 and h100 > g100 / 3.0
         return (p_cuenta, h_cuenta, g_cuenta, calibracion)
     
     # 17.2.2, 17.2.5 - Frutos secos con azucar, cremas con azucar
@@ -343,15 +337,11 @@ def _aplicar_reglas_categoria(
         return (p_cuenta, h_cuenta, g_cuenta, 1.0)
     
     # 17.2.6 - Frutos secos en polvo (cacahuete desgrasado)
-    # Funciona como frutos secos naturales
+    # Funciona como frutos secos naturales (calibracion sobre P y H)
     if _cat_matches(cat, "17.2.6"):
         g_cuenta = True
-        if g100 > 0 and p100 > g100 / 3.0:
-            p_cuenta = True
-            calibracion = _calibracion_frutos_secos(acumulado_frutos_secos + cantidad_g)
-        else:
-            p_cuenta = False
-            calibracion = 0.0
+        calibracion = _calibracion_frutos_secos(acumulado_frutos_secos + cantidad_g)
+        p_cuenta = g100 > 0 and p100 > g100 / 3.0
         h_cuenta = g100 > 0 and h100 > g100 / 3.0
         return (p_cuenta, h_cuenta, g_cuenta, calibracion)
     
@@ -697,6 +687,14 @@ def _cat_matches(cat: str, pattern: str) -> bool:
     cat = str(cat).strip()
     pattern = str(pattern).strip()
     return cat == pattern or cat.startswith(pattern + ".")
+
+
+# Frutos secos naturales: llevan calibracion progresiva sobre P y H
+_FRUTOS_SECOS_NATURALES = ("17.2.1", "17.2.3", "17.2.4", "17.2.6")
+
+
+def _es_fruto_seco_natural(cat: str) -> bool:
+    return any(_cat_matches(cat, c) for c in _FRUTOS_SECOS_NATURALES)
 
 
 def _calibracion_cereales_panes(acumulado_g: float) -> float:
