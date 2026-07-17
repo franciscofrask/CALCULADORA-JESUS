@@ -18,7 +18,8 @@ import FavoritesModal from '../components/nutrition/FavoritesModal';
 import DaySummary from '../components/nutrition/DaySummary';
 import ConfigSection from '../components/nutrition/ConfigSection';
 import MealCard, { MealSelectorItem } from '../components/nutrition/MealCard';
-import { SearchFoodModal, MenuOptionsModal } from '../components/nutrition/SearchFoodModal';
+import { SearchFoodModal } from '../components/nutrition/SearchFoodModal';
+import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -169,10 +170,6 @@ const NutritionPage = () => {
     const [searchLoading, setSearchLoading] = useState(false);
     
     // Menu options
-    const [menuOptions, setMenuOptions] = useState([]);
-    const [menuOptionsLoading, setMenuOptionsLoading] = useState(false);
-    const [menuFoodFilter, setMenuFoodFilter] = useState([]);   // filtro "con estos alimentos"
-    const [menuRelajado, setMenuRelajado] = useState(false);    // aviso: AND relajado
     
     // Summary expanded state
     const [summaryExpanded, setSummaryExpanded] = useState(false);
@@ -912,65 +909,35 @@ const NutritionPage = () => {
         toast.success(`Copiada ${mealInfo[sourceMealKey]?.name || sourceMealKey} del ${formatDate(sourceDiet.fecha)}`);
     };
 
-    // Menu options: catálogo COMPLETO de menús (ligero); las cantidades se cuadran
-    // al seleccionar uno (menu-apply). El flujo antiguo de opciones pre-ajustadas
-    // (menu-options) sigue vivo para el buscador del coach.
-    const loadMenuOptions = async (mealKey, foods = []) => {
-        setMenuOptionsLoading(true);
+    // "Sugiéreme un menú": biblioteca REAL (db.meal_library, 266k comidas de clientes
+    // ya cuadradas con el método). Sustituye al catálogo del recetario + menu-apply
+    // (2026-07-17): ahora se ofrecen menús por CERCANÍA al objetivo de la comida y
+    // se vuelcan TAL CUAL, sin reescalar cantidades ni tocar los macros. El modal
+    // carga sus propios datos (library-menus); aquí solo se abre y se aplica.
+    const loadMenuOptions = (mealKey) => {
         setMenuOptionsModal({ open: true, mealKey });
-        setMenuFoodFilter(foods);
-        try {
-            const result = await api('/api/calculator/menu-catalog');
-            setMenuOptions(result.menus || []);
-            setMenuRelajado(false);
-        } catch (err) {
-            toast.error('Error cargando menús');
-            setMenuOptions([]);
-        }
-        setMenuOptionsLoading(false);
     };
 
-    // Filtro "con estos alimentos" del modal de sugerencias (desactivado para el
-    // cliente 2026-07-12; se conserva para reactivar junto a las props del modal)
-    // eslint-disable-next-line no-unused-vars
-    const changeMenuFoodFilter = (foods) => {
-        if (menuOptionsModal.mealKey) loadMenuOptions(menuOptionsModal.mealKey, foods);
-    };
-
-    const applyMenuOption = async (option) => {
+    const applyLibraryMenu = (menu) => {
         const mealKey = menuOptionsModal.mealKey;
-        // El catálogo es ligero: al seleccionar, el backend cuadra las cantidades
-        // a los macros de ESTA comida (best effort: siempre devuelve el menú).
-        const target = getMealTarget(mealKey);
-        setMenuOptionsLoading(true);
-        let ajustado;
-        try {
-            ajustado = await api('/api/calculator/menu-apply', {
-                method: 'POST',
-                body: JSON.stringify({
-                    plantilla_id: option.id || option.plantilla_id,
-                    macros_objetivo: { P: target.P, H: target.H, G: target.G },
-                })
-            });
-        } catch (err) {
-            setMenuOptionsLoading(false);
-            toast.error('No se pudo montar ese menú');
-            return;
-        }
-        const foods = ajustado.items.map(item => ({
+        // Volcado tal cual: los items ya vienen con los macros que cuenta la
+        // calculadora para esas cantidades exactas. Nada se recalcula ni ajusta.
+        const foods = menu.items.map(item => ({
             alimento_id: item.alimento_id,
             nombre: item.nombre,
             cantidad_g: item.cantidad_g,
             macros_efectivos: item.macros_efectivos,
-            macros_brutos: item.macros_efectivos,
-            que_cuenta: { P: true, H: true, G: true }
+            macros_brutos: item.macros_brutos,
+            que_cuenta: item.que_cuenta,
+            categorias: item.categorias,
+            racion: item.racion,
+            unidades: item.unidades,
         }));
         setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
-        setMenuOptionsLoading(false);
         setMenuOptionsModal({ open: false, mealKey: null });
-        toast.success(ajustado.cuadrada
-            ? `Menú "${ajustado.nombre}" aplicado y cuadrado`
-            : `Menú "${ajustado.nombre}" aplicado (aproximado: afina cantidades si quieres)`);
+        toast.success(menu.clavado
+            ? 'Menú añadido: clava tu objetivo'
+            : 'Menú añadido tal cual (menú real, cercano a tu objetivo)');
     };
 
     // Save & Copy
@@ -1495,21 +1462,22 @@ const NutritionPage = () => {
                 onToggleFavorite={toggleFavorite}
             />
 
-            {/* Menu Options Modal */}
-            <MenuOptionsModal
+            {/* "Sugiéreme un menú": biblioteca REAL por cercanía, sin reescalar */}
+            <LibraryMenusModal
                 open={menuOptionsModal.open}
                 mealKey={menuOptionsModal.mealKey}
                 onClose={() => setMenuOptionsModal({ open: false, mealKey: null })}
                 mealInfo={mealInfo}
-                menuOptionsLoading={menuOptionsLoading}
-                menuOptions={menuOptions}
-                onApplyOption={applyMenuOption}
-                // Filtro "con estos alimentos" (biblioteca real) DESACTIVADO para el cliente
-                // a petición del usuario (2026-07-12). Para reactivarlo, descomentar:
-                // api={api}
-                // foodFilter={menuFoodFilter}
-                // onFoodFilterChange={changeMenuFoodFilter}
-                // relajado={menuRelajado}
+                target={menuOptionsModal.mealKey ? getMealTarget(menuOptionsModal.mealKey) : null}
+                api={api}
+                dayConfig={{
+                    fecha: currentDate,
+                    tipo_dia: tipoDia,
+                    num_comidas: numComidas,
+                    momento_entreno: momentoEntreno,
+                    opcion_peri: opcionPeri,
+                }}
+                onApply={applyLibraryMenu}
             />
 
             {/* Build Meal Modal */}

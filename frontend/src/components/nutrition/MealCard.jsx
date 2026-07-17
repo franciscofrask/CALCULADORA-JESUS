@@ -278,17 +278,31 @@ const MealCard = ({
                             </div>
                         </div>
                     )}
+                    {/* Peri (Intra/Post): sugeridor de biblioteca (solo menús Peri, separados
+                        server-side por tipo_comida) + constructor manual */}
                     {foods.length === 0 && mealKey === 'Intra' && !isLocked && (
-                        <button className="w-full h-11 rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5"
-                            onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'intra' })}>
-                            <Zap className="w-4 h-4" /> Construir Intra
-                        </button>
+                        <div className="space-y-2">
+                            <button className="btn-brand w-full h-12 flex items-center justify-center gap-2 uppercase tracking-wide"
+                                onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
+                                <Zap className="w-5 h-5" /> Sugiéreme un menú
+                            </button>
+                            <button className="w-full h-11 rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5"
+                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'intra' })}>
+                                <Zap className="w-4 h-4" /> Construir Intra
+                            </button>
+                        </div>
                     )}
                     {foods.length === 0 && mealKey === 'Post' && !isLocked && (
-                        <button className="w-full h-11 rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5"
-                            onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'post' })}>
-                            <Zap className="w-4 h-4" /> Construir Post
-                        </button>
+                        <div className="space-y-2">
+                            <button className="btn-brand w-full h-12 flex items-center justify-center gap-2 uppercase tracking-wide"
+                                onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
+                                <Zap className="w-5 h-5" /> Sugiéreme un menú
+                            </button>
+                            <button className="w-full h-11 rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5"
+                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'post' })}>
+                                <Zap className="w-4 h-4" /> Construir Post
+                            </button>
+                        </div>
                     )}
 
                     {/* Ingredients */}

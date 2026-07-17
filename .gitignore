@@ -121,3 +121,6 @@ backend/.env
 serviceAccountKey.json
 **/serviceAccountKey.json
 *firebase-adminsdk*.json
+
+# Biblioteca de menus (fuente CSV, 56MB - no va a git)
+backend/_biblioteca_menus_fuente.csv

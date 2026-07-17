@@ -1231,6 +1231,157 @@ async def library_search(data: dict, user = Depends(get_current_user)):
     return {"resultados": resultados, "relajado": relajado}
 
 
+# ── Biblioteca de menús reales: sugeridor por CERCANÍA (sin reescalar) ────────
+
+# mealKey de la app -> tipo de comida de la biblioteca. Días de 5-6 comidas se
+# mapean a "Comida 4" (la casilla más parecida); Intra/Post comparten "Peri".
+_LIBRARY_TIPOS = {"C1": "Comida 1", "C2": "Comida 2", "C3": "Comida 3", "C4": "Comida 4",
+                  "C5": "Comida 4", "C6": "Comida 4", "Intra": "Peri", "Post": "Peri"}
+_LIBRARY_MARGEN_DEFAULT = 5.0
+_LIBRARY_MARGEN_MAX = 15.0
+_LIBRARY_CANDIDATOS_MAX = 4000
+_LIBRARY_TRABAJO_MAX = 300  # solo los mejores N se materializan con macros por item
+
+
+@router.post("/library-menus")
+async def library_menus(data: dict, user = Depends(get_current_user)):
+    """Sugeridor "elige tu menú" sobre la BIBLIOTECA REAL (db.meal_library, 266k
+    comidas de clientes ya cuadradas con el método).
+
+    Filosofía: cercanía, NO exactitud. Devuelve los menús más cercanos al objetivo
+    de la comida dentro de ±margen y NUNCA los modifica: ni cantidades ni macros.
+    El objetivo lo define la calculadora (reparto del día); si llega vacío o a cero
+    (bug de capturas 0P/0H/0G), se reparte aquí el día con /distribute y se toma
+    el target de la comida en vez de tratar 0 como objetivo real.
+
+    Body: {mealKey, macros_objetivo?: {P,H,G}, margen?: 1-15 (def 5),
+           orden?: 'cuadrado'|'usado', limit?: <=60,
+           fecha?, tipo_dia?, num_comidas?, momento_entreno?, opcion_peri? (fallback)}
+    """
+    meal_key = (data.get("mealKey") or data.get("meal_key") or "").strip()
+    tipo_comida = data.get("tipo_comida") or _LIBRARY_TIPOS.get(meal_key)
+    if tipo_comida not in ("Comida 1", "Comida 2", "Comida 3", "Comida 4", "Peri"):
+        raise HTTPException(status_code=422, detail="mealKey o tipo_comida inválido")
+
+    objetivo_in = data.get("macros_objetivo") or {}
+    obj = {m: float(objetivo_in.get(m, 0) or 0) for m in ("P", "H", "G")}
+
+    # FIX objetivo 0/0/0: repartir los macros del día y usar el target de la comida
+    if obj["P"] <= 0 and obj["H"] <= 0 and obj["G"] <= 0:
+        dist = await distribute_macros({
+            "fecha": data.get("fecha"),
+            "tipo_dia": data.get("tipo_dia", "entrenamiento"),
+            "num_comidas": data.get("num_comidas", 4),
+            "momento_entreno": data.get("momento_entreno", 1),
+            "opcion_peri": data.get("opcion_peri", "intra_post"),
+            "single_meal": (data.get("num_comidas", 4) == 1),
+        }, user)
+        fuente = dist.get("periworkout", {}) if meal_key in ("Intra", "Post") else dist.get("comidas", {})
+        t = fuente.get(meal_key) or {}
+        obj = {m: float(t.get(m, 0) or 0) for m in ("P", "H", "G")}
+        if obj["P"] <= 0 and obj["H"] <= 0 and obj["G"] <= 0:
+            raise HTTPException(status_code=422, detail="No hay macros objetivo para esta comida")
+
+    try:
+        margen = float(data.get("margen") or _LIBRARY_MARGEN_DEFAULT)
+    except (TypeError, ValueError):
+        margen = _LIBRARY_MARGEN_DEFAULT
+    margen = max(1.0, min(_LIBRARY_MARGEN_MAX, margen))
+    orden = "usado" if (data.get("orden") or "").strip().lower() == "usado" else "cuadrado"
+    limit = max(1, min(int(data.get("limit") or 30), 60))
+
+    q = {"tipo_comida": tipo_comida}
+    for m in ("P", "H", "G"):
+        q[f"macros.{m}"] = {"$gte": obj[m] - margen, "$lte": obj[m] + margen}
+    candidatos = await db.meal_library.find(
+        q, {"_id": 0, "id": 1, "macros": 1, "macros_reales": 1, "veces": 1,
+            "origen": 1, "alimentos": 1, "alimento_ids": 1}
+    ).to_list(_LIBRARY_CANDIDATOS_MAX)
+    total = len(candidatos)
+
+    def _err(c):
+        mm = c.get("macros", {})
+        return sum(abs(obj[m] - float(mm.get(m, 0) or 0)) for m in ("P", "H", "G"))
+
+    if orden == "usado":
+        candidatos.sort(key=lambda c: (-int(c.get("veces", 0) or 0), _err(c)))
+    else:
+        candidatos.sort(key=lambda c: (_err(c), -int(c.get("veces", 0) or 0)))
+    trabajo = candidatos[:_LIBRARY_TRABAJO_MAX]
+
+    # Preferencias del usuario (alimentos evitados) + catálogo de los candidatos
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    avoided_prefixes, avoided_keywords = build_avoided_filter(profile)
+    ids = {aid for c in trabajo for aid in c.get("alimento_ids", [])}
+    foods = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0}):
+            foods[int(f["id"])] = f
+
+    menus = []
+    for c in trabajo:
+        if len(menus) >= limit:
+            break
+        items = []
+        valido = True
+        tot = {"P": 0.0, "H": 0.0, "G": 0.0}
+        for a in c.get("alimentos", []):
+            food = foods.get(int(a["alimento_id"]))
+            if not food or food_is_avoided(food, avoided_prefixes, avoided_keywords):
+                valido = False
+                break
+            cantidad_g = float(a["cantidad_g"])
+            # Macros por item con el MISMO motor que añadir/editar alimentos: lo que
+            # se muestra aquí es exactamente lo que contará la comida al volcarlo.
+            efectivos, brutos, cuenta = _efectivos_calma(food, cantidad_g)
+            for m in ("P", "H", "G"):
+                tot[m] += efectivos[m]
+            display = (f"{a['unidades_n']} ud" if a.get("unidades_n")
+                       else f"{cantidad_g:g} g")
+            items.append({
+                "alimento_id": int(a["alimento_id"]),
+                "nombre": food.get("nombre", a.get("nombre", "")),
+                "cantidad_g": cantidad_g,
+                "unidades_n": a.get("unidades_n"),
+                "cantidad_display": display,
+                "macros_efectivos": efectivos,
+                "macros_brutos": brutos,
+                "que_cuenta": cuenta,
+                # para los steppers de cantidad del front al editar la comida
+                "categorias": food.get("categorias", ""),
+                "racion": food.get("racion"),
+                "unidades": bool(food.get("unidades")),
+            })
+        if not valido or not items:
+            continue
+        err = _err(c)
+        menus.append({
+            "biblioteca_id": c["id"],
+            "items": items,
+            # macros del método con los que se filtró/ordenó (los del CSV, sin calibración)
+            "macros_metodo": c.get("macros", {}),
+            # macros de etiqueta (reales) del menú
+            "macros_reales": c.get("macros_reales", {}),
+            # lo que sumará la comida al volcar los items (motor actual)
+            "macros_totales": {"P": round(tot["P"], 1), "H": round(tot["H"], 1), "G": round(tot["G"], 1),
+                               "kcal": round(tot["P"] * 4 + tot["H"] * 4 + tot["G"] * 9)},
+            "veces": int(c.get("veces", 0) or 0),
+            "origen": c.get("origen", "cliente"),
+            "clavado": err <= 0.5,
+            "err": round(err, 1),
+            "fuente": "biblioteca",
+        })
+
+    return {
+        "menus": menus,
+        "total": total,
+        "objetivo": obj,
+        "margen": margen,
+        "orden": orden,
+        "tipo_comida": tipo_comida,
+    }
+
+
 @router.get("/test-templates")
 async def test_templates(user = Depends(get_current_user)):
     """Test endpoint para verificar templates de menú."""
