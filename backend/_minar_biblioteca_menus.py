@@ -67,8 +67,13 @@ async def main():
     cursor = db.diets.find({}, {"_id": 0, "user_id": 1, "comidas": 1})
     async for d in cursor:
         uid = d.get("user_id")
-        for key, meal in (d.get("comidas") or {}).items():
-            alimentos = (meal or {}).get("alimentos") or []
+        comidas = d.get("comidas")
+        if not isinstance(comidas, dict):
+            continue  # datos corruptos (p.ej. un Int64 en 'comidas'): se ignora la dieta
+        for key, meal in comidas.items():
+            if not isinstance(meal, dict):
+                continue
+            alimentos = meal.get("alimentos") or []
             if not (2 <= len(alimentos) <= 9):
                 continue
             total_comidas += 1
