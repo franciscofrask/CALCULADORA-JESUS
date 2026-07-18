@@ -1678,9 +1678,53 @@ class NutritionChatbot:
         mm["G"] = round(mm["G"] + macros["G"], 1)
         return display
 
+    def _recalibrar_dia(self):
+        """Calibración progresiva de la proteína vegetal (spec 17-07-2026) sobre TODO
+        el día del chat: recorre meal_order en orden cronológico con los acumulados
+        de cereales+panes y frutos secos, y reescribe los macros por alimento y los
+        totales de cada comida. El tramo de una comida solo depende de las anteriores,
+        así que editar una comida recalcula esa y las posteriores, nunca las previas."""
+        from calibracion_dia import calibrar_dia
+        order = self.state.get("meal_order") or []
+        if not order:
+            return
+        NEUTRO = {"categorias": "", "proteinas": 0, "hidratos": 0, "grasas": 0, "racion": 100}
+        meals = []
+        for k in order:
+            comida = self.state["comidas_completadas"].get(k) or {}
+            fila = [((f.get("alimento") or NEUTRO),
+                     float(f.get("cantidad_g") or f.get("cantidad") or 0))
+                    for f in comida.get("alimentos", [])]
+            meals.append((k, fila))
+        macros_dia, _ = calibrar_dia(meals)
+        for k in order:
+            comida = self.state["comidas_completadas"].get(k)
+            if not comida:
+                continue
+            tot = {"P": 0.0, "H": 0.0, "G": 0.0}
+            for i, f in enumerate(comida.get("alimentos", [])):
+                if f.get("alimento"):  # sin doc del catálogo no se recalibra ese item
+                    ef = macros_dia[k][i]
+                    f["macros"] = {"P": round(ef["P"], 1), "H": round(ef["H"], 1), "G": round(ef["G"], 1)}
+                m = f.get("macros") or {}
+                for mk in ("P", "H", "G"):
+                    tot[mk] += float(m.get(mk, 0) or 0)
+            comida["macros"] = {mk: round(v, 1) for mk, v in tot.items()}
+
     def _meal_response(self, foods_added: list, foods_not_found: list, choices: list = None) -> dict:
+        # Toda mutación sale por aquí: aplicar la calibración del día antes de responder,
+        # y alinear los macros de "foods_added" con lo que ha quedado guardado (calibrado).
+        try:
+            self._recalibrar_dia()
+        except Exception:
+            pass  # la respuesta nunca debe romperse por la calibración
         key = self.current_meal_key()
         comida = self.state["comidas_completadas"].get(key, {})
+        for fa in (foods_added or []):
+            for f in comida.get("alimentos", []):
+                if f.get("nombre") == fa.get("nombre"):
+                    fa["macros"] = f.get("macros", fa.get("macros"))
+                    break
         restante = self.get_remaining_macros()
         cuadrado = all(abs(restante[m]) <= 4 for m in ("P", "H", "G"))
         return {

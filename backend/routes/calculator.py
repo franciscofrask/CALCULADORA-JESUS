@@ -1062,6 +1062,89 @@ async def get_suggestion_photo(suggestion_id: str, kind: str, user = Depends(get
         },
     )
 
+# ==================== CALIBRACIÓN PROGRESIVA (día completo) ====================
+
+@router.post("/calibrar-dia")
+async def calibrar_dia_endpoint(data: dict, user = Depends(get_current_user)):
+    """Recalcula los macros efectivos de TODO el día aplicando la calibración
+    progresiva de la proteína vegetal (spec 17-07-2026): acumulado conjunto de
+    cereales+panes y acumulado propio de frutos secos, por tramos, recorriendo
+    las comidas en orden cronológico. La comida entera se asigna al tramo del
+    acumulado tras añadirla; editar una comida solo cambia esa y las posteriores.
+
+    Body: {meal_order: ["C1","Intra",...], comidas: {key: [{alimento_id, cantidad_g}]}}
+    Devuelve por item macros_efectivos/brutos/que_cuenta (null si el alimento ya
+    no existe: el front conserva lo que tenía) y los acumulados por comida.
+    """
+    from calibracion_dia import calibrar_dia as _calibrar, clasificar_bloque
+
+    meal_order = [str(k) for k in (data.get("meal_order") or [])]
+    comidas_in = data.get("comidas") or {}
+    keys = [k for k in meal_order if k in comidas_in]
+    keys += [k for k in comidas_in if k not in keys]
+
+    ids = set()
+    for items in comidas_in.values():
+        for it in (items or []):
+            if it.get("alimento_id") is not None:
+                try:
+                    ids.add(int(it["alimento_id"]))
+                except (TypeError, ValueError):
+                    pass
+    foods = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0}):
+            foods[int(f["id"])] = f
+
+    # Estructura para el módulo puro; los no encontrados van como comodín neutro
+    # (no participa en bloques ni aporta) y se marcan para que el front los ignore.
+    NEUTRO = {"categorias": "", "proteinas": 0, "hidratos": 0, "grasas": 0, "racion": 100}
+    meals, encontrados = [], {}
+    for k in keys:
+        fila = []
+        flags = []
+        for it in (comidas_in.get(k) or []):
+            aid = it.get("alimento_id")
+            try:
+                food = foods.get(int(aid)) if aid is not None else None
+            except (TypeError, ValueError):
+                food = None
+            cant = float(it.get("cantidad_g") or 0)
+            fila.append(((food or NEUTRO), max(0.0, cant)))
+            flags.append(food is not None)
+        meals.append((k, fila))
+        encontrados[k] = flags
+
+    macros_dia, pcts = _calibrar(meals)
+
+    out = {}
+    for k, fila in meals:
+        items_out = []
+        for i, (food, cant) in enumerate(fila):
+            if not encontrados[k][i]:
+                items_out.append({"alimento_id": (comidas_in.get(k) or [])[i].get("alimento_id"),
+                                  "cantidad_g": cant, "macros_efectivos": None,
+                                  "macros_brutos": None, "que_cuenta": None})
+                continue
+            ef = macros_dia[k][i]
+            racion = float(food.get("racion") or 100) or 100.0
+            scale = (cant / racion) if food.get("unidades") else (cant / 100.0)
+            brutos = {"P": round(float(food.get("proteinas") or 0) * scale, 1),
+                      "H": round(float(food.get("hidratos") or 0) * scale, 1),
+                      "G": round(float(food.get("grasas") or 0) * scale, 1)}
+            items_out.append({
+                "alimento_id": int(food["id"]),
+                "cantidad_g": cant,
+                "macros_efectivos": {"P": round(ef["P"], 1), "H": round(ef["H"], 1), "G": round(ef["G"], 1)},
+                "macros_brutos": brutos,
+                "que_cuenta": {"P": ef["P"] > 0, "H": ef["H"] > 0, "G": ef["G"] > 0},
+                "bloque": clasificar_bloque(food),
+            })
+        out[k] = items_out
+
+    return {"comidas": out, "pcts": pcts}
+
+
 # ==================== MENU TEMPLATES ====================
 
 @router.post("/menu-options")

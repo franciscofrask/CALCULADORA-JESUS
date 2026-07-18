@@ -651,6 +651,60 @@ const NutritionPage = () => {
         return 'falta';
     };
 
+    // ── Calibración progresiva (proteína vegetal por acumulado del DÍA) ─────────
+    // Spec 17-07-2026: tras CUALQUIER cambio de composición (añadir, quitar, editar
+    // cantidades, aplicar menú, repetir, cuadrar...), el backend recalcula los macros
+    // de TODO el día con los acumulados de cereales+panes y frutos secos en orden
+    // cronológico. Editar una comida solo cambia esa y las posteriores (las
+    // anteriores no dependen de ella). La firma solo mira ids+cantidades, así que
+    // cuando vuelven los macros recalibrados la firma no cambia y no hay bucle.
+    const calibracionSig = JSON.stringify(getMealOrder().map(k => [k,
+        (mealsData[k]?.alimentos || []).map(a => [a.alimento_id ?? null, a.cantidad_g ?? 0])]));
+    useEffect(() => {
+        const order = getMealOrder();
+        if (!order.some(k => (mealsData[k]?.alimentos || []).length > 0)) return;
+        let cancelado = false;
+        const timer = setTimeout(async () => {
+            try {
+                const res = await api('/api/calculator/calibrar-dia', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        meal_order: order,
+                        comidas: Object.fromEntries(order.map(k => [k,
+                            (mealsData[k]?.alimentos || []).map(a => ({
+                                alimento_id: a.alimento_id ?? null,
+                                cantidad_g: a.cantidad_g ?? 0,
+                            }))])),
+                    })
+                });
+                if (cancelado || !res?.comidas) return;
+                setMealsData(prev => {
+                    const next = { ...prev };
+                    for (const k of order) {
+                        if (!prev[k]) continue;
+                        const resp = res.comidas[k] || [];
+                        next[k] = {
+                            ...prev[k],
+                            alimentos: (prev[k].alimentos || []).map((a, i) => {
+                                const r = resp[i];
+                                if (!r || !r.macros_efectivos) return a; // alimento desconocido: se conserva
+                                return {
+                                    ...a,
+                                    macros_efectivos: r.macros_efectivos,
+                                    macros_brutos: r.macros_brutos || a.macros_brutos,
+                                    que_cuenta: r.que_cuenta || a.que_cuenta,
+                                };
+                            }),
+                        };
+                    }
+                    return next;
+                });
+            } catch (e) { /* si falla, se conservan los macros previos */ }
+        }, 300);
+        return () => { cancelado = true; clearTimeout(timer); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [calibracionSig]);
+
     // Get quantity increment based on food category
     // REGLA: Para alimentos con unidades, incrementar por 1 unidad (= racion gramos)
     // Para alimentos sin unidades, incrementar por categoría
