@@ -11,7 +11,7 @@ import { habilitacionesToList } from '../lib/planAccess';
 
 // Presentación de cada plan (orden, badge, descripción comercial). Los datos reales
 // (nombre, precios, qué incluye) vienen del catálogo del backend (GET /api/plans),
-// que es la fuente única — misma que usa Stripe para cobrar.
+// que es la fuente única - misma que usa Stripe para cobrar.
 const PLAN_UI = {
     reto12en12_gold: {
         order: 1, recommended: true,

@@ -106,7 +106,7 @@ memory/
 test_result.md
 frontend/public/downloads/
 
-# Documentos generados / manuales (Word, PDF y notas — no se commitean)
+# Documentos generados / manuales (Word, PDF y notas - no se commitean)
 *.docx
 ~$*.docx
 *.pdf

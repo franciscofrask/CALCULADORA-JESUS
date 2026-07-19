@@ -11,7 +11,7 @@ El envío real ocurre fuera de la app (ActiveCampaign / WhatsApp); aquí solo se
 controla que ocurra: qué toca esta semana, marcarlo como enviado (db.coach_reports)
 y alertar (report_overdue) si la fecha pasa sin registrar el envío.
 
-La semana del ciclo se calcula al vuelo con core/cycle.py — no hay cron: las
+La semana del ciclo se calcula al vuelo con core/cycle.py - no hay cron: las
 alertas de vencido se generan al consultar la vista (create_alert ya deduplica).
 """
 from datetime import datetime, timedelta, timezone
@@ -217,7 +217,7 @@ async def get_my_due_report(user=Depends(get_current_user)):
         })
 
         # Campanita: una notificación por tipo y semana de ciclo.
-        title = f"Esta semana toca tu {rule['label'].lower()} — respóndelo antes del {deadline_label}"
+        title = f"Esta semana toca tu {rule['label'].lower()}: respóndelo antes del {deadline_label}"
         already = await db.notifications.find_one({
             "user_id": user["id"], "type": "reporte",
             "created_at": {"$gte": window_start.isoformat()},

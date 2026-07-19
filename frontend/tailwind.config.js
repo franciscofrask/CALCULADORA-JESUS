@@ -18,7 +18,7 @@ module.exports = {
         sm: 'calc(var(--radius) - 4px)'
       },
       colors: {
-        // 12EN12 — Identidad vigente
+        // 12EN12 - Identidad vigente
         brand: {
           DEFAULT: '#FF671F',
           dark: '#E85A15',

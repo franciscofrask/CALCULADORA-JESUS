@@ -312,7 +312,7 @@ const ClientDashboard = () => {
                         </p>
                         <p className="text-muted-foreground text-xs">
                             {r.overdue
-                                ? 'El plazo ya pasó — respóndelo cuanto antes para que tu coach pueda ajustar tu plan.'
+                                ? 'El plazo ya pasó: respóndelo cuanto antes para que tu coach pueda ajustar tu plan.'
                                 : `Respóndelo antes del ${r.deadline_label}.`}
                         </p>
                     </div>
