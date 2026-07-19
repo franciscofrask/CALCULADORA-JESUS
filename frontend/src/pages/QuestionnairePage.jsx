@@ -282,6 +282,31 @@ const STEPS_NIVEL1 = [
     { type: 'final1', title: 'Perfil completo.', desc: 'Tu coach usará todo esto para tu estrategia. Las fotos de progreso te las pedirá por el chat. Si quieres revisar algo, ve hacia atrás.' },
 ];
 
+// A nivel de módulo para que los inputs conserven el FOCO al teclear: definidos
+// dentro del componente de la página se recrean en cada render (tipo nuevo para
+// React = desmontar/montar el input) y el cursor se pierde con cada carácter.
+const MiniInput = ({ k, label, type = 'text', unit, placeholder, answers, set }) => (
+    <div>
+        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-1.5">{label}</label>
+        <div className="flex items-center gap-2">
+            <Input type={type} value={answers[k] ?? ''} onChange={e => set(k, e.target.value)}
+                placeholder={placeholder || ''} className="bg-card border-[#222222]" />
+            {unit && <span className="text-foreground/50">{unit}</span>}
+        </div>
+    </div>
+);
+
+const MiniChoice = ({ k, options, answers, set }) => (
+    <div className="flex flex-wrap gap-2">
+        {options.map(o => (
+            <button key={o.value} onClick={() => set(k, o.value)}
+                className={`px-4 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${answers[k] === o.value ? 'border-[#FF671F] bg-[#FF671F]/10 text-brand' : 'border-[#222222] text-foreground hover:border-white/30'}`}>
+                {o.label}
+            </button>
+        ))}
+    </div>
+);
+
 const Shell = ({ progress, children }) => (
     <div className="min-h-screen bg-background relative overflow-hidden flex flex-col">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand/10 rounded-full blur-[150px]" />
@@ -551,28 +576,8 @@ const QuestionnairePage = () => {
         </Button>
     ) : null);
 
-    // Input pequeño reutilizado en pasos compuestos (dieta, pesos, salud).
-    const MiniInput = ({ k, label, type = 'text', unit, placeholder }) => (
-        <div>
-            <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-1.5">{label}</label>
-            <div className="flex items-center gap-2">
-                <Input type={type} value={answers[k] ?? ''} onChange={e => set(k, e.target.value)}
-                    placeholder={placeholder || ''} className="bg-card border-[#222222]" />
-                {unit && <span className="text-foreground/50">{unit}</span>}
-            </div>
-        </div>
-    );
-
-    const MiniChoice = ({ k, options }) => (
-        <div className="flex flex-wrap gap-2">
-            {options.map(o => (
-                <button key={o.value} onClick={() => set(k, o.value)}
-                    className={`px-4 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${answers[k] === o.value ? 'border-[#FF671F] bg-[#FF671F]/10 text-brand' : 'border-[#222222] text-foreground hover:border-white/30'}`}>
-                    {o.label}
-                </button>
-            ))}
-        </div>
-    );
+    // Props comunes de los inputs de pasos compuestos (dieta, pesos, salud).
+    const mini = { answers, set };
 
     let body;
     if (step.type === 'statement' && idx === 0 && !retomandoNivel1) {
@@ -762,8 +767,8 @@ const QuestionnairePage = () => {
                 <Title />
                 <div className="space-y-4 mb-8">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <MiniInput k="dieta_hc_entreno" label="Hidratos totales de tu día de entreno" type="number" unit="g" placeholder="250" />
-                        <MiniInput k="dieta_grasa_entreno" label="Grasa aproximada (opcional)" type="number" unit="g" placeholder="60" />
+                        <MiniInput {...mini} k="dieta_hc_entreno" label="Hidratos totales de tu día de entreno" type="number" unit="g" placeholder="250" />
+                        <MiniInput {...mini} k="dieta_grasa_entreno" label="Grasa aproximada (opcional)" type="number" unit="g" placeholder="60" />
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-1.5">¿Qué comes en un día normal?</label>
@@ -786,10 +791,10 @@ const QuestionnairePage = () => {
             <div>
                 <Title />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                    <MiniInput k="peso_maximo" label="Peso máximo que has tenido" type="number" unit="kg" />
-                    <MiniInput k="peso_minimo" label="Peso mínimo (de adulto)" type="number" unit="kg" />
-                    <MiniInput k="peso_habitual" label="Peso habitual" type="number" unit="kg" />
-                    <MiniInput k="peso_mejor_momento" label="Peso en tu mejor momento físico" type="number" unit="kg" />
+                    <MiniInput {...mini} k="peso_maximo" label="Peso máximo que has tenido" type="number" unit="kg" />
+                    <MiniInput {...mini} k="peso_minimo" label="Peso mínimo (de adulto)" type="number" unit="kg" />
+                    <MiniInput {...mini} k="peso_habitual" label="Peso habitual" type="number" unit="kg" />
+                    <MiniInput {...mini} k="peso_mejor_momento" label="Peso en tu mejor momento físico" type="number" unit="kg" />
                 </div>
                 <div className="flex gap-3">
                     <BackBtn />
@@ -806,7 +811,7 @@ const QuestionnairePage = () => {
                 <div className="space-y-5 mb-8 max-h-[55vh] overflow-y-auto pr-1">
                     <div>
                         <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">¿Cómo duermes?</label>
-                        <MiniChoice k="salud_sueno" options={[
+                        <MiniChoice {...mini} k="salud_sueno" options={[
                             { value: 'bien', label: 'Bien (7-8h)' },
                             { value: 'regular', label: 'Regular' },
                             { value: 'mal', label: 'Mal (poco o roto)' },
@@ -814,15 +819,15 @@ const QuestionnairePage = () => {
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">¿Nivel de estrés en tu día a día?</label>
-                        <MiniChoice k="salud_estres" options={[
+                        <MiniChoice {...mini} k="salud_estres" options={[
                             { value: 'bajo', label: 'Bajo' },
                             { value: 'medio', label: 'Medio' },
                             { value: 'alto', label: 'Alto' },
                         ]} />
                     </div>
-                    <MiniInput k="salud_medicacion" label="¿Tomas medicación? ¿Cuál?" placeholder='Si no, escribe "no"' />
-                    <MiniInput k="salud_hormonal" label="¿Algún problema hormonal (tiroides, etc.)?" placeholder='Si no, escribe "no"' />
-                    <MiniInput k="salud_lesiones" label="¿Lesiones o molestias a tener en cuenta?" placeholder='Si no, escribe "no"' />
+                    <MiniInput {...mini} k="salud_medicacion" label="¿Tomas medicación? ¿Cuál?" placeholder='Si no, escribe "no"' />
+                    <MiniInput {...mini} k="salud_hormonal" label="¿Algún problema hormonal (tiroides, etc.)?" placeholder='Si no, escribe "no"' />
+                    <MiniInput {...mini} k="salud_lesiones" label="¿Lesiones o molestias a tener en cuenta?" placeholder='Si no, escribe "no"' />
                 </div>
                 <div className="flex gap-3">
                     <BackBtn />
