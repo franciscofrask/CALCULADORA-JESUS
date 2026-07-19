@@ -2723,18 +2723,40 @@ async def create_chatbot(session_id: str, db, user_macros: dict = None) -> Nutri
     return chatbot
 
 
-# Almacén en memoria de sesiones (en producción usar Redis)
-_chatbot_sessions: Dict[str, NutritionChatbot] = {}
+# Sesiones persistidas en Mongo (db.chatbot_sessions). Todo el estado del bot vive
+# en self.state (JSON puro): en cada petición se crea la instancia y se rehidrata
+# desde Mongo, y la ruta guarda al terminar. Así la sesión sobrevive a reinicios
+# del backend y funciona con varios workers (antes vivía en un dict en RAM y
+# obligaba a --workers 1).
 
 
 async def get_or_create_chatbot(session_id: str, db, user_macros: dict = None) -> NutritionChatbot:
-    """Obtiene o crea un chatbot para la sesión."""
-    if session_id not in _chatbot_sessions:
-        _chatbot_sessions[session_id] = await create_chatbot(session_id, db, user_macros)
-    return _chatbot_sessions[session_id]
+    """Obtiene o crea un chatbot para la sesión, rehidratando el estado desde Mongo."""
+    chatbot = await create_chatbot(session_id, db, user_macros)
+    doc = await db.chatbot_sessions.find_one({"session_id": session_id}, {"_id": 0, "state": 1})
+    if doc and doc.get("state"):
+        chatbot.state = doc["state"]
+        if user_macros:
+            chatbot.state.setdefault("macros_usuario", {}).update(user_macros)
+    return chatbot
 
 
-def clear_session(session_id: str):
+async def save_chatbot_session(chatbot: NutritionChatbot):
+    """Persiste la sesión tras cada interacción (última escritura gana)."""
+    from datetime import timezone
+    await chatbot.db.chatbot_sessions.update_one(
+        {"session_id": chatbot.session_id},
+        {"$set": {"state": chatbot.state, "updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+
+
+async def session_exists(session_id: str, db) -> bool:
+    """True si la sesión está persistida en Mongo."""
+    return await db.chatbot_sessions.count_documents({"session_id": session_id}, limit=1) > 0
+
+
+async def clear_session(session_id: str, db=None):
     """Limpia una sesión de chatbot."""
-    if session_id in _chatbot_sessions:
-        del _chatbot_sessions[session_id]
+    if db is not None:
+        await db.chatbot_sessions.delete_one({"session_id": session_id})

@@ -78,6 +78,9 @@ async def create_indexes():
     # predictivo) y revisiones pendientes de dieta reportada que no cuadra.
     await _ensure("quiz_respuestas", [("client_id", 1), ("created_at", -1)])
     await _ensure("macro_revisiones", [("trainer_id", 1), ("status", 1), ("created_at", -1)])
+    # Sesiones del chatbot persistidas: TTL de 7 días desde la última interacción.
+    await _ensure("chatbot_sessions", "session_id", unique=True)
+    await _ensure("chatbot_sessions", "updated_at", expireAfterSeconds=7 * 24 * 3600)
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""

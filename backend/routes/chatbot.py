@@ -13,7 +13,7 @@ from core.security import get_current_user
 from models.diet import ChatConfigRequest, ChatMessageRequest
 
 # Import chatbot functions
-from chatbot import get_or_create_chatbot, clear_session
+from chatbot import get_or_create_chatbot, clear_session, save_chatbot_session, session_exists
 from routes.diets import upsert_diet_doc
 from pdf_generator import generate_diet_pdf
 
@@ -78,6 +78,7 @@ async def chatbot_start(current_user: dict = Depends(get_current_user)):
             avoided_categories=profile.get("avoided_categories", []),
             avoided_keywords=profile.get("avoided_keywords", []),
         )
+    await save_chatbot_session(chatbot)
 
     return {
         "session_id": session_id,
@@ -121,6 +122,7 @@ async def chatbot_configure(
                 f"• Grasa: {objetivo['G']} g")
     mensaje += "\n\n¿Qué quieres tomar?"
 
+    await save_chatbot_session(chatbot)
     return {
         "session_id": session_id,
         "distribucion": distribucion,
@@ -146,6 +148,7 @@ async def chatbot_message(
     chatbot = await get_or_create_chatbot(session_id, db)
     response = await chatbot.process_message(request.message)
 
+    await save_chatbot_session(chatbot)
     return {
         "session_id": session_id,
         "response": response,
@@ -167,7 +170,9 @@ async def chatbot_suggest_foods(
     """Sugiere alimentos sueltos que cuadran con lo que falta de la comida actual."""
     _assert_session_owner(session_id, current_user)
     chatbot = await get_or_create_chatbot(session_id, db)
-    return {"session_id": session_id, "response": await chatbot.suggest_foods_for_current_meal()}
+    response = await chatbot.suggest_foods_for_current_meal()
+    await save_chatbot_session(chatbot)
+    return {"session_id": session_id, "response": response}
 
 
 @router.post("/add-food")
@@ -182,7 +187,9 @@ async def chatbot_add_food(
     (desambiguación de "150g de pavo"): se respeta tal cual."""
     _assert_session_owner(session_id, current_user)
     chatbot = await get_or_create_chatbot(session_id, db)
-    return {"session_id": session_id, "response": await chatbot.add_food_by_id(alimento_id, cantidad_g)}
+    response = await chatbot.add_food_by_id(alimento_id, cantidad_g)
+    await save_chatbot_session(chatbot)
+    return {"session_id": session_id, "response": response}
 
 
 @router.post("/go-to-meal")
@@ -195,6 +202,7 @@ async def chatbot_go_to_meal(
     _assert_session_owner(session_id, current_user)
     chatbot = await get_or_create_chatbot(session_id, db)
     chatbot.go_to_meal(idx)
+    await save_chatbot_session(chatbot)
     return {"session_id": session_id, "response": chatbot._meal_response([], [])}
 
 
@@ -208,6 +216,7 @@ async def chatbot_remove_food(
     _assert_session_owner(session_id, current_user)
     chatbot = await get_or_create_chatbot(session_id, db)
     chatbot.remove_food_at(index)
+    await save_chatbot_session(chatbot)
     return {"session_id": session_id, "response": chatbot._meal_response([], [])}
 
 @router.post("/complete-meal")
@@ -232,6 +241,7 @@ async def chatbot_complete_meal(
         aviso += f"\n⚠️ En {label_guardada} te pasas {' y '.join(pasan)}."
 
     resultado = chatbot.complete_current_meal()
+    await save_chatbot_session(chatbot)
 
     if resultado.get("vacia"):
         return {
@@ -284,12 +294,11 @@ async def chatbot_session_exists(
     session_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Indica si la sesión de chat sigue viva en memoria del backend.
+    """Indica si la sesión de chat sigue viva (persistida en Mongo).
     El frontend lo usa al volver a la página para detectar sesiones perdidas
-    (p. ej. tras un reinicio del backend) y reiniciar limpio."""
+    (p. ej. borradas o muy antiguas) y reiniciar limpio."""
     _assert_session_owner(session_id, current_user)
-    from chatbot import _chatbot_sessions
-    return {"exists": session_id in _chatbot_sessions}
+    return {"exists": await session_exists(session_id, db)}
 
 @router.post("/save-to-diet")
 async def chatbot_save_to_diet(
@@ -357,7 +366,7 @@ async def chatbot_reset(
 ):
     """Reinicia la sesión de chatbot."""
     _assert_session_owner(session_id, current_user)
-    clear_session(session_id)
+    await clear_session(session_id, db)
     return {"message": "Sesión reiniciada", "session_id": session_id}
 
 @router.get("/export-pdf")
