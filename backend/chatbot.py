@@ -1901,6 +1901,24 @@ class NutritionChatbot:
                 not_found.append({"buscado": f"algo de {macro_lbl}",
                                   "razon": f"No encontré un alimento de {macro_lbl} que quepa en lo que queda"})
 
+        # Preparaciones con aceite ("huevo frito"): el catálogo cuenta el alimento
+        # BASE (no existe "huevo frito") y el cambio de nombre despistaba. Avisar
+        # y recordar que el aceite se apunta aparte. No toca el matching.
+        _FRITURA = ("frito", "frita", "fritos", "fritas", "rebozado", "rebozada",
+                    "rebozados", "rebozadas", "empanado", "empanada", "empanados", "empanadas")
+        pidio_frito = any(
+            any(w in self._norm_text(it.get("nombre", "")).split() for w in _FRITURA)
+            for it in items
+        )
+        if pidio_frito and any(
+            not any(w in self._norm_text(a.get("nombre", "")) for w in _FRITURA)
+            for a in added
+        ):
+            avisos.append(
+                "Apunto el alimento en su versión base (el catálogo no distingue la preparación). "
+                "Si lo haces frito o rebozado, cuenta el aceite aparte: dime, por ejemplo, \"aceite de oliva 5 g\"."
+            )
+
         resp = self._meal_response(added, not_found, choices)
         msgs = list(avisos)
         if choices:
