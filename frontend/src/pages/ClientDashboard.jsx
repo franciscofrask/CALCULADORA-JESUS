@@ -312,8 +312,8 @@ const ClientDashboard = () => {
                         </p>
                         <p className="text-muted-foreground text-xs">
                             {r.overdue
-                                ? 'El plazo ya pasó: respóndelo cuanto antes para que tu coach pueda ajustar tu plan.'
-                                : `Respóndelo antes del ${r.deadline_label}.`}
+                                ? 'El plazo ya pasó: rellénalo cuanto antes para que tu coach pueda ajustar tu plan.'
+                                : `Rellénalo antes del ${r.deadline_label}.`}
                         </p>
                     </div>
                     <button onClick={() => navigate('/dashboard/reports')}

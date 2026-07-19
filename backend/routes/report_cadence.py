@@ -217,7 +217,7 @@ async def get_my_due_report(user=Depends(get_current_user)):
         })
 
         # Campanita: una notificación por tipo y semana de ciclo.
-        title = f"Esta semana toca tu {rule['label'].lower()}: respóndelo antes del {deadline_label}"
+        title = f"Esta semana toca tu {rule['label'].lower()}: rellénalo antes del {deadline_label}"
         already = await db.notifications.find_one({
             "user_id": user["id"], "type": "reporte",
             "created_at": {"$gte": window_start.isoformat()},
