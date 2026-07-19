@@ -15,48 +15,14 @@ import { useAuth } from './AuthContext';
 // opcionalmente `gate` = id de acción que, al ocurrir, auto-avanza el tour, y
 // `cap` = capacidad del plan requerida (los pasos de secciones que el plan no
 // incluye se omiten del recorrido; ver lib/planAccess.js).
+// Recorrido CORTO (petición 19-07): solo lo esencial - Nutrición, Asistente IA,
+// Ajustar macros y Reportes. El resto de secciones se descubren solas.
 const STEPS = [
-    {
-        id: 'dash-macros', route: '/dashboard',
-        element: '[data-testid="macro-trackers-card"], [data-testid="setup-macros-card"]',
-        title: 'Tu resumen del día', side: 'right', align: 'center',
-        description: 'Aquí ves tus macros objetivo y cuánto llevas consumido hoy. Es tu vista rápida cada vez que entras.',
-    },
-    {
-        id: 'dash-nav', route: '/dashboard',
-        element: '[data-testid="desktop-sidebar"], [data-testid="mobile-bottom-nav"]',
-        title: 'Tu menú', side: 'right', align: 'center',
-        description: 'Desde aquí llegas a todas las secciones: nutrición, rutina, reportes, asistente IA y más. Te las muestro una por una.',
-    },
-    {
-        id: 'nut-controls', route: '/dashboard/nutrition',
-        element: '[data-testid="nutrition-controls"]',
-        title: 'Configura tu día', side: 'bottom',
-        description: 'Elige si es día de entrenamiento o de descanso. Tus macros se ajustan automáticamente a cada tipo de día.',
-    },
     {
         id: 'nut-meals', route: '/dashboard/nutrition',
         element: '[data-testid="meal-selector"], [data-testid="meals-accordion"]',
-        title: 'Prepara tus comidas', side: 'right', gate: 'nutrition-add-food',
-        description: 'Aquí están tus comidas del día. Toca una y añade un alimento. Si lo haces ahora, te llevo solo al siguiente paso (o sigue con "Siguiente").',
-    },
-    {
-        id: 'nut-prefs', route: '/dashboard/nutrition',
-        element: '[data-testid="open-preferences-btn"]',
-        title: 'Tus preferencias', side: 'bottom',
-        description: 'La calculadora sugiere comida según lo que te gusta. Puedes ajustar tus preferencias desde aquí cuando quieras.',
-    },
-    {
-        id: 'macros', route: '/dashboard/macro-calculator',
-        element: '[data-testid="macros-content"]',
-        title: 'Ajustar macros', side: 'right', align: 'start',
-        description: 'Si tu entrenador lo indica, desde aquí puedes afinar tus macros manualmente. Por defecto los calculamos por ti.',
-    },
-    {
-        id: 'reports', route: '/dashboard/reports', cap: 'reportes',
-        element: '[data-testid="weight-input"]',
-        title: 'Tus reportes', side: 'bottom', align: 'start',
-        description: 'En Reportes registras tu peso y medidas cada semana. Ves tu evolución en gráficos y tu entrenador te da feedback.',
+        title: 'Nutrición: tus comidas', side: 'right', gate: 'nutrition-add-food',
+        description: 'Aquí montas tu día: elige si es entreno o descanso y prepara cada comida. En cada una tienes "Sugiéreme un menú" con comida real que ya cuadra contigo.',
     },
     {
         id: 'ai', route: '/dashboard/chatbot',
@@ -65,34 +31,22 @@ const STEPS = [
         description: 'El Asistente IA prepara tu dieta conversando: te propone comidas según tus macros y preferencias.',
     },
     {
-        id: 'chat', route: '/dashboard/messages',
-        element: '[data-testid="messages-content"]',
-        title: 'Chat con tu entrenador', side: 'bottom', align: 'start',
-        description: 'En Chat hablas directo con tu entrenador. Te responde y te acompaña durante todo el plan.',
+        id: 'macros', route: '/dashboard/macro-calculator',
+        element: '[data-testid="macros-content"]',
+        title: 'Ajustar macros', side: 'right', align: 'start',
+        description: 'Aquí puedes recalcular o afinar tus macros cuando cambie tu peso o tu objetivo.',
     },
     {
-        id: 'routine', route: '/dashboard/routine', cap: 'rutina',
-        element: '[data-testid="day-selector"], [data-testid="routine-content"]',
-        title: 'Tu rutina', side: 'bottom', align: 'start',
-        description: 'En Rutina tienes tu plan de entrenamiento semana a semana, día por día, con los ejercicios programados.',
-    },
-    {
-        id: 'checkins', route: '/dashboard/checkins', cap: 'reportes',
-        element: '[data-testid="checkins-content"]',
-        title: 'Check-ins', side: 'bottom', align: 'start',
-        description: 'En Check-ins registras cómo te sientes: energía, sueño, estrés y fotos de progreso. Ayuda a ajustar tu plan.',
-    },
-    {
-        id: 'profile', route: '/dashboard/profile',
-        element: '[data-testid="body-data-card"]',
-        title: 'Tu perfil', side: 'bottom', align: 'start',
-        description: 'En Mi perfil mantén tu peso y % de grasa al día para que tus macros se calculen con precisión. Ahí también editas tus datos.',
+        id: 'reports', route: '/dashboard/reports', cap: 'reportes',
+        element: '[data-testid="weight-input"]',
+        title: 'Tus reportes', side: 'bottom', align: 'start',
+        description: 'En Reportes registras tu peso y medidas cada semana. Ves tu evolución y tu entrenador te da feedback.',
     },
     {
         id: 'done', route: '/dashboard', side: 'bottom',
         element: '[data-testid="onboarding-checklist"], [data-testid="macro-trackers-card"], [data-testid="setup-macros-card"], [data-testid="client-dashboard"]',
         title: '¡Listo! 🎉',
-        description: 'Ya conoces tu app. Tu siguiente paso es preparar tu primer día de comidas. Puedes repetir este recorrido cuando quieras desde tu perfil.',
+        description: 'Ya conoces lo importante. Tu siguiente paso es preparar tu primer día de comidas. Puedes repetir este recorrido cuando quieras desde tu perfil.',
     },
 ];
 

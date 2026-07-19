@@ -233,23 +233,9 @@ const STEPS_NIVEL1 = [
     { type: 'salud', title: 'Salud y descanso', desc: 'Sé sincero: todo esto condiciona tu estrategia.' },
     { type: 'text', key: 'dietas_previas', title: '¿Has hecho dietas antes? ¿Qué tal te fue?', desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...', textarea: true },
     { type: 'text', key: 'entrenador_anterior', title: '¿Has tenido entrenador antes?', desc: 'Quién, cuánto tiempo y por qué lo dejaste. Si no, escribe "no".', textarea: true },
-    {
-        type: 'choice', key: 'dias_entreno', title: '¿Cuántos días vas a entrenar por semana?',
-        options: [
-            { value: 2, label: '2 días' }, { value: 3, label: '3 días' }, { value: 4, label: '4 días' },
-            { value: 5, label: '5 días' }, { value: 6, label: '6 días' },
-        ],
-    },
-    {
-        type: 'choice', key: 'hora_entreno', title: '¿A qué hora sueles entrenar?',
-        options: [
-            { value: 'manana', label: 'Por la mañana' },
-            { value: 'mediodia', label: 'A mediodía' },
-            { value: 'tarde', label: 'Por la tarde' },
-            { value: 'noche', label: 'Por la noche' },
-            { value: 'variable', label: 'Depende del día' },
-        ],
-    },
+    // Comidas al día, días de entreno y cuándo entrena YA se preguntan en el
+    // bloque de preferencias del Nivel 0 (no repetir); los alimentos a evitar
+    // se eligen con el selector visual de preferencias, no en texto libre.
     {
         type: 'multiselect', key: 'material', title: '¿Con qué material cuentas para entrenar?',
         desc: 'Marca todo lo que tengas disponible.',
@@ -270,15 +256,7 @@ const STEPS_NIVEL1 = [
             { value: '3+_semana', label: '3 o más veces por semana' },
         ],
     },
-    { type: 'text', key: 'alimentos_evitados', title: '¿Qué alimentos evitas o no te gustan?', desc: 'Sepáralos por comas: lácteos, pescado azul...', textarea: true },
     { type: 'text', key: 'alergias', title: '¿Alergias o intolerancias alimentarias?', desc: 'Si no tienes, escribe "no".', textarea: true },
-    {
-        type: 'choice', key: 'num_comidas', title: '¿Cuántas comidas al día prefieres hacer?',
-        options: [
-            { value: 3, label: '3 comidas' }, { value: 4, label: '4 comidas' },
-            { value: 5, label: '5 comidas' }, { value: 6, label: '6 comidas' },
-        ],
-    },
     { type: 'final1', title: 'Perfil completo.', desc: 'Tu coach usará todo esto para tu estrategia. Las fotos de progreso te las pedirá por el chat. Si quieres revisar algo, ve hacia atrás.' },
 ];
 
@@ -513,15 +491,15 @@ const QuestionnairePage = () => {
                 },
                 dietas_previas: answers.dietas_previas || null,
                 entrenador_anterior: answers.entrenador_anterior || null,
-                dias_entreno: answers.dias_entreno ?? null,
-                hora_entreno: answers.hora_entreno || null,
+                // Preguntados en las preferencias del Nivel 0 (aquí no se repiten);
+                // los alimentos evitados viven en las preferencias del perfil.
+                dias_entreno: answers.pref_dias_entreno ?? null,
+                hora_entreno: null,
                 material: answers.material || null,
                 cardio: answers.cardio || null,
-                alimentos_evitados: answers.alimentos_evitados
-                    ? answers.alimentos_evitados.split(',').map(s => s.trim()).filter(Boolean)
-                    : null,
+                alimentos_evitados: null,
                 alergias: answers.alergias || null,
-                num_comidas: answers.num_comidas ?? null,
+                num_comidas: answers.pref_num_comidas ?? null,
             });
             await refreshProfile();
             toast.success('¡Perfil completo! Tu coach ya tiene toda la información.');
