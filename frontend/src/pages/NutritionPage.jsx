@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
@@ -111,6 +112,7 @@ const POST_CARB_CATEGORIES = [
 
 const NutritionPage = () => {
     const { token } = useAuth();
+    const navigate = useNavigate();
     const { notify } = useOnboarding();
 
     // Preferences state - for checking if user has configured preferences
@@ -141,6 +143,9 @@ const NutritionPage = () => {
 
     // Data state
     const [distribution, setDistribution] = useState(null);
+    // Motivo por el que no hay reparto (p.ej. "No tienes macros asignados"): sin él,
+    // los objetivos por comida se pintaban a 0 sin explicación.
+    const [distribError, setDistribError] = useState(null);
     const [distribTargetsOverlay, setDistribTargetsOverlay] = useState(null);
     // Calma comidaConMacrosVolcadas: the meal key that absorbs the day's remaining macros.
     // When set, every OTHER meal is locked (target = its served = cuadrada). null = no volcado.
@@ -311,8 +316,12 @@ const NutritionPage = () => {
                 })
             });
             setDistribution(result);
+            setDistribError(null);
         } catch (err) {
+            // Sin reparto TODOS los objetivos por comida quedan a 0 ("todo sobra" y el
+            // autoajuste peta): en vez de silenciarlo, se guarda para avisar en pantalla.
             console.error('Error loading distribution:', err);
+            setDistribError(err.message || 'Error de red');
         }
     }, [api, tipoDia, numComidas, momentoEntreno, opcionPeri, currentDate]);
 
@@ -974,8 +983,8 @@ const NutritionPage = () => {
 
     const applyLibraryMenu = (menu) => {
         const mealKey = menuOptionsModal.mealKey;
-        // Volcado tal cual: los items ya vienen con los macros que cuenta la
-        // calculadora para esas cantidades exactas. Nada se recalcula ni ajusta.
+        // Los items ya vienen del backend con las cantidades AJUSTADAS por las
+        // palancas del menú y sus macros calculados: aquí solo se vuelcan.
         const foods = menu.items.map(item => ({
             alimento_id: item.alimento_id,
             nombre: item.nombre,
@@ -991,7 +1000,9 @@ const NutritionPage = () => {
         setMenuOptionsModal({ open: false, mealKey: null });
         toast.success(menu.clavado
             ? 'Menú añadido: clava tu objetivo'
-            : 'Menú añadido tal cual (menú real, cercano a tu objetivo)');
+            : (menu.cuadrada || menu.ajustado)
+                ? 'Menú añadido, ajustado a tu objetivo'
+                : 'Menú añadido tal cual (menú real, cercano a tu objetivo)');
     };
 
     // Save & Copy
@@ -1069,17 +1080,24 @@ const NutritionPage = () => {
         } catch (err) { toast.error('Error guardando favorita'); }
     };
 
-    const applyDietFavorite = async (fav) => {
+    const applyDietFavorite = async (fav, { adaptar = false } = {}) => {
         // Aplica la favorita RE-AJUSTANDO sus cantidades a los macros de HOY (no arrastra los
         // objetivos guardados): reusa /refit-diet, que redimensiona cada alimento con la lógica
         // CALMA sin pasarse y respetando el mínimo. No auto-guarda; el día se guarda después.
-        const cfg = {
+        // Modo adaptar (entreno<->descanso): se mantiene el tipo de día ACTUAL y las comidas
+        // que no existen en él (p.ej. el peri en descanso) se quitan con aviso.
+        const cfg = adaptar ? {
+            tipoDia,                                    // el del día, no el de la favorita
+            numComidas: fav.num_comidas || 4,           // las claves C1..Cn deben casar
+            momentoEntreno,
+            opcionPeri,
+        } : {
             tipoDia: fav.tipo_dia || 'entrenamiento',
             numComidas: fav.num_comidas || 4,
             momentoEntreno: fav.momento_entreno ?? 1,
             opcionPeri: normPeri(fav.opcion_peri),
         };
-        setTipoDia(cfg.tipoDia);
+        if (!adaptar) setTipoDia(cfg.tipoDia);
         setNumComidas(cfg.numComidas);
         setMomentoEntreno(cfg.momentoEntreno);
         setOpcionPeri(cfg.opcionPeri);
@@ -1096,13 +1114,31 @@ const NutritionPage = () => {
                     momento_entreno: cfg.momentoEntreno,
                     opcion_peri: cfg.opcionPeri,
                     comidas: fav.comidas || {},
+                    descartar_sin_objetivo: adaptar,
                 }),
             });
             setMealsData(res.comidas || {});
             if (res.distribution) setDistribution(res.distribution);
-            const nEx = res.excluidos?.length || 0;
-            if (nEx) toast.warning(`Aplicada "${fav.name}" y ajustada a tus macros. ${nEx} alimento(s) no cabían ni al mínimo y se quitaron.`);
-            else toast.success(`Aplicada "${fav.name}" y ajustada a tus macros`);
+
+            const excluidos = res.excluidos || [];
+            const periQuitado = excluidos.filter(e => e.motivo === 'sin_objetivo_en_dia');
+            const noCaben = excluidos.filter(e => e.motivo !== 'sin_objetivo_en_dia');
+            const etiquetaDia = cfg.tipoDia === 'descanso' ? 'descanso' : 'entreno';
+
+            if (adaptar && periQuitado.length) {
+                toast.warning(`Aplicada "${fav.name}" adaptada a tu día de ${etiquetaDia}. El intra/post se ha quitado porque hoy no hay periworkout.`);
+            } else if (adaptar) {
+                toast.success(`Aplicada "${fav.name}" adaptada a tu día de ${etiquetaDia}`);
+            } else if (!noCaben.length) {
+                toast.success(`Aplicada "${fav.name}" y ajustada a tus macros`);
+            }
+            if (noCaben.length) toast.warning(`${noCaben.length} alimento(s) no cabían ni al mínimo y se quitaron.`);
+
+            // Descanso -> entreno: la favorita no trae peri; avisar de que queda vacío.
+            const trae = (k) => ((fav.comidas?.[k]?.alimentos) || []).length > 0;
+            if (adaptar && cfg.tipoDia === 'entrenamiento' && cfg.opcionPeri !== 'sin_peri' && !trae('Intra') && !trae('Post')) {
+                toast.info('El peri ha quedado vacío: añádelo con "Sugiéreme un menú".');
+            }
         } catch (err) {
             toast.error('Error al aplicar la favorita');
         }
@@ -1300,6 +1336,40 @@ const NutritionPage = () => {
                 onCancel={userPreferences.length > 0 ? () => setShowPreferencesSetup(false) : undefined}
                 isEditMode={userPreferences.length > 0}
             />
+        );
+    }
+
+    // ===== SIN REPARTO DE MACROS (bug 0·0·0) =====
+    // Sin distribución, cada comida tendría objetivo 0P·0H·0G: "todo sobra" y el
+    // autoajuste excluye todo. Mejor una pantalla clara con el porqué y la salida.
+    if (!distribution && distribError) {
+        const sinMacros = distribError === 'No tienes macros asignados';
+        return (
+            <div className="min-h-[60vh] flex items-center justify-center px-4">
+                <div className="surface p-6 max-w-md w-full text-center" data-testid="distrib-error">
+                    <span className="text-4xl mb-3 block">🎯</span>
+                    <h2 className="font-heading font-bold text-2xl text-foreground mb-2">
+                        {sinMacros ? 'Aún no tienes macros asignados' : 'No se pudo cargar el reparto del día'}
+                    </h2>
+                    <p className="text-sm text-muted-foreground mb-5">
+                        {sinMacros
+                            ? 'Sin macros no podemos repartir objetivos entre tus comidas. Calcúlalos en un minuto con la calculadora, o pídeselos a tu entrenador.'
+                            : `Sin el reparto, las comidas no tienen objetivo. Inténtalo de nuevo. (${distribError})`}
+                    </p>
+                    <div className="flex flex-col gap-2">
+                        {sinMacros ? (
+                            <button className="btn-brand w-full py-2.5" data-testid="distrib-error-cta"
+                                onClick={() => navigate('/dashboard/macro-calculator')}>
+                                Calcular mis macros
+                            </button>
+                        ) : (
+                            <button className="btn-brand w-full py-2.5" onClick={() => loadDistribution()}>
+                                Reintentar
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
         );
     }
 
@@ -1587,6 +1657,7 @@ const NutritionPage = () => {
                 onSave={saveDietFavorite}
                 onApply={applyDietFavorite}
                 onDelete={deleteDietFavorite}
+                tipoDia={tipoDia}
             />
 
             {/* Diet Calendar Modal */}

@@ -31,6 +31,8 @@ from calma_suggest import (
     cantidad_minima as cantidad_minima_calma,
 )
 from target_calculator import calcular_targets, targets_to_profile_macros, run_tests as target_run_tests
+from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
+from core.quiz_store import guardar_quiz_respuestas
 from macro_distribution import distribuir_macros as dist_macros
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
@@ -776,7 +778,12 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
     día indicado, SIN pasarse y respetando el mínimo de cada alimento. Reutiliza el reparto por
     comida de /distribute (macros de hoy) y la misma función de dimensionado del constructor
     (ajustar_cantidad). Los alimentos que no caben ni a su cantidad mínima se quitan y se
-    devuelven en 'excluidos'. NO inventa lógica: solo aplica la existente a alimentos fijos."""
+    devuelven en 'excluidos'. NO inventa lógica: solo aplica la existente a alimentos fijos.
+
+    Flag opcional `descartar_sin_objetivo` (adaptar una favorita al tipo de día actual,
+    entreno<->descanso): las comidas que no existen en el día destino (Intra/Post en
+    descanso, o Intra con opcion_peri solo_post) se vacían y sus alimentos van a
+    'excluidos' con motivo 'sin_objetivo_en_dia' en vez de copiarse tal cual."""
     dist = await distribute_macros({
         "fecha": data.get("fecha"),
         "tipo_dia": data.get("tipo_dia", "entrenamiento"),
@@ -786,6 +793,13 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
         "single_meal": (data.get("num_comidas", 4) == 1),
     }, user)
     targets = dist.get("comidas", {}) if isinstance(dist, dict) else {}
+    # El peri no tiene target en `comidas` (va aparte, en `periworkout`): sirve para
+    # distinguir "peri legítimo del día" de "comida que este día no tiene" (p.ej.
+    # Intra/Post al adaptar una favorita de entreno a un día de descanso).
+    peri_targets = dist.get("periworkout", {}) if isinstance(dist, dict) else {}
+    # descartar_sin_objetivo (adaptar entreno<->descanso): las comidas sin hueco en el
+    # día NO se copian tal cual, se vacían y sus alimentos se devuelven en excluidos.
+    descartar = bool(data.get("descartar_sin_objetivo", False))
 
     def _target(mk):
         t = targets.get(mk) or {}
@@ -801,6 +815,16 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
     for meal_key, meal in comidas_in.items():
         meal = meal if isinstance(meal, dict) else {}
         if meal_key not in targets:
+            if descartar and meal_key not in peri_targets:
+                # Adaptar al tipo de día: esta comida no existe en el día destino
+                # (p.ej. Intra/Post en descanso). Se vacía (si quedaran alimentos
+                # ocultos, el autosave los persistiría y reaparecerían sin ajustar
+                # al volver a entreno) y se avisa al front vía excluidos.
+                for it in (meal.get("alimentos") or []):
+                    excluidos.append({"meal": meal_key, "nombre": it.get("nombre"),
+                                      "motivo": "sin_objetivo_en_dia"})
+                out_comidas[meal_key] = {**meal, "alimentos": []}
+                continue
             # Sin objetivo para esa comida: la dejamos como estaba (no vaciar por seguridad).
             out_comidas[meal_key] = meal
             continue
@@ -820,7 +844,8 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             aplicar_regla_macros_calma(food)
             cant = ajustar_cantidad_calma(food, remaining)
             if cant <= 0 or math.isinf(cant):
-                excluidos.append({"meal": meal_key, "nombre": food.get("nombre") or it.get("nombre")})
+                excluidos.append({"meal": meal_key, "nombre": food.get("nombre") or it.get("nombre"),
+                                  "motivo": "no_cabe"})
                 continue
             contrib = macros_at_calma(food, cant)
             for k in ("proteinas", "hidratos", "grasas"):
@@ -1331,8 +1356,13 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     """Sugeridor "elige tu menú" sobre la BIBLIOTECA REAL (db.meal_library, 266k
     comidas de clientes ya cuadradas con el método).
 
-    Filosofía: cercanía, NO exactitud. Devuelve los menús más cercanos al objetivo
-    de la comida dentro de ±margen y NUNCA los modifica: ni cantidades ni macros.
+    Cercanía + PALANCAS (doc "FLUJO COMPLETO" 17-07, sustituye al "tal cual" del
+    16-07): se buscan los menús más cercanos al objetivo y se AJUSTAN con los
+    drivers limpios del menú (la palanca de proteína ±20 g, la de hidratos ±30,
+    la de grasa ±8, sin descuadrar el resto). El menú se devuelve con las
+    cantidades ya ajustadas; si un menú no tiene palanca útil, se ofrece tal
+    cual siempre que entre en ±margen. Los alimentos por unidades (huevo,
+    yogur...) nunca actúan de palanca (no se parten unidades).
     El objetivo lo define la calculadora (reparto del día); si llega vacío o a cero
     (bug de capturas 0P/0H/0G), se reparte aquí el día con /distribute y se toma
     el target de la comida en vez de tratar 0 como objetivo real.
@@ -1373,14 +1403,18 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     orden = "usado" if (data.get("orden") or "").strip().lower() == "usado" else "cuadrado"
     limit = max(1, min(int(data.get("limit") or 30), 60))
 
+    # Preselección ampliada por el rango de las palancas: un menú a más de ±margen
+    # puede acabar dentro tras ajustar su driver (P ±20, H ±30, G ±8).
+    from meal_library import AJUSTE_MAX, _ajustar_menu
+    from meal_builder import get_effective_macros_per_100g
     q = {"tipo_comida": tipo_comida}
     for m in ("P", "H", "G"):
-        q[f"macros.{m}"] = {"$gte": obj[m] - margen, "$lte": obj[m] + margen}
+        q[f"macros.{m}"] = {"$gte": obj[m] - margen - AJUSTE_MAX[m],
+                            "$lte": obj[m] + margen + AJUSTE_MAX[m]}
     candidatos = await db.meal_library.find(
         q, {"_id": 0, "id": 1, "macros": 1, "macros_reales": 1, "veces": 1,
             "origen": 1, "alimentos": 1, "alimento_ids": 1}
     ).to_list(_LIBRARY_CANDIDATOS_MAX)
-    total = len(candidatos)
 
     def _err(c):
         mm = c.get("macros", {})
@@ -1403,29 +1437,62 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
 
     menus = []
     for c in trabajo:
-        if len(menus) >= limit:
-            break
-        items = []
+        # Paso 1: resolver alimentos y filtrar evitados; preparar items para las palancas.
+        alimentos_c = c.get("alimentos", [])
+        food_list = []
         valido = True
-        tot = {"P": 0.0, "H": 0.0, "G": 0.0}
-        for a in c.get("alimentos", []):
+        for a in alimentos_c:
             food = foods.get(int(a["alimento_id"]))
             if not food or food_is_avoided(food, avoided_prefixes, avoided_keywords):
                 valido = False
                 break
-            cantidad_g = float(a["cantidad_g"])
-            # Macros por item con el MISMO motor que añadir/editar alimentos: lo que
-            # se muestra aquí es exactamente lo que contará la comida al volcarlo.
+            food_list.append(food)
+        if not valido or not alimentos_c:
+            continue
+
+        # Paso 2: MOTOR DE PALANCAS. Los alimentos por unidades nunca son driver
+        # (no se parten unidades): se degradan a "mixto" y no se tocan.
+        adj_items = []
+        for a, food in zip(alimentos_c, food_list):
+            driver = a.get("driver", "mixto")
+            if a.get("unidades_n") or food.get("unidades"):
+                driver = "mixto"
+            adj_items.append({
+                "cantidad_g": float(a["cantidad_g"]),
+                "driver": driver,
+                "_ef": get_effective_macros_per_100g(food),
+            })
+        ajuste = _ajustar_menu(adj_items, obj, c.get("macros", {}))
+        if ajuste:
+            finales = [it["cantidad_g"] for it in ajuste["items"]]
+            metodo_final = {m: round(ajuste["totales"][m], 1) for m in ("P", "H", "G")}
+        else:
+            finales = [float(a["cantidad_g"]) for a in alimentos_c]
+            metodo_final = {m: float(c.get("macros", {}).get(m, 0) or 0) for m in ("P", "H", "G")}
+        ajustado = bool(ajuste) and any(
+            abs(f - float(a["cantidad_g"])) >= 1 for f, a in zip(finales, alimentos_c))
+
+        # Paso 3: el criterio del margen se aplica a lo que el cliente SE LLEVA
+        # (tras palancas). Sin ajuste posible, el menú original debe entrar solo.
+        if any(abs(obj[m] - metodo_final[m]) > margen for m in ("P", "H", "G")):
+            continue
+
+        # Paso 4: items con el MISMO motor que añadir/editar alimentos: lo que se
+        # muestra aquí es exactamente lo que contará la comida al volcarlo.
+        items = []
+        tot = {"P": 0.0, "H": 0.0, "G": 0.0}
+        for a, food, cantidad_g in zip(alimentos_c, food_list, finales):
             efectivos, brutos, cuenta = _efectivos_calma(food, cantidad_g)
             for m in ("P", "H", "G"):
                 tot[m] += efectivos[m]
-            display = (f"{a['unidades_n']} ud" if a.get("unidades_n")
+            sin_cambio = abs(cantidad_g - float(a["cantidad_g"])) < 0.5
+            display = (f"{a['unidades_n']} ud" if (a.get("unidades_n") and sin_cambio)
                        else f"{cantidad_g:g} g")
             items.append({
                 "alimento_id": int(a["alimento_id"]),
                 "nombre": food.get("nombre", a.get("nombre", "")),
                 "cantidad_g": cantidad_g,
-                "unidades_n": a.get("unidades_n"),
+                "unidades_n": a.get("unidades_n") if sin_cambio else None,
                 "cantidad_display": display,
                 "macros_efectivos": efectivos,
                 "macros_brutos": brutos,
@@ -1435,25 +1502,36 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
                 "racion": food.get("racion"),
                 "unidades": bool(food.get("unidades")),
             })
-        if not valido or not items:
-            continue
-        err = _err(c)
+
+        err = sum(abs(obj[m] - metodo_final[m]) for m in ("P", "H", "G"))
         menus.append({
             "biblioteca_id": c["id"],
             "items": items,
-            # macros del método con los que se filtró/ordenó (los del CSV, sin calibración)
-            "macros_metodo": c.get("macros", {}),
-            # macros de etiqueta (reales) del menú
+            # macros del método que el cliente SE LLEVA (tras palancas)
+            "macros_metodo": metodo_final,
+            # macros del menú base tal cual se guardó (sin ajustar)
+            "macros_base": c.get("macros", {}),
+            # macros de etiqueta (reales) del menú base
             "macros_reales": c.get("macros_reales", {}),
             # lo que sumará la comida al volcar los items (motor actual)
             "macros_totales": {"P": round(tot["P"], 1), "H": round(tot["H"], 1), "G": round(tot["G"], 1),
                                "kcal": round(tot["P"] * 4 + tot["H"] * 4 + tot["G"] * 9)},
             "veces": int(c.get("veces", 0) or 0),
             "origen": c.get("origen", "cliente"),
+            "ajustado": ajustado,
+            "cuadrada": bool(ajuste and ajuste.get("cuadrada")),
             "clavado": err <= 0.5,
             "err": round(err, 1),
             "fuente": "biblioteca",
         })
+
+    # Orden final sobre el resultado REAL (tras palancas), no sobre el menú base.
+    if orden == "usado":
+        menus.sort(key=lambda m: (-m["veces"], m["err"]))
+    else:
+        menus.sort(key=lambda m: (m["err"], -m["veces"]))
+    total = len(menus)   # menús que cuadran a ±margen DESPUÉS de palancas
+    menus = menus[:limit]
 
     return {
         "menus": menus,
@@ -1500,8 +1578,15 @@ async def calculate_client_targets(data: dict, user = Depends(get_current_user))
     """
     Calcula los macros objetivo del cliente basado en peso, sexo, %graso y objetivo.
     Usa las tablas de Jesús Gallego (macros_tables.json).
-    
+
     Body: {"peso": 80, "sexo": "hombre", "porcentaje_graso": 20, "objetivo": "volumen"}
+
+    Motor v2 (spec 18-07): si el body trae `ajustes` (preguntas 5-8 del quiz:
+    actividad_diaria, deporte_extra, facilidad_engordar, dieta reportada...),
+    se aplica calcular_macros_v2 y la respuesta incluye ademas `desglose`,
+    `revision`, `no_aplicados` y `base`. Sin `ajustes` el comportamiento es
+    identico al de siempre (tabla pura). La farmacologia se lee SIEMPRE del
+    perfil (la fija el coach), nunca del body.
     """
     peso = data.get("peso")
     sexo = data.get("sexo")
@@ -1511,17 +1596,44 @@ async def calculate_client_targets(data: dict, user = Depends(get_current_user))
     if not all([peso, sexo, bf is not None, objetivo]):
         raise HTTPException(status_code=400, detail="Faltan campos: peso, sexo, porcentaje_graso, objetivo")
 
+    ajustes = data.get("ajustes")
+    if not isinstance(ajustes, dict):
+        try:
+            targets = calcular_targets(
+                peso=float(peso),
+                sexo=sexo,
+                porcentaje_graso=float(bf),
+                objetivo=objetivo
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return targets
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
     try:
-        targets = calcular_targets(
+        resultado = calcular_macros_v2(
             peso=float(peso),
             sexo=sexo,
             porcentaje_graso=float(bf),
-            objetivo=objetivo
+            objetivo=objetivo,
+            farmacologia=bool(profile.get("farmacologia")),
+            **ajustes_to_kwargs(ajustes),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    return targets
+    # GUARDAR SIEMPRE, desde el dia uno: cada calculo con sus respuestas, se
+    # apliquen los modificadores o no y se guarden los macros o no.
+    await guardar_quiz_respuestas(
+        user_id=user["id"],
+        client_id=profile.get("id"),
+        origen="ajustar_macros",
+        respuestas=ajustes,
+        resultado=resultado,
+        contexto={"peso": float(peso), "porcentaje_graso": float(bf),
+                  "sexo": sexo, "objetivo": objetivo},
+    )
+    return resultado
 
 
 @router.post("/targets/apply")
@@ -1531,6 +1643,9 @@ async def calculate_and_apply_targets(data: dict, user = Depends(get_current_use
     Guarda macros_training, macros_rest y macros_periworkout en el perfil.
     
     Body: {"peso": 80, "sexo": "hombre", "porcentaje_graso": 20, "objetivo": "volumen"}
+
+    Motor v2: si el perfil tiene `ajustes_macros` guardados (preguntas 5-8),
+    se aplican tambien aqui para no pisar los macros v2 con la tabla pura.
     """
     peso = data.get("peso")
     sexo = data.get("sexo")
@@ -1540,13 +1655,27 @@ async def calculate_and_apply_targets(data: dict, user = Depends(get_current_use
     if not all([peso, sexo, bf is not None, objetivo]):
         raise HTTPException(status_code=400, detail="Faltan campos: peso, sexo, porcentaje_graso, objetivo")
 
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    ajustes_guardados = profile.get("ajustes_macros")
     try:
-        targets = calcular_targets(
-            peso=float(peso),
-            sexo=sexo,
-            porcentaje_graso=float(bf),
-            objetivo=objetivo
-        )
+        if ajustes_guardados:
+            resultado = calcular_macros_v2(
+                peso=float(peso),
+                sexo=sexo,
+                porcentaje_graso=float(bf),
+                objetivo=objetivo,
+                farmacologia=bool(profile.get("farmacologia")),
+                **ajustes_to_kwargs(ajustes_guardados),
+            )
+            targets = {**resultado["base"], "macros": resultado["macros"],
+                       "multiplicadores": multiplicadores_de(resultado)}
+        else:
+            targets = calcular_targets(
+                peso=float(peso),
+                sexo=sexo,
+                porcentaje_graso=float(bf),
+                objetivo=objetivo
+            )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

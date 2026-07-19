@@ -100,7 +100,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
 
     return (
         <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-            <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+            <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden [&>button]:hidden">
                 <DialogHeader className="bg-bg-dark p-4 flex-shrink-0">
                     <div className="flex items-center justify-between">
                         <DialogTitle className="text-white">Elige tu menú</DialogTitle>
@@ -179,7 +179,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                         <div className="p-4 space-y-3">
                             <p className="text-xs text-muted-foreground">
                                 Hay <span className="font-bold text-foreground">{total}</span> menús que cuadran (±{margen} g)
-                                {textFilter.trim() ? ` · ${filtrados.length} con "${textFilter.trim()}"` : ''}. Se aplican tal cual, sin retocar.
+                                {textFilter.trim() ? ` · ${filtrados.length} con "${textFilter.trim()}"` : ''}. Las cantidades vienen ajustadas a tu objetivo.
                             </p>
                             {filtrados.map((menu, index) => (
                                 <button key={menu.biblioteca_id}
@@ -192,8 +192,13 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             {verReales && (
                                                 <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">etiqueta</span>
                                             )}
-                                            {menu.clavado && (
+                                            {menu.ajustado && (
+                                                <span className="text-[10px] font-bold uppercase tracking-wide bg-brand-orange/15 text-brand-orange px-2 py-0.5 rounded-full">Ajustado a ti</span>
+                                            )}
+                                            {menu.clavado ? (
                                                 <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-500/15 text-emerald-600 px-2 py-0.5 rounded-full">Clavado</span>
+                                            ) : menu.cuadrada && (
+                                                <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-500/15 text-emerald-600 px-2 py-0.5 rounded-full">Cuadrado</span>
                                             )}
                                         </div>
                                     </div>
@@ -210,7 +215,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             {menu.veces > 1 ? <>Usado <span className="font-bold">{menu.veces}</span> veces</> : 'Variante de un menú real'}
                                         </p>
                                         <p className="text-[11px] text-brand-orange font-semibold flex items-center gap-1">
-                                            <Check className="w-3 h-3" /> Añadir tal cual
+                                            <Check className="w-3 h-3" /> {menu.ajustado ? 'Añadir ajustado a ti' : 'Añadir tal cual'}
                                         </p>
                                     </div>
                                 </button>
