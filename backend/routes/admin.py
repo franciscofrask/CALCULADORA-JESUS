@@ -352,8 +352,12 @@ async def delete_macro_history_entry(client_id: str, entry_id: str, user = Depen
 
 @router.post("/clients/{client_id}/calculator/apply")
 async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_admin_user)):
-    """Calcular targets con tablas JG y aplicarlos al perfil del cliente."""
-    from target_calculator import calcular_targets, targets_to_profile_macros
+    """Calcular con el MOTOR v2 (mismas reglas que la vista del cliente: tabla +
+    modificadores de las preguntas 5-8 + suelos + redondeo) y aplicar al perfil.
+    `ajustes` opcional en el body; si no llega, se usan los guardados del cliente."""
+    from target_calculator import targets_to_profile_macros
+    from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
+    from core.quiz_store import guardar_quiz_respuestas
 
     profile = await db.client_profiles.find_one({"id": client_id})
     assert_client_access(user, profile)
@@ -367,10 +371,19 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
     if not all([peso, sexo, bf is not None, objetivo]):
         raise HTTPException(status_code=400, detail="Faltan campos: peso, sexo, porcentaje_graso, objetivo")
 
+    # Mismas reglas que el cliente: ajustes del body (el coach puede tocarlos) o,
+    # si no llegan, los últimos guardados en el perfil del cliente.
+    ajustes = data.get("ajustes") if isinstance(data.get("ajustes"), dict) else profile.get("ajustes_macros")
     try:
-        targets = calcular_targets(float(peso), sexo, float(bf), objetivo)
+        resultado = calcular_macros_v2(
+            float(peso), sexo, float(bf), objetivo,
+            farmacologia=bool(profile.get("farmacologia")),
+            **ajustes_to_kwargs(ajustes),
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    targets = {**resultado["base"], "macros": resultado["macros"],
+               "multiplicadores": multiplicadores_de(resultado)}
 
     profile_macros = targets_to_profile_macros(targets)
     training = profile_macros["macros_training"]
@@ -383,20 +396,20 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
         m["hidratos"] = m["carbs"]
         m["grasas"] = m["fat"]
 
-    await db.client_profiles.update_one(
-        {"id": client_id},
-        {"$set": {
-            "weight": float(peso),
-            "sex": sexo,
-            "body_fat": float(bf),
-            "goal": objetivo,
-            "macros_training": training,
-            "macros_rest": rest,
-            "macros_periworkout": peri,
-            "macros_source": "auto",
-            "macros_multiplicadores": targets["multiplicadores"],
-        }}
-    )
+    set_data = {
+        "weight": float(peso),
+        "sex": sexo,
+        "body_fat": float(bf),
+        "goal": objetivo,
+        "macros_training": training,
+        "macros_rest": rest,
+        "macros_periworkout": peri,
+        "macros_source": "auto",
+        "macros_multiplicadores": targets["multiplicadores"],
+    }
+    if ajustes:
+        set_data["ajustes_macros"] = ajustes
+    await db.client_profiles.update_one({"id": client_id}, {"$set": set_data})
 
     macro_log = {
         "id": str(uuid.uuid4()),
@@ -407,18 +420,35 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
         "new_rest": rest,
         "training": training,
         "rest": rest,
+        "peri": peri,
         "note": note,
         "changed_by": user.get("name", user.get("email", "admin")),
         "client_weight": float(peso),
+        "peso": float(peso),
+        "porcentaje_graso": float(bf),
+        "sexo": sexo,
+        "objetivo": objetivo,
+        "motor": {"version": resultado["version_motor"], "desglose": resultado["desglose"],
+                  "ajustes": ajustes},
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.macro_history.insert_one(macro_log)
+
+    # GUARDAR SIEMPRE las respuestas/calculo (calibracion futura)
+    await guardar_quiz_respuestas(
+        user_id=profile["user_id"], client_id=client_id, origen="coach",
+        respuestas=ajustes or {}, resultado=resultado,
+        contexto={"peso": float(peso), "porcentaje_graso": float(bf),
+                  "sexo": sexo, "objetivo": objetivo},
+    )
 
     await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition")
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Aplicó macros por calculadora a {(client_user or {}).get('name') or client_id}")
 
-    return {"applied": True, "targets": targets, "training": training, "rest": rest, "peri": peri}
+    return {"applied": True, "targets": targets, "training": training, "rest": rest, "peri": peri,
+            "resultado": {"macros": resultado["macros"], "desglose": resultado["desglose"],
+                          "revision": resultado["revision"], "no_aplicados": resultado["no_aplicados"]}}
 
 # ==================== DASHBOARD ====================
 

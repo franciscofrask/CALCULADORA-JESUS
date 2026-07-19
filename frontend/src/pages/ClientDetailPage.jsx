@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import DesgloseChips from '../components/DesgloseChips';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -219,6 +220,43 @@ const ClientDetailPage = () => {
 
     // Calculator tab
     const [calcForm, setCalcForm] = useState({ peso: '', porcentaje_graso: '', sexo: 'hombre', objetivo: 'volumen' });
+    // Preguntas 5-8 del motor v2 (mismas reglas que la vista del cliente),
+    // precargadas con las respuestas guardadas del cliente.
+    const [calcAjustes, setCalcAjustes] = useState({
+        actividad_diaria: null, deporte_extra: null, facilidad_engordar: null,
+        sigue_dieta: null, dieta_texto: '', dieta_hc_entreno: '', dieta_grasa_entreno: '',
+    });
+    useEffect(() => {
+        const a = client?.ajustes_macros;
+        if (a) setCalcAjustes(prev => ({
+            ...prev, ...a,
+            dieta_texto: a.dieta_texto || '',
+            dieta_hc_entreno: a.dieta_hc_entreno ?? '',
+            dieta_grasa_entreno: a.dieta_grasa_entreno ?? '',
+        }));
+        // Precargar también las 4 básicas del perfil si el formulario está vacío
+        setCalcForm(prev => prev.peso === '' ? {
+            peso: client?.weight != null ? String(client.weight) : '',
+            porcentaje_graso: client?.body_fat != null ? String(client.body_fat) : '',
+            sexo: client?.sex || prev.sexo,
+            objetivo: client?.goal || prev.objetivo,
+        } : prev);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [client]);
+
+    const calcAjustesPayload = () => {
+        const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+        return {
+            actividad_diaria: calcAjustes.actividad_diaria,
+            deporte_extra: calcAjustes.deporte_extra,
+            facilidad_engordar: calcAjustes.facilidad_engordar,
+            sigue_dieta: calcAjustes.sigue_dieta,
+            dieta_texto: calcAjustes.sigue_dieta ? (calcAjustes.dieta_texto || null) : null,
+            dieta_hc_entreno: calcAjustes.sigue_dieta ? num(calcAjustes.dieta_hc_entreno) : null,
+            dieta_grasa_entreno: calcAjustes.sigue_dieta ? num(calcAjustes.dieta_grasa_entreno) : null,
+        };
+    };
+    const setAjuste = (k, v) => { setCalcAjustes(prev => ({ ...prev, [k]: v })); setCalcResults(null); setCalcApplied(false); };
     const [calcResults, setCalcResults] = useState(null);
     const [calcLoading, setCalcLoading] = useState(false);
     const [calcApplying, setCalcApplying] = useState(false);
@@ -880,13 +918,53 @@ const ClientDetailPage = () => {
                                 >{l}</button>
                             ))}
                         </div>
+
+                        {/* Afina tus macros: mismas reglas y preguntas que la vista del cliente */}
+                        <div className="border-t border-[#222] pt-4 space-y-3">
+                            <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Afina tus macros (respuestas del cliente)</p>
+                            {[
+                                { k: 'actividad_diaria', label: 'Actividad diaria', ops: [['sedentario','Sedentario'],['normal','Normal'],['muy_activo','Muy activo']] },
+                                { k: 'deporte_extra', label: '¿Otro deporte además de las pesas?', ops: [[true,'Sí'],[false,'No']] },
+                                { k: 'facilidad_engordar', label: 'Cuando se pasa comiendo, ¿engorda?', ops: [['enseguida','Enseguida'],['normal','Normal'],['casi_no','Casi no']] },
+                                { k: 'sigue_dieta', label: '¿Sigue una dieta que controla?', ops: [[true,'Sí'],[false,'No']] },
+                            ].map(({ k, label, ops }) => (
+                                <div key={k}>
+                                    <label className="block text-xs text-white/40 uppercase mb-1">{label}</label>
+                                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${ops.length}, 1fr)` }}>
+                                        {ops.map(([v, l]) => (
+                                            <button key={String(v)} onClick={() => setAjuste(k, v)}
+                                                className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${calcAjustes[k] === v ? 'text-white' : 'bg-[#1A1A1A] text-white/40'}`}
+                                                style={calcAjustes[k] === v ? { backgroundColor: '#FF671F' } : {}}
+                                            >{l}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                            {calcAjustes.sigue_dieta && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs text-white/40 uppercase mb-1">HC totales día de entreno (g)</label>
+                                        <input type="number" value={calcAjustes.dieta_hc_entreno}
+                                            onChange={e => setAjuste('dieta_hc_entreno', e.target.value)} placeholder="250"
+                                            className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-white/40 uppercase mb-1">Grasa aprox (g, opcional)</label>
+                                        <input type="number" value={calcAjustes.dieta_grasa_entreno}
+                                            onChange={e => setAjuste('dieta_grasa_entreno', e.target.value)} placeholder="60"
+                                            className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <Button onClick={async () => {
                             const peso = parseFloat(calcForm.peso);
                             const bf = parseFloat(calcForm.porcentaje_graso);
                             if (!peso || isNaN(bf)) { toast.error('Rellena peso y % graso'); return; }
                             setCalcLoading(true);
                             try {
-                                const res = await api.post('/calculator/targets', { peso, porcentaje_graso: bf, sexo: calcForm.sexo, objetivo: calcForm.objetivo });
+                                const res = await api.post('/calculator/targets', { peso, porcentaje_graso: bf, sexo: calcForm.sexo, objetivo: calcForm.objetivo, ajustes: calcAjustesPayload() });
                                 setCalcResults(res.data);
                                 setCalcApplied(false);
                             } catch (err) { toast.error(err.response?.data?.detail || 'Error'); }
@@ -912,6 +990,14 @@ const ClientDetailPage = () => {
                                     </div>
                                 ))}
                             </div>
+                            <DesgloseChips desglose={calcResults.desglose} />
+                            {calcResults.revision && (
+                                <p className={`text-xs ${calcResults.revision.requiere_revision ? 'text-amber-400' : 'text-green-400'}`}>
+                                    Dieta reportada: come {Math.round(calcResults.revision.hc_reportados)} g de HC · recomendado {calcResults.revision.hc_recomendados} g
+                                    · diferencia {calcResults.revision.diferencia > 0 ? '+' : ''}{calcResults.revision.diferencia} g
+                                    {calcResults.revision.requiere_revision ? ' (no cuadra: revísalo antes de aplicar)' : ' (cuadra)'}
+                                </p>
+                            )}
                             <div>
                                 <label className="block text-xs text-white/40 uppercase mb-1">Motivo (obligatorio)</label>
                                 <input type="text" value={calcNote}
@@ -930,6 +1016,7 @@ const ClientDetailPage = () => {
                                         sexo: calcForm.sexo,
                                         objetivo: calcForm.objetivo,
                                         note: calcNote,
+                                        ajustes: calcAjustesPayload(),
                                     });
                                     setCalcApplied(true);
                                     toast.success(`Macros aplicados a ${client?.user?.name}`);
