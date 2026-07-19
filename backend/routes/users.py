@@ -10,9 +10,12 @@ from core.database import db
 from core.security import get_current_user
 from models.user import (
     ClientProfile, ClientProfileCreate, ClientProfileUpdate,
-    MacrosUpdate, PLAN_TYPES, PLAN_CATALOG, QuestionnaireSubmit, OnboardingUpdate
+    MacrosUpdate, PLAN_TYPES, PLAN_CATALOG, QuestionnaireSubmit, OnboardingUpdate,
+    Nivel1Submit
 )
 from target_calculator import calcular_targets, targets_to_profile_macros
+from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
+from core.quiz_store import guardar_quiz_respuestas, registrar_revision
 from core.cycle import enrich_cycle
 
 router = APIRouter(tags=["users"])
@@ -80,7 +83,19 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
 
         if all([peso, sexo, bf, objetivo]):
             try:
-                targets = calcular_targets(float(peso), sexo, float(bf), objetivo)
+                # Motor v2: si hay ajustes guardados (preguntas 5-8), recalcular con
+                # ellos; la tabla pura pisaria los modificadores del quiz.
+                ajustes_guardados = profile.get("ajustes_macros")
+                if ajustes_guardados:
+                    resultado = calcular_macros_v2(
+                        float(peso), sexo, float(bf), objetivo,
+                        farmacologia=bool(profile.get("farmacologia")),
+                        **ajustes_to_kwargs(ajustes_guardados),
+                    )
+                    targets = {"macros": resultado["macros"],
+                               "multiplicadores": multiplicadores_de(resultado)}
+                else:
+                    targets = calcular_targets(float(peso), sexo, float(bf), objetivo)
                 profile_macros = targets_to_profile_macros(targets)
                 # Only auto-set if macros haven't been manually overridden
                 if profile.get("macros_source") != "manual":
@@ -111,10 +126,12 @@ def _age_from_birthdate(birthdate: Optional[str]) -> Optional[int]:
     today = datetime.now(timezone.utc).date()
     return today.year - b.year - ((today.month, today.day) < (b.month, b.day))
 
-@router.post("/clients/questionnaire", response_model=ClientProfile)
+@router.post("/clients/questionnaire")
 async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_current_user)):
-    """Cuestionario inicial obligatorio (ELM hombre). Guarda las respuestas en el perfil,
-    marca questionnaire_completed y recalcula los macros automáticamente (peso/sexo/%graso/objetivo)."""
+    """Cuestionario inicial (Nivel 0). Guarda las respuestas en el perfil, marca
+    questionnaire_completed y calcula los macros con el MOTOR v2 (tabla + ajustes
+    de las preguntas 5-8). Devuelve {profile, resultado} para que el front muestre
+    los 8 numeros y el desglose en la pantalla final."""
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado. Selecciona un plan primero.")
@@ -124,6 +141,7 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     sexo = (data.sex or "hombre").strip().lower()
     if sexo not in ("hombre", "mujer"):
         sexo = "hombre"
+    ajustes = data.ajustes.model_dump() if data.ajustes else None
     update = {
         "questionnaire_completed": True,
         "goal": data.goal,
@@ -137,10 +155,19 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         "activity_level": data.activity_level,
         "biotype": data.biotype,
     }
+    if ajustes:
+        update["ajustes_macros"] = ajustes
 
-    # Calcular y aplicar macros (no pisar si el coach ya los fijó manualmente).
+    # Calcular y aplicar macros con el motor v2 (no pisar si el coach ya los fijó manualmente).
+    resultado = None
     try:
-        targets = calcular_targets(float(data.weight), sexo, float(data.body_fat), data.goal)
+        resultado = calcular_macros_v2(
+            float(data.weight), sexo, float(data.body_fat), data.goal,
+            farmacologia=bool(profile.get("farmacologia")),
+            **ajustes_to_kwargs(ajustes),
+        )
+        targets = {"macros": resultado["macros"],
+                   "multiplicadores": multiplicadores_de(resultado)}
         profile_macros = targets_to_profile_macros(targets)
         if profile.get("macros_source") != "manual":
             update["macros_training"] = profile_macros["macros_training"]
@@ -165,10 +192,10 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     # Versionar en macro_history (Calma todosLosMacros) los macros calculados por el quiz, igual
     # que hacen PUT /macros y el admin. Sin esto, el resolver por fecha (dietas, ajustar macros)
     # usaría entradas antiguas o el fallback e ignoraría los macros recién calculados → desajuste.
+    client_id = profile.get("id") or str(uuid.uuid4())
+    if not profile.get("id"):
+        await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": {"id": client_id}})
     if "macros_training" in update:
-        client_id = profile.get("id") or str(uuid.uuid4())
-        if not profile.get("id"):
-            await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": {"id": client_id}})
         training = update["macros_training"]
         rest = update["macros_rest"]
         peri = update.get("macros_periworkout")
@@ -192,8 +219,69 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
             "porcentaje_graso": data.body_fat,
             "sexo": sexo,
             "objetivo": data.goal,
+            # Motor v2: desglose explicable y ajustes que originaron estos macros.
+            "motor": {"version": resultado["version_motor"], "desglose": resultado["desglose"],
+                      "ajustes": ajustes} if resultado else None,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    # GUARDAR SIEMPRE las respuestas desde el dia uno (calibracion futura), y
+    # avisar al coach si la dieta reportada no cuadra con lo recomendado.
+    await guardar_quiz_respuestas(
+        user_id=user["id"],
+        client_id=client_id,
+        origen="quiz_inicial",
+        respuestas=data.model_dump(),
+        resultado=resultado,
+        contexto={"peso": data.weight, "porcentaje_graso": data.body_fat,
+                  "sexo": sexo, "objetivo": data.goal},
+    )
+    await registrar_revision({**profile, "id": client_id}, user, resultado)
+
+    updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado}
+
+
+@router.post("/clients/questionnaire/nivel1", response_model=ClientProfile)
+async def submit_questionnaire_nivel1(data: Nivel1Submit, user = Depends(get_current_user)):
+    """Cuestionario Nivel 1 (solo planes con coach). Alimenta el perfil largo
+    (biotipo, pesos historicos, salud, entreno, alimentos...) y el caso gemelo.
+    NO toca los macros: eso es exclusivo del Nivel 0 y del motor."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    nivel1 = {k: v for k, v in data.model_dump().items() if v is not None}
+    update = {
+        "nivel1": nivel1,
+        "questionnaire_nivel1_completed": True,
+    }
+    # Espejo de los campos que ya existian en el perfil plano (los usan la ficha
+    # del coach, el caso gemelo y el chatbot).
+    if data.height is not None:
+        update["height"] = data.height
+    if data.biotype:
+        update["biotype"] = data.biotype
+    if data.birthdate:
+        update["birthdate"] = data.birthdate
+        update["age"] = _age_from_birthdate(data.birthdate)
+    if data.training_experience:
+        update["training_experience"] = data.training_experience
+    if data.num_comidas is not None:
+        update["diet_num_comidas"] = data.num_comidas
+
+    client_id = profile.get("id") or str(uuid.uuid4())
+    if not profile.get("id"):
+        update["id"] = client_id
+
+    await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
+
+    await guardar_quiz_respuestas(
+        user_id=user["id"],
+        client_id=client_id,
+        origen="nivel1",
+        respuestas=nivel1,
+    )
 
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
@@ -382,6 +470,27 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
     if data.objetivo:
         update["goal"] = data.objetivo
 
+    # Motor v2: ultima version de las preguntas 5-8 al perfil (precarga de la
+    # pantalla y recalculos futuros). La revision se recalcula en SERVIDOR (no
+    # nos fiamos del desglose que mande el front).
+    ajustes = data.ajustes.model_dump() if data.ajustes is not None else None
+    resultado_v2 = None
+    if ajustes is not None:
+        update["ajustes_macros"] = ajustes
+        peso_v2 = data.peso if data.peso is not None else profile.get("weight")
+        bf_v2 = data.porcentaje_graso if data.porcentaje_graso is not None else profile.get("body_fat")
+        sexo_v2 = data.sexo or profile.get("sex")
+        obj_v2 = data.objetivo or profile.get("goal")
+        if all([peso_v2, sexo_v2, bf_v2, obj_v2]):
+            try:
+                resultado_v2 = calcular_macros_v2(
+                    float(peso_v2), sexo_v2, float(bf_v2), obj_v2,
+                    farmacologia=bool(profile.get("farmacologia")),
+                    **ajustes_to_kwargs(ajustes),
+                )
+            except (ValueError, KeyError):
+                pass
+
     # El versionado por fecha (macro_history) se indexa por profile.id. Algunos perfiles antiguos
     # no tienen el campo `id`; lo generamos y persistimos para que el resolver de dietas funcione.
     client_id = profile.get("id") or str(uuid.uuid4())
@@ -416,7 +525,27 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         "objetivo": data.objetivo,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if ajustes is not None:
+        macro_log["motor"] = {
+            "version": 2,
+            "ajustes": ajustes,
+            # El desglose del front es informativo; el recalculado manda.
+            "desglose": (resultado_v2 or {}).get("desglose") or data.desglose,
+        }
     await db.macro_history.insert_one(macro_log)
+
+    revision_registrada = False
+    if ajustes is not None:
+        await guardar_quiz_respuestas(
+            user_id=user["id"],
+            client_id=client_id,
+            origen="ajustar_macros_guardar",
+            respuestas=ajustes,
+            resultado=resultado_v2,
+            contexto={"peso": data.peso, "porcentaje_graso": data.porcentaje_graso,
+                      "sexo": data.sexo, "objetivo": data.objetivo},
+        )
+        revision_registrada = await registrar_revision({**profile, "id": client_id}, user, resultado_v2)
 
     return {
         "success": True,
@@ -424,6 +553,7 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         "rest": rest,
         "peri": peri,
         "effective_date": effective_date,
+        "revision_avisada": revision_registrada,
     }
 
 

@@ -74,6 +74,10 @@ async def create_indexes():
     await _ensure("food_suggestion_photos", [("suggestion_id", 1), ("kind", 1)])
     # Envíos de reportes del coach (cadencia quincenal/mensual/semanal por plan).
     await _ensure("coach_reports", [("client_id", 1), ("tipo", 1), ("due_date", 1)], unique=True)
+    # Motor de macros v2: respuestas del quiz (append-only, para calibrar el modelo
+    # predictivo) y revisiones pendientes de dieta reportada que no cuadra.
+    await _ensure("quiz_respuestas", [("client_id", 1), ("created_at", -1)])
+    await _ensure("macro_revisiones", [("trainer_id", 1), ("status", 1), ("created_at", -1)])
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""

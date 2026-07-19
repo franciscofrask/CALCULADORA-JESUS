@@ -327,6 +327,13 @@ class ClientProfile(BaseModel):
     training_experience: Optional[str] = None
     activity_level: Optional[str] = None
     biotype: Optional[str] = None
+    # Motor v2: ultima version de las preguntas 5-8 (para precargar Ajustar macros).
+    ajustes_macros: Optional[Dict[str, Any]] = None
+    # Usa farmacos -> +10% proteina SOLO descanso. Lo fija el coach (o Nivel 1), nunca el cliente.
+    farmacologia: Optional[bool] = None
+    # Cuestionario Nivel 1 (perfil largo para el coach; no toca macros).
+    nivel1: Optional[Dict[str, Any]] = None
+    questionnaire_nivel1_completed: Optional[bool] = None
     # Onboarding guiado (tour de producto): progreso por usuario.
     onboarding_completed: Optional[bool] = None
     onboarding_step: Optional[str] = None
@@ -387,7 +394,19 @@ class OnboardingUpdate(BaseModel):
     completed: Optional[bool] = None    # tour finalizado/omitido
     checklist_dismissed: Optional[bool] = None  # checklist "Primeros pasos" cerrado/completado
 
-# Cuestionario inicial (ELM)
+# Preguntas 5-8 del Nivel 0 ("Afina tus macros"): las que mueven el motor v2.
+# Se guardan SIEMPRE (quiz_respuestas + perfil), se apliquen o no.
+class AjustesMacros(BaseModel):
+    actividad_diaria: Optional[str] = None      # sedentario | normal | muy_activo
+    deporte_extra: Optional[bool] = None
+    facilidad_engordar: Optional[str] = None    # enseguida | normal | casi_no
+    sigue_dieta: Optional[bool] = None
+    dieta_texto: Optional[str] = None           # texto libre, se guarda tal cual
+    dieta_hc_entreno: Optional[float] = None    # HC totales del dia de entreno que come ahora
+    dieta_grasa_entreno: Optional[float] = None # grasa aproximada (opcional)
+    historial_dietas: Optional[str] = None      # +-10%: guardar, NO aplicar (spec)
+
+# Cuestionario inicial (ELM) - Nivel 0
 class QuestionnaireSubmit(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
@@ -401,6 +420,29 @@ class QuestionnaireSubmit(BaseModel):
     activity_level: Optional[str] = None  # sedentario | ligero | moderado | activo
     biotype: Optional[str] = None
     body_fat: float  # %
+    ajustes: Optional[AjustesMacros] = None  # preguntas 5-8 del quiz nuevo
+
+# Cuestionario Nivel 1 (solo planes con coach: calculadora == 'personalizado').
+# Alimenta perfil, caso gemelo y estrategia; NO toca los macros.
+class Nivel1Submit(BaseModel):
+    biotype: Optional[str] = None
+    height: Optional[float] = None              # cm
+    birthdate: Optional[str] = None             # YYYY-MM-DD
+    training_experience: Optional[str] = None
+    peso_maximo: Optional[float] = None
+    peso_minimo: Optional[float] = None
+    peso_habitual: Optional[float] = None
+    peso_mejor_momento: Optional[float] = None
+    salud: Optional[Dict[str, Any]] = None      # {sueno, estres, medicacion, hormonal, lesiones}
+    dietas_previas: Optional[str] = None
+    entrenador_anterior: Optional[str] = None
+    dias_entreno: Optional[int] = None
+    hora_entreno: Optional[str] = None
+    material: Optional[List[str]] = None
+    cardio: Optional[str] = None
+    alimentos_evitados: Optional[List[str]] = None
+    alergias: Optional[str] = None
+    num_comidas: Optional[int] = None
 
 # Macros Models
 class MacrosData(BaseModel):
@@ -426,3 +468,7 @@ class MacrosUpdate(BaseModel):
     porcentaje_graso: Optional[float] = None
     sexo: Optional[str] = None
     objetivo: Optional[str] = None
+    # Motor v2: preguntas 5-8 y desglose del calculo que origino estos macros
+    # (se versionan en macro_history.motor; la revision se recalcula en servidor).
+    ajustes: Optional[AjustesMacros] = None
+    desglose: Optional[List[Dict[str, Any]]] = None

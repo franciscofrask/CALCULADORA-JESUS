@@ -416,6 +416,23 @@ const ClientDashboard = () => {
                 </div>
             </div>
 
+            {/* Cuestionario Nivel 1 pendiente (planes con coach): retomable, no bloqueante */}
+            {can('macros_personalizados') && profile?.questionnaire_completed && !profile?.questionnaire_nivel1_completed && (
+                <button onClick={() => navigate('/questionnaire')} data-testid="nivel1-pending-banner"
+                    className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">
+                    <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center">
+                            <ClipboardCheck className="w-5 h-5 text-brand" />
+                        </div>
+                        <div className="text-left">
+                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">Completa tu perfil para tu coach</p>
+                            <p className="text-muted-foreground text-sm">Te quedan unas preguntas (biotipo, salud, entreno...). No cambian tus macros.</p>
+                        </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
+                </button>
+            )}
+
             {/* Today routine highlight (solo si el plan incluye rutina) */}
             {can('rutina') && (
             <button onClick={() => navigate('/dashboard/routine')} data-testid="routine-card"

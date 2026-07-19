@@ -17,6 +17,40 @@ from calculator import invalidate_foods_cache
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+# ==================== REVISIONES DE MACROS (motor v2) ====================
+# Dieta reportada que no cuadra con lo recomendado: el motor la deja en
+# db.macro_revisiones con status 'pendiente' y aquí la ve/resuelve el staff.
+
+@router.get("/macro-revisiones")
+async def list_macro_revisiones(status: str = "pendiente", user = Depends(get_admin_user)):
+    """Revisiones de macros pendientes. El trainer solo ve las de sus clientes."""
+    query: Dict[str, Any] = {"status": status}
+    if user.get("role") == "trainer":
+        query["trainer_id"] = user["id"]
+    items = await db.macro_revisiones.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+
+    # Nombre del cliente en una consulta batch.
+    uids = list({i.get("user_id") for i in items if i.get("user_id")})
+    users = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}).to_list(len(uids) or 1)
+    umap = {u["id"]: u for u in users}
+    for i in items:
+        u = umap.get(i.get("user_id")) or {}
+        i["client_name"] = u.get("name") or u.get("email") or "Cliente"
+    return {"items": items}
+
+
+@router.post("/macro-revisiones/{revision_id}/resolver")
+async def resolve_macro_revision(revision_id: str, user = Depends(get_admin_user)):
+    """Marca una revisión de macros como revisada."""
+    r = await db.macro_revisiones.update_one(
+        {"id": revision_id},
+        {"$set": {"status": "revisada", "resolved_by": user.get("name", user.get("email")),
+                  "resolved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Revisión no encontrada")
+    return {"success": True}
+
 # ==================== CLIENTS ====================
 
 @router.get("/clients", response_model=List[Dict[str, Any]])

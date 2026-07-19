@@ -35,6 +35,18 @@ const AdminDashboard = () => {
     const [clients, setClients] = useState([]);
     const [cadence, setCadence] = useState([]);
     const [loading, setLoading] = useState(true);
+    // Motor de macros v2: dietas reportadas que no cuadran, pendientes de revisar.
+    const [revisiones, setRevisiones] = useState([]);
+
+    const resolverRevision = async (rev) => {
+        try {
+            await api.post(`/admin/macro-revisiones/${rev.id}/resolver`);
+            setRevisiones(prev => prev.filter(r => r.id !== rev.id));
+            toast.success('Revisión marcada como revisada');
+        } catch {
+            toast.error('No se pudo marcar la revisión');
+        }
+    };
 
     const markReport = async (item, enviado) => {
         try {
@@ -59,16 +71,18 @@ const AdminDashboard = () => {
     useEffect(() => {
         const fetchAll = async () => {
             try {
-                const [statsRes, upcomingRes, clientsRes, cadenceRes] = await Promise.all([
+                const [statsRes, upcomingRes, clientsRes, cadenceRes, revisionesRes] = await Promise.all([
                     api.get('/admin/dashboard-stats'),
                     api.get('/admin/upcoming-payments'),
                     api.get('/admin/clients'),
                     api.get('/admin/report-cadence'),
+                    api.get('/admin/macro-revisiones').catch(() => ({ data: { items: [] } })),
                 ]);
                 setStats(statsRes.data);
                 setUpcoming(upcomingRes.data.upcoming || []);
                 setClients(clientsRes.data || []);
                 setCadence(cadenceRes.data.items || []);
+                setRevisiones(revisionesRes.data.items || []);
             } catch (error) {
                 console.error('Error fetching dashboard:', error);
                 toast.error('Error al cargar dashboard');
@@ -252,6 +266,47 @@ const AdminDashboard = () => {
                                             </Button>
                                         )}
                                     </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Macros por revisar (motor v2): dieta reportada que no cuadra con lo recomendado */}
+            <Card className="bg-[#111111] border-[#222]" data-testid="macro-revisiones">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="text-base text-white uppercase tracking-wider flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-[#FF671F]" />
+                            Macros por revisar
+                        </span>
+                        <Badge className={`border-0 text-xs ${revisiones.length > 0 ? 'bg-[#FF671F]/20 text-[#FF671F]' : 'bg-green-500/10 text-green-500'}`}>
+                            {revisiones.length > 0 ? `${revisiones.length} pendientes` : 'Al día'}
+                        </Badge>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    {revisiones.length === 0 ? (
+                        <p className="text-white/30 text-sm text-center py-4">Ninguna dieta reportada pendiente de revisar</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {revisiones.map((rev, i) => (
+                                <div key={rev.id}
+                                    className="flex items-center justify-between gap-2 p-3 bg-[#0A0A0A] rounded-lg border border-[#222] hover:border-[#FF671F]/30 transition-colors"
+                                    data-testid={`revision-${i}`}>
+                                    <div className="min-w-0 cursor-pointer" onClick={() => rev.client_id && navigate(`/admin/clients/${rev.client_id}`)}>
+                                        <p className="text-white text-sm font-medium truncate">{rev.client_name}</p>
+                                        <p className="text-white/40 text-xs truncate">
+                                            Come {Math.round(rev.comparacion?.hc_reportados || 0)} g de HC · recomendado {rev.comparacion?.hc_recomendados} g
+                                            · diferencia {rev.comparacion?.diferencia > 0 ? '+' : ''}{rev.comparacion?.diferencia} g
+                                            · {new Date(rev.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                                        </p>
+                                    </div>
+                                    <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs uppercase flex-shrink-0"
+                                        onClick={() => resolverRevision(rev)} data-testid={`revision-resolver-${i}`}>
+                                        Revisada
+                                    </Button>
                                 </div>
                             ))}
                         </div>
