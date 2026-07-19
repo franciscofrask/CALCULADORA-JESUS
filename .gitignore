@@ -124,3 +124,4 @@ serviceAccountKey.json
 
 # Biblioteca de menus (fuente CSV, 56MB - no va a git)
 backend/_biblioteca_menus_fuente.csv
+backend/_fotos_calma/
