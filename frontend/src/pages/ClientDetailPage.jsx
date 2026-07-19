@@ -30,7 +30,7 @@ const USER_ROLES = [
 ];
 
 // ===== Buscador de menús para el coach (biblioteca real de clientes + recetario) =====
-const MenuFinder = ({ api, clientId }) => {
+const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
     const [macros, setMacros] = useState({ P: '', H: '', G: '' });
     const [momento, setMomento] = useState('comida');
     const [fuente, setFuente] = useState('ambas');
@@ -38,6 +38,34 @@ const MenuFinder = ({ api, clientId }) => {
     const [resultados, setResultados] = useState(null);
     const [relajado, setRelajado] = useState(false);
     const [buscando, setBuscando] = useState(false);
+    const [enviando, setEnviando] = useState(null);   // id del menú que se está enviando
+
+    // Texto plano del menú (para copiar o mandar por el chat)
+    const menuATexto = (op) => {
+        const t = op.macros_totales || {};
+        const lineas = (op.items || []).map(it => `• ${it.nombre}: ${it.cantidad_g} g`).join('\n');
+        return `Menú propuesto (${t.P?.toFixed(0)}P · ${t.H?.toFixed(0)}H · ${t.G?.toFixed(0)}G · ${t.kcal} kcal):\n${lineas}`;
+    };
+
+    const copiarMenu = async (op) => {
+        try {
+            await navigator.clipboard.writeText(menuATexto(op));
+            toast.success('Menú copiado al portapapeles');
+        } catch { toast.error('No se pudo copiar'); }
+    };
+
+    // Envía el menú al CHAT del cliente (le llega como mensaje del coach, con su
+    // contador de no leídos). Es la forma de "hacer algo" con un menú encontrado.
+    const enviarMenu = async (op) => {
+        if (!clientUserId) { toast.error('Este cliente no tiene usuario de chat'); return; }
+        const key = op.biblioteca_id || op.plantilla_id || op.letra;
+        setEnviando(key);
+        try {
+            await api.post('/messages', { receiver_id: clientUserId, content: menuATexto(op) });
+            toast.success(`Menú enviado al chat de ${clientName || 'el cliente'}`);
+        } catch { toast.error('No se pudo enviar el menú'); }
+        setEnviando(null);
+    };
 
     // FoodFilterBar espera el api estilo fetch del área cliente; adaptamos el axios del admin
     const fetchApi = React.useCallback(
@@ -136,11 +164,24 @@ const MenuFinder = ({ api, clientId }) => {
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex gap-2 pt-1">
+                            <div className="flex gap-2 pt-1 items-center flex-wrap">
                                 <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-500/15 text-green-400">{op.macros_totales?.P?.toFixed(0)}P</span>
                                 <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/15 text-blue-400">{op.macros_totales?.H?.toFixed(0)}H</span>
                                 <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-400">{op.macros_totales?.G?.toFixed(0)}G</span>
                                 <span className="px-2 py-0.5 rounded-full text-[11px] text-white/40">{op.macros_totales?.kcal} kcal</span>
+                                <span className="flex-1" />
+                                <Button size="sm" variant="outline" onClick={() => copiarMenu(op)}
+                                    className="h-7 px-2.5 text-xs bg-transparent border-[#333] text-white/70 hover:text-white hover:border-[#FF671F]"
+                                    data-testid={`menufinder-copiar-${op.letra}`}>
+                                    Copiar
+                                </Button>
+                                <Button size="sm" onClick={() => enviarMenu(op)}
+                                    disabled={enviando === (op.biblioteca_id || op.plantilla_id || op.letra)}
+                                    className="h-7 px-2.5 text-xs bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-semibold"
+                                    data-testid={`menufinder-enviar-${op.letra}`}>
+                                    {enviando === (op.biblioteca_id || op.plantilla_id || op.letra)
+                                        ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Enviar por chat'}
+                                </Button>
                             </div>
                         </div>
                     ))}
@@ -796,7 +837,7 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB MENÚS (buscador biblioteca + recetario) ========== */}
                 <TabsContent value="menus" className="space-y-4">
-                    <MenuFinder api={api} clientId={clientId} />
+                    <MenuFinder api={api} clientId={clientId} clientUserId={client?.user_id} clientName={client?.name} />
                 </TabsContent>
 
                 {/* ========== TAB CALCULADORA ========== */}
