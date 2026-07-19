@@ -15,15 +15,23 @@ router = APIRouter(prefix="/messages", tags=["messages"])
 
 async def _resolve_receiver(user: dict, receiver_id: Optional[str]) -> str:
     """Traduce el destinatario 'support' (o vacio) a una persona real:
-    el coach del cliente si tiene, o el primer admin como soporte."""
+    el coach del cliente si tiene, o el primer admin como soporte.
+    Nunca se resuelve a uno mismo: un admin probando en modo cliente acababa
+    chateando consigo y todos los mensajes salían en el mismo lado."""
     if receiver_id and receiver_id != "support":
         return receiver_id
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "trainer_id": 1})
-    if profile and profile.get("trainer_id"):
+    if profile and profile.get("trainer_id") and profile["trainer_id"] != user["id"]:
         return profile["trainer_id"]
     admin_user = await db.users.find_one(
-        {"role": "admin", "deleted_at": None}, {"_id": 0, "id": 1}, sort=[("created_at", 1)]
+        {"role": "admin", "deleted_at": None, "id": {"$ne": user["id"]}},
+        {"_id": 0, "id": 1}, sort=[("created_at", 1)]
     )
+    if not admin_user:
+        admin_user = await db.users.find_one(
+            {"role": "trainer", "deleted_at": None, "id": {"$ne": user["id"]}},
+            {"_id": 0, "id": 1}, sort=[("created_at", 1)]
+        )
     if not admin_user:
         raise HTTPException(status_code=500, detail="No hay ningún admin para recibir el mensaje")
     return admin_user["id"]
