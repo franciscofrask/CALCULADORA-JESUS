@@ -16,7 +16,11 @@ export function deriveCapabilities(habilitaciones) {
     const h = habilitaciones || {};
     const reportes = h.reportes || [];
     return {
-        [CAP.RUTINA]: !!h.rutina && h.rutina !== 'ninguna',
+        // RUTINA OCULTA temporalmente (petición 19-07-2026) hasta completar la
+        // funcionalidad. Al reactivarla, restaurar: !!h.rutina && h.rutina !== 'ninguna'
+        // Oculta menú, tarjeta "Entreno de hoy", paso del tour y la ruta directa
+        // (CapabilityRoute). El panel de admin de rutinas NO se toca.
+        [CAP.RUTINA]: false,
         [CAP.SUPLEMENTACION]: !!h.suplementacion,
         [CAP.MACROS_PERSONALIZADOS]: h.calculadora === 'personalizado',
         [CAP.REPORTES]: reportes.length > 0,
