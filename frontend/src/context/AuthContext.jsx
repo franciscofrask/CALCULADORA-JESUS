@@ -153,14 +153,18 @@ export const AuthProvider = ({ children }) => {
     );
     const habilitaciones = myPlan?.habilitaciones || null;
     const capabilities = useMemo(() => deriveCapabilities(habilitaciones), [habilitaciones]);
-    // can(cap): ¿el plan del usuario habilita esta capacidad? Si aún no hay plan
-    // o catálogo cargado, devolvemos true para no ocultar nada por error de carga.
+    // can(cap): ¿el plan del usuario habilita esta capacidad?
+    // - MIENTRAS CARGA (perfil o catálogo sin resolver): true, para no parpadear.
+    // - CARGADO y sin plan contratado (sin perfil, pago pendiente o plan desconocido):
+    //   false. Antes abría por defecto y un registro sin plan veía TODAS las
+    //   funcionalidades (rutina, reportes, suplementos...).
     const can = useCallback(
         (cap) => {
-            if (!myPlan) return true;
+            if (loading || !Object.keys(planCatalog).length) return true;
+            if (!myPlan) return false;
             return !!capabilities[cap];
         },
-        [myPlan, capabilities]
+        [loading, planCatalog, myPlan, capabilities]
     );
 
     const value = {
