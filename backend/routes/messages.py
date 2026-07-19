@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 import uuid
 
+from core.config import SUPPORT_EMAILS
 from core.database import db
 from core.security import get_current_user, get_admin_user
 from models.common import MessageCreate, MessageResponse
@@ -23,6 +24,13 @@ async def _resolve_receiver(user: dict, receiver_id: Optional[str]) -> str:
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "trainer_id": 1})
     if profile and profile.get("trainer_id") and profile["trainer_id"] != user["id"]:
         return profile["trainer_id"]
+    for email in SUPPORT_EMAILS:
+        support_user = await db.users.find_one(
+            {"email": email, "deleted_at": None, "id": {"$ne": user["id"]}},
+            {"_id": 0, "id": 1},
+        )
+        if support_user:
+            return support_user["id"]
     admin_user = await db.users.find_one(
         {"role": "admin", "deleted_at": None, "id": {"$ne": user["id"]}},
         {"_id": 0, "id": 1}, sort=[("created_at", 1)]

@@ -35,3 +35,13 @@ FRONTEND_URL = (os.environ.get('FRONTEND_URL') or os.environ.get('APP_BASE_URL')
 # Billing cycle (matches calmajp: 12 weeks = 84 days). Change here if cobro mensual.
 DEFAULT_BILLING_CYCLE_WEEKS = 12
 DEFAULT_BILLING_CYCLE_DAYS = DEFAULT_BILLING_CYCLE_WEEKS * 7
+
+# Cuentas que reciben el chat de "Soporte" (clientes sin entrenador asignado),
+# en orden de preferencia. Si ninguna existe se cae al primer admin que no sea uno mismo.
+SUPPORT_EMAILS = [
+    e.strip().lower()
+    for e in os.environ.get(
+        'SUPPORT_EMAILS', 'hola@jesusgallegopt.com,admin@jesusgallegopt.com'
+    ).split(',')
+    if e.strip()
+]
