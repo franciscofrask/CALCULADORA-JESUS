@@ -38,12 +38,20 @@ ALERT_DEDUPE_DAYS = 7
 
 # ==================== Stripe module / config ====================
 
+# Mensaje genérico de cara al usuario: el detalle real (qué variable falta, qué
+# módulo, qué excepción) va SOLO al log. Un error de configuración nunca debe
+# exponer nombres de variables, scripts o internos del código en la respuesta.
+PAGOS_NO_DISPONIBLES = "Los pagos no están disponibles en este momento. Inténtalo más tarde o contacta con soporte."
+
+
 def get_stripe_module():
     if stripe is None:
-        raise HTTPException(status_code=503, detail="La dependencia 'stripe' no está instalada en el backend.")
+        logger.error("Stripe no disponible: la dependencia 'stripe' no está instalada")
+        raise HTTPException(status_code=503, detail=PAGOS_NO_DISPONIBLES)
     secret_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
     if not secret_key:
-        raise HTTPException(status_code=503, detail="Falta STRIPE_SECRET_KEY en la configuración del backend.")
+        logger.error("Stripe no disponible: falta STRIPE_SECRET_KEY en el entorno")
+        raise HTTPException(status_code=503, detail=PAGOS_NO_DISPONIBLES)
     stripe.api_key = secret_key
     stripe.api_version = STRIPE_API_VERSION
     return stripe
@@ -66,7 +74,8 @@ def get_stripe_key_mode() -> str:
 def require_stripe_test_mode(action: str = "Esta operación"):
     mode = get_stripe_key_mode()
     if mode == "missing":
-        raise HTTPException(status_code=503, detail="Falta STRIPE_SECRET_KEY para ejecutar pruebas de Stripe.")
+        logger.error("Stripe no disponible para pruebas: falta STRIPE_SECRET_KEY")
+        raise HTTPException(status_code=503, detail=PAGOS_NO_DISPONIBLES)
     if mode != "test" and not STRIPE_ALLOW_LIVE_MODE:
         raise HTTPException(
             status_code=409,
@@ -89,9 +98,14 @@ def get_stripe_price_id_for_plan(plan: str) -> str:
     env_name = plan_info["stripe_price_env"]
     price_id = os.environ.get(env_name, "").strip()
     if not price_id:
+        logger.error(
+            "Precio de Stripe sin configurar para el plan %s: falta %s (correr setup_stripe_products.py)",
+            plan_info["name"], env_name,
+        )
         raise HTTPException(
             status_code=503,
-            detail=f"Falta configurar {env_name} para el plan {plan_info['name']}. Corre setup_stripe_products.py.",
+            detail=f"El plan {plan_info['name']} no está disponible para compra en este momento. "
+                   "Inténtalo más tarde o contacta con soporte.",
         )
     return price_id
 

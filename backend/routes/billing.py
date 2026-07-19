@@ -108,8 +108,9 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
             expand=["subscription", "subscription.default_payment_method"],
         )
     except Exception as exc:
+        # El detalle de la excepción va SOLO al log: puede contener internos de Stripe.
         logger.exception("Error recuperando checkout session %s", session_id)
-        raise HTTPException(status_code=400, detail=f"No se pudo recuperar la sesión de Stripe: {exc}") from exc
+        raise HTTPException(status_code=400, detail="No se pudo verificar el pago. Inténtalo de nuevo en unos minutos.") from exc
 
     metadata = session.get("metadata") or {}
     profile_id = session.get("client_reference_id") or metadata.get("profile_id")
@@ -185,7 +186,8 @@ async def stripe_webhooks(request: Request):
     stripe_module = get_stripe_module()
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
     if not webhook_secret:
-        raise HTTPException(status_code=503, detail="Falta STRIPE_WEBHOOK_SECRET en el backend.")
+        logger.error("Webhook de Stripe rechazado: falta STRIPE_WEBHOOK_SECRET en el entorno")
+        raise HTTPException(status_code=503, detail="Webhook no disponible")
 
     payload = await request.body()
     signature = request.headers.get("stripe-signature")
