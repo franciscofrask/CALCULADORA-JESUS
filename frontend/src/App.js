@@ -31,6 +31,7 @@ import AdminFoodSuggestionsPage from "./pages/AdminFoodSuggestionsPage";
 import AdminPlansPage from "./pages/AdminPlansPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 import WelcomePage from "./pages/WelcomePage";
+import InstallPrompt from "./components/InstallPrompt";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -188,6 +189,7 @@ function App() {
                     <OnboardingProvider>
                         <AppRoutes />
                         <Toaster position="top-center" richColors />
+                        <InstallPrompt />
                     </OnboardingProvider>
                 </AuthProvider>
             </BrowserRouter>

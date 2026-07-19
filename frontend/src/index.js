@@ -9,3 +9,11 @@ root.render(
     <App />
   </React.StrictMode>,
 );
+
+// PWA: registrar el service worker (solo fuera de localhost; en desarrollo
+// molesta y no aporta). Hace la app instalable desde el navegador.
+if ("serviceWorker" in navigator && window.location.hostname !== "localhost") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
