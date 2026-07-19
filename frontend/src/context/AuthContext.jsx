@@ -118,6 +118,14 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
+        // La conversación del chatbot caduca al cerrar sesión: se borra en el backend
+        // (mejor esfuerzo: si el token ya expiró, el TTL de 7 días la limpiará igual)
+        // y se descarta el snapshot local para que no reaparezca en el próximo login.
+        const hadToken = localStorage.getItem('token');
+        if (hadToken) {
+            try { api.delete('/chatbot/sessions').catch(() => {}); } catch (e) {}
+        }
+        try { sessionStorage.removeItem('chatbot_session_state'); } catch (e) {}
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);

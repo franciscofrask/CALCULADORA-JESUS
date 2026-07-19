@@ -359,6 +359,15 @@ async def chatbot_save_to_diet(
         "comidas": list(comidas.keys())
     }
 
+@router.delete("/sessions")
+async def chatbot_end_my_sessions(current_user: dict = Depends(get_current_user)):
+    """Borra TODAS las sesiones de chatbot del usuario. El frontend lo llama al
+    cerrar sesión: la conversación caduca con el logout, no espera al TTL."""
+    uid = current_user.get("id") or current_user.get("user_id")
+    result = await db.chatbot_sessions.delete_many({"session_id": {"$regex": f"^chat_{re.escape(uid)}_"}})
+    return {"deleted": result.deleted_count}
+
+
 @router.post("/reset")
 async def chatbot_reset(
     session_id: str,
