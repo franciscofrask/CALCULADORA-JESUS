@@ -2439,7 +2439,10 @@ class NutritionChatbot:
                 await _asyncio.sleep(0.3)
         if last_err is not None or not isinstance(raw, dict):
             print(f"[understand] fallo: {last_err}")
-            return {"intent": "add", "foods": [], "remove": None, "goto": None, "macro": None}
+            # Fallo del LLM (transitorio): NO seguir como un "add" vacío, que
+            # producía un "comida actualizada" sin alimentos y el chat quedaba
+            # en blanco/confuso. Se devuelve un intent propio para avisar.
+            return {"intent": "llm_fallo", "foods": [], "remove": None, "goto": None, "macro": None}
 
         intents = ("add", "suggest", "complete", "remove", "clear", "status",
                    "summary", "rebalance", "goto", "list", "question", "none")
@@ -2501,6 +2504,13 @@ class NutritionChatbot:
 
         data = await self.understand(user_input)
         intent = data.get("intent")
+        if intent == "llm_fallo":
+            # El interprete no está disponible ahora mismo: pedir reintento en
+            # vez de fingir una actualización vacía.
+            return {"action": "no_foods",
+                    "message": "Ahora mismo no he podido interpretar tu mensaje (fallo puntual del asistente). "
+                               "Escríbelo otra vez en unos segundos, o usa los botones de abajo.",
+                    "day_overview": self.get_day_overview()}
         # Cualquier acción que no sea informativa invalida las opciones pendientes
         # (si dice "pollo y arroz", un "2" posterior ya no debe referirse a la lista vieja).
         if intent not in ("question", "status", "summary", "list", "none"):

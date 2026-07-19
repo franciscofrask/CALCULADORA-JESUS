@@ -421,6 +421,7 @@ export default function ChatbotPage() {
   // Quitar un alimento de la comida actual
   const removeFood = async (index) => {
     if (loading) return;
+    const quitado = currentFoods[index];
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/chatbot/remove-food?session_id=${sessionId}&index=${index}`, {
@@ -428,6 +429,14 @@ export default function ChatbotPage() {
       });
       const data = await res.json();
       applyMealResponse(data.response);
+      // El chat también refleja el borrado hecho desde el panel: sin esto, el
+      // último mensaje del bot seguía contando el alimento recién quitado.
+      addMessage(formatMealUpdate({
+        ...data.response,
+        message: quitado
+          ? `He quitado ${quitado.nombre} (${quitado.cantidad_display}) de la comida.`
+          : 'Alimento quitado.',
+      }), false, data.response);
     } catch (e) { addMessage('Error al quitar el alimento.', false); }
     setLoading(false);
   };
@@ -585,7 +594,8 @@ export default function ChatbotPage() {
       }
     }
 
-    return msg;
+    // Nunca una burbuja en blanco: si la respuesta vino vacía, decirlo.
+    return msg.trim() || 'No he podido procesar eso. Escríbelo otra vez, por favor.';
   };
 
   // Reiniciar chat
