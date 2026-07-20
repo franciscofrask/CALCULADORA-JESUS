@@ -27,6 +27,11 @@ ZEBRA = colors.HexColor("#FAFAFC")
 GOOD = colors.HexColor("#16A34A")
 WARN = colors.HexColor("#D97706")
 
+# Color por rol del alimento (proteína / hidratos / grasa)
+ROL_COLOR = {"P": colors.HexColor("#2563EB"), "H": colors.HexColor("#059669"),
+             "G": colors.HexColor("#D97706")}
+ROL_NOMBRE = {"P": "Proteína", "H": "Hidratos", "G": "Grasa"}
+
 MESES = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
          "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
 
@@ -115,9 +120,18 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
         ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ('ROUNDEDCORNERS', [8, 8, 8, 8]),
     ]))
-    cliente = Table([[Paragraph(f"<b>{user_name}</b>", ParagraphStyle(
-        'cli', parent=styles['Normal'], fontSize=12, textColor=INK)), badge]],
-        colWidths=[116 * mm, 62 * mm])
+    # Línea de contexto: objetivo del cliente + semana del ciclo
+    ctx = []
+    if summary.get("objetivo_cliente"):
+        ctx.append(f"Objetivo: {summary['objetivo_cliente']}")
+    if summary.get("semana"):
+        ctx.append(f"Semana {summary['semana']} del ciclo")
+    nombre_block = [Paragraph(f"<b>{user_name}</b>", ParagraphStyle(
+        'cli', parent=styles['Normal'], fontSize=13, textColor=INK, leading=16))]
+    if ctx:
+        nombre_block.append(Paragraph("  ·  ".join(ctx), ParagraphStyle(
+            'ctx', parent=styles['Normal'], fontSize=9, textColor=MUTED, leading=13, spaceBefore=1)))
+    cliente = Table([[nombre_block, badge]], colWidths=[116 * mm, 62 * mm])
     cliente.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
@@ -134,42 +148,33 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
     st_card_sub = ParagraphStyle('cs', parent=styles['Normal'], fontName='Helvetica',
                                  fontSize=7.5, textColor=MUTED, leading=10, spaceBefore=1)
 
-    def card(label, consum, obj, unidad="g"):
-        val = f"{_fmt(consum)}{unidad}"
-        sub = f"de {_fmt(obj)}{unidad}" if hay_objetivo else "consumido"
-        return [Paragraph(label, st_card_lbl),
-                Paragraph(val, st_card_val),
-                Paragraph(sub, st_card_sub)]
+    def _card_lbl(label, accent):
+        return Paragraph(f"<font color='#{accent.hexval()[4:]}'><b>{label}</b></font>", st_card_lbl)
 
-    kcal_c = consumido.get("kcal", _kcal(consumido.get("P"), consumido.get("H"), consumido.get("G")))
-    kcal_o = objetivo.get("kcal", _kcal(objetivo.get("P"), objetivo.get("H"), objetivo.get("G")))
     cards = Table([[
-        card("CALORÍAS", kcal_c, kcal_o, " kcal"),
-        card("PROTEÍNA", consumido.get("P", 0), objetivo.get("P", 0)),
-        card("HIDRATOS", consumido.get("H", 0), objetivo.get("H", 0)),
-        card("GRASA", consumido.get("G", 0), objetivo.get("G", 0)),
-    ]], colWidths=[44.5 * mm] * 4)
+        [_card_lbl("PROTEÍNA", ROL_COLOR["P"]),
+         Paragraph(f"{_fmt(consumido.get('P',0))} g", st_card_val),
+         Paragraph(f"objetivo {_fmt(objetivo.get('P',0))} g" if hay_objetivo else "del día", st_card_sub)],
+        [_card_lbl("HIDRATOS", ROL_COLOR["H"]),
+         Paragraph(f"{_fmt(consumido.get('H',0))} g", st_card_val),
+         Paragraph(f"objetivo {_fmt(objetivo.get('H',0))} g" if hay_objetivo else "del día", st_card_sub)],
+        [_card_lbl("GRASA", ROL_COLOR["G"]),
+         Paragraph(f"{_fmt(consumido.get('G',0))} g", st_card_val),
+         Paragraph(f"objetivo {_fmt(objetivo.get('G',0))} g" if hay_objetivo else "del día", st_card_sub)],
+    ]], colWidths=[59.3 * mm] * 3)
     cards.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
-        ('BOX', (0, 0), (0, -1), 0.8, BRAND_EDGE),
+        ('BOX', (0, 0), (0, -1), 0.8, LINE),
         ('BOX', (1, 0), (1, -1), 0.8, LINE),
         ('BOX', (2, 0), (2, -1), 0.8, LINE),
-        ('BOX', (3, 0), (3, -1), 0.8, LINE),
-        ('BACKGROUND', (0, 0), (0, -1), BRAND_SOFT),
+        ('LINEBEFORE', (0, 0), (0, -1), 3, ROL_COLOR["P"]),
+        ('LINEBEFORE', (1, 0), (1, -1), 3, ROL_COLOR["H"]),
+        ('LINEBEFORE', (2, 0), (2, -1), 3, ROL_COLOR["G"]),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 9), ('RIGHTPADDING', (0, 0), (-1, -1), 9),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10), ('RIGHTPADDING', (0, 0), (-1, -1), 9),
         ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
     ]))
     elements.append(cards)
-
-    # Reparto calórico + cuadre (una línea informativa)
-    if kcal_c:
-        pp = round((consumido.get("P", 0) * 4) / kcal_c * 100)
-        ph = round((consumido.get("H", 0) * 4) / kcal_c * 100)
-        pg = max(0, 100 - pp - ph)
-        reparto = f"Reparto calórico:  proteína {pp}%  ·  hidratos {ph}%  ·  grasa {pg}%"
-        elements.append(Spacer(1, 2.5 * mm))
-        elements.append(Paragraph(reparto, st_note))
 
     # ---- Detalle por comida ----
     elements.append(Paragraph("Comidas del día", st_section))
@@ -183,12 +188,13 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
         alimentos = comida.get("alimentos", [])
         macros = comida.get("macros", {})
         obj_c = comida.get("objetivo", {})
-        mkcal = macros.get("kcal", _kcal(macros.get("P"), macros.get("H"), macros.get("G")))
 
-        # Encabezado de la comida (nombre + kcal), tipo "pill"
+        # Encabezado de la comida (nombre + macros de la comida), tipo "pill"
+        resumen_comida = (f"P {_fmt(macros.get('P',0))} · H {_fmt(macros.get('H',0))} "
+                          f"· G {_fmt(macros.get('G',0))}")
         cab = Table([[Paragraph(titulo, st_meal),
-                      Paragraph(f"{mkcal} kcal", st_meal_kcal)]],
-                    colWidths=[130 * mm, 48 * mm])
+                      Paragraph(resumen_comida, st_meal_kcal)]],
+                    colWidths=[110 * mm, 68 * mm])
         cab.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), BRAND_SOFT if comida.get("es_peri") else ZEBRA),
             ('LINEBELOW', (0, 0), (-1, -1), 1.2, BRAND if comida.get("es_peri") else LINE),
@@ -200,49 +206,50 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
         block = [cab]
 
         if alimentos:
-            data = [["Alimento", "Cant.", "P", "H", "G", "kcal"]]
+            data = [["Alimento", "Cantidad", "Aporta"]]
+            rol_rows = []  # (fila, color) para pintar el texto del rol
             for a in alimentos:
-                m = a.get("macros", {})
                 cant = a.get("cantidad", 0)
                 unidad = a.get("unidad", "g")
                 cant_str = f"{int(cant)} ud" if unidad == "ud" else f"{_fmt(cant)} g"
-                data.append([
-                    Paragraph(a.get("nombre", "-"), st_food),
-                    cant_str, _fmt(m.get("P", 0)), _fmt(m.get("H", 0)),
-                    _fmt(m.get("G", 0)), _fmt(m.get("kcal", 0)),
-                ])
-            # Fila consumido de la comida
-            data.append(["Total comida", "", _fmt(macros.get("P", 0)), _fmt(macros.get("H", 0)),
-                         _fmt(macros.get("G", 0)), _fmt(mkcal)])
+                rol = a.get("rol", "P")
+                color = ROL_COLOR.get(rol, INK)
+                aporta = Paragraph(
+                    f"<font color='#{color.hexval()[4:]}'><b>{_fmt(a.get('aporta',0))} g</b> "
+                    f"de {ROL_NOMBRE.get(rol, '').lower()}</font>",
+                    ParagraphStyle('ap', parent=st_food, fontSize=8.8))
+                data.append([Paragraph(a.get("nombre", "-"), st_food), cant_str, aporta])
+            # Fila resumen de la comida
+            data.append(["Total de la comida", "",
+                         Paragraph(f"<b>P {_fmt(macros.get('P',0))} · H {_fmt(macros.get('H',0))} "
+                                   f"· G {_fmt(macros.get('G',0))}</b>",
+                                   ParagraphStyle('tot', parent=st_food, fontSize=8.6))])
             n_rows = len(data)
             filas_style = [
                 ('BACKGROUND', (0, 0), (-1, 0), INK),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 8),
-                ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (1, 0), (1, -1), 'CENTER'),
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (2, 0), (2, -1), 'LEFT'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('FONTSIZE', (0, 1), (-1, -1), 8.5),
-                ('TEXTCOLOR', (0, 1), (-1, -1), INK),
                 ('TOPPADDING', (0, 0), (-1, -1), 4.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 4.5),
                 ('LEFTPADDING', (0, 0), (0, -1), 8),
                 ('LINEBELOW', (0, 0), (-1, -2), 0.4, LINE),
-                # Fila total
                 ('BACKGROUND', (0, -1), (-1, -1), BRAND_SOFT),
                 ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
                 ('LINEABOVE', (0, -1), (-1, -1), 0.8, BRAND),
                 ('BOX', (0, 0), (-1, -1), 0.5, LINE),
             ]
-            # Zebra en las filas de alimento
             for r in range(1, n_rows - 1):
                 if r % 2 == 0:
                     filas_style.append(('BACKGROUND', (0, r), (-1, r), ZEBRA))
-            tabla = Table(data, colWidths=[86 * mm, 22 * mm, 17 * mm, 17 * mm, 17 * mm, 19 * mm])
+            tabla = Table(data, colWidths=[104 * mm, 28 * mm, 46 * mm])
             tabla.setStyle(TableStyle(filas_style))
             block.append(tabla)
 
-            # Línea de objetivo/cuadre de la comida
+            # Línea de objetivo/cuadre de la comida (macros, sin calorías)
             if obj_c:
                 dP = round(obj_c.get("P", 0) - macros.get("P", 0), 1)
                 dH = round(obj_c.get("H", 0) - macros.get("H", 0), 1)
@@ -252,7 +259,7 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
                     txt = ("<font color='#16A34A'>&#10004; Cuadra con el objetivo</font> "
                            f"(P {_fmt(obj_c.get('P',0))} · H {_fmt(obj_c.get('H',0))} · G {_fmt(obj_c.get('G',0))})")
                 else:
-                    txt = ("<font color='#D97706'>Objetivo:</font> "
+                    txt = ("<font color='#D97706'>Objetivo de la comida:</font> "
                            f"P {_fmt(obj_c.get('P',0))} · H {_fmt(obj_c.get('H',0))} · G {_fmt(obj_c.get('G',0))}  "
                            f"({_signo(dP)}P · {_signo(dH)}H · {_signo(dG)}G)")
                 block.append(Spacer(1, 1.2 * mm))
@@ -271,8 +278,6 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
         for etq, k in [("Proteína", "P"), ("Hidratos", "H"), ("Grasa", "G")]:
             rows.append([etq, f"{_fmt(objetivo.get(k,0))} g", f"{_fmt(consumido.get(k,0))} g",
                          _signo(diferencia.get(k, 0)) + " g"])
-        rows.append(["Calorías", f"{_fmt(kcal_o)} kcal", f"{_fmt(kcal_c)} kcal",
-                     _signo(round(kcal_o - kcal_c)) + " kcal"])
         bal = Table(rows, colWidths=[52 * mm, 42 * mm, 42 * mm, 42 * mm])
         bal.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), INK),

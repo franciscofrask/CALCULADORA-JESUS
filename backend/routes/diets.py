@@ -373,10 +373,10 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
     # muestra objetivo vs consumido, no solo lo consumido).
     objetivo_por_comida = {}
     objetivo_total = {}
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     try:
         from routes.calculator import _resolve_macros_for_date
         from macro_distribution import distribuir_macros as _dist
-        profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
         if profile:
             training, rest, peri = await _resolve_macros_for_date(profile, fecha)
             base = training if tipo_dia == "entrenamiento" else rest
@@ -399,13 +399,23 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
                 objetivo_por_comida = {**dist.get("comidas", {}), **dist.get("periworkout", {})}
                 res = dist.get("resumen", {})
                 objetivo_total = {"P": res.get("P_total", 0), "H": res.get("H_total", 0),
-                                  "G": res.get("G_total", 0), "kcal": res.get("kcal_total", 0)}
+                                  "G": res.get("G_total", 0)}
     except Exception:
         objetivo_por_comida, objetivo_total = {}, {}
 
+    def _rol_de(a):
+        """Rol del alimento en el método: el macro para el que cuenta (P/H/G)."""
+        qc = a.get("que_cuenta") or {}
+        for k in ("P", "H", "G"):
+            if qc.get(k):
+                return k
+        # Sin que_cuenta (dato viejo): el macro efectivo con más peso.
+        me = a.get("macros_efectivos", {})
+        return max(("P", "H", "G"), key=lambda k: me.get(k, 0)) if me else "P"
+
     # Build comidas list in the format pdf_generator expects
     comidas_list = []
-    total_p, total_h, total_g, total_kcal = 0, 0, 0, 0
+    total_p, total_h, total_g = 0, 0, 0
 
     for key in ["C1", "Intra", "Post", "C2", "C3", "C4"]:
         meal_data = comidas_raw.get(key)
@@ -416,33 +426,33 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
             continue
 
         alimentos_pdf = []
-        mp, mh, mg, mk = 0, 0, 0, 0
+        mp, mh, mg = 0, 0, 0
         for a in alimentos_raw:
             me = a.get("macros_efectivos", {})
             p = round(me.get("P", 0), 1)
             h = round(me.get("H", 0), 1)
             g = round(me.get("G", 0), 1)
-            k = round(me.get("kcal", p * 4 + h * 4 + g * 9), 0)
-            mp += p; mh += h; mg += g; mk += k
+            mp += p; mh += h; mg += g
+            rol = _rol_de(a)
             alimentos_pdf.append({
                 "nombre": a.get("nombre", "?"),
                 "cantidad": a.get("cantidad_g", 0),
                 "unidad": a.get("unidad") or "g",
-                "macros": {"P": p, "H": h, "G": g, "kcal": k},
+                "rol": rol,
+                "aporta": {"P": p, "H": h, "G": g}.get(rol, 0),
             })
 
-        total_p += mp; total_h += mh; total_g += mg; total_kcal += mk
+        total_p += mp; total_h += mh; total_g += mg
         obj = objetivo_por_comida.get(key, {})
         comidas_list.append({
             "titulo": meal_names.get(key, key),
             "es_peri": key in ("Intra", "Post"),
             "alimentos": alimentos_pdf,
-            "macros": {"P": round(mp, 1), "H": round(mh, 1), "G": round(mg, 1), "kcal": round(mk)},
+            "macros": {"P": round(mp, 1), "H": round(mh, 1), "G": round(mg, 1)},
             "objetivo": {"P": obj.get("P", 0), "H": obj.get("H", 0), "G": obj.get("G", 0)} if obj else {},
         })
 
-    consumido = {"P": round(total_p, 1), "H": round(total_h, 1),
-                 "G": round(total_g, 1), "kcal": round(total_kcal)}
+    consumido = {"P": round(total_p, 1), "H": round(total_h, 1), "G": round(total_g, 1)}
     diferencia = {}
     if objetivo_total:
         diferencia = {
@@ -451,8 +461,13 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
             "G": round(objetivo_total["G"] - consumido["G"], 1),
         }
 
+    goal_labels = {"volumen": "Volumen", "definicion": "Definición", "definición": "Definición",
+                   "mantenimiento": "Mantenimiento", "recomposicion": "Recomposición"}
+    goal_raw = (profile or {}).get("goal")
     summary = {
         "tipo_dia": tipo_dia,
+        "objetivo_cliente": goal_labels.get((goal_raw or "").lower(), goal_raw),
+        "semana": (profile or {}).get("week"),
         "objetivo_total": objetivo_total,
         "totales": consumido,
         "diferencia": diferencia,
