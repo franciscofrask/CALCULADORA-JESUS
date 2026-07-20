@@ -366,9 +366,46 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
         "Intra": "Intra-entreno", "Post": "Post-entreno"
     }
 
+    tipo_dia = diet.get("tipo_dia") or "entrenamiento"
+
+    # Objetivo del día y por comida: se recalcula con el motor a partir de los macros
+    # del perfil vigentes a esa fecha, con la misma config que la dieta (así el PDF
+    # muestra objetivo vs consumido, no solo lo consumido).
+    objetivo_por_comida = {}
+    objetivo_total = {}
+    try:
+        from routes.calculator import _resolve_macros_for_date
+        from macro_distribution import distribuir_macros as _dist
+        profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+        if profile:
+            training, rest, peri = await _resolve_macros_for_date(profile, fecha)
+            base = training if tipo_dia == "entrenamiento" else rest
+            if base:
+                dist = _dist(
+                    p_entreno=float(training.get("protein") or training.get("proteinas") or 0),
+                    h_entreno=float(training.get("carbs") or training.get("hidratos") or 0),
+                    g_entreno=float(training.get("fat") or training.get("grasas") or 0),
+                    p_peri=float(peri.get("protein") or peri.get("proteinas") or 35),
+                    h_peri=float(peri.get("carbs") or peri.get("hidratos") or 15),
+                    p_descanso=float(rest.get("protein") or rest.get("proteinas") or 0),
+                    h_descanso=float(rest.get("carbs") or rest.get("hidratos") or 0),
+                    g_descanso=float(rest.get("fat") or rest.get("grasas") or 0),
+                    tipo_dia=tipo_dia,
+                    num_comidas=int(diet.get("num_comidas") or 4),
+                    momento_entreno=int(diet.get("momento_entreno") or 1),
+                    opcion_peri=diet.get("opcion_peri") or "intra_post",
+                    single_meal=bool(diet.get("num_comidas") == 1),
+                )
+                objetivo_por_comida = {**dist.get("comidas", {}), **dist.get("periworkout", {})}
+                res = dist.get("resumen", {})
+                objetivo_total = {"P": res.get("P_total", 0), "H": res.get("H_total", 0),
+                                  "G": res.get("G_total", 0), "kcal": res.get("kcal_total", 0)}
+    except Exception:
+        objetivo_por_comida, objetivo_total = {}, {}
+
     # Build comidas list in the format pdf_generator expects
     comidas_list = []
-    total_p, total_h, total_g = 0, 0, 0
+    total_p, total_h, total_g, total_kcal = 0, 0, 0, 0
 
     for key in ["C1", "Intra", "Post", "C2", "C3", "C4"]:
         meal_data = comidas_raw.get(key)
@@ -379,32 +416,46 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
             continue
 
         alimentos_pdf = []
-        mp, mh, mg = 0, 0, 0
+        mp, mh, mg, mk = 0, 0, 0, 0
         for a in alimentos_raw:
             me = a.get("macros_efectivos", {})
             p = round(me.get("P", 0), 1)
             h = round(me.get("H", 0), 1)
             g = round(me.get("G", 0), 1)
-            mp += p; mh += h; mg += g
+            k = round(me.get("kcal", p * 4 + h * 4 + g * 9), 0)
+            mp += p; mh += h; mg += g; mk += k
             alimentos_pdf.append({
                 "nombre": a.get("nombre", "?"),
                 "cantidad": a.get("cantidad_g", 0),
-                "unidad": "g",
-                "macros": {"P": p, "H": h, "G": g},
+                "unidad": a.get("unidad") or "g",
+                "macros": {"P": p, "H": h, "G": g, "kcal": k},
             })
 
-        total_p += mp; total_h += mh; total_g += mg
+        total_p += mp; total_h += mh; total_g += mg; total_kcal += mk
+        obj = objetivo_por_comida.get(key, {})
         comidas_list.append({
-            "numero": meal_names.get(key, key),
+            "titulo": meal_names.get(key, key),
+            "es_peri": key in ("Intra", "Post"),
             "alimentos": alimentos_pdf,
-            "macros": {"P": round(mp, 1), "H": round(mh, 1), "G": round(mg, 1)},
-            "objetivo": {},
+            "macros": {"P": round(mp, 1), "H": round(mh, 1), "G": round(mg, 1), "kcal": round(mk)},
+            "objetivo": {"P": obj.get("P", 0), "H": obj.get("H", 0), "G": obj.get("G", 0)} if obj else {},
         })
 
+    consumido = {"P": round(total_p, 1), "H": round(total_h, 1),
+                 "G": round(total_g, 1), "kcal": round(total_kcal)}
+    diferencia = {}
+    if objetivo_total:
+        diferencia = {
+            "P": round(objetivo_total["P"] - consumido["P"], 1),
+            "H": round(objetivo_total["H"] - consumido["H"], 1),
+            "G": round(objetivo_total["G"] - consumido["G"], 1),
+        }
+
     summary = {
-        "objetivo_total": {},
-        "totales": {"P": round(total_p, 1), "H": round(total_h, 1), "G": round(total_g, 1)},
-        "diferencia": {},
+        "tipo_dia": tipo_dia,
+        "objetivo_total": objetivo_total,
+        "totales": consumido,
+        "diferencia": diferencia,
         "comidas": comidas_list,
     }
 
