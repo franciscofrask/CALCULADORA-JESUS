@@ -7,7 +7,9 @@ from typing import Dict, List, Any, Optional
 import uuid
 
 from core.database import db
-from core.security import get_admin_user, assert_client_access, hash_password, generate_temp_password
+from core.security import (
+    get_admin_user, get_admin_only_user, assert_client_access, hash_password, generate_temp_password,
+)
 from routes.notifications import notify
 from routes.audit import audit
 from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate, TrainerAssign, PLAN_CATALOG
@@ -70,10 +72,12 @@ async def get_all_clients(
         query["status"] = status
     if trainer_id:
         query["trainer_id"] = trainer_id
-    # Un entrenador solo ve a SUS clientes asignados; el admin ve a todos.
+    # Un entrenador ve a SUS clientes y a los que aún no tienen coach asignado (para
+    # poder captarlos); nunca a los que ya son de otro entrenador. El admin ve a todos.
     es_trainer = user.get("role") == "trainer"
     if es_trainer:
-        query["trainer_id"] = user["id"]
+        # $in con None también empareja documentos SIN el campo trainer_id.
+        query["trainer_id"] = {"$in": [None, "", user["id"]]}
 
     # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
     # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).
@@ -460,7 +464,7 @@ STAFF_ROLES = ["admin", "trainer"]
 
 @router.get("/users")
 async def admin_list_users(role: Optional[str] = None, staff: bool = False, include_deleted: bool = False,
-                           q: Optional[str] = None, user=Depends(get_admin_user)):
+                           q: Optional[str] = None, user=Depends(get_admin_only_user)):
     """Lista de usuarios para gestión (roles, plan, baja lógica). Con staff=true muestra solo
     el equipo (admin/coach). Excluye los dados de baja salvo include_deleted."""
     query = {}
@@ -491,7 +495,7 @@ async def admin_list_users(role: Optional[str] = None, staff: bool = False, incl
 
 
 @router.put("/users/{user_id}")
-async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_user)):
+async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_only_user)):
     """Editar un usuario: nombre, email, teléfono, rol y plan (con opción de cortesía/sin pago)."""
     target = await db.users.find_one({"id": user_id})
     if not target:
@@ -540,7 +544,7 @@ async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_use
 
 
 @router.post("/users/{user_id}/reset-password")
-async def admin_reset_password(user_id: str, user=Depends(get_admin_user)):
+async def admin_reset_password(user_id: str, user=Depends(get_admin_only_user)):
     """Genera una contraseña temporal nueva para un usuario (para cuando la olvida).
     Se devuelve UNA vez; el staff se la pasa al cliente por WhatsApp."""
     target = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "name": 1})
@@ -556,7 +560,7 @@ async def admin_reset_password(user_id: str, user=Depends(get_admin_user)):
 
 
 @router.delete("/users/{user_id}")
-async def admin_soft_delete_user(user_id: str, user=Depends(get_admin_user)):
+async def admin_soft_delete_user(user_id: str, user=Depends(get_admin_only_user)):
     """Baja LÓGICA: no borra datos; el usuario no puede entrar y se oculta de los listados."""
     if user_id == user.get("id"):
         raise HTTPException(status_code=400, detail="No puedes darte de baja a ti mismo")
@@ -573,7 +577,7 @@ async def admin_soft_delete_user(user_id: str, user=Depends(get_admin_user)):
 
 
 @router.post("/users/{user_id}/restore")
-async def admin_restore_user(user_id: str, user=Depends(get_admin_user)):
+async def admin_restore_user(user_id: str, user=Depends(get_admin_only_user)):
     """Reactivar un usuario dado de baja lógica."""
     res = await db.users.update_one({"id": user_id}, {"$set": {"deleted_at": None}, "$unset": {"deleted_by": ""}})
     if res.matched_count == 0:

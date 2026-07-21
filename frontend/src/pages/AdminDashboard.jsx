@@ -641,17 +641,18 @@ const AdminLayout = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api]);
 
+    // adminOnly: solo el admin lo ve; un entrenador no gestiona usuarios/staff.
     const navItems = [
         { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
         { path: '/admin/planes', icon: Layers, label: 'Planes' },
-        { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios' },
+        { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios', adminOnly: true },
         { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
         { path: '/admin/messages', icon: MessageCircle, label: 'Mensajes' },
         { path: '/admin/routines', icon: Dumbbell, label: 'Rutinas' },
         { path: '/admin/menus', icon: Utensils, label: 'Menús' },
         { path: '/admin/alimentos', icon: Apple, label: 'Alimentos' },
-    ];
+    ].filter((i) => !i.adminOnly || user?.role === 'admin');
 
     // En movil la barra inferior muestra 4 accesos + boton "Mas" (el resto va al drawer).
     const primaryPaths = ['/admin', '/admin/clients', '/admin/leads', '/admin/messages'];

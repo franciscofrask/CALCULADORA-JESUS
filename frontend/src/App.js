@@ -172,7 +172,11 @@ function AppRoutes() {
                 <Route path="supplements-catalog" element={<SupplementsCatalogPage />} />
                 <Route path="menus" element={<AdminMenusPage />} />
                 <Route path="alimentos" element={<AdminFoodSuggestionsPage />} />
-                <Route path="usuarios" element={<AdminUsersPage />} />
+                <Route path="usuarios" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminUsersPage />
+                    </ProtectedRoute>
+                } />
             </Route>
 
             {/* Catch all */}

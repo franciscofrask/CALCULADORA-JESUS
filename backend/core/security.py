@@ -94,9 +94,17 @@ async def get_admin_user(user: dict = Depends(get_current_user)) -> dict:
 
     OJO: concede acceso a admin Y trainer. Para endpoints que operan sobre UN cliente
     concreto, NO basta con esto: hay que llamar además a `assert_client_access` para que
-    un entrenador solo toque a SUS clientes asignados (los admin acceden a todos)."""
+    un entrenador solo toque a los clientes que puede ver (los admin acceden a todos)."""
     if user.get("role") not in ["admin", "trainer"]:
         raise HTTPException(status_code=403, detail="Acceso denegado")
+    return user
+
+
+async def get_admin_only_user(user: dict = Depends(get_current_user)) -> dict:
+    """Solo administradores (excluye a los entrenadores). Para la gestión de
+    usuarios/staff, que no debe estar al alcance de un trainer."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden acceder a esta sección")
     return user
 
 
@@ -115,6 +123,8 @@ def assert_client_access(user: dict, profile: Optional[dict]) -> None:
     role = (user or {}).get("role")
     if role == "admin":
         return
-    if role == "trainer" and profile.get("trainer_id") == user.get("id"):
+    # El entrenador accede a sus clientes y a los que aún no tienen coach asignado;
+    # nunca a los que ya son de otro entrenador.
+    if role == "trainer" and profile.get("trainer_id") in (None, "", user.get("id")):
         return
     raise HTTPException(status_code=403, detail="No tienes acceso a este cliente")
