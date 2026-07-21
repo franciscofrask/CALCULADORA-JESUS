@@ -111,20 +111,16 @@ async def get_admin_only_user(user: dict = Depends(get_current_user)) -> dict:
 def assert_client_access(user: dict, profile: Optional[dict]) -> None:
     """Autorización a nivel de recurso para endpoints staff que operan sobre un cliente.
 
-    - admin: acceso a cualquier cliente.
-    - trainer: SOLO a los clientes que tiene asignados (client_profiles.trainer_id == su id).
+    - admin y trainer: acceso a cualquier cliente (decisión del usuario 21-07: los
+      entrenadores ven y gestionan a todos, también los asignados a otro coach).
     - resto: denegado.
 
     `profile` es el documento de client_profiles del cliente objetivo (o None si no existe).
-    Lanza 404 si el perfil no existe y 403 si el entrenador no es el coach asignado.
+    Lanza 404 si el perfil no existe y 403 si el rol no es staff.
     """
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     role = (user or {}).get("role")
-    if role == "admin":
-        return
-    # El entrenador accede a sus clientes y a los que aún no tienen coach asignado;
-    # nunca a los que ya son de otro entrenador.
-    if role == "trainer" and profile.get("trainer_id") in (None, "", user.get("id")):
+    if role in ("admin", "trainer"):
         return
     raise HTTPException(status_code=403, detail="No tienes acceso a este cliente")

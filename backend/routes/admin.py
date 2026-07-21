@@ -25,10 +25,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.get("/macro-revisiones")
 async def list_macro_revisiones(status: str = "pendiente", user = Depends(get_admin_user)):
-    """Revisiones de macros pendientes. El trainer solo ve las de sus clientes."""
+    """Revisiones de macros pendientes. Admin y trainer las ven todas (coherente con
+    que el entrenador ve a todos los clientes)."""
     query: Dict[str, Any] = {"status": status}
-    if user.get("role") == "trainer":
-        query["trainer_id"] = user["id"]
     items = await db.macro_revisiones.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
 
     # Nombre del cliente en una consulta batch.
@@ -72,12 +71,10 @@ async def get_all_clients(
         query["status"] = status
     if trainer_id:
         query["trainer_id"] = trainer_id
-    # Un entrenador ve a SUS clientes y a los que aún no tienen coach asignado (para
-    # poder captarlos); nunca a los que ya son de otro entrenador. El admin ve a todos.
+    # Admin y entrenador ven a TODOS los clientes, incluidos los ya asignados a otro
+    # coach (decisión del usuario 21-07). El filtro por coach solo aplica si se pide
+    # explícitamente con el parámetro trainer_id.
     es_trainer = user.get("role") == "trainer"
-    if es_trainer:
-        # $in con None también empareja documentos SIN el campo trainer_id.
-        query["trainer_id"] = {"$in": [None, "", user["id"]]}
 
     # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
     # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).
