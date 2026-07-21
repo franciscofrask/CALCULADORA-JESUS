@@ -6,7 +6,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
 import { FOOD_FAVORITES_UI } from './SearchFoodModal';
@@ -907,13 +906,12 @@ const BuildMealModal = ({
                         )}
                     </div>}
 
-                    {/* Food list.
-                        El viewport de Radix envuelve el contenido en un div con display:table
-                        (min-width:100%), que ignora el ancho del padre y deja crecer las filas
-                        hasta el nombre más largo: en móvil los nombres se cortaban contra el
-                        borde sin ellipsis. Forzando ese nodo a `block` el ancho se limita al
-                        contenedor y el `truncate` del nombre vuelve a funcionar. */}
-                    <ScrollArea className="flex-1 min-h-[38vh] [&_[data-radix-scroll-area-viewport]>div]:!block">
+                    {/* Food list. Scroll NATIVO (no el ScrollArea de Radix): su viewport
+                        envuelve el contenido en un div display:table que ignora el ancho del
+                        padre y hacía crecer las filas hasta el nombre más largo (en móvil se
+                        cortaban contra el borde). Con overflow nativo el ancho se limita al
+                        contenedor y los nombres largos saltan de línea. */}
+                    <div className="flex-1 min-h-[38vh] overflow-y-auto">
                         <div className="p-3">
                             {!isSearching && selectedCategories.length === 0 ? (
                                 <div className="text-center py-10 text-muted-foreground text-sm">
@@ -952,11 +950,8 @@ const BuildMealModal = ({
                                                             data-testid={`food-item-${food.id || idx}`}
                                                         >
                                                             <div className="flex-1 min-w-0">
-                                                                <div className="text-sm text-foreground truncate">
+                                                                <div className="text-sm text-foreground leading-snug break-words">
                                                                     {food.nombre}
-                                                                    {food.is_promocionado && (
-                                                                        <span className="ml-1.5 align-middle inline-block text-[9px] font-bold tracking-wide text-white bg-black rounded px-1 py-0.5">PROMOCIONADO</span>
-                                                                    )}
                                                                 </div>
                                                                 <div className="text-xs text-muted-foreground">
                                                                     {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)` : `${food._cantidad_sugerida}g`} → ` : ''}
@@ -976,6 +971,9 @@ const BuildMealModal = ({
                                                                         if (parts.length === 0) return 'No aporta macros';
                                                                         return parts.reduce((acc, el, i) => (i === 0 ? [el] : [...acc, ' ', el]), []);
                                                                     })()}
+                                                                    {food.is_promocionado && (
+                                                                        <span className="ml-1.5 align-middle inline-block text-[9px] font-bold tracking-wide text-white bg-black rounded px-1 py-0.5">PROMOCIONADO</span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                             <Plus className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -988,7 +986,7 @@ const BuildMealModal = ({
                                 </>
                             )}
                         </div>
-                    </ScrollArea>
+                    </div>
 
                 </div>
 
