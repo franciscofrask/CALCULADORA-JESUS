@@ -907,8 +907,13 @@ const BuildMealModal = ({
                         )}
                     </div>}
 
-                    {/* Food list */}
-                    <ScrollArea className="flex-1 min-h-[38vh]">
+                    {/* Food list.
+                        El viewport de Radix envuelve el contenido en un div con display:table
+                        (min-width:100%), que ignora el ancho del padre y deja crecer las filas
+                        hasta el nombre más largo: en móvil los nombres se cortaban contra el
+                        borde sin ellipsis. Forzando ese nodo a `block` el ancho se limita al
+                        contenedor y el `truncate` del nombre vuelve a funcionar. */}
+                    <ScrollArea className="flex-1 min-h-[38vh] [&_[data-radix-scroll-area-viewport]>div]:!block">
                         <div className="p-3">
                             {!isSearching && selectedCategories.length === 0 ? (
                                 <div className="text-center py-10 text-muted-foreground text-sm">
