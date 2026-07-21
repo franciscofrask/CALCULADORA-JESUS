@@ -215,7 +215,10 @@ const AdminDashboard = () => {
                 </CardContent>
             </Card>
 
-            {/* Reportes del coach que tocan esta semana */}
+            {/* Reportes del coach que tocan esta semana.
+                OCULTO temporalmente (a petición del usuario, 20-07): reactivar quitando el
+                `false &&` cuando el panel esté mejorado. */}
+            {false && (
             <Card className="bg-[#111111] border-[#222]" data-testid="report-cadence">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center justify-between">
@@ -272,6 +275,7 @@ const AdminDashboard = () => {
                     )}
                 </CardContent>
             </Card>
+            )}
 
             {/* Macros por revisar (motor v2): dieta reportada que no cuadra con lo recomendado */}
             <Card className="bg-[#111111] border-[#222]" data-testid="macro-revisiones">
