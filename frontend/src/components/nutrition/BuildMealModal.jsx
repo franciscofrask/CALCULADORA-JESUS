@@ -952,6 +952,9 @@ const BuildMealModal = ({
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="text-sm text-foreground leading-snug break-words">
                                                                     {food.nombre}
+                                                                    {food.is_promocionado && (
+                                                                        <span className="ml-1.5 align-middle inline-block text-[9px] font-bold tracking-wide text-white bg-black rounded px-1 py-0.5">PROMOCIONADO</span>
+                                                                    )}
                                                                 </div>
                                                                 <div className="text-xs text-muted-foreground">
                                                                     {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)` : `${food._cantidad_sugerida}g`} → ` : ''}
@@ -971,9 +974,6 @@ const BuildMealModal = ({
                                                                         if (parts.length === 0) return 'No aporta macros';
                                                                         return parts.reduce((acc, el, i) => (i === 0 ? [el] : [...acc, ' ', el]), []);
                                                                     })()}
-                                                                    {food.is_promocionado && (
-                                                                        <span className="ml-1.5 align-middle inline-block text-[9px] font-bold tracking-wide text-white bg-black rounded px-1 py-0.5">PROMOCIONADO</span>
-                                                                    )}
                                                                 </div>
                                                             </div>
                                                             <Plus className="w-4 h-4 text-muted-foreground flex-shrink-0" />
