@@ -495,6 +495,27 @@ const NutritionPage = () => {
         if (!loading) loadDistribution();
     }, [tipoDia, numComidas, momentoEntreno, opcionPeri]); // eslint-disable-line
 
+    // Objetivo por comida guardado (distribTargetsOverlay) OBSOLETO: se congela al crear la
+    // dieta, pero si los macros asignados al cliente cambian después, la distribución
+    // recalculada (`distribution`) ya no coincide. Sin esto, la comida seguía mostrando el
+    // objetivo viejo ("cuadrada") mientras la cabecera del día usaba el nuevo ("te pasas") -
+    // en comida única eso dejaba 225/240 en la comida y 180/180 en el día. Al detectar el
+    // desfase descartamos el overlay: la comida pasa a usar el objetivo de HOY (coinciden) y
+    // el autoguardado deja de re-persistir el valor viejo. Se ignora en modo volcado (sus
+    // objetivos viven en volcadoMeal, no en el overlay).
+    useEffect(() => {
+        if (!distribTargetsOverlay || !distribution || volcadoMeal) return;
+        const TOL = 3; // holgura por redondeos; un cambio real de macros es >= 5 g
+        const stale = Object.entries(distribTargetsOverlay).some(([k, t]) => {
+            const f = distribution.comidas?.[k] || distribution.periworkout?.[k];
+            if (!f) return true; // la comida ya no existe en la distribución de hoy
+            return Math.abs((t.P || 0) - (f.P || 0)) > TOL ||
+                   Math.abs((t.H || 0) - (f.H || 0)) > TOL ||
+                   Math.abs((t.G || 0) - (f.G || 0)) > TOL;
+        });
+        if (stale) setDistribTargetsOverlay(null);
+    }, [distribTargetsOverlay, distribution, volcadoMeal]);
+
     // Wrappers for user-initiated config changes - persist to profile (cross-device)
     const handleSetTipoDia = (v) => { setTipoDia(v); };
     const handleSetMomentoEntreno = (v) => {
