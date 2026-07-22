@@ -74,20 +74,26 @@ def get_maps():
     return pipes, stages
 
 
-def iter_ghl():
+def fetch_all_ghl():
+    """Devuelve (lista de oportunidades, total según GHL). Si alguna página falla, _req
+    reintenta y, si no lo logra, lanza -> la corrida aborta ANTES de tocar bajas (así un
+    fetch parcial nunca provoca archivados erróneos)."""
+    opps, total = [], None
     params = {"location_id": GHL_LOCATION, "limit": 100}
     while True:
         r = _req("GET", "https://services.leadconnectorhq.com/opportunities/search",
                  headers=GHL_H, params=params)
         r.raise_for_status()
         d = r.json()
-        for o in d.get("opportunities", []):
-            yield o
+        if total is None:
+            total = d.get("meta", {}).get("total")
+        opps.extend(d.get("opportunities", []))
         meta = d.get("meta", {})
         if not meta.get("startAfterId"):
             break
         params["startAfter"] = meta["startAfter"]
         params["startAfterId"] = meta["startAfterId"]
+    return opps, total
 
 
 def notion_rows():
@@ -173,10 +179,13 @@ def main():
         sys.exit(1)
     pipes, stages = get_maps()
     have = notion_rows()
-    log.info("GHL pipelines=%d etapas=%d | filas en Notion=%d", len(pipes), len(stages), len(have))
+    opps, total = fetch_all_ghl()
+    ghl_ids = {o.get("id") for o in opps}
+    log.info("GHL opps=%d (total=%s) etapas=%d | filas en Notion=%d",
+             len(opps), total, len(stages), len(have))
 
-    creados = actualizados = iguales = errores = 0
-    for o in iter_ghl():
+    creados = actualizados = iguales = archivados = errores = 0
+    for o in opps:
         gid = o.get("id")
         d = desired(o, pipes, stages)
         try:
@@ -205,8 +214,32 @@ def main():
             errores += 1
             if errores <= 5:
                 log.warning("error en opp %s: %s", gid, e)
-    log.info("FIN sync: creados=%d actualizados=%d iguales=%d errores=%d",
-             creados, actualizados, iguales, errores)
+
+    # Bajas: oportunidades que están en Notion pero YA NO en GHL (se borraron) -> archivar
+    # (a la papelera de Notion, reversible). SALVAGUARDA: solo si el fetch de GHL vino
+    # completo (>= 90% del total que reporta GHL); si no, se salta para no archivar por
+    # una lectura parcial.
+    if total and len(ghl_ids) < total * 0.9:
+        log.warning("fetch GHL incompleto (%d de %s): NO se archivan bajas esta corrida",
+                    len(ghl_ids), total)
+    else:
+        for gid, row in have.items():
+            if gid in ghl_ids:
+                continue
+            try:
+                r = _req("PATCH", f"https://api.notion.com/v1/pages/{row['page_id']}",
+                         headers=N_H, json={"archived": True})
+                if r.status_code >= 300:
+                    raise RuntimeError(r.text[:200])
+                archivados += 1
+                time.sleep(0.34)
+            except Exception as e:
+                errores += 1
+                if errores <= 5:
+                    log.warning("error archivando %s: %s", gid, e)
+
+    log.info("FIN sync: creados=%d actualizados=%d iguales=%d archivados=%d errores=%d",
+             creados, actualizados, iguales, archivados, errores)
 
 
 if __name__ == "__main__":
