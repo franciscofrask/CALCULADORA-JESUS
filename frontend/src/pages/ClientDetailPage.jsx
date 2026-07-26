@@ -29,6 +29,18 @@ const USER_ROLES = [
     { value: 'admin', label: 'Admin' },
 ];
 
+// Fecha en la zona del coach (+dias opcionales). Con toISOString(), que es UTC, a partir
+// de las 22:00 en Espana "hoy" saltaba al dia siguiente y los macros entraban tarde.
+const hoyISO = (dias = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() + dias);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
+
+const _fechaLarga = (iso) => iso
+    ? new Date(iso + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+    : '';
+
 // ===== Buscador de menús para el coach (biblioteca real de clientes + recetario) =====
 const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
     const [macros, setMacros] = useState({ P: '', H: '', G: '' });
@@ -214,7 +226,7 @@ const ClientDetailPage = () => {
         // Modelo predictivo (paso 1): criterio interno del coach y % graso del momento.
         criterio: '',
         porcentaje_graso: '',
-        effective_date: new Date().toISOString().slice(0, 10),
+        effective_date: hoyISO(),
     };
     const [macrosForm, setMacrosForm] = useState(MACROS_FORM_VACIO);
     const [entryForm, setEntryForm] = useState(MACROS_FORM_VACIO);
@@ -287,7 +299,7 @@ const ClientDetailPage = () => {
                 note: '',
                 criterio: '',
                 porcentaje_graso: p?.body_fat != null ? String(p.body_fat) : '',
-                effective_date: new Date().toISOString().slice(0, 10),
+                effective_date: hoyISO(),
             });
         } catch (error) {
             toast.error('Error al cargar datos del cliente');
@@ -302,7 +314,7 @@ const ClientDetailPage = () => {
         training: { protein: _g(h.training, 'protein', 'proteinas'), carbs: _g(h.training, 'carbs', 'hidratos'), fat: _g(h.training, 'fat', 'grasas') },
         rest: { protein: _g(h.rest, 'protein', 'proteinas'), carbs: _g(h.rest, 'carbs', 'hidratos'), fat: _g(h.rest, 'fat', 'grasas') },
         peri: { protein: _g(h.peri, 'protein', 'proteinas'), carbs: _g(h.peri, 'carbs', 'hidratos') },
-        effective_date: opts.today ? new Date().toISOString().slice(0, 10) : (h.effective_date || new Date().toISOString().slice(0, 10)),
+        effective_date: opts.today ? hoyISO() : (h.effective_date || hoyISO()),
         note: opts.note != null ? opts.note : (h.note || ''),
         criterio: h.criterio || '',
         porcentaje_graso: h.body_fat != null ? String(h.body_fat) : '',
@@ -330,7 +342,7 @@ const ClientDetailPage = () => {
             rest: { protein: p.descanso?.proteina ?? '', carbs: p.descanso?.hidratos ?? '', fat: p.descanso?.grasa ?? '' },
             peri: { protein: p.perientreno?.proteina ?? '', carbs: p.perientreno?.hidratos ?? '' },
             note: (sugerencia?.razonamiento || '').slice(0, 300),
-            effective_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+            effective_date: hoyISO(1),
         });
         toast.success('Propuesta cargada en el editor: revísala y guarda');
         editorMacrosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -531,7 +543,7 @@ const ClientDetailPage = () => {
     const setMacroCampo = (bloque, campo, valor) => setMacrosForm(prev => ({ ...prev, [bloque]: { ...prev[bloque], [campo]: valor } }));
     const descartarCambiosMacros = () => (setSugerenciaId(null), setMacrosForm({
         ...macrosActuales, note: '', criterio: '', porcentaje_graso: bfActual,
-        effective_date: new Date().toISOString().slice(0, 10),
+        effective_date: hoyISO(),
     }));
 
     const TAB_CONFIG = [
@@ -652,8 +664,18 @@ const ClientDetailPage = () => {
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <Label className="text-white/60 text-xs">Vigente desde</Label>
-                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({ ...macrosForm, effective_date: e.target.value })} className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-effective-date" />
-                                    <p className="text-[10px] text-white/30 mt-1">Las dietas anteriores conservan los macros previos.</p>
+                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({ ...macrosForm, effective_date: e.target.value })} className={`bg-[#0A0A0A] text-white mt-1 ${macrosForm.effective_date !== hoyISO() ? 'border-[#FF671F]' : 'border-[#333]'}`} data-testid="macro-effective-date" />
+                                    {macrosForm.effective_date !== hoyISO() ? (
+                                        <p className="text-[10px] text-[#FF671F] mt-1 leading-relaxed">
+                                            {macrosForm.effective_date > hoyISO()
+                                                ? `No se aplican hasta el ${_fechaLarga(macrosForm.effective_date)}: hasta ese día sigue con los actuales. `
+                                                : `Se aplican hacia atrás, desde el ${_fechaLarga(macrosForm.effective_date)}. `}
+                                            <button type="button" className="underline font-bold"
+                                                onClick={() => setMacrosForm({ ...macrosForm, effective_date: hoyISO() })}>Poner hoy</button>
+                                        </p>
+                                    ) : (
+                                        <p className="text-[10px] text-white/30 mt-1">Las dietas anteriores conservan los macros previos.</p>
+                                    )}
                                 </div>
                                 <div>
                                     <Label className="text-white/60 text-xs">% graso</Label>

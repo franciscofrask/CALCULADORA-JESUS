@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SlidersHorizontal, Calculator, Loader2, CheckCircle2, CalendarDays, Save } from 'lucide-react';
+import { SlidersHorizontal, Calculator, Loader2, CheckCircle2, CalendarDays, Save, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { MACRO } from './ClientDashboard';
 import DesgloseChips from '../components/DesgloseChips';
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// Fecha de HOY en la zona del usuario. Con toISOString() (que es UTC) a partir de las
+// 22:00 en Espana el "hoy" saltaba al dia siguiente.
+const todayISO = () => {
+    const d = new Date();
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
+
+const fechaLarga = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+};
 
 // One macro input cell (P/H/G)
 const Field = ({ label, color, value, onChange, suffix = 'g' }) => (
@@ -71,10 +82,15 @@ const MacroCalculatorClientPage = () => {
     const [note, setNote] = useState('');
     const [loadingMacros, setLoadingMacros] = useState(true);
     const [saving, setSaving] = useState(false);
+    // Macros escritos a mano y sin guardar. Si cambias la fecha de aplicacion NO se
+    // pueden pisar con los de esa fecha: mas de una vez se ha guardado sin querer la
+    // version vieja por eso.
+    const [macrosTocados, setMacrosTocados] = useState(false);
 
     useEffect(() => {
         let alive = true;
         if (!effectiveDate) return;
+        if (macrosTocados) { setLoadingMacros(false); return; }
         api.get('/macros', { params: { fecha: effectiveDate } }).then(res => {
             if (!alive || !res.data) return;
             const d = res.data;
@@ -92,10 +108,12 @@ const MacroCalculatorClientPage = () => {
             }));
         }).catch(() => {}).finally(() => { if (alive) setLoadingMacros(false); });
         return () => { alive = false; };
-    }, [api, effectiveDate]);
+    }, [api, effectiveDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const setMacro = (group, key, value) =>
+    const setMacro = (group, key, value) => {
+        setMacrosTocados(true);
         setMacros(prev => ({ ...prev, [group]: { ...prev[group], [key]: value } }));
+    };
 
     const handleSaveMacros = async () => {
         const num = v => parseFloat(v);
@@ -360,6 +378,27 @@ const MacroCalculatorClientPage = () => {
                             </label>
                             <input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} className="input-light font-data" />
                             <p className="text-xs text-muted-foreground mt-2">Las dietas de ese día en adelante usarán estos macros. Las anteriores conservan los previos.</p>
+                            {/* Si la fecha no es hoy hay que cantarlo: se han guardado macros
+                                con fecha futura sin darse cuenta y el cliente seguia con los viejos. */}
+                            {effectiveDate && effectiveDate !== todayISO() && (
+                                <div className={`mt-3 rounded-xl border p-3 flex items-start gap-2 ${effectiveDate > todayISO() ? 'border-brand/50 bg-brand/10' : 'border-amber-500/50 bg-amber-500/10'}`}>
+                                    <AlertTriangle className="w-4 h-4 text-brand flex-shrink-0 mt-0.5" />
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-foreground">
+                                            {effectiveDate > todayISO()
+                                                ? `Estos macros NO se aplican hasta el ${fechaLarga(effectiveDate)}.`
+                                                : `Se aplicarán hacia atrás, desde el ${fechaLarga(effectiveDate)}.`}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {effectiveDate > todayISO()
+                                                ? 'Hasta ese día se seguirán usando los macros anteriores.'
+                                                : 'Las dietas de esos días pasarán a usar estos macros.'}
+                                        </p>
+                                        <button type="button" onClick={() => setEffectiveDate(todayISO())}
+                                            className="text-xs font-bold text-brand underline mt-1.5">Aplicar desde hoy</button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <GroupCard label="Día entrenamiento" group="training" withFat macros={macros} setMacro={setMacro} />
