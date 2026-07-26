@@ -1,8 +1,37 @@
 """
 Modelos Pydantic para usuarios y autenticación.
 """
-from pydantic import BaseModel, EmailStr, ConfigDict
+import math
+
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from typing import Optional, Dict, List, Any
+
+# Limites de cordura para los macros del perfil. Sin ellos cualquier PUT podia
+# dejar guardado un valor absurdo (p. ej. protein=1e308) que luego se pintaba
+# tal cual en la ficha del cliente.
+MACRO_MAX_GRAMOS = 1500
+MACRO_MAX_CALORIAS = 20000
+
+
+def validar_dict_macros(v):
+    """Valida un dict de macros suelto (protein/carbs/fat/calories y sus alias)."""
+    if v is None:
+        return v
+    limpio = {}
+    for k, val in v.items():
+        if val is None:
+            continue
+        try:
+            num = float(val)
+        except (TypeError, ValueError):
+            raise ValueError(f"Macro '{k}': valor no numerico")
+        if not math.isfinite(num):
+            raise ValueError(f"Macro '{k}': valor no finito")
+        tope = MACRO_MAX_CALORIAS if k in ("calories", "calorias") else MACRO_MAX_GRAMOS
+        if num < 0 or num > tope:
+            raise ValueError(f"Macro '{k}': fuera de rango (0-{tope})")
+        limpio[k] = num
+    return limpio
 
 # =========================================================
 # CATÁLOGO DE PLANES (fuente única)
@@ -384,6 +413,11 @@ class ClientProfileUpdate(BaseModel):
     injuries: Optional[List[str]] = None
     training_days: Optional[int] = None
 
+    @field_validator("macros_training", "macros_rest", "macros_periworkout")
+    @classmethod
+    def _macros_en_rango(cls, v):
+        return validar_dict_macros(v)
+
 # Asignación de coach (trainer_id=None quita el coach)
 class TrainerAssign(BaseModel):
     trainer_id: Optional[str] = None
@@ -446,14 +480,14 @@ class Nivel1Submit(BaseModel):
 
 # Macros Models
 class MacrosData(BaseModel):
-    protein: float
-    carbs: float
-    fat: float
-    calories: Optional[float] = None
+    protein: float = Field(ge=0, le=MACRO_MAX_GRAMOS)
+    carbs: float = Field(ge=0, le=MACRO_MAX_GRAMOS)
+    fat: float = Field(ge=0, le=MACRO_MAX_GRAMOS)
+    calories: Optional[float] = Field(default=None, ge=0, le=MACRO_MAX_CALORIAS)
 
 class PeriMacrosData(BaseModel):
-    protein: float
-    carbs: float
+    protein: float = Field(ge=0, le=MACRO_MAX_GRAMOS)
+    carbs: float = Field(ge=0, le=MACRO_MAX_GRAMOS)
 
 class MacrosUpdate(BaseModel):
     training: MacrosData
@@ -464,11 +498,39 @@ class MacrosUpdate(BaseModel):
     # this date. Default = today. Diets before it keep the prior version.
     effective_date: Optional[str] = None
     # Calc inputs stored per change for traceability (history of how the macros were derived).
-    peso: Optional[float] = None
-    porcentaje_graso: Optional[float] = None
+    peso: Optional[float] = Field(default=None, ge=25, le=300)
+    porcentaje_graso: Optional[float] = Field(default=None, ge=3, le=60)
     sexo: Optional[str] = None
     objetivo: Optional[str] = None
     # Motor v2: preguntas 5-8 y desglose del calculo que origino estos macros
     # (se versionan en macro_history.motor; la revision se recalcula en servidor).
     ajustes: Optional[AjustesMacros] = None
     desglose: Optional[List[Dict[str, Any]]] = None
+    # Modelo predictivo (paso 1): el POR QUE del ajuste, interno del coach. Es
+    # distinto de `note`, que es el feedback que le llega al cliente.
+    criterio: Optional[str] = None
+    # Si este ajuste sale de una sugerencia de la IA: su id. Sirve para medir cuanto
+    # la corrigio el coach (la senal de aprendizaje mas valiosa que hay).
+    sugerencia_id: Optional[str] = None
+
+
+class MacroEvaluacion(BaseModel):
+    """Modelo predictivo (paso 1): como salio la fase que abrio un ajuste. Se
+    rellena a toro pasado, cuando llega el reporte siguiente."""
+    resultado: str            # buena | mala
+    causa: Optional[str] = None   # ajuste (fallo del coach) | cliente (no cumplio) | otro
+    nota: Optional[str] = None
+
+    @field_validator("resultado")
+    @classmethod
+    def _resultado_valido(cls, v):
+        if v not in ("buena", "mala"):
+            raise ValueError("resultado debe ser 'buena' o 'mala'")
+        return v
+
+    @field_validator("causa")
+    @classmethod
+    def _causa_valida(cls, v):
+        if v is not None and v not in ("ajuste", "cliente", "otro"):
+            raise ValueError("causa debe ser 'ajuste', 'cliente' u 'otro'")
+        return v

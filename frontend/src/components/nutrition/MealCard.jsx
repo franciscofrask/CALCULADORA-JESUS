@@ -1,5 +1,5 @@
 import React from 'react';
-import { ProgressBar, StatusDot } from './DaySummary';
+import { StatusDot } from './DaySummary';
 import {
     ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download
 } from 'lucide-react';
@@ -11,9 +11,9 @@ const fmt1 = (x) => { const r = Math.round((x || 0) * 10) / 10; return Number.is
 
 const macrosLine = (m) => {
     const parts = [
-        (m.P || 0) > 0 && `${fmt1(m.P)}P`,
-        (m.H || 0) > 0 && `${fmt1(m.H)}H`,
-        (m.G || 0) > 0 && `${fmt1(m.G)}G`,
+        (m.P || 0) > 0 && `${fmt1(m.P)}g proteína`,
+        (m.H || 0) > 0 && `${fmt1(m.H)}g hidratos`,
+        (m.G || 0) > 0 && `${fmt1(m.G)}g grasa`,
     ].filter(Boolean);
     return parts.length ? parts.join(' · ') : 'sin macros';
 };
@@ -91,13 +91,13 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
 
     const macroState = (servedVal, tgtVal) => {
-        if (!(servedVal > 0)) return { label: null, cls: '', over: false, barColor: undefined };
+        if (!(servedVal > 0)) return { label: null, cls: '', over: false };
         const r = tgtVal - servedVal;
-        if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false, barColor: '#10B981' };
-        if (Math.abs(r) < 4) return { label: 'Válido', cls: 'text-amber-500', over: false, barColor: '#F59E0B' };
+        if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false };
+        if (Math.abs(r) < 4) return { label: 'Válido', cls: 'text-amber-500', over: false };
         return r > 0
-            ? { label: `faltan ${fmt1(r)}g`, cls: 'text-red-500', over: false, barColor: '#EF4444' }
-            : { label: `sobran ${fmt1(-r)}g`, cls: 'text-red-500', over: true, barColor: '#EF4444' };
+            ? { label: `faltan ${fmt1(r)}g`, cls: 'text-red-500', over: false }
+            : { label: `sobran ${fmt1(-r)}g`, cls: 'text-red-500', over: true };
     };
 
     const bars = [
@@ -106,18 +106,17 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     ];
     if (!isPeri) bars.push({ label: 'G', name: 'Grasas', val: served.G, tgt: target.G, color: MACRO.G, st: macroState(served.G, target.G) });
 
+    // Sin barras: los tres macros en una sola linea (servido/objetivo + cuanto falta
+    // o sobra). El color del texto ya dice como va cada uno.
     return (
-        <div className="bg-muted/50 rounded-xl p-3.5 space-y-3" data-testid={`meal-progress-${mealKey}`}>
+        <div className="bg-muted/50 rounded-xl px-3 py-2 flex flex-wrap items-center gap-x-5 gap-y-1" data-testid={`meal-progress-${mealKey}`}>
             {bars.map(({ label, name, val, tgt, color, st }) => (
-                <div key={label}>
-                    <div className="flex items-center gap-2.5">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                        <span className="text-xs font-bold w-16 flex-shrink-0 hidden sm:inline" style={{ color }}>{name}</span>
-                        <span className="text-xs font-bold w-3 flex-shrink-0 sm:hidden" style={{ color }}>{label}</span>
-                        <div className="flex-1 min-w-0"><ProgressBar value={val} max={tgt} color={color} height={9} showCheck statusColor={hasFoods ? st.barColor : undefined} /></div>
-                        <span className={`text-xs font-data w-[72px] text-right ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
-                    </div>
-                    {hasFoods && st.label && <div className={`text-[10px] font-semibold text-right ${st.cls}`}>{st.label}</div>}
+                <div key={label} className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                    <span className="text-[11px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
+                    <span className="text-[11px] font-bold sm:hidden" style={{ color }}>{label}</span>
+                    <span className={`font-data text-[11px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
+                    {hasFoods && st.label && <span className={`font-data text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
                 </div>
             ))}
         </div>
@@ -130,53 +129,51 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
     setEditingQuantity, formatFoodQuantity }) => {
     const macros = food.macros_efectivos || {};
     return (
-        <div className="rounded-xl border border-border bg-muted/40 p-2.5">
-            {/* Nombre completo (ya no se recorta) + macros */}
-            <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground leading-snug">{food.nombre}</p>
-                <p className="text-[11px] text-muted-foreground font-data mt-0.5">{macrosLine(macros)}</p>
+        // Todo el alimento en una linea: prioridad, nombre + macros, cantidad y eliminar.
+        // El nombre se recorta con puntos suspensivos (completo en el title) para que
+        // la lista del dia no se dispare a lo alto.
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-2 py-1.5">
+            {/* Reorder (prioridad) */}
+            <button
+                className="flex flex-col items-center justify-center h-9 w-7 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                disabled={idx === 0 || isLocked} onClick={() => moveFoodUp(mealKey, idx)} title="Subir prioridad"
+                data-testid={`reorder-${mealKey}-${idx}`}
+            >
+                <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
+                <span className="text-[9px] font-data leading-none mt-0.5">{idx + 1}</span>
+            </button>
+
+            {/* Nombre + macros */}
+            <div className="min-w-0 flex-1 flex items-baseline gap-2">
+                <span className="text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
+                <span className="text-[11px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0">{macrosLine(macros)}</span>
             </div>
 
-            {/* Controles debajo: prioridad + cantidad a la izquierda, eliminar a la derecha */}
-            <div className="flex items-center justify-between gap-2 mt-2">
-                <div className="flex items-center gap-2">
-                    {/* Reorder (prioridad) */}
-                    <button
-                        className="flex flex-col items-center justify-center h-10 w-8 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex-shrink-0"
-                        disabled={idx === 0 || isLocked} onClick={() => moveFoodUp(mealKey, idx)} title="Subir prioridad"
-                        data-testid={`reorder-${mealKey}-${idx}`}
-                    >
-                        <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
-                        <span className="text-[9px] font-data leading-none mt-0.5">{idx + 1}</span>
+            {/* Cantidad (gramos) - stepper conectado */}
+            <div className="inline-flex items-stretch h-9 rounded-lg border border-border bg-card overflow-hidden flex-shrink-0" title="Cantidad en gramos">
+                <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, -increment)} aria-label="Menos gramos">
+                    <Minus className="w-3.5 h-3.5" />
+                </button>
+                {isEditing ? (
+                    <input type="number" defaultValue={food.cantidad_g || 0} autoFocus
+                        className="w-14 text-center text-sm font-bold font-data bg-transparent border-x border-border text-foreground focus:outline-none"
+                        onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value); if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null }); }} />
+                ) : (
+                    <button className="min-w-[60px] px-2 text-sm font-bold font-data text-center text-foreground border-x border-border hover:text-brand disabled:opacity-50 transition-colors" disabled={isLocked}
+                        onClick={() => !isLocked && setEditingQuantity({ mealKey, foodIndex: idx })} data-testid={`qty-${mealKey}-${idx}`}>
+                        {formatFoodQuantity ? formatFoodQuantity(food) : `${food.cantidad_g || 0}g`}
                     </button>
-
-                    {/* Cantidad (gramos) - stepper conectado */}
-                    <div className="inline-flex items-stretch rounded-lg border border-border bg-card overflow-hidden flex-shrink-0" title="Cantidad en gramos">
-                        <button className="px-2.5 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, -increment)} aria-label="Menos gramos">
-                            <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        {isEditing ? (
-                            <input type="number" defaultValue={food.cantidad_g || 0} autoFocus
-                                className="w-14 text-center text-sm font-bold font-data bg-transparent border-x border-border text-foreground focus:outline-none"
-                                onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value); if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null }); }} />
-                        ) : (
-                            <button className="min-w-[64px] px-2 text-sm font-bold font-data text-center text-foreground border-x border-border hover:text-brand disabled:opacity-50 transition-colors" disabled={isLocked}
-                                onClick={() => !isLocked && setEditingQuantity({ mealKey, foodIndex: idx })} data-testid={`qty-${mealKey}-${idx}`}>
-                                {formatFoodQuantity ? formatFoodQuantity(food) : `${food.cantidad_g || 0}g`}
-                            </button>
-                        )}
-                        <button className="px-2.5 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, increment)} aria-label="Más gramos">
-                            <Plus className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Eliminar */}
-                <button className="h-9 w-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 transition-colors flex-shrink-0" disabled={isLocked} onClick={() => removeFood(mealKey, idx)} aria-label="Eliminar alimento" data-testid={`remove-${mealKey}-${idx}`}>
-                    <Trash2 className="w-4 h-4" />
+                )}
+                <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, increment)} aria-label="Más gramos">
+                    <Plus className="w-3.5 h-3.5" />
                 </button>
             </div>
+
+            {/* Eliminar */}
+            <button className="h-9 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 transition-colors flex-shrink-0" disabled={isLocked} onClick={() => removeFood(mealKey, idx)} aria-label="Eliminar alimento" data-testid={`remove-${mealKey}-${idx}`}>
+                <Trash2 className="w-4 h-4" />
+            </button>
         </div>
     );
 };
@@ -313,7 +310,7 @@ const MealCard = ({
                                     <p className="caption">Ingredientes</p>
                                     <span className="text-[11px] text-muted-foreground">↑ = prioridad · −/+ = gramos</span>
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     {foods.map((food, idx) => (
                                         <IngredientRow key={idx} food={food} idx={idx} mealKey={mealKey} isLocked={isLocked}
                                             isEditing={editingQuantity.mealKey === mealKey && editingQuantity.foodIndex === idx}

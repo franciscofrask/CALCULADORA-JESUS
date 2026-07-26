@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import DesgloseChips from '../components/DesgloseChips';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -21,7 +20,7 @@ import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
     ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp,
-    AlertCircle, Calculator, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw
+    AlertCircle, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw
 } from 'lucide-react';
 
 const USER_ROLES = [
@@ -202,66 +201,33 @@ const ClientDetailPage = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('resumen');
 
-    // Macros modal
-    const [macrosModalOpen, setMacrosModalOpen] = useState(false);
-    const [macrosForm, setMacrosForm] = useState({
+    // Macros: el editor vive en la propia pestaña (precargado con los macros
+    // actuales). El modal solo se usa para editar/repetir entradas del historial.
+    const [entryModalOpen, setEntryModalOpen] = useState(false);
+    const [sugerencia, setSugerencia] = useState(null);
+    const [sugiriendo, setSugiriendo] = useState(false);
+    const MACROS_FORM_VACIO = {
         training: { protein: '', carbs: '', fat: '' },
         rest: { protein: '', carbs: '', fat: '' },
         peri: { protein: '', carbs: '' },
         note: '',
+        // Modelo predictivo (paso 1): criterio interno del coach y % graso del momento.
+        criterio: '',
+        porcentaje_graso: '',
         effective_date: new Date().toISOString().slice(0, 10),
-    });
+    };
+    const [macrosForm, setMacrosForm] = useState(MACROS_FORM_VACIO);
+    const [entryForm, setEntryForm] = useState(MACROS_FORM_VACIO);
     const [savingMacros, setSavingMacros] = useState(false);
+    const [savingEntry, setSavingEntry] = useState(false);
+    // Sugerencia de la IA que dio pie al ajuste que hay ahora en el editor (si la hubo).
+    const [sugerenciaId, setSugerenciaId] = useState(null);
+    const editorMacrosRef = useRef(null);
 
     // Routine
     const [generatingRoutine, setGeneratingRoutine] = useState(false);
     const [routineInstructions, setRoutineInstructions] = useState('');
     const [generatedRoutine, setGeneratedRoutine] = useState(null);
-
-    // Calculator tab
-    const [calcForm, setCalcForm] = useState({ peso: '', porcentaje_graso: '', sexo: 'hombre', objetivo: 'volumen' });
-    // Preguntas 5-8 del motor v2 (mismas reglas que la vista del cliente),
-    // precargadas con las respuestas guardadas del cliente.
-    const [calcAjustes, setCalcAjustes] = useState({
-        actividad_diaria: null, deporte_extra: null, facilidad_engordar: null,
-        sigue_dieta: null, dieta_texto: '', dieta_hc_entreno: '', dieta_grasa_entreno: '',
-    });
-    useEffect(() => {
-        const a = client?.ajustes_macros;
-        if (a) setCalcAjustes(prev => ({
-            ...prev, ...a,
-            dieta_texto: a.dieta_texto || '',
-            dieta_hc_entreno: a.dieta_hc_entreno ?? '',
-            dieta_grasa_entreno: a.dieta_grasa_entreno ?? '',
-        }));
-        // Precargar también las 4 básicas del perfil si el formulario está vacío
-        setCalcForm(prev => prev.peso === '' ? {
-            peso: client?.weight != null ? String(client.weight) : '',
-            porcentaje_graso: client?.body_fat != null ? String(client.body_fat) : '',
-            sexo: client?.sex || prev.sexo,
-            objetivo: client?.goal || prev.objetivo,
-        } : prev);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [client]);
-
-    const calcAjustesPayload = () => {
-        const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-        return {
-            actividad_diaria: calcAjustes.actividad_diaria,
-            deporte_extra: calcAjustes.deporte_extra,
-            facilidad_engordar: calcAjustes.facilidad_engordar,
-            sigue_dieta: calcAjustes.sigue_dieta,
-            dieta_texto: calcAjustes.sigue_dieta ? (calcAjustes.dieta_texto || null) : null,
-            dieta_hc_entreno: calcAjustes.sigue_dieta ? num(calcAjustes.dieta_hc_entreno) : null,
-            dieta_grasa_entreno: calcAjustes.sigue_dieta ? num(calcAjustes.dieta_grasa_entreno) : null,
-        };
-    };
-    const setAjuste = (k, v) => { setCalcAjustes(prev => ({ ...prev, [k]: v })); setCalcResults(null); setCalcApplied(false); };
-    const [calcResults, setCalcResults] = useState(null);
-    const [calcLoading, setCalcLoading] = useState(false);
-    const [calcApplying, setCalcApplying] = useState(false);
-    const [calcApplied, setCalcApplied] = useState(false);
-    const [calcNote, setCalcNote] = useState('');
 
     // Suplementos
     const [supProtocol, setSupProtocol] = useState({ actual: [], siguiente: [], siguiente_fecha: '', nota: '' });
@@ -310,16 +276,19 @@ const ClientDetailPage = () => {
             setClient(response.data);
             const sp = response.data.supplement_protocol;
             if (sp) setSupProtocol({ actual: sp.actual || [], siguiente: sp.siguiente || [], siguiente_fecha: sp.siguiente_fecha || '', nota: sp.nota || '' });
+            // El editor de la pestana Macros arranca siempre con los macros guardados
+            // (mismo criterio que macrosActuales: 0 es un valor valido, no un hueco).
             const p = response.data.profile;
-            if (p?.macros_training) {
-                setMacrosForm({
-                    training: { protein: p.macros_training.protein || p.macros_training.proteinas || '', carbs: p.macros_training.carbs || p.macros_training.hidratos || '', fat: p.macros_training.fat || p.macros_training.grasas || '' },
-                    rest: { protein: p.macros_rest?.protein || p.macros_rest?.proteinas || '', carbs: p.macros_rest?.carbs || p.macros_rest?.hidratos || '', fat: p.macros_rest?.fat || p.macros_rest?.grasas || '' },
-                    peri: { protein: p.macros_periworkout?.protein ?? p.macros_periworkout?.proteinas ?? '', carbs: p.macros_periworkout?.carbs ?? p.macros_periworkout?.hidratos ?? '' },
-                    note: '',
-                    effective_date: new Date().toISOString().slice(0, 10),
-                });
-            }
+            const _v = (m, k1, k2) => { const v = m?.[k1] ?? m?.[k2]; return v == null ? '' : String(v); };
+            setMacrosForm({
+                training: { protein: _v(p?.macros_training, 'protein', 'proteinas'), carbs: _v(p?.macros_training, 'carbs', 'hidratos'), fat: _v(p?.macros_training, 'fat', 'grasas') },
+                rest: { protein: _v(p?.macros_rest, 'protein', 'proteinas'), carbs: _v(p?.macros_rest, 'carbs', 'hidratos'), fat: _v(p?.macros_rest, 'fat', 'grasas') },
+                peri: { protein: _v(p?.macros_periworkout, 'protein', 'proteinas'), carbs: _v(p?.macros_periworkout, 'carbs', 'hidratos') },
+                note: '',
+                criterio: '',
+                porcentaje_graso: p?.body_fat != null ? String(p.body_fat) : '',
+                effective_date: new Date().toISOString().slice(0, 10),
+            });
         } catch (error) {
             toast.error('Error al cargar datos del cliente');
             navigate('/admin/clients');
@@ -335,15 +304,69 @@ const ClientDetailPage = () => {
         peri: { protein: _g(h.peri, 'protein', 'proteinas'), carbs: _g(h.peri, 'carbs', 'hidratos') },
         effective_date: opts.today ? new Date().toISOString().slice(0, 10) : (h.effective_date || new Date().toISOString().slice(0, 10)),
         note: opts.note != null ? opts.note : (h.note || ''),
+        criterio: h.criterio || '',
+        porcentaje_graso: h.body_fat != null ? String(h.body_fat) : '',
     });
-    const openNewMacros = () => { setEditingEntryId(null); setMacrosModalOpen(true); };
-    const openEditEntry = (h) => { setEditingEntryId(h.id); setMacrosForm(macroFormFromEntry(h)); setMacrosModalOpen(true); };
+    // Agente de re-ajuste de macros: pide la sugerencia y, si el coach la acepta,
+    // pre-rellena el editor de macros con la propuesta (vigente manana).
+    const pedirSugerencia = async () => {
+        setSugiriendo(true); setSugerencia(null);
+        try {
+            const r = await api.post(`/admin/clients/${clientId}/sugerir-ajuste`);
+            if (r.data?.propuesta) setSugerencia(r.data);
+            else toast.error('El asistente no devolvió una propuesta válida');
+        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo obtener la sugerencia'); }
+        finally { setSugiriendo(false); }
+    };
+    // Vuelca la propuesta de la IA en el editor de la pestaña: el coach la ve
+    // sobre los macros actuales, la retoca si quiere y guarda desde ahi.
+    const usarSugerencia = () => {
+        const p = sugerencia?.propuesta; if (!p) return;
+        // Arrastramos el id: al guardar, el backend compara lo que propuso la IA con
+        // lo que dejaste tu y registra la correccion.
+        setSugerenciaId(sugerencia.sugerencia_id || null);
+        setMacrosForm({
+            training: { protein: p.entreno?.proteina ?? '', carbs: p.entreno?.hidratos ?? '', fat: p.entreno?.grasa ?? '' },
+            rest: { protein: p.descanso?.proteina ?? '', carbs: p.descanso?.hidratos ?? '', fat: p.descanso?.grasa ?? '' },
+            peri: { protein: p.perientreno?.proteina ?? '', carbs: p.perientreno?.hidratos ?? '' },
+            note: (sugerencia?.razonamiento || '').slice(0, 300),
+            effective_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+        });
+        toast.success('Propuesta cargada en el editor: revísala y guarda');
+        editorMacrosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    const openEditEntry = (h) => { setEditingEntryId(h.id); setEntryForm(macroFormFromEntry(h)); setEntryModalOpen(true); };
     const openRepeatEntry = (h) => {
         const d = h.effective_date ? new Date(h.effective_date + 'T12:00:00') : new Date(h.created_at);
         setEditingEntryId(null);
-        setMacrosForm(macroFormFromEntry(h, { today: true, note: `Repetición de los macros del ${d.toLocaleDateString('es-ES')}` }));
-        setMacrosModalOpen(true);
+        setEntryForm(macroFormFromEntry(h, { today: true, note: `Repetición de los macros del ${d.toLocaleDateString('es-ES')}` }));
+        setEntryModalOpen(true);
     };
+    // Modelo predictivo (paso 1): evaluar como salio la fase que abrio un ajuste.
+    const [evalEntry, setEvalEntry] = useState(null);   // entrada del historial en edicion
+    const [evalForm, setEvalForm] = useState({ resultado: 'buena', causa: 'cliente', nota: '' });
+    const [savingEval, setSavingEval] = useState(false);
+    const openEvaluar = (h) => {
+        const ev = h.evaluacion || {};
+        setEvalForm({ resultado: ev.resultado || 'buena', causa: ev.causa || 'cliente', nota: ev.nota || '' });
+        setEvalEntry(h);
+    };
+    const guardarEvaluacion = async () => {
+        if (!evalEntry) return;
+        setSavingEval(true);
+        try {
+            await api.put(`/admin/clients/${clientId}/macro-history/${evalEntry.id}/evaluacion`, {
+                resultado: evalForm.resultado,
+                causa: evalForm.resultado === 'mala' ? evalForm.causa : null,
+                nota: evalForm.nota.trim() || null,
+            });
+            toast.success('Evaluación guardada');
+            setEvalEntry(null);
+            fetchClient();
+        } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo guardar la evaluación'); }
+        finally { setSavingEval(false); }
+    };
+
     const deleteMacroEntry = async (h) => {
         if (!window.confirm('¿Eliminar esta entrada del historial de macros? No cambia los macros actuales del cliente.')) return;
         try { await api.delete(`/admin/clients/${clientId}/macro-history/${h.id}`); toast.success('Entrada eliminada'); fetchClient(); }
@@ -376,17 +399,41 @@ const ClientDetailPage = () => {
         catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo dar de baja'); }
     };
 
+    const macrosFormToBody = (f) => ({
+        training: { protein: parseFloat(f.training.protein), carbs: parseFloat(f.training.carbs), fat: parseFloat(f.training.fat) },
+        rest: { protein: parseFloat(f.rest.protein), carbs: parseFloat(f.rest.carbs), fat: parseFloat(f.rest.fat) },
+        peri: { protein: parseFloat(f.peri.protein) || 0, carbs: parseFloat(f.peri.carbs) || 0 },
+        note: f.note,
+        criterio: (f.criterio || '').trim() || null,
+        porcentaje_graso: f.porcentaje_graso === '' || f.porcentaje_graso == null ? null : parseFloat(f.porcentaje_graso),
+        effective_date: f.effective_date,
+    });
+    const macrosFormIncompleto = (f) => ['training', 'rest'].some(
+        b => ['protein', 'carbs', 'fat'].some(k => f[b][k] === '' || f[b][k] == null || isNaN(parseFloat(f[b][k])))
+    );
+
+    // Guarda los macros del cliente desde el editor de la pestaña.
     const handleSaveMacros = async () => {
-        if (!editingEntryId && !macrosForm.note.trim()) { toast.error('El motivo es obligatorio'); return; }
+        if (macrosFormIncompleto(macrosForm)) { toast.error('Completa proteína, hidratos y grasa de entrenamiento y descanso'); return; }
+        if (!macrosForm.note.trim()) { toast.error('El feedback para el cliente es obligatorio'); return; }
         setSavingMacros(true);
         try {
-            const body = {
-                training: { protein: parseFloat(macrosForm.training.protein), carbs: parseFloat(macrosForm.training.carbs), fat: parseFloat(macrosForm.training.fat) },
-                rest: { protein: parseFloat(macrosForm.rest.protein), carbs: parseFloat(macrosForm.rest.carbs), fat: parseFloat(macrosForm.rest.fat) },
-                peri: { protein: parseFloat(macrosForm.peri.protein) || 0, carbs: parseFloat(macrosForm.peri.carbs) || 0 },
-                note: macrosForm.note,
-                effective_date: macrosForm.effective_date,
-            };
+            await api.put(`/admin/clients/${clientId}/macros`, { ...macrosFormToBody(macrosForm), sugerencia_id: sugerenciaId });
+            toast.success('Macros actualizados');
+            setSugerencia(null);
+            setSugerenciaId(null);
+            fetchClient();
+        } catch (error) { toast.error(error?.response?.data?.detail || 'Error al guardar'); }
+        finally { setSavingMacros(false); }
+    };
+
+    // Guarda una entrada del historial (editar) o la reaplica como macros actuales (repetir).
+    const handleSaveEntry = async () => {
+        if (macrosFormIncompleto(entryForm)) { toast.error('Completa proteína, hidratos y grasa de entrenamiento y descanso'); return; }
+        if (!editingEntryId && !entryForm.note.trim()) { toast.error('El motivo es obligatorio'); return; }
+        setSavingEntry(true);
+        try {
+            const body = macrosFormToBody(entryForm);
             if (editingEntryId) {
                 await api.put(`/admin/clients/${clientId}/macro-history/${editingEntryId}`, body);
                 toast.success('Entrada del historial actualizada');
@@ -394,12 +441,11 @@ const ClientDetailPage = () => {
                 await api.put(`/admin/clients/${clientId}/macros`, body);
                 toast.success('Macros actualizados');
             }
-            setMacrosModalOpen(false);
+            setEntryModalOpen(false);
             setEditingEntryId(null);
-            setMacrosForm(prev => ({ ...prev, note: '' }));
             fetchClient();
-        } catch (error) { toast.error('Error al guardar'); }
-        finally { setSavingMacros(false); }
+        } catch (error) { toast.error(error?.response?.data?.detail || 'Error al guardar'); }
+        finally { setSavingEntry(false); }
     };
 
     // Calma quiereRepartoDeComidas: coach toggles single-meal mode for this client.
@@ -464,17 +510,33 @@ const ClientDetailPage = () => {
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-48 bg-[#111] rounded-xl" /></div></div>;
     if (!client) return <div className="p-6 bg-[#0A0A0A] min-h-screen text-center text-white/50">Cliente no encontrado</div>;
 
-    const { profile, user, routines, reports, payments, macro_history, nutrition_stats } = client;
+    const { profile, user, routines, reports, payments, macro_history, nutrition_stats, calma_raw } = client;
     const mt = profile?.macros_training;
     const mr = profile?.macros_rest;
     const mp = profile?.macros_periworkout;
-    const getV = (m, k1, k2) => Math.round(m?.[k1] || m?.[k2] || 0);
     const activeRoutine = routines?.find(r => r.status === 'active');
+
+    // Macros guardados ahora mismo, en el mismo formato que el formulario: sirven
+    // para precargar el editor, marcar lo que el coach ha tocado y poder descartar.
+    const _cur = (m, k1, k2) => { const v = m?.[k1] ?? m?.[k2]; return v == null ? '' : String(v); };
+    const macrosActuales = {
+        training: { protein: _cur(mt, 'protein', 'proteinas'), carbs: _cur(mt, 'carbs', 'hidratos'), fat: _cur(mt, 'fat', 'grasas') },
+        rest: { protein: _cur(mr, 'protein', 'proteinas'), carbs: _cur(mr, 'carbs', 'hidratos'), fat: _cur(mr, 'fat', 'grasas') },
+        peri: { protein: _cur(mp, 'protein', 'proteinas'), carbs: _cur(mp, 'carbs', 'hidratos') },
+    };
+    const bfActual = profile?.body_fat != null ? String(profile.body_fat) : '';
+    const macrosTocados = ['training', 'rest', 'peri'].some(
+        b => Object.keys(macrosActuales[b]).some(k => String(macrosForm[b][k] ?? '') !== macrosActuales[b][k])
+    ) || String(macrosForm.porcentaje_graso ?? '') !== bfActual;
+    const setMacroCampo = (bloque, campo, valor) => setMacrosForm(prev => ({ ...prev, [bloque]: { ...prev[bloque], [campo]: valor } }));
+    const descartarCambiosMacros = () => (setSugerenciaId(null), setMacrosForm({
+        ...macrosActuales, note: '', criterio: '', porcentaje_graso: bfActual,
+        effective_date: new Date().toISOString().slice(0, 10),
+    }));
 
     const TAB_CONFIG = [
         { id: 'resumen', label: 'Resumen', icon: User },
         { id: 'macros', label: 'Macros', icon: Apple },
-        { id: 'calculadora', label: 'Calculadora', icon: Calculator },
         { id: 'membresia', label: 'Membresía', icon: CreditCard },
         { id: 'cuestionario', label: 'Cuestionario', icon: ClipboardList },
         { id: 'entrenamiento', label: 'Entreno', icon: Dumbbell },
@@ -558,33 +620,120 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB 2: MACROS ========== */}
                 <TabsContent value="macros" className="space-y-4">
-                    {mt ? (
-                        <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
-                            <div className="flex items-center justify-between mb-4">
-                                <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Macros actuales</p>
-                                <div className="flex items-center gap-2">
-                                    <Badge className={`border-0 text-[10px] ${profile?.macros_source === 'auto' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-400'}`}>{profile?.macros_source || 'manual'}</Badge>
-                                    <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs" onClick={openNewMacros} data-testid="change-macros-btn">Cambiar macros</Button>
+                    {/* Editor de macros siempre a la vista, precargado con los actuales:
+                        el coach edita a mano o vuelca la propuesta de la IA y guarda aqui. */}
+                    <Card className="bg-[#111] border-[#222]" ref={editorMacrosRef}><CardContent className="p-5">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                            <div className="flex items-center gap-2">
+                                <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Macros del cliente</p>
+                                {mt && <Badge className={`border-0 text-[10px] ${profile?.macros_source === 'auto' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-400'}`}>{profile?.macros_source || 'manual'}</Badge>}
+                                {macrosTocados && <Badge className="border-0 text-[10px] bg-[#FF671F]/20 text-[#FF671F]">sin guardar</Badge>}
+                            </div>
+                            <Button size="sm" variant="outline" className="bg-transparent border-[#FF671F]/40 text-[#FF671F] hover:bg-[#FF671F]/10 text-xs" onClick={pedirSugerencia} disabled={sugiriendo} data-testid="suggest-macros-btn">{sugiriendo ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}Sugerir ajuste (IA)</Button>
+                        </div>
+                        {!mt && <p className="text-white/40 text-xs mb-3">Este cliente aún no tiene macros asignados: rellénalos aquí o pídele una propuesta al asistente.</p>}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <MacroEditGroup title="Entrenamiento" icon={Zap} color="#FF671F" fields={[
+                                { label: 'Proteína', value: macrosForm.training.protein, actual: macrosActuales.training.protein, onChange: v => setMacroCampo('training', 'protein', v), testId: 'macro-input-tp' },
+                                { label: 'Hidratos', value: macrosForm.training.carbs, actual: macrosActuales.training.carbs, onChange: v => setMacroCampo('training', 'carbs', v) },
+                                { label: 'Grasa', value: macrosForm.training.fat, actual: macrosActuales.training.fat, onChange: v => setMacroCampo('training', 'fat', v) },
+                            ]} />
+                            <MacroEditGroup title="Perientreno" icon={Activity} color="#EAB308" fields={[
+                                { label: 'Proteína', value: macrosForm.peri.protein, actual: macrosActuales.peri.protein, onChange: v => setMacroCampo('peri', 'protein', v) },
+                                { label: 'Hidratos', value: macrosForm.peri.carbs, actual: macrosActuales.peri.carbs, onChange: v => setMacroCampo('peri', 'carbs', v) },
+                            ]} />
+                            <MacroEditGroup title="Descanso" icon={Scale} color="#22C55E" fields={[
+                                { label: 'Proteína', value: macrosForm.rest.protein, actual: macrosActuales.rest.protein, onChange: v => setMacroCampo('rest', 'protein', v) },
+                                { label: 'Hidratos', value: macrosForm.rest.carbs, actual: macrosActuales.rest.carbs, onChange: v => setMacroCampo('rest', 'carbs', v) },
+                                { label: 'Grasa', value: macrosForm.rest.fat, actual: macrosActuales.rest.fat, onChange: v => setMacroCampo('rest', 'fat', v) },
+                            ]} />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-white/60 text-xs">Vigente desde</Label>
+                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({ ...macrosForm, effective_date: e.target.value })} className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-effective-date" />
+                                    <p className="text-[10px] text-white/30 mt-1">Las dietas anteriores conservan los macros previos.</p>
+                                </div>
+                                <div>
+                                    <Label className="text-white/60 text-xs">% graso</Label>
+                                    <Input type="number" step="0.1" min="3" max="60" value={macrosForm.porcentaje_graso}
+                                        onChange={e => setMacrosForm({ ...macrosForm, porcentaje_graso: e.target.value })}
+                                        placeholder="-" className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-body-fat" />
+                                    <p className="text-[10px] text-white/30 mt-1">El del momento del ajuste. Queda en el historial.</p>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <MacroGroup title="Entrenamiento" icon={Zap} color="#FF671F" items={[
-                                    { label: 'Proteína', value: getV(mt, 'protein', 'proteinas') },
-                                    { label: 'Hidratos', value: getV(mt, 'carbs', 'hidratos') },
-                                    { label: 'Grasa', value: getV(mt, 'fat', 'grasas') },
-                                ]} />
-                                <MacroGroup title="Perientreno" icon={Activity} color="#EAB308" items={[
-                                    { label: 'Proteína', value: getV(mp, 'protein', 'proteinas') },
-                                    { label: 'Hidratos', value: getV(mp, 'carbs', 'hidratos') },
-                                ]} />
-                                <MacroGroup title="Descanso" icon={Scale} color="#22C55E" items={[
-                                    { label: 'Proteína', value: getV(mr, 'protein', 'proteinas') },
-                                    { label: 'Hidratos', value: getV(mr, 'carbs', 'hidratos') },
-                                    { label: 'Grasa', value: getV(mr, 'fat', 'grasas') },
-                                ]} />
+                            <div className="grid grid-cols-1 gap-3">
+                                <div>
+                                    <Label className="text-white/60 text-xs">Criterio del ajuste (interno)</Label>
+                                    <Textarea value={macrosForm.criterio} onChange={e => setMacrosForm({ ...macrosForm, criterio: e.target.value })} placeholder="Ej: estancado dos meses cumpliendo, recorto un escalón de hidratos..." className="bg-[#0A0A0A] border-[#333] text-white mt-1 min-h-[38px]" data-testid="macro-criterio" />
+                                    <p className="text-[10px] text-white/30 mt-1">Por qué haces este ajuste. No lo ve el cliente: es lo que aprende el modelo.</p>
+                                </div>
+                                <div>
+                                    <Label className="text-white/60 text-xs">Feedback para el cliente (obligatorio)</Label>
+                                    <Textarea value={macrosForm.note} onChange={e => setMacrosForm({ ...macrosForm, note: e.target.value })} placeholder="Ej: Bajamos un poco los hidratos por la pérdida de peso, sigue así..." className="bg-[#0A0A0A] border-[#333] text-white mt-1 min-h-[38px]" data-testid="macro-note" />
+                                    <p className="text-[10px] text-white/30 mt-1">Le llega al cliente como novedad al guardar (sustituye al audio).</p>
+                                </div>
                             </div>
-                        </CardContent></Card>
-                    ) : <EmptyState icon={Apple} message="Sin macros asignados. Usa 'Cambiar macros' para asignar." action={<Button size="sm" className="bg-[#FF671F] text-white mt-2" onClick={openNewMacros}>Asignar macros</Button>} />}
+                        </div>
+                        <div className="flex items-center justify-end gap-2 mt-4">
+                            {macrosTocados && <Button size="sm" variant="ghost" className="text-white/50 hover:text-white text-xs" onClick={descartarCambiosMacros}>Descartar cambios</Button>}
+                            <Button onClick={handleSaveMacros} disabled={savingMacros || !macrosTocados} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white disabled:opacity-40" data-testid="save-macros-btn">{savingMacros ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" />Guardar macros</>}</Button>
+                        </div>
+                    </CardContent></Card>
+
+                    {/* Sugerencia del agente de re-ajuste de macros (revisar y confirmar) */}
+                    {sugerencia?.propuesta && (
+                        <Card className="bg-[#111] border-[#FF671F]/30">
+                            <CardContent className="p-5 space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4 text-[#FF671F]" />
+                                    <p className="text-xs font-bold text-white uppercase tracking-wider">Ajuste sugerido por el asistente</p>
+                                    <span className="text-white/30 text-[10px] ml-auto">confianza: {sugerencia.confianza || '—'}{sugerencia._modelo ? ` · ${sugerencia._modelo}` : ''}</span>
+                                </div>
+                                {sugerencia.contexto_decision && Object.keys(sugerencia.contexto_decision).length > 0 && (
+                                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
+                                        {sugerencia.contexto_decision.peso_actual != null && (
+                                            <span className="text-white/50">Último peso: <b className="text-white">{sugerencia.contexto_decision.peso_actual} kg</b>{sugerencia.contexto_decision.fecha_actual ? <span className="text-white/30"> · {sugerencia.contexto_decision.fecha_actual}</span> : null}</span>
+                                        )}
+                                        {sugerencia.contexto_decision.delta_ultimo != null && (
+                                            <span className="text-white/50">Desde el anterior: <b className="text-white">{sugerencia.contexto_decision.delta_ultimo > 0 ? '+' : ''}{sugerencia.contexto_decision.delta_ultimo} kg</b>{sugerencia.contexto_decision.dias_desde_anterior != null ? <span className="text-white/30"> ({sugerencia.contexto_decision.dias_desde_anterior} días)</span> : null}</span>
+                                        )}
+                                        {sugerencia.contexto_decision.delta_inicio != null && (
+                                            <span className="text-white/50">Desde el inicio: <b className="text-white">{sugerencia.contexto_decision.delta_inicio > 0 ? '+' : ''}{sugerencia.contexto_decision.delta_inicio} kg</b></span>
+                                        )}
+                                        {sugerencia.contexto_decision.cumplimiento_dieta && (
+                                            <span className="text-white/50">Cumplimiento: <b className="text-white">{sugerencia.contexto_decision.cumplimiento_dieta}</b></span>
+                                        )}
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    {[['Entrenamiento', sugerencia.propuesta.entreno, true], ['Perientreno', sugerencia.propuesta.perientreno, false], ['Descanso', sugerencia.propuesta.descanso, true]].map(([t, mm, g]) => (
+                                        <div key={t} className="bg-[#0A0A0A] rounded-xl p-3 border border-[#222]">
+                                            <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">{t}</p>
+                                            <p className="text-sm font-bold"><span className="text-orange-400">{mm?.proteina}P</span> · <span className="text-blue-400">{mm?.hidratos}H</span>{g && <> · <span className="text-yellow-400">{mm?.grasa}G</span></>}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                {sugerencia.cambios?.length > 0 && <p className="text-white/60 text-xs"><span className="text-white/40">Cambios: </span>{sugerencia.cambios.join('  ·  ')}</p>}
+                                {sugerencia.razonamiento && <p className="text-white/80 text-sm leading-relaxed">{sugerencia.razonamiento}</p>}
+                                {sugerencia.avisos?.length > 0 && (
+                                    <ul className="space-y-1">{sugerencia.avisos.map((a, i) => <li key={i} className="text-amber-500/90 text-xs flex gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /><span>{a}</span></li>)}</ul>
+                                )}
+                                {sugerencia.guardarrail?.length > 0 && (
+                                    <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-2">
+                                        <p className="text-red-400 text-[11px] font-bold mb-0.5">Revisar (guardarraíl):</p>
+                                        <ul className="space-y-0.5">{sugerencia.guardarrail.map((w, i) => <li key={i} className="text-red-400/90 text-xs">· {w}</li>)}</ul>
+                                    </div>
+                                )}
+                                <div className="flex items-center gap-2 pt-1">
+                                    <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs" onClick={usarSugerencia} data-testid="use-suggestion-btn"><CheckCircle2 className="w-3 h-3 mr-1" />Usar esta propuesta</Button>
+                                    <Button size="sm" variant="ghost" className="text-white/50 hover:text-white text-xs" onClick={() => setSugerencia(null)}>Descartar</Button>
+                                </div>
+                                <p className="text-white/30 text-[10px] leading-relaxed">Es una sugerencia para que la revises. Al usarla se cargan estos valores en el editor de arriba (vigentes mañana); nada se guarda hasta que le des a "Guardar macros".</p>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Estructura de dieta (Calma quiereRepartoDeComidas) */}
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
@@ -601,54 +750,109 @@ const ClientDetailPage = () => {
                         </div>
                     </CardContent></Card>
 
-                    {/* Macro History */}
-                    <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><History className="w-4 h-4" />Historial de cambios</CardTitle></CardHeader>
-                        <CardContent>{macro_history?.length > 0 ? (
-                            <div className="space-y-2">{macro_history.map((h, i) => <MacroHistoryItem key={h.id || i} item={h} onEdit={openEditEntry} onRepeat={openRepeatEntry} onDelete={deleteMacroEntry} />)}</div>
-                        ) : <p className="text-white/30 text-sm text-center py-4">Sin cambios registrados</p>}</CardContent>
-                    </Card>
+                    {/* Historial de macros (tabla + filtro por fechas) */}
+                    <MacroHistoryTable items={macro_history} onEdit={openEditEntry} onRepeat={openRepeatEntry} onDelete={deleteMacroEntry} onEvaluar={openEvaluar} />
 
-                    {/* Macros Modal */}
-                    <Dialog open={macrosModalOpen} onOpenChange={(o) => { setMacrosModalOpen(o); if (!o) setEditingEntryId(null); }}>
+                    {/* Evaluacion de la fase que abrio un ajuste (modelo predictivo, paso 1) */}
+                    <Dialog open={!!evalEntry} onOpenChange={(o) => !o && setEvalEntry(null)}>
+                        {evalEntry && (
+                            <DialogContent className="bg-[#111] border-[#333] max-w-md text-white" data-testid="eval-dialog">
+                                <DialogHeader><DialogTitle className="uppercase tracking-wider">Cómo salió la fase</DialogTitle></DialogHeader>
+                                <p className="text-white/50 text-xs -mt-2">
+                                    Macros del {_fechaCorta(evalEntry.effective_date || (evalEntry.created_at || '').slice(0, 10))}.
+                                    Se evalúa a toro pasado, cuando ya sabes qué dio de sí.
+                                </p>
+                                <div className="space-y-3">
+                                    <div>
+                                        <Label className="text-white/60 text-xs">Resultado</Label>
+                                        <div className="grid grid-cols-2 gap-2 mt-1">
+                                            {[['buena', 'Buena'], ['mala', 'Mala']].map(([v, l]) => (
+                                                <button key={v} onClick={() => setEvalForm(f => ({ ...f, resultado: v }))}
+                                                    className={`py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${evalForm.resultado === v ? (v === 'buena' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white') : 'bg-[#1A1A1A] text-white/40 hover:text-white'}`}
+                                                    data-testid={`eval-resultado-${v}`}>{l}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    {evalForm.resultado === 'mala' && (
+                                        <div>
+                                            <Label className="text-white/60 text-xs">¿De quién fue?</Label>
+                                            <div className="grid grid-cols-3 gap-2 mt-1">
+                                                {[['ajuste', 'Del ajuste'], ['cliente', 'No cumplió'], ['otro', 'Otro']].map(([v, l]) => (
+                                                    <button key={v} onClick={() => setEvalForm(f => ({ ...f, causa: v }))}
+                                                        className={`py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${evalForm.causa === v ? 'bg-[#FF671F] text-white' : 'bg-[#1A1A1A] text-white/40 hover:text-white'}`}>{l}</button>
+                                                ))}
+                                            </div>
+                                            <p className="text-[10px] text-white/30 mt-1">"Del ajuste" = te pasaste o te quedaste corto tú. "No cumplió" = el ajuste estaba bien.</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <Label className="text-white/60 text-xs">Nota (opcional)</Label>
+                                        <Textarea value={evalForm.nota} onChange={e => setEvalForm(f => ({ ...f, nota: e.target.value }))}
+                                            placeholder="Ej: bajó 2 kg pero se quedó sin fuerza la última semana" className="bg-[#0A0A0A] border-[#333] text-white mt-1" />
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setEvalEntry(null)} className="bg-transparent border-[#333] text-white">Cancelar</Button>
+                                    <Button onClick={guardarEvaluacion} disabled={savingEval} className="bg-[#FF671F] text-white" data-testid="save-eval-btn">
+                                        {savingEval ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" />Guardar</>}
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        )}
+                    </Dialog>
+
+                    {/* Modal del historial: editar una entrada pasada o reaplicarla como macros actuales */}
+                    <Dialog open={entryModalOpen} onOpenChange={(o) => { setEntryModalOpen(o); if (!o) setEditingEntryId(null); }}>
                         <DialogContent className="bg-[#111] border-[#333] max-w-lg" data-testid="macros-modal">
-                            <DialogHeader><DialogTitle className="text-white uppercase tracking-wider">{editingEntryId ? 'Editar entrada del historial' : 'Cambiar macros'}</DialogTitle></DialogHeader>
+                            <DialogHeader><DialogTitle className="text-white uppercase tracking-wider">{editingEntryId ? 'Editar entrada del historial' : 'Repetir estos macros'}</DialogTitle></DialogHeader>
                             <div className="space-y-4">
                                 <div>
                                     <p className="text-xs text-white/40 uppercase tracking-wider mb-2">Entrenamiento</p>
                                     <div className="grid grid-cols-3 gap-2">
-                                        <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={macrosForm.training.protein} onChange={e => setMacrosForm({...macrosForm, training: {...macrosForm.training, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" data-testid="macro-input-tp" /></div>
-                                        <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={macrosForm.training.carbs} onChange={e => setMacrosForm({...macrosForm, training: {...macrosForm.training, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
-                                        <div><Label className="text-white/60 text-xs">Grasa</Label><Input type="number" value={macrosForm.training.fat} onChange={e => setMacrosForm({...macrosForm, training: {...macrosForm.training, fat: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                        <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={entryForm.training.protein} onChange={e => setEntryForm({...entryForm, training: {...entryForm.training, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" data-testid="macro-input-tp" /></div>
+                                        <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={entryForm.training.carbs} onChange={e => setEntryForm({...entryForm, training: {...entryForm.training, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                        <div><Label className="text-white/60 text-xs">Grasa</Label><Input type="number" value={entryForm.training.fat} onChange={e => setEntryForm({...entryForm, training: {...entryForm.training, fat: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                                     </div>
                                 </div>
                                 <div>
                                     <p className="text-xs text-white/40 uppercase tracking-wider mb-2">Descanso</p>
                                     <div className="grid grid-cols-3 gap-2">
-                                        <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={macrosForm.rest.protein} onChange={e => setMacrosForm({...macrosForm, rest: {...macrosForm.rest, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
-                                        <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={macrosForm.rest.carbs} onChange={e => setMacrosForm({...macrosForm, rest: {...macrosForm.rest, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
-                                        <div><Label className="text-white/60 text-xs">Grasa</Label><Input type="number" value={macrosForm.rest.fat} onChange={e => setMacrosForm({...macrosForm, rest: {...macrosForm.rest, fat: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                        <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={entryForm.rest.protein} onChange={e => setEntryForm({...entryForm, rest: {...entryForm.rest, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                        <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={entryForm.rest.carbs} onChange={e => setEntryForm({...entryForm, rest: {...entryForm.rest, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                        <div><Label className="text-white/60 text-xs">Grasa</Label><Input type="number" value={entryForm.rest.fat} onChange={e => setEntryForm({...entryForm, rest: {...entryForm.rest, fat: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                                     </div>
                                 </div>
                                 <div>
                                     <p className="text-xs text-white/40 uppercase tracking-wider mb-2">Perientreno</p>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={macrosForm.peri.protein} onChange={e => setMacrosForm({...macrosForm, peri: {...macrosForm.peri, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
-                                        <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={macrosForm.peri.carbs} onChange={e => setMacrosForm({...macrosForm, peri: {...macrosForm.peri, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                        <div><Label className="text-white/60 text-xs">Proteína</Label><Input type="number" value={entryForm.peri.protein} onChange={e => setEntryForm({...entryForm, peri: {...entryForm.peri, protein: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                        <div><Label className="text-white/60 text-xs">Hidratos</Label><Input type="number" value={entryForm.peri.carbs} onChange={e => setEntryForm({...entryForm, peri: {...entryForm.peri, carbs: e.target.value}})} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <Label className="text-white/60 text-xs">Vigente desde</Label>
+                                        <Input type="date" value={entryForm.effective_date} onChange={e => setEntryForm({...entryForm, effective_date: e.target.value})} className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-effective-date" />
+                                        <p className="text-[10px] text-white/30 mt-1">Las dietas anteriores conservan los macros previos.</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-white/60 text-xs">% graso</Label>
+                                        <Input type="number" step="0.1" min="3" max="60" value={entryForm.porcentaje_graso} onChange={e => setEntryForm({...entryForm, porcentaje_graso: e.target.value})} placeholder="-" className="bg-[#0A0A0A] border-[#333] text-white mt-1" />
                                     </div>
                                 </div>
                                 <div>
-                                    <Label className="text-white/60 text-xs">Vigente desde</Label>
-                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({...macrosForm, effective_date: e.target.value})} className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-effective-date" />
-                                    <p className="text-[10px] text-white/30 mt-1">Las dietas anteriores a esta fecha conservan los macros previos.</p>
+                                    <Label className="text-white/60 text-xs">Criterio del ajuste (interno)</Label>
+                                    <Textarea value={entryForm.criterio} onChange={e => setEntryForm({...entryForm, criterio: e.target.value})} placeholder="Por qué se hizo este ajuste" className="bg-[#0A0A0A] border-[#333] text-white mt-1 min-h-[38px]" />
                                 </div>
                                 <div>
-                                    <Label className="text-white/60 text-xs">Motivo del cambio {editingEntryId ? '(opcional)' : '(obligatorio)'}</Label>
-                                    <Textarea value={macrosForm.note} onChange={e => setMacrosForm({...macrosForm, note: e.target.value})} placeholder="Ej: Ajuste semanal por pérdida de peso..." className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-note" />
+                                    <Label className="text-white/60 text-xs">Feedback para el cliente {editingEntryId ? '(opcional)' : '(obligatorio)'}</Label>
+                                    <Textarea value={entryForm.note} onChange={e => setEntryForm({...entryForm, note: e.target.value})} placeholder="Ej: Bajamos un poco los hidratos por la pérdida de peso, sigue así..." className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-note" />
+                                    <p className="text-[10px] text-white/30 mt-1">Le llega al cliente como novedad al guardar (sustituye al audio).</p>
                                 </div>
                             </div>
                             <DialogFooter>
-                                <Button variant="outline" onClick={() => setMacrosModalOpen(false)} className="bg-transparent border-[#333] text-white">Cancelar</Button>
-                                <Button onClick={handleSaveMacros} disabled={savingMacros} className="bg-[#FF671F] text-white" data-testid="save-macros-btn">{savingMacros ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" />Guardar</>}</Button>
+                                <Button variant="outline" onClick={() => setEntryModalOpen(false)} className="bg-transparent border-[#333] text-white">Cancelar</Button>
+                                <Button onClick={handleSaveEntry} disabled={savingEntry} className="bg-[#FF671F] text-white" data-testid="save-entry-btn">{savingEntry ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" />Guardar</>}</Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
@@ -711,12 +915,13 @@ const ClientDetailPage = () => {
                             ))}</div>
                         ) : <p className="text-white/30 text-sm text-center py-4">Sin pagos registrados</p>}</CardContent>
                     </Card>
+                    {calma_raw?.membresia?.length > 0 && <CalmaMembresias membresia={calma_raw.membresia} />}
                 </TabsContent>
 
                 {/* ========== TAB 4: REPORTES ========== */}
 
                 {/* ========== TAB 5: CUESTIONARIO ========== */}
-                <TabsContent value="cuestionario">
+                <TabsContent value="cuestionario" className="space-y-4">
                     {(profile?.goal || profile?.weight || profile?.equipment?.length) ? (
                         <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -738,7 +943,8 @@ const ClientDetailPage = () => {
                                 </div>
                             )}
                         </CardContent></Card>
-                    ) : <EmptyState icon={ClipboardList} message="Cuestionario pendiente." />}
+                    ) : (!calma_raw?.formulario_inicial && <EmptyState icon={ClipboardList} message="Cuestionario pendiente." />)}
+                    {calma_raw?.formulario_inicial && <CalmaCuestionario fi={calma_raw.formulario_inicial} />}
                 </TabsContent>
 
                 {/* ========== TAB 6: ENTRENAMIENTO ========== */}
@@ -835,6 +1041,7 @@ const ClientDetailPage = () => {
                     </Card>
 
                     <p className="text-white/30 text-xs">El catálogo se gestiona en <button onClick={() => navigate('/admin/supplements-catalog')} className="text-[#FF671F] hover:underline">Catálogo de suplementos</button>.</p>
+                    {calma_raw?.suplementacion && <CalmaSuplementos sup={calma_raw.suplementacion} />}
                 </TabsContent>
 
                 {/* ========== TAB 7: NUTRICIÓN ========== */}
@@ -878,175 +1085,11 @@ const ClientDetailPage = () => {
                     <MenuFinder api={api} clientId={clientId} clientUserId={client?.user_id} clientName={client?.name} />
                 </TabsContent>
 
-                {/* ========== TAB CALCULADORA ========== */}
-                <TabsContent value="calculadora" className="space-y-4">
-                    <Card className="bg-[#111] border-[#222]"><CardContent className="p-5 space-y-4">
-                        <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Calcular macros - Método JG</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-xs text-white/40 uppercase mb-1">Peso (kg)</label>
-                                <input type="number" min="30" max="200" step="0.5"
-                                    value={calcForm.peso}
-                                    onChange={e => { setCalcForm(f => ({...f, peso: e.target.value})); setCalcResults(null); setCalcApplied(false); }}
-                                    placeholder="80"
-                                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs text-white/40 uppercase mb-1">% Graso</label>
-                                <input type="number" min="5" max="60" step="0.5"
-                                    value={calcForm.porcentaje_graso}
-                                    onChange={e => { setCalcForm(f => ({...f, porcentaje_graso: e.target.value})); setCalcResults(null); setCalcApplied(false); }}
-                                    placeholder="20"
-                                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]"
-                                />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            {[['hombre','Hombre'],['mujer','Mujer']].map(([v,l]) => (
-                                <button key={v} onClick={() => { setCalcForm(f => ({...f, sexo: v})); setCalcResults(null); }}
-                                    className={`py-2.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all ${calcForm.sexo === v ? 'text-white' : 'bg-[#1A1A1A] text-white/40'}`}
-                                    style={calcForm.sexo === v ? { backgroundColor: '#FF671F' } : {}}
-                                >{l}</button>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            {[['volumen','Volumen'],['definicion','Definición']].map(([v,l]) => (
-                                <button key={v} onClick={() => { setCalcForm(f => ({...f, objetivo: v})); setCalcResults(null); }}
-                                    className={`py-2.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all ${calcForm.objetivo === v ? 'text-white' : 'bg-[#1A1A1A] text-white/40'}`}
-                                    style={calcForm.objetivo === v ? { backgroundColor: '#FF671F' } : {}}
-                                >{l}</button>
-                            ))}
-                        </div>
-
-                        {/* Afina tus macros: mismas reglas y preguntas que la vista del cliente */}
-                        <div className="border-t border-[#222] pt-4 space-y-3">
-                            <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Afina tus macros (respuestas del cliente)</p>
-                            {[
-                                { k: 'actividad_diaria', label: 'Actividad diaria', ops: [['sedentario','Sedentario'],['normal','Normal'],['muy_activo','Muy activo']] },
-                                { k: 'deporte_extra', label: '¿Otro deporte además de las pesas?', ops: [[true,'Sí'],[false,'No']] },
-                                { k: 'facilidad_engordar', label: 'Cuando se pasa comiendo, ¿engorda?', ops: [['enseguida','Enseguida'],['normal','Normal'],['casi_no','Casi no']] },
-                                { k: 'sigue_dieta', label: '¿Sigue una dieta que controla?', ops: [[true,'Sí'],[false,'No']] },
-                            ].map(({ k, label, ops }) => (
-                                <div key={k}>
-                                    <label className="block text-xs text-white/40 uppercase mb-1">{label}</label>
-                                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${ops.length}, 1fr)` }}>
-                                        {ops.map(([v, l]) => (
-                                            <button key={String(v)} onClick={() => setAjuste(k, v)}
-                                                className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${calcAjustes[k] === v ? 'text-white' : 'bg-[#1A1A1A] text-white/40'}`}
-                                                style={calcAjustes[k] === v ? { backgroundColor: '#FF671F' } : {}}
-                                            >{l}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                            {calcAjustes.sigue_dieta && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs text-white/40 uppercase mb-1">HC totales día de entreno (g)</label>
-                                        <input type="number" value={calcAjustes.dieta_hc_entreno}
-                                            onChange={e => setAjuste('dieta_hc_entreno', e.target.value)} placeholder="250"
-                                            className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs text-white/40 uppercase mb-1">Grasa aprox (g, opcional)</label>
-                                        <input type="number" value={calcAjustes.dieta_grasa_entreno}
-                                            onChange={e => setAjuste('dieta_grasa_entreno', e.target.value)} placeholder="60"
-                                            className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]" />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <Button onClick={async () => {
-                            const peso = parseFloat(calcForm.peso);
-                            const bf = parseFloat(calcForm.porcentaje_graso);
-                            if (!peso || isNaN(bf)) { toast.error('Rellena peso y % graso'); return; }
-                            setCalcLoading(true);
-                            try {
-                                const res = await api.post('/calculator/targets', { peso, porcentaje_graso: bf, sexo: calcForm.sexo, objetivo: calcForm.objetivo, ajustes: calcAjustesPayload() });
-                                setCalcResults(res.data);
-                                setCalcApplied(false);
-                            } catch (err) { toast.error(err.response?.data?.detail || 'Error'); }
-                            finally { setCalcLoading(false); }
-                        }} disabled={calcLoading || !calcForm.peso || !calcForm.porcentaje_graso}
-                            className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold uppercase tracking-wider disabled:opacity-40">
-                            {calcLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Calculator className="w-4 h-4 mr-2" />}
-                            {calcLoading ? 'Calculando...' : 'Calcular macros'}
-                        </Button>
-
-                        {calcResults && (<>
-                            <div className="grid grid-cols-3 gap-2">
-                                {[
-                                    { label: 'Entreno', m: calcResults.macros.entreno, color: '#FF671F' },
-                                    { label: 'Peri', m: { proteina: calcResults.macros.perientreno.proteina, hidratos: calcResults.macros.perientreno.hidratos, grasa: null }, color: '#EAB308' },
-                                    { label: 'Descanso', m: calcResults.macros.descanso, color: '#22C55E' },
-                                ].map(({ label, m, color }) => (
-                                    <div key={label} className="bg-[#0A0A0A] rounded-xl p-3 border border-[#222]">
-                                        <p className="text-[10px] font-bold uppercase mb-2" style={{ color }}>{label}</p>
-                                        <p className="text-xs text-white/60">P <span className="text-white font-bold">{Math.round(m.proteina)}</span></p>
-                                        <p className="text-xs text-white/60">H <span className="text-white font-bold">{Math.round(m.hidratos)}</span></p>
-                                        {m.grasa !== null && <p className="text-xs text-white/60">G <span className="text-white font-bold">{Math.round(m.grasa)}</span></p>}
-                                    </div>
-                                ))}
-                            </div>
-                            <DesgloseChips desglose={calcResults.desglose} />
-                            {calcResults.revision && (
-                                <p className={`text-xs ${calcResults.revision.requiere_revision ? 'text-amber-400' : 'text-green-400'}`}>
-                                    Dieta reportada: come {Math.round(calcResults.revision.hc_reportados)} g de HC · recomendado {calcResults.revision.hc_recomendados} g
-                                    · diferencia {calcResults.revision.diferencia > 0 ? '+' : ''}{calcResults.revision.diferencia} g
-                                    {calcResults.revision.requiere_revision ? ' (no cuadra: revísalo antes de aplicar)' : ' (cuadra)'}
-                                </p>
-                            )}
-                            <div>
-                                <label className="block text-xs text-white/40 uppercase mb-1">Motivo (obligatorio)</label>
-                                <input type="text" value={calcNote}
-                                    onChange={e => setCalcNote(e.target.value)}
-                                    placeholder="Ej: Inicio de programa, ajuste semana 3..."
-                                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F]"
-                                />
-                            </div>
-                            <Button onClick={async () => {
-                                if (!calcNote.trim()) { toast.error('El motivo es obligatorio'); return; }
-                                setCalcApplying(true);
-                                try {
-                                    await api.post(`/admin/clients/${clientId}/calculator/apply`, {
-                                        peso: parseFloat(calcForm.peso),
-                                        porcentaje_graso: parseFloat(calcForm.porcentaje_graso),
-                                        sexo: calcForm.sexo,
-                                        objetivo: calcForm.objetivo,
-                                        note: calcNote,
-                                        ajustes: calcAjustesPayload(),
-                                    });
-                                    setCalcApplied(true);
-                                    toast.success(`Macros aplicados a ${client?.user?.name}`);
-                                    fetchClient();
-                                } catch (err) { toast.error(err.response?.data?.detail || 'Error aplicando'); }
-                                finally { setCalcApplying(false); }
-                            }} disabled={calcApplying || calcApplied}
-                                className={`w-full font-bold uppercase tracking-wider ${calcApplied ? 'bg-green-600 hover:bg-green-600' : 'bg-[#1A1A1A] border border-[#333] hover:border-[#FF671F]'} text-white disabled:opacity-60`}>
-                                {calcApplying ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : calcApplied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : null}
-                                {calcApplying ? 'Aplicando...' : calcApplied ? 'Aplicado' : `Aplicar a ${client?.user?.name?.split(' ')[0] || 'cliente'}`}
-                            </Button>
-                        </>)}
-                    </CardContent></Card>
-
-                    {/* Historial */}
-                    <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2">
-                        <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
-                            <History className="w-4 h-4" />Historial de macros
-                        </CardTitle>
-                    </CardHeader>
-                        <CardContent>{macro_history?.length > 0
-                            ? <div className="space-y-2">{macro_history.map((h, i) => <MacroHistoryItem key={h.id || i} item={h} />)}</div>
-                            : <p className="text-white/30 text-sm text-center py-4">Sin historial</p>}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
                 {/* ========== TAB: SEGUIMIENTO (evolución de peso + check-ins + reportes) ========== */}
                 <TabsContent value="seguimiento" className="space-y-4">
                     <WeightEvolution reports={reports} />
+                    <ProgressComparator api={api} clientId={clientId} calmaFotos={calma_raw?.fotos_descargadas} reports={reports} macroHistory={macro_history} />
+                    <EvolutionTimeline api={api} clientId={clientId} reportes={calma_raw?.formularios_mensuales} calmaFotos={calma_raw?.fotos_descargadas} reports={reports} macroHistory={macro_history} />
                     <CoachCheckins clientId={clientId} />
                     <ReportsFeedbackList initialReports={reports} />
                 </TabsContent>
@@ -1064,65 +1107,162 @@ const InfoItem = ({ icon: Icon, label, value }) => (
     </div>
 );
 
-const MacroGroup = ({ title, icon: Icon, color, items }) => (
+// Bloque de macros editable (entrenamiento / perientreno / descanso). Cuando el
+// coach cambia un valor, debajo de la etiqueta queda el que hay guardado ahora.
+const MacroEditGroup = ({ title, icon: Icon, color, fields }) => (
     <div className="bg-[#0A0A0A] rounded-xl p-3 border border-[#222]">
         <div className="flex items-center gap-1.5 mb-3"><Icon className="w-3.5 h-3.5" style={{ color }} /><span className="text-xs font-bold uppercase tracking-wider" style={{ color }}>{title}</span></div>
-        <div className="space-y-2">{items.map(it => (
-            <div key={it.label} className="flex items-center justify-between">
-                <span className="text-white/50 text-xs">{it.label}</span>
-                <span className="text-white font-bold text-sm" style={{ fontFamily: 'Barlow Condensed' }}>{it.value}g</span>
-            </div>
-        ))}</div>
+        <div className="space-y-2">{fields.map(f => {
+            const cambiado = String(f.value ?? '') !== String(f.actual ?? '');
+            return (
+                <div key={f.label} className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                        <span className="text-white/50 text-xs">{f.label}</span>
+                        {cambiado && f.actual !== '' && <span className="block text-[10px] text-white/30">ahora {f.actual}g</span>}
+                    </div>
+                    <div className="relative w-[88px] flex-shrink-0">
+                        <Input type="number" min="0" value={f.value} onChange={e => f.onChange(e.target.value)} data-testid={f.testId}
+                            className={`h-9 pr-5 text-right font-bold bg-[#111] text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${cambiado ? 'border-[#FF671F]/60' : 'border-[#333]'}`} />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">g</span>
+                    </div>
+                </div>
+            );
+        })}</div>
     </div>
 );
 
 const _mv = (m, keys) => { for (const k of keys) if (m && m[k] != null) return Math.round(m[k]); return 0; };
-const _mkcal = (m) => Math.round(_mv(m, ['protein', 'proteinas']) * 4 + _mv(m, ['carbs', 'hidratos']) * 4 + _mv(m, ['fat', 'grasas']) * 9);
 
-const MacroRow = ({ label, color, m, showG = true }) => {
-    if (!m) return null;
-    const P = _mv(m, ['protein', 'proteinas']), H = _mv(m, ['carbs', 'hidratos']), G = _mv(m, ['fat', 'grasas']);
-    return (
-        <div className="flex items-center gap-3 py-1">
-            <span className="w-24 shrink-0 flex items-center gap-1.5 text-white/50 text-xs uppercase tracking-wide">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />{label}
-            </span>
-            <span className="text-orange-400 font-bold text-sm tabular-nums">P {P}</span>
-            <span className="text-blue-400 font-bold text-sm tabular-nums">H {H}</span>
-            {showG && <span className="text-yellow-400 font-bold text-sm tabular-nums">G {G}</span>}
-            <span className="text-white/30 text-xs ml-auto tabular-nums">{_mkcal(m)} kcal</span>
-        </div>
-    );
-};
+// Fecha por la que se ordena y filtra: manda effective_date (desde cuando aplican
+// esos macros); si la entrada es antigua y no la trae, se usa el created_at.
+const _fechaEntrada = (h) => h.effective_date || (h.created_at || '').slice(0, 10) || '';
+const _fechaCorta = (f) => f ? f.split('-').reverse().join('/') : '-';
 
-const MacroHistoryItem = ({ item, onEdit, onRepeat, onDelete }) => {
-    const peso = item.peso ?? item.client_weight;
-    const peri = item.peri || item.macros_periworkout;
-    const hasPeri = peri && (peri.protein || peri.proteinas || peri.carbs || peri.hidratos);
-    const fecha = item.effective_date ? item.effective_date + 'T12:00:00' : item.created_at;
-    const hasActions = onEdit || onRepeat || onDelete;
+// Celdas P/H/G de un bloque de macros dentro de la tabla del historial.
+const MacroCeldas = ({ m, showG = true }) => (
+    <>
+        <td className="px-2 py-2 text-right tabular-nums font-bold text-orange-400">{m ? _mv(m, ['protein', 'proteinas']) : '-'}</td>
+        <td className="px-2 py-2 text-right tabular-nums font-bold text-blue-400">{m ? _mv(m, ['carbs', 'hidratos']) : '-'}</td>
+        {showG && <td className="px-2 py-2 text-right tabular-nums font-bold text-yellow-400">{m ? _mv(m, ['fat', 'grasas']) : '-'}</td>}
+    </>
+);
+
+const CAUSA_LABEL = { ajuste: 'fallo del ajuste', cliente: 'no cumplió', otro: 'otros motivos' };
+
+const EvaluacionBadge = ({ ev }) => (
+    <span className={`text-xs font-semibold ${ev.resultado === 'buena' ? 'text-emerald-400' : 'text-red-400'}`}
+        title={[ev.resultado === 'buena' ? 'Fase buena' : 'Fase mala', CAUSA_LABEL[ev.causa], ev.nota].filter(Boolean).join(' · ')}>
+        {ev.resultado === 'buena' ? 'Buena' : 'Mala'}
+        {ev.causa && <span className="text-white/40 font-normal"> · {CAUSA_LABEL[ev.causa]}</span>}
+    </span>
+);
+
+// Historial de macros en tabla, con filtro por rango de fechas.
+const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar }) => {
+    const [desde, setDesde] = useState('');
+    const [hasta, setHasta] = useState('');
+    const todas = useMemo(
+        () => [...(items || [])].sort((a, b) => _fechaEntrada(b).localeCompare(_fechaEntrada(a))),
+        [items]);
+    const filas = useMemo(() => todas.filter(h => {
+        const f = _fechaEntrada(h);
+        return !((desde && f < desde) || (hasta && f > hasta));
+    }), [todas, desde, hasta]);
+    const filtrando = !!(desde || hasta);
+    const inputFecha = "bg-[#0A0A0A] border border-[#333] text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#FF671F]";
+
     return (
-        <div className="p-3.5 bg-[#0A0A0A] rounded-xl border border-[#222]">
-            <div className="flex items-center justify-between mb-2.5">
-                <span className="text-white text-sm font-semibold">{new Date(fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                <div className="flex items-center gap-2.5">
-                    {peso != null && <span className="text-[#FF671F] font-bold text-base" style={{ fontFamily: 'Barlow Condensed' }}>{peso} kg</span>}
-                    {hasActions && (
-                        <div className="flex items-center gap-0.5">
-                            {onRepeat && <button onClick={() => onRepeat(item)} title="Repetir estos macros (aplicar hoy)" className="p-1 rounded text-white/40 hover:text-[#FF671F] hover:bg-[#FF671F]/10"><RotateCcw className="w-3.5 h-3.5" /></button>}
-                            {onEdit && <button onClick={() => onEdit(item)} title="Editar esta entrada" className="p-1 rounded text-white/40 hover:text-white hover:bg-white/10"><Pencil className="w-3.5 h-3.5" /></button>}
-                            {onDelete && <button onClick={() => onDelete(item)} title="Eliminar esta entrada" className="p-1 rounded text-white/40 hover:text-red-400 hover:bg-red-500/10"><Trash2 className="w-3.5 h-3.5" /></button>}
-                        </div>
-                    )}
+        <Card className="bg-[#111] border-[#222] text-white">
+            <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                        <History className="w-4 h-4" />Historial de macros
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                        <span className="text-white/30 text-[11px] tabular-nums">{filtrando ? `${filas.length} de ${todas.length}` : `${todas.length} cambios`}</span>
+                        <input type="date" value={desde} max={hasta || undefined} onChange={e => setDesde(e.target.value)} title="Desde" className={inputFecha} data-testid="macro-hist-desde" />
+                        <span className="text-white/30 text-xs">a</span>
+                        <input type="date" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)} title="Hasta" className={inputFecha} data-testid="macro-hist-hasta" />
+                        {filtrando && (
+                            <button onClick={() => { setDesde(''); setHasta(''); }} title="Quitar filtro"
+                                className="p-1 rounded text-white/40 hover:text-white hover:bg-white/10"><X className="w-3.5 h-3.5" /></button>
+                        )}
+                    </div>
                 </div>
-            </div>
-            <div className="space-y-0.5">
-                <MacroRow label="Entreno" color="#FF671F" m={item.training} />
-                <MacroRow label="Descanso" color="#22C55E" m={item.rest} />
-                {hasPeri && <MacroRow label="Peri" color="#818CF8" m={peri} showG={false} />}
-            </div>
-            {item.note && item.note !== 'Importado de Calma' && <p className="text-white/40 text-xs italic mt-2">{item.note}</p>}
-        </div>
+            </CardHeader>
+            <CardContent>
+                {todas.length === 0 ? (
+                    <p className="text-white/30 text-sm text-center py-4">Sin cambios registrados</p>
+                ) : filas.length === 0 ? (
+                    <p className="text-white/30 text-sm text-center py-4">Ningún cambio entre esas fechas</p>
+                ) : (
+                    <div className="overflow-x-auto -mx-2">
+                        <table className="w-full text-sm min-w-[720px]">
+                            <thead>
+                                <tr className="text-white/40 text-[10px] uppercase tracking-wider border-b border-[#222]">
+                                    <th rowSpan={2} className="px-2 py-1.5 text-left font-medium">Vigente desde</th>
+                                    <th rowSpan={2} className="px-2 py-1.5 text-right font-medium">Peso<span className="block text-white/25 normal-case">y %graso</span></th>
+                                    <th colSpan={3} className="px-2 py-1.5 text-center font-bold border-l border-[#222]" style={{ color: '#FF671F' }}>Entrenamiento</th>
+                                    <th colSpan={2} className="px-2 py-1.5 text-center font-bold border-l border-[#222]" style={{ color: '#EAB308' }}>Perientreno</th>
+                                    <th colSpan={3} className="px-2 py-1.5 text-center font-bold border-l border-[#222]" style={{ color: '#22C55E' }}>Descanso</th>
+                                    <th rowSpan={2} className="px-2 py-1.5 text-left font-medium border-l border-[#222]">Criterio<span className="block text-white/25 normal-case">interno</span></th>
+                                    <th rowSpan={2} className="px-2 py-1.5 text-left font-medium">Feedback</th>
+                                    <th rowSpan={2} className="px-2 py-1.5 text-left font-medium border-l border-[#222]">Cómo salió</th>
+                                    {(onEdit || onRepeat || onDelete) && <th rowSpan={2} className="px-2 py-1.5" />}
+                                </tr>
+                                <tr className="text-white/30 text-[10px] uppercase border-b border-[#222]">
+                                    <th className="px-2 pb-1.5 text-right font-medium border-l border-[#222]">P</th><th className="px-2 pb-1.5 text-right font-medium">H</th><th className="px-2 pb-1.5 text-right font-medium">G</th>
+                                    <th className="px-2 pb-1.5 text-right font-medium border-l border-[#222]">P</th><th className="px-2 pb-1.5 text-right font-medium">H</th>
+                                    <th className="px-2 pb-1.5 text-right font-medium border-l border-[#222]">P</th><th className="px-2 pb-1.5 text-right font-medium">H</th><th className="px-2 pb-1.5 text-right font-medium">G</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filas.map((h, i) => {
+                                    const peso = h.peso ?? h.client_weight;
+                                    const peri = h.peri || h.macros_periworkout;
+                                    const nota = h.note && h.note !== 'Importado de Calma' ? h.note : '';
+                                    return (
+                                        <tr key={h.id || i} className="border-b border-[#1a1a1a] last:border-0 hover:bg-white/[0.03]">
+                                            <td className="px-2 py-2 whitespace-nowrap font-medium tabular-nums">
+                                                {_fechaCorta(_fechaEntrada(h))}
+                                                {h.origen === 'ia' && <span className="ml-1.5 text-[9px] uppercase text-[#FF671F]" title="Propuesta de la IA aceptada tal cual">IA</span>}
+                                                {h.origen === 'ia_corregida' && <span className="ml-1.5 text-[9px] uppercase text-amber-500" title={`Propuesta de la IA corregida por el coach: ${JSON.stringify(h.correccion_coach || {})}`}>IA·corr</span>}
+                                            </td>
+                                            <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
+                                                <span className="text-[#FF671F] font-bold">{peso != null ? `${peso} kg` : '-'}</span>
+                                                {h.body_fat != null && <span className="text-white/40 text-xs"> · {h.body_fat}%</span>}
+                                            </td>
+                                            <MacroCeldas m={h.training} />
+                                            <MacroCeldas m={peri} showG={false} />
+                                            <MacroCeldas m={h.rest} />
+                                            <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]"><span className="block truncate" title={h.criterio || ''}>{h.criterio || '-'}</span></td>
+                                            <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]"><span className="block truncate" title={nota}>{nota || '-'}</span></td>
+                                            <td className="px-2 py-2 whitespace-nowrap">
+                                                {onEvaluar && h.id ? (
+                                                    <button onClick={() => onEvaluar(h)} title="Cómo salió la fase que abrió este ajuste"
+                                                        className="text-xs rounded px-1.5 py-0.5 transition-colors hover:bg-white/10">
+                                                        {h.evaluacion?.resultado ? <EvaluacionBadge ev={h.evaluacion} /> : <span className="text-white/30">Evaluar</span>}
+                                                    </button>
+                                                ) : (h.evaluacion?.resultado ? <EvaluacionBadge ev={h.evaluacion} /> : <span className="text-white/30 text-xs">-</span>)}
+                                            </td>
+                                            {(onEdit || onRepeat || onDelete) && (
+                                                <td className="px-2 py-2">
+                                                    <div className="flex items-center justify-end gap-0.5">
+                                                        {onRepeat && <button onClick={() => onRepeat(h)} title="Repetir estos macros (aplicar hoy)" className="p-1 rounded text-white/40 hover:text-[#FF671F] hover:bg-[#FF671F]/10"><RotateCcw className="w-3.5 h-3.5" /></button>}
+                                                        {onEdit && <button onClick={() => onEdit(h)} title="Editar esta entrada" className="p-1 rounded text-white/40 hover:text-white hover:bg-white/10"><Pencil className="w-3.5 h-3.5" /></button>}
+                                                        {onDelete && <button onClick={() => onDelete(h)} title="Eliminar esta entrada" className="p-1 rounded text-white/40 hover:text-red-400 hover:bg-red-500/10"><Trash2 className="w-3.5 h-3.5" /></button>}
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 };
 
@@ -1132,6 +1272,483 @@ const MiniStat = ({ label, value }) => (
         <span className="text-white font-bold text-sm ml-1">{value}</span>
     </div>
 );
+
+// ========== CALMA (datos importados, solo lectura) ==========
+const CalmaBadge = () => (
+    <Badge className="bg-amber-500/15 text-amber-400 border-0 text-[10px] uppercase tracking-wide">Importado de Calma</Badge>
+);
+
+// Los campos de texto de Calma a veces acaban con un código interno del formulario
+// (p. ej. "Descanso OK|A", "...semanales|I"): lo quitamos para mostrarlo limpio.
+const _limpiaCodigo = (s) => typeof s === 'string' ? s.replace(/\s*\|[A-Za-z0-9]{1,2}\s*$/, '').trim() : s;
+
+const CalmaField = ({ label, value }) => {
+    if (value == null || value === '' || (Array.isArray(value) && !value.length)) return null;
+    const text = Array.isArray(value) ? value.join(', ') : _limpiaCodigo(String(value));
+    return (
+        <div>
+            <p className="text-[10px] text-white/40 uppercase tracking-wider mb-0.5">{label}</p>
+            <p className="text-white/90 text-sm whitespace-pre-wrap break-words">{text}</p>
+        </div>
+    );
+};
+
+const CalmaCuestionario = ({ fi }) => {
+    if (!fi) return null;
+    const med = fi.mediciones?.valores?.filter(v => v != null);
+    const fnac = fi.fechaNacimiento ? new Date(fi.fechaNacimiento).toLocaleDateString('es-ES') : null;
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><ClipboardList className="w-4 h-4" />Cuestionario inicial <CalmaBadge /></CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
+                    <CalmaField label="Nombre" value={fi.nombre} />
+                    <CalmaField label="Fecha nacimiento" value={fnac} />
+                    <CalmaField label="Teléfono" value={fi.telefono} />
+                    <CalmaField label="Instagram" value={fi.instagram} />
+                    <CalmaField label="Dirección" value={fi.direccion} />
+                    <CalmaField label="Profesión" value={fi.profesion} />
+                    <CalmaField label="Cómo nos conoció" value={fi.fuenteCliente} />
+                    <CalmaField label="Estatura" value={fi.estatura ? `${fi.estatura} cm` : null} />
+                    <CalmaField label="Peso inicial" value={fi.peso ? `${fi.peso} kg` : null} />
+                    <CalmaField label="Peso máximo" value={fi.pesoMaximo ? `${fi.pesoMaximo} kg` : null} />
+                    <CalmaField label="Objetivo" value={fi.objetivo} />
+                    <CalmaField label="Estilo de vida" value={fi.estiloVida} />
+                    <CalmaField label="Experiencia con preparadores" value={fi.preparadores} />
+                    <CalmaField label="Estado de forma anterior" value={fi.estadoFormaAnterior} />
+                    <CalmaField label="Entrena actualmente" value={fi.entrenamientoActual} />
+                    <CalmaField label="Rutina inicial" value={fi.rutinaInicial} />
+                    <CalmaField label="Descanso" value={fi.descanso} />
+                    <CalmaField label="Interés en suplementación" value={fi.interesEnSuplementacion} />
+                </div>
+                <div className="space-y-3 border-t border-[#222] pt-3">
+                    <CalmaField label="Medidas (cm)" value={med?.length ? med.join(' · ') : (fi.mediciones?.raw || null)} />
+                    <CalmaField label="Medicación" value={fi.medicacion} />
+                    <CalmaField label="Fármacos actuales" value={fi.farmacosActuales} />
+                    <CalmaField label="Maquinaria disponible" value={fi.maquinaria} />
+                    <CalmaField label="Lesiones" value={fi.lesiones} />
+                    <CalmaField label="Dieta de ejemplo" value={fi.ejemploDieta} />
+                    <CalmaField label="Interés en otros servicios" value={fi.informacionSobreServicios} />
+                    <CalmaField label="Comentario del cliente" value={fi.comentarioCliente} />
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+const _resp = (r) => {
+    if (!r) return null;
+    const extra = [r.nota, r.score != null ? r.score : null].filter(v => v != null && v !== '').join(' · ');
+    return [r.texto, extra ? `(${extra})` : ''].filter(Boolean).join(' ');
+};
+
+const CalmaReportItem = ({ r, hideHeader }) => {
+    const med = r.mediciones?.valores?.filter(v => v != null);
+    const fecha = r.fecha ? new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    const filas = [
+        ['Compromiso', r.compromiso], ['Objetivo', r.objetivo], ['Cumplimiento dieta', r.cumplimientoDieta],
+        ['Esfuerzo con la dieta', r.esfuerzoParaCumplirDieta], ['Suplementación', r.suplementacion],
+        ['Entrenamiento', r.cumplimientoEntrenamiento], ['Cardio', r.cumplimientoCardio], ['Descanso', r.descanso],
+    ].filter(([, v]) => v && v.texto);
+    return (
+        <div className="p-3.5 bg-[#0A0A0A] rounded-xl border border-[#222]">
+            {!hideHeader && (
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-white text-sm font-semibold">{fecha}</span>
+                    {r.peso != null && <span className="text-[#FF671F] font-bold text-base" style={{ fontFamily: 'Barlow Condensed' }}>{r.peso} kg</span>}
+                </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                {filas.map(([label, v]) => (
+                    <div key={label} className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/40 shrink-0">{label}</span>
+                        <span className="text-white/80 text-right">{_resp(v)}</span>
+                    </div>
+                ))}
+            </div>
+            {med?.length > 0 && <p className="text-white/40 text-xs mt-2">Medidas: {med.join(' · ')}</p>}
+            {r.problemasParaEntrenar && <p className="text-white/60 text-xs mt-2"><span className="text-white/40">Problemas para entrenar: </span>{r.problemasParaEntrenar}</p>}
+            {r.comentarioCliente && <p className="text-white/60 text-xs mt-1 italic">"{r.comentarioCliente}"</p>}
+        </div>
+    );
+};
+
+// Foto subida desde la app (client_photos) como miniatura; abre la original al hacer clic.
+const AppFoto = ({ api, foto }) => {
+    const [thumb, setThumb] = useState(null);
+    useEffect(() => {
+        let url; let alive = true;
+        api.get(`/reports/photos/${foto.id}`, { responseType: 'blob' })
+            .then(r => { if (!alive) return; url = URL.createObjectURL(r.data); setThumb(url); })
+            .catch(() => {});
+        return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+    }, [api, foto.id]);
+    const openFull = async (e) => {
+        e.preventDefault();
+        try {
+            const r = await api.get(`/reports/photos/${foto.id}`, { responseType: 'blob' });
+            window.open(URL.createObjectURL(r.data), '_blank', 'noopener');
+        } catch { /* noop */ }
+    };
+    return (
+        <a href="#foto" onClick={openFull} className="block group">
+            {thumb
+                ? <img src={thumb} alt={foto.fecha || ''} className="w-full aspect-[3/4] object-cover rounded-lg border border-[#222] group-hover:border-[#FF671F]/50 bg-[#0A0A0A]" />
+                : <div className="w-full aspect-[3/4] rounded-lg border border-[#222] bg-[#0A0A0A] animate-pulse" />}
+            <p className="text-[9px] text-white/40 mt-0.5 truncate">{foto.fecha}</p>
+        </a>
+    );
+};
+
+// Línea temporal de evolución: agrupa por mes el peso (+ variación), las fotos de
+// ese mes (miniaturas por pose) y el reporte mensual, unificando las dos fuentes
+// (Calma + app) en una sola vista cronológica.
+const EvolutionTimeline = ({ api, clientId, reportes, calmaFotos, reports, macroHistory }) => {
+    const [appFotos, setAppFotos] = useState([]);
+    useEffect(() => {
+        let alive = true;
+        api.get(`/admin/clients/${clientId}/photos`)
+            .then(r => { if (alive) setAppFotos(r.data?.photos || []); })
+            .catch(() => {});
+        return () => { alive = false; };
+    }, [api, clientId]);
+
+    // Timeline de pesos (reportes de la app + historial de macros + reportes Calma).
+    const pesos = useMemo(() => {
+        const arr = [];
+        (reports || []).forEach(r => { if (r.weight != null && r.created_at) arr.push({ date: r.created_at, w: r.weight }); });
+        (macroHistory || []).forEach(h => {
+            const w = h.peso ?? h.client_weight;
+            const d = h.effective_date || h.created_at;
+            if (w != null && d) arr.push({ date: d, w });
+        });
+        (reportes || []).forEach(r => { if (r.peso != null && r.fecha) arr.push({ date: r.fecha, w: r.peso }); });
+        return arr;
+    }, [reports, macroHistory, reportes]);
+
+    // Hitos por mes: reporte + fotos (Calma y app) + peso, más reciente primero.
+    const meses = useMemo(() => {
+        const map = new Map();
+        const get = (k) => { if (!map.has(k)) map.set(k, { key: k, reporte: null, cal: [], app: [] }); return map.get(k); };
+        (reportes || []).forEach(r => { if (r.fecha) get(_mesKey(r.fecha)).reporte = r; });
+        (calmaFotos || []).forEach(f => { if (f.fecha) get(_mesKey(f.fecha)).cal.push(f); });
+        (appFotos || []).forEach(p => {
+            const d = (p.taken_at || p.uploaded_at || '').slice(0, 10);
+            if (d) get(_mesKey(d)).app.push({ ...p, fecha: d });
+        });
+        const arr = [...map.values()].filter(m => m.reporte || m.cal.length || m.app.length);
+        arr.sort((a, b) => b.key.localeCompare(a.key));
+        arr.forEach(m => {
+            m.peso = m.reporte?.peso != null ? m.reporte.peso : _pesoCercano(pesos, m.key + '-15');
+            m.cal.sort((a, b) => _POSE_ORDER.indexOf(_poseDeKind(a.kind)) - _POSE_ORDER.indexOf(_poseDeKind(b.kind)));
+        });
+        // Variación de peso respecto al hito anterior (el siguiente en el array = más antiguo).
+        arr.forEach((m, i) => {
+            const prev = arr[i + 1]?.peso;
+            m.delta = (m.peso != null && prev != null) ? Math.round((m.peso - prev) * 10) / 10 : null;
+        });
+        return arr;
+    }, [reportes, calmaFotos, appFotos, pesos]);
+
+    if (!meses.length) return null;
+
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4" />Evolución del cliente <span className="text-white/30">({meses.length})</span>
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-5">
+                    {meses.map(m => (
+                        <div key={m.key} className="relative pl-4 border-l-2 border-[#222]">
+                            <div className="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-[#FF671F]" />
+                            <div className="flex items-center gap-3 mb-2">
+                                <span className="text-white text-sm font-semibold capitalize">{_mesLabel(m.key)}</span>
+                                {m.peso != null && <span className="text-[#FF671F] font-bold text-base" style={{ fontFamily: 'Barlow Condensed' }}>{m.peso} kg</span>}
+                                {m.delta != null && m.delta !== 0 && (
+                                    <span className={`text-xs font-bold ${m.delta < 0 ? 'text-green-400' : 'text-[#FF671F]'}`}>
+                                        {m.delta < 0 ? '▼' : '▲'} {Math.abs(m.delta)} kg
+                                    </span>
+                                )}
+                            </div>
+                            {(m.cal.length > 0 || m.app.length > 0) && (
+                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 mb-2">
+                                    {m.cal.map((f, i) => <CalmaFoto key={'c' + i} api={api} clientId={clientId} foto={f} />)}
+                                    {m.app.map((f, i) => <AppFoto key={'a' + i} api={api} foto={f} />)}
+                                </div>
+                            )}
+                            {m.reporte && <CalmaReportItem r={m.reporte} hideHeader />}
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+// ========== COMPARADOR DE FOTOS (antes / después) ==========
+//
+// Unifica las dos fuentes de fotos del cliente: las importadas de Calma
+// (calma_raw.fotos_descargadas, con la pose en el nombre) y las que sube desde
+// la app (client_photos). Agrupa por pose, arranca en la primera vs la última y
+// deja al coach cambiar cada lado.
+
+// El "kind" de Calma es texto libre sacado del nombre del archivo; lo mapeamos a
+// una pose por palabras clave. Lo que no encaje va a "Otras".
+const _poseDeKind = (kind) => {
+    const k = (kind || '').toLowerCase();
+    if (/frent|frontal|delante|front/.test(k)) return 'Frontal';
+    if (/espald|atr[aá]s|trasera|back|dorsal/.test(k)) return 'Espalda';
+    if (/lateral|perfil|lado|side/.test(k)) return 'Lateral';
+    return 'Otras';
+};
+const _POSE_ORDER = ['Frontal', 'Lateral', 'Espalda', 'Otras', 'Sin clasificar'];
+
+const _mesKey = (fecha) => (fecha || '').slice(0, 7);  // YYYY-MM
+const _mesLabel = (key) => {
+    const [y, m] = key.split('-');
+    const dt = new Date(+y, +m - 1, 1);
+    return isNaN(dt) ? key : dt.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+};
+
+const _fmtFotoFecha = (d) => {
+    if (!d) return '?';
+    const dt = new Date(d.length <= 10 ? d + 'T12:00:00' : d);
+    return isNaN(dt) ? d : dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+// Peso más cercano a una fecha (dentro de ~21 días), best-effort para anotar la foto.
+const _pesoCercano = (pesos, fecha) => {
+    if (!fecha || !pesos?.length) return null;
+    const target = new Date(fecha.length <= 10 ? fecha + 'T12:00:00' : fecha).getTime();
+    let best = null, bestDiff = Infinity;
+    for (const p of pesos) {
+        const diff = Math.abs(new Date(p.date.length <= 10 ? p.date + 'T12:00:00' : p.date).getTime() - target);
+        if (diff < bestDiff) { bestDiff = diff; best = p.w; }
+    }
+    return bestDiff <= 21 * 864e5 ? best : null;
+};
+
+// Carga el blob de una foto (Calma o subida por la app) y la muestra a tamaño grande.
+const ComparePhoto = ({ api, clientId, foto }) => {
+    const [url, setUrl] = useState(null);
+    const [err, setErr] = useState(false);
+    useEffect(() => {
+        let obj; let alive = true;
+        setUrl(null); setErr(false);
+        const req = foto.source === 'calma'
+            ? api.get(`/admin/clients/${clientId}/calma-foto`, { params: { file: foto.file }, responseType: 'blob' })
+            : api.get(`/reports/photos/${foto.id}`, { responseType: 'blob' });
+        req.then(r => { if (!alive) return; obj = URL.createObjectURL(r.data); setUrl(obj); })
+            .catch(() => { if (alive) setErr(true); });
+        return () => { alive = false; if (obj) URL.revokeObjectURL(obj); };
+    }, [api, clientId, foto.key, foto.source, foto.file, foto.id]);
+    if (err) return <div className="w-full aspect-[3/4] rounded-lg border border-[#222] bg-[#0A0A0A] flex items-center justify-center text-white/30 text-xs">No disponible</div>;
+    if (!url) return <div className="w-full aspect-[3/4] rounded-lg border border-[#222] bg-[#0A0A0A] animate-pulse" />;
+    return <img src={url} alt={foto.date} className="w-full aspect-[3/4] object-cover rounded-lg border border-[#222] bg-[#0A0A0A]" />;
+};
+
+const DateSelect = ({ fotos, value, onChange, pesos }) => (
+    <select value={value || ''} onChange={e => onChange(e.target.value)}
+        className="w-full bg-[#0A0A0A] border border-[#222] rounded-lg px-2 py-1.5 text-xs text-white/80 focus:border-[#FF671F]/50 outline-none">
+        {fotos.map(f => {
+            const peso = _pesoCercano(pesos, f.date);
+            return <option key={f.key} value={f.key}>{_fmtFotoFecha(f.date)}{peso != null ? ` · ${peso} kg` : ''}</option>;
+        })}
+    </select>
+);
+
+const ProgressComparator = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
+    const [appFotos, setAppFotos] = useState([]);
+    const [pose, setPose] = useState(null);
+    const [leftKey, setLeftKey] = useState(null);
+    const [rightKey, setRightKey] = useState(null);
+
+    // Fotos subidas desde la app (client_photos). Las de Calma llegan por prop.
+    useEffect(() => {
+        let alive = true;
+        api.get(`/admin/clients/${clientId}/photos`)
+            .then(r => { if (alive) setAppFotos(r.data?.photos || []); })
+            .catch(() => {});
+        return () => { alive = false; };
+    }, [api, clientId]);
+
+    // Timeline de pesos (reportes de la app + historial de macros) para anotar cada foto.
+    const pesos = useMemo(() => {
+        const arr = [];
+        (reports || []).forEach(r => { if (r.weight != null && r.created_at) arr.push({ date: r.created_at, w: r.weight }); });
+        (macroHistory || []).forEach(h => {
+            const w = h.peso ?? h.client_weight;
+            const d = h.effective_date || h.created_at;
+            if (w != null && d) arr.push({ date: d, w });
+        });
+        return arr;
+    }, [reports, macroHistory]);
+
+    // Lista unificada de fotos (Calma + app), descartando las que no tienen fecha.
+    const todas = useMemo(() => {
+        const cal = (calmaFotos || []).map(f => ({
+            key: `calma:${f.file}`, source: 'calma', file: f.file,
+            date: f.fecha || '', pose: _poseDeKind(f.kind),
+        }));
+        const app = (appFotos || []).map(p => ({
+            key: `app:${p.id}`, source: 'app', id: p.id,
+            date: (p.taken_at || p.uploaded_at || '').slice(0, 10), pose: 'Sin clasificar',
+        }));
+        return [...cal, ...app].filter(f => f.date);
+    }, [calmaFotos, appFotos]);
+
+    // Poses con al menos una foto, en el orden canónico.
+    const poses = useMemo(() => {
+        const set = new Set(todas.map(f => f.pose));
+        return _POSE_ORDER.filter(p => set.has(p));
+    }, [todas]);
+
+    useEffect(() => {
+        if (poses.length && (!pose || !poses.includes(pose))) setPose(poses[0]);
+    }, [poses, pose]);
+
+    // Fotos de la pose actual, ordenadas por fecha ascendente.
+    const fotosPose = useMemo(
+        () => todas.filter(f => f.pose === pose).sort((a, b) => a.date.localeCompare(b.date)),
+        [todas, pose]
+    );
+
+    // Al cambiar de pose: izquierda = primera, derecha = última.
+    useEffect(() => {
+        if (!fotosPose.length) { setLeftKey(null); setRightKey(null); return; }
+        setLeftKey(fotosPose[0].key);
+        setRightKey(fotosPose[fotosPose.length - 1].key);
+    }, [pose, fotosPose.length]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+    if (!todas.length) return null;
+
+    const left = fotosPose.find(f => f.key === leftKey) || fotosPose[0];
+    const right = fotosPose.find(f => f.key === rightKey) || fotosPose[fotosPose.length - 1];
+    const pLeft = left && _pesoCercano(pesos, left.date);
+    const pRight = right && _pesoCercano(pesos, right.date);
+    const dPeso = (pLeft != null && pRight != null) ? Math.round((pRight - pLeft) * 10) / 10 : null;
+
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4" />Comparador antes / después
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                {poses.length > 1 && (
+                    <div className="flex flex-wrap gap-1.5">
+                        {poses.map(p => (
+                            <button key={p} onClick={() => setPose(p)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium transition ${p === pose ? 'bg-[#FF671F] text-white' : 'bg-[#0A0A0A] text-white/50 border border-[#222] hover:text-white/80'}`}>
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                )}
+                {fotosPose.length === 0 ? (
+                    <p className="text-white/30 text-sm text-center py-4">Sin fotos en esta pose</p>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                {left && <ComparePhoto api={api} clientId={clientId} foto={left} />}
+                                <DateSelect fotos={fotosPose} value={leftKey} onChange={setLeftKey} pesos={pesos} />
+                            </div>
+                            <div className="space-y-1.5">
+                                {right && <ComparePhoto api={api} clientId={clientId} foto={right} />}
+                                <DateSelect fotos={fotosPose} value={rightKey} onChange={setRightKey} pesos={pesos} />
+                            </div>
+                        </div>
+                        {dPeso != null && (
+                            <div className="text-center text-sm">
+                                <span className="text-white/40">Diferencia de peso: </span>
+                                <span className={`font-bold ${dPeso < 0 ? 'text-green-400' : dPeso > 0 ? 'text-[#FF671F]' : 'text-white'}`}>
+                                    {dPeso > 0 ? '+' : ''}{dPeso} kg
+                                </span>
+                            </div>
+                        )}
+                    </>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
+// Cada foto se carga por fetch autenticado (blob) para no llevar el token en la URL.
+const CalmaFoto = ({ api, clientId, foto }) => {
+    const [thumb, setThumb] = useState(null);
+    useEffect(() => {
+        let url; let alive = true;
+        api.get(`/admin/clients/${clientId}/calma-foto`, { params: { file: foto.file, w: 300 }, responseType: 'blob' })
+            .then(r => { if (!alive) return; url = URL.createObjectURL(r.data); setThumb(url); })
+            .catch(() => {});
+        return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+    }, [api, clientId, foto.file]);
+    const openFull = async (e) => {
+        e.preventDefault();
+        try {
+            const r = await api.get(`/admin/clients/${clientId}/calma-foto`, { params: { file: foto.file }, responseType: 'blob' });
+            window.open(URL.createObjectURL(r.data), '_blank', 'noopener');
+        } catch { /* noop */ }
+    };
+    return (
+        <a href="#foto" onClick={openFull} className="block group">
+            {thumb
+                ? <img src={thumb} alt={`${foto.kind || ''} ${foto.fecha || ''}`}
+                    className="w-full aspect-[3/4] object-cover rounded-lg border border-[#222] group-hover:border-[#FF671F]/50 bg-[#0A0A0A]" />
+                : <div className="w-full aspect-[3/4] rounded-lg border border-[#222] bg-[#0A0A0A] animate-pulse" />}
+            <p className="text-[9px] text-white/40 mt-0.5 truncate">{foto.fecha} {foto.kind}</p>
+        </a>
+    );
+};
+
+const CalmaMembresias = ({ membresia }) => {
+    if (!membresia?.length) return null;
+    const fmt = (d) => d ? new Date(d).toLocaleDateString('es-ES') : '?';
+    const ordenadas = [...membresia].sort((a, b) => (b.inicio || '').localeCompare(a.inicio || ''));
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">Historial de membresías <CalmaBadge /></CardTitle></CardHeader>
+            <CardContent><div className="space-y-2">{ordenadas.map((m, i) => (
+                <div key={i} className="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-lg border border-[#222]">
+                    <span className="text-white text-sm font-medium">{m.nombre || 'Plan'}</span>
+                    <span className="text-white/40 text-xs">{fmt(m.inicio)} a {fmt(m.fin)}</span>
+                </div>
+            ))}</div></CardContent>
+        </Card>
+    );
+};
+
+const CalmaSuplementos = ({ sup }) => {
+    if (!sup || (!sup.protocolos?.length && !sup.observaciones)) return null;
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">Suplementación <CalmaBadge /></CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+                {sup.protocolos?.length > 0 && (
+                    <div className="space-y-1">
+                        {sup.protocolos.map((p, i) => (
+                            <div key={i} className="flex items-center justify-between p-2.5 bg-[#0A0A0A] rounded-lg border border-[#222]">
+                                <span className="text-white/50 text-xs">{p.fecha}</span>
+                                <span className="text-white/70 text-xs">códigos: {p.raw || (p.codigos || []).join('|')}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {sup.observaciones && (
+                    <div>
+                        <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">Observaciones del coach</p>
+                        <p className="text-white/80 text-sm whitespace-pre-wrap">{sup.observaciones}</p>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
 
 const WeightEvolution = ({ reports }) => {
     const data = (reports || [])

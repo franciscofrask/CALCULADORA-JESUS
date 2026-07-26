@@ -1,0 +1,5 @@
+# Fotos de progreso descargadas de Calma (dev-only, no versionar: ~8 GB)
+_fotos_calma/
+
+# Claves de servicio de Firebase (secretos)
+serviceAccountKey*.json

@@ -124,7 +124,7 @@ const AdminUsersPage = () => {
             </div>
 
             {tab === 'actividad' && (
-                <Card className="bg-[#111] border-[#222]">
+                <Card className="bg-[#111] border-[#222] text-white">
                     <CardContent className="p-0">
                         {auditEntries.length === 0 ? (
                             <p className="text-white/30 text-sm text-center py-10">Sin actividad registrada todavía. Aquí quedará quién cambió macros, coaches, roles, contraseñas y leads.</p>
@@ -168,7 +168,7 @@ const AdminUsersPage = () => {
             {loading ? (
                 <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[#FF671F]" /></div>
             ) : (
-                <Card className="bg-[#111] border-[#222]">
+                <Card className="bg-[#111] border-[#222] text-white">
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">

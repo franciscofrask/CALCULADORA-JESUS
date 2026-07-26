@@ -2,17 +2,25 @@
 Rutas de administración: clientes, dashboard, entrenadores.
 """
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import FileResponse, Response
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
 import uuid
+import os
 
 from core.database import db
 from core.security import (
     get_admin_user, get_admin_only_user, assert_client_access, hash_password, generate_temp_password,
+    decode_token,
 )
+
+# Carpeta local con las fotos de progreso importadas de Calma (solo dev).
+_FOTOS_CALMA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_fotos_calma")
 from routes.notifications import notify
 from routes.audit import audit
-from models.user import ClientProfile, ClientProfileUpdate, MacrosUpdate, TrainerAssign, PLAN_CATALOG
+from models.user import (
+    ClientProfile, ClientProfileUpdate, MacrosUpdate, MacroEvaluacion, TrainerAssign, PLAN_CATALOG,
+)
 from core.cycle import enrich_cycle, compute_cycle
 from models.common import FoodSuggestionUpdate, AdminFoodCreate
 from calculator import invalidate_foods_cache
@@ -135,6 +143,13 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     macro_history = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).sort("effective_date", -1).to_list(500)
     supplement_protocol = await db.supplement_protocols.find_one({"client_id": client_id}, {"_id": 0})
 
+    # Datos rescatados de Calma (staging, solo lectura). Se busca por client_id o user_id.
+    # Se excluye raw_firestore (verbatim, muy pesado): la ficha usa los campos decodificados.
+    calma_raw = await db.calma_raw.find_one(
+        {"$or": [{"client_id": client_id}, {"user_id": profile["user_id"]}]},
+        {"_id": 0, "raw_firestore": 0},
+    )
+
     # Nutrition stats: fechas con proyección ligera (sin las comidas, que es lo que pesa)
     # y el top de alimentos calculado EN MongoDB con agregación (antes venían hasta 3000
     # dietas completas a Python solo para contar).
@@ -171,7 +186,254 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
         "macro_history": macro_history,
         "nutrition_stats": nutrition_stats,
         "supplement_protocol": supplement_protocol,
+        "calma_raw": calma_raw,
     }
+
+
+def _sanea_peso(w):
+    """Corrige errores de coma en el peso (819 -> 81.9, 51400 -> 51.4)."""
+    try:
+        w = float(w)
+    except (TypeError, ValueError):
+        return None
+    while w > 1000:
+        w /= 1000.0
+    if 300 < w <= 1000:
+        w /= 10.0
+    return round(w, 1) if 25 < w < 300 else None
+
+
+def _delta_vs_propuesta(propuesta, training, rest, peri):
+    """Cuanto corrigio el coach la propuesta de la IA, macro a macro. Devuelve solo
+    lo que cambio: {} = la acepto tal cual."""
+    guardado = {
+        "entreno": {"proteina": training.get("protein"), "hidratos": training.get("carbs"), "grasa": training.get("fat")},
+        "descanso": {"proteina": rest.get("protein"), "hidratos": rest.get("carbs"), "grasa": rest.get("fat")},
+        "perientreno": {"proteina": (peri or {}).get("protein"), "hidratos": (peri or {}).get("carbs")},
+    }
+    delta = {}
+    for bloque, campos in guardado.items():
+        prop = (propuesta or {}).get(bloque) or {}
+        for campo, valor in campos.items():
+            p = prop.get(campo)
+            if p is None or valor is None:
+                continue
+            if round(float(valor) - float(p), 1) != 0:
+                delta.setdefault(bloque, {})[campo] = round(float(valor) - float(p), 1)
+    return delta
+
+
+def _contexto_decision(evolucion, reporte):
+    """B9: consolida lo que mira el coach (lo que Jesus revisa a mano): ultimo peso
+    y fecha, dias desde el pesaje anterior, kg desde el ultimo y desde el inicio, y
+    el cumplimiento/comentario del reporte. Para mostrarlo junto a la sugerencia."""
+    cd = {}
+    pts = [e for e in (evolucion or []) if isinstance(e.get("peso"), (int, float))]
+    if pts:
+        last = pts[-1]
+        cd["peso_actual"] = last["peso"]
+        cd["fecha_actual"] = last["fecha"]
+        cd["peso_inicial"] = pts[0]["peso"]
+        cd["fecha_inicial"] = pts[0]["fecha"]
+        cd["delta_inicio"] = round(last["peso"] - pts[0]["peso"], 1)
+        if len(pts) >= 2:
+            prev = pts[-2]
+            cd["peso_anterior"] = prev["peso"]
+            cd["fecha_anterior"] = prev["fecha"]
+            cd["delta_ultimo"] = round(last["peso"] - prev["peso"], 1)
+            try:
+                d1 = datetime.strptime(last["fecha"][:10], "%Y-%m-%d")
+                d0 = datetime.strptime(prev["fecha"][:10], "%Y-%m-%d")
+                cd["dias_desde_anterior"] = (d1 - d0).days
+            except (ValueError, TypeError):
+                pass
+    if reporte:
+        cd["cumplimiento_dieta"] = reporte.get("cumplimiento_dieta")
+        cd["comentario"] = reporte.get("comentario")
+    return cd
+
+
+@router.post("/macro-casos/reconstruir")
+async def reconstruir_macro_casos(user = Depends(get_admin_only_user)):
+    """Rehace el banco de casos que usa el agente para buscar clientes gemelos.
+
+    Hay que lanzarlo de vez en cuando (los ajustes y las evaluaciones nuevas no entran
+    solos). Es idempotente: borra y reconstruye.
+    """
+    import macro_casos
+    return await macro_casos.reconstruir()
+
+
+@router.post("/clients/{client_id}/sugerir-ajuste")
+async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
+    """Agente de re-ajuste de macros (Tarea 1): arma el contexto del cliente y
+    propone el siguiente ajuste para que el COACH lo revise/edite/confirme."""
+    import macro_agent
+
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    assert_client_access(user, profile)
+
+    macros_actuales = {
+        "entreno": profile.get("macros_training") or {},
+        "perientreno": profile.get("macros_periworkout") or {},
+        "descanso": profile.get("macros_rest") or {},
+    }
+    sexo = profile.get("sex") or "hombre"
+
+    raw = await db.calma_raw.find_one(
+        {"$or": [{"client_id": client_id}, {"user_id": profile["user_id"]}]},
+        {"_id": 0, "macros_historial": 1, "pesos": 1, "formularios_mensuales": 1}) or {}
+
+    # evolucion de peso (calma + macro_history + reports), saneada
+    pesos = {}
+    for p in (raw.get("pesos") or []):
+        w = _sanea_peso(p.get("valor"))
+        if w and p.get("fecha"):
+            pesos[p["fecha"]] = w
+    async for h in db.macro_history.find({"client_id": client_id}, {"_id": 0, "effective_date": 1, "peso": 1, "client_weight": 1}):
+        w = _sanea_peso(h.get("peso") if h.get("peso") is not None else h.get("client_weight"))
+        if w and h.get("effective_date"):
+            pesos[h["effective_date"]] = w
+    async for r in db.reports.find({"client_id": client_id}, {"_id": 0, "created_at": 1, "weight": 1}):
+        w = _sanea_peso(r.get("weight")); f = (r.get("created_at") or "")[:10]
+        if w and f:
+            pesos[f] = w
+    evolucion = [{"fecha": f, "peso": w} for f, w in sorted(pesos.items())]
+
+    # ultimo reporte (calma formularios_mensuales) + fase
+    fm = sorted([x for x in (raw.get("formularios_mensuales") or []) if x.get("fecha")], key=lambda x: x["fecha"])
+    reporte = None
+    fase = profile.get("goal") or "definicion"
+    if fm:
+        r = fm[-1]
+        gt = lambda k: (r.get(k) or {}).get("texto") if isinstance(r.get(k), dict) else r.get(k)
+        reporte = {k: v for k, v in {
+            "cumplimiento_dieta": gt("cumplimientoDieta"), "esfuerzo_dieta": gt("esfuerzoParaCumplirDieta"),
+            "cumplimiento_entreno": gt("cumplimientoEntrenamiento"), "cardio": gt("cumplimientoCardio"),
+            "descanso": gt("descanso"), "objetivo": gt("objetivo"),
+            "problemas_entreno": r.get("problemasParaEntrenar"), "comentario": r.get("comentarioCliente"),
+            "peso": _sanea_peso(r.get("peso")),
+        }.items() if v not in (None, "")}
+        ot = (gt("objetivo") or "").lower()
+        if "volumen" in ot:
+            fase = "volumen"
+        elif "defin" in ot:
+            fase = "definicion"
+    fase = "volumen" if str(fase).lower().startswith("vol") else "definicion"
+
+    # historial de ajustes de ESTA persona (para que el agente aprenda su patron):
+    # los importados de Calma + los hechos en la app (estos si traen criterio,
+    # evaluacion de la fase y % graso: el paso 1 del modelo predictivo).
+    historial = []
+    for h in sorted([x for x in (raw.get("macros_historial") or []) if x.get("fecha")], key=lambda x: x["fecha"]):
+        historial.append({"fecha": h["fecha"], "peso": pesos.get(h["fecha"]), "macros": {
+            "entreno": {"proteina": h.get("p_ent"), "hidratos": h.get("h_ent"), "grasa": h.get("g_ent")},
+            "perientreno": {"proteina": h.get("p_peri"), "hidratos": h.get("h_peri")},
+            "descanso": {"proteina": h.get("p_desc"), "hidratos": h.get("h_desc"), "grasa": h.get("g_desc")}}})
+    async for h in db.macro_history.find({"client_id": client_id}, {"_id": 0}):
+        fecha = h.get("effective_date") or (h.get("created_at") or "")[:10]
+        if not fecha:
+            continue
+        historial.append({
+            "fecha": fecha,
+            "peso": pesos.get(fecha) or _sanea_peso(h.get("client_weight")),
+            "porcentaje_graso": h.get("body_fat"),
+            "criterio": h.get("criterio"),
+            "evaluacion": h.get("evaluacion"),
+            "macros": {"entreno": h.get("training") or {}, "perientreno": h.get("peri") or {},
+                       "descanso": h.get("rest") or {}},
+        })
+    historial.sort(key=lambda x: x["fecha"])
+
+    # Memoria de la cartera: casos parecidos de OTROS clientes (el "cliente gemelo"),
+    # con lo que se hizo entonces y como salio. Ver backend/macro_casos.py.
+    import macro_casos
+    peso_actual = evolucion[-1]["peso"] if evolucion else _sanea_peso(profile.get("weight"))
+    hc_ent = (macros_actuales["entreno"] or {}).get("carbs") or (macros_actuales["entreno"] or {}).get("hidratos")
+    ref = {
+        "sexo": (sexo or "hombre").lower(), "fase": fase, "peso": peso_actual,
+        "body_fat": profile.get("body_fat"), "hc_entreno": hc_ent,
+        "hc_entreno_kg": round(hc_ent / peso_actual, 2) if hc_ent and peso_actual else None,
+        "cumplimiento": (reporte or {}).get("cumplimiento_dieta"),
+    }
+    try:
+        gemelos = await macro_casos.buscar_gemelos(ref, k=8, excluir_client_id=client_id)
+    except Exception:
+        gemelos = []   # el banco puede no estar construido todavia
+
+    ctx = macro_agent.construir_contexto(
+        macros_actuales=macros_actuales, sexo=sexo, fase=fase, evolucion_peso=evolucion,
+        reporte=reporte, historial_ajustes=historial,
+        biotipo=(profile.get("nivel1") or {}).get("biotype"), porcentaje_graso=profile.get("body_fat"),
+        casos_gemelos=macro_casos.formatear_gemelos(gemelos))
+    out = await macro_agent.sugerir_ajuste(ctx)
+    if isinstance(out, dict) and out.get("propuesta"):
+        out["guardarrail"] = macro_agent.validar(out["propuesta"], macros_actuales, out.get("avisos", []))
+    out["contexto_usado"] = {"fase": fase, "sexo": sexo, "n_pesos": len(evolucion),
+                             "n_historial": len(historial), "tiene_reporte": bool(reporte),
+                             "n_gemelos": len(gemelos)}
+    out["contexto_decision"] = _contexto_decision(evolucion, reporte)
+
+    # Toda sugerencia queda registrada. Cuando el coach guarde los macros diremos si
+    # la uso tal cual, la corrigio (con el delta) o la ignoro: esa es la senal con la
+    # que el agente puede ir aprendiendo.
+    if out.get("propuesta"):
+        out["sugerencia_id"] = str(uuid.uuid4())
+        await db.macro_sugerencias.insert_one({
+            "id": out["sugerencia_id"],
+            "client_id": client_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "pedida_por": user.get("name", user.get("email", "admin")),
+            "macros_actuales": macros_actuales,
+            "propuesta": out["propuesta"],
+            "cambios": out.get("cambios"),
+            "razonamiento": out.get("razonamiento"),
+            "avisos": out.get("avisos"),
+            "guardarrail": out.get("guardarrail"),
+            "confianza": out.get("confianza"),
+            "modelo": out.get("_modelo"),
+            "contexto_usado": out["contexto_usado"],
+            "resultado": "pendiente",     # pendiente | aceptada | corregida
+        })
+    return out
+
+
+@router.get("/clients/{client_id}/calma-foto")
+async def get_calma_foto(client_id: str, file: str, w: int = 0, user = Depends(get_admin_user)):
+    """Sirve una foto de progreso importada de Calma (disco local del backend).
+
+    Auth por cabecera (get_admin_user) + acceso al cliente. El frontend la carga por
+    fetch autenticado (blob), no con el token en la URL. Valida que el fichero pertenece
+    a este cliente (esta en su fotos_descargadas) y evita path traversal.
+    `w` opcional: devuelve un thumbnail JPEG de ese ancho maximo (respeta la orientacion EXIF).
+    """
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "user_id": 1, "trainer_id": 1})
+    assert_client_access(user, profile)
+    raw = await db.calma_raw.find_one(
+        {"$or": [{"client_id": client_id}, {"user_id": profile["user_id"]}]},
+        {"_id": 0, "fotos_descargadas": 1},
+    )
+    allowed = {f.get("file") for f in (raw or {}).get("fotos_descargadas", [])}
+    if file not in allowed:
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+
+    full = os.path.normpath(os.path.join(_FOTOS_CALMA_DIR, file))
+    if not full.startswith(_FOTOS_CALMA_DIR) or not os.path.exists(full):
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+
+    if w and w > 0:
+        try:
+            from PIL import Image, ImageOps
+            import io
+            img = Image.open(full)
+            img = ImageOps.exif_transpose(img)  # respeta la orientación EXIF (fotos de móvil)
+            img.thumbnail((w, w * 3))
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, "JPEG", quality=80)
+            return Response(content=buf.getvalue(), media_type="image/jpeg")
+        except Exception:
+            pass
+    return FileResponse(full)
 
 @router.get("/clients/{client_id}/diet")
 async def get_client_diet(client_id: str, fecha: str, user = Depends(get_admin_user)):
@@ -268,6 +530,12 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         "macros_source": "manual",
     }
 
+    # Modelo predictivo (paso 1): el % graso del momento del ajuste. Si el coach lo
+    # informa, ademas actualiza el perfil (es el dato mas reciente que hay).
+    body_fat = data.porcentaje_graso if data.porcentaje_graso is not None else profile.get("body_fat")
+    if data.porcentaje_graso is not None:
+        set_data["body_fat"] = data.porcentaje_graso
+
     if data.peri is not None:
         peri = data.peri.model_dump()
         peri["calories"] = peri["protein"] * 4 + peri["carbs"] * 4
@@ -296,13 +564,38 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         "peri": set_data.get("macros_periworkout"),
         "effective_date": effective_date,
         "note": data.note,
+        # Modelo predictivo (paso 1): criterio interno del coach y % graso del momento.
+        # La `evaluacion` de la fase que abre este ajuste se rellena despues, con
+        # PUT .../macro-history/{id}/evaluacion.
+        "criterio": data.criterio,
+        "body_fat": body_fat,
         "changed_by": user.get("name", user.get("email", "admin")),
         "client_weight": profile.get("weight"),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
+
+    # Si el ajuste viene de una sugerencia de la IA, guardamos cuanto la corrigio el
+    # coach: es la senal de aprendizaje (y no le cuesta un clic extra a nadie).
+    macro_log["origen"] = "manual"
+    if data.sugerencia_id:
+        sug = await db.macro_sugerencias.find_one({"id": data.sugerencia_id, "client_id": client_id}, {"_id": 0})
+        if sug:
+            delta = _delta_vs_propuesta(sug.get("propuesta"), training, rest, set_data.get("macros_periworkout"))
+            macro_log["origen"] = "ia" if not delta else "ia_corregida"
+            macro_log["sugerencia_id"] = data.sugerencia_id
+            macro_log["sugerencia_propuesta"] = sug.get("propuesta")
+            macro_log["correccion_coach"] = delta or None
+            await db.macro_sugerencias.update_one({"id": data.sugerencia_id}, {"$set": {
+                "resultado": "aceptada" if not delta else "corregida",
+                "correccion_coach": delta or None,
+                "macro_history_id": macro_log["id"],
+                "guardado_at": macro_log["created_at"],
+                "criterio_coach": data.criterio,
+            }})
+
     await db.macro_history.insert_one(macro_log)
 
-    await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition")
+    await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition", body=data.note)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Actualizó macros de {(client_user or {}).get('name') or client_id} (manual)")
 
@@ -329,6 +622,10 @@ async def update_macro_history_entry(client_id: str, entry_id: str, data: Macros
         "rest": rest, "new_rest": rest,
         "note": data.note,
     }
+    if data.criterio is not None:
+        set_data["criterio"] = data.criterio
+    if data.porcentaje_graso is not None:
+        set_data["body_fat"] = data.porcentaje_graso
     if data.effective_date:
         set_data["effective_date"] = data.effective_date
     if data.peri is not None:
@@ -339,6 +636,33 @@ async def update_macro_history_entry(client_id: str, entry_id: str, data: Macros
 
     await db.macro_history.update_one({"id": entry_id}, {"$set": set_data})
     return {**entry, **set_data}
+
+
+@router.put("/clients/{client_id}/macro-history/{entry_id}/evaluacion")
+async def evaluar_macro_history_entry(client_id: str, entry_id: str, data: MacroEvaluacion,
+                                      user = Depends(get_admin_user)):
+    """Modelo predictivo (paso 1): evaluar como salio la fase que abrio este ajuste.
+
+    Se rellena a toro pasado (cuando llega el reporte siguiente): si fue mala, de quien
+    fue la culpa (del ajuste = del coach, o del cliente que no cumplio). Es lo que le
+    permite al modelo aprender que ajustes funcionaron y cuales no.
+    """
+    prof = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "trainer_id": 1, "user_id": 1})
+    assert_client_access(user, prof)
+    entry = await db.macro_history.find_one({"id": entry_id, "client_id": client_id}, {"_id": 0, "id": 1})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entrada de historial no encontrada")
+
+    evaluacion = {
+        "resultado": data.resultado,
+        # La culpa solo tiene sentido si la fase salio mal.
+        "causa": data.causa if data.resultado == "mala" else None,
+        "nota": data.nota,
+        "evaluado_por": user.get("name", user.get("email", "admin")),
+        "evaluado_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.macro_history.update_one({"id": entry_id}, {"$set": {"evaluacion": evaluacion}})
+    return {"id": entry_id, "evaluacion": evaluacion}
 
 
 @router.delete("/clients/{client_id}/macro-history/{entry_id}")
@@ -443,7 +767,7 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
                   "sexo": sexo, "objetivo": objetivo},
     )
 
-    await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition")
+    await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition", body=note)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Aplicó macros por calculadora a {(client_user or {}).get('name') or client_id}")
 
@@ -678,6 +1002,81 @@ async def get_upcoming_payments(user = Depends(get_admin_user)):
         })
 
     return {"upcoming": results, "total": len(results)}
+
+
+@router.get("/todo-semana")
+async def get_todo_semana(user = Depends(get_admin_user)):
+    """Panel 'por hacer esta semana' del coach (tarea 19): clientes sin macros
+    asignados (planes con calculadora personalizada), sin rutina activa (planes con
+    rutina), y con el reporte de esta semana pendiente. Cada cliente lleva si está
+    'al corriente de pago' para poder priorizar/filtrar."""
+    from core.plan_access import has_active_access, plan_grants_feature
+    from routes.report_cadence import compute_client_report_state
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+
+    now = datetime.now(timezone.utc)
+    catalog = merged_catalog(await _overrides_by_code())
+
+    profiles = await db.client_profiles.find(
+        {"status": {"$in": ["activo", "pago_pendiente"]}},
+        {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "status": 1, "macros_training": 1,
+         "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
+         "cycle_start": 1, "created_at": 1},
+    ).to_list(3000)
+
+    uids = [p["user_id"] for p in profiles if p.get("user_id")]
+    users = await db.users.find(
+        {"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(len(uids) or 1)
+    umap = {u["id"]: u for u in users}
+
+    # Rutinas activas y reportes recientes: una consulta cada uno (no N+1).
+    active_routine_clients = set(await db.routines.distinct("client_id", {"status": "active"}))
+    cutoff = (now - timedelta(days=10)).isoformat()
+    recent = await db.reports.find(
+        {"created_at": {"$gte": cutoff}}, {"_id": 0, "client_id": 1, "created_at": 1}
+    ).to_list(5000)
+    last_report: Dict[str, str] = {}
+    for r in recent:
+        cid, ca = r.get("client_id"), r.get("created_at")
+        if cid and (cid not in last_report or ca > last_report[cid]):
+            last_report[cid] = ca
+
+    sin_macros, sin_rutina, reporte_pendiente = [], [], []
+    for p in profiles:
+        u = umap.get(p.get("user_id"), {})
+        base = {
+            "client_id": p["id"], "name": u.get("name") or "?", "email": u.get("email") or "",
+            "plan": p.get("plan"), "al_corriente": has_active_access(p),
+        }
+        plan_cat = catalog.get((p.get("plan") or "").lower().strip()) or {}
+        hab = plan_cat.get("habilitaciones") or {}
+
+        # Sin macros: el plan espera macros del coach (calculadora personalizada) y no los tiene.
+        if hab.get("calculadora") == "personalizado" and not p.get("macros_training"):
+            sin_macros.append(base)
+
+        # Sin rutina: el plan incluye rutina y el cliente no tiene una activa.
+        if plan_grants_feature(p.get("plan"), "rutina") and p["id"] not in active_routine_clients:
+            sin_rutina.append(base)
+
+        # Reporte de esta semana pendiente (no enviado dentro de la semana de ciclo).
+        state = compute_client_report_state(p, catalog, now)
+        if state["due"]:
+            reported = last_report.get(p["id"])
+            if not (reported and reported >= state["window_start"].isoformat()):
+                reporte_pendiente.append({
+                    **base, "tipo": state["tipos"][0],
+                    "is_open": state["is_open"], "overdue": now > state["window_close"],
+                })
+
+    return {
+        "sin_macros": sin_macros,
+        "sin_rutina": sin_rutina,
+        "reporte_pendiente": reporte_pendiente,
+        "generated_at": now.isoformat(),
+    }
 
 
 @router.get("/dashboard")
