@@ -22,6 +22,19 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     if not plan_grants_feature(profile.get("plan"), "reportes"):
         raise HTTPException(status_code=403, detail="Tu plan no incluye reportes de seguimiento.")
 
+    # Ventana de envío (viernes 00:00 -> lunes 06:00): fuera de ella se bloquea.
+    from routes.report_cadence import compute_client_report_state, _fecha_es
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+    now = datetime.now(timezone.utc)
+    state = compute_client_report_state(profile, merged_catalog(await _overrides_by_code()), now)
+    if not state["due"]:
+        raise HTTPException(status_code=403, detail="Esta semana no toca reporte. Te avisaremos cuando abra la ventana.")
+    if now < state["window_open"]:
+        raise HTTPException(status_code=403, detail=f"Tu reporte se rellena el fin de semana. La ventana abre el {_fecha_es(state['window_open'])}.")
+    if now > state["window_close"]:
+        raise HTTPException(status_code=403, detail="La ventana de esta semana ya se cerró. Espera a la semana que viene.")
+
     report_id = str(uuid.uuid4())
     report = {
         "id": report_id,
@@ -61,6 +74,21 @@ async def get_reports(skip: int = 0, limit: int = 50, user = Depends(get_current
     ).sort("created_at", -1).skip(max(0, skip)).to_list(min(max(1, limit), 100))
 
     return [ReportResponse(**r) for r in reports]
+
+@router.get("/previous")
+async def get_previous_report(user = Depends(get_current_user)):
+    """Último reporte del cliente (peso + medidas + fecha), como referencia al rellenar
+    el nuevo (tarea 12: medidas con referencia del mes anterior)."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    prev = await db.reports.find_one(
+        {"client_id": profile["id"]},
+        {"_id": 0, "weight": 1, "measurements": 1, "created_at": 1},
+        sort=[("created_at", -1)],
+    )
+    return prev or {}
+
 
 @router.get("/evolution")
 async def get_evolution_data(user = Depends(get_current_user)):

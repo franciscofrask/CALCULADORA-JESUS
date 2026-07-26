@@ -130,7 +130,7 @@ class NutritionChatbot:
             api_key=self.api_key,
             session_id=session_id,
             system_message=SYSTEM_PROMPT
-        ).with_model("openai", os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')).with_json_mode()
+        ).with_model("openai", os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini')).with_json_mode()
     
     def set_user_macros(self, macros: dict):
         """Establece los macros del usuario desde su perfil."""
@@ -1028,7 +1028,7 @@ class NutritionChatbot:
         last_err = None
         for intento in range(2):
             chat = LlmChat(api_key=self.api_key, system_message=prompt).with_model(
-                "openai", os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+                "openai", os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
             ).with_json_mode()
             try:
                 resp = await chat.send_message(UserMessage(text=text))
@@ -1320,13 +1320,16 @@ class NutritionChatbot:
         entry["alimento"] = alimento
         return entry["cantidad_display"]
 
-    async def set_food_quantity(self, name: str, cantidad: float = None, unidad: str = None) -> dict:
+    async def set_food_quantity(self, name: str, cantidad: float = None, unidad: str = None,
+                                incrementar: bool = False) -> dict:
         """Fija manualmente la cantidad de un alimento, con paridad con la calculadora: NO topa
         por los macros restantes (permite SOBREPASAR el objetivo). Si el alimento ya está en la
         comida, actualiza su cantidad; si no, lo añade a la cantidad indicada.
 
         `unidad`: "g" (gramos), "ud" (unidades) o None (se resuelve según el alimento:
-        unidades si es un alimento contable, gramos en caso contrario)."""
+        unidades si es un alimento contable, gramos en caso contrario).
+        `incrementar`: si True, SUMA la cantidad a lo que ya hay de ese alimento en la comida
+        ("agrega un huevo": 2 -> 3), en vez de fijar el total."""
         key = self.current_meal_key()
         # 1) Match ESTRICTO contra la comida (evita actualizar un alimento parecido pero
         #    distinto). 2) Si no, resolver contra la base y ver si ESE alimento ya está.
@@ -1366,6 +1369,11 @@ class NutritionChatbot:
             cantidad_g = cantidad * racion
         else:
             cantidad_g = cantidad
+        # Incremento ("agrega un huevo"): sumar lo pedido a lo que ya hay de ese alimento
+        # en la comida, en vez de fijar el total. Si aún no está, equivale a añadir esa cantidad.
+        if incrementar and idx >= 0:
+            actual = self.state["comidas_completadas"][key]["alimentos"][idx]
+            cantidad_g = float(actual.get("cantidad_g") or actual.get("cantidad") or 0) + cantidad_g
         # Tope de cordura: nadie come 999999 kg de lentejas; rechazar en vez de aceptar
         # cantidades imposibles con un simple aviso.
         if cantidad_g > 5000:
@@ -1757,6 +1765,227 @@ class NutritionChatbot:
         m = macros_at(a, cant)
         return {"P": round(m["proteinas"], 1), "H": round(m["hidratos"], 1), "G": round(m["grasas"], 1)}
 
+    # Detección determinista de "sumar a lo que ya hay" vs "fijar el total". Se hace en
+    # código (no en el LLM) porque el router clasificaba "pon un huevo" de forma inestable.
+    _RE_SET_TOTAL = re.compile(r"\b(a|en)\s+\d|\b(deja|dejalo|baja|bajala|sube|subela|subelo|cambia|solo|unicamente)\b")
+    _RE_INCREMENTO = re.compile(r"\b(agrega|anade|suma|echa|mete|otro|otra|un|una)\b|\bmas\b")
+    # Marca aditiva "fuerte" (verbo o 'otro'/'más', SIN 'un/una'): la exigimos para
+    # incrementar cuando la cantidad viene en GRAMOS ('añade 20 g más de arroz'), para no
+    # confundir un objetivo en gramos ('80 g de arroz') con un incremento.
+    _RE_INCREMENTO_FUERTE = re.compile(r"\b(agrega|anade|suma|echa|mete|otro|otra)\b|\bmas\b")
+    # Nombres de medida vaga: 'un poco/puñado/vaso de X' no es '1 unidad de X'.
+    _MEDIDAS_VAGAS = {"poco", "poca", "poquito", "punado", "punadito", "vaso", "vasos",
+                      "loncha", "lonchas", "rebanada", "rebanadas", "cucharada", "cucharadita",
+                      "cucharadas", "lata", "latas", "pizca", "chorro", "chorrito", "trozo",
+                      "trozos", "cacho", "taza", "tazas", "bol", "cazo", "plato", "platos",
+                      "racion", "raciones", "porcion", "porciones", "kilo", "kilos", "litro",
+                      "litros", "gramo", "gramos"}
+
+    def _tiene_medida_vaga(self, text: str) -> bool:
+        return bool(self._MEDIDAS_VAGAS.intersection(self._norm_text(text or "").split()))
+
+    def _a_num(self, w: str):
+        """Un número suelto ('2', 'dos', '1.5') -> float, o None."""
+        w = self._norm_text(w or "").strip()
+        if re.match(r"^\d+(?:[.,]\d+)?$", w):
+            return float(w.replace(",", "."))
+        return self._NUM_PALABRAS.get(w)
+
+    _RE_DEC = re.compile(r"\b(?:quita\w*|kita\w*|qita\w*|saca\w*|elimina\w*|retira\w*|resta\w*)\s+(?:solo\s+)?"
+                         r"(un|una|uno|dos|tres|cuatro|cinco|\d+(?:[.,]\d+)?)\s+(?:de\s+)?(.+)")
+    _RE_DEC_MENOS = re.compile(r"\b(un|una|uno|dos|tres|cuatro|cinco|\d+(?:[.,]\d+)?)\s+(.+?)\s+menos\b")
+
+    def _intento_decremento(self, text: str):
+        """Detecta 'quita N X' / 'N X menos' / 'quita uno' -> (nombre|'__ultimo__', n) o None.
+        NO se activa con 'deja/solo N' (eso es fijar el total) ni si el mensaje también añade."""
+        t = self._norm_text(text or "")
+        if re.search(r"\b(deja|dejame|solo|unicamente)\b", t) or "en total" in t:
+            return None
+        if re.search(r"\b(agrega\w*|anade\w*|ponme|pon|dame|quiero|echa\w*|mete\w*)\b", t) \
+                and re.search(r"\b(quita\w*|kita\w*|qita\w*|saca\w*)\b", t):
+            return None  # mensaje mixto add+quitar: lo gestiona _intento_mixto / flujo normal
+        en_gramos = bool(re.search(r"\d\s*(?:g|gr|gramos?|kg|kilos?)\b", t))
+        for rgx, gf, gn in ((self._RE_DEC, 2, 1), (self._RE_DEC_MENOS, 2, 1)):
+            m = rgx.search(t)
+            if m:
+                n = self._a_num(m.group(gn))
+                food = m.group(gf).strip()
+                food = re.sub(r"^(?:g|gr|gramos?|kg|kilos?|ud|unidades?|de|del)\s+", "", food).strip()
+                food = re.sub(r"^(?:de\s+)?(?:la|el|los|las)\s+", "", food).strip()
+                food = re.sub(r"\s+de\s+(?:la|el|los|las)\s+comida.*$", "", food).strip()
+                if n and food:
+                    return (food, n, en_gramos)
+        if re.search(r"\b(?:quita\w*|kita\w*|qita\w*|saca\w*)\s+(?:un|una|uno|otro|otra)\b", t) and " de " not in f" {t} ":
+            return ("__ultimo__", 1.0, False)
+        return None
+
+    async def decrementar_alimento(self, name: str, n: float, en_gramos: bool = False) -> dict:
+        """Reduce un alimento de la comida; si baja a ~0 lo quita. `n` se interpreta como
+        gramos si `en_gramos`; si no, como unidades/porciones (para granel contado por
+        unidad, p.ej. 'quita 2 claras', se resta n * ración)."""
+        key = self.current_meal_key()
+        alimentos = self.state["comidas_completadas"].get(key, {}).get("alimentos", [])
+        if not alimentos:
+            return {"ok": False, "vacio": True}
+        idx = (len(alimentos) - 1) if name == "__ultimo__" else self._match_meal_food_index(name, strict=False)
+        if idx < 0 or idx >= len(alimentos):
+            return {"ok": False, "nombre": (None if name == "__ultimo__" else name)}
+        item = alimentos[idx]
+        alimento = item.get("alimento") or {}
+        es_ud = bool(alimento.get("unidades"))
+        racion = float(alimento.get("racion") or 100) or 100.0
+        cur_g = float(item.get("cantidad_g") or 0)
+        nombre = item.get("nombre")
+        # Gramos a restar según el tipo de alimento y cómo se pidió.
+        if en_gramos:
+            resta_g = n
+        elif es_ud:
+            resta_g = n * racion
+        else:
+            resta_g = n * racion  # granel contado por porción ("quita 2 claras")
+        nuevo_g = cur_g - resta_g
+        if nuevo_g <= (0.4 * racion if es_ud else 4):
+            self.remove_food_at(idx)
+            return {"ok": True, "removido": True, "nombre": nombre}
+        nuevo = (nuevo_g / racion) if es_ud else nuevo_g
+        res = await self.set_food_quantity(nombre, cantidad=nuevo, unidad=("ud" if es_ud else "g"))
+        res["nombre"] = res.get("nombre") or nombre
+        return res
+
+    def _intento_quitar_todo(self, text: str):
+        """'quita todo el arroz' -> 'arroz' (quitar ESE alimento entero, no vaciar la comida)."""
+        m = re.search(r"\b(?:quita\w*|kita\w*|qita\w*|saca\w*|elimina\w*|borra\w*)\s+tod[oa]s?\s+"
+                      r"(?:el\s+|la\s+|los\s+|las\s+)?(\w{3,}.*)", self._norm_text(text or ""))
+        if not m:
+            return None
+        food = re.sub(r"\s+de\s+(?:la|esta)\s+comida.*$", "", m.group(1).strip()).strip()
+        return food or None
+
+    _RE_REEMPLAZO = re.compile(r"\b(?:cambia\w*|canbia\w*|kambia\w*|canvia\w*|reemplaza\w*|reenplaza\w*|sustituy\w*)\s+(?:el |la |los |las )?(.+?)\s+por\s+(.+)")
+    _RE_REEMPLAZO_ENVEZ = re.compile(r"\ben (?:vez|lugar) de\s+(?:el |la |los |las )?(.+?)\s+"
+                                     r"(?:pon\w*|ponme|dame|quiero|echa\w*|mete\w*|usa|anade\w*|agrega\w*)\s+(.+)")
+
+    def _intento_reemplazo(self, text: str):
+        """'cambia el pollo por pavo' / 'en vez de pollo ponme atún' -> (viejo, spec_nuevo) o None."""
+        t = self._norm_text(text or "")
+        m = self._RE_REEMPLAZO.search(t) or self._RE_REEMPLAZO_ENVEZ.search(t)
+        if not m:
+            return None
+        old = m.group(1).strip()
+        new = re.sub(r"\bpor favor\b.*$", "", m.group(2)).strip()
+        if not old or not new or new in ("favor", "fa"):
+            return None
+        return (old, new)
+
+    def _parse_cantidad_spec(self, spec: str):
+        """'100g de pavo' -> (100,'g','pavo'); '2 huevos' -> (2,'ud','huevos'); 'pavo' -> (None,None,'pavo')."""
+        t = self._norm_text(spec or "")
+        cant, uni, nombre = None, None, spec
+        mg = re.search(r"(\d+(?:[.,]\d+)?)\s*(kg|kilos?|gr|gramos?|g)\b", t)
+        if mg:
+            cant = float(mg.group(1).replace(",", ".")); uni = "g"
+            if mg.group(2).startswith("k"):
+                cant *= 1000
+            nombre = re.sub(r"\d+(?:[.,]\d+)?\s*(kg|kilos?|gr|gramos?|g)\b", "", spec, flags=re.I)
+        else:
+            mn = re.match(r"\s*(un|una|uno|dos|tres|cuatro|cinco|\d+(?:[.,]\d+)?)\s+(.+)", t)
+            if mn:
+                cant = self._a_num(mn.group(1)); uni = "ud"; nombre = mn.group(2)
+        nombre = re.sub(r"^\s*(?:de\s+)?(?:el|la|los|las)\s+", "", nombre.strip(), flags=re.I).strip()
+        nombre = re.sub(r"^\s*de\s+", "", nombre, flags=re.I).strip()
+        return cant, uni, (nombre or spec).strip()
+
+    def _intento_multiplicador(self, text: str):
+        """'el doble'/'la mitad'/'el triple' (de X) -> (factor, nombre|'__ultimo__') o None."""
+        t = self._norm_text(text or "")
+        factor = (2.0 if re.search(r"\b(doble|duplica\w*)\b", t)
+                  else 3.0 if re.search(r"\b(triple|triplica\w*)\b", t)
+                  else 0.5 if re.search(r"\bmitad\b", t)
+                  else None)
+        if factor is None:
+            return None
+        m = re.search(r"\b(?:de|del)\s+(?:la\s+|el\s+|los\s+|las\s+)?(.+)", t)
+        return (factor, m.group(1).strip() if m else "__ultimo__")
+
+    async def aplicar_multiplicador(self, factor: float, food: str) -> dict:
+        key = self.current_meal_key()
+        alimentos = self.state["comidas_completadas"].get(key, {}).get("alimentos", [])
+        if not alimentos:
+            return {"ok": False, "vacio": True}
+        idx = (len(alimentos) - 1) if food == "__ultimo__" else self._match_meal_food_index(food, strict=False)
+        if idx < 0 or idx >= len(alimentos):
+            return {"ok": False, "nombre": food}
+        item = alimentos[idx]
+        alimento = item.get("alimento") or {}
+        es_ud = bool(alimento.get("unidades"))
+        racion = float(alimento.get("racion") or 100) or 100.0
+        new_g = float(item.get("cantidad_g") or 0) * factor
+        cur = (new_g / racion) if es_ud else new_g
+        return await self.set_food_quantity(item.get("nombre"), cantidad=cur, unidad=("ud" if es_ud else "g"))
+
+    def _intento_ajuste_ultimo(self, text: str):
+        """Ajuste referido al ÚLTIMO alimento sin nombrarlo: 'ponlo en 2', 'que sean 150 g',
+        'añade 20 g más'. Devuelve (cantidad, unidad|None, incrementar) o None."""
+        t = self._norm_text(text or "")
+        # "ponme otro" / "otro" / "uno más": +1 unidad del último alimento (sin nombrarlo).
+        # Se excluye "otro X" (con alimento nombrado): eso lo maneja el incremento normal.
+        if (re.fullmatch(r"(?:y\s+)?(?:otro|otra|uno mas|una mas)", t)
+                or re.search(r"\b(?:ponme|pon|dame|echa\w*|agrega\w*|anade\w*|suma\w*|mete\w*)\s+"
+                             r"(?:otro|otra|uno mas|una mas)\b", t)) \
+                and not re.search(r"\b(?:otro|otra)\s+[a-z]{3,}", t):
+            return (1.0, "ud", True)
+        mi = re.search(r"\b(?:anade\w*|suma\w*|agrega\w*|echa\w*)\s+(\d+(?:[.,]\d+)?)\s*(?:g|gr|gramos?)\b.*\bmas\b", t)
+        if mi:
+            return (float(mi.group(1).replace(",", ".")), "g", True)
+        m2 = re.search(r"\b(?:ponlo|ponla|ponlos|ponlas|dejalo|dejala|dejalos|dejalas)\s+"
+                       r"(?:en|a)\s+(\d+(?:[.,]\d+)?)\s*(g|gr|gramos?|ud|unidades?)?\b", t)
+        m3 = m2 or re.search(r"\bque\s+sea[n]?\s+(?:de\s+)?(\d+(?:[.,]\d+)?)\s*(g|gr|gramos?|ud|unidades?)?\b", t)
+        if m3:
+            u = m3.group(2)
+            uni = "g" if (u and u.startswith("g")) else ("ud" if u else None)
+            return (float(m3.group(1).replace(",", ".")), uni, False)
+        return None
+
+    def _intento_mixto(self, text: str):
+        """'agrega un huevo y quita uno' (mismo alimento) -> (nombre, neto) o None."""
+        t = self._norm_text(text or "")
+        ma = re.search(r"\b(?:agrega\w*|anade\w*|ponme|pon|suma\w*|echa\w*|mete\w*)\s+"
+                       r"(un|una|uno|dos|tres|\d+)\s+(?:el\s+|la\s+|los\s+|las\s+)?([a-z]{3,})", t)
+        md = re.search(r"\b(?:quita\w*|kita\w*|qita\w*|saca\w*)\s+(un|una|uno|dos|tres|\d+)?\s*(?:el\s+|la\s+|los\s+|las\s+)?([a-z]{3,})?", t)
+        if not (ma and md):
+            return None
+        # Solo si el 'quita' se refiere al MISMO alimento. Si NO nombra alimento (p.ej.
+        # "quita uno", donde 'uno' es el conteo), es el mismo -> neto. Si nombra OTRO
+        # alimento distinto ("... y quita el arroz"), no es un neto: que lo haga el flujo normal.
+        food = ma.group(2)
+        dec_food = (md.group(2) or "").strip()
+        if dec_food and dec_food not in ("uno", "una", "otro", "otra") \
+                and food not in dec_food and dec_food not in food:
+            return None
+        nadd = self._a_num(ma.group(1)) or 1
+        ndec = self._a_num(md.group(1)) if md.group(1) else 1
+        return (food, nadd - ndec)
+
+    def _es_incremento(self, text: str) -> bool:
+        """¿El usuario quiere SUMAR a lo que ya hay (incremento) en vez de FIJAR el total?
+        Marca aditiva ('agrega/añade/suma/otro/más/un/una') SALVO que haya marca de fijar
+        total ('a N', 'en N', 'deja/baja/sube/cambia/solo'). Ej.: 'pon un huevo' -> suma;
+        'deja los huevos en 2' / 'pon el arroz a 80' / '2 huevos' -> fija el total."""
+        t = self._norm_text(text or "")
+        if self._RE_SET_TOTAL.search(t):
+            return False
+        return bool(self._RE_INCREMENTO.search(t))
+
+    _NUM_PALABRAS = {"un": 1, "una": 1, "uno": 1, "otro": 1, "otra": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5}
+
+    def _num_pedido(self, text: str):
+        """Número de unidades pedido en el texto ('dos claras' -> 2, 'un huevo más' -> 1), o None."""
+        t = self._norm_text(text or "")
+        m = re.search(r"\b(\d+)\b", t)
+        if m:
+            return float(m.group(1))
+        return next((v for w, v in self._NUM_PALABRAS.items() if re.search(rf"\b{w}\b", t)), None)
+
     async def add_foods(self, items: list) -> dict:
         """Añade a la comida actual los alimentos extraídos del mensaje.
 
@@ -1818,7 +2047,8 @@ class NutritionChatbot:
 
         # ── 1) Cantidades explícitas: una a una, manual (sin tope, se respeta lo pedido) ──
         for it in explicit:
-            res = await self.set_food_quantity(it["nombre"], cantidad=it["cantidad"], unidad=it.get("unidad"))
+            res = await self.set_food_quantity(it["nombre"], cantidad=it["cantidad"],
+                                               unidad=it.get("unidad"), incrementar=it.get("sumar", False))
             if res.get("ok"):
                 added.append({"nombre": res["nombre"], "cantidad_display": res["cantidad_display"],
                               "macros": res["macros"]})
@@ -2338,7 +2568,7 @@ class NutritionChatbot:
         )
         user_msg = f"Pregunta del cliente: {text}\n\nDATOS:\n{food_facts}\n{ctx}".strip()
         chat = LlmChat(api_key=self.api_key, system_message=system).with_model(
-            "openai", os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+            "openai", os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
         )
         try:
             answer = await chat.send_message(UserMessage(text=user_msg))
@@ -2360,7 +2590,7 @@ class NutritionChatbot:
             if isinstance(f, str):
                 nombre = f.strip()
                 if nombre:
-                    items.append({"nombre": nombre, "cantidad": None, "unidad": None})
+                    items.append({"nombre": nombre, "cantidad": None, "unidad": None, "sumar": False})
                 continue
             if not isinstance(f, dict):
                 continue
@@ -2378,7 +2608,7 @@ class NutritionChatbot:
                 unidad = "g"
             if unidad not in ("g", "ud"):
                 unidad = None
-            items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad})
+            items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad, "sumar": bool(f.get("sumar"))})
         return items
 
     async def understand(self, text: str) -> dict:
@@ -2444,7 +2674,7 @@ class NutritionChatbot:
         last_err = None
         for _ in range(2):
             chat = LlmChat(api_key=self.api_key, system_message=prompt).with_model(
-                "openai", os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+                "openai", os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
             ).with_json_mode()
             try:
                 resp = await chat.send_message(UserMessage(text=text))
@@ -2548,6 +2778,95 @@ class NutritionChatbot:
                                     "\"resumen del día\"."),
                         "day_overview": self.get_day_overview()}
 
+        # ── Operaciones deterministas que el router interpreta mal (decremento, reemplazo,
+        #    multiplicador, add+quitar mixto). Se detectan del texto crudo y tienen PRIORIDAD
+        #    sobre el intent del LLM (que p.ej. malclasifica "agrega X y quita Y" como pregunta). ──
+        _puede_mutar = self.state.get("step") != "complete" or bool(goto_idx)
+        # "quita todo el arroz" el router lo suele marcar como 'clear' (vaciar); lo
+        # interceptamos aparte para quitar SOLO ese alimento.
+        if _puede_mutar and self.state["comidas_completadas"].get(self.current_meal_key(), {}).get("alimentos"):
+            qt = self._intento_quitar_todo(user_input)
+            if qt:
+                if goto_idx:
+                    self.go_to_meal(goto_idx)
+                quitado = self.remove_food_by_name(qt)
+                resp = self._meal_response([], [])
+                resp["message"] = (f"Quité {quitado.get('nombre')} de esta comida." if quitado
+                                   else f"No veo {qt} en esta comida.")
+                return resp
+
+        if _puede_mutar and intent not in ("suggest", "complete", "clear", "rebalance", "status", "summary", "list"):
+            mix = self._intento_mixto(user_input)
+            if mix:
+                if goto_idx:
+                    self.go_to_meal(goto_idx)
+                nombre, neto = mix
+                if abs(neto) < 0.001:
+                    resp = self._meal_response([], [])
+                    resp["message"] = "Lo dejo igual (lo que añades y quitas se compensa)."
+                    return resp
+                if neto > 0:
+                    r = await self.set_food_quantity(nombre, cantidad=neto, unidad="ud", incrementar=True)
+                    resp = self._meal_response([{"nombre": r.get("nombre"), "cantidad_display": r.get("cantidad_display"), "macros": r.get("macros")}] if r.get("ok") else [], [])
+                else:
+                    r = await self.decrementar_alimento(nombre, -neto)
+                    resp = self._meal_response([], [])
+                resp["message"] = f"Ajustado: {r.get('nombre') or nombre}." if r.get("ok") else f"No pude ajustar {nombre}."
+                return resp
+
+            dec = self._intento_decremento(user_input)
+            if dec:
+                if goto_idx:
+                    self.go_to_meal(goto_idx)
+                res = await self.decrementar_alimento(dec[0], dec[1], dec[2])
+                resp = self._meal_response([], [])
+                if not res.get("ok"):
+                    resp["message"] = ("Esta comida está vacía." if res.get("vacio")
+                                       else "No veo ese alimento en la comida para quitarlo.")
+                elif res.get("removido"):
+                    resp["message"] = f"Quité {res['nombre']} de esta comida."
+                else:
+                    resp["message"] = f"Bajé {res['nombre']} a {res.get('cantidad_display')}."
+                return resp
+
+            rep = self._intento_reemplazo(user_input)
+            if rep:
+                if goto_idx:
+                    self.go_to_meal(goto_idx)
+                old, newspec = rep
+                quitado = self.remove_food_by_name(old)
+                cant, uni, nombre = self._parse_cantidad_spec(newspec)
+                resp = await self.add_foods([{"nombre": nombre, "cantidad": cant, "unidad": uni, "sumar": False}])
+                viejo = quitado.get("nombre") if quitado else old
+                nota = f"Cambié {viejo} por {nombre}." if quitado else f"No tenías {old}; añadí {nombre}."
+                resp["message"] = nota + ("\n" + resp["message"] if resp.get("message") else "")
+                return resp
+
+            mult = self._intento_multiplicador(user_input)
+            if mult and len(user_input.split()) <= 6 \
+                    and self.state["comidas_completadas"].get(self.current_meal_key(), {}).get("alimentos"):
+                if goto_idx:
+                    self.go_to_meal(goto_idx)
+                res = await self.aplicar_multiplicador(mult[0], mult[1])
+                if res.get("ok"):
+                    resp = self._meal_response([{"nombre": res["nombre"], "cantidad_display": res.get("cantidad_display"), "macros": res.get("macros")}], [])
+                    resp["message"] = f"Ajusté {res['nombre']} a {res.get('cantidad_display')}."
+                    return resp
+
+            # "ponlo en 2" / "que sean 150 g" / "añade 20 g más": ajuste del ÚLTIMO alimento.
+            adj = self._intento_ajuste_ultimo(user_input)
+            if adj:
+                alimentos = self.state["comidas_completadas"].get(self.current_meal_key(), {}).get("alimentos", [])
+                if alimentos:
+                    if goto_idx:
+                        self.go_to_meal(goto_idx)
+                    cant, uni, inc = adj
+                    res = await self.set_food_quantity(alimentos[-1].get("nombre"), cantidad=cant, unidad=uni, incrementar=inc)
+                    if res.get("ok"):
+                        resp = self._meal_response([{"nombre": res["nombre"], "cantidad_display": res.get("cantidad_display"), "macros": res.get("macros")}], [])
+                        resp["message"] = f"Ajusté {res['nombre']} a {res.get('cantidad_display')}."
+                        return resp
+
         if intent == "goto":
             if goto_idx and self.go_to_meal(goto_idx):
                 resp = self._meal_response([], [])
@@ -2634,6 +2953,26 @@ class NutritionChatbot:
         if data.get("remove"):
             quitado = self.remove_food_by_name(data["remove"])
         if foods:
+            # ¿Suma a lo que ya hay ("pon/agrega un huevo") o fija el total ("deja en 2")?
+            # Determinista en código. Solo aplica a unidades/porciones: los gramos explícitos
+            # ("80 g de arroz") son un objetivo, no un incremento.
+            t_norm = self._norm_text(user_input)
+            set_marker = bool(self._RE_SET_TOTAL.search(t_norm))
+            weak = not set_marker and bool(self._RE_INCREMENTO.search(t_norm))          # incluye un/una (unidades)
+            strong = not set_marker and bool(self._RE_INCREMENTO_FUERTE.search(t_norm))  # verbos/más (gramos)
+            cnt_hint = self._num_pedido(user_input)
+            vaga = self._tiene_medida_vaga(user_input)
+            for f in foods:
+                # En gramos solo se incrementa con marca fuerte ('añade 20 g más'); en
+                # unidades basta 'un/una/otro/más' ('un huevo más').
+                is_incr = strong if f.get("unidad") == "g" else weak
+                f["sumar"] = is_incr
+                # "un huevo más" / "otro huevo": el router a veces no captura el número. Si es un
+                # incremento con conteo explícito Y no es una medida vaga ("un poco de arroz"),
+                # fijar +N unidades en vez de auto-dimensionar (que lo rechazaría con "no cabe").
+                if is_incr and f.get("cantidad") is None and cnt_hint and not vaga:
+                    f["cantidad"] = cnt_hint
+                    f["unidad"] = f.get("unidad") or "ud"
             resp = await self.add_foods(foods)
             if quitado:
                 # Si lo quitado se volvió a añadir (era un cambio de cantidad), decirlo como
@@ -2651,17 +2990,29 @@ class NutritionChatbot:
             resp["message"] = f"He quitado {quitado.get('nombre')} de esta comida."
             return resp
 
-        # Mensaje corto sin alimentos según el router ("arroz" a secas): intentar tratarlo
-        # como un alimento directo antes de rendirse. Solo con match de cobertura real
-        # (nada de colar "noodles" cuando el usuario dijo "no").
-        toks_cortos = [t for t in re.findall(r"[a-zñ]+", self._norm_text(user_input)) if len(t) >= 3]
+        # Mensaje corto sin alimentos según el router ("arroz" a secas, "otro huevo",
+        # "un huevo más"): tratarlo como un alimento directo antes de rendirse. Se quitan
+        # las palabras de relleno/cantidad para buscar SOLO el alimento (el router falla a
+        # veces con estas frases sin verbo). Solo con match de cobertura real (nada de colar
+        # "noodles" cuando el usuario dijo "no").
         _SMALLTALK = {"hola", "buenas", "gracias", "vale", "venga", "adios", "hasta", "luego"}
-        if intent in ("add", "none") and len(user_input.split()) <= 3 and toks_cortos \
+        _FILLER = {"otro", "otra", "mas", "uno", "una", "dos", "tres", "cuatro", "cinco",
+                   "pon", "ponme", "dame", "quiero", "agrega", "anade", "suma", "echa", "mete",
+                   "por", "favor", "gramos", "gramo", "unidad", "unidades", "unos", "unas"}
+        toks_cortos = [t for t in re.findall(r"[a-zñ]+", self._norm_text(user_input)) if len(t) >= 3]
+        content = [t for t in toks_cortos if t not in _FILLER]
+        if intent in ("add", "none") and len(user_input.split()) <= 4 and content \
                 and not any(t in _SMALLTALK for t in toks_cortos):
-            matches = await self.search_foods(user_input, limit=1)
+            query = " ".join(content)
+            matches = await self.search_foods(query, limit=1)
             if matches and not matches[0].get("_match_parcial") \
-                    and all(t in self._norm_text(matches[0].get("nombre", "")) for t in toks_cortos):
-                return await self.add_foods([{"nombre": user_input.strip(), "cantidad": None, "unidad": None}])
+                    and all(t in self._norm_text(matches[0].get("nombre", "")) for t in content):
+                # Conteo pedido ("dos claras", "un huevo más" -> 2/1) y si suma o fija.
+                # Las medidas vagas ("un poco de arroz") no fuerzan conteo: se auto-dimensionan.
+                cnt = None if self._tiene_medida_vaga(user_input) else self._num_pedido(user_input)
+                incr = self._es_incremento(user_input)
+                return await self.add_foods([{"nombre": query, "cantidad": cnt, "unidad": None,
+                                              "sumar": bool(incr and cnt)}])
 
         # Sin alimentos claros: si parece una frase, tratar como duda; si no, pedir alimentos.
         if len(user_input.split()) >= 4:

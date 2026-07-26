@@ -5,7 +5,7 @@ import os
 
 from openai import AsyncOpenAI
 
-DEFAULT_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+DEFAULT_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 
 
 class UserMessage:
@@ -54,9 +54,20 @@ class LlmChat:
 
         kwargs = {
             "model": self.model,
-            "max_tokens": 4096,
             "messages": self._build_messages(),
         }
+        # La familia gpt-5 y los modelos de razonamiento (o1/o3/o4) exigen
+        # max_completion_tokens en lugar de max_tokens. Para gpt-5 forzamos ademas
+        # reasoning_effort="minimal": el router y las respuestas cortas no necesitan
+        # razonamiento y asi evitamos +5s de latencia y el coste de los reasoning tokens.
+        model_l = (self.model or "").lower()
+        if model_l.startswith("gpt-5"):
+            kwargs["max_completion_tokens"] = 4096
+            kwargs["reasoning_effort"] = "minimal"
+        elif model_l.startswith(("o1", "o3", "o4")):
+            kwargs["max_completion_tokens"] = 4096
+        else:
+            kwargs["max_tokens"] = 4096
         if self.response_format:
             kwargs["response_format"] = self.response_format
 

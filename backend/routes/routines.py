@@ -141,7 +141,7 @@ Genera una rutina completa de 7 días. Responde SOLO con el JSON."""
             system_message=("Eres un entrenador personal experto. Genera rutinas en formato JSON. "
                             "Escribe los nombres de ejercicios y notas en español neutro con tuteo "
                             "(prohibido el voseo y los regionalismos).")
-        ).with_model("openai", os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'))
+        ).with_model("openai", os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'))
         
         response = await chat.send_message(UserMessage(text=prompt))
         

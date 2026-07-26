@@ -11,6 +11,7 @@ from pymongo.errors import DuplicateKeyError
 
 from core.database import db
 from core.security import get_admin_user, generate_temp_password
+from core.notion_sync import upsert_lead_to_notion
 from routes.audit import audit
 
 router = APIRouter(prefix="/leads", tags=["leads"])
@@ -446,6 +447,7 @@ async def ghl_webhook(request: Request):
             "created_at": now,
         }
         await db.leads.update_one({"id": existing["id"]}, {"$set": update, "$push": {"activity": entry}})
+        await upsert_lead_to_notion({**existing, **update})
         return {"status": "ok", "lead_id": existing["id"], "deduped": True}
 
     # Dedup: si ya existe un lead con ese email/telefono, actualizarlo en vez de duplicar
@@ -476,4 +478,5 @@ async def ghl_webhook(request: Request):
         if existing:
             return await _apply_reentry(existing)
         raise
+    await upsert_lead_to_notion(lead)
     return {"status": "ok", "lead_id": lead["id"]}

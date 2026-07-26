@@ -26,6 +26,56 @@ const PLAN_COLORS = {
     premium: '#EC4899', plan_6m: '#14B8A6', sin_plan: '#555555',
 };
 
+// Panel "Por hacer esta semana": tres columnas accionables (sin macros / sin rutina /
+// reporte pendiente), con filtro por clientes al corriente de pago (tarea 19).
+const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => {
+    if (!todo) return null;
+    const flt = (arr) => (arr || []).filter(c => !soloAlCorriente || c.al_corriente);
+    const cols = [
+        { key: 'macros', label: 'Sin macros', icon: Apple, color: '#FF671F', sub: 'Necesitan macros del coach', items: flt(todo.sin_macros) },
+        { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina, sin una activa', items: flt(todo.sin_rutina) },
+        { key: 'reportes', label: 'Reporte pendiente', icon: FileText, color: '#EAB308', sub: 'No enviado esta semana', items: flt(todo.reporte_pendiente) },
+    ];
+    return (
+        <Card className="bg-[#111111] border-[#222]" data-testid="todo-semana">
+            <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                    <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Por hacer esta semana</p>
+                    <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
+                        <input type="checkbox" checked={soloAlCorriente} onChange={e => setSoloAlCorriente(e.target.checked)}
+                            className="accent-[#FF671F]" data-testid="todo-filter-alcorriente" />
+                        Solo al corriente de pago
+                    </label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {cols.map(col => (
+                        <div key={col.key} className="bg-[#0A0A0A] rounded-xl border border-[#222] p-3">
+                            <div className="flex items-center gap-2 mb-1">
+                                <col.icon className="w-4 h-4" style={{ color: col.color }} />
+                                <span className="text-sm font-bold text-white">{col.label}</span>
+                                <span className="ml-auto text-sm font-bold" style={{ color: col.color }}>{col.items.length}</span>
+                            </div>
+                            <p className="text-[10px] text-white/30 mb-2">{col.sub}</p>
+                            <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                                {col.items.length === 0 && <p className="text-white/25 text-xs py-3 text-center">Nada pendiente</p>}
+                                {col.items.map(c => (
+                                    <button key={c.client_id} onClick={() => navigate(`/admin/clients/${c.client_id}`)}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 text-left">
+                                        <span className="flex-1 min-w-0 truncate text-sm text-white/80">{c.name}</span>
+                                        {col.key === 'reportes' && c.overdue && <span className="text-[9px] text-red-400 font-bold uppercase tracking-wide">tarde</span>}
+                                        {!c.al_corriente && <span title="Pago pendiente" className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
+                                        <ChevronRight className="w-3.5 h-3.5 text-white/20 flex-shrink-0" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
 // Admin Dashboard Home
 const AdminDashboard = () => {
     const { api, planCatalog } = useAuth();
@@ -37,6 +87,9 @@ const AdminDashboard = () => {
     const [loading, setLoading] = useState(true);
     // Motor de macros v2: dietas reportadas que no cuadran, pendientes de revisar.
     const [revisiones, setRevisiones] = useState([]);
+    // "Por hacer esta semana": sin macros / sin rutina / reporte pendiente (tarea 19).
+    const [todo, setTodo] = useState(null);
+    const [soloAlCorriente, setSoloAlCorriente] = useState(false);
 
     const resolverRevision = async (rev) => {
         try {
@@ -71,18 +124,20 @@ const AdminDashboard = () => {
     useEffect(() => {
         const fetchAll = async () => {
             try {
-                const [statsRes, upcomingRes, clientsRes, cadenceRes, revisionesRes] = await Promise.all([
+                const [statsRes, upcomingRes, clientsRes, cadenceRes, revisionesRes, todoRes] = await Promise.all([
                     api.get('/admin/dashboard-stats'),
                     api.get('/admin/upcoming-payments'),
                     api.get('/admin/clients'),
                     api.get('/admin/report-cadence'),
                     api.get('/admin/macro-revisiones').catch(() => ({ data: { items: [] } })),
+                    api.get('/admin/todo-semana').catch(() => ({ data: null })),
                 ]);
                 setStats(statsRes.data);
                 setUpcoming(upcomingRes.data.upcoming || []);
                 setClients(clientsRes.data || []);
                 setCadence(cadenceRes.data.items || []);
                 setRevisiones(revisionesRes.data.items || []);
+                setTodo(todoRes.data || null);
             } catch (error) {
                 console.error('Error fetching dashboard:', error);
                 toast.error('Error al cargar dashboard');
@@ -178,6 +233,10 @@ const AdminDashboard = () => {
                 <KpiCard value={stats?.inactive_clients || 0} label="Bajas" icon={UserMinus} color="#EF4444" testId="kpi-bajas" />
                 <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />
             </div>
+
+            {/* Por hacer esta semana (tarea 19) */}
+            <TodoSemana todo={todo} soloAlCorriente={soloAlCorriente} setSoloAlCorriente={setSoloAlCorriente}
+                navigate={navigate} />
 
             {/* Plan Distribution */}
             <Card className="bg-[#111111] border-[#222]" data-testid="plan-distribution">

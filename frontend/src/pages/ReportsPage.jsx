@@ -39,6 +39,46 @@ const SliderRow = ({ icon: Icon, iconColor, label, value, max, unit, onChange })
     </div>
 );
 
+const _fmtCorta = (iso) => iso ? new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '';
+
+// Estado de la ventana de envío (viernes 00:00 -> lunes 06:00).
+const WindowBanner = ({ w }) => {
+    const base = "rounded-2xl p-4 border text-sm flex items-center gap-2";
+    if (!w || !w.due) {
+        return (
+            <div className={`${base} border-border bg-muted text-foreground/60`}>
+                <Calendar className="w-4 h-4 text-foreground/40 flex-shrink-0" />
+                Esta semana no toca reporte. Te avisaremos cuando abra la ventana.
+            </div>
+        );
+    }
+    if (w.submitted) {
+        return (
+            <div className={`${base} border-green-500/40 bg-green-500/5 text-foreground`}>
+                <Calendar className="w-4 h-4 text-green-500 flex-shrink-0" />
+                Ya enviaste tu {w.tipo_label?.toLowerCase()} de esta semana. ¡Bien hecho!
+            </div>
+        );
+    }
+    if (w.is_open) {
+        return (
+            <div className={`${base} border-yellow-500/40 bg-yellow-500/5 text-foreground`}>
+                <Calendar className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                Ventana abierta: rellena tu {w.tipo_label?.toLowerCase()} antes del {w.closes_label}.
+            </div>
+        );
+    }
+    const before = w.opens_at && new Date(w.opens_at).getTime() > Date.now();
+    return (
+        <div className={`${base} ${before ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-red-500/40 bg-red-500/5'} text-foreground`}>
+            <Calendar className={`w-4 h-4 flex-shrink-0 ${before ? 'text-yellow-500' : 'text-red-500'}`} />
+            {before
+                ? `Tu reporte se rellena el fin de semana. La ventana abre el ${w.opens_label}.`
+                : 'La ventana de esta semana se cerró. Espera a la semana que viene.'}
+        </div>
+    );
+};
+
 const ReportsPage = () => {
     const { api } = useAuth();
     const [reports, setReports] = useState([]);
@@ -46,6 +86,8 @@ const ReportsPage = () => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState('form');
+    const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
+    const [prev, setPrev] = useState(null);                 // último reporte (referencia de medidas)
 
     const [reportData, setReportData] = useState({
         weight: '',
@@ -63,13 +105,17 @@ const ReportsPage = () => {
 
     const fetchData = async () => {
         try {
-            const [reportsRes, evolutionRes] = await Promise.all([
+            const [reportsRes, evolutionRes, dueRes, prevRes] = await Promise.all([
                 api.get('/reports'),
-                api.get('/reports/evolution')
+                api.get('/reports/evolution'),
+                api.get('/reports/due').catch(() => ({ data: { window: null } })),
+                api.get('/reports/previous').catch(() => ({ data: null })),
             ]);
             setReports(reportsRes.data);
             setHasMore(reportsRes.data.length === 50);
             setEvolution(evolutionRes.data);
+            setWindowState(dueRes.data?.window || null);
+            setPrev(prevRes.data && Object.keys(prevRes.data).length ? prevRes.data : null);
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
@@ -124,13 +170,15 @@ const ReportsPage = () => {
                 notes: ''
             });
         } catch (error) {
-            toast.error('Error al enviar el reporte');
+            toast.error(error?.response?.data?.detail || 'Error al enviar el reporte');
+            if (error?.response?.status === 403) fetchData();  // la ventana pudo cambiar de estado
         } finally {
             setSubmitting(false);
         }
     };
 
-    const set = (field, value) => setReportData(prev => ({ ...prev, [field]: value }));
+    const set = (field, value) => setReportData(prevData => ({ ...prevData, [field]: value }));
+    const formOpen = windowState ? (windowState.is_open && !windowState.submitted) : true;
 
     const weightData = evolution?.weight?.map(w => ({
         date: new Date(w.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
@@ -189,6 +237,8 @@ const ReportsPage = () => {
             {/* ── FORM TAB ── */}
             {activeTab === 'form' && (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    <WindowBanner w={windowState} />
+                    <fieldset disabled={!formOpen} className="space-y-4 p-0 m-0 border-0 min-w-0 disabled:opacity-50">
                     {/* Weight */}
                     <div className="bg-card border border-border rounded-2xl p-4">
                         <div className="flex items-center gap-3 mb-3">
@@ -212,6 +262,9 @@ const ReportsPage = () => {
                             />
                             <span className="text-lg text-foreground/40 font-bold">kg</span>
                         </div>
+                        {prev?.weight != null && (
+                            <p className="text-xs text-foreground/40 mt-2">Último: {prev.weight} kg{prev.created_at ? ` · ${_fmtCorta(prev.created_at)}` : ''}</p>
+                        )}
                     </div>
 
                     {/* Measurements */}
@@ -240,9 +293,12 @@ const ReportsPage = () => {
                                         step="0.1"
                                         value={reportData.measurements[key]}
                                         onChange={(e) => set('measurements', { ...reportData.measurements, [key]: e.target.value })}
-                                        placeholder="--"
+                                        placeholder={prev?.measurements?.[key] != null ? String(prev.measurements[key]) : '--'}
                                         className={inputCls}
                                     />
+                                    {prev?.measurements?.[key] != null && (
+                                        <p className="text-[10px] text-foreground/40 mt-1">antes: {prev.measurements[key]} cm</p>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -280,6 +336,7 @@ const ReportsPage = () => {
                         <Send className="w-4 h-4" />
                         {submitting ? 'Enviando...' : 'Enviar reporte'}
                     </button>
+                    </fieldset>
                 </form>
             )}
 

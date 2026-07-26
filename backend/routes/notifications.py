@@ -13,9 +13,12 @@ from core.security import get_current_user
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
-async def notify(user_id: str, type: str, title: str, link: Optional[str] = None):
+async def notify(user_id: str, type: str, title: str, link: Optional[str] = None, body: Optional[str] = None):
     """Crea una notificación para un usuario. Falla en silencio: un aviso nunca
-    debe romper la operación principal (asignar coach, guardar macros...)."""
+    debe romper la operación principal (asignar coach, guardar macros...).
+
+    `body` es el texto que escribe el coach (feedback al ajustar macros/suplementos):
+    el cliente lo lee en el panel de novedades."""
     if not user_id:
         return
     try:
@@ -24,6 +27,7 @@ async def notify(user_id: str, type: str, title: str, link: Optional[str] = None
             "user_id": user_id,
             "type": type,
             "title": title,
+            "body": (body or "").strip() or None,
             "link": link,
             "read": False,
             "created_at": datetime.now(timezone.utc).isoformat(),

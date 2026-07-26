@@ -172,61 +172,116 @@ def _client_deadline(tipo: str, due: datetime, window_start: datetime):
     return deadline, _fecha_es(deadline)
 
 
+# ==================== Ventana de envío del cliente (viernes -> lunes 6:00) ====================
+#
+# TODOS los reportes del cliente se recogen en el fin de semana de la semana de ciclo
+# en la que tocan: la ventana abre el VIERNES 00:00 y cierra el LUNES 06:00. Fuera de
+# ella el envío se bloquea ("espera a la semana que viene"). Horas en UTC (como el
+# resto del módulo); se podrían pasar a Europe/Madrid más adelante.
+
+
+def _submission_window(window_start: datetime):
+    """(apertura, cierre) de la ventana de envío: viernes 00:00 -> lunes 06:00."""
+    friday = _due_date_in_window(window_start, 4).replace(hour=0, minute=0, second=0, microsecond=0)
+    close = (friday + timedelta(days=3)).replace(hour=6, minute=0, second=0, microsecond=0)
+    return friday, close
+
+
+def _principal_label(tipos: List[str]) -> str:
+    """Etiqueta del reporte más relevante que toca (mensual > quincenal > semanal)."""
+    for t in ("mensual", "quincenal", "semanal"):
+        if t in tipos:
+            return REPORT_RULES[t]["label"]
+    return "reporte"
+
+
+def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any], now: datetime) -> Dict[str, Any]:
+    """Estado del reporte del cliente esta semana de ciclo: qué tipos tocan y la
+    ventana de envío (abierta/cerrada). Compartido por /reports/due y POST /reports."""
+    plan = catalog.get((profile.get("plan") or "").lower().strip())
+    reportes = ((plan or {}).get("habilitaciones") or {}).get("reportes") or []
+    cycle = compute_cycle(profile, now)
+    window_start = _week_window_start(profile, now)
+    tipos = [t for t in reportes if REPORT_RULES.get(t) and _tipo_due_this_week(t, cycle["week"])]
+    win_open, win_close = _submission_window(window_start)
+    return {
+        "cycle": cycle,
+        "window_start": window_start,
+        "tipos": tipos,
+        "due": bool(tipos),
+        "window_open": win_open,
+        "window_close": win_close,
+        "is_open": bool(tipos) and win_open <= now <= win_close,
+    }
+
+
 @client_router.get("/due")
 async def get_my_due_report(user=Depends(get_current_user)):
-    """Reportes que el cliente actual tiene pendientes esta semana (para el banner
-    del dashboard). Al detectar uno pendiente crea la notificación de la campanita
-    (una por tipo y semana). Devuelve {items: []} si no toca o ya lo subió."""
+    """Estado del reporte del cliente esta semana (para el banner del dashboard y el
+    formulario): qué tipos tocan y la ventana de envío (viernes 00:00 -> lunes 06:00).
+    Cuando la ventana ABRE crea la notificación de la campanita (una por semana de
+    ciclo). Devuelve {items: [], window: {...}}."""
     profile = await db.client_profiles.find_one(
         {"user_id": user["id"]},
         {"_id": 0, "id": 1, "plan": 1, "status": 1, "cycle_start": 1, "created_at": 1},
     )
     if not profile or profile.get("status") != "activo":
-        return {"items": []}
+        return {"items": [], "window": None}
 
     catalog = merged_catalog(await _overrides_by_code())
-    plan = catalog.get((profile.get("plan") or "").lower().strip())
-    reportes = ((plan or {}).get("habilitaciones") or {}).get("reportes") or []
-    if not reportes:
-        return {"items": []}
-
     now = datetime.now(timezone.utc)
-    cycle = compute_cycle(profile, now)
-    window_start = _week_window_start(profile, now)
+    state = compute_client_report_state(profile, catalog, now)
+
+    if not state["due"]:
+        return {"items": [], "window": {"due": False, "is_open": False}}
+
+    win_open, win_close = state["window_open"], state["window_close"]
+    # ¿Ya subió un reporte dentro de esta semana de ciclo?
+    submitted = await db.reports.find_one(
+        {"client_id": profile["id"], "created_at": {"$gte": state["window_start"].isoformat()}},
+        {"_id": 0, "id": 1},
+    )
+    label = _principal_label(state["tipos"])
+    closes_label = f"{_fecha_es(win_close)} a las 6:00"
+    opens_label = _fecha_es(win_open)
+    window = {
+        "due": True,
+        "is_open": state["is_open"],
+        "submitted": bool(submitted),
+        "opens_at": win_open.isoformat(),
+        "closes_at": win_close.isoformat(),
+        "opens_label": opens_label,
+        "closes_label": closes_label,
+        "tipo_label": label,
+    }
 
     items = []
-    for tipo in reportes:
-        rule = REPORT_RULES.get(tipo)
-        if not rule or not _tipo_due_this_week(tipo, cycle["week"]):
-            continue
-        # ¿Ya subió un reporte dentro de esta semana de ciclo?
-        submitted = await db.reports.find_one(
-            {"client_id": profile["id"], "created_at": {"$gte": window_start.isoformat()}},
-            {"_id": 0, "id": 1},
-        )
-        if submitted:
-            continue
-        due = _due_date_in_window(window_start, rule["due_weekday"])
-        deadline, deadline_label = _client_deadline(tipo, due, window_start)
-        items.append({
-            "tipo": tipo,
-            "tipo_label": rule["label"],
-            "deadline": deadline.isoformat(),
-            "deadline_label": deadline_label,
-            "overdue": now > deadline,
-        })
+    if not submitted:
+        for tipo in state["tipos"]:
+            rule = REPORT_RULES[tipo]
+            items.append({
+                "tipo": tipo,
+                "tipo_label": rule["label"],
+                "deadline": win_close.isoformat(),
+                "deadline_label": closes_label,
+                "overdue": now > win_close,
+                "is_open": state["is_open"],
+                "opens_label": opens_label,
+            })
 
-        # Campanita: una notificación por tipo y semana de ciclo.
-        title = f"Esta semana toca tu {rule['label'].lower()}: rellénalo antes del {deadline_label}"
-        already = await db.notifications.find_one({
-            "user_id": user["id"], "type": "reporte",
-            "created_at": {"$gte": window_start.isoformat()},
-            "title": {"$regex": f"^Esta semana toca tu {rule['label'].lower()}"},
-        }, {"_id": 0, "id": 1})
-        if not already:
-            await notify(user["id"], "reporte", title, "/dashboard/reports")
+        # Campanita cuando la ventana está ABIERTA (aviso del viernes, tarea 11+13).
+        # Una sola por semana de ciclo.
+        if state["is_open"]:
+            title = f"Ya puedes rellenar tu {label.lower()}: tienes hasta el {closes_label}"
+            already = await db.notifications.find_one({
+                "user_id": user["id"], "type": "reporte",
+                "created_at": {"$gte": state["window_start"].isoformat()},
+                "title": {"$regex": "^Ya puedes rellenar tu"},
+            }, {"_id": 0, "id": 1})
+            if not already:
+                await notify(user["id"], "reporte", title, "/dashboard/reports")
 
-    return {"items": items}
+    return {"items": items, "window": window}
 
 
 @router.post("/mark")

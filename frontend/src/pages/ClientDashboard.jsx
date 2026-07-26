@@ -308,19 +308,25 @@ const ClientDashboard = () => {
                         <p className="text-foreground font-semibold text-sm">
                             {r.overdue
                                 ? `Tu ${r.tipo_label.toLowerCase()} está fuera de plazo`
-                                : `Tienes tu ${r.tipo_label.toLowerCase()} pendiente`}
+                                : r.is_open
+                                    ? `Tienes tu ${r.tipo_label.toLowerCase()} pendiente`
+                                    : `Este fin de semana toca tu ${r.tipo_label.toLowerCase()}`}
                         </p>
                         <p className="text-muted-foreground text-xs">
                             {r.overdue
-                                ? 'El plazo ya pasó: rellénalo cuanto antes para que tu coach pueda ajustar tu plan.'
-                                : `Rellénalo antes del ${r.deadline_label}.`}
+                                ? 'La ventana de esta semana se cerró; podrás enviarlo la próxima.'
+                                : r.is_open
+                                    ? `Rellénalo antes del ${r.deadline_label}.`
+                                    : `La ventana abre el ${r.opens_label}.`}
                         </p>
                     </div>
-                    <button onClick={() => navigate('/dashboard/reports')}
-                        className="btn-brand flex items-center gap-1.5 text-sm flex-shrink-0 self-start sm:self-auto"
-                        data-testid={`due-report-btn-${r.tipo}`}>
-                        Hacer reporte <ChevronRight className="w-4 h-4" />
-                    </button>
+                    {r.is_open && (
+                        <button onClick={() => navigate('/dashboard/reports')}
+                            className="btn-brand flex items-center gap-1.5 text-sm flex-shrink-0 self-start sm:self-auto"
+                            data-testid={`due-report-btn-${r.tipo}`}>
+                            Hacer reporte <ChevronRight className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
             ))}
 
@@ -700,6 +706,7 @@ const ClientLayout = () => {
                                         {!n.read && <span className="w-2 h-2 rounded-full bg-brand mt-1.5 flex-shrink-0" />}
                                         <div className="flex-1 min-w-0">
                                             <p className={`text-sm ${n.read ? 'text-muted-foreground' : 'text-foreground font-medium'}`}>{n.title}</p>
+                                            {n.body && <p className="text-xs text-foreground/80 mt-1 whitespace-pre-wrap">"{n.body}"</p>}
                                             <p className="text-[11px] text-muted-foreground mt-0.5">{notifTime(n.created_at)}</p>
                                         </div>
                                     </div>
