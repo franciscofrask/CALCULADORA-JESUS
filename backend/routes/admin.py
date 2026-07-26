@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse, Response
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
+import asyncio
 import uuid
 import os
 
@@ -201,6 +202,12 @@ def _sanea_peso(w):
     if 300 < w <= 1000:
         w /= 10.0
     return round(w, 1) if 25 < w < 300 else None
+
+
+def _refrescar_casos():
+    """Rehace el banco de casos (clientes gemelos) sin bloquear la respuesta."""
+    import macro_casos
+    asyncio.create_task(macro_casos.refrescar_en_segundo_plano())
 
 
 def _delta_vs_propuesta(propuesta, training, rest, peri):
@@ -595,6 +602,9 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
 
     await db.macro_history.insert_one(macro_log)
 
+    # El banco de casos (clientes gemelos) se refresca solo con cada ajuste nuevo.
+    _refrescar_casos()
+
     await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition", body=data.note)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Actualizó macros de {(client_user or {}).get('name') or client_id} (manual)")
@@ -662,6 +672,8 @@ async def evaluar_macro_history_entry(client_id: str, entry_id: str, data: Macro
         "evaluado_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.macro_history.update_one({"id": entry_id}, {"$set": {"evaluacion": evaluacion}})
+    # Los casos con evaluacion pesan mas al buscar gemelos: refrescamos el banco.
+    _refrescar_casos()
     return {"id": entry_id, "evaluacion": evaluacion}
 
 

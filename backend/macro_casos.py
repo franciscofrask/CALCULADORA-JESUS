@@ -229,13 +229,25 @@ def construir_casos(clientes: List[Dict]) -> List[Dict]:
 
 
 async def reconstruir() -> Dict:
-    """Rehace el banco entero (idempotente: se puede lanzar cuantas veces haga falta)."""
+    """Rehace el banco entero (idempotente: se puede lanzar cuantas veces haga falta).
+
+    Se construye en una coleccion aparte y se renombra encima al final, para que el
+    banco nunca quede vacio o a medias mientras alguien pide una sugerencia.
+    """
     clientes = await _cartera()
     casos = construir_casos(clientes)
-    await db.macro_casos.delete_many({})
     if casos:
-        await db.macro_casos.insert_many(casos)
-        await db.macro_casos.create_index([("sexo", 1), ("fase", 1)])
+        await db.macro_casos_tmp.drop()
+        await db.macro_casos_tmp.insert_many(casos)
+        await db.macro_casos_tmp.create_index([("sexo", 1), ("fase", 1)])
+        try:
+            await db.macro_casos_tmp.rename("macro_casos", dropTarget=True)
+        except Exception:
+            # Sin permiso de rename: reemplazo directo (deja un hueco de milisegundos).
+            await db.macro_casos.delete_many({})
+            await db.macro_casos.insert_many(casos)
+            await db.macro_casos.create_index([("sexo", 1), ("fase", 1)])
+            await db.macro_casos_tmp.drop()
     con_movimiento = sum(1 for c in casos if c["movimiento"])
     return {
         "clientes": len(clientes),
@@ -246,6 +258,30 @@ async def reconstruir() -> Dict:
         "con_cumplimiento": sum(1 for c in casos if c.get("cumplimiento")),
         "con_evaluacion": sum(1 for c in casos if c.get("evaluacion")),
     }
+
+
+# El banco se rehace solo cuando cambia algo (guardar macros, evaluar una fase). Tarda
+# unos segundos, asi que va en segundo plano y nunca bloquea la respuesta al coach.
+_reconstruyendo = asyncio.Lock()
+_pendiente = False
+
+
+async def refrescar_en_segundo_plano() -> None:
+    """Relanza la reconstruccion sin solaparla. Si llega otra peticion mientras corre,
+    se encola una sola pasada mas al terminar (no una por cada guardado)."""
+    global _pendiente
+    if _reconstruyendo.locked():
+        _pendiente = True
+        return
+    async with _reconstruyendo:
+        while True:
+            _pendiente = False
+            try:
+                await reconstruir()
+            except Exception as e:      # nunca debe tumbar lo que lo llamo
+                print(f"[macro_casos] fallo al reconstruir el banco: {e}")
+            if not _pendiente:
+                return
 
 
 # ---------------------------------------------------------------- recuperacion
