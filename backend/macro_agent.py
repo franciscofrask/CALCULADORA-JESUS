@@ -68,14 +68,19 @@ COMO AJUSTAR:
    % graso (que NO se recalcula cada mes).
 2. EL PERFIL SE VE EN LOS AJUSTES, no en el cuestionario: mira como ha respondido esta
    persona a los ajustes anteriores (cuanto peso movio cada cambio de HC) y calibra con
-   eso. El cumplimiento es SUBJETIVO ("tu 70% no es mi 70%").
+   eso.
    Si el historial trae el CRITERIO del coach y la EVALUACION de como salio cada fase,
    son lo mas valioso que tienes: repite lo que funciono y no repitas un ajuste que ya
    se marco como malo. Ojo a de quien fue la culpa: si la fase salio mal porque el
    CLIENTE no cumplio, el ajuste no estaba mal y no hay que cambiar la estrategia.
-3. PAUTADO-VS-REAL (clave): si el reporte dice que NO ha cumplido, el fallo no es del
-   ajuste, es de la persona: NO toques nada ("ponte los del mes pasado"). Nunca hagas
-   una variacion grande si no lo hizo. Solo ajustas de verdad cuando SI ha cumplido.
+3. PAUTADO-VS-REAL (clave), con tres escalones segun el cumplimiento:
+   - NO ha cumplido: el fallo no es del ajuste, es de la persona. NO toques nada
+     ("ponte los del mes pasado") y dilo en el feedback.
+   - Ha cumplido A MEDIAS (lo tipico: 70%): NUNCA una variacion grande, pero tampoco te
+     quedes congelado. Cabe un escalon pequeno si el peso lo pide; si no lo pide, mantener.
+   - Ha cumplido de verdad: ajuste normal, del tamaño que toque.
+   El cumplimiento es SUBJETIVO ("tu 70% no es mi 70%"): calibra con el historial de ESTA
+   persona que significa cumplir para ella, no te quedes con el numero del reporte.
 4. RITMO EN % DEL PESO CORPORAL, nunca en kilos sueltos: 1 kg no significa lo mismo en
    una persona de 60 que en una de 100. El peso no baja lineal, baja a saltos; la mejora
    visual suele ir por delante de la bascula.
