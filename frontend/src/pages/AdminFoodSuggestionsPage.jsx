@@ -4,6 +4,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
+import { useConfirm } from '../components/ui/confirm';
 import { Check, X, Pencil, Trash2, Plus, Loader2, ExternalLink, ImageOff } from 'lucide-react';
 import CategorySelect from '../components/nutrition/CategorySelect';
 
@@ -99,6 +100,7 @@ const emptyFood = { nombre: '', por_unidad: false, racion: 100, proteinas: '', h
 
 const AdminFoodSuggestionsPage = () => {
     const { api } = useAuth();
+    const { confirm, prompt } = useConfirm();
     const [tab, setTab] = useState('pending');   // pending | all
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -158,7 +160,11 @@ const AdminFoodSuggestionsPage = () => {
 
     const approve = async (s) => {
         if (!s.categorias) {
-            if (!window.confirm('Este alimento no tiene categorías asignadas. ¿Aprobarlo igualmente?')) return;
+            if (!await confirm({
+                title: 'Este alimento no tiene categorías',
+                description: 'Sin categorías no aparecerá en los filtros del buscador. ¿Lo apruebas igualmente?',
+                confirmLabel: 'Aprobar igualmente',
+            })) return;
         }
         setBusy(s.id);
         try {
@@ -170,7 +176,12 @@ const AdminFoodSuggestionsPage = () => {
     };
 
     const reject = async (s) => {
-        const motivo = window.prompt('Motivo del rechazo (opcional):', '');
+        const motivo = await prompt({
+            title: 'Rechazar la sugerencia',
+            description: 'Puedes explicar por qué, para que el cliente lo entienda.',
+            placeholder: 'Ej: ya está en la calculadora con otro nombre',
+            confirmLabel: 'Rechazar', optional: true, danger: true,
+        });
         if (motivo === null) return;
         setBusy(s.id);
         try {
@@ -182,7 +193,11 @@ const AdminFoodSuggestionsPage = () => {
     };
 
     const remove = async (s) => {
-        if (!window.confirm('¿Eliminar esta sugerencia y sus fotos? No se puede deshacer.')) return;
+        if (!await confirm({
+            title: '¿Eliminar esta sugerencia?',
+            description: 'Se borra junto con sus fotos y no se puede deshacer.',
+            confirmLabel: 'Eliminar', danger: true,
+        })) return;
         setBusy(s.id);
         try {
             await api.delete(`/admin/food-suggestions/${s.id}`);

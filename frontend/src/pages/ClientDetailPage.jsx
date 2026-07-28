@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
+import { useConfirm } from '../components/ui/confirm';
 import { PlanBadge } from './ClientDashboard';
 import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel } from '../lib/labels';
 import CoachCheckins from '../components/CoachCheckins';
@@ -219,6 +220,7 @@ const ClientDetailPage = () => {
     const { clientId } = useParams();
     const navigate = useNavigate();
     const { api, user: adminUser, planCatalog } = useAuth();
+    const { confirm } = useConfirm();
     // Planes asignables del catálogo (excluye complementos), para el selector de plan.
     const assignablePlans = Object.values(planCatalog || {}).filter(p => p.asignable);
     const [client, setClient] = useState(null);
@@ -392,7 +394,11 @@ const ClientDetailPage = () => {
     };
 
     const deleteMacroEntry = async (h) => {
-        if (!window.confirm('¿Eliminar esta entrada del historial de macros? No cambia los macros actuales del cliente.')) return;
+        if (!await confirm({
+            title: '¿Eliminar esta entrada del historial?',
+            description: 'Se borra el registro de ese cambio. No afecta a los macros que el cliente tiene ahora.',
+            confirmLabel: 'Eliminar', danger: true,
+        })) return;
         try { await api.delete(`/admin/clients/${clientId}/macro-history/${h.id}`); toast.success('Entrada eliminada'); fetchClient(); }
         catch { toast.error('No se pudo eliminar la entrada'); }
     };
@@ -418,7 +424,11 @@ const ClientDetailPage = () => {
             catch { toast.error('No se pudo reactivar'); }
             return;
         }
-        if (!window.confirm('¿Dar de baja a este usuario? No podrá entrar, pero los datos se conservan y se puede reactivar.')) return;
+        if (!await confirm({
+            title: '¿Dar de baja a este usuario?',
+            description: 'No podrá entrar, pero los datos se conservan y se puede reactivar cuando quieras.',
+            confirmLabel: 'Dar de baja', danger: true,
+        })) return;
         try { await api.delete(`/admin/users/${uid}`); toast.success('Usuario dado de baja'); fetchClient(); }
         catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo dar de baja'); }
     };

@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
+import { useConfirm } from '../components/ui/confirm';
 import { Pill, Plus, Pencil, Trash2, Loader2, Save } from 'lucide-react';
 import { suplementoCatLabel, sexoLabel, objetivoLabel } from '../lib/labels';
 
@@ -24,6 +25,7 @@ const EMPTY = { titulo: '', imagen: '', enlaces: [], cuando: '', cuanto: '', obs
 
 const SupplementsCatalogPage = () => {
     const { api } = useAuth();
+    const { confirm } = useConfirm();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState({ open: false, item: null });
@@ -58,7 +60,11 @@ const SupplementsCatalogPage = () => {
     };
 
     const del = async (it) => {
-        if (!window.confirm(`¿Desactivar "${it.titulo}"?`)) return;
+        if (!await confirm({
+            title: `¿Desactivar "${it.titulo}"?`,
+            description: 'Deja de estar disponible para asignarlo a clientes. Se puede volver a activar.',
+            confirmLabel: 'Desactivar', danger: true,
+        })) return;
         try { await api.delete(`/admin/supplements/catalog/${it.id}`); toast.success('Desactivado'); load(); }
         catch (e) { toast.error('Error'); }
     };

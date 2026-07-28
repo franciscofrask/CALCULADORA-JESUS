@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useConfirm } from '../components/ui/confirm';
 import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download, ClipboardList } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -13,6 +14,7 @@ const loadPersisted = () => {
 };
 
 export default function ChatbotPage() {
+  const { confirm } = useConfirm();
   const navigate = useNavigate();
 
   // Snapshot persistido leído una sola vez al montar
@@ -515,9 +517,11 @@ export default function ChatbotPage() {
         const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
         autoSyncRef.current.decided = true;
         if (hasFood) {
-          const ok = window.confirm(
-            `Ya tienes una dieta guardada el ${formatDateLabel(targetDate)}. ¿Quieres que el chatbot la vaya actualizando con esta?`
-          );
+          const ok = await confirm({
+            title: `Ya tienes una dieta el ${formatDateLabel(targetDate)}`,
+            description: '¿Quieres que la vaya actualizando con lo que montemos aquí?',
+            confirmLabel: 'Sí, actualizarla', cancelLabel: 'No, dejarla',
+          });
           autoSyncRef.current.enabled = ok;
           if (!ok) {
             addMessage('Vale, no tocaré tu dieta guardada. Podrás volcarla manualmente al terminar.', false);
@@ -705,7 +709,11 @@ export default function ChatbotPage() {
         const ex = await exRes.json();
         const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
         if (hasFood) {
-          const ok = window.confirm(`Ya tienes una dieta guardada el ${formatDateLabel(targetDate)}. ¿Sobrescribirla?`);
+          const ok = await confirm({
+            title: `Ya tienes una dieta el ${formatDateLabel(targetDate)}`,
+            description: 'Si sigues, se sustituye por esta.',
+            confirmLabel: 'Sobrescribir', danger: true,
+          });
           if (!ok) { setSaving(false); return; }
           force = true;
         }
@@ -719,7 +727,11 @@ export default function ChatbotPage() {
       const data = await res.json();
 
       if (data.needs_confirmation) {
-        const ok = window.confirm(data.message || '¿Sobrescribir la dieta existente?');
+        const ok = await confirm({
+          title: '¿Sobrescribir la dieta existente?',
+          description: data.message || 'Ese día ya tiene alimentos guardados.',
+          confirmLabel: 'Sobrescribir', danger: true,
+        });
         if (ok) { setSaving(false); return saveToDiet(true); }
         setSaving(false);
         return;

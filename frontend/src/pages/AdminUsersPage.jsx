@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
+import { useConfirm } from '../components/ui/confirm';
 import { Search, Pencil, UserX, RotateCcw, Loader2, Shield, KeyRound } from 'lucide-react';
 
 const ROLES = [
@@ -22,6 +23,7 @@ const EMPTY_EDIT = { name: '', email: '', phone: '', role: 'client', plan: '', c
 
 const AdminUsersPage = () => {
     const { api, user: me, planCatalog } = useAuth();
+    const { confirm } = useConfirm();
     const assignablePlans = Object.values(planCatalog || {}).filter(p => p.asignable);
     const planName = (code) => planCatalog?.[code]?.name || code;
     const [users, setUsers] = useState([]);
@@ -76,7 +78,11 @@ const AdminUsersPage = () => {
     };
 
     const softDelete = async (u) => {
-        if (!window.confirm(`¿Dar de baja a ${u.name || u.email}? No podrá entrar, pero los datos se conservan y se puede reactivar.`)) return;
+        if (!await confirm({
+            title: `¿Dar de baja a ${u.name || u.email}?`,
+            description: 'No podrá entrar, pero los datos se conservan y se puede reactivar cuando quieras.',
+            confirmLabel: 'Dar de baja', danger: true,
+        })) return;
         try { await api.delete(`/admin/users/${u.id}`); toast.success('Usuario dado de baja'); load(); }
         catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo dar de baja'); }
     };
@@ -88,7 +94,11 @@ const AdminUsersPage = () => {
     // Restablecer contraseña: genera una temporal y la muestra una sola vez
     const [resetResult, setResetResult] = useState(null);
     const resetPassword = async (u) => {
-        if (!window.confirm(`¿Generar una contraseña nueva para ${u.name || u.email}? La actual dejará de funcionar.`)) return;
+        if (!await confirm({
+            title: `¿Generar una contraseña nueva para ${u.name || u.email}?`,
+            description: 'La actual dejará de funcionar. Verás la nueva una sola vez para pasársela.',
+            confirmLabel: 'Generar',
+        })) return;
         try {
             const r = await api.post(`/admin/users/${u.id}/reset-password`);
             setResetResult({ user: u, temp_password: r.data.temp_password });

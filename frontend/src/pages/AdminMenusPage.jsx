@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
+import { useConfirm } from '../components/ui/confirm';
 import { Utensils, Plus, Pencil, Trash2, Loader2, Save, X } from 'lucide-react';
 
 const MOMENTOS = ['desayuno', 'comida', 'merienda', 'cena'];
@@ -75,6 +76,7 @@ function FoodPicker({ api, nombre, onPick }) {
 
 const AdminMenusPage = () => {
     const { api } = useAuth();
+    const { confirm } = useConfirm();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filtro, setFiltro] = useState('todos');
@@ -138,7 +140,11 @@ const AdminMenusPage = () => {
     };
 
     const del = async (it) => {
-        if (!window.confirm(`¿Borrar el menú "${it.nombre}"? Esto lo quita del listado.`)) return;
+        if (!await confirm({
+            title: `¿Borrar el menú "${it.nombre}"?`,
+            description: 'Desaparece del listado y deja de proponerse a los clientes.',
+            confirmLabel: 'Borrar', danger: true,
+        })) return;
         try { await api.delete(`/admin/menu-templates/${it.id}`); toast.success('Menú borrado'); load(); }
         catch (e) { toast.error('Error al borrar'); }
     };

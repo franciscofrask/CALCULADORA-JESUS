@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ConfirmProvider } from "./components/ui/confirm";
 import { OnboardingProvider } from "./context/OnboardingContext";
 import { ThemeProvider } from "./context/ThemeContext";
 
@@ -190,11 +191,13 @@ function App() {
         <ThemeProvider>
             <BrowserRouter>
                 <AuthProvider>
-                    <OnboardingProvider>
-                        <AppRoutes />
-                        <Toaster position="top-center" richColors />
-                        <InstallPrompt />
-                    </OnboardingProvider>
+                    <ConfirmProvider>
+                        <OnboardingProvider>
+                            <AppRoutes />
+                            <Toaster position="top-center" richColors />
+                            <InstallPrompt />
+                        </OnboardingProvider>
+                    </ConfirmProvider>
                 </AuthProvider>
             </BrowserRouter>
         </ThemeProvider>
