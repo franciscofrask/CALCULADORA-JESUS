@@ -80,13 +80,22 @@ const CategoryRail = ({
 
     const clampStyle = (collapsible && !expanded) ? { maxHeight: collapsedMaxH, overflow: 'hidden' } : undefined;
 
+    // El tooltip de la categoría SELECCIONADA se queda abierto: en tablet y móvil no hay
+    // hover, así que sin esto no se puede saber qué categoría está aplicada. El resto se
+    // abren y cierran con el ratón como siempre (`abierta` guarda cuál lo está).
+    const [abierta, setAbierta] = useState(null);
+
     const pills = (
         <div ref={wrapRef} style={clampStyle} className="flex items-center gap-1.5 flex-wrap py-1">
             {categories.map((cat) => {
                 const selected = isSelected(cat.value);
                 const iconNode = renderIcon(cat.icon, 'w-4 h-4');
                 return (
-                    <Tooltip key={cat.value || '__all__'}>
+                    <Tooltip
+                        key={cat.value || '__all__'}
+                        open={selected || abierta === cat.value}
+                        onOpenChange={(o) => setAbierta(o ? cat.value : null)}
+                    >
                         <TooltipTrigger asChild>
                             <button
                                 type="button"
