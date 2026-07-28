@@ -17,6 +17,15 @@ export default function ChatbotPage() {
   const { confirm } = useConfirm();
   const navigate = useNavigate();
 
+  // Movil: algunos textos van abreviados para que quepan en una linea.
+  const [esMovil, setEsMovil] = useState(() => window.matchMedia('(max-width: 640px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const on = (e) => setEsMovil(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+
   // Snapshot persistido leído una sola vez al montar
   const persistedRef = useRef(undefined);
   if (persistedRef.current === undefined) persistedRef.current = loadPersisted();
@@ -820,18 +829,26 @@ export default function ChatbotPage() {
     // el header y el input quedan fijos y solo la zona de mensajes hace scroll.
     <div className="h-[calc(100dvh-8.5rem)] lg:h-screen bg-background text-foreground flex flex-col">
       {/* Header */}
-      <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
+      <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
             <Bot size={24} />
           </div>
-          <div>
-            <h1 className="font-bold" data-testid="chatbot-heading">Asistente de Nutrición</h1>
-            <p className="text-xs text-muted-foreground">
+          <div className="min-w-0">
+            <h1 className="font-bold truncate" data-testid="chatbot-heading">Asistente de Nutrición</h1>
+            {/* En movil el detalle va abreviado y en una sola linea: la version larga
+                ocupaba tres y dejaba la conversacion en un tercio de la pantalla. */}
+            <p className="text-xs text-muted-foreground truncate">
               {step === 'building_meal' && (
                 <>
-                  {mealNombre} • Falta: proteína {macrosRestantes.P} g · hidratos {macrosRestantes.H} g · grasa {macrosRestantes.G} g
-                  {dayOverview && ` · Día: ${dayOverview.completas}/${dayOverview.total_comidas} comidas`}
+                  <span className="sm:hidden">
+                    {mealNombre} · faltan {macrosRestantes.P}P · {macrosRestantes.H}H · {macrosRestantes.G}G
+                    {dayOverview && ` · ${dayOverview.completas}/${dayOverview.total_comidas}`}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {mealNombre} • Falta: proteína {macrosRestantes.P} g · hidratos {macrosRestantes.H} g · grasa {macrosRestantes.G} g
+                    {dayOverview && ` · Día: ${dayOverview.completas}/${dayOverview.total_comidas} comidas`}
+                  </span>
                 </>
               )}
               {step === 'complete' && '¡Día completo!'}
@@ -840,9 +857,9 @@ export default function ChatbotPage() {
             </p>
           </div>
         </div>
-        <button 
+        <button
           onClick={resetChat}
-          className="p-2 hover:bg-muted rounded-lg transition-colors"
+          className="p-2 hover:bg-muted rounded-lg transition-colors flex-shrink-0"
           title="Reiniciar"
         >
           <RefreshCw size={20} />
@@ -1024,7 +1041,9 @@ export default function ChatbotPage() {
               className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl font-semibold text-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
               data-testid="save-meal-btn"
             >
-              <Check size={16} /> Guardar y siguiente
+              <Check size={16} />
+              <span className="sm:hidden">Guardar</span>
+              <span className="hidden sm:inline">Guardar y siguiente</span>
             </button>
             <button
               onClick={requestSuggestions}
@@ -1032,14 +1051,16 @@ export default function ChatbotPage() {
               className="bg-muted hover:bg-accent border border-input text-foreground px-3 py-2 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
               data-testid="suggest-foods-btn"
             >
-              Sugerir alimentos
+              <span className="sm:hidden">Sugerir</span>
+              <span className="hidden sm:inline">Sugerir alimentos</span>
             </button>
             <button
               onClick={() => addMessage(formatDayOverview(dayOverview), false)}
               disabled={loading || !dayOverview}
               className="bg-muted hover:bg-accent border border-input text-foreground px-3 py-2 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
             >
-              Resumen del día
+              <span className="sm:hidden">Resumen</span>
+              <span className="hidden sm:inline">Resumen del día</span>
             </button>
           </div>
 
@@ -1051,8 +1072,11 @@ export default function ChatbotPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder='Escribe qué quieres comer, o pídeme cosas como "edita la comida 2" o "vacía el post-entreno"…'
-              className="flex-1 bg-muted border border-input rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
+              // En movil el placeholder largo se corta a mitad de frase y no se entiende.
+              placeholder={esMovil
+                ? 'Escribe qué quieres comer…'
+                : 'Escribe qué quieres comer, o pídeme cosas como "edita la comida 2" o "vacía el post-entreno"…'}
+              className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
               disabled={loading}
               data-testid="chat-input"
             />
