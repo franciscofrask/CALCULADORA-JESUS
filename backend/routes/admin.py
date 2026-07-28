@@ -205,9 +205,11 @@ def _sanea_peso(w):
 
 
 def _refrescar_casos():
-    """Rehace el banco de casos (clientes gemelos) sin bloquear la respuesta."""
-    import macro_casos
+    """Rehace el banco de casos (gemelos) y los indices/perfiles, sin bloquear la
+    respuesta: los dos salen del mismo camino, asi que se refrescan juntos."""
+    import macro_casos, macro_indices
     asyncio.create_task(macro_casos.refrescar_en_segundo_plano())
+    asyncio.create_task(macro_indices.refrescar_en_segundo_plano())
 
 
 def _delta_vs_propuesta(propuesta, training, rest, peri):
@@ -267,8 +269,10 @@ async def reconstruir_macro_casos(user = Depends(get_admin_only_user)):
     Hay que lanzarlo de vez en cuando (los ajustes y las evaluaciones nuevas no entran
     solos). Es idempotente: borra y reconstruye.
     """
-    import macro_casos
-    return await macro_casos.reconstruir()
+    import macro_casos, macro_indices
+    casos = await macro_casos.reconstruir()
+    indices = await macro_indices.reconstruir()
+    return {"casos": casos, "indices_y_perfiles": indices}
 
 
 @router.post("/clients/{client_id}/sugerir-ajuste")
@@ -352,9 +356,10 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         })
     historial.sort(key=lambda x: x["fecha"])
 
-    # Memoria de la cartera: casos parecidos de OTROS clientes (el "cliente gemelo"),
-    # con lo que se hizo entonces y como salio. Ver backend/macro_casos.py.
-    import macro_casos
+    # Memoria de la cartera: el PERFIL de este cliente (motor x respondedor, derivado de
+    # su camino), las REGLAS de ajuste de ese perfil y los casos parecidos de otros
+    # clientes. Ver backend/macro_indices.py y backend/macro_casos.py.
+    import macro_casos, macro_indices
     peso_actual = evolucion[-1]["peso"] if evolucion else _sanea_peso(profile.get("weight"))
     hc_ent = (macros_actuales["entreno"] or {}).get("carbs") or (macros_actuales["entreno"] or {}).get("hidratos")
     ref = {
@@ -363,8 +368,19 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         "hc_entreno_kg": round(hc_ent / peso_actual, 2) if hc_ent and peso_actual else None,
         "cumplimiento": (reporte or {}).get("cumplimiento_dieta"),
     }
+    perfil_ix, reglas_perfil, mismo_perfil = None, [], None
     try:
-        gemelos = await macro_casos.buscar_gemelos(ref, k=8, excluir_client_id=client_id)
+        perfil_ix = await macro_indices.perfil_de(client_id)
+        if perfil_ix:
+            reglas_perfil = await macro_indices.reglas_de(perfil_ix["perfil"], fase)
+            mismo_perfil = {d["client_id"] async for d in db.macro_indices.find(
+                {"perfil": perfil_ix["perfil"]}, {"_id": 0, "client_id": 1})}
+            mismo_perfil.discard(client_id)
+    except Exception:
+        pass   # los indices pueden no estar construidos todavia
+    try:
+        gemelos = await macro_casos.buscar_gemelos(ref, k=8, excluir_client_id=client_id,
+                                                   mismo_perfil=mismo_perfil)
     except Exception:
         gemelos = []   # el banco puede no estar construido todavia
 
@@ -372,13 +388,27 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         macros_actuales=macros_actuales, sexo=sexo, fase=fase, evolucion_peso=evolucion,
         reporte=reporte, historial_ajustes=historial,
         biotipo=(profile.get("nivel1") or {}).get("biotype"), porcentaje_graso=profile.get("body_fat"),
-        casos_gemelos=macro_casos.formatear_gemelos(gemelos))
+        casos_gemelos=macro_casos.formatear_gemelos(gemelos),
+        perfil=macro_indices.formatear_para_prompt(perfil_ix, reglas_perfil))
     out = await macro_agent.sugerir_ajuste(ctx)
     if isinstance(out, dict) and out.get("propuesta"):
         out["guardarrail"] = macro_agent.validar(out["propuesta"], macros_actuales, out.get("avisos", []))
     out["contexto_usado"] = {"fase": fase, "sexo": sexo, "n_pesos": len(evolucion),
                              "n_historial": len(historial), "tiene_reporte": bool(reporte),
-                             "n_gemelos": len(gemelos)}
+                             "n_gemelos": len(gemelos), "n_reglas_perfil": len(reglas_perfil)}
+    if perfil_ix:
+        out["perfil"] = {
+            "etiqueta": perfil_ix.get("perfil"),
+            "motor": perfil_ix.get("perfil_motor"),
+            "respondedor": perfil_ix.get("perfil_respondedor"),
+            "techo_hc": perfil_ix.get("techo_hc"),
+            "suelo_hc": perfil_ix.get("suelo_hc"),
+            "hc_kg_techo": perfil_ix.get("hc_kg_techo"),
+            "indice_hidrato_grasa_techo": perfil_ix.get("indice_hidrato_grasa_techo"),
+            "umbral_volumen": perfil_ix.get("umbral_volumen"),
+            "umbral_definicion": perfil_ix.get("umbral_definicion"),
+            "ratio_recomposicion": perfil_ix.get("ratio_recomposicion"),
+        }
     out["contexto_decision"] = _contexto_decision(evolucion, reporte)
 
     # Toda sugerencia queda registrada. Cuando el coach guarde los macros diremos si

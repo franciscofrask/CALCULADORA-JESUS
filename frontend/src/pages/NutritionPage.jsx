@@ -896,14 +896,20 @@ const NutritionPage = () => {
         });
     };
 
+    // Vaciar sin el confirm del navegador: ese dialogo bloquea la pestaña entera y no
+    // pega con el resto de la app. Se vacia directamente y se ofrece deshacer, que en
+    // movil es mas comodo y sigue siendo reversible.
     const clearMeal = (mealKey) => {
-        if (window.confirm(`¿Vaciar todos los ingredientes de ${mealInfo[mealKey].name}?`)) {
-            setMealsData(prev => ({
-                ...prev,
-                [mealKey]: { alimentos: [] }
-            }));
-            toast.success('Comida vaciada');
-        }
+        const previo = mealsData[mealKey];
+        const nombre = mealInfo[mealKey]?.name || 'La comida';
+        setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: [] } }));
+        toast.success(`${nombre} vaciada`, {
+            duration: 8000,
+            action: {
+                label: 'Deshacer',
+                onClick: () => setMealsData(prev => ({ ...prev, [mealKey]: previo })),
+            },
+        });
     };
 
     // Repeat from another day

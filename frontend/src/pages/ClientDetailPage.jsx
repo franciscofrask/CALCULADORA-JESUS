@@ -37,6 +37,18 @@ const hoyISO = (dias = 0) => {
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
 
+// Fecha de una dieta. Hay documentos antiguos con la fecha corrupta (basura que dejo el
+// harness de simulacion antes de que la ruta validara el formato): antes salia
+// "Invalid Date" y dejaba la lista inservible.
+const _fechaDieta = (f, opts = { day: 'numeric', month: 'short', year: 'numeric' }) => {
+    if (typeof f !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(f)) return 'Sin fecha válida';
+    const d = new Date(f + 'T12:00:00');
+    return isNaN(d) ? 'Sin fecha válida' : d.toLocaleDateString('es-ES', opts);
+};
+
+// Colores de los dos ejes del perfil (motor y respondedor): alto verde, bajo rojo.
+const MOTOR_COLOR = { alto: 'text-emerald-400', medio: 'text-amber-400', bajo: 'text-red-400' };
+
 const _fechaLarga = (iso) => iso
     ? new Date(iso + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
     : '';
@@ -713,6 +725,20 @@ const ClientDetailPage = () => {
                                     <p className="text-xs font-bold text-white uppercase tracking-wider">Ajuste sugerido por el asistente</p>
                                     <span className="text-white/30 text-[10px] ml-auto">confianza: {sugerencia.confianza || '—'}{sugerencia._modelo ? ` · ${sugerencia._modelo}` : ''}</span>
                                 </div>
+                                {/* Perfil derivado del camino del cliente (motor x respondedor) */}
+                                {sugerencia.perfil && (
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
+                                        <span className="text-white/40 uppercase tracking-wider text-[10px]">Perfil</span>
+                                        <span className="text-white/50">Motor <b className={MOTOR_COLOR[sugerencia.perfil.motor] || 'text-white'}>{sugerencia.perfil.motor || 'sin dato'}</b>
+                                            {sugerencia.perfil.hc_kg_techo != null && <span className="text-white/30"> ({sugerencia.perfil.hc_kg_techo} g HC/kg en su techo)</span>}</span>
+                                        <span className="text-white/50">Respondedor <b className={MOTOR_COLOR[sugerencia.perfil.respondedor] || 'text-white/40'}>{sugerencia.perfil.respondedor === 'sin_dato' ? 'sin dato' : sugerencia.perfil.respondedor}</b>
+                                            {sugerencia.perfil.indice_hidrato_grasa_techo != null && <span className="text-white/30"> (índice {sugerencia.perfil.indice_hidrato_grasa_techo})</span>}</span>
+                                        {sugerencia.perfil.techo_hc != null && <span className="text-white/50">Techo/suelo <b className="text-white">{sugerencia.perfil.techo_hc}/{sugerencia.perfil.suelo_hc} g</b></span>}
+                                        {sugerencia.perfil.umbral_definicion != null && <span className="text-white/50">Umbral def. <b className="text-white">{sugerencia.perfil.umbral_definicion} g</b></span>}
+                                        {sugerencia.perfil.umbral_volumen != null && <span className="text-white/50">Umbral vol. <b className="text-white">{sugerencia.perfil.umbral_volumen} g</b></span>}
+                                        {sugerencia.contexto_usado?.n_reglas_perfil > 0 && <span className="text-white/30">{sugerencia.contexto_usado.n_reglas_perfil} reglas de su perfil</span>}
+                                    </div>
+                                )}
                                 {sugerencia.contexto_decision && Object.keys(sugerencia.contexto_decision).length > 0 && (
                                     <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
                                         {sugerencia.contexto_decision.peso_actual != null && (
@@ -1084,14 +1110,14 @@ const ClientDetailPage = () => {
                                         <div className="space-y-1">{nutrition_stats.diet_dates?.map((d, i) => (
                                             <button key={i} onClick={() => openDiet(d.fecha)}
                                                 className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left transition-colors ${selectedDietDate === d.fecha ? 'bg-[#FF671F]/15 border border-[#FF671F]/40' : 'bg-[#0A0A0A] border border-transparent hover:bg-[#1a1a1a]'}`}>
-                                                <span className="text-white text-sm">{new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                                <span className="text-white text-sm">{_fechaDieta(d.fecha)}</span>
                                                 <Badge className={d.tipo_dia === 'entrenamiento' ? 'bg-[#FF671F]/10 text-[#FF671F] border-0 text-[10px]' : 'bg-green-500/10 text-green-500 border-0 text-[10px]'}>{d.tipo_dia}</Badge>
                                             </button>
                                         ))}</div>
                                     </ScrollArea>
                                 </CardContent>
                             </Card>
-                            <Card className="bg-[#111] border-[#222] md:col-span-2"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">{selectedDietDate ? `Dieta del ${new Date(selectedDietDate + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}` : 'Dieta'}</CardTitle></CardHeader>
+                            <Card className="bg-[#111] border-[#222] md:col-span-2"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">{selectedDietDate ? `Dieta del ${_fechaDieta(selectedDietDate, { day: 'numeric', month: 'long', year: 'numeric' })}` : 'Dieta'}</CardTitle></CardHeader>
                                 <CardContent>
                                     {dietLoading ? <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-[#FF671F]" /></div>
                                         : selectedDiet ? <DietDetail diet={selectedDiet} />

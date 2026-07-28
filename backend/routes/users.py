@@ -72,6 +72,13 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
 
+    # El perfil del cliente NO es la via para fijar macros: para eso esta PUT /macros,
+    # que ademas los versiona en macro_history. Aqui se ignoran (antes se guardaban tal
+    # cual, con lo que un cliente podia saltarse a su coach).
+    for campo in ("macros_training", "macros_rest", "macros_periworkout", "macros_source",
+                  "plan", "price", "week", "status", "trainer_id"):
+        update_data.pop(campo, None)
+
     # Auto-calculate macros if body data is provided and macros_source is not 'manual'
     body_fields = {"weight", "sex", "goal", "body_fat"}
     if body_fields & set(update_data.keys()):

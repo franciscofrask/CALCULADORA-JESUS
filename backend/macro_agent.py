@@ -57,7 +57,8 @@ G. ESCALONES reales (nada de 20 g fijos ni progresiones lineales): 10, 15, 20, 2
    40, 50 o 60 g; el de 20 es el mas comun. Cuanto mas arriba, pasos mas pequenos: a
    partir de ~280-300 de HC entreno, minimos. Los valores son multiplos de 5, pero un
    MOVIMIENTO de 5 g no es un escalon: el paso mas pequeno es de 10 (y las grasas se
-   mueven siempre de 10 en 10). Si no merece la pena mover 10, no muevas nada.
+   mueven siempre de 10 en 10). Vale tambien para el intra, que baja por su secuencia
+   90-75-60-50-40-30-15. Si no merece la pena mover 10, no muevas nada.
 H. El TECHO y el SUELO son de cada persona, no generales: sacalos de SU historial (la
    suma mas alta a la que ha llegado y el punto mas bajo que ha aguantado). No apliques
    topes inventados.
@@ -101,9 +102,16 @@ COMO AJUSTAR:
    grasas). Proponlas cuando encajen, avisando de que son temporales.
 9. MUJERES: rangos mas bajos y estrechos, se estancan distinto; a cierta edad puede ser
    hormonal (avisa de valorar analitica, no lo "arregles" con macros).
-10. CASOS PARECIDOS: si te paso casos de otros clientes en la misma fase y con un estado
-    similar, usalos como referencia de que tamano de ajuste funciona ahi (el "cliente
-    gemelo"). Miralos asi: que se movio, cuanto peso hizo despues y si el coach marco la
+10. PERFIL Y CASOS PARECIDOS. El perfil sale de SU camino (motor = cuanto hidrato tolera,
+    por su techo; respondedor = si coge musculo y pierde grasa, por el indice
+    hidrato-grasa), no del cuestionario. Usalo asi: su TECHO y su SUELO historicos son los
+    limites de esa persona, y sus UMBRALES dicen donde dejo de ser rentable seguir
+    moviendo el hidrato (si esta en el umbral, el ajuste rinde poco: dilo). Un buen
+    respondedor aguanta mas hidrato con menos grasa; uno malo necesita menos recorte para
+    mover el peso. Si te paso las reglas de su perfil (medianas de casos reales), son la
+    referencia de que tamano de ajuste funciona en gente como el.
+    Ademas, si te paso casos parecidos de otros clientes, usalos igual, y da mas peso a
+    los marcados [MISMO PERFIL] (el "cliente gemelo"). Miralos asi: que se movio, cuanto peso hizo despues y si el coach marco la
     fase como buena o mala. Repite lo que funciono en varios casos parecidos y evita lo
     que salio mal por culpa del ajuste. Manda siempre el historial DEL PROPIO cliente:
     los casos ajenos son apoyo, no sustituyen su respuesta individual. Si te apoyas en
@@ -155,6 +163,7 @@ def construir_contexto(
     meses_en_fase: Optional[int] = None,
     porcentaje_graso: Optional[float] = None,
     casos_gemelos: Optional[str] = None,
+    perfil: Optional[str] = None,
 ) -> str:
     """Arma el mensaje de usuario con TODO el contexto que el agente debe interpretar."""
     L = []
@@ -202,6 +211,10 @@ def construir_contexto(
                 L.append(f"      como salio esa fase: {ev['resultado']}"
                          + (f" ({culpa})" if culpa else "")
                          + (f" - {ev['nota']}" if ev.get("nota") else ""))
+    # perfil derivado de su camino + las reglas de su perfil (indices JG12)
+    if perfil:
+        L.append("")
+        L.append(perfil)
     # memoria de la cartera: que se hizo en situaciones parecidas y como salio
     if casos_gemelos:
         L.append("")
@@ -329,8 +342,10 @@ def validar(propuesta: Dict, macros_actuales: Dict, avisos_llm: List[str]) -> Li
                 warns.append(f"El intra va en direccion contraria al HC de entreno "
                              f"(entreno {he_act}->{he}, intra {hi_act}->{hi_intra}): el intra lo acompana.")
 
-    # escalones reales respecto a los macros actuales
+    # escalones reales respecto a los macros actuales (el intra tambien: su secuencia
+    # es 90-75-60-50-40-30-15, nunca saltos de 5)
     for blk, campo in (("entreno", "hidratos"), ("entreno", "grasa"),
+                       ("perientreno", "hidratos"),
                        ("descanso", "hidratos"), ("descanso", "grasa")):
         act = g(macros_actuales, blk, campo, {"hidratos": "carbs", "grasa": "fat"}[campo])
         nue = g(propuesta, blk, campo)

@@ -115,13 +115,21 @@ async def _cartera() -> List[Dict]:
                                                 "body_fat": 1, "height": 1}):
         raw = await db.calma_raw.find_one(
             {"$or": [{"client_id": p["id"]}, {"user_id": p.get("user_id")}]},
-            {"_id": 0, "macros_historial": 1, "pesos": 1, "formularios_mensuales": 1, "sexo": 1}) or {}
+            {"_id": 0, "macros_historial": 1, "pesos": 1, "porcentajes_grasos": 1,
+             "formularios_mensuales": 1, "sexo": 1}) or {}
 
         pesos = {}
         for x in (raw.get("pesos") or []):
             w = _sanea_peso(x.get("valor"))
             if w and x.get("fecha"):
                 pesos[x["fecha"][:10]] = w
+        # Serie de % graso de Calma: es lo que permite medir el indice hidrato-grasa
+        # (el eje RESPONDEDOR del doc). Se mide poco, asi que se busca con mas margen.
+        grasos = {}
+        for x in (raw.get("porcentajes_grasos") or []):
+            v = _num(x.get("valor"))
+            if v and 3 <= v <= 60 and x.get("fecha"):
+                grasos[x["fecha"][:10]] = round(v, 1)
         async for r in db.reports.find({"client_id": p["id"]}, {"_id": 0, "created_at": 1, "weight": 1}):
             w = _sanea_peso(r.get("weight"))
             if w and r.get("created_at"):
@@ -153,6 +161,7 @@ async def _cartera() -> List[Dict]:
             "client_id": p["id"], "sexo": (p.get("sex") or raw.get("sexo") or "hombre").lower(),
             "goal": p.get("goal"), "body_fat": _num(p.get("body_fat")),
             "pesos": [{"fecha": f, "peso": w} for f, w in sorted(pesos.items())],
+            "grasos": [{"fecha": f, "peso": v} for f, v in sorted(grasos.items())],
             "ajustes": ajustes, "reportes": reportes,
         })
     return clientes
@@ -207,7 +216,8 @@ def construir_casos(clientes: List[Dict]) -> List[Dict]:
                 "fase": _fase_de(reporte, c["goal"]),
                 # estado del que se parte
                 "peso": peso_ini,
-                "body_fat": a.get("body_fat") if a.get("body_fat") is not None else c.get("body_fat"),
+                "body_fat": (a.get("body_fat") if a.get("body_fat") is not None
+                             else _peso_en(c.get("grasos") or [], a["fecha"], margen=45) or c.get("body_fat")),
                 "hc_entreno": he,
                 "hc_total_entreno": round(he + hi, 1) if he is not None else None,
                 "hc_entreno_kg": round(he / peso_ini, 2) if he and peso_ini else None,
@@ -315,8 +325,11 @@ def _similitud(caso: Dict, ref: Dict) -> Optional[float]:
     return d
 
 
-async def buscar_gemelos(ref: Dict, k: int = 8, excluir_client_id: Optional[str] = None) -> List[Dict]:
-    """Los k casos mas parecidos a la situacion actual del cliente."""
+async def buscar_gemelos(ref: Dict, k: int = 8, excluir_client_id: Optional[str] = None,
+                         mismo_perfil: Optional[set] = None) -> List[Dict]:
+    """Los k casos mas parecidos a la situacion actual del cliente. Si se pasan los
+    clientes de su MISMO PERFIL (motor x respondedor), esos casos pesan mas: es el
+    "cliente gemelo" del doc, que primero mira el perfil y luego el parecido."""
     q = {"sexo": ref.get("sexo"), "fase": ref.get("fase")}
     candidatos = []
     async for c in db.macro_casos.find(q, {"_id": 0}):
@@ -324,6 +337,9 @@ async def buscar_gemelos(ref: Dict, k: int = 8, excluir_client_id: Optional[str]
             continue
         s = _similitud(c, ref)
         if s is not None:
+            if mismo_perfil and c.get("client_id") in mismo_perfil:
+                s -= 0.8
+                c = {**c, "mismo_perfil": True}
             candidatos.append((s, c))
     candidatos.sort(key=lambda x: x[0])
     return [c for _, c in candidatos[:k]]
@@ -346,7 +362,8 @@ def formatear_gemelos(casos: List[Dict]) -> str:
                   + (f", {c.get('body_fat')}% graso" if c.get("body_fat") else "")
                   + f", HC entreno {c.get('hc_entreno')} (+{c.get('intra')} intra)"
                   + (f", cumplimiento {c.get('cumplimiento')}" if c.get("cumplimiento") else ""))
-        linea = f"  - {estado} -> {que} -> {c.get('delta_peso_pct'):+.2f}% de peso en {c.get('dias_tramo')} dias"
+        linea = (f"  - {estado} -> {que} -> {c.get('delta_peso_pct'):+.2f}% de peso en {c.get('dias_tramo')} dias"
+                 + (" [MISMO PERFIL]" if c.get("mismo_perfil") else ""))
         ev = (c.get("evaluacion") or {}).get("resultado")
         if ev:
             linea += f" (el coach la marco como fase {ev})"
