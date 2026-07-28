@@ -31,12 +31,7 @@ const CategoryRail = ({
     collapsible = false,
     maxRows = 2,
 }) => {
-    // En movil y tablet no hay raton, asi que el tooltip no se puede ver: la pill lleva
-    // el nombre debajo del icono y se muestra siempre. A partir de lg vuelve al circulo
-    // con tooltip, que es donde si hay hover.
-    const btn = size === 'sm'
-        ? 'w-[5.25rem] lg:w-8 lg:h-8'
-        : 'w-[5.5rem] lg:w-9 lg:h-9';
+    const btn = size === 'sm' ? 'w-8 h-8' : 'w-9 h-9';
 
     const isArray = Array.isArray(value);
     const isSelected = (catValue) =>
@@ -70,26 +65,12 @@ const CategoryRail = ({
         const el = wrapRef.current;
         if (!el) return;
         const check = () => {
-            // Las pills ya no miden todas igual (en movil llevan el nombre debajo y
-            // pueden ocupar una linea o tres), asi que la altura del recorte se mide
-            // sobre las filas reales: se corta justo despues de la fila `maxRows`.
-            const pills = [...el.querySelectorAll('button')];
-            if (!pills.length) return;
-            // Medidas relativas al propio contenedor (offsetTop lo es a otro ancestro).
-            const base = el.getBoundingClientRect().top;
-            const top = (p) => Math.round(p.getBoundingClientRect().top - base);
-            const filas = [...new Set(pills.map(top))].sort((a, b) => a - b);
-            if (filas.length <= maxRows) {
-                setOverflowing(false);
-                return;
-            }
-            const dentro = pills.filter((p) => filas.indexOf(top(p)) < maxRows);
-            const abajo = Math.max(...dentro.map((p) => p.getBoundingClientRect().bottom - base));
-            // +8 de aire para el anillo (ring) de la pill seleccionada, que se dibuja
-            // fuera del boton, pero sin llegar a dejar asomar la fila siguiente.
-            const maxH = Math.min(abajo + 8, filas[maxRows] - 2);
+            const pill = el.querySelector('button');
+            const btnPx = pill ? pill.offsetHeight : fallbackBtnPx;
+            const gap = parseFloat(getComputedStyle(el).rowGap) || 7;
+            const maxH = maxRows * btnPx + (maxRows - 1) * gap + 8;
             setCollapsedMaxH(maxH);
-            setOverflowing(true);
+            setOverflowing(el.scrollHeight > maxH + 2);
         };
         check();
         const ro = new ResizeObserver(check);
@@ -100,9 +81,7 @@ const CategoryRail = ({
     const clampStyle = (collapsible && !expanded) ? { maxHeight: collapsedMaxH, overflow: 'hidden' } : undefined;
 
     const pills = (
-        // items-stretch en movil: las pills de una misma fila igualan altura aunque el
-        // nombre ocupe una linea o tres.
-        <div ref={wrapRef} style={clampStyle} className="flex items-stretch lg:items-center gap-1.5 flex-wrap py-1">
+        <div ref={wrapRef} style={clampStyle} className="flex items-center gap-1.5 flex-wrap py-1">
             {categories.map((cat) => {
                 const selected = isSelected(cat.value);
                 const iconNode = renderIcon(cat.icon, 'w-4 h-4');
@@ -115,10 +94,7 @@ const CategoryRail = ({
                                 aria-label={cat.label}
                                 aria-pressed={selected}
                                 className={cn(
-                                    'flex flex-col lg:flex-row items-center justify-center gap-0.5 lg:gap-0 transition-all',
-                                    // min-h para que todas las pills midan igual aunque el
-                                    // nombre ocupe una linea o dos
-                                    'px-1 py-1.5 lg:p-0 rounded-xl lg:rounded-full min-h-[3.4rem] lg:min-h-0',
+                                    'flex items-center justify-center rounded-full transition-all',
                                     btn,
                                     selected
                                         ? 'bg-brand-orange/10 text-brand-orange ring-2 ring-brand-orange shadow-sm'
@@ -130,16 +106,12 @@ const CategoryRail = ({
                                         {cat.emoji || '·'}
                                     </span>
                                 )}
-                                {/* El nombre completo, siempre visible en movil y tablet */}
-                                <span className="lg:hidden text-[10px] leading-tight text-center w-full px-0.5 break-words">
-                                    {cat.label}
-                                </span>
                             </button>
                         </TooltipTrigger>
                         <TooltipContent
                             side="top"
                             sideOffset={6}
-                            className="hidden lg:block bg-gray-900 text-white text-xs font-semibold px-3 py-1.5 max-w-[260px] text-center"
+                            className="bg-gray-900 text-white text-xs font-semibold px-3 py-1.5 max-w-[260px] text-center"
                         >
                             {cat.label}
                         </TooltipContent>
