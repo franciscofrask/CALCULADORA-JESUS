@@ -11,7 +11,7 @@ from core.security import get_current_user
 from models.user import (
     ClientProfile, ClientProfileCreate, ClientProfileUpdate,
     MacrosUpdate, PLAN_TYPES, PLAN_CATALOG, QuestionnaireSubmit, OnboardingUpdate,
-    Nivel1Submit
+    Nivel1Submit, AjustesMacros
 )
 from target_calculator import calcular_targets, targets_to_profile_macros
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
@@ -242,6 +242,92 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         resultado=resultado,
         contexto={"peso": data.weight, "porcentaje_graso": data.body_fat,
                   "sexo": sexo, "objetivo": data.goal},
+    )
+    await registrar_revision({**profile, "id": client_id}, user, resultado)
+
+    updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado}
+
+
+@router.post("/clients/ajustar-macros")
+async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
+    """
+    Cuestionario de AJUSTE (paso 2 del doc del 29-07): afina los macros provisionales del alta
+    y devuelve los DEFINITIVOS.
+
+    Va aparte del alta a proposito: el alta se rellena una vez y se cierra, mientras que esto se
+    puede repetir (si cambia de trabajo, si empieza a jugar al padel, si cambia de dieta). Los
+    cuatro datos de la tabla (peso, sexo, grasa, objetivo) se leen del perfil, que ya los tiene.
+    """
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado. Selecciona un plan primero.")
+
+    peso, sexo = profile.get("weight"), (profile.get("sex") or "hombre")
+    bf, objetivo = profile.get("body_fat"), profile.get("goal")
+    if not all([peso, bf is not None, objetivo]):
+        raise HTTPException(status_code=400,
+                            detail="Faltan tus datos de partida (peso, grasa y objetivo). Completa el alta primero.")
+
+    ajustes = data.model_dump()
+    update = {"ajustes_macros": ajustes, "ajuste_macros_completado": True}
+
+    try:
+        resultado = calcular_macros_v2(
+            float(peso), sexo, float(bf), objetivo,
+            farmacologia=bool(profile.get("farmacologia")),
+            **ajustes_to_kwargs(ajustes),
+        )
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=f"No se pueden calcular tus macros: {e}")
+
+    targets = {"macros": resultado["macros"], "multiplicadores": multiplicadores_de(resultado)}
+    profile_macros = targets_to_profile_macros(targets)
+    # Pendiente de la fase de planes: en el plan con entrenador esto no se aplica, se le presenta
+    # como propuesta y le llega al coach para validarla (seccion 6 del doc).
+    if profile.get("macros_source") != "manual":
+        update["macros_training"] = profile_macros["macros_training"]
+        update["macros_rest"] = profile_macros["macros_rest"]
+        update["macros_periworkout"] = profile_macros["macros_periworkout"]
+        update["macros_source"] = "auto"
+        update["macros_multiplicadores"] = targets["multiplicadores"]
+
+    client_id = profile.get("id") or str(uuid.uuid4())
+    if not profile.get("id"):
+        update["id"] = client_id
+    await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
+
+    # Igual que el alta: se versiona en macro_history para que el resolver por fecha coja estos
+    # macros y no los del alta.
+    if "macros_training" in update:
+        await db.macro_history.insert_one({
+            "id": str(uuid.uuid4()),
+            "client_id": client_id,
+            "user_id": user["id"],
+            "previous_training": profile.get("macros_training"),
+            "previous_rest": profile.get("macros_rest"),
+            "new_training": update["macros_training"],
+            "new_rest": update["macros_rest"],
+            "training": update["macros_training"],
+            "rest": update["macros_rest"],
+            "peri": update.get("macros_periworkout"),
+            "effective_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "note": "Cuestionario de ajuste de macros",
+            "changed_by": user.get("name", user.get("email", "cliente")),
+            "client_weight": peso,
+            "peso": peso,
+            "porcentaje_graso": bf,
+            "sexo": sexo,
+            "objetivo": objetivo,
+            "motor": {"version": resultado["version_motor"], "desglose": resultado["desglose"],
+                      "ajustes": ajustes},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    await guardar_quiz_respuestas(
+        user_id=user["id"], client_id=client_id, origen="ajuste_macros",
+        respuestas=ajustes, resultado=resultado,
+        contexto={"peso": peso, "porcentaje_graso": bf, "sexo": sexo, "objetivo": objetivo},
     )
     await registrar_revision({**profile, "id": client_id}, user, resultado)
 

@@ -422,6 +422,30 @@ const ClientDashboard = () => {
                 </div>
             </div>
 
+            {/* Ajustar macros: el cuestionario del paso 2. Sale mientras tenga los macros
+                provisionales del alta, porque hasta que lo rellene sus numeros no estan afinados.
+                En el plan con coach el boton se llama "Rellena tu formulario", que es lo que es:
+                el coach lo revisa con el despues. */}
+            {profile?.questionnaire_completed && !profile?.ajuste_macros_completado && (
+                <button onClick={() => navigate('/questionnaire?ajustar=1')} data-testid="ajustar-macros-banner"
+                    className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">
+                    <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center">
+                            <SlidersHorizontal className="w-5 h-5 text-brand" />
+                        </div>
+                        <div className="text-left">
+                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">
+                                {can('macros_personalizados') ? 'Rellena tu formulario' : 'Ajusta tus macros'}
+                            </p>
+                            <p className="text-muted-foreground text-sm">
+                                Tus macros son provisionales. Unas preguntas más y quedan afinados a tu caso.
+                            </p>
+                        </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
+                </button>
+            )}
+
             {/* Cuestionario Nivel 1 pendiente (planes con coach): retomable, no bloqueante */}
             {can('macros_personalizados') && profile?.questionnaire_completed && !profile?.questionnaire_nivel1_completed && (
                 <button onClick={() => navigate('/questionnaire')} data-testid="nivel1-pending-banner"

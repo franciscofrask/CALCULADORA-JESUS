@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CAP } from '../lib/planAccess';
 import { Button } from '../components/ui/button';
@@ -117,12 +117,18 @@ const BodyFatSlider = ({ value, onChange }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NIVEL 0 - lo contesta TODO EL MUNDO (estas preguntas SÍ mueven los macros).
+// EL ALTA - cuatro preguntas y ya tiene macros (doc 29-07, paso 1).
+//
+// Solo lo que hace falta para leer la tabla: sexo, objetivo, % de grasa y peso. De aqui sale
+// con MACROS PROVISIONALES y con la app usable el mismo dia. Todo lo demas espera al
+// cuestionario de ajuste, detras de un boton, porque cada pantalla que se pone antes de
+// entregar algo cuesta gente.
+//
+// El nombre y el telefono se piden en el registro, no aqui.
+//
 // type: statement | text | email | tel | date | number | choice | bf | dieta | final0 | result
-const STEPS_NIVEL0 = [
-    { type: 'statement', title: 'Quiz Inicial', desc: 'Vamos a conocerte para calcular tus macros. Tardarás un par de minutos. Responde con sinceridad.' },
-    { type: 'text', key: 'name', title: 'Nombre y apellidos', required: true },
-    { type: 'tel', key: 'phone', title: 'Número de teléfono', required: true },
+const STEPS_ALTA = [
+    { type: 'statement', title: 'Empecemos', desc: 'Cuatro preguntas y tienes tus macros. Un minuto.' },
     {
         type: 'choice', key: 'sex', title: '¿Cuál es tu sexo?',
         desc: 'Lo usamos para calcular tus macros con la tabla correcta.',
@@ -147,7 +153,17 @@ const STEPS_NIVEL0 = [
     },
     { type: 'number', key: 'weight', title: '¿Cuánto pesas?', desc: 'Pésate siempre igual: en ayunas, sin ropa y después de ir al baño.', unit: 'kg', required: true },
     { type: 'bf', key: 'body_fat', title: '¿Cuál dirías que es tu porcentaje de grasa actual?', desc: 'Elige el valor más cercano a tu % de grasa estimado.' },
-    { type: 'statement', title: 'Afina tus macros', desc: 'Cuatro preguntas rápidas para ajustar tus números a tu vida real. Responde con sinceridad: cada respuesta cuenta.', cta: 'Vamos' },
+    { type: 'final0', title: 'Ya está.', desc: 'Con esto ya podemos calcular tus macros de partida. Si quieres revisar alguna respuesta, ve hacia atrás.' },
+    { type: 'result', title: 'Tus macros' },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AJUSTAR MACROS - el cuestionario del paso 2, detras de un boton.
+//
+// Todo lo que afina el numero: lo que hace fuera del gimnasio, como responde su cuerpo y la
+// dieta que trae. Al terminar se le entregan los MACROS DEFINITIVOS.
+const STEPS_AJUSTE = [
+    { type: 'statement', title: 'Afina tus macros', desc: 'Unas preguntas para ajustar tus números a tu vida real. Verás los macros moverse a medida que contestas.', cta: 'Vamos' },
     {
         type: 'choice', key: 'actividad_diaria', title: '¿Cómo es tu actividad diaria, fuera del gimnasio?',
         desc: 'Ir al gimnasio 1h 4-5 veces/semana no te hace activo. Piensa en cuánto te mueves en tu día a día.',
@@ -362,6 +378,7 @@ const Shell = ({ progress, children }) => (
 
 const QuestionnairePage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { api, refreshProfile, user, profile, can, token } = useAuth();
     const [idx, setIdx] = useState(0);
     const [answers, setAnswers] = useState({});
@@ -380,9 +397,18 @@ const QuestionnairePage = () => {
     const retomandoNivel1 = !!profile?.questionnaire_completed && !nivel0Enviado
         && tieneCoach && !profile?.questionnaire_nivel1_completed;
 
+    // Dos modos, como pide el doc del 29-07:
+    //   ALTA   -> cuatro preguntas y macros provisionales. Es lo que ve quien acaba de entrar.
+    //   AJUSTE -> el cuestionario que afina, detras del boton "Ajustar macros". Se llega con
+    //             ?ajustar=1, o solo con el alta ya hecha (por si vuelve por el enlace).
+    const modoAjuste = new URLSearchParams(location.search).get('ajustar') === '1'
+        || (!!profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1);
+
     const flow = retomandoNivel1
         ? STEPS_NIVEL1
-        : [...STEPS_NIVEL0, ...STEPS_ONBOARD, ...(tieneCoach ? STEPS_NIVEL1 : [])];
+        : modoAjuste
+            ? [...STEPS_AJUSTE, ...STEPS_ONBOARD, ...(tieneCoach ? STEPS_NIVEL1 : [])]
+            : STEPS_ALTA;
 
     // PreferencesSetup espera el helper estilo fetch (endpoint, {method, body}).
     const fetchApi = useCallback(async (endpoint, options = {}) => {
@@ -490,32 +516,37 @@ const QuestionnairePage = () => {
 
     const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 
-    // Nivel 0 -> CALCULAR: envía las 8 preguntas, recibe los 8 números + desglose.
+    // Las respuestas que afinan los macros, en el formato que espera el backend.
+    const ajustesDelCuestionario = () => ({
+        actividad_diaria: answers.actividad_diaria ?? null,
+        deporte_extra: answers.deporte_extra ?? null,
+        facilidad_engordar: answers.facilidad_engordar ?? null,
+        cuesta_definir: answers.cuesta_definir ?? null,
+        sigue_dieta: answers.sigue_dieta ?? null,
+        tiempo_dieta: answers.sigue_dieta ? (answers.tiempo_dieta ?? null) : null,
+        como_va: answers.sigue_dieta ? (answers.como_va ?? null) : null,
+        hambre_saturacion: answers.sigue_dieta ? (answers.hambre_saturacion ?? null) : null,
+        dieta_texto: answers.sigue_dieta ? (answers.dieta_texto || null) : null,
+        dieta_hc_entreno: answers.sigue_dieta ? num(answers.dieta_hc_entreno) : null,
+        dieta_grasa_entreno: answers.sigue_dieta ? num(answers.dieta_grasa_entreno) : null,
+    });
+
+    // CALCULAR. En el alta van los cuatro datos de la tabla y salen macros provisionales; en el
+    // cuestionario de ajuste van las respuestas que afinan y salen los definitivos.
     const submitNivel0 = async () => {
         setLoading(true);
         try {
-            const res = await api.post('/clients/questionnaire', {
-                name: answers.name,
-                email: answers.email,
-                phone: answers.phone,
-                goal: answers.goal,
-                sex: answers.sex,
-                weight: parseFloat(answers.weight),
-                body_fat: parseFloat(answers.body_fat),
-                ajustes: {
-                    actividad_diaria: answers.actividad_diaria ?? null,
-                    deporte_extra: answers.deporte_extra ?? null,
-                    facilidad_engordar: answers.facilidad_engordar ?? null,
-                    cuesta_definir: answers.cuesta_definir ?? null,
-                    sigue_dieta: answers.sigue_dieta ?? null,
-                    tiempo_dieta: answers.sigue_dieta ? (answers.tiempo_dieta ?? null) : null,
-                    como_va: answers.sigue_dieta ? (answers.como_va ?? null) : null,
-                    hambre_saturacion: answers.sigue_dieta ? (answers.hambre_saturacion ?? null) : null,
-                    dieta_texto: answers.sigue_dieta ? (answers.dieta_texto || null) : null,
-                    dieta_hc_entreno: answers.sigue_dieta ? num(answers.dieta_hc_entreno) : null,
-                    dieta_grasa_entreno: answers.sigue_dieta ? num(answers.dieta_grasa_entreno) : null,
-                },
-            });
+            const res = modoAjuste
+                ? await api.post('/clients/ajustar-macros', ajustesDelCuestionario())
+                : await api.post('/clients/questionnaire', {
+                    name: answers.name,
+                    email: answers.email,
+                    phone: answers.phone,
+                    goal: answers.goal,
+                    sex: answers.sex,
+                    weight: parseFloat(answers.weight),
+                    body_fat: parseFloat(answers.body_fat),
+                });
             setResultado(res.data?.resultado || null);
             setNivel0Enviado(true);
             await refreshProfile();
@@ -669,8 +700,16 @@ const QuestionnairePage = () => {
         const m = resultado?.macros;
         body = (
             <div>
-                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">Estos son tus macros</h2>
-                <p className="text-foreground/60 mb-6 text-sm md:text-base">Calculados con el método a partir de tus respuestas. Los verás siempre en tu panel.</p>
+                {/* En el alta son PROVISIONALES y hay que decirlo con esas palabras: ya puede comer
+                    hoy, y afinarlos es el paso siguiente. Tras el cuestionario, son los definitivos. */}
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
+                    {modoAjuste ? 'Estos son tus macros' : 'Tus macros de partida'}
+                </h2>
+                <p className="text-foreground/60 mb-6 text-sm md:text-base">
+                    {modoAjuste
+                        ? 'Calculados con el método a partir de tus respuestas. Los verás siempre en tu panel.'
+                        : 'Ya puedes empezar a comer hoy. Termina de ajustarlos para afinarlos a tu caso.'}
+                </p>
                 {m ? (
                     <div className="space-y-4">
                         <div className="grid grid-cols-3 gap-3 text-center">
@@ -697,11 +736,24 @@ const QuestionnairePage = () => {
                 ) : (
                     <p className="text-foreground/60">Tus macros se han guardado y los verás en tu panel.</p>
                 )}
-                <div className="flex gap-3 mt-8">
-                    <Button onClick={goNext}
-                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                        Continuar <ArrowRight className="w-5 h-5 ml-2" />
-                    </Button>
+                <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                    {modoAjuste ? (
+                        <Button onClick={goNext}
+                            className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                            Continuar <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                    ) : (
+                        <>
+                            <Button onClick={() => navigate('/questionnaire?ajustar=1')}
+                                className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                                Ajustar mis macros <ArrowRight className="w-5 h-5 ml-2" />
+                            </Button>
+                            <Button variant="ghost" onClick={() => navigate('/dashboard')}
+                                className="text-foreground/60 py-6 text-base">
+                                Lo hago más tarde
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
         );
