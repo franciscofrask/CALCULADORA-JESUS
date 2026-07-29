@@ -410,7 +410,11 @@ def ajustes_to_kwargs(ajustes: Optional[Dict]) -> Dict:
     del motor. Tolera None y claves ausentes (perfil sin ajustes guardados)."""
     a = ajustes or {}
     dieta = None
-    if a.get("sigue_dieta") and a.get("dieta_hc_entreno") is not None:
+    # La dieta que trae el cliente solo entra si la CONFIRMO (doc 29-07: "este dato manda por
+    # encima de todo lo demas, asi que no puede entrar sin confirmar"). Los registros antiguos
+    # no tienen el campo; para no cambiarles el calculo, la ausencia se trata como confirmada.
+    confirmada = a.get("dieta_confirmada")
+    if a.get("sigue_dieta") and a.get("dieta_hc_entreno") is not None and confirmada is not False:
         dieta = {
             "hc_entreno": a.get("dieta_hc_entreno"),
             "grasa_entreno": a.get("dieta_grasa_entreno"),
@@ -422,4 +426,5 @@ def ajustes_to_kwargs(ajustes: Optional[Dict]) -> Dict:
         "facilidad_engordar": a.get("facilidad_engordar"),
         "dieta_reportada": dieta,
         "historial_dietas": a.get("historial_dietas"),
+        "como_va": a.get("como_va"),
     }

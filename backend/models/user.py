@@ -431,13 +431,23 @@ class OnboardingUpdate(BaseModel):
 # Preguntas 5-8 del Nivel 0 ("Afina tus macros"): las que mueven el motor v2.
 # Se guardan SIEMPRE (quiz_respuestas + perfil), se apliquen o no.
 class AjustesMacros(BaseModel):
-    actividad_diaria: Optional[str] = None      # sedentario | normal | muy_activo
-    deporte_extra: Optional[bool] = None
-    facilidad_engordar: Optional[str] = None    # enseguida | normal | casi_no
-    sigue_dieta: Optional[bool] = None
-    dieta_texto: Optional[str] = None           # texto libre, se guarda tal cual
-    dieta_hc_entreno: Optional[float] = None    # HC totales del dia de entreno que come ahora
-    dieta_grasa_entreno: Optional[float] = None # grasa aproximada (opcional)
+    actividad_diaria: Optional[str] = None      # P1: sedentario | normal | muy_activo
+    deporte_extra: Optional[bool] = None        # P2
+    facilidad_engordar: Optional[str] = None    # P3: enseguida | normal | casi_no
+    cuesta_definir: Optional[str] = None        # P5: se guarda, no modifica
+    sigue_dieta: Optional[bool] = None          # P6
+    tiempo_dieta: Optional[str] = None          # P7: menos_1m | 1_3m | 3_6m | mas_6m (se guarda)
+    # P8: decide que se hace con la dieta que trae (paso 4 del metodo). Definicion:
+    # bien | lento | mantengo | cogiendo_peso. Volumen: bien | lento | mucha_grasa |
+    # mantengo | bajando.
+    como_va: Optional[str] = None
+    # P9: no cambia el macro de arranque, marca el ritmo de los ajustes siguientes.
+    # Definicion: mucho | normal | aguanto_mas. Volumen: no_puedo_mas | puedo_mas.
+    hambre_saturacion: Optional[str] = None
+    dieta_texto: Optional[str] = None           # P10: texto libre, se guarda tal cual
+    dieta_hc_entreno: Optional[float] = None    # P10: HC totales del dia de entreno que come ahora
+    dieta_grasa_entreno: Optional[float] = None # P10: grasa aproximada (opcional)
+    dieta_confirmada: Optional[bool] = None     # P10: sin confirmar, la dieta NO se aplica
     historial_dietas: Optional[str] = None      # +-10%: guardar, NO aplicar (spec)
 
 # Cuestionario inicial (ELM) - Nivel 0

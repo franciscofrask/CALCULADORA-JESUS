@@ -175,12 +175,67 @@ const STEPS_NIVEL0 = [
         ],
     },
     {
+        // P5 del doc: se guarda, no mueve los macros.
+        type: 'choice', key: 'cuesta_definir', title: '¿Te cuesta definir?',
+        desc: 'Nos ayuda a situarte entre los clientes que ya han pasado por aquí.',
+        options: [
+            { value: 'mucho', label: 'Mucho: siempre me ha costado quitarme la grasa.' },
+            { value: 'normal', label: 'Lo normal: con esfuerzo, lo consigo.' },
+            { value: 'poco', label: 'Poco: defino con facilidad.' },
+        ],
+    },
+    {
         type: 'choice', key: 'sigue_dieta', title: '¿Sigues una dieta ahora mismo y sabes lo que comes?',
         desc: 'Si controlas más o menos tus cantidades, podremos partir de lo que ya comes.',
         options: [
             { value: true, label: 'Sí, sé lo que como.' },
             { value: false, label: 'No, como sin controlar.' },
         ],
+    },
+    {
+        // P7: se guarda. Un mes comiendo asi no dice lo mismo que seis.
+        type: 'choice', key: 'tiempo_dieta', title: '¿Cuánto tiempo llevas con esa dieta, o con una parecida?',
+        cond: a => a.sigue_dieta === true,
+        options: [
+            { value: 'menos_1m', label: 'Menos de un mes' },
+            { value: '1_3m', label: 'Entre 1 y 3 meses' },
+            { value: '3_6m', label: 'Entre 3 y 6 meses' },
+            { value: 'mas_6m', label: 'Más de 6 meses' },
+        ],
+    },
+    {
+        // P8: la que decide que se hace con su dieta (paso 4 del metodo). Las opciones cambian
+        // segun el objetivo, porque "ir bien" no es lo mismo definiendo que en volumen.
+        type: 'choice', key: 'como_va', title: '¿Cómo te está funcionando?',
+        desc: 'Sé sincero: de esto depende que partamos de lo que comes o de lo que te toca comer.',
+        cond: a => a.sigue_dieta === true,
+        options: a => (a.goal === 'volumen' ? [
+            { value: 'bien', label: 'Bien: estoy subiendo peso.' },
+            { value: 'lento', label: 'Regular: subo, pero muy lento.' },
+            { value: 'mucha_grasa', label: 'Regular: subo, pero cojo más grasa de la cuenta.' },
+            { value: 'mantengo', label: 'Me mantengo igual, siento que necesito comer más.' },
+            { value: 'bajando', label: 'Mal: en lugar de subir, estoy bajando.' },
+        ] : [
+            { value: 'bien', label: 'Bien: estoy bajando a buen ritmo.' },
+            { value: 'lento', label: 'Estoy bajando, pero muy lento.' },
+            { value: 'mantengo', label: 'Me mantengo.' },
+            { value: 'cogiendo_peso', label: 'Mal: estoy cogiendo peso.' },
+        ]),
+    },
+    {
+        // P9: no cambia el macro de arranque; marca el ritmo de los ajustes de cada mes.
+        type: 'choice', key: 'hambre_saturacion',
+        title: a => (a.goal === 'volumen' ? '¿Estás saturado de comer?' : '¿Pasas hambre o ansiedad comiendo así?'),
+        desc: 'No cambia tus macros de hoy: nos dice con cuánta mano irán los ajustes de cada mes.',
+        cond: a => a.sigue_dieta === true,
+        options: a => (a.goal === 'volumen' ? [
+            { value: 'no_puedo_mas', label: 'No estoy saturado, pero tampoco me veo capaz de comer más.' },
+            { value: 'puedo_mas', label: 'Puedo comer más sin problema.' },
+        ] : [
+            { value: 'mucho', label: 'Mucho.' },
+            { value: 'normal', label: 'Lo normal cuando estás a dieta.' },
+            { value: 'aguanto_mas', label: 'Nada: aguanto mucho más que esto.' },
+        ]),
     },
     { type: 'dieta', title: 'Cuéntanos qué comes', desc: 'Con esto partimos de tu dieta real en vez de empezar de cero.', cond: a => a.sigue_dieta === true },
     { type: 'final0', title: 'Y ya estaría.', desc: 'Si quieres revisar alguna respuesta, ve hacia atrás. Al calcular verás tus macros personalizados.' },
@@ -451,7 +506,11 @@ const QuestionnairePage = () => {
                     actividad_diaria: answers.actividad_diaria ?? null,
                     deporte_extra: answers.deporte_extra ?? null,
                     facilidad_engordar: answers.facilidad_engordar ?? null,
+                    cuesta_definir: answers.cuesta_definir ?? null,
                     sigue_dieta: answers.sigue_dieta ?? null,
+                    tiempo_dieta: answers.sigue_dieta ? (answers.tiempo_dieta ?? null) : null,
+                    como_va: answers.sigue_dieta ? (answers.como_va ?? null) : null,
+                    hambre_saturacion: answers.sigue_dieta ? (answers.hambre_saturacion ?? null) : null,
                     dieta_texto: answers.sigue_dieta ? (answers.dieta_texto || null) : null,
                     dieta_hc_entreno: answers.sigue_dieta ? num(answers.dieta_hc_entreno) : null,
                     dieta_grasa_entreno: answers.sigue_dieta ? num(answers.dieta_grasa_entreno) : null,
@@ -541,10 +600,14 @@ const QuestionnairePage = () => {
         ];
     };
 
+    // El titulo, la descripcion y las opciones pueden ser funcion de las respuestas: hay preguntas
+    // que se formulan distinto segun el objetivo (definicion o volumen).
+    const segunRespuestas = (v) => (typeof v === 'function' ? v(answers) : v);
+
     const Title = () => (
         <>
-            <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">{step.title}</h2>
-            {step.desc && <p className="text-foreground/60 mb-8 text-sm md:text-base">{step.desc}</p>}
+            <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">{segunRespuestas(step.title)}</h2>
+            {step.desc && <p className="text-foreground/60 mb-8 text-sm md:text-base">{segunRespuestas(step.desc)}</p>}
         </>
     );
 
@@ -846,7 +909,7 @@ const QuestionnairePage = () => {
             </div>
         );
     } else if (step.type === 'choice') {
-        const opts = step.confirm ? confirmOptions() : step.options;
+        const opts = step.confirm ? confirmOptions() : segunRespuestas(step.options);
         body = (
             <div>
                 <Title />
