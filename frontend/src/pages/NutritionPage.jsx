@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
     ChevronLeft, ChevronRight,
-    Copy, Calendar, FileDown, SlidersHorizontal, Star
+    Copy, Calendar, FileDown, SlidersHorizontal, Star, Check, AlertCircle
 } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
@@ -280,6 +280,10 @@ const NutritionPage = () => {
     const exportPdf = async () => {
         setExportingPdf(true);
         try {
+            // El PDF se genera en el servidor a partir de la dieta GUARDADA, no de lo que hay en
+            // pantalla. Sin esto, montar el dia y pulsar PDF sin salir antes de la pantalla daba
+            // siempre "No hay dieta guardada para este dia" (404).
+            await flushGuardado();
             const res = await fetch(`${API_URL}/api/diets/${currentDate}/pdf`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -370,11 +374,11 @@ const NutritionPage = () => {
                 setMealsData(updatedMeals);
                 setVolcadoMeal(diet.comida_volcada || null);
                 console.log('[loadDiet] distribution_targets:', diet.distribution_targets);
-                return { targets: diet.distribution_targets || null, config: dietConfig, ok: true };
+                return { targets: diet.distribution_targets || null, config: dietConfig, ok: true, comidas: updatedMeals };
             } else {
                 setMealsData({});
                 setVolcadoMeal(null);
-                return { targets: null, config: null, ok: true };
+                return { targets: null, config: null, ok: true, comidas: {} };
             }
         } catch (err) {
             console.error('Error loading diet:', err);
@@ -392,18 +396,46 @@ const NutritionPage = () => {
     // diet never loaded (or failed to load) - preventing accidental deletion on a race.
     const autoSaveRef = useRef({});
     const loadedDateRef = useRef(null);
+    // Estado del guardado que se muestra al usuario. Antes el auto-guardado era mudo: si fallaba,
+    // seguias montando el dia creyendo que estaba a salvo y lo perdias al recargar.
+    const [guardadoEstado, setGuardadoEstado] = useState('idle'); // idle | guardando | guardado | error
+    // Un dia que llego con alimentos y se queda vacio SI se borra (el usuario los quito). Un dia
+    // que nunca los tuvo no borra nada: asi un fallo de carga no puede convertirse en un DELETE.
+    const teniaAlimentosRef = useRef(false);
+
+    const hayAlimentos = (snap) =>
+        Object.values(snap?.comidas || {}).some(m => (m?.alimentos || []).length > 0);
 
     const autoSaveDiet = useCallback(async (date, snap) => {
         if (!date || !snap) return;
-        const hasFood = Object.values(snap.comidas || {}).some(m => (m?.alimentos || []).length > 0);
+        const hasFood = hayAlimentos(snap);
+        setGuardadoEstado('guardando');
         try {
             if (hasFood) {
                 await api('/api/diets', { method: 'POST', body: JSON.stringify({ fecha: date, ...snap }) });
-            } else {
+                teniaAlimentosRef.current = true;
+            } else if (teniaAlimentosRef.current) {
                 await api(`/api/diets/${date}`, { method: 'DELETE' }).catch(() => {}); // 404 = nothing to delete
+                teniaAlimentosRef.current = false;
             }
-        } catch (e) { /* silent: auto-save must never interrupt the user */ }
+            setGuardadoEstado('guardado');
+        } catch (e) {
+            setGuardadoEstado('error');
+        }
     }, [api]);
+
+    // Guardado mientras trabajas (no solo al salir de la pantalla). Sin esto, el dia vivia unicamente
+    // en memoria: el PDF no encontraba nada que exportar y una recarga podia llegar antes que el
+    // guardado de despedida y dejar la pantalla en blanco.
+    const guardadoTimerRef = useRef(null);
+    const flushGuardado = useCallback(async () => {
+        if (guardadoTimerRef.current) {
+            clearTimeout(guardadoTimerRef.current);
+            guardadoTimerRef.current = null;
+        }
+        if (loadedDateRef.current !== currentDate) return;
+        await autoSaveDiet(currentDate, autoSaveRef.current);
+    }, [autoSaveDiet, currentDate]);
 
     // On mount: restore the last viewed date (so a reload returns to the day you were on, not
     // today), else the local date. Persisted below on every date change.
@@ -438,7 +470,7 @@ const NutritionPage = () => {
                 cfgOverrides = { momentoEntreno: me, numComidas: nc, opcionPeri: op };
             } catch (e) {}
 
-            const { targets, config: dietConfig, ok } = await loadDiet(currentDate);
+            const { targets, config: dietConfig, ok, comidas: dietComidas } = await loadDiet(currentDate);
             if (targets) setDistribTargetsOverlay(targets);
 
             // If diet has its own config, use that (overrides profile defaults for this day)
@@ -446,7 +478,12 @@ const NutritionPage = () => {
             await loadDistribution(finalOverrides);
             setLoading(false);
             // Only enable auto-save for this date once it has loaded successfully.
-            if (ok) loadedDateRef.current = currentDate;
+            if (ok) {
+                loadedDateRef.current = currentDate;
+                // Lo que traia el dia al abrirlo decide si un dia vacio puede borrarse (ver autoSaveDiet).
+                teniaAlimentosRef.current = hayAlimentos({ comidas: dietComidas || {} });
+                setGuardadoEstado('idle');
+            }
         };
         init();
     }, [currentDate]); // eslint-disable-line
@@ -489,6 +526,20 @@ const NutritionPage = () => {
         window.addEventListener('beforeunload', handler);
         return () => window.removeEventListener('beforeunload', handler);
     }, [currentDate, loading]);
+
+    // Guardado con retardo: cada cambio reinicia el contador y se guarda cuando paras de tocar.
+    // 1,5 s es suficiente para no disparar una peticion por cada gramo que ajustas.
+    useEffect(() => {
+        if (loading || loadedDateRef.current !== currentDate) return;
+        if (guardadoTimerRef.current) clearTimeout(guardadoTimerRef.current);
+        guardadoTimerRef.current = setTimeout(() => {
+            autoSaveDiet(currentDate, autoSaveRef.current);
+        }, 1500);
+        return () => {
+            if (guardadoTimerRef.current) clearTimeout(guardadoTimerRef.current);
+        };
+    }, [mealsData, tipoDia, numComidas, momentoEntreno, opcionPeri, volcadoMeal,
+        currentDate, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Reload distribution when config changes
     useEffect(() => {
@@ -1421,6 +1472,27 @@ const NutritionPage = () => {
         />
     );
 
+    // Aviso de guardado. Solo aparece cuando hay algo que contar: mientras guarda, cuando acaba
+    // y, sobre todo, si ha fallado (antes fallaba en silencio y el dia se perdia sin avisar).
+    const renderEstadoGuardado = () => {
+        if (guardadoEstado === 'idle') return null;
+        if (guardadoEstado === 'error') {
+            return (
+                <button onClick={flushGuardado}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-red-400 hover:underline">
+                    <AlertCircle className="w-3.5 h-3.5" /> No se ha podido guardar. Reintentar
+                </button>
+            );
+        }
+        return (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {guardadoEstado === 'guardando'
+                    ? <><div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Guardando...</>
+                    : <><Check className="w-3.5 h-3.5 text-green-500" /> Guardado</>}
+            </span>
+        );
+    };
+
     const renderActions = (suffix = '') => (
         <div className="surface p-3 grid grid-cols-3 gap-2">
             <button onClick={exportPdf} disabled={exportingPdf} data-testid={`export-pdf-btn${suffix}`} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
@@ -1442,6 +1514,7 @@ const NutritionPage = () => {
                 <div>
                     <p className="caption text-brand mb-1">Plan nutricional</p>
                     <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none">Nutrición</h1>
+                    <div className="mt-1 h-4">{renderEstadoGuardado()}</div>
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={exportPdf} disabled={exportingPdf} data-testid="export-pdf-btn"
