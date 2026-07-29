@@ -37,17 +37,32 @@ const CategoryRail = ({
     const isSelected = (catValue) =>
         isArray ? value.includes(catValue) : value === catValue;
 
+    // Cuando se pueden marcar varias categorias, tener el nombre abierto en todas las marcadas
+    // llenaba la pantalla de cajitas superpuestas. Solo se queda abierta la ultima que has tocado.
+    const [ultima, setUltima] = useState(null);
+
     const handleClick = (catValue) => {
         if (isArray) {
-            if (catValue === '' || catValue == null) { onChange?.([]); return; }
-            const next = value.includes(catValue)
+            if (catValue === '' || catValue == null) { onChange?.([]); setUltima(null); return; }
+            const quitando = value.includes(catValue);
+            const next = quitando
                 ? value.filter((v) => v !== catValue)
                 : [...value, catValue];
+            setUltima(quitando ? null : catValue);
             onChange?.(next);
         } else {
             onChange?.(value === catValue ? '' : catValue);
         }
     };
+
+    // Cual lleva el nombre visible. En seleccion simple, la unica marcada (como hasta ahora).
+    // En multiple, la ultima tocada; si se quito, la ultima que quede marcada, para que al
+    // volver a la pantalla con filtros ya puestos siga viendose uno.
+    const destacada = !isArray
+        ? (value || null)
+        : (ultima && value.includes(ultima)
+            ? ultima
+            : (value.length ? value[value.length - 1] : null));
 
     // Recorte a `maxRows` filas: altura = filas*altoPill + (filas-1)*gap.
     // La pill se mide en el DOM (w-8/w-9 son rem y el html usa font-size 17/18px,
@@ -80,9 +95,9 @@ const CategoryRail = ({
 
     const clampStyle = (collapsible && !expanded) ? { maxHeight: collapsedMaxH, overflow: 'hidden' } : undefined;
 
-    // El tooltip de la categoría SELECCIONADA se queda abierto: en tablet y móvil no hay
-    // hover, así que sin esto no se puede saber qué categoría está aplicada. El resto se
-    // abren y cierran con el ratón como siempre (`abierta` guarda cuál lo está).
+    // El nombre de la categoría marcada se queda visible: en tablet y móvil no hay ratón, así
+    // que sin esto no se puede saber qué categoría está aplicada. El resto se abren y cierran
+    // con el ratón como siempre (`abierta` guarda cuál lo está).
     const [abierta, setAbierta] = useState(null);
 
     const pills = (
@@ -93,7 +108,7 @@ const CategoryRail = ({
                 return (
                     <Tooltip
                         key={cat.value || '__all__'}
-                        open={selected || abierta === cat.value}
+                        open={destacada === cat.value || abierta === cat.value}
                         onOpenChange={(o) => setAbierta(o ? cat.value : null)}
                     >
                         <TooltipTrigger asChild>
