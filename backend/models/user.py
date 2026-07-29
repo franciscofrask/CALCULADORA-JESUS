@@ -366,6 +366,9 @@ class ClientProfile(BaseModel):
     # Cuestionario de ajuste (paso 2) hecho: hasta entonces sus macros son los provisionales
     # que salieron de las cuatro preguntas del alta.
     ajuste_macros_completado: Optional[bool] = None
+    # Progreso del cuestionario de ajuste: {respuestas: {...}, paso: n}. Se guarda a cada
+    # respuesta para que pueda salirse y volver donde lo dejo. Se borra al terminarlo.
+    ajuste_macros_progreso: Optional[Dict[str, Any]] = None
     # Onboarding guiado (tour de producto): progreso por usuario.
     onboarding_completed: Optional[bool] = None
     onboarding_step: Optional[str] = None

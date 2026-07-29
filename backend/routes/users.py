@@ -249,6 +249,32 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado}
 
 
+@router.put("/clients/ajuste-progreso")
+async def guardar_progreso_ajuste(data: dict, user = Depends(get_current_user)):
+    """
+    Guarda el cuestionario de ajuste a medias, respuesta a respuesta.
+
+    Sin esto, salirse a mitad significaba empezar de cero, y son nueve preguntas. Se guarda lo
+    contestado y en que pantalla iba; al volver, sigue donde lo dejo.
+    """
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+    respuestas = data.get("respuestas")
+    if not isinstance(respuestas, dict):
+        raise HTTPException(status_code=400, detail="Faltan las respuestas")
+    paso = data.get("paso")
+    progreso = {
+        "respuestas": respuestas,
+        "paso": int(paso) if isinstance(paso, (int, float)) else 0,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    r = await db.client_profiles.update_one(
+        {"user_id": user["id"]}, {"$set": {"ajuste_macros_progreso": progreso}})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    return {"guardado": True, "paso": progreso["paso"]}
+
+
 @router.post("/clients/ajustar-macros")
 async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     """
@@ -270,7 +296,9 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
                             detail="Faltan tus datos de partida (peso, grasa y objetivo). Completa el alta primero.")
 
     ajustes = data.model_dump()
-    update = {"ajustes_macros": ajustes, "ajuste_macros_completado": True}
+    # Terminado: el progreso a medias ya no hace falta.
+    update = {"ajustes_macros": ajustes, "ajuste_macros_completado": True,
+              "ajuste_macros_progreso": None}
 
     try:
         resultado = calcular_macros_v2(

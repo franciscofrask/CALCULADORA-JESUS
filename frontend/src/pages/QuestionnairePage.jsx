@@ -356,7 +356,36 @@ const MiniChoice = ({ k, options, answers, set }) => (
     </div>
 );
 
-const Shell = ({ progress, children }) => (
+// Los macros que va teniendo, siempre a la vista, con lo que se mueve cada uno respecto a lo
+// anterior. Es la pieza que hace que valga la pena contestar la pregunta siguiente.
+const MacrosEnVivo = ({ macros, previos, calculando }) => {
+    if (!macros) return null;
+    const linea = (etiqueta, ahora, antes) => {
+        const delta = (antes != null && ahora != null) ? ahora - antes : 0;
+        return (
+            <div className="flex items-baseline gap-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-foreground/40">{etiqueta}</span>
+                <span className="font-heading font-extrabold text-xl text-brand tabular-nums">{ahora}</span>
+                {delta !== 0 && (
+                    <span className={`text-[11px] font-bold ${delta > 0 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {delta > 0 ? '+' : ''}{delta}
+                    </span>
+                )}
+            </div>
+        );
+    };
+    const hcE = macros.entreno?.hidratos, hcD = macros.descanso?.hidratos;
+    return (
+        <div className={`flex items-center gap-5 flex-wrap transition-opacity ${calculando ? 'opacity-50' : ''}`}>
+            <span className="text-[10px] uppercase tracking-wider text-foreground/30">Tus macros</span>
+            {linea('Entreno', hcE, previos?.entreno?.hidratos)}
+            {linea('Descanso', hcD, previos?.descanso?.hidratos)}
+            {linea('Peri', macros.perientreno?.hidratos, previos?.perientreno?.hidratos)}
+        </div>
+    );
+};
+
+const Shell = ({ progress, children, tramo, cabecera }) => (
     <div className="min-h-screen bg-background relative overflow-hidden flex flex-col">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand/10 rounded-full blur-[150px]" />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-brand/5 rounded-full blur-[120px]" />
@@ -366,9 +395,13 @@ const Shell = ({ progress, children }) => (
         <div className="fixed top-0 left-0 right-0 h-1 bg-white/10 z-20">
             <div className="h-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
-        {/* Cabecera con logo de marca */}
-        <div className="relative z-10 flex items-center h-16 px-6 md:px-10">
-            <Logo12EN12 size="sm" tone="dark" />
+        {/* Cabecera: logo, en qué tramo va y los macros en vivo */}
+        <div className="relative z-10 flex items-center justify-between gap-4 min-h-16 px-6 md:px-10 py-2 flex-wrap">
+            <div className="flex items-center gap-4">
+                <Logo12EN12 size="sm" tone="dark" />
+                {tramo && <span className="text-[11px] uppercase tracking-wider text-foreground/40 font-semibold">{tramo}</span>}
+            </div>
+            {cabecera}
         </div>
         <div className="flex-1 flex items-center justify-center p-6 relative z-10">
             <div className="w-full max-w-2xl">{children}</div>
@@ -390,6 +423,12 @@ const QuestionnairePage = () => {
     const [nivel0Enviado, setNivel0Enviado] = useState(false);
     // Momento mágico: primeros menús del banco personal (null = cargando).
     const [menusMagia, setMenusMagia] = useState(null);
+    // Macros recalculados a cada respuesta, para verlos moverse. No se aplican: son un avance.
+    const [vistaPrevia, setVistaPrevia] = useState(null);
+    const [calculandoVivo, setCalculandoVivo] = useState(false);
+    const progresoCargadoRef = useRef(false);
+    // Los macros de antes de la ultima respuesta, para poder mostrar cuanto se ha movido cada uno.
+    const previosRef = useRef(null);
 
     // Nivel 1 solo para planes con coach (calculadora == 'personalizado').
     const tieneCoach = can(CAP.MACROS_PERSONALIZADOS);
@@ -461,6 +500,24 @@ const QuestionnairePage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx]);
 
+    // Retomar el cuestionario de ajuste donde lo dejó, y arrancar la cabecera con los macros
+    // que tiene ahora mismo (los provisionales del alta) para que se vea de dónde parte.
+    useEffect(() => {
+        if (!modoAjuste || progresoCargadoRef.current || !profile) return;
+        progresoCargadoRef.current = true;
+        const guardado = profile.ajuste_macros_progreso;
+        if (guardado?.respuestas && Object.keys(guardado.respuestas).length) {
+            setAnswers(a => ({ ...a, ...guardado.respuestas }));
+            const paso = Number(guardado.paso) || 0;
+            if (paso > 0 && paso < flow.length) setIdx(paso);
+            recalcularEnVivo(guardado.respuestas);
+            toast.info('Seguimos donde lo dejaste');
+        } else {
+            recalcularEnVivo({});
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [modoAjuste, profile]);
+
     // Nombre y email ya los tenemos del login: autocompletar (el email no es editable).
     useEffect(() => {
         if (!user) return;
@@ -501,6 +558,49 @@ const QuestionnairePage = () => {
 
     const set = (key, value) => setAnswers(a => ({ ...a, [key]: value }));
 
+    // ── Macros en vivo (doc 29-07) ────────────────────────────────────────────
+    // Tras cada respuesta se recalcula y el cliente ve moverse los numeros. Si contesta y no
+    // pasa nada visible, no contesta la siguiente. Se calcula sin aplicar nada: lo definitivo
+    // se guarda al terminar el cuestionario.
+    const recalcularEnVivo = useCallback(async (respuestas) => {
+        if (!modoAjuste || !profile?.weight || !profile?.goal) return;
+        setCalculandoVivo(true);
+        try {
+            const res = await api.post('/calculator/targets', {
+                peso: profile.weight,
+                sexo: profile.sex || 'hombre',
+                porcentaje_graso: profile.body_fat,
+                objetivo: profile.goal,
+                ajustes: ajustesDe(respuestas),
+            });
+            // El valor anterior se guarda desde dentro del setState: asi es el real y no uno
+            // capturado en un closure viejo.
+            setVistaPrevia(anterior => {
+                previosRef.current = anterior?.macros || null;
+                return res.data || null;
+            });
+        } catch (e) {
+            /* el recalculo es un extra: si falla, se sigue contestando */
+        } finally {
+            setCalculandoVivo(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, modoAjuste, profile]);
+
+    // El progreso se guarda a cada respuesta: si se sale y vuelve, sigue donde lo dejo.
+    const guardarProgreso = useCallback((respuestas, paso) => {
+        if (!modoAjuste) return;
+        api.put('/clients/ajuste-progreso', { respuestas, paso }).catch(() => {});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, modoAjuste]);
+
+    // Una respuesta contestada: se recalcula y se guarda, las dos cosas con lo de este instante.
+    const trasResponder = (key, value) => {
+        const respuestas = { ...answers, [key]: value };
+        recalcularEnVivo(respuestas);
+        guardarProgreso(respuestas, idx);
+    };
+
     // Pasos condicionales (p.ej. el detalle de la dieta solo si sigue_dieta).
     const visible = (s) => !s.cond || s.cond(answers);
     const goNext = () => setIdx(i => {
@@ -517,6 +617,22 @@ const QuestionnairePage = () => {
     const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 
     // Las respuestas que afinan los macros, en el formato que espera el backend.
+    // Recibe las respuestas por parametro para poder calcular con las de ESTE instante: el
+    // estado de React aun no se ha actualizado cuando se acaba de pulsar una opcion.
+    const ajustesDe = (a) => ({
+        actividad_diaria: a.actividad_diaria ?? null,
+        deporte_extra: a.deporte_extra ?? null,
+        facilidad_engordar: a.facilidad_engordar ?? null,
+        cuesta_definir: a.cuesta_definir ?? null,
+        sigue_dieta: a.sigue_dieta ?? null,
+        tiempo_dieta: a.sigue_dieta ? (a.tiempo_dieta ?? null) : null,
+        como_va: a.sigue_dieta ? (a.como_va ?? null) : null,
+        hambre_saturacion: a.sigue_dieta ? (a.hambre_saturacion ?? null) : null,
+        dieta_texto: a.sigue_dieta ? (a.dieta_texto || null) : null,
+        dieta_hc_entreno: a.sigue_dieta ? num(a.dieta_hc_entreno) : null,
+        dieta_grasa_entreno: a.sigue_dieta ? num(a.dieta_grasa_entreno) : null,
+    });
+
     const ajustesDelCuestionario = () => ({
         actividad_diaria: answers.actividad_diaria ?? null,
         deporte_extra: answers.deporte_extra ?? null,
@@ -620,7 +736,10 @@ const QuestionnairePage = () => {
             return;
         }
         set(step.key, value);
-        setTimeout(goNext, 150);
+        trasResponder(step.key, value);
+        // Un poco mas de pausa que antes: da tiempo a ver moverse los macros de la cabecera
+        // antes de pasar a la siguiente pregunta.
+        setTimeout(goNext, modoAjuste ? 550 : 150);
     };
 
     const confirmOptions = () => {
@@ -1084,7 +1203,29 @@ const QuestionnairePage = () => {
         );
     }
 
-    return <Shell progress={progress}>{body}</Shell>;
+    // La barra va en dos tramos (doc 29-07): el primero ajusta los macros y al acabarlo ya se
+    // los entregamos; el segundo completa el perfil y es opcional. Los pasos de STEPS_AJUSTE
+    // son el primer tramo; lo que viene detras (preferencias y perfil largo) es el segundo.
+    const pasosTramo1 = modoAjuste ? STEPS_AJUSTE.length : flow.length;
+    const enTramo1 = idx < pasosTramo1;
+    const progresoTramo = enTramo1
+        ? ((idx + 1) / pasosTramo1) * 100
+        : ((idx + 1 - pasosTramo1) / Math.max(1, flow.length - pasosTramo1)) * 100;
+    const etiquetaTramo = !modoAjuste
+        ? null
+        : enTramo1 ? 'Ajustando tus macros' : 'Completando tu perfil (opcional)';
+
+    return (
+        <Shell
+            progress={modoAjuste ? progresoTramo : progress}
+            tramo={etiquetaTramo}
+            cabecera={modoAjuste && enTramo1 && step.type !== 'result'
+                ? <MacrosEnVivo macros={vistaPrevia?.macros} previos={previosRef.current} calculando={calculandoVivo} />
+                : null}
+        >
+            {body}
+        </Shell>
+    );
 };
 
 export default QuestionnairePage;

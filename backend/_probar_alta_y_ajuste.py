@@ -54,6 +54,28 @@ async def main():
         perfil = r.json().get("profile") or {}
         print("   ajuste pendiente ->", not perfil.get("ajuste_macros_completado"))
 
+        # 3b) MACROS EN VIVO: cada respuesta recalcula sin aplicar nada
+        print("\n3b) recalculo en vivo (sin aplicar):")
+        acumulado = {}
+        for clave, valor, etiqueta in (
+            ("actividad_diaria", "muy_activo", "muy activo"),
+            ("deporte_extra", True, "+ deporte extra"),
+            ("facilidad_engordar", "normal", "+ engorda lo normal"),
+        ):
+            acumulado[clave] = valor
+            r = await c.post(f"{BASE}/calculator/targets", headers=h, json={
+                "peso": 85, "sexo": "hombre", "porcentaje_graso": 18, "objetivo": "definicion",
+                "ajustes": {**acumulado, "sigue_dieta": False}})
+            print(f"    {etiqueta:22s} -> {macros(r.json())}")
+
+        # 3c) PROGRESO: se guarda a medias y se recupera
+        r = await c.put(f"{BASE}/clients/ajuste-progreso", headers=h, json={
+            "respuestas": acumulado, "paso": 4})
+        print("\n3c) progreso guardado ->", r.status_code, r.json())
+        r = await c.get(f"{BASE}/clients/profile", headers=h)
+        g = (r.json() or {}).get("ajuste_macros_progreso") or {}
+        print("    al volver, paso   ->", g.get("paso"), "| respuestas:", list((g.get('respuestas') or {}).keys()))
+
         # 4) EL AJUSTE: las respuestas que afinan
         r = await c.post(f"{BASE}/clients/ajustar-macros", headers=h, json={
             "actividad_diaria": "muy_activo", "deporte_extra": True,
