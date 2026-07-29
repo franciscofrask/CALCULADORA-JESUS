@@ -415,6 +415,9 @@ const QuestionnairePage = () => {
     const { api, refreshProfile, user, profile, can, token } = useAuth();
     const [idx, setIdx] = useState(0);
     const [answers, setAnswers] = useState({});
+    // Espejo de las respuestas siempre al dia, para las comprobaciones que no pueden esperar al
+    // siguiente render (ver `visible`).
+    const answersRef = useRef({});
     const [loading, setLoading] = useState(false);
     // Resultado del motor v2 tras enviar el Nivel 0 (los 8 números + desglose).
     const [resultado, setResultado] = useState(null);
@@ -436,15 +439,18 @@ const QuestionnairePage = () => {
 
     // Nivel 1 solo para planes con coach (calculadora == 'personalizado').
     const tieneCoach = can(CAP.MACROS_PERSONALIZADOS);
+    // Si ha pulsado "Ajustar macros" manda eso y nada más: sin esta comprobación, un cliente con
+    // coach que le diera al botón acababa en el perfil largo en vez de en el cuestionario.
+    const pidioAjustar = new URLSearchParams(location.search).get('ajustar') === '1';
     // Retomar: Nivel 0 hecho en otra sesión pero Nivel 1 pendiente.
-    const retomandoNivel1 = !!profile?.questionnaire_completed && !nivel0Enviado
+    const retomandoNivel1 = !pidioAjustar && !!profile?.questionnaire_completed && !nivel0Enviado
         && tieneCoach && !profile?.questionnaire_nivel1_completed;
 
     // Dos modos, como pide el doc del 29-07:
     //   ALTA   -> cuatro preguntas y macros provisionales. Es lo que ve quien acaba de entrar.
     //   AJUSTE -> el cuestionario que afina, detras del boton "Ajustar macros". Se llega con
     //             ?ajustar=1, o solo con el alta ya hecha (por si vuelve por el enlace).
-    const modoAjuste = new URLSearchParams(location.search).get('ajustar') === '1'
+    const modoAjuste = pidioAjustar
         || (!!profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1);
 
     const flow = retomandoNivel1
@@ -511,6 +517,7 @@ const QuestionnairePage = () => {
         progresoCargadoRef.current = true;
         const guardado = profile.ajuste_macros_progreso;
         if (guardado?.respuestas && Object.keys(guardado.respuestas).length) {
+            answersRef.current = { ...answersRef.current, ...guardado.respuestas };
             setAnswers(a => ({ ...a, ...guardado.respuestas }));
             const paso = Number(guardado.paso) || 0;
             if (paso > 0 && paso < flow.length) setIdx(paso);
@@ -531,36 +538,6 @@ const QuestionnairePage = () => {
             email: user.email ?? a.email ?? '',
         }));
     }, [user]);
-
-    // Todo completado: no puede volver a rellenarlo (ni por el link).
-    if (profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1) {
-        return (
-            <Shell progress={100}>
-                <div className="text-center">
-                    <div className="w-16 h-16 rounded-full bg-brand/10 flex items-center justify-center mx-auto mb-6">
-                        <Check className="w-8 h-8 text-brand" />
-                    </div>
-                    <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
-                        Ya completaste el cuestionario inicial
-                    </h2>
-                    <p className="text-foreground/60 mb-8 text-sm md:text-base">
-                        Solo se rellena una vez. Tus respuestas ya están guardadas y tus macros calculados.
-                    </p>
-                    <div className="flex justify-center">
-                        <Button onClick={() => navigate('/dashboard')}
-                            className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg">
-                            Ir al inicio <ArrowRight className="w-5 h-5 ml-2" />
-                        </Button>
-                    </div>
-                </div>
-            </Shell>
-        );
-    }
-
-    const step = flow[idx] || flow[0];
-    const progress = ((idx + 1) / flow.length) * 100;
-
-    const set = (key, value) => setAnswers(a => ({ ...a, [key]: value }));
 
     // ── Macros en vivo (doc 29-07) ────────────────────────────────────────────
     // Tras cada respuesta se recalcula y el cliente ve moverse los numeros. Si contesta y no
@@ -607,6 +584,43 @@ const QuestionnairePage = () => {
         } catch (e) { setMisDias([]); }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, misDias]);
+
+    // El ALTA no se puede repetir (ni por el enlace). El cuestionario de AJUSTE sí: si cambia de
+    // trabajo o empieza a hacer otro deporte, lo vuelve a pasar y sus macros se recalculan.
+    if (profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1 && !pidioAjustar) {
+        return (
+            <Shell progress={100}>
+                <div className="text-center">
+                    <div className="w-16 h-16 rounded-full bg-brand/10 flex items-center justify-center mx-auto mb-6">
+                        <Check className="w-8 h-8 text-brand" />
+                    </div>
+                    <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
+                        Ya completaste el cuestionario inicial
+                    </h2>
+                    <p className="text-foreground/60 mb-8 text-sm md:text-base">
+                        Solo se rellena una vez. Tus respuestas ya están guardadas y tus macros calculados.
+                    </p>
+                    <div className="flex justify-center">
+                        <Button onClick={() => navigate('/dashboard')}
+                            className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg">
+                            Ir al inicio <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                    </div>
+                </div>
+            </Shell>
+        );
+    }
+
+    const step = flow[idx] || flow[0];
+    const progress = ((idx + 1) / flow.length) * 100;
+
+    const set = (key, value) => {
+        // El ref se actualiza a la vez que el estado para que `visible()` vea la respuesta que
+        // se acaba de dar, sin esperar al siguiente render.
+        answersRef.current = { ...answersRef.current, [key]: value };
+        setAnswers(a => ({ ...a, [key]: value }));
+    };
+
 
     const elegirFotoDieta = () => {
         const input = document.createElement('input');
@@ -658,6 +672,7 @@ const QuestionnairePage = () => {
             dieta_grasa_entreno: m.grasa ?? null,
             dieta_confirmada: true,
         };
+        answersRef.current = respuestas;
         setAnswers(respuestas);
         recalcularEnVivo(respuestas);
         guardarProgreso(respuestas, idx);
@@ -672,8 +687,13 @@ const QuestionnairePage = () => {
         guardarProgreso(respuestas, idx);
     };
 
-    // Pasos condicionales (p.ej. el detalle de la dieta solo si sigue_dieta).
-    const visible = (s) => !s.cond || s.cond(answers);
+    // Pasos condicionales (p.ej. las preguntas de la dieta solo si sigue_dieta).
+    //
+    // Se leen de un ref y no del estado a proposito: al pasar de pantalla se comprueba que pasos
+    // hay que saltar, y esa comprobacion ocurre justo despues de contestar, cuando el estado de
+    // React todavia tiene el valor anterior. Con `answers` a secas, decir "si, sigo una dieta"
+    // se saltaba las cuatro preguntas de la dieta, que es justo lo que acababa de habilitar.
+    const visible = (s) => !s.cond || s.cond(answersRef.current);
     const goNext = () => setIdx(i => {
         let j = i + 1;
         while (j < flow.length - 1 && !visible(flow[j])) j++;
