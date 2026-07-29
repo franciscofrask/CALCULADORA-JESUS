@@ -249,6 +249,48 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado}
 
 
+@router.get("/clients/mis-dias")
+async def mis_dias_montados(user = Depends(get_current_user)):
+    """Los últimos días que el cliente tiene montados en la calculadora (para elegir uno en P10)."""
+    from core.lectura_dieta import dias_disponibles
+    return {"dias": await dias_disponibles(user["id"])}
+
+
+@router.post("/clients/leer-dieta")
+async def leer_dieta(data: dict, user = Depends(get_current_user)):
+    """
+    P10 del doc: traduce a macros la dieta que trae el cliente, por cualquiera de las tres
+    puertas (texto, un menú suyo o una foto). NO aplica nada: solo devuelve lo entendido para
+    que él lo confirme. Sin su confirmación este dato no entra en el cálculo.
+    """
+    from core.lectura_dieta import leer_de_texto, leer_de_menu_guardado, leer_de_foto
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+
+    texto = (data.get("texto") or "").strip()
+    fecha_menu = (data.get("fecha_menu") or "").strip()
+    imagen = data.get("imagen")
+
+    if fecha_menu:
+        resultado = await leer_de_menu_guardado(fecha_menu, user["id"])
+    elif imagen:
+        resultado = await leer_de_foto(imagen, user["id"])
+    elif texto:
+        if len(texto) > 4000:
+            raise HTTPException(status_code=400, detail="El texto es demasiado largo")
+        resultado = await leer_de_texto(texto, user["id"])
+    else:
+        raise HTTPException(status_code=400, detail="Cuéntanos tu dieta, elige un día o sube una foto")
+
+    if resultado.get("error"):
+        raise HTTPException(status_code=422, detail=resultado["error"])
+    if not resultado.get("alimentos"):
+        raise HTTPException(status_code=422,
+                            detail="No hemos reconocido ningún alimento. Prueba a escribirlo con cantidades.")
+    return resultado
+
+
 @router.put("/clients/ajuste-progreso")
 async def guardar_progreso_ajuste(data: dict, user = Depends(get_current_user)):
     """

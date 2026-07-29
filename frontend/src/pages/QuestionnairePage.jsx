@@ -429,6 +429,10 @@ const QuestionnairePage = () => {
     const progresoCargadoRef = useRef(false);
     // Los macros de antes de la ultima respuesta, para poder mostrar cuanto se ha movido cada uno.
     const previosRef = useRef(null);
+    // P10: lo que hemos entendido de su dieta, pendiente de que lo confirme.
+    const [lecturaDieta, setLecturaDieta] = useState(null);
+    const [leyendoDieta, setLeyendoDieta] = useState(false);
+    const [misDias, setMisDias] = useState(null);   // null = sin pedir todavia
 
     // Nivel 1 solo para planes con coach (calculadora == 'personalizado').
     const tieneCoach = can(CAP.MACROS_PERSONALIZADOS);
@@ -594,6 +598,73 @@ const QuestionnairePage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, modoAjuste]);
 
+    // ── P10: leer la dieta que trae el cliente ────────────────────────────────
+    const cargarMisDias = useCallback(async () => {
+        if (misDias !== null) return;
+        try {
+            const r = await api.get('/clients/mis-dias');
+            setMisDias(r.data?.dias || []);
+        } catch (e) { setMisDias([]); }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, misDias]);
+
+    const elegirFotoDieta = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (ev) => {
+            const file = ev.target.files?.[0];
+            if (!file) return;
+            if (file.size > 8 * 1024 * 1024) { toast.error('La foto pesa demasiado (máximo 8 MB)'); return; }
+            const reader = new FileReader();
+            reader.onload = (e) => set('dieta_imagen', e.target.result);
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    };
+
+    const leerMiDieta = async () => {
+        const modo = answers.dieta_modo || 'texto';
+        const cuerpo = modo === 'menu' ? { fecha_menu: answers.dieta_fecha_menu }
+            : modo === 'foto' ? { imagen: answers.dieta_imagen }
+            : { texto: answers.dieta_texto };
+        const vacio = modo === 'menu' ? !answers.dieta_fecha_menu
+            : modo === 'foto' ? !answers.dieta_imagen
+            : !(answers.dieta_texto || '').trim();
+        if (vacio) {
+            toast.error(modo === 'menu' ? 'Elige uno de tus días'
+                : modo === 'foto' ? 'Sube la foto de tu dieta'
+                : 'Cuéntanos qué comes en un día');
+            return;
+        }
+        setLeyendoDieta(true);
+        try {
+            const r = await api.post('/clients/leer-dieta', cuerpo);
+            setLecturaDieta(r.data);
+        } catch (e) {
+            toast.error(e.response?.data?.detail || 'No hemos podido leer tu dieta');
+        } finally {
+            setLeyendoDieta(false);
+        }
+    };
+
+    // Confirmada: ya puede entrar en el cálculo. Los hidratos que manda el método son los del
+    // día de entreno (comidas + peri), que es lo que el cliente acaba de validar.
+    const confirmarDieta = () => {
+        const m = lecturaDieta?.macros || {};
+        const respuestas = {
+            ...answers,
+            dieta_hc_entreno: m.hidratos ?? null,
+            dieta_grasa_entreno: m.grasa ?? null,
+            dieta_confirmada: true,
+        };
+        setAnswers(respuestas);
+        recalcularEnVivo(respuestas);
+        guardarProgreso(respuestas, idx);
+        setLecturaDieta(null);
+        goNext();
+    };
+
     // Una respuesta contestada: se recalcula y se guarda, las dos cosas con lo de este instante.
     const trasResponder = (key, value) => {
         const respuestas = { ...answers, [key]: value };
@@ -631,6 +702,7 @@ const QuestionnairePage = () => {
         dieta_texto: a.sigue_dieta ? (a.dieta_texto || null) : null,
         dieta_hc_entreno: a.sigue_dieta ? num(a.dieta_hc_entreno) : null,
         dieta_grasa_entreno: a.sigue_dieta ? num(a.dieta_grasa_entreno) : null,
+        dieta_confirmada: a.dieta_confirmada === true,
     });
 
     const ajustesDelCuestionario = () => ({
@@ -645,6 +717,7 @@ const QuestionnairePage = () => {
         dieta_texto: answers.sigue_dieta ? (answers.dieta_texto || null) : null,
         dieta_hc_entreno: answers.sigue_dieta ? num(answers.dieta_hc_entreno) : null,
         dieta_grasa_entreno: answers.sigue_dieta ? num(answers.dieta_grasa_entreno) : null,
+        dieta_confirmada: answers.dieta_confirmada === true,
     });
 
     // CALCULAR. En el alta van los cuatro datos de la tabla y salen macros provisionales; en el
@@ -972,30 +1045,110 @@ const QuestionnairePage = () => {
             </div>
         );
     } else if (step.type === 'dieta') {
-        // Dieta reportada: números para el motor + texto libre para el coach.
-        const hcOk = !isNaN(parseFloat(answers.dieta_hc_entreno)) && parseFloat(answers.dieta_hc_entreno) > 0;
+        // P10 del doc: tres formas de meter la dieta y CONFIRMACIÓN OBLIGATORIA. El cliente no
+        // calcula nada: cuenta lo que come y le devolvemos lo que hemos entendido. Sin su
+        // confirmación el dato no entra en el cálculo, porque manda sobre todo lo demás.
         body = (
             <div>
                 <Title />
-                <div className="space-y-4 mb-8">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <MiniInput {...mini} k="dieta_hc_entreno" label="Hidratos totales de tu día de entreno" type="number" unit="g" placeholder="250" />
-                        <MiniInput {...mini} k="dieta_grasa_entreno" label="Grasa aproximada (opcional)" type="number" unit="g" placeholder="60" />
+
+                {!lecturaDieta ? (
+                    <div className="space-y-4 mb-6">
+                        {/* Las tres puertas */}
+                        <div className="grid grid-cols-3 gap-2">
+                            {[['texto', 'Escribirla'], ['menu', 'Un día mío'], ['foto', 'Una foto']].map(([modo, etiqueta]) => (
+                                <button key={modo} onClick={() => { set('dieta_modo', modo); if (modo === 'menu') cargarMisDias(); }}
+                                    className={`px-3 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                                        (answers.dieta_modo || 'texto') === modo
+                                            ? 'border-brand bg-brand/10 text-foreground'
+                                            : 'border-[#222222] text-foreground/60 hover:border-white/30'}`}>
+                                    {etiqueta}
+                                </button>
+                            ))}
+                        </div>
+
+                        {(answers.dieta_modo || 'texto') === 'texto' && (
+                            <textarea value={answers.dieta_texto ?? ''} onChange={e => set('dieta_texto', e.target.value)}
+                                rows={5} placeholder="Un día tipo, con cantidades. Por ejemplo: desayuno 80 g de avena y 30 g de proteína; comida 200 g de pollo con 100 g de arroz; cena merluza con ensalada."
+                                className="w-full rounded-xl bg-card border-2 border-[#222222] p-3 text-foreground text-sm resize-none focus:outline-none focus:border-brand" />
+                        )}
+
+                        {answers.dieta_modo === 'menu' && (
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                                {misDias === null && <p className="text-foreground/50 text-sm">Buscando tus días...</p>}
+                                {misDias?.length === 0 && (
+                                    <p className="text-foreground/50 text-sm">
+                                        Todavía no tienes ningún día montado en la calculadora. Escríbela o sube una foto.
+                                    </p>
+                                )}
+                                {misDias?.map(d => (
+                                    <button key={d.fecha} onClick={() => set('dieta_fecha_menu', d.fecha)}
+                                        className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                                            answers.dieta_fecha_menu === d.fecha
+                                                ? 'border-brand bg-brand/10' : 'border-[#222222] hover:border-white/30'}`}>
+                                        <span className="text-foreground text-sm font-semibold">{d.fecha}</span>
+                                        <span className="text-foreground/50 text-xs ml-2">{d.alimentos} alimentos</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {answers.dieta_modo === 'foto' && (
+                            <div>
+                                <button onClick={elegirFotoDieta}
+                                    className="w-full rounded-xl border-2 border-dashed border-[#333] py-8 text-center hover:border-brand transition-colors">
+                                    <ImagePlus className="w-7 h-7 text-foreground/40 mx-auto mb-2" />
+                                    <span className="text-foreground/60 text-sm">
+                                        {answers.dieta_imagen ? 'Foto elegida. Toca para cambiarla' : 'Sube la foto de tu dieta'}
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-3">
+                            <BackBtn />
+                            <Button onClick={leerMiDieta} disabled={leyendoDieta}
+                                className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
+                                {leyendoDieta ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Leyendo...</> : <>Calcular <ArrowRight className="w-4 h-4 ml-2" /></>}
+                            </Button>
+                            <Button variant="ghost" onClick={goNext} className="text-foreground/50">
+                                No lo sé, sáltalo
+                            </Button>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-1.5">¿Qué comes en un día normal?</label>
-                        <textarea value={answers.dieta_texto ?? ''} onChange={e => set('dieta_texto', e.target.value)}
-                            rows={4} placeholder="Desayuno, comida, cena... con cantidades si las sabes. Se guarda tal cual para tu entrenador."
-                            className="w-full rounded-xl bg-card border-2 border-[#222222] p-3 text-foreground text-sm resize-none focus:outline-none focus:border-brand" />
+                ) : (
+                    /* Lo que hemos entendido, para que lo confirme */
+                    <div className="space-y-4 mb-6">
+                        <div className="rounded-xl border-2 border-brand/40 bg-brand/5 p-5">
+                            <p className="text-foreground text-base mb-3">
+                                He entendido que estás comiendo{' '}
+                                <strong className="text-brand">{lecturaDieta.macros.hidratos} g de hidratos</strong>,{' '}
+                                <strong className="text-brand">{lecturaDieta.macros.proteina} g de proteína</strong> y{' '}
+                                <strong className="text-brand">{lecturaDieta.macros.grasa} g de grasa</strong>. ¿Es correcto?
+                            </p>
+                            <ul className="text-xs text-foreground/50 space-y-0.5 max-h-40 overflow-y-auto">
+                                {lecturaDieta.alimentos.map((a, i) => (
+                                    <li key={i}>{a.cantidad_g} g · {a.nombre}</li>
+                                ))}
+                            </ul>
+                            {lecturaDieta.no_reconocidos?.length > 0 && (
+                                <p className="text-xs text-amber-500 mt-2">
+                                    No hemos reconocido: {lecturaDieta.no_reconocidos.join(', ')}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                            <Button onClick={confirmarDieta}
+                                className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
+                                Sí, es correcto <ArrowRight className="w-4 h-4 ml-2" />
+                            </Button>
+                            <Button variant="outline" onClick={() => setLecturaDieta(null)}
+                                className="border-[#333] text-foreground">
+                                No, corregir
+                            </Button>
+                        </div>
                     </div>
-                </div>
-                <div className="flex gap-3">
-                    <BackBtn />
-                    <Button onClick={goNext} disabled={!hcOk}
-                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
-                        OK <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                </div>
+                )}
             </div>
         );
     } else if (step.type === 'pesos') {

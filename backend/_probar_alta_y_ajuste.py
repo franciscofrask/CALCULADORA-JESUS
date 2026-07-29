@@ -76,6 +76,35 @@ async def main():
         g = (r.json() or {}).get("ajuste_macros_progreso") or {}
         print("    al volver, paso   ->", g.get("paso"), "| respuestas:", list((g.get('respuestas') or {}).keys()))
 
+        # 3d) P10: leer la dieta que trae, por sus tres puertas
+        print("\n3d) leer su dieta (P10):")
+        r = await c.post(f"{BASE}/clients/leer-dieta", headers=h, json={
+            "texto": "80 g de avena, 200 g de pollo, 150 g de arroz y 30 g de aceite de oliva"})
+        if r.status_code == 200:
+            m = r.json()["macros"]
+            print(f"    escrita  -> {m['hidratos']} g HC, {m['proteina']} g P, {m['grasa']} g G "
+                  f"({len(r.json()['alimentos'])} alimentos)")
+        else:
+            print("    escrita  ->", r.status_code, r.text[:120])
+        r = await c.get(f"{BASE}/clients/mis-dias", headers=h)
+        print("    sus dias ->", r.status_code, r.json())
+        r = await c.post(f"{BASE}/clients/leer-dieta", headers=h, json={"texto": "asdfgh qwerty"})
+        print("    sin sentido ->", r.status_code, "(422 = no reconoce nada, correcto)")
+
+        # 3e) La dieta SIN confirmar no puede entrar en el calculo
+        r = await c.post(f"{BASE}/clients/ajustar-macros", headers=h, json={
+            "sigue_dieta": True, "como_va": "bien", "dieta_hc_entreno": 400,
+            "dieta_confirmada": False})
+        sin_conf = macros(r.json().get("resultado"))
+        r = await c.post(f"{BASE}/clients/ajustar-macros", headers=h, json={
+            "sigue_dieta": True, "como_va": "bien", "dieta_hc_entreno": 400,
+            "dieta_confirmada": True})
+        con_conf = macros(r.json().get("resultado"))
+        print("\n3e) la misma dieta de 400 g:")
+        print("    SIN confirmar ->", sin_conf)
+        print("    confirmada    ->", con_conf)
+        print("    se respeta la confirmacion:", "SI" if sin_conf != con_conf else "NO")
+
         # 4) EL AJUSTE: las respuestas que afinan
         r = await c.post(f"{BASE}/clients/ajustar-macros", headers=h, json={
             "actividad_diaria": "muy_activo", "deporte_extra": True,
