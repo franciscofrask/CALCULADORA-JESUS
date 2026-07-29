@@ -1,17 +1,23 @@
 """
-MOTOR DE MACROS v2 - Quiz inicial + modificadores (spec 18-07-2026)
-===================================================================
+MOTOR DE MACROS - Cuestionario de ajuste (doc de Jesus del 29-07-2026)
+======================================================================
 Envuelve calcular_targets() (la tabla) y aplica encima, EN ORDEN:
-modificadores de hidratos -> dato real (dieta reportada) -> suelos -> redondeo.
+modificadores de hidratos -> regla dura descanso/entreno -> dieta real ->
+grasa segun la dieta que trae -> suelos -> redondeo.
 
-Reglas de la spec:
+Reglas del doc:
 - Los modificadores solo tocan los HIDRATOS de entreno y descanso, NUNCA el
-  perientreno y NUNCA la proteina (excepcion: farmacologia, +10% proteina
-  SOLO en descanso).
+  perientreno y NUNCA la proteina.
 - Los porcentajes se SUMAN sobre la base de tabla (no compuestos).
 - "Engordo enseguida" = VETO: anula todas las subidas de hidratos.
+- El descanso NUNCA por encima del entreno (comidas contra comidas, el peri
+  aparte): si se pasa, se sube el entreno hasta igualarlo.
+- La dieta real manda sobre todo lo anterior, y lo que se hace con ella
+  depende de como le esta funcionando (matrices por objetivo).
 - hc_e de la tabla son los hidratos de COMIDAS del dia de entreno (el peri
-  va aparte en hc_pe); por eso el suelo de comidas es 50 (con peri 15 => 65).
+  va aparte en hc_pe); por eso el suelo de comidas es 60 (con peri 15 => 75).
+
+Pendiente de Jesus: la regla de la TRT (se guarda, no se aplica).
 
 Modulo puro: sin Mongo y sin FastAPI. La persistencia y los avisos al coach
 viven en las rutas.
@@ -28,39 +34,70 @@ from target_calculator import calcular_targets
 # Modificadores de hidratos (fracciones sobre la base de tabla)
 MOD_MUY_ACTIVO_ENTRENO = 0.10
 MOD_MUY_ACTIVO_DESCANSO = 0.10
-MOD_DEPORTE_EXTRA_DESCANSO = 0.10        # solo descanso
-MOD_CASI_NO_ENGORDA = 0.20               # entreno y descanso; requiere bf <= 20
-BF_MAX_CASI_NO_ENGORDA = 20.0
+# Deporte extra: solo descanso, y el doc del 29-07 lo separa por objetivo. El partido del domingo
+# cae en un dia marcado como descanso que en realidad es de entreno disfrazado.
+MOD_DEPORTE_EXTRA_DESCANSO_DEFINICION = 0.10
+MOD_DEPORTE_EXTRA_DESCANSO_VOLUMEN = 0.20
+MOD_NO_ENGORDA = 0.20                    # entreno y descanso; requiere bf <= 20
+BF_MAX_NO_ENGORDA = 20.0
+# Desde el doc del 29-07 el +20% lo cobran "casi no lo noto" Y "engordo lo normal": las dos
+# condiciones (respuesta y grasa <= 20%) tienen que darse a la vez.
+RESPUESTAS_QUE_SUBEN = ("casi_no", "normal")
 TOPE_SUBIDA_ENTRENO = 0.30
 TOPE_SUBIDA_DESCANSO = 0.40
 
-# Excepcion que toca proteina: farmacologia (+10% SOLO descanso)
+# Excepcion que toca proteina: farmacologia / TRT (+10% SOLO descanso)
 MOD_FARMACOLOGIA_PROTEINA_DESCANSO = 0.10
 
 # NO PROGRAMADOS AUN (guardar el dato, no aplicar):
 APLICAR_HISTORIAL_DIETA = False   # +-10% por historial de dieta: en pausa, sin validar
-APLICAR_ENGORDA_EN_MUJERES = False  # +20% "casi no engordo" en mujeres: n=11, sin validar
+APLICAR_ENGORDA_EN_MUJERES = False  # +20% "no engorda" en mujeres: n=11, sin validar
+# TRT / farmacologia: el doc del 29-07 dice que la pregunta se guarda y que la regla se activara
+# cuando Jesus confirme como afecta. Hasta entonces NO se aplica (antes sumaba +10% de proteina
+# en descanso, que es justo lo que el doc deja pendiente de definir).
+APLICAR_FARMACOLOGIA = False
 # El VETO ("engordo enseguida") SI aplica a ambos sexos: es lo conservador.
 
 # Suelos (la tabla ya cumple la proteina; se dejan como red de seguridad).
 # Los "macros umbral" (40 g de hidratos / 40 de grasa, max un mes) y la grasa
 # de descanso 70 puntual NO los aplica el motor: son decision manual del coach.
 SUELO_PROTEINA_ENTRENO = {"hombre": 160, "mujer": 120}
-SUELO_HC_COMIDAS_ENTRENO = 50     # comidas de entreno; con el peri de 15, 65 totales
+# Doc 29-07: el suelo del dia de entreno son 75 g totales = 60 en comidas + 15 de peri.
+SUELO_HC_COMIDAS_ENTRENO = 60
 SUELO_HC_DESCANSO = 50
 SUELO_GRASA = 50                  # entreno y descanso
 
-# Dieta reportada: banda de peri por HC totales del dia de entreno
-BANDAS_PERI = [(200, 50), (300, 60), (400, 75), (float("inf"), 90)]
-
-# Definicion "come mucho": primer recorte (~13%) por tramo de HC totales.
-# Anclas de la spec: 150->-20, 200->-25, 250->-30, 300->-40, 350->-45, 400+->-55.
-# Se aplica el ancla mas cercana (cortes en los puntos medios).
-RECORTES_DEFINICION = [(175, 20), (225, 25), (275, 30), (325, 40), (375, 45), (float("inf"), 55)]
+# Dieta reportada: banda de peri por HC totales del dia de entreno (doc 29-07).
+BANDAS_PERI = [(300, 40), (350, 50), (400, 60), (450, 75), (float("inf"), 90)]
 
 UMBRAL_HC_EN_LAS_ULTIMAS = 75     # < 75 g netos -> arranque minimo
 PERI_EN_LAS_ULTIMAS = 15
-DESCANSO_SOBRE_COMIDAS = 0.75     # descanso = comidas de entreno - 25%
+DESCANSO_SOBRE_COMIDAS = 0.80     # doc 29-07: el descanso va un 20% por debajo de las comidas
+
+# Grasa segun la dieta con la que llega el cliente (doc 29-07, paso 5). Tope 80, igual en
+# entreno y en descanso. La excepcion (definicion con X < T) va 50 y 60 y se resuelve aparte.
+TRAMOS_GRASA_POR_DIETA = [(60, 60), (90, 70), (float("inf"), 80)]
+
+# Paso 4: que se hace con la dieta real segun como le esta funcionando. "X" son los hidratos de
+# entreno + peri que reporta; "T" los mismos de la tabla ya modificada.
+#   'x'      -> se le deja X tal cual
+#   'tabla'  -> se ignora X y manda la tabla
+#   'x_75'   -> el 75% de X
+#   'x_-10'  -> X menos 10 g
+MATRIZ_DEFINICION = {
+    #  como_va          X > T      X < T
+    "bien":          ("x",       "x"),
+    "lento":         ("tabla",   "x_-10"),
+    "mantengo":      ("x_75",    "x_-10"),
+    "cogiendo_peso": ("tabla",   "x_-10"),
+}
+MATRIZ_VOLUMEN = {
+    "bien":          ("x",       "x"),
+    "lento":         ("x",       "tabla"),
+    "mucha_grasa":   ("x",       "x"),
+    "mantengo":      ("x",       "tabla"),
+    "bajando":       ("x",       "tabla"),
+}
 
 # Humano en el bucle: si lo reportado se desvia mas de esto de lo recomendado,
 # se avisa al entrenador para que revise.
@@ -82,11 +119,24 @@ def _banda_peri(hc_totales: float) -> int:
     return BANDAS_PERI[-1][1]
 
 
-def _recorte_definicion(hc_totales: float) -> int:
-    for limite, recorte in RECORTES_DEFINICION:
-        if hc_totales <= limite:
-            return recorte
-    return RECORTES_DEFINICION[-1][1]
+def _grasa_por_dieta(grasa_reportada: float) -> int:
+    """Paso 5 del doc: la grasa de partida sale de la que ya viene comiendo."""
+    for limite, grasa in TRAMOS_GRASA_POR_DIETA:
+        if grasa_reportada <= limite:
+            return grasa
+    return TRAMOS_GRASA_POR_DIETA[-1][1]
+
+
+def _nivelar_descanso(hc_entreno: float, hc_descanso: float) -> tuple:
+    """
+    Regla dura: los hidratos del dia de descanso NUNCA por encima de los del dia de entreno
+    (comparando comidas contra comidas, el peri va aparte). Si se pasa, se sube el ENTRENO
+    hasta igualar; nunca se baja el descanso, porque la subida del descanso viene de un motivo
+    real (el deporte extra de ese dia).
+    """
+    if hc_descanso > hc_entreno:
+        return hc_descanso, hc_descanso
+    return hc_entreno, hc_descanso
 
 
 def calcular_macros_v2(
@@ -100,6 +150,7 @@ def calcular_macros_v2(
     dieta_reportada: Optional[Dict] = None,    # {'hc_entreno': g, 'grasa_entreno': g|None, 'texto': str}
     farmacologia: bool = False,
     historial_dietas: Optional[str] = None,    # solo se registra, no se aplica
+    como_va: Optional[str] = None,             # P8: como le esta funcionando la dieta que trae
 ) -> Dict:
     """Los 8 numeros del metodo con la spec v2 encima de la tabla.
 
@@ -140,23 +191,25 @@ def calcular_macros_v2(
                          "detalle": "+10% HC entreno y descanso"})
 
     if deporte_extra:
-        pct_d += MOD_DEPORTE_EXTRA_DESCANSO
+        mod_dep = (MOD_DEPORTE_EXTRA_DESCANSO_VOLUMEN if obj_norm == "volumen"
+                   else MOD_DEPORTE_EXTRA_DESCANSO_DEFINICION)
+        pct_d += mod_dep
         desglose.append({"paso": "deporte_extra", "estado": "aplicado",
-                         "detalle": "+10% HC solo descanso"})
+                         "detalle": f"+{mod_dep:.0%} HC solo descanso ({obj_norm})"})
 
-    if facilidad_engordar == "casi_no":
+    if facilidad_engordar in RESPUESTAS_QUE_SUBEN:
         if sexo_norm == "mujer" and not APLICAR_ENGORDA_EN_MUJERES:
-            no_aplicados["engorda_mujer"] = "casi_no"
-            desglose.append({"paso": "casi_no_engorda", "estado": "no_aplica_mujer",
+            no_aplicados["engorda_mujer"] = facilidad_engordar
+            desglose.append({"paso": "no_engorda", "estado": "no_aplica_mujer",
                              "detalle": "Modificador sin validar en mujeres: se guarda, no se aplica"})
-        elif porcentaje_graso <= BF_MAX_CASI_NO_ENGORDA:
-            pct_e += MOD_CASI_NO_ENGORDA
-            pct_d += MOD_CASI_NO_ENGORDA
-            desglose.append({"paso": "casi_no_engorda", "estado": "aplicado",
-                             "detalle": "+20% HC entreno y descanso"})
+        elif porcentaje_graso <= BF_MAX_NO_ENGORDA:
+            pct_e += MOD_NO_ENGORDA
+            pct_d += MOD_NO_ENGORDA
+            desglose.append({"paso": "no_engorda", "estado": "aplicado",
+                             "detalle": f"+20% HC entreno y descanso ('{facilidad_engordar}' con grasa <= {BF_MAX_NO_ENGORDA:.0f}%)"})
         else:
-            desglose.append({"paso": "casi_no_engorda", "estado": "no_aplica_bf",
-                             "detalle": f"Requiere grasa <= {BF_MAX_CASI_NO_ENGORDA:.0f}%"})
+            desglose.append({"paso": "no_engorda", "estado": "no_aplica_bf",
+                             "detalle": f"Requiere grasa <= {BF_MAX_NO_ENGORDA:.0f}%"})
 
     if facilidad_engordar == "enseguida" and (pct_e > 0 or pct_d > 0):
         desglose.append({"paso": "veto_engorda_enseguida", "estado": "vetado",
@@ -178,13 +231,27 @@ def calcular_macros_v2(
     hc_e = hc_e * (1 + pct_e)
     hc_d = hc_d * (1 + pct_d)
 
+    # Regla dura del doc 29-07: el descanso nunca por encima del entreno. Se comprueba aqui,
+    # justo despues de las subidas, porque el +20% de deporte extra en volumen puede dejar el
+    # dia de descanso por encima del de entreno.
+    hc_e_antes = hc_e
+    hc_e, hc_d = _nivelar_descanso(hc_e, hc_d)
+    if hc_e > hc_e_antes:
+        desglose.append({"paso": "nivelar_descanso", "estado": "aplicado",
+                         "detalle": f"El descanso ({hc_d:.0f} g) superaba al entreno ({hc_e_antes:.0f} g): se sube el entreno para igualarlo"})
+
     # -----------------------------------------------------
-    # 2) Excepcion proteina: farmacologia (+10% SOLO descanso)
+    # 2) Excepcion proteina: farmacologia / TRT (+10% SOLO descanso)
     # -----------------------------------------------------
     if farmacologia:
-        pr_d = pr_d * (1 + MOD_FARMACOLOGIA_PROTEINA_DESCANSO)
-        desglose.append({"paso": "farmacologia", "estado": "aplicado",
-                         "detalle": "+10% proteina solo en descanso"})
+        if APLICAR_FARMACOLOGIA:
+            pr_d = pr_d * (1 + MOD_FARMACOLOGIA_PROTEINA_DESCANSO)
+            desglose.append({"paso": "farmacologia", "estado": "aplicado",
+                             "detalle": "+10% proteina solo en descanso"})
+        else:
+            no_aplicados["farmacologia"] = True
+            desglose.append({"paso": "farmacologia", "estado": "no_aplicado",
+                             "detalle": "TRT: pendiente de que Jesus confirme la regla. Se guarda, no se aplica"})
 
     # HC de entreno recomendados (comidas + peri) tras modificadores: es la
     # referencia contra la que se compara la dieta reportada.
@@ -200,6 +267,19 @@ def calcular_macros_v2(
         grasa_rep = dieta_reportada.get("grasa_entreno")
         grasa_rep = float(grasa_rep) if grasa_rep is not None else None
 
+        # X = hidratos de entreno + peri que reporta. T = los mismos de la tabla ya modificada.
+        X = hc_rep
+        T = hc_recomendados
+        matriz = MATRIZ_DEFINICION if obj_norm == "definicion" else MATRIZ_VOLUMEN
+        # Sin la respuesta de "como te esta funcionando" no se puede decidir: se trata como el
+        # caso neutro ("me mantengo"), que es el que menos supone.
+        clave = como_va if como_va in matriz else "mantengo"
+        if como_va and como_va not in matriz:
+            no_aplicados["como_va_desconocido"] = como_va
+        # En definicion la columna es X > T o X < T; los empates cuentan como "no se pasa".
+        columna = 0 if X > T else 1
+        accion = matriz[clave][columna]
+
         if obj_norm == "definicion" and hc_rep < UMBRAL_HC_EN_LAS_ULTIMAS:
             # Llega "en las ultimas": arranque minimo, se sube en el siguiente ajuste
             hc_e, gr_e = 60.0, 50.0
@@ -207,28 +287,47 @@ def calcular_macros_v2(
             hc_d, gr_d = 50.0, 60.0
             desglose.append({"paso": "dieta_reportada", "rama": "def_ultimas",
                              "detalle": f"Reporta {hc_rep:.0f} g de HC (<{UMBRAL_HC_EN_LAS_ULTIMAS}): arranque 60/50, peri 15, descanso 50/60"})
-        else:
-            total = hc_rep
-            recorte = 0
-            if obj_norm == "definicion":
-                recorte = _recorte_definicion(hc_rep)
-                total = hc_rep - recorte
-            peri = _banda_peri(total)
-            comidas = total - peri
-            hc_e = comidas
-            hc_pe = float(peri)
-            hc_d = comidas * DESCANSO_SOBRE_COMIDAS
 
-            if obj_norm == "volumen":
-                gr_e = 60.0
-                if grasa_rep is not None and grasa_rep > 70:
-                    gr_e = 80.0 if hc_rep > 450 else 70.0
-                gr_d = 80.0 if (grasa_rep is not None and grasa_rep > 70) else 70.0
-                desglose.append({"paso": "dieta_reportada", "rama": "volumen",
-                                 "detalle": f"Mismos {hc_rep:.0f} g repartidos: peri {peri} por banda, {comidas:.0f} a comidas, descanso -25%"})
+        elif accion == "tabla":
+            # Manda la tabla: no se toca nada de lo que ya venia de los modificadores.
+            desglose.append({"paso": "dieta_reportada", "rama": "manda_la_tabla",
+                             "detalle": f"'{clave}' con X={X:.0f} {'>' if columna == 0 else '<='} T={T:.0f}: se queda la tabla"})
+
+        elif obj_norm == "definicion" and columna == 1:
+            # X < T en definicion: come por debajo de la tabla. Arranque atado por el doc.
+            total = X - 10 if accion == "x_-10" else X
+            hc_pe = float(PERI_EN_LAS_ULTIMAS)          # peri 15
+            hc_e = total - hc_pe                       # el resto, a las comidas del entreno
+            hc_d = hc_e * DESCANSO_SOBRE_COMIDAS       # descanso, un 20% por debajo
+            gr_e, gr_d = 50.0, 60.0                    # excepcion de grasa del doc
+            desglose.append({"paso": "dieta_reportada", "rama": "def_por_debajo",
+                             "detalle": f"'{clave}' con X={X:.0f} < T={T:.0f}: {'X-10' if accion == 'x_-10' else 'X'} = {total:.0f}, peri 15, comidas {hc_e:.0f}, descanso -20%, grasa 50/60"})
+
+        else:
+            # Se le pone X (entero, al 75% o menos 10) y el peri sale de X por banda.
+            if accion == "x_75":
+                total = X * 0.75
+            elif accion == "x_-10":
+                total = X - 10
             else:
-                desglose.append({"paso": "dieta_reportada", "rama": "def_come_mucho",
-                                 "detalle": f"Recorte -{recorte} g (~13%) sobre {hc_rep:.0f}: peri {peri}, {comidas:.0f} a comidas, descanso -25%"})
+                total = X
+            peri = _banda_peri(total)
+            hc_pe = float(peri)
+            hc_e = total - peri
+            hc_d = hc_e * DESCANSO_SOBRE_COMIDAS
+            desglose.append({"paso": "dieta_reportada", "rama": f"se_le_pone_{accion}",
+                             "detalle": f"'{clave}' con X={X:.0f} vs T={T:.0f}: total {total:.0f}, peri {peri} por banda, comidas {hc_e:.0f}, descanso -20%"})
+
+        # Paso 5 del doc: la grasa de partida sale de la que ya viene comiendo. La excepcion
+        # (definicion por debajo de la tabla, que va 50/60) ya se ha fijado arriba.
+        if grasa_rep is not None and not (obj_norm == "definicion" and columna == 1):
+            g = float(_grasa_por_dieta(grasa_rep))
+            gr_e = gr_d = g
+            desglose.append({"paso": "grasa_por_dieta", "estado": "aplicado",
+                             "detalle": f"Viene comiendo {grasa_rep:.0f} g de grasa: se fija en {g:.0f} en entreno y descanso"})
+
+        # La regla dura se vuelve a comprobar: X puede dejar el entreno por debajo del descanso.
+        hc_e, hc_d = _nivelar_descanso(hc_e, hc_d)
 
         diferencia = hc_rep - hc_recomendados
         diferencia_pct = abs(diferencia) / hc_recomendados if hc_recomendados else 0.0
