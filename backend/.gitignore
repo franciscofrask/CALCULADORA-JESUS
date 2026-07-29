@@ -3,3 +3,4 @@ _fotos_calma/
 
 # Claves de servicio de Firebase (secretos)
 serviceAccountKey*.json
+_motor_viejo.py
