@@ -291,16 +291,72 @@ const STEPS_NIVEL1 = [
     { type: 'number', key: 'height', title: '¿Cuánto mides?', desc: 'Tu altura, en cm.', unit: 'cm', required: true },
     { type: 'date', key: 'birthdate', title: 'Fecha de nacimiento', desc: 'La verdadera, no me engañes.', required: true },
     {
-        type: 'choice', key: 'training_experience', title: '¿Qué experiencia tienes entrenando fuerza en el gimnasio?',
-        desc: 'Me da igual tu desarrollo muscular actual, me interesa saber si sabes entrenar y cuánta experiencia tienes.',
+        // P13 del doc: los tramos son los suyos (menos de 1, 1-3, 3-10, mas de 10, y el que
+        // entreno antes pero lleva parado, que no es lo mismo que empezar de cero).
+        type: 'choice', key: 'training_experience', title: '¿Cuántos años llevas entrenando con pesas de forma regular?',
+        desc: 'Me da igual tu desarrollo muscular actual: me interesa la experiencia que tienes entrenando.',
         options: [
-            { value: 'cero', label: 'Ninguna, empiezo ahora o hace mucho que no entreno. Parto de cero.' },
-            { value: 'principiante', label: 'Llevo menos de 1 año entrenando con regularidad (principiante).' },
-            { value: 'intermedio', label: 'Llevo más de un año, aunque no siempre en serio (intermedio).' },
-            { value: 'avanzado', label: 'Llevo años entrenando de forma seria (avanzado).' },
+            { value: 'menos_1', label: 'Menos de 1 año' },
+            { value: '1_3', label: 'Entre 1 y 3 años' },
+            { value: '3_10', label: 'Entre 3 y 10 años' },
+            { value: 'mas_10', label: 'Más de 10 años' },
+            { value: 'parado', label: 'He entrenado antes, pero llevo tiempo parado' },
+        ],
+    },
+    {
+        // P14. La respuesta se guarda; la regla de como afecta a los macros la dara Jesus.
+        type: 'choice', key: 'trt', title: '¿Sigues algún tratamiento hormonal tipo TRT?',
+        desc: 'Es información médica y la trata tu entrenador. No cambia tus macros.',
+        options: [
+            { value: 'si', label: 'Sí' },
+            { value: 'no', label: 'No' },
+            { value: 'antes', label: 'Lo seguí antes, ahora no' },
+        ],
+    },
+    {
+        // P15
+        type: 'choice', key: 'zona_grasa', title: '¿Dónde acumulas más grasa?',
+        options: [
+            { value: 'abdomen', label: 'Abdomen' },
+            { value: 'cintura', label: 'Cintura y flancos' },
+            { value: 'espalda_baja', label: 'Espalda baja' },
+            { value: 'pecho', label: 'Pecho' },
+            { value: 'piernas', label: 'Piernas y glúteos' },
+            { value: 'reparto', label: 'Se me reparte por igual' },
         ],
     },
     { type: 'pesos', title: 'Tu historial de peso', desc: 'Aproximado, en kg. Ayuda a tu coach a entender tu recorrido.' },
+    { type: 'historia', title: 'Tu recorrido', desc: 'Cuándo fue cada cosa y hasta dónde quieres llegar.' },
+    {
+        // P22
+        type: 'choice', key: 'vario_peso_3m', title: '¿Ha variado tu peso de forma significativa en los últimos 3 meses?',
+        options: [
+            { value: 'subido', label: 'Sí, he subido' },
+            { value: 'bajado', label: 'Sí, he bajado' },
+            { value: 'estable', label: 'No, sigo más o menos igual' },
+        ],
+    },
+    {
+        // P23
+        type: 'choice', key: 'tiempo_intentandolo', title: '¿Cuánto tiempo llevas intentando conseguir este objetivo?',
+        options: [
+            { value: 'menos_6m', label: 'Menos de 6 meses' },
+            { value: '6m_2a', label: 'Entre 6 meses y 2 años' },
+            { value: 'mas_2a', label: 'Más de 2 años' },
+            { value: 'siempre', label: 'Toda la vida' },
+        ],
+    },
+    {
+        // P26, el cierre
+        type: 'choice', key: 'motivo_apuntarse', title: '¿Cuál ha sido el motivo principal para apuntarte?',
+        options: [
+            { value: 'saturado', label: 'Estoy saturado de dietas' },
+            { value: 'esfuerzo_sin_premio', label: 'Me esfuerzo mucho y mejoro poco' },
+            { value: 'no_se_como', label: 'No sé cómo hacerlo por mi cuenta' },
+            { value: 'evento', label: 'Tengo una fecha concreta (boda, verano, competición...)' },
+            { value: 'salud', label: 'Por salud' },
+        ],
+    },
     { type: 'salud', title: 'Salud y descanso', desc: 'Sé sincero: todo esto condiciona tu estrategia.' },
     { type: 'text', key: 'dietas_previas', title: '¿Has hecho dietas antes? ¿Qué tal te fue?', desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...', textarea: true },
     { type: 'text', key: 'entrenador_anterior', title: '¿Has tenido entrenador antes?', desc: 'Quién, cuánto tiempo y por qué lo dejaste. Si no, escribe "no".', textarea: true },
@@ -511,6 +567,21 @@ const QuestionnairePage = () => {
           .catch(() => setMenusMagia([]));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx]);
+
+    // Al pasar del alta al cuestionario de ajuste, el flujo es OTRA lista: hay que volver al
+    // primer paso. Sin esto, el numero de paso que traia del alta apuntaba a una pregunta
+    // cualquiera de la lista nueva y el cuestionario arrancaba por la mitad.
+    //
+    // Se compara contra el modo anterior en un ref (y no con la lista de dependencias) porque
+    // este componente ya reinicia `idx` por otras vias y un setState suelto en un efecto se
+    // encadenaba con ellas.
+    const modoAnteriorRef = useRef(modoAjuste);
+    useEffect(() => {
+        if (modoAnteriorRef.current !== modoAjuste) {
+            modoAnteriorRef.current = modoAjuste;
+            setIdx(0);
+        }
+    });
 
     // Retomar el cuestionario de ajuste donde lo dejó, y arrancar la cabecera con los macros
     // que tiene ahora mismo (los provisionales del alta) para que se vea de dónde parte.
@@ -802,6 +873,17 @@ const QuestionnairePage = () => {
                 alimentos_evitados: null,
                 alergias: answers.alergias || null,
                 num_comidas: answers.pref_num_comidas ?? null,
+                // Bloque 4 del doc: no mueven macros, sirven para emparejarlo con casos anteriores.
+                trt: answers.trt || null,
+                zona_grasa: answers.zona_grasa || null,
+                peso_maximo_cuando: answers.peso_maximo_cuando || null,
+                mejor_definicion_cuando: answers.mejor_definicion_cuando || null,
+                hasta_donde: answers.hasta_donde || null,
+                vario_peso_3m: answers.vario_peso_3m || null,
+                tiempo_intentandolo: answers.tiempo_intentandolo || null,
+                dieta_que_funciona: answers.dieta_que_funciona || null,
+                por_que_fallaron: answers.por_que_fallaron || null,
+                motivo_apuntarse: answers.motivo_apuntarse || null,
             });
             await refreshProfile();
             toast.success('¡Perfil completo! Tu coach ya tiene toda la información.');
@@ -1191,6 +1273,29 @@ const QuestionnairePage = () => {
                     <MiniInput {...mini} k="peso_minimo" label="Peso mínimo (de adulto)" type="number" unit="kg" />
                     <MiniInput {...mini} k="peso_habitual" label="Peso habitual" type="number" unit="kg" />
                     <MiniInput {...mini} k="peso_mejor_momento" label="Peso en tu mejor momento físico" type="number" unit="kg" />
+                </div>
+                <div className="flex gap-3">
+                    <BackBtn />
+                    <Button onClick={goNext} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
+                        OK <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (step.type === 'historia') {
+        // P18-P21 y P24-P25 juntas: son de texto corto y preguntarlas de una en una serian seis
+        // pantallas seguidas sin devolverle nada, que es justo lo que el doc quiere evitar.
+        body = (
+            <div>
+                <Title />
+                <div className="space-y-4 mb-8 max-h-[55vh] overflow-y-auto pr-1">
+                    <MiniInput {...mini} k="peso_maximo_cuando" label="¿Cuándo tuviste tu peso máximo?" placeholder="Por ejemplo: en 2019, o hace 3 años" />
+                    <MiniInput {...mini} k="mejor_definicion_cuando"
+                        label="¿Cuál ha sido tu mejor punto de definición? ¿Cuándo?"
+                        placeholder='Cuándo fue, o escribe "nunca" si no has estado definido' />
+                    <MiniInput {...mini} k="hasta_donde" label="¿Hasta dónde quieres llegar?" placeholder="Tu meta real: un peso, un aspecto, una talla..." />
+                    <MiniInput {...mini} k="dieta_que_funciona" label="¿Qué tipo de dieta consideras que te funciona mejor?" placeholder="Y por qué crees que contigo funciona" />
+                    <MiniInput {...mini} k="por_que_fallaron" label="¿Por qué crees que no te han funcionado las dietas anteriores?" placeholder='Si nunca has hecho, escribe "no he hecho"' />
                 </div>
                 <div className="flex gap-3">
                     <BackBtn />

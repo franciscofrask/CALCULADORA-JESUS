@@ -493,6 +493,19 @@ class Nivel1Submit(BaseModel):
     alimentos_evitados: Optional[List[str]] = None
     alergias: Optional[str] = None
     num_comidas: Optional[int] = None
+    # Bloque 4 del doc del 29-07. Ninguna toca los macros: son las que permiten emparejar al
+    # cliente con los que ya han pasado por aqui.
+    trt: Optional[str] = None                   # P14: si | no | antes  (la regla, pendiente de Jesus)
+    zona_grasa: Optional[str] = None            # P15: abdomen | cintura | espalda_baja | pecho | piernas | reparto
+    peso_maximo_cuando: Optional[str] = None    # P18
+    foto_peso_maximo: Optional[str] = None      # P19 (opcional)
+    mejor_definicion_cuando: Optional[str] = None   # P20; "nunca" si nunca estuvo definido
+    hasta_donde: Optional[str] = None           # P21
+    vario_peso_3m: Optional[str] = None         # P22
+    tiempo_intentandolo: Optional[str] = None   # P23
+    dieta_que_funciona: Optional[str] = None    # P24
+    por_que_fallaron: Optional[str] = None      # P25
+    motivo_apuntarse: Optional[str] = None      # P26
 
 # Macros Models
 class MacrosData(BaseModel):
