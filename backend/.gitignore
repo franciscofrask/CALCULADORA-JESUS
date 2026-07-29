@@ -4,3 +4,10 @@ _fotos_calma/
 # Claves de servicio de Firebase (secretos)
 serviceAccountKey*.json
 _motor_viejo.py
+
+# Capturas intermedias de los generadores de documentacion (se regeneran con _doc2.py,
+# _doc_word.py y _quiz_capturas.py; los Word ya llevan las imagenes dentro).
+_doc_shots/
+_doc2_shots/
+_doc2_prev/
+_quiz_shots/
