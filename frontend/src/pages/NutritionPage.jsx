@@ -403,12 +403,45 @@ const NutritionPage = () => {
     // que nunca los tuvo no borra nada: asi un fallo de carga no puede convertirse en un DELETE.
     const teniaAlimentosRef = useRef(false);
 
+    const [cargaFallida, setCargaFallida] = useState(false);
+    const [reintentoCarga, setReintentoCarga] = useState(0);
+
+    // ── Copia local del dia (red de seguridad) ───────────────────────────────
+    // El dia se copia en el navegador en cuanto lo tocas. Si el servidor no responde, ni la
+    // pantalla se queda vacia ni se pierde nada: se recupera de aqui y se sube solo cuando el
+    // servidor vuelve. La copia se borra en cuanto el guardado remoto confirma.
+    const claveLocal = (date) => `nutrition_dia_${date}`;
+
+    const guardarCopiaLocal = (date, snap) => {
+        try {
+            if (hayAlimentos(snap)) localStorage.setItem(claveLocal(date), JSON.stringify(snap));
+        } catch (e) { /* almacenamiento lleno o bloqueado: no es critico */ }
+    };
+    const leerCopiaLocal = (date) => {
+        try {
+            const s = localStorage.getItem(claveLocal(date));
+            return s ? JSON.parse(s) : null;
+        } catch (e) { return null; }
+    };
+    const borrarCopiaLocal = (date) => {
+        try { localStorage.removeItem(claveLocal(date)); } catch (e) {}
+    };
+
     const hayAlimentos = (snap) =>
         Object.values(snap?.comidas || {}).some(m => (m?.alimentos || []).length > 0);
+
+    // Cuando se puede escribir en el servidor: con el dia cargado (caso normal) o, si la carga
+    // fallo, en cuanto haya alimentos en pantalla. Perder lo que acabas de montar es mucho peor
+    // que guardar un dia que quiza no cargo del todo; y borrar nunca se permite en ese estado.
+    const puedeGuardar = (snap, date) =>
+        loadedDateRef.current === date || hayAlimentos(snap);
 
     const autoSaveDiet = useCallback(async (date, snap) => {
         if (!date || !snap) return;
         const hasFood = hayAlimentos(snap);
+        // Lo primero, la copia local: es instantanea y no puede fallar por red. A partir de aqui,
+        // pase lo que pase con el servidor, el dia ya no se pierde.
+        guardarCopiaLocal(date, snap);
         setGuardadoEstado('guardando');
         try {
             if (hasFood) {
@@ -418,11 +451,14 @@ const NutritionPage = () => {
                 await api(`/api/diets/${date}`, { method: 'DELETE' }).catch(() => {}); // 404 = nothing to delete
                 teniaAlimentosRef.current = false;
             }
+            borrarCopiaLocal(date);   // confirmado en el servidor: la copia ya no hace falta
             setGuardadoEstado('guardado');
+            return true;
         } catch (e) {
-            setGuardadoEstado('error');
+            setGuardadoEstado('error'); // la copia local sigue ahi y el reenvio la subira
+            return false;
         }
-    }, [api]);
+    }, [api]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Guardado mientras trabajas (no solo al salir de la pantalla). Sin esto, el dia vivia unicamente
     // en memoria: el PDF no encontraba nada que exportar y una recarga podia llegar antes que el
@@ -433,9 +469,36 @@ const NutritionPage = () => {
             clearTimeout(guardadoTimerRef.current);
             guardadoTimerRef.current = null;
         }
-        if (loadedDateRef.current !== currentDate) return;
+        if (!puedeGuardar(autoSaveRef.current, currentDate)) return;
         await autoSaveDiet(currentDate, autoSaveRef.current);
-    }, [autoSaveDiet, currentDate]);
+    }, [autoSaveDiet, currentDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Reintentar a mano nunca puede costarte lo que tienes en pantalla: si hay comida montada,
+    // primero se sube y solo despues se vuelve a pedir el dia al servidor. Si la subida falla,
+    // no se recarga nada (recargar pisaria tu trabajo con lo que haya en el servidor).
+    const reintentarCarga = useCallback(async () => {
+        const snap = autoSaveRef.current;
+        if (hayAlimentos(snap)) {
+            const subido = await autoSaveDiet(currentDate, snap);
+            if (!subido) {
+                toast.error('Seguimos sin conexión. Tu día está guardado en este dispositivo');
+                return;
+            }
+        }
+        setReintentoCarga(n => n + 1);
+    }, [autoSaveDiet, currentDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Reenvio automatico: mientras quede una copia local sin confirmar, se reintenta sola cada 8 s.
+    // Asi un corte de red se arregla solo en cuanto vuelve, sin que tengas que hacer nada.
+    useEffect(() => {
+        if (guardadoEstado !== 'error' || !currentDate) return;
+        const t = setInterval(() => {
+            const pendiente = leerCopiaLocal(currentDate);
+            if (!pendiente) { clearInterval(t); return; }
+            autoSaveDiet(currentDate, autoSaveRef.current);
+        }, 8000);
+        return () => clearInterval(t);
+    }, [guardadoEstado, currentDate, autoSaveDiet]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // On mount: restore the last viewed date (so a reload returns to the day you were on, not
     // today), else the local date. Persisted below on every date change.
@@ -470,7 +533,14 @@ const NutritionPage = () => {
                 cfgOverrides = { momentoEntreno: me, numComidas: nc, opcionPeri: op };
             } catch (e) {}
 
-            const { targets, config: dietConfig, ok, comidas: dietComidas } = await loadDiet(currentDate);
+            // Reintento automatico antes de molestar al usuario: un microcorte de red no deberia
+            // costarle un aviso ni, mucho menos, el dia. Tres intentos con esperas crecientes.
+            let carga = await loadDiet(currentDate);
+            for (let intento = 1; !carga.ok && intento <= 2; intento++) {
+                await new Promise(r => setTimeout(r, intento * 1200));
+                carga = await loadDiet(currentDate);
+            }
+            const { targets, config: dietConfig, ok, comidas: dietComidas } = carga;
             if (targets) setDistribTargetsOverlay(targets);
 
             // If diet has its own config, use that (overrides profile defaults for this day)
@@ -483,10 +553,34 @@ const NutritionPage = () => {
                 // Lo que traia el dia al abrirlo decide si un dia vacio puede borrarse (ver autoSaveDiet).
                 teniaAlimentosRef.current = hayAlimentos({ comidas: dietComidas || {} });
                 setGuardadoEstado('idle');
+                setCargaFallida(false);
+            } else {
+                // La carga fallo (red, backend caido, sesion caducada). Antes esto dejaba la pantalla
+                // muda PARA SIEMPRE en esa fecha: seguias montando el dia y no se guardaba por ningun
+                // camino, sin un solo aviso. Ahora se avisa, y lo que montes se guarda igualmente
+                // (ver puedeGuardar); lo unico que queda prohibido es BORRAR, porque el dia vacio que
+                // se ve en pantalla no es de fiar.
+                setCargaFallida(true);
+                teniaAlimentosRef.current = false;
+                // Sin esto, el "Guardado" del dia que acabas de dejar tapaba el aviso de esta fecha.
+                setGuardadoEstado('idle');
+                // Si el dia tenia copia local sin subir, se recupera: no ves la pantalla en blanco
+                // ni pierdes lo que montaste la ultima vez que el servidor no respondio.
+                const copia = leerCopiaLocal(currentDate);
+                if (copia && hayAlimentos(copia)) {
+                    setMealsData(copia.comidas || {});
+                    if (copia.tipo_dia) setTipoDia(copia.tipo_dia);
+                    if (copia.num_comidas) setNumComidas(copia.num_comidas);
+                    if (copia.momento_entreno != null) setMomentoEntreno(copia.momento_entreno);
+                    if (copia.opcion_peri) setOpcionPeri(normPeri(copia.opcion_peri));
+                    setVolcadoMeal(copia.comida_volcada || null);
+                    setGuardadoEstado('error');   // hay algo pendiente de subir: arranca el reenvio
+                    toast.info('Sin conexion con el servidor: hemos recuperado tu día de la copia local');
+                }
             }
         };
         init();
-    }, [currentDate]); // eslint-disable-line
+    }, [currentDate, reintentoCarga]); // eslint-disable-line
 
     // Auto-save the date being LEFT (cleanup runs on date change and on unmount) - mirrors
     // Calma's `watch fecha` + `unmounted` -> autoGuardadoEnFecha. Guarded by loadedDateRef so
@@ -498,21 +592,24 @@ const NutritionPage = () => {
     useEffect(() => {
         const dateLeaving = currentDate;
         return () => {
-            if (loadedDateRef.current === dateLeaving) {
+            if (loadedDateRef.current === dateLeaving || hayAlimentos(autoSaveRef.current)) {
                 autoSaveDietRef.current(dateLeaving, autoSaveRef.current);
             }
         };
-    }, [currentDate]);
+    }, [currentDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // A browser REFRESH/close does NOT run React cleanup, so the unmount auto-save never fires
-    // and the day looked "lost". Save synchronously on `beforeunload` via keepalive fetch (it
-    // survives unload and carries the auth header). Only saves a loaded, non-empty day.
+    // and the day looked "lost". Save synchronously via keepalive fetch (it survives unload and
+    // carries the auth header). Only saves a non-empty day, and nunca borra.
+    //
+    // Tres eventos, no uno: `beforeunload` no es fiable en movil (iOS puede matar la pestana sin
+    // dispararlo nunca), asi que se escucha tambien `pagehide` y el paso a segundo plano, que es
+    // lo que si ocurre cuando cambias de aplicacion. Guardar de mas es inofensivo: es un upsert.
     useEffect(() => {
         const handler = () => {
-            if (loading || loadedDateRef.current !== currentDate) return;
+            if (loading) return;
             const snap = autoSaveRef.current;
-            const hasFood = Object.values(snap.comidas || {}).some(m => (m?.alimentos || []).length > 0);
-            if (!hasFood) return;
+            if (!hayAlimentos(snap)) return;
             try {
                 const token = localStorage.getItem('token');
                 fetch(`${process.env.REACT_APP_BACKEND_URL}/api/diets`, {
@@ -523,14 +620,21 @@ const NutritionPage = () => {
                 });
             } catch (e) { /* best effort */ }
         };
+        const alOcultarse = () => { if (document.visibilityState === 'hidden') handler(); };
         window.addEventListener('beforeunload', handler);
-        return () => window.removeEventListener('beforeunload', handler);
+        window.addEventListener('pagehide', handler);
+        document.addEventListener('visibilitychange', alOcultarse);
+        return () => {
+            window.removeEventListener('beforeunload', handler);
+            window.removeEventListener('pagehide', handler);
+            document.removeEventListener('visibilitychange', alOcultarse);
+        };
     }, [currentDate, loading]);
 
     // Guardado con retardo: cada cambio reinicia el contador y se guarda cuando paras de tocar.
     // 1,5 s es suficiente para no disparar una peticion por cada gramo que ajustas.
     useEffect(() => {
-        if (loading || loadedDateRef.current !== currentDate) return;
+        if (loading || !puedeGuardar(autoSaveRef.current, currentDate)) return;
         if (guardadoTimerRef.current) clearTimeout(guardadoTimerRef.current);
         guardadoTimerRef.current = setTimeout(() => {
             autoSaveDiet(currentDate, autoSaveRef.current);
@@ -1475,6 +1579,14 @@ const NutritionPage = () => {
     // Aviso de guardado. Solo aparece cuando hay algo que contar: mientras guarda, cuando acaba
     // y, sobre todo, si ha fallado (antes fallaba en silencio y el dia se perdia sin avisar).
     const renderEstadoGuardado = () => {
+        if (cargaFallida && guardadoEstado !== 'guardado') {
+            return (
+                <button onClick={reintentarCarga} title="Vuelve a pedir el día al servidor"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-amber-500 hover:underline">
+                    <AlertCircle className="w-3.5 h-3.5" /> Sin conexión con el servidor. Reintentar
+                </button>
+            );
+        }
         if (guardadoEstado === 'idle') return null;
         if (guardadoEstado === 'error') {
             return (
