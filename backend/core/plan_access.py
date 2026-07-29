@@ -73,6 +73,25 @@ def plan_grants_feature(plan_code: Optional[str], feature: Optional[str]) -> boo
     return feature in plan_features(plan_code)
 
 
+def modo_calculadora(plan_code: Optional[str]) -> str:
+    """
+    Como trabaja la calculadora en este plan: 'personalizado' (hay un coach detras que revisa),
+    'autogestion' (el cliente se lo lleva solo) o 'sin_ajuste'.
+
+    Es el eje que separa los dos comportamientos del doc del 29-07: en el plan con entrenador los
+    macros del cuestionario se calculan pero NO se aplican solos, se le presentan como propuesta y
+    esperan a que el coach los valide.
+    """
+    from models.user import PLAN_CATALOG
+    plan = PLAN_CATALOG.get((plan_code or "").lower().strip()) or {}
+    return (plan.get("habilitaciones") or {}).get("calculadora") or "sin_ajuste"
+
+
+def tiene_entrenador_detras(plan_code: Optional[str]) -> bool:
+    """True si el plan incluye coach que revisa los macros."""
+    return modo_calculadora(plan_code) == "personalizado"
+
+
 def require_access(feature: Optional[str] = None):
     """Dependencia FastAPI: exige perfil con acceso activo y, opcionalmente, que el plan
     habilite `feature`. Devuelve {'user', 'profile'} para reutilizar el perfil ya leído.

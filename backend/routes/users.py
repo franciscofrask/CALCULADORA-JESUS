@@ -15,6 +15,7 @@ from models.user import (
 )
 from target_calculator import calcular_targets, targets_to_profile_macros
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
+from core.plan_access import tiene_entrenador_detras
 from core.quiz_store import guardar_quiz_respuestas, registrar_revision
 from core.cycle import enrich_cycle
 
@@ -353,14 +354,21 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
 
     targets = {"macros": resultado["macros"], "multiplicadores": multiplicadores_de(resultado)}
     profile_macros = targets_to_profile_macros(targets)
-    # Pendiente de la fase de planes: en el plan con entrenador esto no se aplica, se le presenta
-    # como propuesta y le llega al coach para validarla (seccion 6 del doc).
-    if profile.get("macros_source") != "manual":
+
+    # Seccion 6 del doc: el cuestionario es el mismo para todos, lo que cambia es que hace la app
+    # con las respuestas. Con entrenador detras, los macros se CALCULAN pero no se aplican solos:
+    # se le presentan como propuesta y esperan a que el coach los valide. Se calculan igual (y no
+    # se le deja con los provisionales del alta) porque si no, el que mas paga seria el que peor lo
+    # pasa: esperaria con peores numeros que el del plan basico.
+    con_entrenador = tiene_entrenador_detras(profile.get("plan"))
+    aplicado = False
+    if not con_entrenador and profile.get("macros_source") != "manual":
         update["macros_training"] = profile_macros["macros_training"]
         update["macros_rest"] = profile_macros["macros_rest"]
         update["macros_periworkout"] = profile_macros["macros_periworkout"]
         update["macros_source"] = "auto"
         update["macros_multiplicadores"] = targets["multiplicadores"]
+        aplicado = True
 
     client_id = profile.get("id") or str(uuid.uuid4())
     if not profile.get("id"):
@@ -401,8 +409,51 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     )
     await registrar_revision({**profile, "id": client_id}, user, resultado)
 
+    # Con entrenador: la propuesta queda pendiente para el coach, con todo lo que necesita para
+    # decidir (los macros propuestos, las respuestas del cliente y el desglose del porque).
+    entrega = {"aplicado": aplicado, "con_entrenador": con_entrenador, "coach": None}
+    if con_entrenador:
+        propuesta_id = str(uuid.uuid4())
+        await db.macro_sugerencias.insert_one({
+            "id": propuesta_id,
+            "client_id": client_id,
+            "user_id": user["id"],
+            "origen": "cuestionario_cliente",
+            "estado": "pendiente",
+            "propuesta": profile_macros,
+            "multiplicadores": targets["multiplicadores"],
+            "respuestas": ajustes,
+            "desglose": resultado["desglose"],
+            "actuales": {
+                "macros_training": profile.get("macros_training"),
+                "macros_rest": profile.get("macros_rest"),
+                "macros_periworkout": profile.get("macros_periworkout"),
+            },
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        entrega["propuesta_id"] = propuesta_id
+
+        coach = None
+        if profile.get("trainer_id"):
+            coach = await db.users.find_one({"id": profile["trainer_id"]}, {"_id": 0, "name": 1})
+        entrega["coach"] = (coach or {}).get("name")
+        # Aviso al coach por la campanita, con lo justo para que sepa que hacer.
+        if profile.get("trainer_id"):
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": profile["trainer_id"],
+                "type": "macros_propuestos",
+                "title": "Macros propuestos por el cuestionario",
+                "message": f"{profile.get('name') or 'Un cliente'} ha rellenado el formulario. "
+                           f"Revisa la propuesta antes de aplicarla.",
+                "client_id": client_id,
+                "read": False,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
-    return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado}
+    return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado,
+            "entrega": entrega}
 
 
 @router.post("/clients/questionnaire/nivel1", response_model=ClientProfile)

@@ -421,6 +421,8 @@ const QuestionnairePage = () => {
     const [loading, setLoading] = useState(false);
     // Resultado del motor v2 tras enviar el Nivel 0 (los 8 números + desglose).
     const [resultado, setResultado] = useState(null);
+    // Como se le entrega el resultado: aplicado solo, o propuesta que revisa su coach (seccion 6).
+    const [entrega, setEntrega] = useState(null);
     // El Nivel 0 se completó EN ESTA SESIÓN: seguimos en el flujo aunque el
     // perfil ya diga questionnaire_completed (para ver resultados y el Nivel 1).
     const [nivel0Enviado, setNivel0Enviado] = useState(false);
@@ -757,6 +759,7 @@ const QuestionnairePage = () => {
                     body_fat: parseFloat(answers.body_fat),
                 });
             setResultado(res.data?.resultado || null);
+            setEntrega(res.data?.entrega || null);
             setNivel0Enviado(true);
             await refreshProfile();
             toast.success('¡Macros calculados!');
@@ -914,13 +917,21 @@ const QuestionnairePage = () => {
             <div>
                 {/* En el alta son PROVISIONALES y hay que decirlo con esas palabras: ya puede comer
                     hoy, y afinarlos es el paso siguiente. Tras el cuestionario, son los definitivos. */}
+                {/* Tres mensajes distintos (doc 29-07): provisionales en el alta; en el ajuste,
+                    definitivos si el plan se autogestiona, o "de partida, tu coach los revisa" si
+                    hay entrenador detrás. Al que paga más no se le deja esperando con peores
+                    números: ya tiene los suyos y encima se los van a repasar. */}
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
-                    {modoAjuste ? 'Estos son tus macros' : 'Tus macros de partida'}
+                    {!modoAjuste ? 'Tus macros de partida'
+                        : entrega?.con_entrenador ? 'Tus macros de partida'
+                        : 'Estos son tus macros'}
                 </h2>
                 <p className="text-foreground/60 mb-6 text-sm md:text-base">
-                    {modoAjuste
-                        ? 'Calculados con el método a partir de tus respuestas. Los verás siempre en tu panel.'
-                        : 'Ya puedes empezar a comer hoy. Termina de ajustarlos para afinarlos a tu caso.'}
+                    {!modoAjuste
+                        ? 'Ya puedes empezar a comer hoy. Termina de ajustarlos para afinarlos a tu caso.'
+                        : entrega?.con_entrenador
+                            ? `${entrega.coach || 'Tu entrenador'} los va a revisar contigo y los ajustará a tu caso.`
+                            : 'Calculados con el método a partir de tus respuestas. Los verás siempre en tu panel.'}
                 </p>
                 {m ? (
                     <div className="space-y-4">
