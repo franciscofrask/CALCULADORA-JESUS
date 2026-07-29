@@ -49,6 +49,13 @@ const DaySummary = ({
     const tgtG = dayTarget.G_entreno ?? dayTarget.G_total;
     const dayStatus = getDayStatus();
 
+    // El peri (intra y post) se lleva su propia cuenta: no entra en el total del dia ni en su
+    // objetivo, que son los de las comidas normales.
+    const esPeri = (k) => k === 'Intra' || k === 'Post';
+    const comidasPrincipales = mealOrder.filter(k => !esPeri(k));
+    const comidasPeri = mealOrder.filter(esPeri);
+    const hayPeri = comidasPeri.length > 0 && tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri';
+
     const macros = [
         { key: 'P', label: 'Proteína', val: mainP, tgt: tgtP, color: MACRO.P },
         { key: 'H', label: 'Hidratos', val: mainH, tgt: tgtH, color: MACRO.H },
@@ -118,22 +125,25 @@ const DaySummary = ({
                             <th className="text-right font-medium py-1.5 w-14">G</th>
                         </tr></thead>
                         <tbody>
-                            {mealOrder.map(mealKey => {
+                            {comidasPrincipales.map(mealKey => {
                                 const served = calculateMealMacros(mealKey);
-                                const isPeri = mealKey === 'Intra' || mealKey === 'Post';
                                 return (
                                     <tr key={mealKey} className="border-t border-border">
                                         <td className="py-1.5 text-foreground">{mealInfo[mealKey].name}</td>
                                         <td className="text-right font-data text-muted-foreground">{served.P.toFixed(0)}</td>
                                         <td className="text-right font-data text-muted-foreground">{served.H.toFixed(0)}</td>
-                                        <td className="text-right font-data text-muted-foreground">{isPeri ? '-' : served.G.toFixed(0)}</td>
+                                        <td className="text-right font-data text-muted-foreground">{served.G.toFixed(0)}</td>
                                     </tr>
                                 );
                             })}
+                            {/* TOTAL y OBJETIVO van SIN peri, para que se puedan comparar entre si.
+                                Antes el total sumaba el peri en P y H pero no en G, y el objetivo no
+                                lo contaba nunca: las dos filas no cuadraban y no habia forma de saber
+                                por que. El peri tiene su propio objetivo y va debajo, aparte. */}
                             <tr className="border-t-2 border-border font-bold text-foreground">
                                 <td className="py-1.5">TOTAL</td>
-                                <td className="text-right font-data">{dayMacros.P.toFixed(0)}</td>
-                                <td className="text-right font-data">{dayMacros.H.toFixed(0)}</td>
+                                <td className="text-right font-data">{mainP.toFixed(0)}</td>
+                                <td className="text-right font-data">{mainH.toFixed(0)}</td>
                                 <td className="text-right font-data">{mainG.toFixed(0)}</td>
                             </tr>
                             <tr className="text-muted-foreground">
@@ -144,6 +154,33 @@ const DaySummary = ({
                             </tr>
                         </tbody>
                     </table>
+
+                    {hayPeri && (
+                        <div className="mt-3 pt-2.5 border-t border-dashed border-border">
+                            <p className="caption mb-1">Peri-entreno · aparte del total</p>
+                            <table className="w-full text-xs">
+                                <tbody>
+                                    {comidasPeri.map(mealKey => {
+                                        const served = calculateMealMacros(mealKey);
+                                        return (
+                                            <tr key={mealKey}>
+                                                <td className="py-1 text-foreground">{mealInfo[mealKey].name}</td>
+                                                <td className="text-right font-data text-muted-foreground w-14">{served.P.toFixed(0)}</td>
+                                                <td className="text-right font-data text-muted-foreground w-14">{served.H.toFixed(0)}</td>
+                                                <td className="text-right font-data text-muted-foreground w-14">-</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="border-t border-border text-muted-foreground">
+                                        <td className="py-1">OBJETIVO PERI</td>
+                                        <td className="text-right font-data w-14">{(totalPeriP || 0).toFixed(0)}</td>
+                                        <td className="text-right font-data w-14">{(totalPeriH || 0).toFixed(0)}</td>
+                                        <td className="text-right font-data w-14">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
