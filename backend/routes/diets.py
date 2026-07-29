@@ -274,6 +274,37 @@ async def copy_day(data: dict, user = Depends(get_current_user)):
     )
     return {"message": "Día copiado", "origen": source_date, "destino": target_date}
 
+async def _adjuntar_urls(diet: dict) -> None:
+    """
+    Pone la URL de ficha en cada alimento del dia (los de marca la tienen; los genericos no).
+
+    Se resuelve aqui y no al guardar por dos motivos: los dias ya guardados no la tienen, y los
+    alimentos entran por muchas puertas (buscador, chatbot, menu sugerido, copiar dia, favoritas),
+    asi que guardarla en cada una seria facil de olvidar. Ademas, si se corrige la URL de un
+    alimento, los dias antiguos la cogen sola. Es una unica consulta por dia.
+    """
+    comidas = diet.get("comidas") or {}
+    ids = {
+        a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
+        for comida in comidas.values()
+        for a in ((comida or {}).get("alimentos") or [])
+    }
+    ids.discard(None)
+    if not ids:
+        return
+
+    urls = {
+        f["id"]: f.get("url")
+        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0, "id": 1, "url": 1})
+    }
+    for comida in comidas.values():
+        for a in ((comida or {}).get("alimentos") or []):
+            clave = a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
+            url = urls.get(clave)
+            if url:
+                a["url"] = url
+
+
 @router.get("/{fecha}")
 async def get_diet(fecha: str, user = Depends(get_current_user)):
     """Obtener la dieta guardada para una fecha."""
@@ -284,6 +315,7 @@ async def get_diet(fecha: str, user = Depends(get_current_user)):
     if not diet:
         return {"fecha": fecha, "exists": False}
 
+    await _adjuntar_urls(diet)
     diet["exists"] = True
     return diet
 

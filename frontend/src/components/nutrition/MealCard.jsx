@@ -143,9 +143,18 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                 <span className="text-[9px] font-data leading-none mt-0.5">{idx + 1}</span>
             </button>
 
-            {/* Nombre + macros */}
+            {/* Nombre + macros. Los alimentos de marca tienen ficha propia: el nombre abre su
+                enlace, igual que en el buscador de alimentos (naranja = tiene ficha). */}
             <div className="min-w-0 flex-1 flex items-baseline gap-2">
-                <span className="text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
+                {food.url ? (
+                    <a href={food.url} target="_blank" rel="noopener noreferrer"
+                        className="text-sm font-semibold text-brand hover:underline truncate"
+                        title={`${food.nombre} (abre la ficha del producto)`}>
+                        {food.nombre}
+                    </a>
+                ) : (
+                    <span className="text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
+                )}
                 <span className="text-[11px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0">{macrosLine(macros)}</span>
             </div>
 

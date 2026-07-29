@@ -976,7 +976,8 @@ const NutritionPage = () => {
                 que_cuenta: result.que_cuenta,
                 categorias: food.categorias,
                 racion: food.racion,
-                unidades: food.unidades || false
+                unidades: food.unidades || false,
+                url: food.url || null,   // para que el enlace salga ya, sin esperar a recargar el dia
             };
             setMealsData(prev => ({
                 ...prev,
