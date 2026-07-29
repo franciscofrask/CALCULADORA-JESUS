@@ -157,7 +157,7 @@ const DaySummary = ({
 
                     {hayPeri && (
                         <div className="mt-3 pt-2.5 border-t border-dashed border-border">
-                            <p className="caption mb-1">Peri-entreno · aparte del total</p>
+                            <p className="caption mb-1">Peri-entreno</p>
                             <table className="w-full text-xs">
                                 <tbody>
                                     {comidasPeri.map(mealKey => {
