@@ -20,7 +20,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
-    ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp,
+    ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp, ChevronRight,
     AlertCircle, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw
 } from 'lucide-react';
 
@@ -1851,6 +1851,7 @@ const ReportsFeedbackList = ({ initialReports }) => {
     const [drafts, setDrafts] = useState({});
     const [savingId, setSavingId] = useState(null);
     const [showAll, setShowAll] = useState(false);
+    const [detalleId, setDetalleId] = useState(null);   // reporte abierto en el modal
 
     const saveFeedback = async (reportId) => {
         const text = (drafts[reportId] ?? '').trim();
@@ -1865,48 +1866,74 @@ const ReportsFeedbackList = ({ initialReports }) => {
         } finally { setSavingId(null); }
     };
 
+    // Sin reportes no se pinta nada: en una ficha nueva solo seria ruido.
     if (!reports.length) return null;
-    const visible = showAll ? reports : reports.slice(0, 5);
+    // Listado de fechas y el detalle en un modal: con decenas de reportes, verlos todos
+    // desplegados a la vez no hay quien lo lea.
+    const visible = showAll ? reports : reports.slice(0, 8);
+    const abierto = reports.find(r => r.id === detalleId) || null;
+    const draftAbierto = abierto ? (drafts[abierto.id] ?? (abierto.trainer_feedback || '')) : '';
+    const dirtyAbierto = abierto ? draftAbierto !== (abierto.trainer_feedback || '') : false;
 
     return (
-        <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
+        <Card className="bg-[#111] border-[#222] text-white"><CardContent className="p-5">
             <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Reportes del cliente</p>
                 <span className="text-white/25 text-xs">{reports.length} en total</span>
             </div>
-            <div className="space-y-3">
-                {visible.map(r => {
-                    const draft = drafts[r.id] ?? (r.trainer_feedback || '');
-                    const dirty = draft !== (r.trainer_feedback || '');
-                    return (
-                        <div key={r.id} className="bg-[#0A0A0A] rounded-xl p-3 border border-[#222]" data-testid={`report-${r.id}`}>
-                            <div className="flex items-center gap-3 text-sm">
-                                <span className="text-white/40 text-xs">{new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                                {r.weight != null && <span className="text-white font-bold">{r.weight} kg</span>}
-                                {r.training_compliance != null && <span className="text-white/40 text-xs">Entreno {r.training_compliance}%</span>}
-                                {r.nutrition_compliance != null && <span className="text-white/40 text-xs">Nutrición {r.nutrition_compliance}%</span>}
-                            </div>
-                            {r.notes && <p className="text-white/50 text-xs mt-1.5">"{r.notes}"</p>}
-                            <div className="flex items-end gap-2 mt-2">
-                                <Textarea value={draft} onChange={e => setDrafts(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                    placeholder="Escribe feedback para el cliente..." rows={1}
-                                    className="bg-[#111] border-[#222] text-white text-xs flex-1 min-h-[34px]" />
-                                {dirty && (
-                                    <Button size="sm" onClick={() => saveFeedback(r.id)} disabled={savingId === r.id}
-                                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs h-8">
-                                        {savingId === r.id ? '...' : 'Guardar'}
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
+            <div className="space-y-1">
+                {visible.map(r => (
+                    <button key={r.id} onClick={() => setDetalleId(r.id)} data-testid={`report-${r.id}`}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#222] hover:border-[#FF671F]/40 transition-colors text-left">
+                        <span className="text-white text-sm font-medium tabular-nums whitespace-nowrap">
+                            {new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        {r.weight != null && <span className="text-[#FF671F] font-bold text-sm tabular-nums">{r.weight} kg</span>}
+                        <span className="ml-auto flex items-center gap-2 flex-shrink-0">
+                            {r.trainer_feedback
+                                ? <span className="text-emerald-400 text-[10px] uppercase tracking-wider">con feedback</span>
+                                : <span className="text-white/25 text-[10px] uppercase tracking-wider">sin feedback</span>}
+                            <ChevronRight className="w-4 h-4 text-white/30" />
+                        </span>
+                    </button>
+                ))}
             </div>
-            {reports.length > 5 && (
+            {reports.length > 8 && (
                 <button onClick={() => setShowAll(v => !v)} className="text-[#FF671F] text-xs mt-3 hover:underline">
                     {showAll ? 'Ver menos' : `Ver los ${reports.length}`}
                 </button>
             )}
+
+            <Dialog open={!!abierto} onOpenChange={(o) => !o && setDetalleId(null)}>
+                {abierto && (
+                    <DialogContent className="bg-[#111] border-[#333] max-w-lg text-white" data-testid="report-detail">
+                        <DialogHeader>
+                            <DialogTitle className="uppercase tracking-wider">
+                                Reporte del {new Date(abierto.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
+                            {abierto.weight != null && <span className="text-white/50">Peso <b className="text-white">{abierto.weight} kg</b></span>}
+                            {abierto.training_compliance != null && <span className="text-white/50">Entreno <b className="text-white">{abierto.training_compliance}%</b></span>}
+                            {abierto.nutrition_compliance != null && <span className="text-white/50">Nutrición <b className="text-white">{abierto.nutrition_compliance}%</b></span>}
+                        </div>
+                        {abierto.notes && <p className="text-white/70 text-sm italic">"{abierto.notes}"</p>}
+                        <div>
+                            <Label className="text-white/60 text-xs">Feedback para el cliente</Label>
+                            <Textarea value={draftAbierto} onChange={e => setDrafts(prev => ({ ...prev, [abierto.id]: e.target.value }))}
+                                placeholder="Escribe feedback para el cliente..." rows={3}
+                                className="bg-[#0A0A0A] border-[#333] text-white mt-1" />
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDetalleId(null)} className="bg-transparent border-[#333] text-white">Cerrar</Button>
+                            <Button onClick={() => saveFeedback(abierto.id)} disabled={!dirtyAbierto || savingId === abierto.id}
+                                className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white disabled:opacity-40">
+                                {savingId === abierto.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" />Guardar feedback</>}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                )}
+            </Dialog>
         </CardContent></Card>
     );
 };

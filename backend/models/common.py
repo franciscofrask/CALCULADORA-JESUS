@@ -1,7 +1,8 @@
 """
 Modelos Pydantic para rutinas, reportes, mensajes y pagos.
 """
-from pydantic import BaseModel, ConfigDict
+from datetime import datetime, date
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional, Dict, List, Any
 
 # Routine Models
@@ -105,6 +106,16 @@ class CheckInResponse(BaseModel):
     notes: Optional[str] = None
     trainer_feedback: Optional[str] = None
     created_at: str
+
+    # Los check-ins migrados de Calma guardan created_at como datetime (los que crea
+    # la app lo guardan como texto ISO). Sin esto, un solo registro migrado tumbaba
+    # la respuesta entera con un 500 y el coach no veia ningun check-in.
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _fecha_a_texto(cls, v):
+        if isinstance(v, (datetime, date)):
+            return v.isoformat()
+        return v
 
 # Message Models
 class MessageCreate(BaseModel):

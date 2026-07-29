@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { Heart, Calendar, Camera, Loader2, Save, Pencil } from 'lucide-react';
+import { Heart, Calendar, Camera, Loader2, Save, ChevronRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 
 // Tonos de celda (tema oscuro) según calidad de la respuesta.
 const TONE = {
@@ -55,84 +56,89 @@ const MONTHLY_COLS = [
     { key: 'notes', label: 'Comentario cliente', r: e => ({ v: txt(e.notes), t: e.notes ? 'amber' : 'muted' }) },
 ];
 
-const FeedbackCell = ({ entry, onSave }) => {
-    const [editing, setEditing] = useState(false);
-    const [val, setVal] = useState(entry.trainer_feedback || '');
-    const [saving, setSaving] = useState(false);
+// Listado de fechas + detalle en modal. Con decenas de envíos, la tabla entera
+// desplegada era ilegible; y si el cliente no ha enviado nada, el bloque no se pinta.
+const CheckinsLista = ({ title, columns, rows, onFeedback, resumen }) => {
+    const [abiertoId, setAbiertoId] = useState(null);
+    const [borrador, setBorrador] = useState('');
+    const [guardando, setGuardando] = useState(false);
 
-    const save = async () => {
-        setSaving(true);
-        try { await onSave(entry.id, val); setEditing(false); }
-        finally { setSaving(false); }
+    if (!rows.length) return null;
+
+    const abierto = rows.find(r => r.id === abiertoId) || null;
+    const abrir = (e) => { setBorrador(e.trainer_feedback || ''); setAbiertoId(e.id); };
+    const guardar = async () => {
+        setGuardando(true);
+        try { await onFeedback(abierto.id, borrador); setAbiertoId(null); }
+        finally { setGuardando(false); }
     };
 
-    if (editing) {
-        return (
-            <td className="px-3 py-2.5 align-top border-r border-[#222] last:border-r-0 min-w-[200px]">
-                <textarea value={val} onChange={e => setVal(e.target.value)} rows={2} autoFocus
-                    className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[#FF671F]" />
-                <div className="flex gap-1.5 mt-1.5">
-                    <button onClick={save} disabled={saving}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-white bg-[#FF671F] px-2 py-1 rounded-md disabled:opacity-60">
-                        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Guardar
-                    </button>
-                    <button onClick={() => { setVal(entry.trainer_feedback || ''); setEditing(false); }}
-                        className="text-[11px] text-white/40 px-2 py-1">Cancelar</button>
-                </div>
-            </td>
-        );
-    }
     return (
-        <td onClick={() => setEditing(true)}
-            className={`px-3 py-2.5 text-xs align-top border-r border-[#222] last:border-r-0 cursor-pointer hover:bg-white/5 ${entry.trainer_feedback ? 'text-emerald-300' : 'text-white/30 italic'}`}>
-            <span className="whitespace-pre-wrap leading-relaxed block max-w-[240px]">
-                {entry.trainer_feedback || <span className="inline-flex items-center gap-1"><Pencil className="w-3 h-3" /> Añadir feedback</span>}
-            </span>
-        </td>
+        <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-3 border-b border-[#222] flex items-baseline justify-between gap-3">
+                <p className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-[#FF671F]" /> {title}
+                </p>
+                <span className="text-xs text-white/40">{rows.length} {rows.length === 1 ? 'envío' : 'envíos'}</span>
+            </div>
+            <ul className="divide-y divide-[#1a1a1a] max-h-[22rem] overflow-y-auto">
+                {rows.map((e, i) => (
+                    <li key={e.id || i}>
+                        <button onClick={() => abrir(e)}
+                            className="w-full flex items-center gap-3 px-5 py-2.5 text-left hover:bg-white/[0.03] transition-colors">
+                            <span className="text-white text-sm tabular-nums whitespace-nowrap">{fmt(e.created_at)}</span>
+                            <span className="text-white/50 text-xs truncate">{resumen(e)}</span>
+                            <span className="ml-auto flex items-center gap-2 flex-shrink-0">
+                                {e.trainer_feedback
+                                    ? <span className="text-emerald-400 text-[10px] uppercase tracking-wider">con feedback</span>
+                                    : <span className="text-white/25 text-[10px] uppercase tracking-wider">sin feedback</span>}
+                                <ChevronRight className="w-4 h-4 text-white/30" />
+                            </span>
+                        </button>
+                    </li>
+                ))}
+            </ul>
+
+            <Dialog open={!!abierto} onOpenChange={(o) => !o && setAbiertoId(null)}>
+                {abierto && (
+                    <DialogContent className="bg-[#111] border-[#333] max-w-lg text-white" data-testid="checkin-detail">
+                        <DialogHeader>
+                            <DialogTitle className="uppercase tracking-wider">{title.replace('Check-ins', 'Check-in')}</DialogTitle>
+                        </DialogHeader>
+                        <p className="text-white/40 text-xs -mt-2">{fmt(abierto.created_at)}</p>
+                        <dl className="grid grid-cols-[9rem_1fr] gap-x-4 gap-y-2 text-sm">
+                            {columns.filter(c => c.key !== 'created_at').map(c => {
+                                const { v, t = 'none' } = c.r(abierto) || {};
+                                return (
+                                    <React.Fragment key={c.key}>
+                                        <dt className="text-white/40 text-xs uppercase tracking-wider pt-0.5">{c.label}</dt>
+                                        <dd className={v == null ? TONE.muted : (TONE[t] || TONE.none)}>
+                                            <span className="whitespace-pre-wrap leading-relaxed">{v == null ? 'sin respuesta' : v}</span>
+                                        </dd>
+                                    </React.Fragment>
+                                );
+                            })}
+                        </dl>
+                        <div>
+                            <p className="text-white/60 text-xs mb-1">Feedback para el cliente</p>
+                            <textarea value={borrador} onChange={e => setBorrador(e.target.value)} rows={3}
+                                placeholder="Escribe feedback para el cliente..."
+                                className="w-full bg-[#0A0A0A] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#FF671F]" />
+                        </div>
+                        <DialogFooter>
+                            <button onClick={() => setAbiertoId(null)}
+                                className="px-4 py-2 rounded-lg text-sm border border-[#333] text-white">Cerrar</button>
+                            <button onClick={guardar} disabled={guardando || borrador === (abierto.trainer_feedback || '')}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-[#FF671F] text-white disabled:opacity-40">
+                                {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar feedback
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                )}
+            </Dialog>
+        </div>
     );
 };
-
-const CheckinsTable = ({ title, columns, rows, onFeedback, empty }) => (
-    <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden">
-        <div className="px-5 pt-5 pb-3 border-b border-[#222] flex items-baseline justify-between gap-3">
-            <p className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-[#FF671F]" /> {title}
-            </p>
-            <span className="text-xs text-white/40">{rows.length} {rows.length === 1 ? 'envío' : 'envíos'}</span>
-        </div>
-        {rows.length === 0 ? (
-            <p className="text-sm text-white/40 text-center py-10">{empty}</p>
-        ) : (
-            <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                    <thead>
-                        <tr>
-                            {columns.map(c => (
-                                <th key={c.key} className="sticky top-0 bg-[#FF671F] text-white text-[11px] font-bold uppercase tracking-wider px-3 py-2 text-left whitespace-nowrap">{c.label}</th>
-                            ))}
-                            <th className="bg-[#FF671F] text-white text-[11px] font-bold uppercase tracking-wider px-3 py-2 text-left whitespace-nowrap">Feedback coach</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((e, i) => (
-                            <tr key={e.id || i} className="border-t border-[#222]">
-                                {columns.map(c => {
-                                    const { v, t = 'none' } = c.r(e) || {};
-                                    return (
-                                        <td key={c.key} className={`px-3 py-2.5 text-xs align-top border-r border-[#222] last:border-r-0 ${v == null ? TONE.muted : (TONE[t] || TONE.none)}`}>
-                                            <span className="whitespace-pre-wrap leading-relaxed block max-w-[260px]">{v == null ? 'sin respuesta' : v}</span>
-                                        </td>
-                                    );
-                                })}
-                                <FeedbackCell entry={e} onSave={onFeedback} />
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        )}
-    </div>
-);
 
 const PhotoTile = ({ photo, token }) => {
     const [src, setSrc] = useState(null);
@@ -221,19 +227,22 @@ const CoachCheckins = ({ clientId }) => {
                 </div>
             )}
 
-            <CheckinsTable title="Check-ins semanales" columns={WEEKLY_COLS} rows={weekly} onFeedback={saveFeedback}
-                empty="Este cliente no ha enviado ningún check-in semanal todavía." />
-            <CheckinsTable title="Check-ins mensuales" columns={MONTHLY_COLS} rows={monthly} onFeedback={saveFeedback}
-                empty="Este cliente no ha enviado ningún check-in mensual todavía." />
+            <CheckinsLista title="Check-ins semanales" columns={WEEKLY_COLS} rows={weekly} onFeedback={saveFeedback}
+                resumen={e => [e.weight != null && `${e.weight} kg`,
+                               e.training_compliance != null && `entreno ${e.training_compliance}%`,
+                               e.nutrition_compliance != null && `nutrición ${e.nutrition_compliance}%`]
+                               .filter(Boolean).join(' · ')} />
+            <CheckinsLista title="Check-ins mensuales" columns={MONTHLY_COLS} rows={monthly} onFeedback={saveFeedback}
+                resumen={e => [e.weight != null && `${e.weight} kg`,
+                               e.body_fat_pct != null && `${e.body_fat_pct}% graso`]
+                               .filter(Boolean).join(' · ')} />
 
-            {/* Diarios: resumen compacto, sin feedback */}
-            <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden">
-                <div className="px-5 pt-5 pb-3 border-b border-[#222]">
-                    <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Check-ins diarios (últimos 14)</p>
-                </div>
-                {daily.length === 0 ? (
-                    <p className="text-sm text-white/40 text-center py-8">Sin check-ins diarios.</p>
-                ) : (
+            {/* Diarios: resumen compacto, sin feedback. Si no hay, no se pinta. */}
+            {daily.length > 0 && (
+                <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden">
+                    <div className="px-5 pt-5 pb-3 border-b border-[#222]">
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Check-ins diarios (últimos 14)</p>
+                    </div>
                     <ul className="divide-y divide-[#222]">
                         {daily.map(c => (
                             <li key={c.id} className="px-5 py-2.5 flex items-center justify-between text-xs">
@@ -246,27 +255,25 @@ const CoachCheckins = ({ clientId }) => {
                             </li>
                         ))}
                     </ul>
-                )}
-            </div>
-
-            {/* Fotos */}
-            <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden">
-                <div className="px-5 pt-5 pb-3 border-b border-[#222] flex items-baseline justify-between gap-3">
-                    <p className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
-                        <Camera className="w-4 h-4 text-[#FF671F]" /> Fotos de progreso
-                    </p>
-                    <span className="text-xs text-white/40">{photos.length} {photos.length === 1 ? 'foto' : 'fotos'}</span>
                 </div>
-                <div className="px-5 py-4">
-                    {photos.length === 0 ? (
-                        <p className="text-sm text-white/40 text-center py-6">El cliente no ha subido fotos todavía.</p>
-                    ) : (
+            )}
+
+            {/* Fotos: igual, solo si las hay */}
+            {photos.length > 0 && (
+                <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden">
+                    <div className="px-5 pt-5 pb-3 border-b border-[#222] flex items-baseline justify-between gap-3">
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
+                            <Camera className="w-4 h-4 text-[#FF671F]" /> Fotos de progreso
+                        </p>
+                        <span className="text-xs text-white/40">{photos.length} {photos.length === 1 ? 'foto' : 'fotos'}</span>
+                    </div>
+                    <div className="px-5 py-4">
                         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                             {photos.map(p => <PhotoTile key={p.id} photo={p} token={token} />)}
                         </div>
-                    )}
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };
