@@ -369,6 +369,10 @@ class ClientProfile(BaseModel):
     # Progreso del cuestionario de ajuste: {respuestas: {...}, paso: n}. Se guarda a cada
     # respuesta para que pueda salirse y volver donde lo dejo. Se borra al terminarlo.
     ajuste_macros_progreso: Optional[Dict[str, Any]] = None
+    # Punto de partida (paso 3 del doc): fotos y medidas del dia 1, que son la unica forma de
+    # comparar dentro de un mes.
+    punto_de_partida_hecho: Optional[bool] = None
+    medidas_inicio: Optional[Dict[str, Any]] = None
     # Onboarding guiado (tour de producto): progreso por usuario.
     onboarding_completed: Optional[bool] = None
     onboarding_step: Optional[str] = None

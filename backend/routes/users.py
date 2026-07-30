@@ -250,6 +250,78 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado}
 
 
+@router.get("/clients/mi-ficha")
+async def mi_ficha_de_partida(user = Depends(get_current_user)):
+    """
+    La ficha que se le entrega en el punto de partida (paso 3 del doc): de qué está hecho hoy,
+    cuánto músculo lleva para su altura, y qué le pasó a la gente que empezó pareciéndose a él.
+    """
+    from core.ficha_partida import composicion_de, referencia_de_parecidos
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    peso, bf = profile.get("weight"), profile.get("body_fat")
+    if not peso or bf is None:
+        raise HTTPException(status_code=400, detail="Faltan tu peso o tu % de grasa")
+
+    sexo = (profile.get("sex") or "hombre").lower()
+    sexo = "mujer" if sexo.startswith("muj") or sexo in ("f", "femenino") else "hombre"
+    objetivo = (profile.get("goal") or "definicion").lower()
+    fase = "volumen" if "vol" in objetivo else "definicion"
+    altura = profile.get("height") or (profile.get("nivel1") or {}).get("height")
+
+    composicion = composicion_de(float(peso), float(bf), altura, sexo)
+    referencia = await referencia_de_parecidos(
+        sexo, fase, float(peso), float(bf), excluir_client_id=profile.get("id"))
+
+    fotos = await db.client_photos.count_documents({"client_id": profile.get("id")})
+    return {
+        "composicion": composicion,
+        "referencia": referencia,
+        "fase": fase,
+        "fotos_subidas": fotos,
+        "punto_de_partida_hecho": bool(profile.get("punto_de_partida_hecho")),
+    }
+
+
+@router.post("/clients/punto-de-partida")
+async def guardar_punto_de_partida(data: dict, user = Depends(get_current_user)):
+    """
+    Guarda las medidas del día 1 y marca el punto de partida como hecho. Las fotos van por su
+    propio endpoint (POST /reports/photos), que ya sabe tratarlas.
+    """
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    medidas = data.get("medidas") if isinstance(data.get("medidas"), dict) else {}
+    limpias = {}
+    for k, v in medidas.items():
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            continue
+        if 0 < n < 300:            # cm de contorno: fuera de ahí es un error de tecleo
+            limpias[str(k)[:30]] = round(n, 1)
+
+    update = {"punto_de_partida_hecho": True}
+    if limpias:
+        update["medidas_inicio"] = {**limpias, "fecha": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
+    # La altura se pregunta aquí si aún no la tenemos: sin ella no hay índice de muscularidad.
+    altura = data.get("altura")
+    try:
+        if altura and 120 <= float(altura) <= 230:
+            update["height"] = float(altura)
+    except (TypeError, ValueError):
+        pass
+
+    await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
+    return {"guardado": True, "medidas": limpias}
+
+
 @router.get("/clients/mis-dias")
 async def mis_dias_montados(user = Depends(get_current_user)):
     """Los últimos días que el cliente tiene montados en la calculadora (para elegir uno en P10)."""

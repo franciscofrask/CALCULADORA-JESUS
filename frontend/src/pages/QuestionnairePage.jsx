@@ -350,6 +350,10 @@ const STEPS_AJUSTE = [
 //   - los alimentos que le gustan y las alergias -> a la primera dieta. No sirven para calcular
 //     macros, sirven para generar comida, y tienen sentido justo cuando va a ver su primer menu.
 const STEPS_ONBOARD = [
+    // Paso 3 del doc: se le piden fotos y medidas justo despues de darle los macros, que es
+    // cuando mas motivado esta. Y a cambio se le entrega su ficha.
+    { type: 'partida', title: 'Ya tienes tus macros' },
+    { type: 'ficha', title: 'Tu punto de partida' },
     { type: 'magia', title: 'Comidas que puedes comer hoy' },
 ];
 
@@ -560,6 +564,10 @@ const QuestionnairePage = () => {
     const progresoCargadoRef = useRef(false);
     // Los macros de antes de la ultima respuesta, para poder mostrar cuanto se ha movido cada uno.
     const previosRef = useRef(null);
+    // Punto de partida: fotos subidas y la ficha que se le entrega a cambio.
+    const [fotosPartida, setFotosPartida] = useState(0);
+    const [subiendoFotos, setSubiendoFotos] = useState(false);
+    const [ficha, setFicha] = useState(null);
     // P10: lo que hemos entendido de su dieta, pendiente de que lo confirme.
     const [lecturaDieta, setLecturaDieta] = useState(null);
     const [leyendoDieta, setLeyendoDieta] = useState(false);
@@ -618,6 +626,16 @@ const QuestionnairePage = () => {
         if (answers.pref_dias_entreno != null) {
             api.put('/clients/profile', { training_days: answers.pref_dias_entreno }).catch(() => {});
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [idx]);
+
+    // La ficha se pide al llegar a su pantalla, no antes: hasta ese momento el cliente puede
+    // haber cambiado su altura o sus medidas, y la ficha saldria con datos viejos.
+    useEffect(() => {
+        if (flow[idx]?.type !== 'ficha' || ficha) return;
+        api.get('/clients/mi-ficha')
+            .then(r => setFicha(r.data))
+            .catch(() => setFicha({ composicion: null, referencia: null }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx]);
 
@@ -764,6 +782,57 @@ const QuestionnairePage = () => {
         setAnswers(a => ({ ...a, [key]: value }));
     };
 
+
+    // ── Punto de partida: fotos y medidas del dia 1 ──────────────────────────
+    // Las fotos van por el endpoint de siempre (multipart), que ya sabe validarlas y guardarlas
+    // en disco; aqui solo se eligen y se suben.
+    const elegirFotosPartida = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.onchange = async (ev) => {
+            const files = [...(ev.target.files || [])];
+            if (!files.length) return;
+            setSubiendoFotos(true);
+            let subidas = 0;
+            for (const file of files) {
+                try {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    const r = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/reports/photos`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` },
+                        body: fd,
+                    });
+                    if (r.ok) subidas += 1;
+                    else {
+                        const e = await r.json().catch(() => ({}));
+                        toast.error(e.detail || `No se ha podido subir ${file.name}`);
+                    }
+                } catch (e) {
+                    toast.error(`No se ha podido subir ${file.name}`);
+                }
+            }
+            setFotosPartida(n => n + subidas);
+            setSubiendoFotos(false);
+            if (subidas) toast.success(`${subidas} foto${subidas > 1 ? 's' : ''} guardada${subidas > 1 ? 's' : ''}`);
+        };
+        input.click();
+    };
+
+    const guardarPuntoDePartida = async () => {
+        const medidas = {};
+        for (const [clave, campo] of [['cintura', 'medida_cintura'], ['abdomen', 'medida_abdomen'],
+                                      ['cadera', 'medida_cadera']]) {
+            const n = num(answers[campo]);
+            if (n) medidas[clave] = n;
+        }
+        try {
+            await api.post('/clients/punto-de-partida', { medidas, altura: num(answers.height) });
+        } catch (e) { /* no bloquea: lo importante son las fotos, que ya estan subidas */ }
+        goNext();
+    };
 
     // Igual que la de la dieta, pero para la foto del peso maximo (P19).
     const elegirFotoPesoMaximo = () => {
@@ -1365,6 +1434,131 @@ const QuestionnairePage = () => {
                     <BackBtn />
                     <Button onClick={goNext} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
                         OK <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (step.type === 'partida') {
+        // Fotos y medidas del dia 1. Se piden aqui porque es el momento de mas ganas, y porque
+        // sin una foto de hoy dentro de un mes no hay con que comparar.
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
+                    Ya tienes tus macros
+                </h2>
+                <p className="text-foreground/60 mb-6 text-sm md:text-base">
+                    Hazte las fotos de hoy para poder comparar dentro de un mes. Es lo único que no
+                    se puede recuperar después.
+                </p>
+
+                <div className="space-y-4 mb-6">
+                    <div>
+                        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-1.5">
+                            Tus fotos de hoy
+                        </label>
+                        <button type="button" onClick={elegirFotosPartida} disabled={subiendoFotos}
+                            className="w-full rounded-xl border-2 border-dashed border-[#333] py-7 text-center hover:border-brand transition-colors disabled:opacity-50">
+                            {subiendoFotos ? (
+                                <span className="inline-flex items-center gap-2 text-foreground/60 text-sm">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Subiendo...
+                                </span>
+                            ) : fotosPartida > 0 ? (
+                                <span className="inline-flex items-center gap-2 text-foreground/80 text-sm">
+                                    <Check className="w-4 h-4 text-emerald-500" /> {fotosPartida} foto{fotosPartida > 1 ? 's' : ''} subida{fotosPartida > 1 ? 's' : ''}. Toca para añadir más
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-2 text-foreground/50 text-sm">
+                                    <ImagePlus className="w-5 h-5" /> Subir fotos (frente, lateral y espalda)
+                                </span>
+                            )}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <MiniInput {...mini} k="medida_cintura" label="Cintura" type="number" unit="cm" placeholder="85" />
+                        <MiniInput {...mini} k="medida_abdomen" label="Abdomen" type="number" unit="cm" placeholder="90" />
+                        <MiniInput {...mini} k="medida_cadera" label="Cadera" type="number" unit="cm" placeholder="98" />
+                        {!answers.height && (
+                            <MiniInput {...mini} k="height" label="Altura" type="number" unit="cm" placeholder="178" />
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                    <Button onClick={guardarPuntoDePartida}
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
+                        Ver mi ficha <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                    <Button variant="ghost" onClick={goNext} className="text-foreground/50">
+                        Ahora no
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (step.type === 'ficha') {
+        // Lo que se le da a cambio: de que esta hecho y que le paso a gente como el.
+        const c = ficha?.composicion;
+        const r = ficha?.referencia;
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
+                    Tu punto de partida
+                </h2>
+                <p className="text-foreground/60 mb-6 text-sm md:text-base">
+                    De aquí sales hoy. Dentro de un mes lo comparamos con esto.
+                </p>
+
+                {!ficha ? (
+                    <div className="flex justify-center py-10">
+                        <Loader2 className="w-8 h-8 animate-spin text-brand" />
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {[['Peso', `${c.peso} kg`], ['Grasa', `${c.masa_grasa} kg`],
+                              ['Masa magra', `${c.masa_magra} kg`]].map(([lbl, val]) => (
+                                <div key={lbl} className="rounded-xl border-2 border-[#222222] bg-card py-4 px-3 text-center">
+                                    <p className="text-[11px] text-foreground/50 uppercase font-bold mb-1">{lbl}</p>
+                                    <p className="font-heading font-extrabold text-2xl text-brand">{val}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {c.indice_muscular != null ? (
+                            <div className="rounded-xl border-2 border-brand/40 bg-brand/5 p-4">
+                                <p className="text-[11px] text-foreground/50 uppercase font-bold mb-1">Índice de muscularidad</p>
+                                <p className="font-heading font-extrabold text-3xl text-brand mb-1">{c.indice_muscular}</p>
+                                <p className="text-sm text-foreground/70">
+                                    Músculo que llevas para tu altura: <strong className="text-foreground">{c.indice_muscular_lectura}</strong>.
+                                </p>
+                            </div>
+                        ) : (
+                            <p className="text-foreground/50 text-sm">
+                                Dinos tu altura y te calculamos cuánto músculo llevas para tu estatura.
+                            </p>
+                        )}
+
+                        {r && (
+                            <div className="rounded-xl border-2 border-[#222222] bg-card p-4">
+                                <p className="text-[11px] text-foreground/50 uppercase font-bold mb-1">Gente que empezó como tú</p>
+                                <p className="text-sm text-foreground/80">
+                                    De {r.casos} casos parecidos al tuyo, <strong className="text-foreground">{r.avanzaron} avanzaron</strong>,
+                                    y los que avanzaron se movieron{' '}
+                                    <strong className="text-brand">{r.kg_mes} kg al mes</strong>{' '}
+                                    ({r.ritmo_mediano_pct_mes}% de su peso).
+                                </p>
+                                <p className="text-xs text-foreground/40 mt-1">
+                                    No es un objetivo ni una promesa: es lo que les pasó de verdad, y ya ves
+                                    que no le sale a todo el mundo.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div className="mt-8">
+                    <Button onClick={goNext} className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                        Continuar <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
                 </div>
             </div>
