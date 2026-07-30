@@ -1,25 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '../ui/button';
 import { ArrowRight, Clock, Utensils } from 'lucide-react';
-import PreferencesSetup from './PreferencesSetup';
 
 /**
- * Paso 4 del doc del 29-07: LA PRIMERA DIETA.
+ * Paso 4 del doc del 29-07, la parte que faltaba: enseñarle su configuracion de entrenamiento
+ * antes de su primera dieta.
  *
- * Aqui entran las preferencias de alimentos, y no antes, porque no sirven para calcular macros:
- * sirven para generar comida. Pedirlas en el cuestionario era hacerle marcar cincuenta alimentos
- * para llegar a un numero que no depende de ellos.
+ * Las preferencias de alimentos ya se le piden aqui (PreferencesSetup a pantalla completa la
+ * primera vez), que es justo donde el doc las quiere: no sirven para calcular macros, sirven
+ * para generar comida.
  *
- * Y se le enseña su configuracion de entrenamiento, que hasta ahora se daba por hecha: sus
- * comidas vienen repartidas para quien entrena por la tarde, y si entrena por la mañana tiene que
- * saber que puede cambiarlo.
- *
- * Lo que viene marcado por defecto se queda como esta si no toca nada, asi que el que tenga prisa
- * llega a su menu igual.
+ * Lo que no se le decia es como esta repartido su dia. Sus comidas vienen colocadas para un
+ * momento de entreno concreto, y si el entrena a otra hora tiene que saber que puede cambiarlo:
+ * cambia el reparto, nunca los totales.
  */
-const PrimeraDieta = ({ api, momentoEntreno, numComidas, onIrAConfig, onListo }) => {
-    const [paso, setPaso] = useState('gustos');   // gustos -> config
-
+const PrimeraDieta = ({ momentoEntreno, numComidas, onIrAConfig, onListo }) => {
     const COMO_ENTRENA = {
         0: 'en ayunas, antes de desayunar',
         1: 'después de la primera comida',
@@ -31,60 +26,44 @@ const PrimeraDieta = ({ api, momentoEntreno, numComidas, onIrAConfig, onListo })
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" data-testid="primera-dieta">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-            <div className="relative bg-card rounded-2xl shadow-xl max-w-lg w-full max-h-[92vh] overflow-y-auto">
-                {paso === 'gustos' ? (
-                    <div className="p-6">
-                        <p className="caption text-brand mb-1">Antes de tu primera dieta</p>
-                        <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-tight mb-1">
-                            ¿Qué te gusta comer?
-                        </h2>
-                        <p className="text-muted-foreground text-sm mb-5">
-                            Con esto tus menús salen con comida que te vas a comer de verdad. Lo que ya viene
-                            marcado vale: si tienes prisa, dale a guardar y listo.
-                        </p>
-                        <PreferencesSetup api={api} onSave={() => setPaso('config')} onCancel={() => setPaso('config')} />
-                    </div>
-                ) : (
-                    <div className="p-6">
-                        <p className="caption text-brand mb-1">Una cosa más</p>
-                        <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-tight mb-4">
-                            Así está repartido tu día
-                        </h2>
+            <div className="relative bg-card rounded-2xl shadow-xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-6">
+                <p className="caption text-brand mb-1">Antes de tu primera dieta</p>
+                <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-tight mb-4">
+                    Así está repartido tu día
+                </h2>
 
-                        <div className="space-y-3 mb-6">
-                            <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/40 border border-border">
-                                <Clock className="w-5 h-5 text-brand flex-shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-foreground font-semibold text-sm">Entrenas {comoEntrena}</p>
-                                    <p className="text-muted-foreground text-sm">
-                                        Tus comidas y tu perientreno están colocados para eso.
-                                        <strong className="text-foreground"> Si tú entrenas en otro momento, cámbialo</strong> y
-                                        se recoloca todo. Tus totales del día no cambian.
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/40 border border-border">
-                                <Utensils className="w-5 h-5 text-brand flex-shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-foreground font-semibold text-sm">{numComidas || 4} comidas al día</p>
-                                    <p className="text-muted-foreground text-sm">
-                                        Sin contar el perientreno. También se cambia cuando quieras.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            <Button onClick={onListo}
-                                className="bg-brand hover:bg-brand/90 text-white font-bold flex-1 py-6">
-                                Ver mi primera dieta <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
-                            <Button variant="outline" onClick={onIrAConfig} className="border-border text-foreground py-6">
-                                Cambiar mi configuración
-                            </Button>
+                <div className="space-y-3 mb-6">
+                    <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/40 border border-border">
+                        <Clock className="w-5 h-5 text-brand flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-foreground font-semibold text-sm">Entrenas {comoEntrena}</p>
+                            <p className="text-muted-foreground text-sm">
+                                Tus comidas y tu perientreno están colocados para eso.
+                                <strong className="text-foreground"> Si tú entrenas en otro momento, cámbialo</strong> y
+                                se recoloca todo. Tus totales del día no cambian.
+                            </p>
                         </div>
                     </div>
-                )}
+                    <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/40 border border-border">
+                        <Utensils className="w-5 h-5 text-brand flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-foreground font-semibold text-sm">{numComidas || 4} comidas al día</p>
+                            <p className="text-muted-foreground text-sm">
+                                Sin contar el perientreno. También se cambia cuando quieras, aquí mismo.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <Button onClick={onListo}
+                        className="bg-brand hover:bg-brand/90 text-white font-bold flex-1 py-6">
+                        Ver mi primera dieta <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                    <Button variant="outline" onClick={onIrAConfig} className="border-border text-foreground py-6">
+                        Quiero cambiarlo
+                    </Button>
+                </div>
             </div>
         </div>
     );

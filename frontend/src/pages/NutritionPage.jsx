@@ -1633,9 +1633,10 @@ const NutritionPage = () => {
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto pb-24 lg:pb-10 animate-fade-in" data-testid="nutrition-page">
+            {/* Primero los gustos (el gate de preferencias, mas arriba), luego como esta repartido
+                su dia, y solo despues el tutorial de la pantalla. */}
             {primeraDieta ? (
                 <PrimeraDieta
-                    api={api}
                     momentoEntreno={momentoEntreno}
                     numComidas={numComidas}
                     // La configuración del día está siempre a la vista en esta misma pantalla, así
