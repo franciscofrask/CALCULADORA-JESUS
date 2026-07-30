@@ -92,6 +92,23 @@ def tiene_entrenador_detras(plan_code: Optional[str]) -> bool:
     return modo_calculadora(plan_code) == "personalizado"
 
 
+def dias_hasta_la_revision(plan_code: Optional[str]) -> int:
+    """
+    Cada cuanto le toca revision de macros segun su plan: quincenal si el plan la incluye,
+    mensual en el resto. Es lo que hay que decirle al terminar el cuestionario ("tu proxima
+    revision automatica sera el ..."), porque un numero sin fecha de repaso no dice cuando
+    volver.
+    """
+    from models.user import PLAN_CATALOG
+    plan = PLAN_CATALOG.get((plan_code or "").lower().strip()) or {}
+    reportes = (plan.get("habilitaciones") or {}).get("reportes") or []
+    if "semanal" in reportes:
+        return 7
+    if "quincenal" in reportes:
+        return 14
+    return 28
+
+
 def require_access(feature: Optional[str] = None):
     """Dependencia FastAPI: exige perfil con acceso activo y, opcionalmente, que el plan
     habilite `feature`. Devuelve {'user', 'profile'} para reutilizar el perfil ya leído.

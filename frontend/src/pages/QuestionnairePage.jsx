@@ -341,28 +341,15 @@ const STEPS_AJUSTE = [
     { type: 'result', title: 'Tus macros' },
 ];
 
-// Onboarding tras el quiz (doc "FLUJO COMPLETO" 17-07): preferencias en asistente
-// (una cosa por pantalla) y el "momento mágico" (primeros menús del banco personal).
-// Pantallas pendientes de revisión por Jesús: montadas con piezas reutilizables.
+// Lo que viene despues de entregar los macros. Aqui ya no se le PIDE nada: se le ENSEÑA.
+//
+// Salieron de aqui, por el doc del 29-07:
+//   - cuantas comidas, cuantos dias entrena y cuando entrena -> al perfil, con los valores por
+//     defecto del metodo. Ninguna cambia los totales, solo el reparto, y se cambian cuando quiera
+//     desde Nutricion. Puestas aqui eran tres pantallas que no movian ningun numero.
+//   - los alimentos que le gustan y las alergias -> a la primera dieta. No sirven para calcular
+//     macros, sirven para generar comida, y tienen sentido justo cuando va a ver su primer menu.
 const STEPS_ONBOARD = [
-    { type: 'statement', title: 'Ahora, tus gustos', desc: 'Con tus macros y tus gustos, la app te prepara un banco de menús a tu medida: comida real que ya cuadra contigo. Un minuto más y lo ves.', cta: 'Vamos' },
-    {
-        type: 'choice', key: 'pref_num_comidas', title: '¿Cuántas comidas quieres hacer al día?',
-        desc: 'Sin contar el perientreno. Podrás cambiarlo cuando quieras desde Nutrición.',
-        options: [
-            { value: 3, label: '3 comidas' },
-            { value: 4, label: '4 comidas' },
-        ],
-    },
-    {
-        type: 'choice', key: 'pref_dias_entreno', title: '¿Cuántos días entrenas por semana?',
-        options: [
-            { value: 2, label: '2 días' }, { value: 3, label: '3 días' }, { value: 4, label: '4 días' },
-            { value: 5, label: '5 días' }, { value: 6, label: '6 días' },
-        ],
-    },
-    { type: 'momento', key: 'pref_momento', title: '¿Cuándo sueles entrenar?', desc: 'Con esto colocamos tu perientreno (intra y post) en el momento correcto del día.' },
-    { type: 'prefs', title: 'Tus alimentos' },
     { type: 'magia', title: 'Comidas que puedes comer hoy' },
 ];
 
@@ -778,6 +765,22 @@ const QuestionnairePage = () => {
     };
 
 
+    // Igual que la de la dieta, pero para la foto del peso maximo (P19).
+    const elegirFotoPesoMaximo = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (ev) => {
+            const file = ev.target.files?.[0];
+            if (!file) return;
+            if (file.size > 8 * 1024 * 1024) { toast.error('La foto pesa demasiado (máximo 8 MB)'); return; }
+            const reader = new FileReader();
+            reader.onload = (e) => set('foto_peso_maximo', e.target.result);
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    };
+
     const elegirFotoDieta = () => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -960,6 +963,7 @@ const QuestionnairePage = () => {
                 trt: answers.trt || null,
                 zona_grasa: answers.zona_grasa || null,
                 peso_maximo_cuando: answers.peso_maximo_cuando || null,
+                foto_peso_maximo: answers.foto_peso_maximo || null,
                 mejor_definicion_cuando: answers.mejor_definicion_cuando || null,
                 hasta_donde: answers.hasta_donde || null,
                 vario_peso_3m: answers.vario_peso_3m || null,
@@ -1095,8 +1099,8 @@ const QuestionnairePage = () => {
                     {!modoAjuste
                         ? 'Ya puedes empezar a comer hoy. Termina de ajustarlos para afinarlos a tu caso.'
                         : entrega?.con_entrenador
-                            ? `${entrega.coach || 'Tu entrenador'} los va a revisar contigo y los ajustará a tu caso.`
-                            : 'Calculados con el método a partir de tus respuestas. Los verás siempre en tu panel.'}
+                            ? `${entrega.coach || 'Tu entrenador'} los va a revisar contigo${entrega.proxima_revision ? ` el ${entrega.proxima_revision}` : ''} y los ajustará a tu caso.`
+                            : `Calculados con el método a partir de tus respuestas.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ' Los verás siempre en tu panel.'}`}
                 </p>
                 {m ? (
                     <div className="space-y-4">
@@ -1373,6 +1377,25 @@ const QuestionnairePage = () => {
                 <Title />
                 <div className="space-y-4 mb-8 max-h-[55vh] overflow-y-auto pr-1">
                     <MiniInput {...mini} k="peso_maximo_cuando" label="¿Cuándo tuviste tu peso máximo?" placeholder="Por ejemplo: en 2019, o hace 3 años" />
+                    {/* P19 del doc: la foto de aquel momento, opcional. Al coach le dice mucho mas
+                        que el numero, porque el mismo peso es otra cosa segun como lo llevaras. */}
+                    <div>
+                        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-1.5">
+                            Foto de aquel momento (opcional)
+                        </label>
+                        <button type="button" onClick={elegirFotoPesoMaximo}
+                            className="w-full rounded-xl border-2 border-dashed border-[#333] py-5 text-center hover:border-brand transition-colors">
+                            {answers.foto_peso_maximo ? (
+                                <span className="inline-flex items-center gap-2 text-foreground/70 text-sm">
+                                    <Check className="w-4 h-4 text-emerald-500" /> Foto elegida. Toca para cambiarla
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-2 text-foreground/50 text-sm">
+                                    <ImagePlus className="w-5 h-5" /> Subir una foto
+                                </span>
+                            )}
+                        </button>
+                    </div>
                     <MiniInput {...mini} k="mejor_definicion_cuando"
                         label="¿Cuál ha sido tu mejor punto de definición? ¿Cuándo?"
                         placeholder='Cuándo fue, o escribe "nunca" si no has estado definido' />

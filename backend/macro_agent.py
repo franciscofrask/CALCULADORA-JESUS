@@ -164,6 +164,7 @@ def construir_contexto(
     porcentaje_graso: Optional[float] = None,
     casos_gemelos: Optional[str] = None,
     perfil: Optional[str] = None,
+    hambre_saturacion: Optional[str] = None,
 ) -> str:
     """Arma el mensaje de usuario con TODO el contexto que el agente debe interpretar."""
     L = []
@@ -171,6 +172,21 @@ def construir_contexto(
              f"fase actual={fase}, meses en fase={meses_en_fase if meses_en_fase is not None else 'desconocido'}, "
              f"% graso={porcentaje_graso if porcentaje_graso is not None else 'sin dato reciente'}.")
     L.append(f"MACROS ACTUALES: {formatear_macros(macros_actuales)}")
+
+    # P9 del cuestionario: no cambio su macro de arranque, pero SI marca con cuanta mano se
+    # ajusta a partir de ahora. Quien aguanta de sobra admite un recorte mayor; quien ya lo
+    # esta pasando mal, no. Es margen del cliente, no del metodo, asi que se le dice al agente
+    # como contexto y no como una regla que lo obligue.
+    RITMO = {
+        "aguanto_mas": "Dice que aguanta mucho mas de lo que come ahora: en definicion se le puede "
+                       "recortar unos 10 g mas de lo habitual.",
+        "mucho": "Dice que pasa MUCHA hambre o ansiedad: ajustes suaves, no le aprietes.",
+        "normal": "Dice que pasa lo normal estando a dieta: ritmo habitual.",
+        "puedo_mas": "Dice que puede comer mas sin problema: en volumen admite subidas mas grandes.",
+        "no_puedo_mas": "Dice que no se ve capaz de comer mas: subidas suaves aunque toque subir.",
+    }
+    if hambre_saturacion in RITMO:
+        L.append(f"MARGEN DEL CLIENTE: {RITMO[hambre_saturacion]}")
     # evolucion de peso + ritmo en % del peso corporal (el doc: nunca en kilos sueltos)
     pts = [(p.get('fecha'), p.get('peso')) for p in (evolucion_peso or [])
            if isinstance(p.get('peso'), (int, float))]

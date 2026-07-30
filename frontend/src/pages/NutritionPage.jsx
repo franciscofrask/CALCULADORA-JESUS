@@ -12,6 +12,7 @@ import {
 import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 import NutritionIntro from '../components/nutrition/NutritionIntro';
+import PrimeraDieta from '../components/nutrition/PrimeraDieta';
 import BuildMealModal from '../components/nutrition/BuildMealModal';
 import RepeatMealModal from '../components/nutrition/RepeatMealModal';
 import CopyDietModal from '../components/nutrition/CopyDietModal';
@@ -126,6 +127,16 @@ const NutritionPage = () => {
     const dismissIntro = useCallback(() => {
         localStorage.setItem('nutrition-intro-seen', '1');
         setShowIntro(false);
+    }, []);
+
+    // Paso 4 del doc: la primera vez que viene a por su dieta se le piden los gustos (que es
+    // cuando sirven de algo) y se le enseña como esta repartido su dia. Va antes que el tutorial:
+    // primero se configura lo suyo, y despues se le explica la pantalla.
+    const [primeraDieta, setPrimeraDieta] = useState(
+        () => localStorage.getItem('primera-dieta-hecha') !== '1');
+    const cerrarPrimeraDieta = useCallback(() => {
+        localStorage.setItem('primera-dieta-hecha', '1');
+        setPrimeraDieta(false);
     }, []);
 
     // Date & Config state
@@ -1622,7 +1633,17 @@ const NutritionPage = () => {
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto pb-24 lg:pb-10 animate-fade-in" data-testid="nutrition-page">
-            {showIntro && <NutritionIntro onClose={dismissIntro} />}
+            {primeraDieta ? (
+                <PrimeraDieta
+                    api={api}
+                    momentoEntreno={momentoEntreno}
+                    numComidas={numComidas}
+                    // La configuración del día está siempre a la vista en esta misma pantalla, así
+                    // que "cambiarla" es cerrar esto (y el tutorial) para que la vea sin estorbos.
+                    onIrAConfig={() => { cerrarPrimeraDieta(); dismissIntro(); }}
+                    onListo={cerrarPrimeraDieta}
+                />
+            ) : showIntro && <NutritionIntro onClose={dismissIntro} />}
             <header className="flex items-center justify-between gap-4 mb-4">
                 <div>
                     <p className="caption text-brand mb-1">Plan nutricional</p>

@@ -15,7 +15,7 @@ from models.user import (
 )
 from target_calculator import calcular_targets, targets_to_profile_macros
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
-from core.plan_access import tiene_entrenador_detras
+from core.plan_access import tiene_entrenador_detras, dias_hasta_la_revision
 from core.quiz_store import guardar_quiz_respuestas, registrar_revision
 from core.cycle import enrich_cycle
 
@@ -411,7 +411,17 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
 
     # Con entrenador: la propuesta queda pendiente para el coach, con todo lo que necesita para
     # decidir (los macros propuestos, las respuestas del cliente y el desglose del porque).
-    entrega = {"aplicado": aplicado, "con_entrenador": con_entrenador, "coach": None}
+    # La fecha de la proxima revision: en el plan que se autogestiona es la revision automatica;
+    # en el plan con coach, cuando le toca repasarlos con el.
+    proxima = datetime.now(timezone.utc) + timedelta(days=dias_hasta_la_revision(profile.get("plan")))
+    MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+             "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    entrega = {
+        "aplicado": aplicado,
+        "con_entrenador": con_entrenador,
+        "coach": None,
+        "proxima_revision": f"{proxima.day} de {MESES[proxima.month - 1]}",
+    }
     if con_entrenador:
         propuesta_id = str(uuid.uuid4())
         await db.macro_sugerencias.insert_one({

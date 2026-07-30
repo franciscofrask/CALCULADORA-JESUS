@@ -389,7 +389,9 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         reporte=reporte, historial_ajustes=historial,
         biotipo=(profile.get("nivel1") or {}).get("biotype"), porcentaje_graso=profile.get("body_fat"),
         casos_gemelos=macro_casos.formatear_gemelos(gemelos),
-        perfil=macro_indices.formatear_para_prompt(perfil_ix, reglas_perfil))
+        perfil=macro_indices.formatear_para_prompt(perfil_ix, reglas_perfil),
+        # P9 del cuestionario: con cuanta mano se le puede ajustar (hambre o saturacion).
+        hambre_saturacion=(profile.get("ajustes_macros") or {}).get("hambre_saturacion"))
     out = await macro_agent.sugerir_ajuste(ctx)
     if isinstance(out, dict) and out.get("propuesta"):
         out["guardarrail"] = macro_agent.validar(out["propuesta"], macros_actuales, out.get("avisos", []))
