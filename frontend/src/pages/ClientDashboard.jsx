@@ -150,6 +150,7 @@ const ClientDashboard = () => {
     const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
     const [routine, setRoutine] = useState(null);
+    const [pidiendoRevision, setPidiendoRevision] = useState(false);
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [macros, setMacros] = useState(null);
     const [todayConsumed, setTodayConsumed] = useState({ P: 0, H: 0, G: 0 });
@@ -158,6 +159,20 @@ const ClientDashboard = () => {
     const [checklistDismissed, setChecklistDismissed] = useState(() => localStorage.getItem('onboarding-checklist-dismissed') === '1');
     const [dashDataLoaded, setDashDataLoaded] = useState(false);
     const [dueReports, setDueReports] = useState([]);
+
+    // Compra suelta de una revisión por entrenador: lleva al pago de Stripe. Al volver, el
+    // dashboard ya muestra "revisión en marcha".
+    const pedirRevisionSuelta = async () => {
+        setPidiendoRevision(true);
+        try {
+            const r = await api.post('/billing/revision-suelta/checkout', {});
+            if (r.data?.checkout_url) window.location.href = r.data.checkout_url;
+            else throw new Error('Sin enlace de pago');
+        } catch (e) {
+            toast.error(e.response?.data?.detail || 'No hemos podido abrir el pago');
+            setPidiendoRevision(false);
+        }
+    };
 
     // El cierre/completado vive en el perfil (backend); localStorage es solo caché local.
     useEffect(() => {
@@ -444,6 +459,46 @@ const ClientDashboard = () => {
                     </div>
                     <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
                 </button>
+            )}
+
+            {/* Revisión suelta: solo para quien se autogestiona y ya tiene sus macros afinados.
+                Es la puerta de entrada a tener coach: prueba lo que se siente y, si sube de plan
+                en 30 días, lo que pagó se le descuenta. */}
+            {!can('macros_personalizados') && profile?.ajuste_macros_completado
+                && !profile?.revision_suelta?.estado && (
+                <button onClick={pedirRevisionSuelta} disabled={pidiendoRevision}
+                    data-testid="revision-suelta-banner"
+                    className="surface surface-hover w-full p-4 flex items-center justify-between group border border-border disabled:opacity-60">
+                    <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center">
+                            <ClipboardCheck className="w-5 h-5 text-brand" />
+                        </div>
+                        <div className="text-left">
+                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">
+                                ¿Quieres que un entrenador revise tus macros?
+                            </p>
+                            <p className="text-muted-foreground text-sm">
+                                Una revisión suelta, sin cambiar de plan. Si luego subes de plan, te lo descontamos.
+                            </p>
+                        </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
+                </button>
+            )}
+
+            {/* Ya la pagó: que sepa en qué punto está. */}
+            {profile?.revision_suelta?.estado === 'pendiente' && (
+                <div className="surface w-full p-4 flex items-center gap-4 border border-brand/30">
+                    <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center">
+                        <ClipboardCheck className="w-5 h-5 text-brand" />
+                    </div>
+                    <div>
+                        <p className="font-bold text-foreground text-sm uppercase tracking-wide">Revisión en marcha</p>
+                        <p className="text-muted-foreground text-sm">
+                            Un entrenador está revisando tus macros. Te avisamos en cuanto los tenga.
+                        </p>
+                    </div>
+                </div>
             )}
 
             {/* Cuestionario Nivel 1 pendiente (planes con coach): retomable, no bloqueante */}

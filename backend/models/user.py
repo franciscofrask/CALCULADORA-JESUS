@@ -373,6 +373,9 @@ class ClientProfile(BaseModel):
     # comparar dentro de un mes.
     punto_de_partida_hecho: Optional[bool] = None
     medidas_inicio: Optional[Dict[str, Any]] = None
+    # Revision de macros comprada suelta: {estado, importe_eur, pagada_at, descuento_aplicado}.
+    # Solo para quien se autogestiona; el plan con coach ya la lleva incluida.
+    revision_suelta: Optional[Dict[str, Any]] = None
     # Onboarding guiado (tour de producto): progreso por usuario.
     onboarding_completed: Optional[bool] = None
     onboarding_step: Optional[str] = None

@@ -61,11 +61,30 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     stripe_price_id = get_stripe_price_id_for_plan(plan_info["code"])
 
     checkout_metadata = {"user_id": user["id"], "profile_id": profile["id"], "plan": plan_info["code"]}
+
+    # Si pagó una revisión suelta hace menos de 30 días, ese importe se le descuenta al subir de
+    # plan: es lo que hace que probar no le cueste nada. Se crea un cupón de un solo uso por el
+    # importe exacto y se marca como aplicado para que no se lo pueda descontar dos veces.
+    from core.revision_suelta import descuento_vigente
+    descuento = descuento_vigente(profile)
+    cupon_id = None
+    if descuento:
+        try:
+            cupon = await stripe_api_call(
+                stripe_module.Coupon.create,
+                amount_off=int(round(descuento["importe_eur"] * 100)),
+                currency="eur", duration="once",
+                name="Revisión de macros ya pagada",
+                max_redemptions=1,
+            )
+            cupon_id = cupon["id"]
+        except Exception as e:   # noqa: BLE001 - si el cupón falla, el alta NO se bloquea
+            logger.warning("No se pudo crear el cupón de la revisión suelta: %s", e)
+
     session_kwargs = dict(
         customer=customer_id,
         client_reference_id=profile["id"],
         line_items=[{"price": stripe_price_id, "quantity": 1}],
-        allow_promotion_codes=True,
         billing_address_collection="auto",
         customer_update={"address": "auto", "name": "auto"},
         success_url=success_url,
@@ -81,13 +100,80 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     else:
         session_kwargs["mode"] = "subscription"
         session_kwargs["subscription_data"] = {"metadata": checkout_metadata}
+    # Con cupón no se pueden ofrecer códigos promocionales a la vez: Stripe no admite las dos cosas.
+    if cupon_id:
+        session_kwargs["discounts"] = [{"coupon": cupon_id}]
+    else:
+        session_kwargs["allow_promotion_codes"] = True
+
     session = await stripe_api_call(stripe_module.checkout.Session.create, **session_kwargs)
 
+    cambios = {"stripe_customer_id": customer_id, "stripe_price_id": stripe_price_id,
+               "checkout_status": "created"}
+    if cupon_id:
+        cambios["revision_suelta.descuento_aplicado"] = True
+        cambios["revision_suelta.descuento_cupon"] = cupon_id
+    await db.client_profiles.update_one({"id": profile["id"]}, {"$set": cambios})
+    return CheckoutSessionResponse(checkout_url=session["url"], session_id=session["id"], profile_id=profile["id"])
+
+
+@router.post("/revision-suelta/checkout")
+async def comprar_revision_suelta(payload: Dict[str, Any] = Body(default={}), user=Depends(get_current_user)):
+    """
+    Compra suelta de una revisión de macros por entrenador (sección 6 del doc).
+
+    Para el cliente que se autogestiona: paga una vez y un entrenador le mira los números, sin
+    cambiar de plan. Si sube de plan en los 30 días siguientes se le descuenta lo pagado.
+
+    El precio es provisional hasta que Jesús lo cierre (core/revision_suelta.py).
+    """
+    from core.plan_access import tiene_entrenador_detras
+    from core.revision_suelta import PRECIO_EUR, NOMBRE_PRODUCTO, importe_centimos
+
+    stripe_module = get_stripe_module()
+    require_stripe_test_mode("La compra de una revisión suelta")
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    if tiene_entrenador_detras(profile.get("plan")):
+        raise HTTPException(status_code=400,
+                            detail="Tu plan ya incluye entrenador: tus macros los revisa él.")
+    if (profile.get("revision_suelta") or {}).get("estado") == "pendiente":
+        raise HTTPException(status_code=409, detail="Ya tienes una revisión pendiente de que la vea tu entrenador.")
+
+    customer_id = await get_or_create_stripe_customer(user, profile)
+    metadata = {"user_id": user["id"], "profile_id": profile["id"], "tipo": "revision_suelta"}
+    # El precio va en linea (price_data) y no como producto de Stripe: siendo provisional, asi se
+    # cambia tocando una constante y no hay que mantener un producto por cada precio de prueba.
+    session = await stripe_api_call(
+        stripe_module.checkout.Session.create,
+        customer=customer_id,
+        client_reference_id=profile["id"],
+        mode="payment",
+        line_items=[{
+            "price_data": {
+                "currency": "eur",
+                "unit_amount": importe_centimos(),
+                "product_data": {"name": NOMBRE_PRODUCTO,
+                                 "description": "Un entrenador revisa tus macros y te los ajusta."},
+            },
+            "quantity": 1,
+        }],
+        invoice_creation={"enabled": True},
+        payment_intent_data={"metadata": metadata},
+        success_url=build_frontend_url(payload.get("success_path") or "/dashboard?revision=ok",
+                                       include_session_placeholder=True),
+        cancel_url=build_frontend_url(payload.get("cancel_path") or "/dashboard"),
+        metadata=metadata,
+    )
     await db.client_profiles.update_one(
         {"id": profile["id"]},
-        {"$set": {"stripe_customer_id": customer_id, "stripe_price_id": stripe_price_id, "checkout_status": "created"}},
+        {"$set": {"revision_suelta": {"estado": "iniciada", "importe_eur": PRECIO_EUR,
+                                      "session_id": session["id"],
+                                      "creada_at": datetime.now(timezone.utc).isoformat()}}},
     )
-    return CheckoutSessionResponse(checkout_url=session["url"], session_id=session["id"], profile_id=profile["id"])
+    return {"checkout_url": session["url"], "session_id": session["id"], "importe_eur": PRECIO_EUR}
 
 
 @router.post("/checkout-session/sync")
@@ -149,8 +235,18 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
             synced_profile = await db.client_profiles.find_one({"id": synced_profile["id"]}, {"_id": 0})
 
     if not synced_profile and session.get("mode") == "payment":
-        # Checkout de pago único (p.ej. reto60): no hay suscripción que sincronizar.
-        synced_profile = await sync_profile_from_one_time_session(session, user_id=user["id"])
+        if (session.get("metadata") or {}).get("tipo") == "revision_suelta":
+            # Revisión suelta: no cambia el plan. Se activa aquí también (además del webhook)
+            # para que el cliente vuelva de Stripe y ya la vea en marcha; activar_tras_pago no
+            # duplica si el webhook llegó antes.
+            from core.revision_suelta import activar_tras_pago
+            perfil = await db.client_profiles.find_one({"user_id": user["id"]})
+            if perfil:
+                await activar_tras_pago(perfil, (session.get("amount_total") or 0) / 100.0)
+                synced_profile = await db.client_profiles.find_one({"id": perfil["id"]}, {"_id": 0})
+        else:
+            # Checkout de pago único (p.ej. reto60): no hay suscripción que sincronizar.
+            synced_profile = await sync_profile_from_one_time_session(session, user_id=user["id"])
 
     if not synced_profile and profile_id:
         synced_profile = await db.client_profiles.find_one({"id": profile_id}, {"_id": 0})
@@ -240,8 +336,16 @@ async def _process_stripe_event(event: Dict[str, Any]) -> None:
                 subscription, profile_id=metadata.get("profile_id"),
                 user_id=metadata.get("user_id"), customer_id=obj.get("customer"))
         elif obj.get("mode") == "payment":
-            # Pago único (p.ej. reto60): activa el perfil con acceso hasta fin de ciclo.
-            await sync_profile_from_one_time_session(obj)
+            if metadata.get("tipo") == "revision_suelta":
+                # Revisión de macros comprada suelta: NO toca el plan ni el acceso, solo deja la
+                # revisión pendiente para el entrenador.
+                from core.revision_suelta import activar_tras_pago
+                perfil = await db.client_profiles.find_one({"id": metadata.get("profile_id")})
+                if perfil:
+                    await activar_tras_pago(perfil, (obj.get("amount_total") or 0) / 100.0)
+            else:
+                # Pago único (p.ej. reto60): activa el perfil con acceso hasta fin de ciclo.
+                await sync_profile_from_one_time_session(obj)
 
     elif event_type in {"customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"}:
         await sync_profile_from_subscription(obj)
