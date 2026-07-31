@@ -13,11 +13,15 @@ Funciones principales:
 from typing import Dict, List, Optional
 import math
 from calma_engine import (
-    calcular_macros_efectivos,
-    calcular_macros_efectivos_alimento,
     calcular_macros_brutos,
     que_macros_cuentan,
     _redondear_cantidad
+)
+# El conteo de macros va SIEMPRE por calma_suggest (port fiel del bundle de Calma), que es
+# el mismo motor del buscador y del chat. calma_engine se queda solo para utilidades.
+from calma_suggest import (
+    macros_efectivos as macros_efectivos_calma,
+    _per100 as _per100_calma,
 )
 import re
 import unicodedata
@@ -524,23 +528,29 @@ def calcular_cantidad_automatica(
     H_base = float(alimento.get("hidratos", 0) or 0)
     G_base = float(alimento.get("grasas", 0) or 0)
     
-    # Macros por 100g
-    P_100 = P_base * 100.0 / racion if racion > 0 else 0
-    H_100 = H_base * 100.0 / racion if racion > 0 else 0
-    G_100 = G_base * 100.0 / racion if racion > 0 else 0
-    
+    # Macros por 100 g. Con la convencion de Calma: en granel los campos YA son por 100 g
+    # (la `racion` se ignora); solo los de unidades se dividen por la racion.
+    P_100 = _per100_calma(alimento, "proteinas")
+    H_100 = _per100_calma(alimento, "hidratos")
+    G_100 = _per100_calma(alimento, "grasas")
+
     # Categoría
     cat = get_categoria_principal(alimento)
     cat_sec = None
     cats = get_categorias(alimento)
     if len(cats) > 1:
         cat_sec = cats[1]
-    
+
+    def _ef(cantidad_g):
+        """Macros efectivos con el motor fiel a Calma (calma_suggest), con las claves que
+        usaba el motor anterior para no tocar el resto de la funcion."""
+        m = macros_efectivos_calma(alimento, cantidad_g)
+        return {"proteina_efectiva": m["P"], "hidratos_efectivos": m["H"],
+                "grasa_efectiva": m["G"]}
+
     # Calcular qué macros cuentan (usando una ración de referencia de 100g)
-    efectivos_100 = calcular_macros_efectivos(
-        P_100, H_100, G_100, cat, 100.0, cat_sec, es_vegano
-    )
-    
+    efectivos_100 = _ef(100.0)
+
     p_ef_100 = efectivos_100["proteina_efectiva"]
     h_ef_100 = efectivos_100["hidratos_efectivos"]
     g_ef_100 = efectivos_100["grasa_efectiva"]
@@ -602,7 +612,7 @@ def calcular_cantidad_automatica(
         peso_ud = config.get('peso_unidad', 0)
         permite_media = config.get('permite_media', False)
         if peso_ud > 0:
-            ef_unit = calcular_macros_efectivos(P_100, H_100, G_100, cat, peso_ud, cat_sec, es_vegano)
+            ef_unit = _ef(peso_ud)
             p_ud = ef_unit['proteina_efectiva']
             h_ud = ef_unit['hidratos_efectivos']
             g_ud = ef_unit['grasa_efectiva']
@@ -645,7 +655,7 @@ def calcular_cantidad_automatica(
     # Si el mínimo causaría sobrepasar un macro, devolver excede=True
     minimo_config = config.get('minimo', 5)
     if cantidad == 0:
-        ef_at_min0 = calcular_macros_efectivos(P_100, H_100, G_100, cat, minimo_config, cat_sec, es_vegano)
+        ef_at_min0 = _ef(minimo_config)
         if (not math.isinf(p_rest) and p_rest >= 0 and ef_at_min0["proteina_efectiva"] > p_rest + 0.05) or \
            (not math.isinf(h_rest) and h_rest >= 0 and ef_at_min0["hidratos_efectivos"] > h_rest + 0.05) or \
            (not math.isinf(g_rest) and g_rest >= 0 and ef_at_min0["grasa_efectiva"] > g_rest + 0.05):
@@ -659,7 +669,7 @@ def calcular_cantidad_automatica(
             }
         cantidad = minimo_config
     elif 0 < cantidad < minimo_config:
-        ef_at_min = calcular_macros_efectivos(P_100, H_100, G_100, cat, minimo_config, cat_sec, es_vegano)
+        ef_at_min = _ef(minimo_config)
         if (p_rest > 0 and ef_at_min["proteina_efectiva"] > p_rest + 0.05) or \
            (h_rest > 0 and ef_at_min["hidratos_efectivos"] > h_rest + 0.05) or \
            (g_rest > 0 and ef_at_min["grasa_efectiva"] > g_rest + 0.05):
@@ -675,9 +685,7 @@ def calcular_cantidad_automatica(
     
     # Recalcular macros efectivos con la cantidad final
     # (la calibración puede cambiar con la nueva cantidad)
-    efectivos_final = calcular_macros_efectivos(
-        P_100, H_100, G_100, cat, cantidad, cat_sec, es_vegano
-    )
+    efectivos_final = _ef(cantidad)
     
     # Macros brutos
     factor = cantidad / 100.0
@@ -1106,14 +1114,15 @@ async def buscar_alimentos(
     # Limitar resultados
     alimentos = alimentos[:limit]
     
-    # Calcular macros efectivos si se solicita
+    # Calcular macros efectivos si se solicita (mismo motor que el buscador y el chat)
     if calcular_efectivos:
         for alimento in alimentos:
             racion = float(alimento.get("racion", 100) or 100)
-            macros_ef = calcular_macros_efectivos_alimento(alimento, racion, es_vegano)
-            cuenta = que_macros_cuentan(alimento, racion, es_vegano)
+            m = macros_efectivos_calma(alimento, racion)
+            macros_ef = {"P": m["P"], "H": m["H"], "G": m["G"],
+                         "kcal": round(m["P"] * 4 + m["H"] * 4 + m["G"] * 9, 1)}
             alimento["macros_efectivos"] = macros_ef
-            alimento["que_cuenta"] = cuenta
+            alimento["que_cuenta"] = {"P": m["P"] > 0, "H": m["H"] > 0, "G": m["G"] > 0}
     
     return alimentos
 

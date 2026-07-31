@@ -15,7 +15,6 @@ from models.common import FoodSuggestion, FoodSuggestionResponse
 
 # Import calculator functions
 from calma_engine import (
-    calcular_macros_efectivos_alimento as calcular_macros_efectivos,
     que_macros_cuentan,
     calcular_macros_brutos,
     run_tests as calma_run_tests,
@@ -29,11 +28,12 @@ from calma_suggest import (
     aplicar_regla_macros as aplicar_regla_macros_calma,
     food_in_cat as food_in_cat_calma,
     cantidad_minima as cantidad_minima_calma,
+    macros_efectivos as macros_efectivos_calma,
 )
 from target_calculator import calcular_targets, targets_to_profile_macros, run_tests as target_run_tests
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
 from core.quiz_store import guardar_quiz_respuestas
-from macro_distribution import distribuir_macros as dist_macros
+from macro_distribution import distribuir_macros as dist_macros, leer_macro, leer_peri
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
@@ -306,11 +306,8 @@ def _efectivos_calma(alimento: dict, cantidad_g: float):
     Returns ({P,H,G} efectivos, {P,H,G} brutos, {P,H,G} bool que_cuenta)."""
     es_unidad = bool(alimento.get("unidades"))
     racion = float(alimento.get("racion") or 100) or 100.0
-    cant_for_macros = (cantidad_g / racion) if es_unidad else cantidad_g
-    food_copy = copy.deepcopy(alimento)
-    aplicar_regla_macros_calma(food_copy)  # zeroes non-counting macros + sets _ajuste
-    m = macros_at_calma(food_copy, cant_for_macros)
-    efectivos = {"P": round(m["proteinas"], 1), "H": round(m["hidratos"], 1), "G": round(m["grasas"], 1)}
+    m = macros_efectivos_calma(alimento, cantidad_g)  # funcion canonica (calma_suggest)
+    efectivos = {"P": round(m["P"], 1), "H": round(m["H"], 1), "G": round(m["G"], 1)}
     scale = (cantidad_g / racion) if es_unidad else (cantidad_g / 100.0)
     brutos = {
         "P": round(float(alimento.get("proteinas") or 0) * scale, 1),
@@ -362,11 +359,11 @@ async def get_macros_comida(data: dict, user = Depends(get_current_user)):
             continue
         
         cantidad = item.get("cantidad_g", alimento.get("racion", 100))
-        
-        efectivos = calcular_macros_efectivos(alimento, cantidad, es_vegano)
-        brutos = calcular_macros_brutos(alimento, cantidad)
-        cuenta = que_macros_cuentan(alimento, cantidad, es_vegano)
-        
+
+        # Mismo motor que el buscador y que anadir a mano (calma_suggest), para que una
+        # comida no sume distinto segun el endpoint por el que se pregunte.
+        efectivos, brutos, cuenta = _efectivos_calma(alimento, cantidad)
+
         total_P += efectivos["P"]
         total_H += efectivos["H"]
         total_G += efectivos["G"]
@@ -455,19 +452,24 @@ async def distribute_macros(data: dict, user = Depends(get_current_user)):
     if not training:
         raise HTTPException(status_code=400, detail="No tienes macros asignados")
 
+    opcion_peri = data.get("opcion_peri", "intra_post")
+    # El 35/15 de arranque solo entra si el cliente NO tiene peri configurado, y nunca en modo
+    # `sin_peri`. Un peri a 0 es decision del coach y se respeta (ver leer_peri/leer_macro).
+    p_peri, h_peri = leer_peri(peri, opcion_peri)
+
     resultado = dist_macros(
-        p_entreno=float(training.get("protein") or training.get("proteinas") or 0),
-        h_entreno=float(training.get("carbs") or training.get("hidratos") or 0),
-        g_entreno=float(training.get("fat") or training.get("grasas") or 0),
-        p_peri=float(peri.get("protein") or peri.get("proteinas") or 35),
-        h_peri=float(peri.get("carbs") or peri.get("hidratos") or 15),
-        p_descanso=float(rest.get("protein") or rest.get("proteinas") or 0),
-        h_descanso=float(rest.get("carbs") or rest.get("hidratos") or 0),
-        g_descanso=float(rest.get("fat") or rest.get("grasas") or 0),
+        p_entreno=leer_macro(training, "protein", "proteinas"),
+        h_entreno=leer_macro(training, "carbs", "hidratos"),
+        g_entreno=leer_macro(training, "fat", "grasas"),
+        p_peri=p_peri,
+        h_peri=h_peri,
+        p_descanso=leer_macro(rest, "protein", "proteinas"),
+        h_descanso=leer_macro(rest, "carbs", "hidratos"),
+        g_descanso=leer_macro(rest, "fat", "grasas"),
         tipo_dia=data.get("tipo_dia", "entrenamiento"),
         num_comidas=data.get("num_comidas", 4),
         momento_entreno=data.get("momento_entreno", 1),
-        opcion_peri=data.get("opcion_peri", "intra_post"),
+        opcion_peri=opcion_peri,
         # single-meal: el cliente puede elegirlo desde Nutrición (select nº comidas = 1),
         # lo que sobrescribe el ajuste del coach. Si el request no lo manda, se usa el perfil.
         single_meal=(bool(data["single_meal"]) if data.get("single_meal") is not None

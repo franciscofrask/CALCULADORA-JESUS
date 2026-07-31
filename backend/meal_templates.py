@@ -11,7 +11,7 @@ grasa) y las cantidades se autoajustan a los macros del usuario.
 import math
 
 from typing import Dict, List, Optional
-from calma_engine import calcular_macros_efectivos, _redondear_cantidad, parse_categories
+from calma_engine import _redondear_cantidad, parse_categories
 
 
 

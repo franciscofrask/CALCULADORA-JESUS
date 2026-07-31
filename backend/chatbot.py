@@ -16,12 +16,10 @@ load_dotenv()
 
 from llm_client import LlmChat, UserMessage
 
-# Importar funciones del motor CALMA
-from calma_engine import (
-    calcular_macros_efectivos,
-    calcular_macros_efectivos_alimento,
-    parse_categories
-)
+# Importar funciones del motor CALMA. El conteo de macros va por calma_suggest (fiel al
+# bundle de Calma) via calibracion_dia; de calma_engine solo queda el parseo de categorias.
+from calma_engine import parse_categories
+from calibracion_dia import macros_item_por_acumulado
 from calculator import (
     calcular_cantidad_automatica,
     get_food_config,
@@ -596,8 +594,8 @@ class NutritionChatbot:
         Returns:
             dict con cantidad_g, macros_efectivos, cabe, config
         """
-        from calma_engine import calcular_macros_efectivos, parse_categories
-        
+        from calma_engine import parse_categories
+
         config = get_food_config(alimento)
         
         # Datos del alimento
@@ -621,16 +619,16 @@ class NutritionChatbot:
         h_rest = float(macros_restantes.get("H", 0))
         g_rest = float(macros_restantes.get("G", 0))
         
-        # Calcular qué macros cuentan para 100g
-        ef_100 = calcular_macros_efectivos(
-            P_100, H_100, G_100, cat, 100.0, cat_sec,
-            acumulado_cereales_panes=self.state["acumulado_cereales_panes"],
-            acumulado_frutos_secos=self.state["acumulado_frutos_secos"]
+        # Calcular qué macros cuentan para 100g (motor fiel a Calma + calibración del día)
+        ef_100 = macros_item_por_acumulado(
+            alimento, 100.0,
+            acum_cp=self.state["acumulado_cereales_panes"],
+            acum_fs=self.state["acumulado_frutos_secos"]
         )
-        
-        p_ef_100 = ef_100["proteina_efectiva"]
-        h_ef_100 = ef_100["hidratos_efectivos"]
-        g_ef_100 = ef_100["grasa_efectiva"]
+
+        p_ef_100 = ef_100["P"]
+        h_ef_100 = ef_100["H"]
+        g_ef_100 = ef_100["G"]
         
         # Calcular cantidad máxima por cada macro EFECTIVO
         cantidades = []
@@ -683,26 +681,26 @@ class NutritionChatbot:
             cantidad = ajustar_por_unidades(cantidad, config)
         
         # Recalcular macros efectivos con la cantidad final
-        ef_final = calcular_macros_efectivos(
-            P_100, H_100, G_100, cat, cantidad, cat_sec,
-            acumulado_cereales_panes=self.state["acumulado_cereales_panes"],
-            acumulado_frutos_secos=self.state["acumulado_frutos_secos"]
+        ef_final = macros_item_por_acumulado(
+            alimento, cantidad,
+            acum_cp=self.state["acumulado_cereales_panes"],
+            acum_fs=self.state["acumulado_frutos_secos"]
         )
-        
+
         # Verificar si se pasa en algún macro
-        if ef_final["proteina_efectiva"] > p_rest + 4:  # margen CALMA
+        if ef_final["P"] > p_rest + 4:  # margen CALMA
             cabe = False
-        if ef_final["hidratos_efectivos"] > h_rest + 4:
+        if ef_final["H"] > h_rest + 4:
             cabe = False
-        if ef_final["grasa_efectiva"] > g_rest + 4:
+        if ef_final["G"] > g_rest + 4:
             cabe = False
-        
+
         return {
             "cantidad_g": round(cantidad, 1),
             "macros_efectivos": {
-                "P": round(ef_final["proteina_efectiva"], 1),
-                "H": round(ef_final["hidratos_efectivos"], 1),
-                "G": round(ef_final["grasa_efectiva"], 1)
+                "P": round(ef_final["P"], 1),
+                "H": round(ef_final["H"], 1),
+                "G": round(ef_final["G"], 1)
             },
             "cabe": cabe,
             "config": config,
@@ -786,11 +784,12 @@ class NutritionChatbot:
                 "macros": {"P": 0, "H": 0, "G": 0}
             }
 
-        # Calcular macros efectivos
-        efectivos = calcular_macros_efectivos_alimento(
+        # Calcular macros efectivos. Mismo motor que el buscador y que anadir a mano
+        # (calma_suggest, fiel a Calma) + la calibracion progresiva del dia.
+        efectivos = macros_item_por_acumulado(
             alimento, cantidad_g,
-            acumulado_cereales_panes=self.state["acumulado_cereales_panes"],
-            acumulado_frutos_secos=self.state["acumulado_frutos_secos"]
+            acum_cp=self.state["acumulado_cereales_panes"],
+            acum_fs=self.state["acumulado_frutos_secos"]
         )
         
         # Actualizar acumulados si aplica

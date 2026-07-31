@@ -309,3 +309,32 @@ def hay_suficiente(actual: float, objetivo: float) -> bool:
     if not objetivo:
         return True
     return actual / objetivo > PORC_SUFICIENTE
+
+
+# ── Macros efectivos de un alimento (funcion canonica) ─────────────────────
+def macros_efectivos(food: dict, cantidad_g: float) -> Dict[str, float]:
+    """Macros que CUENTAN de `food` a `cantidad_g` gramos, {"P","H","G"}.
+
+    Esta es la unica forma correcta de contar un alimento: aplica ye() sobre una copia
+    (sin tocar el original) y escala. Para los alimentos por unidades convierte gramos a
+    unidades, que es lo que espera macros_at.
+
+    Es la funcion que deben usar TODOS los caminos de la app (buscador, chat, generador
+    de menus). El motor viejo `calma_engine.calcular_macros_efectivos_alimento` daba otro
+    resultado en 330 alimentos y ademas dividia los granel por `racion` en vez de por 100,
+    asi que el mismo alimento contaba distinto segun por donde entrase el usuario.
+
+    OJO: los alimentos de los bloques con calibracion progresiva (cereales/panes y frutos
+    secos) NO deben pasar por aqui cuando hay un dia con acumulado; para esos usa
+    calibracion_dia.macros_item_por_acumulado, que aplica la calibracion encima.
+    """
+    import copy as _copy
+    fc = _copy.deepcopy(food)
+    aplicar_regla_macros(fc)
+    es_unidad = bool(food.get("unidades"))
+    racion = float(food.get("racion") or 100) or 100.0
+    cant = (cantidad_g / racion) if es_unidad else cantidad_g
+    m = macros_at(fc, cant)
+    return {"P": round(m["proteinas"], 2),
+            "H": round(m["hidratos"], 2),
+            "G": round(m["grasas"], 2)}

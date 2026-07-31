@@ -14,7 +14,8 @@ Fecha: 31/03/2026
 """
 
 from typing import Dict, List, Tuple, Optional
-from calma_engine import calcular_macros_efectivos, parse_categories
+from calma_engine import parse_categories
+from calma_suggest import macros_efectivos as macros_efectivos_calma, _per100 as _per100_calma
 from calculator import get_food_config
 
 # =========================================================
@@ -201,25 +202,30 @@ def get_food_limits(alimento: dict, config: dict) -> Tuple[float, float]:
 def get_effective_macros_per_100g(alimento: dict) -> Dict[str, float]:
     """
     Calcula los macros EFECTIVOS por 100g de un alimento según CALMA.
+
+    Cuenta con calma_suggest (fiel al bundle de Calma), igual que el buscador y el chat.
+    Antes usaba calma_engine, que ademas dividia SIEMPRE por `racion`: en los alimentos a
+    granel con racion != 100 (platos preparados) eso daba macros equivocados.
     """
     cats = parse_categories(alimento.get("categorias", []))
     cat = cats[0] if cats else "0"
-    
-    racion = float(alimento.get("racion", 100) or 100)
-    P_100 = float(alimento.get("proteinas", 0) or 0) * 100.0 / racion
-    H_100 = float(alimento.get("hidratos", 0) or 0) * 100.0 / racion
-    G_100 = float(alimento.get("grasas", 0) or 0) * 100.0 / racion
-    
-    ef = calcular_macros_efectivos(P_100, H_100, G_100, cat, 100.0)
-    
+
+    ef = macros_efectivos_calma(alimento, 100.0)
+    bruto = {m: _per100_calma(alimento, m)
+             for m in ("proteinas", "hidratos", "grasas")}
+    # "cuenta" = la regla no lo ha anulado. Un macro que ya vale 0 en el catalogo se
+    # considera que cuenta, como hacia el motor anterior.
+    def _cuenta(ef_v, bruto_v):
+        return ef_v > 0 or bruto_v == 0
+
     return {
-        "P": ef["proteina_efectiva"],
-        "H": ef["hidratos_efectivos"],
-        "G": ef["grasa_efectiva"],
+        "P": ef["P"],
+        "H": ef["H"],
+        "G": ef["G"],
         "cat": cat,
-        "p_cuenta": ef["proteina_cuenta"],
-        "h_cuenta": ef["hidratos_cuenta"],
-        "g_cuenta": ef["grasa_cuenta"],
+        "p_cuenta": _cuenta(ef["P"], bruto["proteinas"]),
+        "h_cuenta": _cuenta(ef["H"], bruto["hidratos"]),
+        "g_cuenta": _cuenta(ef["G"], bruto["grasas"]),
     }
 
 

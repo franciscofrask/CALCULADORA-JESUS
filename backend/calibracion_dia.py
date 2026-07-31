@@ -129,3 +129,20 @@ def calibrar_dia(meals: List[Tuple[str, List[Tuple[dict, float]]]]):
         macros[key] = [macros_item_calibrados(f, c, p["pct_cp"], p["pct_fs"])
                        for f, c in items]
     return macros, pcts
+
+
+def macros_item_por_acumulado(food: dict, cantidad_g: float,
+                              acum_cp: float = 0.0, acum_fs: float = 0.0) -> Dict[str, float]:
+    """Macros efectivos de UN alimento a partir de los gramos ya acumulados en el día.
+
+    Para quien lleva la cuenta corriente en vez de las comidas completas (el chat, que va
+    añadiendo alimento a alimento). El tramo se calcula con el acumulado TRAS sumar esta
+    cantidad, igual que hace `pcts_por_comida` con la comida entera.
+
+    Sustituye a `calma_engine.calcular_macros_efectivos_alimento`: por debajo cuenta con
+    el motor fiel a Calma (`calma_suggest`) en vez del legado.
+    """
+    bloque = clasificar_bloque(food)
+    pct_cp = _calibracion_cereales_panes(acum_cp + (cantidad_g if bloque == "cereal_pan" else 0))
+    pct_fs = _calibracion_frutos_secos(acum_fs + (cantidad_g if bloque == "fruto_seco" else 0))
+    return macros_item_calibrados(food, cantidad_g, pct_cp, pct_fs)

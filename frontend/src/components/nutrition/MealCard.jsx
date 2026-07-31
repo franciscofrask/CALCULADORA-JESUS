@@ -18,6 +18,17 @@ const macrosLine = (m) => {
     return parts.length ? parts.join(' · ') : 'sin macros';
 };
 
+// Version corta para movil: en la fila del ingrediente los macros comparten linea con los
+// controles y "47.4g proteina · 26.6g hidratos" no cabe; "47.4P · 26.6H" si.
+const macrosLineCorta = (m) => {
+    const parts = [
+        (m.P || 0) > 0 && `${fmt1(m.P)}P`,
+        (m.H || 0) > 0 && `${fmt1(m.H)}H`,
+        (m.G || 0) > 0 && `${fmt1(m.G)}G`,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : 'sin macros';
+};
+
 // ===== Selector item (master-detail) =====
 export const MealSelectorItem = ({ mealKey, mealInfo, getMealTarget, calculateMealMacros, getMealStatus, isLocked, selected, onSelect }) => {
     const info = mealInfo[mealKey];
@@ -132,10 +143,37 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
         // Todo el alimento en una linea: prioridad, nombre + macros, cantidad y eliminar.
         // El nombre se recorta con puntos suspensivos (completo en el title) para que
         // la lista del dia no se dispare a lo alto.
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-2 py-1.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-border bg-muted/40 px-2 py-1.5">
+            {/* Nombre + macros. Los alimentos de marca tienen ficha propia: el nombre abre su
+                enlace, igual que en el buscador de alimentos (naranja = tiene ficha).
+
+                En movil ocupa SU PROPIA LINEA (order-1 + w-full). En una sola linea no cabia:
+                los controles fijos (prioridad 32 + stepper 129 + papelera 36 = 197 px) se
+                comen casi toda la fila de 335 px de un movil, dejaban 92 px para el texto y
+                el nombre del alimento se quedaba en una letra o desaparecia del todo, asi que
+                no habia forma de saber que llevaba la comida. Desde sm vuelve a la linea unica. */}
+            <div className="order-1 w-full min-w-0 sm:order-2 sm:w-auto sm:flex-1">
+                {food.url ? (
+                    <a href={food.url} target="_blank" rel="noopener noreferrer"
+                        className="block text-sm font-semibold text-brand hover:underline truncate"
+                        title={`${food.nombre} (abre la ficha del producto)`}>
+                        {food.nombre}
+                    </a>
+                ) : (
+                    <span className="block text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
+                )}
+            </div>
+
+            {/* Macros: en movil comparten linea con los controles, para no gastar una fila
+                entera. En sm van justo detras del nombre, como siempre. */}
+            <span className="order-3 flex-1 min-w-0 truncate text-[11px] text-muted-foreground font-data sm:hidden"
+                title={macrosLine(macros)}>{macrosLineCorta(macros)}</span>
+            <span className="hidden sm:inline order-3 text-[11px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0"
+                title={macrosLine(macros)}>{macrosLine(macros)}</span>
+
             {/* Reorder (prioridad) */}
             <button
-                className="flex flex-col items-center justify-center h-9 w-7 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                className="order-2 sm:order-1 flex flex-col items-center justify-center h-9 w-7 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex-shrink-0"
                 disabled={idx === 0 || isLocked} onClick={() => moveFoodUp(mealKey, idx)} title="Subir prioridad"
                 data-testid={`reorder-${mealKey}-${idx}`}
             >
@@ -143,23 +181,9 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                 <span className="text-[9px] font-data leading-none mt-0.5">{idx + 1}</span>
             </button>
 
-            {/* Nombre + macros. Los alimentos de marca tienen ficha propia: el nombre abre su
-                enlace, igual que en el buscador de alimentos (naranja = tiene ficha). */}
-            <div className="min-w-0 flex-1 flex items-baseline gap-2">
-                {food.url ? (
-                    <a href={food.url} target="_blank" rel="noopener noreferrer"
-                        className="text-sm font-semibold text-brand hover:underline truncate"
-                        title={`${food.nombre} (abre la ficha del producto)`}>
-                        {food.nombre}
-                    </a>
-                ) : (
-                    <span className="text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
-                )}
-                <span className="text-[11px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0">{macrosLine(macros)}</span>
-            </div>
-
-            {/* Cantidad (gramos) - stepper conectado */}
-            <div className="inline-flex items-stretch h-9 rounded-lg border border-border bg-card overflow-hidden flex-shrink-0" title="Cantidad en gramos">
+            {/* Cantidad (gramos) - stepper conectado. En movil se pega a la derecha (ml-auto),
+                con la prioridad a la izquierda y el nombre encima. */}
+            <div className="order-3 ml-auto sm:ml-0 inline-flex items-stretch h-9 rounded-lg border border-border bg-card overflow-hidden flex-shrink-0" title="Cantidad en gramos">
                 <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, -increment)} aria-label="Menos gramos">
                     <Minus className="w-3.5 h-3.5" />
                 </button>
@@ -180,7 +204,7 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
             </div>
 
             {/* Eliminar */}
-            <button className="h-9 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 transition-colors flex-shrink-0" disabled={isLocked} onClick={() => removeFood(mealKey, idx)} aria-label="Eliminar alimento" data-testid={`remove-${mealKey}-${idx}`}>
+            <button className="order-4 h-9 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 transition-colors flex-shrink-0" disabled={isLocked} onClick={() => removeFood(mealKey, idx)} aria-label="Eliminar alimento" data-testid={`remove-${mealKey}-${idx}`}>
                 <Trash2 className="w-4 h-4" />
             </button>
         </div>

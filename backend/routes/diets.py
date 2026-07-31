@@ -408,24 +408,28 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     try:
         from routes.calculator import _resolve_macros_for_date
-        from macro_distribution import distribuir_macros as _dist
+        from macro_distribution import distribuir_macros as _dist, leer_macro, leer_peri
         if profile:
             training, rest, peri = await _resolve_macros_for_date(profile, fecha)
             base = training if tipo_dia == "entrenamiento" else rest
             if base:
+                opcion_peri = diet.get("opcion_peri") or "intra_post"
+                # 35/15 solo si NO hay peri configurado, y nunca en `sin_peri`; un peri a 0
+                # se respeta (leer_peri/leer_macro).
+                p_peri, h_peri = leer_peri(peri, opcion_peri)
                 dist = _dist(
-                    p_entreno=float(training.get("protein") or training.get("proteinas") or 0),
-                    h_entreno=float(training.get("carbs") or training.get("hidratos") or 0),
-                    g_entreno=float(training.get("fat") or training.get("grasas") or 0),
-                    p_peri=float(peri.get("protein") or peri.get("proteinas") or 35),
-                    h_peri=float(peri.get("carbs") or peri.get("hidratos") or 15),
-                    p_descanso=float(rest.get("protein") or rest.get("proteinas") or 0),
-                    h_descanso=float(rest.get("carbs") or rest.get("hidratos") or 0),
-                    g_descanso=float(rest.get("fat") or rest.get("grasas") or 0),
+                    p_entreno=leer_macro(training, "protein", "proteinas"),
+                    h_entreno=leer_macro(training, "carbs", "hidratos"),
+                    g_entreno=leer_macro(training, "fat", "grasas"),
+                    p_peri=p_peri,
+                    h_peri=h_peri,
+                    p_descanso=leer_macro(rest, "protein", "proteinas"),
+                    h_descanso=leer_macro(rest, "carbs", "hidratos"),
+                    g_descanso=leer_macro(rest, "fat", "grasas"),
                     tipo_dia=tipo_dia,
                     num_comidas=int(diet.get("num_comidas") or 4),
                     momento_entreno=int(diet.get("momento_entreno") or 1),
-                    opcion_peri=diet.get("opcion_peri") or "intra_post",
+                    opcion_peri=opcion_peri,
                     single_meal=bool(diet.get("num_comidas") == 1),
                 )
                 objetivo_por_comida = {**dist.get("comidas", {}), **dist.get("periworkout", {})}

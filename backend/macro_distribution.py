@@ -13,6 +13,49 @@ from typing import Dict, List, Optional
 import math
 
 
+# Peri de arranque para el cliente que todavia NO tiene perientreno configurado en su perfil
+# (campo vacio, no un 0 puesto a proposito). Viene de cuando ningun perfil traia el campo.
+PERI_DEFAULT_P = 35.0
+PERI_DEFAULT_H = 15.0
+
+
+def leer_macro(macros: Optional[Dict], *claves: str, default: float = 0.0) -> float:
+    """Lee un macro de un dict de perfil probando varias claves (`protein`/`proteinas`).
+
+    Distingue "no asignado" de un 0 puesto a proposito: un perientreno a 0 es una decision
+    del coach, no un hueco que haya que rellenar con el valor por defecto. Antes las rutas
+    encadenaban `peri.get("protein") or peri.get("proteinas") or 35`, y como en Python el 0
+    cuenta como vacio, un peri a 0 se sustituia por 35 P / 15 H. Ese peri fantasma se colaba
+    en el dia de entreno (repartido entre las comidas si la opcion era `sin_peri`) y hacia
+    que el total del dia no cuadrase con los macros introducidos.
+    """
+    for clave in claves:
+        valor = (macros or {}).get(clave)
+        if valor is not None and valor != "":
+            return float(valor)
+    return float(default)
+
+
+def leer_peri(peri: Optional[Dict], opcion_peri: Optional[str]) -> tuple:
+    """Presupuesto de perientreno (P, H) del cliente, segun lo que tenga en el perfil.
+
+    El peri son DOS ajustes distintos: cuanto tiene asignado (este dict) y como se lo toma
+    (`opcion_peri`). El 35/15 de arranque solo es para el primero, cuando el campo esta vacio.
+
+    En modo `sin_peri` ese arranque es 0: si el cliente no tiene peri configurado y ademas ha
+    dicho que no toma peri, no hay presupuesto ninguno que repartir, y inventarle 35/15 le
+    meteria en las comidas gramos que nadie le ha asignado. Ojo: esto NO toca al cliente que
+    si tiene peri asignado y elige `sin_peri`; ese presupuesto es real y se sigue repartiendo
+    entre las comidas (decision del 22-06, pendiente de confirmar con Jesus).
+    """
+    if opcion_peri == "sin_peri":
+        por_defecto_p = por_defecto_h = 0.0
+    else:
+        por_defecto_p, por_defecto_h = PERI_DEFAULT_P, PERI_DEFAULT_H
+    return (leer_macro(peri, "protein", "proteinas", default=por_defecto_p),
+            leer_macro(peri, "carbs", "hidratos", default=por_defecto_h))
+
+
 # NOTE: Calma rounds each per-meal macro to the nearest 0.5 g (stepRedondeo) ONLY FOR
 # DISPLAY. The unrounded value drives the suggestion engine (me/diferencia). Rounding here
 # made the frontend send the rounded remaining (e.g. 47 instead of 46.8) -> a granel food's
