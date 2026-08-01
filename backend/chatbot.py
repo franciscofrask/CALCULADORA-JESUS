@@ -1419,7 +1419,12 @@ class NutritionChatbot:
         if math.isinf(cant):
             cant = cantidad_minima(a)  # alimento libre (sin macros que cuenten)
         if cant <= 0:
-            return None
+            # No cabe en lo que queda. Se pone su racion minima igualmente: el chat es el
+            # modo manual, lo que pide el usuario entra y en el resumen ya se ve lo que
+            # sobra. Antes se rechazaba y el alimento no aparecia por ningun lado.
+            cant = cantidad_minima(a)
+            if cant <= 0:
+                return None
         es_unidad = bool(a.get("unidades"))
         racion = float(a.get("racion") or 100) or 100.0
         cantidad_g = (cant * racion) if es_unidad else cant
@@ -2119,7 +2124,10 @@ class NutritionChatbot:
         elif len(nombres_ok) >= 2:
             from meal_builder import build_meal
             restante = self.get_remaining_macros()
-            result = await build_meal(self.db, nombres_ok, restante, self.search_foods)
+            # forzar=True: el chat es el modo manual, lo que pide el usuario entra aunque
+            # la comida se pase de macros (el resumen ya avisa de lo que sobra).
+            result = await build_meal(self.db, nombres_ok, restante, self.search_foods,
+                                      forzar=True)
             not_found.extend(result.get("foods_not_found", []))
             for f in result["foods_added"]:
                 cantidad_g = f.get("cantidad", f.get("cantidad_g", 0))

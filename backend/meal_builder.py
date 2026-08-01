@@ -346,17 +346,21 @@ async def build_meal(
     db,
     foods_requested: List[str],
     objetivo: Dict[str, float],
-    search_func
+    search_func,
+    forzar: bool = False
 ) -> Dict:
     """
     Construye una comida distribuyendo macros entre los alimentos.
-    
+
     Args:
         db: Conexión a MongoDB
         foods_requested: Lista de nombres de alimentos
         objetivo: {"P": 32.5, "H": 32.5, "G": 15}
         search_func: Función async para buscar alimentos
-    
+        forzar: si True, los alimentos que no caben en los macros se añaden igualmente
+            con su ración mínima, en vez de descartarse. Lo usa el chat, que tiene que
+            comportarse como el modo manual de Nutrición: lo que pide el usuario, entra.
+
     Returns:
         {
             "foods_added": [...],
@@ -790,19 +794,47 @@ async def build_meal(
                 g_remaining -= macros["G"]
     elif fuentes_G:
         # La grasa de la comida ya esta cubierta por los otros alimentos, asi que estos no
-        # entran. Hay que DECIRLO: antes se salia por el `if` de arriba y el alimento que
-        # habia pedido el usuario desaparecia sin dejar rastro (pedir "huevos con bacon"
-        # devolvia solo los huevos, sin una linea que explicase donde estaba el bacon).
+        # entran por el reparto. Se anotan para que no se pierdan en silencio: pedir
+        # "huevos con bacon" devolvia solo los huevos, sin rastro del bacon.
         for info in fuentes_G:
             nombre_al = info["alimento"].get("nombre", info["buscado"])
             not_found.append({
                 "buscado": info["buscado"],
                 "encontrado": nombre_al,
                 "razon": (f"La grasa de esta comida ya está cubierta ({g_obj:.0f} g) con el "
-                          f"resto de alimentos, así que no cabe. Si lo quieres igualmente, "
-                          f"dime la cantidad (por ejemplo \"{nombre_al.lower()} 20 g\")"),
+                          f"resto de alimentos"),
                 "alternativas": info["alternativas"],
             })
+
+    # Paso 7b: con `forzar`, lo que el usuario ha pedido POR SU NOMBRE entra igualmente.
+    # El chat funciona como el modo manual de Nutrición: si pides bacon, te pongo bacon,
+    # aunque la comida se pase de macros; ya se ve en el resumen que sobra. Solo se sigue
+    # descartando lo que de verdad no existe en la base de datos.
+    if forzar and not_found:
+        from calma_suggest import macros_efectivos as _macros_efectivos
+        pendientes = []
+        for nf in not_found:
+            info = next((a for a in alimentos_info if a["buscado"] == nf.get("buscado")), None)
+            if not info:
+                pendientes.append(nf)      # no está en el catálogo: eso sí hay que decirlo
+                continue
+            alimento = info["alimento"]
+            config = info["config"]
+            cantidad_g = info["minimo"]    # la ración mínima con sentido de su categoría
+            m = _macros_efectivos(alimento, cantidad_g)
+            macros = {"P": round(m["P"], 1), "H": round(m["H"], 1), "G": round(m["G"], 1)}
+            found_foods.append({
+                "nombre": alimento.get("nombre"),
+                "cantidad": cantidad_g,
+                "cantidad_display": format_cantidad_display(cantidad_g, alimento, config),
+                "macros": macros,
+                "alternativas": info["alternativas"],
+                "forzado": True,
+            })
+            totals["P"] += macros["P"]
+            totals["H"] += macros["H"]
+            totals["G"] += macros["G"]
+        not_found = pendientes
 
     # Paso 8: Calcular restantes y verificar si cuadra
     remaining = {
