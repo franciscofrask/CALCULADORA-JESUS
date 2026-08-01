@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../components/ui/confirm';
 import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download, ClipboardList } from 'lucide-react';
+import ChatMealSummary from '../components/nutrition/ChatMealSummary';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -561,54 +562,17 @@ export default function ChatbotPage() {
   const macrosLinea = (m) =>
     `Proteína ${m?.P || 0} g · Hidratos ${m?.H || 0} g · Grasa ${m?.G || 0} g`;
 
+  // El texto de la burbuja se queda SOLO con la frase de conversación. Los alimentos, los
+  // macros de la comida y los avisos los pinta <ChatMealSummary> a partir de los mismos
+  // datos, que ya venían estructurados: antes se aplanaba todo a un texto larguísimo y no
+  // se distinguía lo importante. Si la respuesta no trae nada que pintar, se deja una
+  // frase para no dejar la burbuja vacía.
   const formatMealUpdate = (response) => {
-    let msg = '';
-
-    if (response.message) {
-      msg += `${response.message}\n\n`;
-    }
-
-    if (response.foods_added?.length > 0) {
-      msg += '**Alimentos añadidos:**\n';
-      response.foods_added.forEach(f => {
-        msg += `• ${f.nombre}: ${f.cantidad_display} (${macrosLinea(f.macros)})\n`;
-      });
-    }
-
-    if (response.foods_not_found?.length > 0) {
-      msg += '\n**No he podido añadir:**\n';
-      response.foods_not_found.forEach(f => {
-        msg += `• "${f.buscado}": ${f.razon}\n`;
-        if (f.sugerencia) {
-          msg += `  ${f.sugerencia}\n`;
-        }
-      });
-    }
-
-    if (response.meal_status) {
-      const ms = response.meal_status;
-      msg += `\n**${ms.comida_nombre || `Comida ${ms.comida}`}:**\n`;
-      msg += `Llevas: ${macrosLinea(ms.actual)}\n`;
-      msg += `Objetivo: ${macrosLinea(ms.objetivo)}\n`;
-      msg += `Te falta: ${macrosLinea(ms.restante)}`;
-
-      if (ms.cuadrado) {
-        msg += '\n\n✅ **¡Comida cuadrada!** Pulsa "Guardar y siguiente".';
-      } else {
-        const r = ms.restante || {};
-        const faltan = ['P', 'H', 'G'].filter(k => (r[k] || 0) > 4).map(k => `${r[k]} g de ${MACRO_NOMBRE[k]}`);
-        const pasado = ['P', 'H', 'G'].filter(k => (r[k] || 0) < -4).map(k => `${Math.abs(r[k])} g de ${MACRO_NOMBRE[k]}`);
-        if (faltan.length) {
-          msg += `\n\n⚠️ Todavía te faltan ${faltan.join(' y ')}. Añade más alimentos, pulsa "Sugerir alimentos", o "Guardar y siguiente" si quieres dejarla así.`;
-        }
-        if (pasado.length) {
-          msg += `\n\n⚠️ Te has pasado ${pasado.join(' y ')}. Puedes bajar la cantidad o dejarlo así si lo quieres a propósito.`;
-        }
-      }
-    }
-
-    // Nunca una burbuja en blanco: si la respuesta vino vacía, decirlo.
-    return msg.trim() || 'No he podido procesar eso. Escríbelo otra vez, por favor.';
+    if (response.message) return response.message.trim();
+    const hayTarjeta = response.meal_status
+      || response.foods_added?.length > 0
+      || response.foods_not_found?.length > 0;
+    return hayTarjeta ? '' : 'No he podido procesar eso. Escríbelo otra vez, por favor.';
   };
 
   // Reiniciar chat
@@ -654,15 +618,19 @@ export default function ChatbotPage() {
             {isUser ? <User size={16} /> : <Bot size={16} />}
           </div>
           <div className={`rounded-2xl px-4 py-2 ${
-            isUser 
-              ? 'bg-orange-500 text-white rounded-br-md' 
+            isUser
+              ? 'bg-orange-500 text-white rounded-br-md'
               : 'bg-card text-foreground rounded-bl-md'
           }`}>
-            <div className="whitespace-pre-wrap text-sm">
-              {msg.content.split('**').map((part, i) => 
-                i % 2 === 1 ? <strong key={i}>{part}</strong> : part
-              )}
-            </div>
+            {msg.content && (
+              <div className="whitespace-pre-wrap text-sm">
+                {msg.content.split('**').map((part, i) =>
+                  i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+                )}
+              </div>
+            )}
+            {/* Alimentos de la comida + barras de macros, en vez del muro de texto */}
+            {!isUser && <ChatMealSummary data={msg.data} />}
           </div>
         </div>
       </div>
