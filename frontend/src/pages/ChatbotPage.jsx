@@ -430,7 +430,11 @@ export default function ChatbotPage() {
     return msg;
   };
 
-  // Quitar un alimento de la comida actual
+  // Quitar un alimento de la comida actual.
+  // Ahora mismo no la llama nadie: la lista de chips "En esta comida" con su × se quitó
+  // porque repetía la tarjeta del asistente. Se deja preparada por si se vuelve a poner un
+  // botón de quitar; mientras tanto, el usuario lo pide por chat ("quita el bacon").
+  // eslint-disable-next-line no-unused-vars
   const removeFood = async (index) => {
     if (loading) return;
     const quitado = currentFoods[index];
@@ -986,20 +990,10 @@ export default function ChatbotPage() {
       {/* Input + controles de montaje */}
       {step === 'building_meal' && (
         <div className="border-t border-border p-3 bg-card relative z-40 space-y-2">
-          {/* Alimentos de la comida actual (toca la × para quitar) */}
-          {currentFoods.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">En esta comida</p>
-              <div className="flex flex-wrap gap-1.5">
-                {currentFoods.map((f, i) => (
-                  <span key={i} className="inline-flex items-center gap-1.5 bg-muted border border-input text-foreground text-xs px-2.5 py-1 rounded-full">
-                    {f.nombre} · {f.cantidad_display}
-                    <button onClick={() => removeFood(i)} disabled={loading} className="text-muted-foreground hover:text-red-500 disabled:opacity-50 font-bold leading-none">×</button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Aquí iba la lista "En esta comida" con un chip por alimento. Se quitó porque
+              repetía lo que ya enseña la tarjeta de la última respuesta del asistente, que
+              lista la comida entera con sus macros. Para quitar un alimento se le dice al
+              chat ("quita el bacon"), que ya lo entiende. */}
 
           {/* Botones de control */}
           <div className="flex flex-wrap gap-2">
