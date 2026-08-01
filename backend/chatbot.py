@@ -1119,6 +1119,15 @@ class NutritionChatbot:
                 "tiene_alimentos": len(comida.get("alimentos", [])) > 0,
                 "guardada": key in self.state.get("saved_meals", []),
                 "es_actual": idx == self.state["comida_actual"],
+                # Lo que lleva cada comida, para que el resumen del dia se pueda pintar
+                # en condiciones en vez de como una lista de texto.
+                "alimentos": [
+                    {"nombre": a.get("nombre"),
+                     "cantidad_display": a.get("cantidad_display") or f"{a.get('cantidad_g', 0)}g",
+                     "macros": a.get("macros", {}),
+                     "categorias": (a.get("alimento") or {}).get("categorias") or a.get("categorias")}
+                    for a in comida.get("alimentos", [])
+                ],
             })
         return out
 
@@ -2432,6 +2441,7 @@ class NutritionChatbot:
                 "nombre": a.get("nombre"),
                 "cantidad_display": self._format_cantidad(cantidad_g, a, config),
                 "macros": macros,
+                "categorias": a.get("categorias"),  # para el emoji de la opcion en la app
             }))
 
         # Dentro de cada tipo: mejores primero, baraja los top para variedad, y pon al final
@@ -2465,10 +2475,12 @@ class NutritionChatbot:
         self.state["seen_sugg"][key].extend(
             s["alimento_id"] for s in chosen if s["alimento_id"] not in self.state["seen_sugg"][key])
         if chosen:
-            intro = (f"Opciones de {fase_lbl}:" if macro
-                     else f"Lo que más te falta es {fase_lbl}. Opciones:")
-            message = (f"{intro}\n{self._format_options_lines(chosen)}\n\n"
-                       "Dime cuál quieres (p.ej. \"la 1\" o \"el nombre\"), o pídeme otras.")
+            # La lista de opciones la pinta la app con <ChatSuggestions> a partir de
+            # `suggestions` (tarjetas que se pulsan). Aquí solo va la frase de contexto y,
+            # si toca, el aviso de que ninguna cubre sola lo que falta: repetir las opciones
+            # en el texto dejaba el mensaje duplicado.
+            message = (f"Opciones de {fase_lbl}:" if macro
+                       else f"Lo que más te falta es {fase_lbl}.")
             # Honestidad: si ninguna opción cubre por sí sola lo que falta, decirlo.
             mejor = max((s["macros"].get(driver, 0) for s in chosen), default=0)
             if mejor < restante[driver] - 4:
@@ -2897,7 +2909,11 @@ class NutritionChatbot:
                     "day_overview": self.get_day_overview()}
 
         if intent == "list":
+            # `vista: dia` = la app pinta el resumen con <ChatDayOverview> (una fila por
+            # comida, con sus alimentos y barras) en vez de soltar el texto de list_meals_text,
+            # que se queda como respaldo.
             return {"action": "message", "message": self.list_meals_text(goto_idx),
+                    "vista": "dia",
                     "day_overview": self.get_day_overview()}
 
         if intent == "status":

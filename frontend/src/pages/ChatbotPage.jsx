@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../components/ui/confirm';
 import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download, ClipboardList } from 'lucide-react';
 import ChatMealSummary from '../components/nutrition/ChatMealSummary';
+import ChatDayOverview from '../components/nutrition/ChatDayOverview';
+import ChatSuggestions from '../components/nutrition/ChatSuggestions';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -368,6 +370,28 @@ export default function ChatbotPage() {
     inputRef.current?.focus();
   };
 
+  // Elegir una sugerencia pulsándola. Se manda al backend lo mismo que si el usuario
+  // escribiera "la 3", que es lo que ya entiende (resuelve contra state.last_options).
+  const elegirSugerencia = async (numero, sug) => {
+    if (loading) return;
+    addMessage((sug?.nombre || `la ${numero}`).trim(), true);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/chatbot/message`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `la ${numero}`, session_id: sessionId }),
+      });
+      const data = await res.json();
+      if (data.day_overview) setDayOverview(data.day_overview);
+      if (data.state?.step) setStep(data.state.step);
+      await handleBotResponse(data.response);
+    } catch (e) {
+      addMessage('Error al añadir esa opción.', false);
+    }
+    setLoading(false);
+  };
+
   // Aplica meal_status (etiqueta + restante) y resumen del día a la UI
   const applyMealResponse = (resp) => {
     if (resp?.meal_status) {
@@ -390,8 +414,9 @@ export default function ChatbotPage() {
         addMessage(formatMealUpdate(resp), false, resp);
         break;
       case 'suggestions':
-        // Las sugerencias van numeradas en el propio mensaje; se elige por texto.
-        addMessage(resp.message || 'No encuentro alimentos que cuadren ahora mismo.', false);
+        // Las opciones las pinta <ChatSuggestions> (tarjetas que se pulsan) a partir de
+        // resp.suggestions; el texto se queda con la frase de contexto.
+        addMessage(resp.message || 'No encuentro alimentos que cuadren ahora mismo.', false, resp);
         break;
       case 'complete_request':
         await completeMeal();
@@ -404,7 +429,13 @@ export default function ChatbotPage() {
         break;
       case 'no_foods':
       default:
-        addMessage(resp.message || 'No te entendí. Dime qué alimentos quieres o usa los botones.', false);
+        // `vista: dia` (el listado de comidas) lo pinta <ChatDayOverview>; su `message` es
+        // el texto de respaldo y no se enseña para no repetirlo.
+        addMessage(
+          resp.vista === 'dia'
+            ? ''
+            : (resp.message || 'No te entendí. Dime qué alimentos quieres o usa los botones.'),
+          false, resp);
     }
   };
 
@@ -635,6 +666,11 @@ export default function ChatbotPage() {
             )}
             {/* Alimentos de la comida + barras de macros, en vez del muro de texto */}
             {!isUser && <ChatMealSummary data={msg.data} />}
+            {/* Resumen del día y sugerencias, también como tarjetas */}
+            {!isUser && msg.data?.vista === 'dia' && <ChatDayOverview data={msg.data} />}
+            {!isUser && msg.data?.action === 'suggestions' && (
+              <ChatSuggestions data={msg.data} disabled={loading} onElegir={elegirSugerencia} />
+            )}
           </div>
         </div>
       </div>
