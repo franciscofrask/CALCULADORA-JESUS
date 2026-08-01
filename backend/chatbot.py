@@ -1497,6 +1497,17 @@ class NutritionChatbot:
         if any(c.get("_match_parcial") for c in cands):
             return None
 
+        # Si hay un alimento que se llama EXACTAMENTE como lo pedido, no hay nada que
+        # desambiguar: es ese. Pedir "bacon" sacaba seis alimentos "sabor bacon" y escondía
+        # el propio "Bacon", porque la lista de opciones descarta lo que no cabe en lo que
+        # queda de la comida y el bacon (42 g de grasa por 100) se caía por el mínimo de su
+        # categoría. Preguntar "¿cuál de estos?" cuando el usuario ha dicho el nombre exacto
+        # de un alimento no tiene sentido; esto solo afecta a términos con alimento propio
+        # (bacon, merluza, salmón...), no a los ambiguos de verdad (pavo, lomo, pollo).
+        pedido = self._norm_text(nombre).strip()
+        if any(self._norm_text(c.get("nombre", "")).strip() == pedido for c in cands):
+            return None
+
         # Subfamilias (nivel 2) distintas entre los candidatos: si hay 2+, es ambiguo de
         # verdad. Cubre tanto familias enteras (carne 2 vs pescado 3, "lomo") como tipos
         # dispares dentro de una familia (fiambre 2.1 vs carne fresca 2.2, "pavo").

@@ -788,7 +788,22 @@ async def build_meal(
                 totals["H"] += macros["H"]
                 totals["G"] += macros["G"]
                 g_remaining -= macros["G"]
-    
+    elif fuentes_G:
+        # La grasa de la comida ya esta cubierta por los otros alimentos, asi que estos no
+        # entran. Hay que DECIRLO: antes se salia por el `if` de arriba y el alimento que
+        # habia pedido el usuario desaparecia sin dejar rastro (pedir "huevos con bacon"
+        # devolvia solo los huevos, sin una linea que explicase donde estaba el bacon).
+        for info in fuentes_G:
+            nombre_al = info["alimento"].get("nombre", info["buscado"])
+            not_found.append({
+                "buscado": info["buscado"],
+                "encontrado": nombre_al,
+                "razon": (f"La grasa de esta comida ya está cubierta ({g_obj:.0f} g) con el "
+                          f"resto de alimentos, así que no cabe. Si lo quieres igualmente, "
+                          f"dime la cantidad (por ejemplo \"{nombre_al.lower()} 20 g\")"),
+                "alternativas": info["alternativas"],
+            })
+
     # Paso 8: Calcular restantes y verificar si cuadra
     remaining = {
         "P": round(p_obj - totals["P"], 1),
