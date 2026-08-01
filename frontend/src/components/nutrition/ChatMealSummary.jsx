@@ -58,17 +58,19 @@ const FilaAlimento = ({ nombre, cantidad, macros, categorias, esNuevo }) => {
     return (
         <div className="flex items-start gap-2">
             <span className="text-base leading-5">{getFoodEmoji(categorias)}</span>
-            <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-1.5">
+            {/* Nombre y macros comparten linea SI CABEN; si no, los macros bajan solos
+                (flex-wrap). La cantidad se queda siempre arriba a la derecha. */}
+            <div className="flex min-w-0 flex-1 items-baseline gap-2">
+                <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+                    <span className="flex max-w-full items-center gap-1.5">
                         {esNuevo && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" title="Recién añadido" />}
                         <span className="truncate text-sm font-semibold text-foreground">{nombre}</span>
                     </span>
-                    <span className="shrink-0 font-data text-xs text-foreground">{cantidad}</span>
+                    {trozos.length > 0 && (
+                        <span className="font-data text-[11px] text-muted-foreground">{trozos.join(' · ')}</span>
+                    )}
                 </div>
-                {trozos.length > 0 && (
-                    <div className="font-data text-[11px] text-muted-foreground">{trozos.join(' · ')}</div>
-                )}
+                <span className="shrink-0 font-data text-xs text-foreground">{cantidad}</span>
             </div>
         </div>
     );
