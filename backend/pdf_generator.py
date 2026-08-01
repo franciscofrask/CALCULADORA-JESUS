@@ -209,15 +209,27 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
             data = [["Alimento", "Cantidad", "Aporta"]]
             rol_rows = []  # (fila, color) para pintar el texto del rol
             for a in alimentos:
-                cant = a.get("cantidad", 0)
-                unidad = a.get("unidad", "g")
-                cant_str = f"{int(cant)} ud" if unidad == "ud" else f"{_fmt(cant)} g"
-                rol = a.get("rol", "P")
-                color = ROL_COLOR.get(rol, INK)
-                aporta = Paragraph(
-                    f"<font color='#{color.hexval()[4:]}'><b>{_fmt(a.get('aporta',0))} g</b> "
-                    f"de {ROL_NOMBRE.get(rol, '').lower()}</font>",
-                    ParagraphStyle('ap', parent=st_food, fontSize=8.8))
+                # Cantidad: la ruta manda el texto ya montado ("2 ud (126 g)" en los
+                # alimentos por unidades). El formato viejo queda de respaldo.
+                cant_str = a.get("cantidad_txt")
+                if not cant_str:
+                    cant = a.get("cantidad", 0)
+                    unidad = a.get("unidad", "g")
+                    cant_str = f"{int(cant)} ud" if unidad == "ud" else f"{_fmt(cant)} g"
+
+                # Aporta: TODOS los macros que cuentan, de mayor a menor. Con uno solo, las
+                # almendras salian como proteina y no se veia la grasa, que es lo suyo.
+                items = a.get("aporta_items")
+                if not items:
+                    items = [{"rol": a.get("rol", "P"), "valor": a.get("aporta", 0)}]
+                trozos = []
+                for it in items:
+                    color = ROL_COLOR.get(it["rol"], INK)
+                    trozos.append(
+                        f"<font color='#{color.hexval()[4:]}'><b>{_fmt(it['valor'])} g</b> "
+                        f"de {ROL_NOMBRE.get(it['rol'], '').lower()}</font>")
+                aporta = Paragraph(" · ".join(trozos),
+                                   ParagraphStyle('ap', parent=st_food, fontSize=8.8))
                 data.append([Paragraph(a.get("nombre", "-"), st_food), cant_str, aporta])
             # Fila resumen de la comida
             data.append(["Total de la comida", "",
@@ -245,7 +257,9 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
             for r in range(1, n_rows - 1):
                 if r % 2 == 0:
                     filas_style.append(('BACKGROUND', (0, r), (-1, r), ZEBRA))
-            tabla = Table(data, colWidths=[104 * mm, 28 * mm, 46 * mm])
+            # La cantidad ahora puede ser "2 ud (126 g)" y el aporte lleva todos los macros,
+            # asi que las dos ultimas columnas necesitan mas sitio que antes (104/28/46).
+            tabla = Table(data, colWidths=[86 * mm, 30 * mm, 62 * mm])
             tabla.setStyle(TableStyle(filas_style))
             block.append(tabla)
 

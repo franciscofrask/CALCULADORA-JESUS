@@ -439,15 +439,39 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
     except Exception:
         objetivo_por_comida, objetivo_total = {}, {}
 
-    def _rol_de(a):
-        """Rol del alimento en el método: el macro para el que cuenta (P/H/G)."""
-        qc = a.get("que_cuenta") or {}
-        for k in ("P", "H", "G"):
-            if qc.get(k):
-                return k
-        # Sin que_cuenta (dato viejo): el macro efectivo con más peso.
-        me = a.get("macros_efectivos", {})
-        return max(("P", "H", "G"), key=lambda k: me.get(k, 0)) if me else "P"
+    def _aporta_de(a, p, h, g):
+        """Todo lo que aporta el alimento, de mayor a menor.
+
+        Antes salia UN solo macro (el primero de P/H/G que contase), asi que las almendras
+        aparecian como "6.9 g de proteina" y no se veian los 18.6 de grasa, que es lo que
+        de verdad aportan. Ahora se listan todos los que cuentan, empezando por el mayor.
+        """
+        items = [(rol, valor) for rol, valor in (("P", p), ("H", h), ("G", g)) if valor > 0]
+        items.sort(key=lambda x: -x[1])
+        return [{"rol": rol, "valor": valor} for rol, valor in items]
+
+    # Catalogo de los alimentos de la dieta: hace falta para saber cuales van por unidades
+    # (el campo `unidad` que se guarda en la dieta viene vacio en casi todas las filas).
+    ids = [a.get("alimento_id") for m in comidas_raw.values()
+           for a in (m.get("alimentos") or []) if a.get("alimento_id") is not None]
+    catalogo = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": ids}},
+                                     {"_id": 0, "id": 1, "unidades": 1, "racion": 1}):
+            catalogo[f["id"]] = f
+
+    def _cantidad_de(a):
+        """Texto de la cantidad. En los alimentos por unidades, Jesus quiere ver las
+        unidades y el peso entre parentesis: "2 ud (126 g)", no "126 g" a secas."""
+        gramos = a.get("cantidad_g", 0) or 0
+        food = catalogo.get(a.get("alimento_id")) or {}
+        por_unidad = bool(food.get("unidades")) or a.get("unidad") == "ud"
+        racion = float(food.get("racion") or a.get("racion") or 0)
+        if por_unidad and racion > 0:
+            uds = round(gramos / racion * 2) / 2          # medias unidades, como en la app
+            uds_txt = f"{uds:.0f}" if uds == int(uds) else f"{uds:.1f}"
+            return f"{uds_txt} ud ({gramos:.0f} g)"
+        return f"{gramos:.0f} g"
 
     # Build comidas list in the format pdf_generator expects
     comidas_list = []
@@ -469,13 +493,16 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
             h = round(me.get("H", 0), 1)
             g = round(me.get("G", 0), 1)
             mp += p; mh += h; mg += g
-            rol = _rol_de(a)
+            aporta_items = _aporta_de(a, p, h, g)
             alimentos_pdf.append({
                 "nombre": a.get("nombre", "?"),
+                "cantidad_txt": _cantidad_de(a),
+                "aporta_items": aporta_items,
+                # compatibilidad con el formato antiguo del generador
                 "cantidad": a.get("cantidad_g", 0),
                 "unidad": a.get("unidad") or "g",
-                "rol": rol,
-                "aporta": {"P": p, "H": h, "G": g}.get(rol, 0),
+                "rol": aporta_items[0]["rol"] if aporta_items else "P",
+                "aporta": aporta_items[0]["valor"] if aporta_items else 0,
             })
 
         total_p += mp; total_h += mh; total_g += mg
