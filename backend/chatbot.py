@@ -2344,7 +2344,8 @@ class NutritionChatbot:
         display = self._append_food(key, alimento, cantidad_g, macros)
         return self._meal_response([{"nombre": alimento.get("nombre"), "cantidad_display": display, "macros": macros}], [])
 
-    async def suggest_foods_for_current_meal(self, limit: int = 6, macro: str = None) -> dict:
+    async def suggest_foods_for_current_meal(self, limit: int = 6, macro: str = None,
+                                             marca: str = None) -> dict:
         """Sugiere alimentos sueltos POR FASES, igual que la calculadora:
         primero PROTEÍNA (pollo, carnes, huevos, pescados…), luego HIDRATOS (arroz,
         pasta, cereales…), luego GRASA (aceites, frutos secos…). Si `macro` viene
@@ -2366,8 +2367,9 @@ class NutritionChatbot:
                     "message": "Esta comida ya está cuadrada. Pulsa \"Guardar y siguiente\".",
                     "day_overview": self.get_day_overview()}
 
-        if macro in ("P", "H", "G"):
+        if macro in ("P", "H", "G") and not marca:
             # El usuario pidió un macro concreto: respetarlo, y si ya va servido, decirlo.
+            # Con una marca de por medio no se corta: ha pedido ver productos de esa marca.
             if restante[macro] <= 0:
                 exceso = abs(restante[macro])
                 detalle = f" (te pasas {exceso} g)" if exceso > 0.5 else ""
@@ -2422,6 +2424,21 @@ class NutritionChatbot:
                 if not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
                 and not (avoid_prefixes and cat_hit(a.get("categorias"), avoid_prefixes))]
 
+        # Marca pedida ("algo de FullGas"): se busca en TODO el catálogo, no solo en las
+        # categorías de la fase, porque una marca vende de todo y lo que el usuario quiere
+        # es ver SUS productos. Si no queda ninguno se avisa en vez de colar otra cosa.
+        if marca:
+            marca_norm = self._norm_text(marca)
+            de_la_marca = [a for a in all_foods
+                           if marca_norm in self._norm_text(a.get("nombre", ""))]
+            if not de_la_marca:
+                return {"action": "suggestions", "suggestions": [],
+                        "message": f"No tengo alimentos de \"{marca}\" en la base de datos.",
+                        "day_overview": self.get_day_overview()}
+            pool = [a for a in de_la_marca
+                    if not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
+                    and not (avoid_prefixes and cat_hit(a.get("categorias"), avoid_prefixes))]
+
         # Dimensionar; agrupar por TIPO de alimento (categoría a 2 niveles) para diversificar
         from collections import defaultdict
         buckets = defaultdict(list)  # coarse_cat -> [(aporte, es_pref, item)]
@@ -2430,7 +2447,10 @@ class NutritionChatbot:
             if not sized:
                 continue
             cantidad_g, macros = sized
-            if macros[driver] <= 0:
+            # Con una marca pedida vale cualquier producto suyo que quepa: se ordenan por
+            # lo que aporten a lo que falta, pero no se descarta el que no aporte ese macro
+            # (el usuario quiere ver los productos de esa marca, no cuadrar a toda costa).
+            if macros[driver] <= 0 and not marca:
                 continue
             cats = parse_categories(a.get("categorias"))
             coarse = ".".join(cats[0].split(".")[:2]) if cats else "?"
@@ -2479,8 +2499,12 @@ class NutritionChatbot:
             # `suggestions` (tarjetas que se pulsan). Aquí solo va la frase de contexto y,
             # si toca, el aviso de que ninguna cubre sola lo que falta: repetir las opciones
             # en el texto dejaba el mensaje duplicado.
-            message = (f"Opciones de {fase_lbl}:" if macro
-                       else f"Lo que más te falta es {fase_lbl}.")
+            if marca:
+                message = f"Esto es lo que tengo de {marca}:"
+            elif macro:
+                message = f"Opciones de {fase_lbl}:"
+            else:
+                message = f"Lo que más te falta es {fase_lbl}."
             # Honestidad: si ninguna opción cubre por sí sola lo que falta, decirlo.
             mejor = max((s["macros"].get(driver, 0) for s in chosen), default=0)
             if mejor < restante[driver] - 4:
@@ -2651,7 +2675,7 @@ class NutritionChatbot:
             '{"intent": "add|suggest|complete|remove|clear|status|summary|rebalance|goto|list|question|none", '
             '"foods": [{"nombre": "...", "cantidad": <numero o null>, "unidad": "g"|"ud"|null}], '
             '"remove": "<alimento a quitar o null>", "goto": <numero de comida, "post", "intra", "ultima", "actual" o null>, '
-            '"macro": "P"|"H"|"G"|null}. '
+            '"macro": "P"|"H"|"G"|null, "marca": "<marca pedida o null>"}. '
             "Intenciones: "
             "'add' = dice qué alimentos quiere comer/añadir o CAMBIAR DE CANTIDAD "
             "(ej: 'quiero tortilla de claras y pan', 'pon 80 g de arroz', 'cambia el arroz a 100g'). "
@@ -2666,6 +2690,9 @@ class NutritionChatbot:
             "'suggest' = pide que TÚ sugieras/recomiendes qué poner SIN nombrar ningún alimento concreto "
             "(ej: 'qué me sugieres', 'dame opciones', 'qué pongo', 'no sé qué añadir'). Si pide sugerencias "
             "de un macro concreto ('sugiéreme grasas', 'opciones de proteína'), pon ese macro en 'macro'. "
+            "MARCAS: si pide algo de una MARCA ('recomiéndame algo de FullGas', 'algún alimento Hacendado', "
+            "'un yogur de Mercadona'), es 'suggest' con la marca en 'marca' y 'macro' a null. Una marca NUNCA "
+            "es un macro: 'fullgas' NO es grasa. Si no nombra ninguna marca, 'marca' va a null. "
             "'complete' = quiere GUARDAR/cerrar esta comida y pasar a la siguiente "
             "(ej: 'siguiente', 'guardar y siguiente', 'ya está, la dejo así', 'pasa a la siguiente'). "
             "'remove' = quitar del todo UN alimento ya añadido, SIN cantidad final "
@@ -2743,12 +2770,21 @@ class NutritionChatbot:
         macro = raw.get("macro")
         if macro not in ("P", "H", "G"):
             macro = None
+        # Marca pedida ("algo de FullGas", "un yogur de Hacendado"). Se filtran las
+        # sugerencias por ella. Antes no existía y el router colaba las marcas en `macro`:
+        # "recomienda algún alimento fullgas" salía como sugerencias de GRASA.
+        marca = raw.get("marca")
+        if not isinstance(marca, str) or not marca.strip():
+            marca = None
+        else:
+            marca = marca.strip()
         return {
             "intent": intent,
             "foods": self._normalize_food_items(raw.get("foods") or []),
             "remove": remove,
             "goto": goto,
             "macro": macro,
+            "marca": marca,
         }
 
     async def process_message(self, user_input: str) -> dict:
@@ -2935,7 +2971,8 @@ class NutritionChatbot:
             return {"action": "complete_request"}
 
         if intent == "suggest":
-            return await self.suggest_foods_for_current_meal(macro=data.get("macro"))
+            return await self.suggest_foods_for_current_meal(macro=data.get("macro"),
+                                                             marca=data.get("marca"))
 
         if intent == "summary":
             return {"action": "summary", "day_overview": self.get_day_overview()}
