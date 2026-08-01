@@ -28,10 +28,21 @@ export const ChatSuggestions = ({ data, onElegir, disabled }) => {
     // El macro que se está intentando cubrir: se resalta en cada opción.
     const clave = FASE_MACRO[data.fase] || null;
 
+    // La cabecera lleva TODO el contexto de la lista. Antes lo decía también el texto de
+    // la burbuja ("Lo que más te falta es proteína.") justo encima de un "PARA CUBRIR
+    // PROTEÍNA": la misma frase dos veces seguidas.
+    const cabecera = data.marca
+        ? <>Lo que tengo de <span className="text-foreground">{data.marca}</span></>
+        : clave
+            ? (data.motivo === 'pedido'
+                ? <>Opciones de <span style={{ color: MACRO[clave] }}>{NOMBRE[clave]}</span></>
+                : <>Lo que más te falta es <span style={{ color: MACRO[clave] }}>{NOMBRE[clave]}</span></>)
+            : 'Opciones';
+
     return (
         <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/30 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {clave ? <>Para cubrir <span style={{ color: MACRO[clave] }}>{NOMBRE[clave]}</span></> : 'Opciones'}
+                {cabecera}
             </p>
 
             <div className="space-y-1.5">

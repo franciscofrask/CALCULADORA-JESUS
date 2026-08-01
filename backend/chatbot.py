@@ -1791,6 +1791,14 @@ class NutritionChatbot:
 
     # Detección determinista de "sumar a lo que ya hay" vs "fijar el total". Se hace en
     # código (no en el LLM) porque el router clasificaba "pon un huevo" de forma inestable.
+    # "quiero añadir un alimento", "voy a sugerir algo", "puedo meter un producto": pide
+    # meter algo pero SIN decir qué. El que elige es él, no el asistente: se le pregunta cuál.
+    _RE_ADD_SIN_DECIR_QUE = re.compile(
+        r"\b(?:quiero|queria|quisiera|voy a|me gustaria|puedo|podria|deseo)\b"
+        r"(?:\W+\w+){0,2}\W+"
+        r"(?:anadir|poner|meter|agregar|sumar|echar|sugerir|proponer|introducir|cargar)\b"
+        r"[^.?!]*?\b(?:alimento|alimentos|algo|comida|producto|cosa)\b")
+
     _RE_SET_TOTAL = re.compile(r"\b(a|en)\s+\d|\b(deja|dejalo|baja|bajala|sube|subela|subelo|cambia|solo|unicamente)\b")
     _RE_INCREMENTO = re.compile(r"\b(agrega|anade|suma|echa|mete|otro|otra|un|una)\b|\bmas\b")
     # Marca aditiva "fuerte" (verbo o 'otro'/'más', SIN 'un/una'): la exigimos para
@@ -2499,22 +2507,25 @@ class NutritionChatbot:
             # `suggestions` (tarjetas que se pulsan). Aquí solo va la frase de contexto y,
             # si toca, el aviso de que ninguna cubre sola lo que falta: repetir las opciones
             # en el texto dejaba el mensaje duplicado.
-            if marca:
-                message = f"Esto es lo que tengo de {marca}:"
-            elif macro:
-                message = f"Opciones de {fase_lbl}:"
-            else:
-                message = f"Lo que más te falta es {fase_lbl}."
+            # El encabezado ("lo que más te falta es proteína" / "esto es lo que tengo de
+            # FullGas") lo pone la tarjeta de opciones, que ya lleva ese contexto. Aquí el
+            # texto se queda VACÍO para no decir lo mismo dos veces, una en la burbuja y
+            # otra en la tarjeta; solo se rellena con el aviso de más abajo si hace falta.
+            message = ""
+            motivo = "marca" if marca else ("pedido" if macro else "falta")
             # Honestidad: si ninguna opción cubre por sí sola lo que falta, decirlo.
             mejor = max((s["macros"].get(driver, 0) for s in chosen), default=0)
             if mejor < restante[driver] - 4:
-                message += (f"\nNinguna cubre sola los {restante[driver]} g de {MACRO_LBL[driver]} "
-                            "que faltan: combina un par, o añade otro alimento después.")
+                message = (f"Ninguna cubre sola los {restante[driver]} g de {MACRO_LBL[driver]} "
+                           "que faltan: combina un par, o añade otro alimento después.")
         else:
+            motivo = "vacio"
             message = "No encuentro alimentos que cuadren con lo que te falta ahora mismo."
         return {
             "action": "suggestions",
             "fase": fase,
+            "motivo": motivo,      # de qué va la lista: falta / pedido / marca
+            "marca": marca,
             "message": message,
             "suggestions": chosen,
             "day_overview": self.get_day_overview(),
@@ -2693,6 +2704,9 @@ class NutritionChatbot:
             "MARCAS: si pide algo de una MARCA ('recomiéndame algo de FullGas', 'algún alimento Hacendado', "
             "'un yogur de Mercadona'), es 'suggest' con la marca en 'marca' y 'macro' a null. Una marca NUNCA "
             "es un macro: 'fullgas' NO es grasa. Si no nombra ninguna marca, 'marca' va a null. "
+            "OJO CON QUIÉN SUGIERE: 'suggest' es SOLO cuando pide que TÚ elijas. Si el que va a decir el "
+            "alimento es ÉL ('quiero añadir un alimento', 'quiero sugerir un alimento', 'voy a poner algo', "
+            "'quiero meter un alimento'), NO es 'suggest': es 'add' con 'foods' vacío, para preguntarle cuál. "
             "'complete' = quiere GUARDAR/cerrar esta comida y pasar a la siguiente "
             "(ej: 'siguiente', 'guardar y siguiente', 'ya está, la dejo así', 'pasa a la siguiente'). "
             "'remove' = quitar del todo UN alimento ya añadido, SIN cantidad final "
@@ -3084,6 +3098,17 @@ class NutritionChatbot:
                 incr = self._es_incremento(user_input)
                 return await self.add_foods([{"nombre": query, "cantidad": cnt, "unidad": None,
                                               "sumar": bool(incr and cnt)}])
+
+        # "quiero añadir un alimento" / "voy a poner algo" / "quiero sugerir un alimento":
+        # dice que quiere meter algo pero no dice QUÉ. No es una duda de nutrición (que es
+        # a donde iba por tener 4+ palabras) ni una petición de que sugiera el asistente:
+        # el que va a decir el alimento es él, así que se le pregunta cuál.
+        if intent in ("add", "none") and self._RE_ADD_SIN_DECIR_QUE.search(self._norm_text(user_input)):
+            return {"action": "no_foods",
+                    "message": ("Dime cuál quieres añadir: el alimento y, si la tienes, la "
+                                "cantidad (por ejemplo \"pechuga de pollo\" o \"200 g de arroz\"). "
+                                "Si prefieres que elija yo, dime \"sugiéreme algo\"."),
+                    "day_overview": self.get_day_overview()}
 
         # Sin alimentos claros: si parece una frase, tratar como duda; si no, pedir alimentos.
         if len(user_input.split()) >= 4:
