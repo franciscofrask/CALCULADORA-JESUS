@@ -837,10 +837,12 @@ export default function ChatbotPage() {
     // el header y el input quedan fijos y solo la zona de mensajes hace scroll.
     <div className="h-[calc(100dvh-8.5rem)] lg:h-screen bg-background text-foreground flex flex-col">
       {/* Header */}
-      <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
-            <Bot size={24} />
+      {/* En movil la cabecera va al minimo: cada pixel de aqui es un pixel menos de
+          conversacion, y con el teclado abierto quedan unos 300 px utiles. */}
+      <header className="bg-card border-b border-border px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+            <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0">
             <h1 className="font-bold truncate" data-testid="chatbot-heading">Asistente de Nutrición</h1>
@@ -875,7 +877,7 @@ export default function ChatbotPage() {
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4">
         {/* Pantalla inicial */}
         {step === 'init' && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
@@ -1025,28 +1027,29 @@ export default function ChatbotPage() {
 
       {/* Input + controles de montaje */}
       {step === 'building_meal' && (
-        <div className="border-t border-border p-3 bg-card relative z-40 space-y-2">
+        <div className="border-t border-border p-2 sm:p-3 bg-card relative z-40 space-y-2">
           {/* Aquí iba la lista "En esta comida" con un chip por alimento. Se quitó porque
               repetía lo que ya enseña la tarjeta de la última respuesta del asistente, que
               lista la comida entera con sus macros. Para quitar un alimento se le dice al
               chat ("quita el bacon"), que ya lo entiende. */}
 
-          {/* Botones de control */}
-          <div className="flex flex-wrap gap-2">
+          {/* Botones de control. En movil se reparten el ancho en UNA fila: envueltos
+              se iban a dos y con el teclado abierto se comian media conversacion. */}
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
             <button
               onClick={completeMeal}
               disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl font-semibold text-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              className="bg-green-600 hover:bg-green-700 text-white px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
               data-testid="save-meal-btn"
             >
-              <Check size={16} />
+              <Check size={16} className="flex-shrink-0" />
               <span className="sm:hidden">Guardar</span>
               <span className="hidden sm:inline">Guardar y siguiente</span>
             </button>
             <button
               onClick={requestSuggestions}
               disabled={loading}
-              className="bg-muted hover:bg-accent border border-input text-foreground px-3 py-2 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+              className="bg-muted hover:bg-accent border border-input text-foreground px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
               data-testid="suggest-foods-btn"
             >
               <span className="sm:hidden">Sugerir</span>
@@ -1055,7 +1058,7 @@ export default function ChatbotPage() {
             <button
               onClick={() => addMessage(formatDayOverview(dayOverview), false)}
               disabled={loading || !dayOverview}
-              className="bg-muted hover:bg-accent border border-input text-foreground px-3 py-2 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+              className="bg-muted hover:bg-accent border border-input text-foreground px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
             >
               <span className="sm:hidden">Resumen</span>
               <span className="hidden sm:inline">Resumen del día</span>
@@ -1070,11 +1073,16 @@ export default function ChatbotPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+              // Al abrirse el teclado, el navegador encoge la ventana y el input se
+              // queda debajo. Un scroll al enfocar lo devuelve a la vista.
+              onFocus={(e) => setTimeout(
+                () => e.target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 250)}
               // En movil el placeholder largo se corta a mitad de frase y no se entiende.
               placeholder={esMovil
                 ? 'Escribe qué quieres comer…'
                 : 'Escribe qué quieres comer, o pídeme cosas como "edita la comida 2" o "vacía el post-entreno"…'}
-              className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
+              // 16px de fuente: por debajo, iOS hace zoom al enfocar y descuadra la pantalla.
+              className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 sm:px-4 py-3 text-base sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
               disabled={loading}
               data-testid="chat-input"
             />

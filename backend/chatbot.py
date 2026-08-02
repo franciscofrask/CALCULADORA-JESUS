@@ -1271,6 +1271,30 @@ class NutritionChatbot:
         s = (s or "").lower()
         return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
+    @staticmethod
+    def _clave_fonetica(s: str) -> str:
+        """Como suena, para comparar nombres de alimentos escritos deprisa.
+
+        La mitad de España sesea y en el movil se escribe rapido: "sumo" por "zumo",
+        "cosido" por "cocido", "berengena" por "berenjena". Comparando por escrito, un
+        cliente que pedia "la mitad de sumo" recibia "sumo: no encontrado" aunque tenia
+        el zumo delante en la lista.
+
+        Se pliegan los sonidos que se confunden de verdad en español:
+          z, ce/ci -> s      (seseo)
+          ll -> y            (yeismo)
+          v -> b, h -> nada, qu/k -> k, gue/gui -> ge/gi
+        Y las dobles, que solo se notan al escribir.
+        """
+        import unicodedata
+        t = (s or "").lower()
+        t = "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn")
+        t = t.replace("qu", "k").replace("gue", "ge").replace("gui", "gi")
+        t = re.sub(r"c(?=[ei])", "s", t)
+        t = t.replace("z", "s").replace("ll", "y").replace("v", "b").replace("h", "")
+        t = t.replace("y", "i").replace("c", "k")   # "aceyte" == "aceite"
+        return re.sub(r"(.)\1+", r"\1", t)   # dobles: "arrós" == "aros"
+
     def _match_meal_food_index(self, name: str, strict: bool = False) -> int:
         """Índice del alimento de la comida actual que mejor coincide con `name`, o -1.
 
@@ -1298,6 +1322,11 @@ class NutritionChatbot:
                 if not any(t in head or head in t for t in q_tokens):
                     continue
             score = sum(1 for t in q_tokens if t in fn)
+            # Segunda pasada, por como SUENA: "sumo" encuentra el zumo, "cosido" el cocido.
+            # Puntua menos que la coincidencia literal para que esta siempre gane.
+            if not score:
+                fn_fon = self._clave_fonetica(f.get("nombre", ""))
+                score = sum(0.5 for t in q_tokens if self._clave_fonetica(t) in fn_fon)
             if score > best_score:
                 best_score, best_idx = score, i
         return best_idx if best_score > 0 else -1
@@ -1842,8 +1871,12 @@ class NutritionChatbot:
             if m:
                 n = self._a_num(m.group(gn))
                 food = m.group(gf).strip()
-                food = re.sub(r"^(?:g|gr|gramos?|kg|kilos?|ud|unidades?|de|del)\s+", "", food).strip()
-                food = re.sub(r"^(?:de\s+)?(?:la|el|los|las)\s+", "", food).strip()
+                # Todos los prefijos de golpe: "quita 100 gramos de la avena" -> "avena".
+                # Antes se quitaban en dos pasadas y "gramos de arroz" se quedaba en
+                # "de arroz"; colaba de milagro porque luego "de" se filtra como palabra
+                # vacia al buscar, pero el nombre llegaba sucio a todo lo demas.
+                food = re.sub(r"^(?:(?:g|gr|gramos?|kg|kilos?|ud|uds|unidades?|"
+                              r"de|del|la|el|los|las)\s+)+", "", food).strip()
                 food = re.sub(r"\s+de\s+(?:la|el|los|las)\s+comida.*$", "", food).strip()
                 if n and food:
                     return (food, n, en_gramos)
@@ -1927,17 +1960,39 @@ class NutritionChatbot:
         nombre = re.sub(r"^\s*de\s+", "", nombre, flags=re.I).strip()
         return cant, uni, (nombre or spec).strip()
 
+    # Coletillas que van DETRAS del nombre y no forman parte de el. Sin esto, "la cantidad
+    # de zumo que sea la mitad" buscaba un alimento llamado "zumo que sea la mitad".
+    _RE_COLETILLA = re.compile(
+        r"\s+(?:que\s+sea\w*|que\s+quede\w*|porfa\w*|por\s+favor|please|"
+        r"en\s+total|nada\s+mas|solamente|solo)\b.*$")
+
     def _intento_multiplicador(self, text: str):
         """'el doble'/'la mitad'/'el triple' (de X) -> (factor, nombre|'__ultimo__') o None."""
         t = self._norm_text(text or "")
         factor = (2.0 if re.search(r"\b(doble|duplica\w*)\b", t)
                   else 3.0 if re.search(r"\b(triple|triplica\w*)\b", t)
-                  else 0.5 if re.search(r"\bmitad\b", t)
+                  else 0.5 if re.search(r"\b(mitad|halfa?|50\s*%)\b", t)
                   else None)
         if factor is None:
             return None
-        m = re.search(r"\b(?:de|del)\s+(?:la\s+|el\s+|los\s+|las\s+)?(.+)", t)
-        return (factor, m.group(1).strip() if m else "__ultimo__")
+
+        # Fuera la expresion del multiplicador: lo que quede es la frase con el alimento.
+        # Si no se quita, "la mitad de zumo" y "de zumo la mitad" se comportan distinto.
+        sin_mult = re.sub(
+            r"\b(?:la\s+|el\s+)?(?:mitad|doble|triple|duplica\w*|triplica\w*|halfa?|50\s*%)\b",
+            " ", t)
+
+        # "...de zumo", que es la forma habitual.
+        m = re.search(r"\b(?:de|del)\s+(?:la\s+|el\s+|los\s+|las\s+)?(.+)", sin_mult)
+        if not m:
+            # "que el zumo sea la mitad": aqui el nombre va ANTES del multiplicador.
+            m = re.search(r"\bque\s+(?:el|la|los|las)\s+(.+?)\s+sea\w*\b", t)
+        if not m:
+            return (factor, "__ultimo__")   # "la mitad" a secas: el ultimo que añadio
+
+        nombre = self._RE_COLETILLA.sub("", m.group(1)).strip()
+        nombre = re.sub(r"\s+(?:de\s+)?(?:la\s+|el\s+)?comida.*$", "", nombre).strip()
+        return (factor, nombre or "__ultimo__")
 
     async def aplicar_multiplicador(self, factor: float, food: str) -> dict:
         key = self.current_meal_key()
@@ -2923,7 +2978,12 @@ class NutritionChatbot:
                 return resp
 
             mult = self._intento_multiplicador(user_input)
-            if mult and len(user_input.split()) <= 6 \
+            # El limite de palabras esta para no disparar el multiplicador cuando "mitad"
+            # aparece de pasada en una frase larga. Pero solo hace falta cuando NO se sabe
+            # a que alimento se refiere: si nombra uno ("la cantidad de zumo que sea la
+            # mitad", 8 palabras), la intencion es inequivoca y la longitud da igual.
+            _mult_claro = bool(mult and mult[1] != "__ultimo__" and len(mult[1]) > 2)
+            if mult and (_mult_claro or len(user_input.split()) <= 6) \
                     and self.state["comidas_completadas"].get(self.current_meal_key(), {}).get("alimentos"):
                 if goto_idx:
                     self.go_to_meal(goto_idx)
