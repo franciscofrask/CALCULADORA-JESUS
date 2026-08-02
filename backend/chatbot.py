@@ -1654,21 +1654,22 @@ class NutritionChatbot:
                 cantidad_g, macros = sized
             contrib = {"proteinas": macros["P"], "hidratos": macros["H"], "grasas": macros["G"]}
             dif = diferencia_de_macros(contrib, remaining)
-            # Orden: primero lo que de verdad ES lo pedido, luego marca, luego macros.
+            # Orden: primero lo que de verdad ES lo pedido, luego el genérico, luego macros.
             #
             # Quien pide "tostadas" quiere tostadas. Ampliar la búsqueda a otros géneros
             # trajo "Edamame tostado" y "Copos de maíz tostado", que llevan la palabra de
-            # adjetivo, y con la marca por delante se colaban ANTES que las tostadas. Por
-            # eso la forma exacta manda sobre la marca: entre dos tostadas decide la marca,
-            # pero un edamame no adelanta a una tostada por tener marca.
+            # adjetivo; sin este primer criterio se colaban ANTES que las tostadas. Por eso
+            # la forma exacta manda: un edamame no adelanta a una tostada.
             nombre_c = self._norm_text(c.get("nombre") or "")
             # Misma palabra en singular o plural, pero NO en otro género: "tostadas" case
             # con "Tostada sin gluten", y "tostado" (adjetivo) se queda en el segundo bloque.
             base_term = termino[:-1] if termino.endswith("s") and len(termino) > 3 else termino
             exacto = 0 if re.search(rf"\b{re.escape(base_term)}s?\b", nombre_c) else 1
-            # Con marca primero (petición 2026-08-02). En la base, marca = tiene URL.
-            es_generico = 0 if c.get("url") else 1
-            rankeados.append((exacto, es_generico, dif, c.get("nombre") or "", c, cantidad_g, macros))
+            # Genérico primero, marca después (petición 2026-08-02). En la base, genérico =
+            # NO tiene URL. Es lo neutro: el que pide "tostadas" quiere la tostada de toda
+            # la vida antes que la de una marca concreta.
+            es_marca = 1 if c.get("url") else 0
+            rankeados.append((exacto, es_marca, dif, c.get("nombre") or "", c, cantidad_g, macros))
         rankeados.sort(key=lambda t: (t[0], t[1], t[2], t[3]))
 
         # Para no repetir 6 marcas de lo mismo, una opción por TIPO real: agrupamos por las
@@ -1680,7 +1681,7 @@ class NutritionChatbot:
             return " ".join(sig_w[:2])
 
         vistos, opciones = set(), []
-        for _exacto, _es_generico, dif, _nombre, c, cantidad_g, macros in rankeados:
+        for _exacto, _es_marca, dif, _nombre, c, cantidad_g, macros in rankeados:
             clave = clave_tipo(c.get("nombre"))
             if not clave or clave in vistos:
                 continue
@@ -1697,10 +1698,10 @@ class NutritionChatbot:
             if len(opciones) >= max_op:
                 break
 
-        # Que siempre asome un genérico si lo hay. En la base casi todo tiene marca (con
-        # "tostad" hay 48 de marca y 3 genéricos), así que las marcas llenaban la lista y
-        # el "Pan tostado" de toda la vida no se veía nunca. Va el último: la marca sigue
-        # delante, pero el genérico deja de ser invisible.
+        # Que siempre asome un genérico si lo hay. Los genéricos van delante, pero solo
+        # dentro de su bloque de relevancia: si el término exacto son todo marcas (con
+        # "tostad" hay 48 de marca y 3 genéricos), la lista se llenaba de marcas y el
+        # "Pan tostado" de toda la vida no se veía nunca. Este hueco lo garantiza.
         ids = {o["alimento_id"] for o in opciones}
         if opciones and not any(not (r[4].get("url")) for r in rankeados if r[4].get("id") in ids):
             gen = next((r for r in rankeados if not r[4].get("url") and r[4].get("id") not in ids), None)
