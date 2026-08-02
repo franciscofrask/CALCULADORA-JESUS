@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { Layers, Pencil, RotateCcw, Check, X } from 'lucide-react';
-import { habilitacionesToList } from '../lib/planAccess';
+import { habilitacionesToList, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
 
 // Orden y etiquetas de las categorías (pestañas del catálogo original).
 const ESTADOS = [
@@ -75,6 +75,8 @@ const PlanCard = ({ plan, onEdit }) => {
                     <HabRow label="Calculadora" value={h.calculadora || '-'} />
                     <HabRow label="Rutina" value={h.rutina || '-'} />
                     <HabRow label="Reportes" value={(h.reportes && h.reportes.length) ? h.reportes.join(' + ') : 'ninguno'} />
+                    <HabRow label="Acompañamiento" value={etiquetaAcompanamiento(h.acompanamiento)} />
+                    <HabRow label="Contacto" value={etiquetaFrecuencia(h.frecuencia_contacto)} />
                     <div className="flex items-center justify-between text-xs py-0.5">
                         <span className="text-white/50">Suplementación</span><Dot on={!!h.suplementacion} />
                     </div>
@@ -125,6 +127,10 @@ const AdminPlansPage = () => {
             reportes: [...(plan.habilitaciones?.reportes || [])],
             suplementacion: !!plan.habilitaciones?.suplementacion,
             harbiz: !!plan.habilitaciones?.harbiz,
+            // Lo que separa a dos planes que por lo demás son idénticos salvo el precio:
+            // si hay alguien detrás y cada cuánto le escribe.
+            acompanamiento: plan.habilitaciones?.acompanamiento || 'solo_app',
+            frecuencia_contacto: plan.habilitaciones?.frecuencia_contacto || 'ninguna',
         });
     };
 
@@ -153,6 +159,8 @@ const AdminPlansPage = () => {
                     reportes: form.reportes,
                     suplementacion: form.suplementacion,
                     harbiz: form.harbiz,
+                    acompanamiento: form.acompanamiento,
+                    frecuencia_contacto: form.frecuencia_contacto,
                 },
             };
             await api.put(`/admin/plans/${editing.code}`, payload);
@@ -266,6 +274,24 @@ const AdminPlansPage = () => {
                                     <div><Label className="text-white/60 text-xs">Rutina</Label>
                                         <select value={form.rutina} onChange={e => setForm(f => ({ ...f, rutina: e.target.value }))} className="w-full bg-[#111] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
                                             {RUTINA_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                {/* Lo que de verdad separa un plan de otro cuando el resto es
+                                    igual: si hay alguien detrás y cada cuánto le escribe. */}
+                                <div className="grid grid-cols-2 gap-3 mt-3">
+                                    <div><Label className="text-white/60 text-xs">Acompañamiento</Label>
+                                        <select value={form.acompanamiento} onChange={e => setForm(f => ({ ...f, acompanamiento: e.target.value }))}
+                                            data-testid="plan-acompanamiento"
+                                            className="w-full bg-[#111] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
+                                            {ACOMPANAMIENTO_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div><Label className="text-white/60 text-xs">Frecuencia de contacto</Label>
+                                        <select value={form.frecuencia_contacto} onChange={e => setForm(f => ({ ...f, frecuencia_contacto: e.target.value }))}
+                                            data-testid="plan-frecuencia-contacto"
+                                            className="w-full bg-[#111] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
+                                            {FRECUENCIA_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                         </select>
                                     </div>
                                 </div>

@@ -56,8 +56,33 @@ export function habilitacionesToList(habilitaciones) {
     (h.reportes || []).forEach((r) => REPORTE_LABEL[r] && out.push(REPORTE_LABEL[r]));
     if (h.suplementacion) out.push('Suplementación personalizada');
     if (h.harbiz) out.push('Rutina en Harbiz (app calendario)');
+    if (h.acompanamiento && h.acompanamiento !== 'solo_app') {
+        out.push(ACOMPANAMIENTO_LABEL[h.acompanamiento]);
+        if (h.frecuencia_contacto && h.frecuencia_contacto !== 'ninguna') {
+            out.push(`Contacto ${h.frecuencia_contacto}`);
+        }
+    }
     return out;
 }
+
+// Acompañamiento y frecuencia de contacto (especificación 31-07-2026): lo que separa
+// dos planes que, por lo demás, solo se diferencian en el precio.
+export const ACOMPANAMIENTO_OPTS = [
+    { value: 'solo_app', label: 'Sin entrenador (solo app)' },
+    { value: 'con_entrenador', label: 'Con entrenador' },
+    { value: 'con_entrenador_y_llamadas', label: 'Con entrenador y llamadas' },
+];
+export const FRECUENCIA_CONTACTO_OPTS = [
+    { value: 'semanal', label: 'Semanal' },
+    { value: 'quincenal', label: 'Quincenal' },
+    { value: 'mensual', label: 'Mensual' },
+    { value: 'ninguna', label: 'Ninguna' },
+];
+const ACOMPANAMIENTO_LABEL = Object.fromEntries(ACOMPANAMIENTO_OPTS.map(o => [o.value, o.label]));
+const FRECUENCIA_LABEL = Object.fromEntries(FRECUENCIA_CONTACTO_OPTS.map(o => [o.value, o.label]));
+
+export const etiquetaAcompanamiento = (v) => ACOMPANAMIENTO_LABEL[v] || ACOMPANAMIENTO_LABEL.solo_app;
+export const etiquetaFrecuencia = (v) => FRECUENCIA_LABEL[v] || FRECUENCIA_LABEL.ninguna;
 
 // Etiqueta corta del estado del plan.
 export const ESTADO_LABEL = {

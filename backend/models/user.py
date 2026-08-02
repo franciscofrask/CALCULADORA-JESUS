@@ -58,6 +58,12 @@ def validar_dict_macros(v):
 #       reportes        lista de: quincenal, mensual, semanal
 #       suplementacion  bool
 #       harbiz          bool
+#       acompanamiento  solo_app | con_entrenador | con_entrenador_y_llamadas
+#       frecuencia_contacto  semanal | quincenal | mensual | ninguna
+#
+#   Los dos ultimos son de la especificacion del 31-07-2026 (parte 1). Sin ellos, dos
+#   planes que solo se diferencian en si hay alguien detras y cada cuanto te escribe
+#   quedaban identicos salvo el precio, y eso no habia donde configurarlo.
 #   stripe_price_env  Variable .env con el Price ID de Stripe ("" si no aplica).
 #   billing_cycle_weeks  Longitud del ciclo de cobro recurrente (semanas).
 
@@ -245,6 +251,40 @@ PLAN_TYPES = {
 }
 
 
+ACOMPANAMIENTO_OPCIONES = ("solo_app", "con_entrenador", "con_entrenador_y_llamadas")
+FRECUENCIA_CONTACTO_OPCIONES = ("semanal", "quincenal", "mensual", "ninguna")
+
+
+def completar_acompanamiento(hab: Dict[str, Any]) -> Dict[str, Any]:
+    """Pone `acompanamiento` y `frecuencia_contacto` si el plan no los trae.
+
+    Se añadieron con la especificacion del 31-07-2026, asi que ni los planes del
+    catalogo ni los overrides que el admin ya tenia guardados los declaran. En vez de
+    dejarlos vacios se deducen de algo que ya esta en el plan y es objetivo: la cadencia
+    de reportes, que hoy ES la frecuencia con la que alguien mira a ese cliente.
+
+    Es un punto de partida para que el panel tenga algo que enseñar, no una decision de
+    negocio: en cuanto se repasen desde el panel manda lo que se ponga alli. Lo que NO
+    se deduce de ningun dato existente es si el plan lleva llamadas; eso hay que
+    marcarlo a mano (`con_entrenador_y_llamadas`).
+    """
+    hab = dict(hab or {})
+    reportes = hab.get("reportes") or []
+
+    if not hab.get("acompanamiento"):
+        hab["acompanamiento"] = "con_entrenador" if reportes else "solo_app"
+
+    if not hab.get("frecuencia_contacto"):
+        for cadencia in ("semanal", "quincenal", "mensual"):
+            if cadencia in reportes:
+                hab["frecuencia_contacto"] = cadencia
+                break
+        else:
+            hab["frecuencia_contacto"] = "ninguna"
+
+    return hab
+
+
 def get_plan(code: Optional[str]) -> Optional[Dict[str, Any]]:
     """Devuelve la entrada completa del catálogo (con code incluido) o None."""
     if not code:
@@ -252,7 +292,9 @@ def get_plan(code: Optional[str]) -> Optional[Dict[str, Any]]:
     p = PLAN_CATALOG.get(code.lower().strip())
     if not p:
         return None
-    return {"code": code.lower().strip(), **p, "features": derive_features(p.get("habilitaciones", {}))}
+    hab = completar_acompanamiento(p.get("habilitaciones", {}))
+    return {"code": code.lower().strip(), **p, "habilitaciones": hab,
+            "features": derive_features(hab)}
 
 
 def assignable_plan_codes() -> List[str]:
@@ -263,7 +305,7 @@ def assignable_plan_codes() -> List[str]:
 def plan_habilitaciones(code: Optional[str]) -> Dict[str, Any]:
     """Habilitaciones del plan (matriz). Vacío si el plan no existe."""
     p = PLAN_CATALOG.get((code or "").lower().strip())
-    return dict(p["habilitaciones"]) if p else {}
+    return completar_acompanamiento(p["habilitaciones"]) if p else {}
 
 
 # Campos del catálogo que el admin puede sobrescribir desde el panel (guardados en
@@ -288,7 +330,8 @@ def merged_catalog(overrides_by_code: Optional[Dict[str, Dict[str, Any]]] = None
             if field in PLAN_EDITABLE_FIELDS:
                 entry[field] = value
         entry["code"] = code
-        entry["features"] = derive_features(entry.get("habilitaciones", {}))
+        entry["habilitaciones"] = completar_acompanamiento(entry.get("habilitaciones", {}))
+        entry["features"] = derive_features(entry["habilitaciones"])
         out[code] = entry
     return out
 

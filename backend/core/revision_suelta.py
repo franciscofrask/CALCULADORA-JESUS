@@ -6,15 +6,16 @@ una vez para que un entrenador se los revise, sin cambiar de plan. Es una puerta
 prueba lo que se siente teniendo a alguien detras, y si sube de plan en los 30 dias siguientes
 se le descuenta lo que pago.
 
-El precio de aqui es PROVISIONAL, para poder probar el circuito entero. Cuando Jesus cierre los
-planes se cambia este numero y ya.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
-# ── PRECIO PROVISIONAL ────────────────────────────────────────────────────────
-# Pendiente de que Jesus lo fije. Al cambiarlo aqui cambia el cobro y el descuento posterior.
-PRECIO_EUR = 29.0
+# ── PRECIO ────────────────────────────────────────────────────────────────────
+# 147 EUR, cerrado en la especificacion del 31-07-2026 (parte 1). Antes era un 29
+# provisional puesto para poder probar el circuito de cobro.
+# Subirlo no toca a quien ya compro: el importe que se le cobro se guarda en su perfil
+# (`revision_suelta.importe_eur`) y el descuento posterior sale de ahi, no de aqui.
+PRECIO_EUR = 147.0
 DIAS_PARA_DESCONTAR = 30
 NOMBRE_PRODUCTO = "Revisión de macros por entrenador"
 

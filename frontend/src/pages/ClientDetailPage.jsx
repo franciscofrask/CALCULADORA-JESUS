@@ -21,8 +21,10 @@ import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
     ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp, ChevronRight,
-    AlertCircle, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw
+    AlertCircle, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw,
+    Headphones, CalendarClock
 } from 'lucide-react';
+import { etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
 
 const USER_ROLES = [
     { value: 'client', label: 'Cliente' },
@@ -620,6 +622,12 @@ const ClientDetailPage = () => {
                                 const sem = planCatalog?.[profile?.plan]?.ciclo?.semanas;
                                 return sem ? `${profile?.week || 1}/${sem}` : `${profile?.week || 1}`;
                             })()} />
+                            {/* Lo que le corresponde por plan: si le toca entrenador y cada
+                                cuánto se le escribe. Sale del catálogo, no de este cliente. */}
+                            <InfoItem icon={Headphones} label="Acompañamiento"
+                                value={etiquetaAcompanamiento(planCatalog?.[profile?.plan]?.habilitaciones?.acompanamiento)} />
+                            <InfoItem icon={CalendarClock} label="Contacto"
+                                value={etiquetaFrecuencia(planCatalog?.[profile?.plan]?.habilitaciones?.frecuencia_contacto)} />
                             <InfoItem icon={Dumbbell} label="Entrenador" value={(() => {
                                 const trainerId = profile?.trainer_id || null;
                                 const trainerName = trainers.find(t => t.id === trainerId)?.name || trainerId;
