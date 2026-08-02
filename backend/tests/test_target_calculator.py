@@ -267,12 +267,21 @@ class TestTargetCalculatorApply(TestTargetCalculatorSetup):
         assert "macros_rest" in pm
         assert "macros_periworkout" in pm
         
-        # Verify training macros match canonical values
-        assert pm["macros_training"]["protein"] == 190
-        assert pm["macros_training"]["carbs"] == 170
-        assert pm["macros_training"]["fat"] == 60
-        
-        print("✅ Targets applied to profile successfully")
+        # OJO: aquí NO valen los valores canónicos de la tabla base (190/170/60). Aplicar
+        # usa los modificadores que el cliente tenga guardados en su perfil
+        # (`ajustes_macros`), y el cliente demo tiene una dieta actual declarada de 250 g
+        # de hidratos, así que le salen 205 y no 170. Eso es lo correcto: calcular sin
+        # modificadores da la tabla, aplicar da lo que le toca a ÉL.
+        #
+        # Lo que sí debe cumplirse siempre: lo que se guarda en el perfil es exactamente
+        # lo que se acaba de calcular.
+        entreno = data["targets"]["macros"]["entreno"]
+        assert pm["macros_training"]["protein"] == entreno["proteina"], \
+            "Lo guardado en el perfil no coincide con lo calculado"
+        assert pm["macros_training"]["carbs"] == entreno["hidratos"], \
+            "Lo guardado en el perfil no coincide con lo calculado"
+        assert pm["macros_training"]["fat"] == entreno["grasa"], \
+            "Lo guardado en el perfil no coincide con lo calculado"
     
     def test_verify_macros_after_apply(self, auth_headers):
         """Verify GET /api/macros returns applied macros with source='auto'"""
@@ -305,8 +314,12 @@ class TestTargetCalculatorChatbot(TestTargetCalculatorSetup):
     
     def test_chatbot_reads_auto_macros(self, auth_headers):
         """POST /api/chatbot/start should read macros from profile"""
-        # First apply targets
-        requests.post(
+        # Se aplican unos objetivos y se comprueba que el chatbot arranca CON ESOS, sean
+        # los que sean. Clavar 190/170/60 daba por hecho un cliente sin modificadores
+        # guardados; el demo tiene su dieta actual declarada y le salen otros. Lo que
+        # importa aquí no son los números, es que el chatbot lea lo que se acaba de
+        # aplicar y no unos macros viejos.
+        aplicado = requests.post(
             f"{BASE_URL}/api/calculator/targets/apply",
             json={
                 "peso": 80,
@@ -316,22 +329,24 @@ class TestTargetCalculatorChatbot(TestTargetCalculatorSetup):
             },
             headers=auth_headers
         )
-        
+        assert aplicado.status_code == 200, f"Apply failed: {aplicado.text}"
+        entreno = aplicado.json()["targets"]["macros"]["entreno"]
+
         # Then start chatbot
         response = requests.post(f"{BASE_URL}/api/chatbot/start", headers=auth_headers)
-        
+
         assert response.status_code == 200, f"Chatbot start failed: {response.text}"
         data = response.json()
-        
+
         assert "macros" in data
         macros = data["macros"]
-        
-        # Verify chatbot received the auto-calculated macros
-        assert macros["p_entreno"] == 190, f"Expected p_entreno=190, got {macros['p_entreno']}"
-        assert macros["h_entreno"] == 170, f"Expected h_entreno=170, got {macros['h_entreno']}"
-        assert macros["g_entreno"] == 60, f"Expected g_entreno=60, got {macros['g_entreno']}"
-        
-        print("✅ Chatbot reads auto-calculated macros correctly")
+
+        assert macros["p_entreno"] == entreno["proteina"], \
+            f"El chatbot no lee la proteína recién aplicada: {macros['p_entreno']} vs {entreno['proteina']}"
+        assert macros["h_entreno"] == entreno["hidratos"], \
+            f"El chatbot no lee los hidratos recién aplicados: {macros['h_entreno']} vs {entreno['hidratos']}"
+        assert macros["g_entreno"] == entreno["grasa"], \
+            f"El chatbot no lee la grasa recién aplicada: {macros['g_entreno']} vs {entreno['grasa']}"
 
 
 class TestTargetCalculatorInternalTests(TestTargetCalculatorSetup):

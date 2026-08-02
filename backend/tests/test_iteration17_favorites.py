@@ -197,7 +197,14 @@ class TestSearchWithFavorites:
                 break
         
         print(f"Favorites at top of results: {favorites_at_top}")
-        assert favorites_at_top > 0 or fav_count == 0, "Favorites should appear at the top of search results"
+        # El orden favoritos-primero está DESACTIVADO a propósito desde el 2026-07-06
+        # (bandera FOOD_FAVORITES_FIRST en routes/calculator.py): se quitó porque la
+        # estrella alteraba el orden del buscador y no se quería. Así que exigir que los
+        # favoritos salgan arriba es pedir justo lo contrario de la decisión tomada.
+        #
+        # Lo que sí debe cumplirse: que el buscador marque bien cuáles son favoritos.
+        for f in alimentos:
+            assert "is_favorite" in f, f"Al buscador le falta marcar is_favorite en {f.get('nombre')}"
 
 
 class TestFavoritesEdgeCases:

@@ -116,14 +116,18 @@ class TestDashboardStatsEndpoint:
         assert response.status_code == 200
         data = response.json()
         
-        # Based on context: 4 clients, 2 gold (149€), 2 silver (99€) = 496€ MRR
-        assert data["total_clients"] == 4, f"Expected 4 total clients, got {data['total_clients']}"
-        assert data["active_clients"] == 4, f"Expected 4 active clients, got {data['active_clients']}"
-        assert data["at_risk_clients"] == 0, f"Expected 0 at-risk clients, got {data['at_risk_clients']}"
-        # inactive_clients counts status in [inactivo, baja, cancelado]
-        assert data["mrr"] == 496, f"Expected 496€ MRR, got {data['mrr']}"
-        
-        print(f"✅ Dashboard stats values match: total={data['total_clients']}, active={data['active_clients']}, mrr={data['mrr']}€")
+        # Esto estaba clavado a la base de dev de entonces: 4 clientes y 496 € de MRR.
+        # Hoy hay 198 clientes. Contar clientes no es lo que este endpoint tiene que
+        # demostrar; lo que sí debe cumplirse siempre es que las cifras sean coherentes
+        # entre sí: los activos no pueden ser más que el total, y nada puede ser negativo.
+        for clave in ("total_clients", "active_clients", "at_risk_clients", "mrr"):
+            assert clave in data, f"Falta {clave} en las estadísticas"
+            assert data[clave] >= 0, f"{clave} no puede ser negativo: {data[clave]}"
+
+        assert data["active_clients"] <= data["total_clients"], \
+            f"Activos ({data['active_clients']}) no pueden superar el total ({data['total_clients']})"
+        assert data["at_risk_clients"] <= data["total_clients"], \
+            f"En riesgo ({data['at_risk_clients']}) no pueden superar el total ({data['total_clients']})"
     
     def test_dashboard_stats_plan_distribution(self, admin_token):
         """Verify plan distribution: Gold 2, Silver 2"""
@@ -134,11 +138,14 @@ class TestDashboardStatsEndpoint:
         assert response.status_code == 200
         data = response.json()
         
+        # Cuántos clientes hay de cada plan cambia solo. Lo que el endpoint debe garantizar
+        # es que el desglose existe, no es negativo y no suma más que el total de clientes.
         plans = data.get("plans", {})
-        assert plans.get("gold") == 2, f"Expected 2 gold, got {plans.get('gold')}"
-        assert plans.get("silver") == 2, f"Expected 2 silver, got {plans.get('silver')}"
-        
-        print(f"✅ Plan distribution correct: gold={plans['gold']}, silver={plans['silver']}")
+        assert isinstance(plans, dict) and plans, "Debería venir el desglose por plan"
+        for nombre, n in plans.items():
+            assert n >= 0, f"El plan {nombre} no puede tener {n} clientes"
+        assert sum(plans.values()) <= data["total_clients"], \
+            f"El desglose por plan ({sum(plans.values())}) supera el total ({data['total_clients']})"
     
     def test_dashboard_stats_requires_admin_auth(self, client_token):
         """Client token should be rejected (401/403)"""
@@ -203,11 +210,13 @@ class TestUpcomingPaymentsEndpoint:
         assert response.status_code == 200
         data = response.json()
         
-        # Context says: "No upcoming payments because next_payment dates are in the past"
-        assert data["total"] == 0, f"Expected 0 upcoming, got {data['total']}"
-        assert len(data["upcoming"]) == 0, f"Expected empty upcoming list"
-        
-        print(f"✅ Upcoming payments correctly returns 0 (dates in past)")
+        # Antes exigía CERO cobros próximos porque, cuando se escribió, todas las fechas
+        # de pago estaban en el pasado. Hoy hay 3, y está bien que los haya. Lo que debe
+        # cumplirse es que la lista y el contador cuadren entre sí.
+        assert data["total"] == len(data["upcoming"]), \
+            f"El contador dice {data['total']} y la lista trae {len(data['upcoming'])}"
+        for p in data["upcoming"]:
+            assert p.get("client_name") or p.get("name"), f"Un cobro sin cliente: {p}"
     
     def test_upcoming_payments_requires_admin_auth(self, client_token):
         """Client token should be rejected"""
@@ -266,8 +275,12 @@ class TestAdminClientsEndpoint:
         assert response.status_code == 200, f"Admin clients failed: {response.text}"
         data = response.json()
         
+        # Cuántos clientes hay no es asunto de este test (eran 4, hoy son 198): lo que
+        # debe comprobar es que devuelve la lista y que cada cliente viene identificado.
         assert isinstance(data, list), "Should return a list"
-        assert len(data) == 4, f"Expected 4 clients, got {len(data)}"
+        assert data, "El listado de clientes no debería venir vacío"
+        for c in data[:20]:
+            assert c.get("id"), f"Un cliente sin id: {c}"
         
         # Check first client has required fields
         if data:

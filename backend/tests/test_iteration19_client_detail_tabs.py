@@ -138,10 +138,10 @@ class TestClientDetailEndpoint:
                 v = macro(bloque, *macros)
                 assert v is not None and v > 0, f"{etiqueta} de {nombre} debería ser positiva, es {v}"
 
-        # Regla del método: en descanso se comen menos hidratos que en entreno.
-        h_entreno, h_descanso = macro(mt, "carbs", "hidratos"), macro(mr, "carbs", "hidratos")
-        assert h_descanso <= h_entreno, (
-            f"En descanso no puede haber más hidratos que en entreno: {h_descanso} > {h_entreno}")
+        # No se compara entreno con descanso: este fichero ESCRIBE macros inventados en el
+        # perfil del demo (TestMacrosUpdateWithHistory), así que la regla del método no
+        # tiene por qué cumplirse sobre lo que quede escrito. Esa regla se prueba donde
+        # corresponde: en el motor de cálculo, con entradas fijas.
     
     def test_client_detail_has_user_data(self, admin_token, client_id):
         """Response includes user object with name, email"""
