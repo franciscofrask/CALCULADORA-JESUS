@@ -344,6 +344,63 @@ async def get_macros_efectivos(data: dict, user = Depends(get_current_user)):
         "que_cuenta": cuenta
     }
 
+@router.post("/adjust")
+async def adjust_food_quantity(data: dict, user = Depends(get_current_user)):
+    """Cuánto poner de un alimento para lo que queda de comida.
+
+    REPUESTO el 2026-08-02. Esta ruta no existía y el frontend la llamaba: al pulsar un
+    alimento en el buscador de Nutrición, `handleAddFood` hacía POST aquí, recibía un 404
+    y caía en su catch con un "Error añadiendo alimento". O sea, añadir un alimento desde
+    el buscador estaba roto. El motor (`calcular_cantidad_automatica`) siempre ha estado
+    ahí; lo que faltaba era la puerta.
+
+    Lo encontró un test que yo venía descartando como caduco. No lo era.
+    """
+    alimento_id = data.get("alimento_id")
+    restantes = data.get("macros_restantes") or {}
+    es_vegano = bool(data.get("es_vegano"))
+
+    alimento = await db.foods.find_one({"id": alimento_id}, {"_id": 0})
+    if not alimento:
+        raise HTTPException(status_code=404, detail="Alimento no encontrado")
+
+    # Se monta sobre calma_suggest, que es el motor con el que cuenta TODO desde el 31-07.
+    # El antiguo `calculator.calcular_cantidad_automatica` es de antes de unificar y ya ni
+    # se ejecuta: revienta con KeyError 'proteina_cuenta' porque busca una clave que la
+    # forma actual de los macros efectivos ya no tiene. Usarlo aquí habría repuesto la
+    # puerta para dar un 500 en vez de un 404.
+    from calma_suggest import ajustar_cantidad
+
+    remaining = {
+        "proteinas": float(restantes.get("P") or restantes.get("proteina") or 0),
+        "hidratos": float(restantes.get("H") or restantes.get("hidratos") or 0),
+        "grasas": float(restantes.get("G") or restantes.get("grasa") or 0),
+    }
+    # OJO: ajustar_cantidad devuelve UNIDADES si el alimento va por unidades, y gramos si
+    # va a granel. El frontend espera gramos, así que se convierte. Sin esto salían "1 g"
+    # de aceite (era 1 cucharada) y "2 g" de pollo (eran 2 latas de 52 g).
+    cantidad = ajustar_cantidad(alimento, remaining)
+    if alimento.get("unidades"):
+        cantidad_g = cantidad * (float(alimento.get("racion") or 100) or 100.0)
+    else:
+        cantidad_g = cantidad
+    efectivos, brutos, cuenta = _efectivos_calma(alimento, cantidad_g)
+
+    return {
+        "alimento_id": alimento.get("id"),
+        "nombre": alimento.get("nombre"),
+        "cantidad_g": cantidad_g,
+        "macros_efectivos": efectivos,
+        "macros_brutos": brutos,
+        "que_cuenta": cuenta,
+        # Cabe si aporta algo y no se pasa de lo que queda en ningún macro.
+        "cabe": all(
+            efectivos.get(k, 0) <= remaining[v] + 0.5 or remaining[v] <= 0
+            for k, v in (("P", "proteinas"), ("H", "hidratos"), ("G", "grasas"))
+        ),
+    }
+
+
 @router.post("/macros-comida")
 async def get_macros_comida(data: dict, user = Depends(get_current_user)):
     """Calcula los macros totales de una comida completa."""
@@ -939,18 +996,28 @@ async def suggest_foods_endpoint(
     data: dict,
     user = Depends(get_current_user)
 ):
-    """Sugerir alimentos para completar macros."""
+    """Sugerir alimentos para completar macros.
+
+    Acepta los dos nombres de cada campo (`restante`/`macros_restantes`,
+    `limit`/`max_resultados`) porque hay clientes usando ambos, y pasa `excluir_ids` al
+    motor: lo soportaba desde siempre y la ruta se lo estaba comiendo, así que pedir
+    "otras sugerencias, esas no" devolvía las mismas.
+    """
     objetivo = data.get("objetivo", {"P": 40, "H": 15, "G": 8})
-    restante = data.get("restante", objetivo)
+    restante = data.get("restante") or data.get("macros_restantes") or objetivo
     paso = data.get("paso")
-    limit = data.get("limit", 5)
-    
+    limit = data.get("limit") or data.get("max_resultados") or 5
+    excluir = data.get("excluir_ids") or []
+    tipo_comida = data.get("tipo_comida", "normal")
+
     foods_list = await get_all_foods_cached(db)
 
     sugerencias = sugerir_alimentos(
         alimentos_disponibles=foods_list,
         macros_restantes=restante,
+        tipo_comida=tipo_comida,
         max_resultados=limit,
+        excluir_ids=excluir,
         paso=paso
     )
     

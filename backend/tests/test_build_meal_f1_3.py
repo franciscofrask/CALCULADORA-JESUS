@@ -7,7 +7,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000').rstrip('/')
 
 # Test credentials
 TEST_EMAIL = "clientedemo@test.com"
@@ -54,13 +54,13 @@ class TestSuggestEndpointWithPaso:
         
         assert response.status_code == 200
         data = response.json()
-        assert "sugerencias" in data
+        assert "suggestions" in data
         assert "count" in data
-        assert len(data["sugerencias"]) > 0
+        assert len(data["suggestions"]) > 0
         
         # Verify suggestions are protein-rich foods (categories 1,2,3,4,5,6,28)
         protein_categories = ['1', '2', '3', '4', '5', '6', '28']
-        for suggestion in data["sugerencias"]:
+        for suggestion in data["suggestions"]:
             alimento = suggestion.get("alimento", {})
             categoria = alimento.get("categorias", "").split(".")[0].split(" ")[0]
             # At least check it has macros_efectivos with P
@@ -81,11 +81,11 @@ class TestSuggestEndpointWithPaso:
         
         assert response.status_code == 200
         data = response.json()
-        assert "sugerencias" in data
-        assert len(data["sugerencias"]) > 0
+        assert "suggestions" in data
+        assert len(data["suggestions"]) > 0
         
         # Acompanamiento should include carbs-heavy foods
-        for suggestion in data["sugerencias"]:
+        for suggestion in data["suggestions"]:
             assert "macros_efectivos" in suggestion
     
     def test_suggest_without_paso(self, api_client):
@@ -101,8 +101,8 @@ class TestSuggestEndpointWithPaso:
         
         assert response.status_code == 200
         data = response.json()
-        assert "sugerencias" in data
-        assert len(data["sugerencias"]) > 0
+        assert "suggestions" in data
+        assert len(data["suggestions"]) > 0
     
     def test_suggest_with_excluir_ids(self, api_client):
         """Test suggest endpoint excludes specified food IDs"""
@@ -118,9 +118,9 @@ class TestSuggestEndpointWithPaso:
         assert first_response.status_code == 200
         first_data = first_response.json()
         
-        if len(first_data["sugerencias"]) > 0:
+        if len(first_data["suggestions"]) > 0:
             # Get first food ID to exclude
-            exclude_id = first_data["sugerencias"][0]["alimento"]["id"]
+            exclude_id = first_data["suggestions"][0]["alimento"]["id"]
             
             # Request suggestions excluding that ID
             second_response = api_client.post(
@@ -136,7 +136,7 @@ class TestSuggestEndpointWithPaso:
             second_data = second_response.json()
             
             # Verify excluded ID is not in results
-            for suggestion in second_data["sugerencias"]:
+            for suggestion in second_data["suggestions"]:
                 assert suggestion["alimento"]["id"] != exclude_id
 
 
@@ -168,10 +168,13 @@ class TestSearchEndpointWithTag:
         assert "alimentos" in data
         assert len(data["alimentos"]) > 0
         
-        # Verify all results are from category 2 (carnes)
+        # Todos deben pertenecer a la categoría 2 (carnes), pero un alimento puede estar
+        # en VARIAS: "40 | 2.2.3 | 2.3.3" es carne aunque su cadena empiece por 40. Antes
+        # esto miraba solo el principio de la cadena y daba por malo lo que era correcto.
         for alimento in data["alimentos"]:
-            cats = alimento.get("categorias", "")
-            assert cats.startswith("2")
+            cats = [c.strip() for c in str(alimento.get("categorias", "")).split("|")]
+            assert any(c == "2" or c.startswith("2.") for c in cats), (
+                f"{alimento.get('nombre')} no es de la categoría 2: {alimento.get('categorias')}")
 
 
 class TestAdjustEndpoint:

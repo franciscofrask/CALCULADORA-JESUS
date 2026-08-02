@@ -9,11 +9,11 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000').rstrip('/')
 
 # Test credentials
-ADMIN_EMAIL = "alvaro@test.com"
-ADMIN_PASSWORD = "Alvaro123"
+ADMIN_EMAIL = "francisco@test.com"
+ADMIN_PASSWORD = "demo123"
 
 @pytest.fixture(scope="module")
 def admin_token():

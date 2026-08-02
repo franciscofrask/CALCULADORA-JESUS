@@ -10,7 +10,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000').rstrip('/')
 
 class TestAuthentication:
     """Get auth token for tests"""
@@ -74,7 +74,7 @@ class TestFIX7SuggestProteinaFilter:
         assert response.status_code == 200, f"Suggest failed: {response.text}"
         data = response.json()
         
-        sugerencias = data.get("sugerencias", [])
+        sugerencias = data.get("suggestions", [])
         assert len(sugerencias) > 0, "No suggestions returned for proteina paso"
         
         # Allowed protein categories (main category numbers)
@@ -119,7 +119,7 @@ class TestFIX7SuggestProteinaFilter:
         
         excluded_cats = ['7', '8', '9', '11', '13', '17', '21', '22', '24', '37', '38']
         
-        for sug in data.get("sugerencias", []):
+        for sug in data.get("suggestions", []):
             alimento = sug.get("alimento", {})
             categorias = alimento.get("categorias", "")
             main_cat = categorias.split('.')[0].split(' | ')[0].strip() if categorias else ""
@@ -148,7 +148,7 @@ class TestFIX7SuggestProteinaFilter:
         assert response.status_code == 200
         data = response.json()
         
-        sugerencias = data.get("sugerencias", [])
+        sugerencias = data.get("suggestions", [])
         assert len(sugerencias) > 0, "No suggestions for acompanamiento"
         
         # acompanamiento should include various categories
@@ -181,7 +181,7 @@ class TestFIX7SuggestProteinaFilter:
         assert response.status_code == 200
         data = response.json()
         
-        assert len(data.get("sugerencias", [])) > 0
+        assert len(data.get("suggestions", [])) > 0
         print(f"✅ No paso parameter returns general suggestions")
 
 
@@ -218,7 +218,7 @@ class TestIntraPostTypeFiltering:
         assert response.status_code == 200
         data = response.json()
         
-        sugerencias = data.get("sugerencias", [])
+        sugerencias = data.get("suggestions", [])
         
         # Intra should only have categories 41 and 18.1
         valid_intra_cats = ['41', '18']  # Base categories
@@ -256,7 +256,7 @@ class TestIntraPostTypeFiltering:
         assert response.status_code == 200
         data = response.json()
         
-        sugerencias = data.get("sugerencias", [])
+        sugerencias = data.get("suggestions", [])
         assert len(sugerencias) > 0, "No suggestions for post workout"
         
         # Post categories include: 4 (protein), 5 (dairy), 11 (fruits), etc.
@@ -281,10 +281,14 @@ class TestIntraPostTypeFiltering:
         
         alimentos = data.get("alimentos", [])
         
-        # Verify all returned foods are intra-compatible
+        # La regla del backend es CATS_INTRA = ['41', '18']: vale cualquier 18.x, no solo
+        # 18.1. Este test era MÁS estricto que el código y daba por inválida la Dextrosa
+        # (18.3), que es el hidrato de intra por excelencia. Además un alimento tiene
+        # varias categorías, así que hay que mirarlas todas, no solo el principio.
         for alimento in alimentos:
             categorias = alimento.get("categorias", "")
-            is_valid = categorias.startswith('41') or categorias.startswith('18.1')
+            cats = [c.strip() for c in str(categorias).split("|")]
+            is_valid = any(c == p or c.startswith(p + ".") for c in cats for p in ("41", "18"))
             assert is_valid, f"Non-intra food in intra search: {alimento.get('nombre')} ({categorias})"
         
         print(f"✅ Search with tipo_comida='intra' returns {len(alimentos)} valid intra foods")

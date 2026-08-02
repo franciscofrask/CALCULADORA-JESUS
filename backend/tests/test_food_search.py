@@ -129,18 +129,25 @@ class TestEffectiveMacros:
         data = response.json()
         
         assert data.get("total", 0) > 0, "Expected results for 'arroz'"
-        
-        # Find an arroz item and check its macros_efectivos
+
+        # Un arroz A SECAS, no un plato preparado. Antes esto cogía el primer resultado
+        # que llevara "arroz" en el nombre, y hoy el primero es "Arroz 3 delicias", que
+        # es un preparado con otros ingredientes: ahí la proteína SÍ cuenta, y con razón.
+        # La regla que se quiere fijar es la del arroz solo.
         alimentos = data.get("alimentos", [])
-        for a in alimentos:
-            if "arroz" in a.get("nombre", "").lower():
-                macros_ef = a.get("macros_efectivos", {})
-                # For cat 21 (arroz), P should be 0 effective
-                assert macros_ef.get("P", -1) == 0, f"Expected P=0 for arroz, got {macros_ef.get('P')}"
-                # H should be > 0
-                assert macros_ef.get("H", 0) > 0, f"Expected H>0 for arroz, got {macros_ef.get('H')}"
-                print(f"✅ Arroz '{a.get('nombre')}' has P={macros_ef.get('P')}, H={macros_ef.get('H')}, G={macros_ef.get('G')}")
-                return
+        planos = [
+            a for a in alimentos
+            if "arroz" in a.get("nombre", "").lower()
+            and "(" not in a.get("nombre", "")           # sin marca
+            and "PRE" not in str(a.get("categorias", ""))  # sin preparar
+        ]
+        assert planos, f"No hay ningún arroz sin preparar entre: {[a.get('nombre') for a in alimentos]}"
+
+        a = planos[0]
+        macros_ef = a.get("macros_efectivos", {})
+        assert macros_ef.get("P", -1) == 0, f"El arroz no debería aportar proteína: {a.get('nombre')} P={macros_ef.get('P')}"
+        assert macros_ef.get("H", 0) > 0, f"El arroz debería aportar hidratos: {a.get('nombre')} H={macros_ef.get('H')}"
+        return
         
         pytest.fail("No arroz found with macros_efectivos")
     
@@ -175,21 +182,33 @@ class TestEffectiveMacros:
 class TestSearchLimit:
     """Test search returns up to 50 results"""
     
-    def test_search_limit_is_50(self, auth_headers):
-        """Search should return up to 50 results by default"""
-        response = requests.get(
-            f"{BASE_URL}/api/calculator/search?q=&limit=50",
-            headers=auth_headers
-        )
-        assert response.status_code == 200
-        data = response.json()
-        
-        # Check limit parameter in response
-        assert data.get("limit") == 50, f"Expected limit=50, got {data.get('limit')}"
-        
-        # Results should not exceed 50
-        assert data.get("total", 0) <= 50, f"Expected max 50 results, got {data.get('total')}"
-        print(f"✅ Search limit is correctly set to 50, returned {data.get('total')} results")
+    def test_el_limite_manda_al_navegar_sin_filtro(self, auth_headers):
+        """Sin búsqueda ni categoría, `limit` corta.
+
+        Antes esto miraba un campo `limit` en la respuesta que el endpoint nunca ha
+        devuelto. El contrato real es {alimentos, total, available_preps}.
+        """
+        for pedidos in (10, 50):
+            r = requests.get(f"{BASE_URL}/api/calculator/search?limit={pedidos}", headers=auth_headers)
+            assert r.status_code == 200
+            alimentos = r.json().get("alimentos", [])
+            assert len(alimentos) == pedidos, f"Pedí {pedidos} y me ha dado {len(alimentos)}"
+
+    def test_con_busqueda_se_devuelven_todas_las_coincidencias(self, auth_headers):
+        """Con búsqueda NO se corta, y es a propósito.
+
+        El motor de Calma ordena el conjunto entero por diferencia de macros. Recortar
+        antes de ordenar tiraba los alimentos que mejor encajaban (buscando "arroz" se
+        perdían Pollo tikka o Crema de lentejas por caer más allá de los primeros 50 de
+        la base). Así que aquí `limit` no es un tope de respuesta.
+        """
+        r = requests.get(f"{BASE_URL}/api/calculator/search?q=pollo&limit=50", headers=auth_headers)
+        assert r.status_code == 200
+        data = r.json()
+        alimentos = data.get("alimentos", [])
+        assert alimentos, "El buscador no ha devuelto nada para 'pollo'"
+        assert len(alimentos) == data.get("total"), (
+            "Con búsqueda deben venir todas las coincidencias, no un recorte")
 
 
 class TestCategoryFiltering:

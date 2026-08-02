@@ -10,11 +10,11 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000').rstrip('/')
 
 # Test credentials
-ADMIN_EMAIL = "alvaro@test.com"
-ADMIN_PASSWORD = "Alvaro123"
+ADMIN_EMAIL = "francisco@test.com"
+ADMIN_PASSWORD = "demo123"
 CLIENT_EMAIL = "clientedemo@test.com"
 CLIENT_PASSWORD = "demo123"
 

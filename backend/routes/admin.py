@@ -141,7 +141,12 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
         {"$or": [{"sender_id": profile["user_id"]}, {"receiver_id": profile["user_id"]}]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
-    macro_history = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).sort("effective_date", -1).to_list(500)
+    # Por fecha de efecto y, a igualdad, por cuándo se hizo el cambio. Ordenar solo por
+    # effective_date dejaba al azar el orden de varios ajustes del MISMO día: el panel del
+    # coach podía enseñar primero el cambio más viejo de hoy.
+    macro_history = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).sort(
+        [("effective_date", -1), ("created_at", -1)]
+    ).to_list(500)
     supplement_protocol = await db.supplement_protocols.find_one({"client_id": client_id}, {"_id": 0})
 
     # Datos rescatados de Calma (staging, solo lectura). Se busca por client_id o user_id.
