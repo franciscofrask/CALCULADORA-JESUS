@@ -55,7 +55,11 @@ const periodoLabel = (periodo) => (periodo === 'único' ? ' · pago único' : `/
 const OnboardingPage = () => {
     const navigate = useNavigate();
     const { api, refreshProfile, planCatalog } = useAuth();
-    const [selectedPlan, setSelectedPlan] = useState(null);
+    // Si viene del test de nivel, llega con un plan ya elegido: se preselecciona en vez
+    // de hacerle repetir la decisión que acaba de tomar.
+    const [selectedPlan, setSelectedPlan] = useState(() => {
+        try { return sessionStorage.getItem('plan_elegido') || null; } catch { return null; }
+    });
     const [loading, setLoading] = useState(false);
 
     // Planes comercialmente activos del catálogo, con su capa de presentación.
@@ -113,6 +117,8 @@ const OnboardingPage = () => {
         setLoading(true);
         try {
             const res = await api.post('/billing/checkout-session', { plan: selectedPlan });
+            // Ya cumplió su función; si vuelve atrás que elija libremente.
+            try { sessionStorage.removeItem('plan_elegido'); } catch { /* modo privado */ }
             // Redirige a la página de pago de Stripe (test mode).
             window.location.href = res.data.checkout_url;
         } catch (error) {

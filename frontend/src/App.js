@@ -34,6 +34,7 @@ import QuestionnairePage from "./pages/QuestionnairePage";
 import WelcomePage from "./pages/WelcomePage";
 import PlanesPage from "./pages/PlanesPage";
 import RenovacionPage from "./pages/RenovacionPage";
+import QuizVentaPage from "./pages/QuizVentaPage";
 import InstallPrompt from "./components/InstallPrompt";
 
 // Protected Route Component
@@ -103,6 +104,11 @@ function AppRoutes() {
                     </PublicRoute>
                 }
             />
+
+            {/* El quiz de venta va SIN sesion y sin PublicRoute: "ve su resultado sin dar
+                el correo" (parte 10), y PublicRoute redirige al panel al que ya ha
+                entrado alguna vez, que es justo a quien se le manda el enlace. */}
+            <Route path="/test" element={<QuizVentaPage />} />
 
             {/* Cuestionario inicial obligatorio (antes del plan) */}
             <Route

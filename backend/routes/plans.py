@@ -4,9 +4,11 @@ Catálogo de planes y membresías.
 Fuente única: PLAN_CATALOG (código) + overrides editables por el admin (db.plan_overrides).
 El catálogo refleja el documento "JG - Catálogo de Planes y Membresías".
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Body, HTTPException, Depends
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
+import re
+import uuid
 
 from core.database import db
 from core.security import get_admin_user
@@ -31,6 +33,90 @@ async def get_plans(estado: Optional[str] = None):
     if estado:
         return {c: p for c, p in catalog.items() if p.get("estado") == estado}
     return catalog
+
+
+@router.get("/quiz-venta")
+async def get_quiz_venta():
+    """Las cuatro preguntas del quiz de venta. PUBLICO: se responde antes de registrarse."""
+    from core.quiz_venta import PREGUNTAS
+    return {"preguntas": PREGUNTAS}
+
+
+@router.post("/quiz-venta")
+async def post_quiz_venta(data: Dict[str, Any] = Body(default={})):
+    """
+    El resultado del quiz: que nivel le pega y por que (especificacion 31-07-2026, parte 3).
+
+    PUBLICO A PROPOSITO. "Ve su resultado sin dar el correo" es una decision cerrada del
+    documento (parte 10): pedirle el correo para enseñarle lo que acaba de contestar es
+    justo lo que hace que la gente cierre la pestaña. El correo se le ofrece DESPUES,
+    para guardarlo o recibirlo.
+
+    No guarda nada ni crea usuario: solo calcula.
+    """
+    from core.quiz_venta import resultado_completo
+
+    respuestas = (data or {}).get("respuestas") or {}
+    if not isinstance(respuestas, dict):
+        raise HTTPException(status_code=400, detail="Respuestas inválidas")
+
+    catalogo = merged_catalog(await _overrides_by_code())
+    return resultado_completo(respuestas, catalogo)
+
+
+_RE_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+
+
+@router.post("/quiz-venta/guardar")
+async def guardar_quiz_venta(data: Dict[str, Any] = Body(default={})):
+    """
+    Guarda el resultado del quiz como lead. PUBLICO: es el paso de DESPUES del resultado
+    ("puede guardarlo o recibirlo por email", parte 10), nunca el peaje para verlo.
+
+    Cae en el CRM que ya existe (db.leads, source "web") en vez de en una coleccion
+    aparte, para que Jesus lo vea donde ve el resto.
+
+    Es un endpoint abierto que escribe, asi que:
+      - solo entra lo que se necesita, recortado,
+      - si el correo ya es lead o ya es cliente NO se dice (seria un enumerador de
+        correos): se responde lo mismo y no se toca nada,
+      - no llama a Notion ni a GHL: una llamada de red en un endpoint publico es un
+        grifo abierto. La sincronizacion ya la hace el flujo normal de leads.
+    """
+    email = str((data or {}).get("email") or "").strip().lower()[:120]
+    if not _RE_EMAIL.match(email):
+        raise HTTPException(status_code=400, detail="Necesitamos un correo válido")
+
+    nombre = str((data or {}).get("nombre") or "").strip()[:80]
+    respuestas = (data or {}).get("respuestas") or {}
+    recomendado = str((data or {}).get("recomendado") or "")[:20]
+    quiere_llamada = bool((data or {}).get("quiere_llamada"))
+
+    ahora = datetime.now(timezone.utc).isoformat()
+    ya_cliente = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 1})
+    ya_lead = await db.leads.find_one({"email": email}, {"_id": 0, "id": 1})
+
+    # Al que ya esta dentro no se le crea un lead duplicado; se le responde igual.
+    if not ya_cliente and not ya_lead:
+        await db.leads.insert_one({
+            "id": str(uuid.uuid4()),
+            "name": nombre or email.split("@")[0],
+            "email": email,
+            "phone": "",
+            "source": "web",
+            "status": "nuevo",
+            "notes": (f"Test de nivel: sale {recomendado}."
+                      + (" PIDE LLAMADA (Nivel 3)." if quiere_llamada else "")),
+            "quiz_venta": {"respuestas": {str(k): str(v)[:2] for k, v in list(respuestas.items())[:10]},
+                           "recomendado": recomendado, "fecha": ahora},
+            "assigned_to": None,
+            "next_action_date": None,
+            "created_at": ahora,
+            "updated_at": ahora,
+            "created_by": "test de nivel",
+        })
+
+    return {"guardado": True, "quiere_llamada": quiere_llamada}
 
 
 # ==================== ADMIN ====================
