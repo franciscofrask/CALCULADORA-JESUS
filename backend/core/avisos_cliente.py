@@ -136,7 +136,7 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
             "tipo": "programa",
             "titulo": "Tu ciclo acaba en una semana",
             "cuerpo": "Mira lo que has cambiado.",
-            "link": "/dashboard/reports",
+            "link": "/renovacion",
             "calendario": True,
         })
 

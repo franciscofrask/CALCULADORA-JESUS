@@ -33,6 +33,7 @@ import AdminPlansPage from "./pages/AdminPlansPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 import WelcomePage from "./pages/WelcomePage";
 import PlanesPage from "./pages/PlanesPage";
+import RenovacionPage from "./pages/RenovacionPage";
 import InstallPrompt from "./components/InstallPrompt";
 
 // Protected Route Component
@@ -140,6 +141,16 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <PlanesPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* La semana 12: el balance del ciclo y las tres salidas */}
+            <Route
+                path="/renovacion"
+                element={
+                    <ProtectedRoute>
+                        <RenovacionPage />
                     </ProtectedRoute>
                 }
             />

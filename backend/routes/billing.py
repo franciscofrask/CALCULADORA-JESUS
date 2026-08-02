@@ -147,6 +147,58 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     return CheckoutSessionResponse(checkout_url=session["url"], session_id=session["id"], profile_id=profile["id"])
 
 
+@router.get("/renovacion")
+async def get_renovacion(user=Depends(get_current_user)):
+    """
+    La pantalla de la semana 12 (especificacion 31-07-2026, parte 3).
+
+    Primero lo que ha conseguido en el ciclo -- su foto del dia 1 al lado de la de hoy,
+    el peso en porcentaje, su constancia -- y despues las tres salidas: seguir igual,
+    cambiar de nivel o dejarlo en la membresia.
+
+    No cobra nada ni cambia nada: solo cuenta. Cada salida lleva a su propio checkout.
+    """
+    from core.renovacion import montar_renovacion, resumen_del_ciclo
+    from models.user import opciones_de_renovacion, merged_catalog
+    from routes.plans import _overrides_by_code
+
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    # El primer reporte con fotos es el "dia 1": la comparacion que de verdad enseña el
+    # cambio, no la del mes pasado.
+    primero = await db.reports.find_one(
+        {"client_id": perfil["id"], "photos": {"$ne": []}}, {"_id": 0},
+        sort=[("created_at", 1)])
+    ultimo = await db.reports.find_one(
+        {"client_id": perfil["id"]}, {"_id": 0}, sort=[("created_at", -1)])
+
+    desde = perfil.get("arranque_lunes") or perfil.get("created_at")
+    dias_totales, dias_dieta = 84, 0
+    if desde:
+        try:
+            d0 = datetime.fromisoformat(str(desde).replace("Z", "+00:00")).date()
+            hoy = datetime.now(timezone.utc).date()
+            dias_totales = max(1, (hoy - d0).days)
+            dias_dieta = await db.diets.count_documents({
+                "user_id": user["id"], "fecha": {"$gte": d0.isoformat(), "$lte": hoy.isoformat()}})
+        except (ValueError, TypeError):
+            pass
+
+    ajustes = await db.macro_history.count_documents({"client_id": perfil["id"]})
+    catalogo = merged_catalog(await _overrides_by_code())
+
+    return montar_renovacion(
+        perfil=perfil,
+        catalogo=catalogo,
+        opciones_catalogo=opciones_de_renovacion(perfil.get("plan"), catalogo),
+        resumen=resumen_del_ciclo(
+            reporte_primero=primero, reporte_ultimo=ultimo, perfil=perfil,
+            dias_dieta=dias_dieta, dias_totales=dias_totales, ajustes_de_macros=ajustes),
+    )
+
+
 @router.post("/revision-suelta/checkout")
 async def comprar_revision_suelta(payload: Dict[str, Any] = Body(default={}), user=Depends(get_current_user)):
     """
