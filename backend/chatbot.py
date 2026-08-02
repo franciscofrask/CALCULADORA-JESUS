@@ -117,7 +117,9 @@ class NutritionChatbot:
             "acumulado_frutos_secos": 0,
             "last_options": [],  # Últimas opciones ofrecidas (sugerencias/desambiguación) para elegir por texto
             "saved_meals": [],  # Claves de comidas guardadas con "guardar y siguiente"
-            "seen_sugg": {}  # Sugerencias ya ofrecidas por comida (para no repetirlas)
+            "seen_sugg": {},  # Sugerencias ya ofrecidas por comida (para no repetirlas)
+            "last_termino": None,  # De qué tipo de alimento iba la última lista ("tostadas")
+            "termino_vistos": [],  # Ids ya enseñados de ese término, para no repetirlos
         }
         
         # Historial de mensajes para persistencia
@@ -464,6 +466,21 @@ class NutritionChatbot:
             except Exception:
                 pass
         
+        # Paso 2b: variantes de género y número. "tostadas" tiene que llegar a "Pan
+        # tostado": es el mismo alimento y el usuario no tiene por qué adivinar cómo está
+        # escrito en el catálogo. Solo para consultas de UNA palabra significativa; con
+        # varias, los pasos de arriba ya acotan bastante y ensanchar aquí traería ruido.
+        raiz_pat = self._regex_raiz(sig_words[0]) if len(sig_words) == 1 else ""
+        if raiz_pat:
+            try:
+                variantes = await self.db.foods.find(
+                    {"nombre": {"$regex": raiz_pat, "$options": "i"}}, {"_id": 0}
+                ).limit(50).to_list(50)
+                existing_nombres = {c.get("nombre") for c in candidates}
+                candidates.extend(r for r in variantes if r.get("nombre") not in existing_nombres)
+            except Exception:
+                pass
+
         # Paso 3: Si aún no hay resultados, buscar palabra por palabra
         if not candidates:
             for word in search_norm.split():
@@ -514,6 +531,11 @@ class NutritionChatbot:
             # Baja prioridad: coincidencia parcial
             elif any(w in nombre_norm for w in query_words):
                 score += 40
+            # Misma palabra en otro género o número ("tostadas" -> "Pan tostado"). Va la
+            # última y suma poco: es una coincidencia real, pero nunca debe adelantar a
+            # quien empieza por lo que se ha pedido.
+            elif raiz_pat and re.search(raiz_pat, nombre_norm):
+                score += 35
             else:
                 continue  # No incluir si no hay coincidencia
             
@@ -1272,6 +1294,36 @@ class NutritionChatbot:
         return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
     @staticmethod
+    def _raiz(palabra: str) -> str:
+        """La raiz de una palabra en español, sin genero ni numero.
+
+        Nadie pide la comida en la forma exacta en que esta escrita en la base. Alguien
+        pide "tostadas" y en el catalogo pone "Pan tostado": misma cosa, y la busqueda
+        no los unia porque comparaba letra a letra. Aqui "tostadas", "tostada", "tostado"
+        y "tostados" caen todos en "tostad".
+
+        Se queda corta a proposito: quitar plural y la vocal final cubre la mayoria del
+        castellano sin inventar parentescos. Devuelve "" si la raiz queda tan corta que
+        emparejaria cualquier cosa ("pavo" -> "pav" no vale).
+        """
+        p = (palabra or "").strip()
+        if p.endswith("es") and len(p) > 4:
+            p = p[:-2]
+        elif p.endswith("s") and len(p) > 3:
+            p = p[:-1]
+        if p and p[-1] in "ao" and len(p) > 4:
+            p = p[:-1]
+        return p if len(p) >= 4 else ""
+
+    @classmethod
+    def _regex_raiz(cls, palabra: str) -> str:
+        """Patron que casa la palabra en cualquier genero y numero. "" si no aplica."""
+        raiz = cls._raiz(cls._norm_text(palabra))
+        # La "s" suelta hace falta cuando la raíz conserva su vocal ("pavo" -> "pavos");
+        # sin ella el plural de las palabras cortas se quedaba fuera.
+        return rf"\b{raiz}(s|a|o|as|os|es)?\b" if raiz else ""
+
+    @staticmethod
     def _clave_fonetica(s: str) -> str:
         """Como suena, para comparar nombres de alimentos escritos deprisa.
 
@@ -1532,8 +1584,12 @@ class NutritionChatbot:
         if termino in getattr(NutritionChatbot, "_CANONICAL_TERMS", frozenset()):
             return None
         # Solo candidatos que REALMENTE contienen el término (evita que "arroz" arrastre
-        # "azúcar blanco"/"pescado blanco" por compartir la palabra "blanco").
-        cands = [c for c in cands if termino in self._norm_text(c.get("nombre", ""))]
+        # "azúcar blanco"/"pescado blanco" por compartir la palabra "blanco"). Cuenta
+        # también en otro género o número: quien pide "tostadas" quiere ver "Pan tostado".
+        raiz_pat = self._regex_raiz(termino)
+        cands = [c for c in cands
+                 if termino in self._norm_text(c.get("nombre", ""))
+                 or (raiz_pat and re.search(raiz_pat, self._norm_text(c.get("nombre", ""))))]
         if len(cands) < 2:
             return None
         # ¿Coincidencia parcial? (search no tenía el término tal cual). No forzamos opciones.
@@ -1598,8 +1654,22 @@ class NutritionChatbot:
                 cantidad_g, macros = sized
             contrib = {"proteinas": macros["P"], "hidratos": macros["H"], "grasas": macros["G"]}
             dif = diferencia_de_macros(contrib, remaining)
-            rankeados.append((dif, c.get("nombre") or "", c, cantidad_g, macros))
-        rankeados.sort(key=lambda t: (t[0], t[1]))
+            # Orden: primero lo que de verdad ES lo pedido, luego marca, luego macros.
+            #
+            # Quien pide "tostadas" quiere tostadas. Ampliar la búsqueda a otros géneros
+            # trajo "Edamame tostado" y "Copos de maíz tostado", que llevan la palabra de
+            # adjetivo, y con la marca por delante se colaban ANTES que las tostadas. Por
+            # eso la forma exacta manda sobre la marca: entre dos tostadas decide la marca,
+            # pero un edamame no adelanta a una tostada por tener marca.
+            nombre_c = self._norm_text(c.get("nombre") or "")
+            # Misma palabra en singular o plural, pero NO en otro género: "tostadas" case
+            # con "Tostada sin gluten", y "tostado" (adjetivo) se queda en el segundo bloque.
+            base_term = termino[:-1] if termino.endswith("s") and len(termino) > 3 else termino
+            exacto = 0 if re.search(rf"\b{re.escape(base_term)}s?\b", nombre_c) else 1
+            # Con marca primero (petición 2026-08-02). En la base, marca = tiene URL.
+            es_generico = 0 if c.get("url") else 1
+            rankeados.append((exacto, es_generico, dif, c.get("nombre") or "", c, cantidad_g, macros))
+        rankeados.sort(key=lambda t: (t[0], t[1], t[2], t[3]))
 
         # Para no repetir 6 marcas de lo mismo, una opción por TIPO real: agrupamos por las
         # 2 primeras palabras SIGNIFICATIVAS del nombre sin marca ("fiambre pechuga" vs
@@ -1610,7 +1680,7 @@ class NutritionChatbot:
             return " ".join(sig_w[:2])
 
         vistos, opciones = set(), []
-        for dif, _, c, cantidad_g, macros in rankeados:
+        for _exacto, _es_generico, dif, _nombre, c, cantidad_g, macros in rankeados:
             clave = clave_tipo(c.get("nombre"))
             if not clave or clave in vistos:
                 continue
@@ -1626,7 +1696,68 @@ class NutritionChatbot:
             opciones.append(op)
             if len(opciones) >= max_op:
                 break
+
+        # Que siempre asome un genérico si lo hay. En la base casi todo tiene marca (con
+        # "tostad" hay 48 de marca y 3 genéricos), así que las marcas llenaban la lista y
+        # el "Pan tostado" de toda la vida no se veía nunca. Va el último: la marca sigue
+        # delante, pero el genérico deja de ser invisible.
+        ids = {o["alimento_id"] for o in opciones}
+        if opciones and not any(not (r[4].get("url")) for r in rankeados if r[4].get("id") in ids):
+            gen = next((r for r in rankeados if not r[4].get("url") and r[4].get("id") not in ids), None)
+            if gen:
+                _e, _g, _d, _n, c, cantidad_g, macros = gen
+                op = {
+                    "alimento_id": c.get("id"), "nombre": (c.get("nombre") or "").strip(),
+                    "cantidad_display": self._format_cantidad(cantidad_g, c, get_food_config(c)),
+                    "macros": macros,
+                }
+                if cant_fija is not None:
+                    op["cantidad_fija"], op["cantidad_g"] = True, cantidad_g
+                if len(opciones) >= max_op:
+                    opciones[-1] = op
+                else:
+                    opciones.append(op)
         return opciones if len(opciones) >= 2 else None
+
+    async def _mas_opciones_termino(self, termino: str):
+        """Más opciones DEL MISMO tipo de alimento, sin repetir las ya enseñadas.
+
+        Antes, pedir "¿hay otras opciones de tostadas?" caía en las sugerencias generales
+        y contestaba con callos y batidos de proteína. Si ha pedido tostadas, se le enseñan
+        tostadas; y cuando de verdad no quedan, se dice y se le pregunta, en vez de
+        cambiarle de tema sin avisar.
+
+        Devuelve None si el término no da ninguna lista (que lo trate el flujo normal).
+        """
+        vistos = set(self.state.get("termino_vistos") or [])
+        restante = self.get_remaining_macros()
+        opciones = await self._opciones_ambiguas(termino, restante, max_op=6 + len(vistos))
+        if opciones is None:
+            # No hay lista para este término: que siga el camino de siempre.
+            return None
+
+        nuevas = [o for o in opciones if o.get("alimento_id") not in vistos][:6]
+        if not nuevas:
+            # Honestidad: no quedan más. Y en vez de dejarle en un callejón, se le
+            # ofrece la salida (esto es lo que el chat debe hacer cuando no sabe seguir).
+            self.state["last_options"] = []
+            return {
+                "action": "no_foods",
+                "message": (f"No me quedan más opciones de {termino} que cuadren con lo que "
+                            f"te falta. ¿Quieres que te sugiera otra cosa parecida, o prefieres "
+                            f"decirme tú qué te apetece?"),
+                "day_overview": self.get_day_overview(),
+            }
+
+        self.state["last_options"] = nuevas
+        self.state["last_termino"] = termino
+        self.state["termino_vistos"] = list(vistos) + [o.get("alimento_id") for o in nuevas]
+        return {
+            "action": "no_foods",
+            "message": (f"Más opciones de {termino}. Dime cuál quieres (p.ej. \"el 1\"):\n"
+                        f"{self._format_options_lines(nuevas)}"),
+            "day_overview": self.get_day_overview(),
+        }
 
     # Relleno que no distingue una elección ("quiero el primero", "venga, la 2", "mejor ese")
     _PICK_FILLER = {"el", "la", "lo", "los", "las", "un", "una", "unas", "unos", "opcion",
@@ -1771,6 +1902,11 @@ class NutritionChatbot:
                 for mk in ("P", "H", "G"):
                     tot[mk] += float(m.get(mk, 0) or 0)
             comida["macros"] = {mk: round(v, 1) for mk, v in tot.items()}
+
+    # Cuando no hay NADA parecido, un "no encontrado" seco deja al usuario sin salida y
+    # sin saber si el fallo es suyo o del catálogo. Se le devuelve la pregunta.
+    _NO_LO_TENGO = ("No lo tengo con ese nombre. ¿Cómo lo llamas normalmente, "
+                    "o quieres que te sugiera algo parecido?")
 
     def _meal_response(self, foods_added: list, foods_not_found: list, choices: list = None) -> dict:
         # Toda mutación sale por aquí: aplicar la calibración del día antes de responder,
@@ -2154,7 +2290,7 @@ class NutritionChatbot:
                 not_found.append({"buscado": it["nombre"], "razon": "No lo tengo en la base de datos",
                                   "sugerencia": f"Lo más parecido que tengo es \"{res['sugerencia'].strip()}\". Escríbelo si lo quieres."})
             else:
-                not_found.append({"buscado": it["nombre"], "razon": "No encontrado en la base de datos"})
+                not_found.append({"buscado": it["nombre"], "razon": self._NO_LO_TENGO})
 
         # ── 2) Sin cantidad: resolver nombres primero; los matches PARCIALES no se añaden
         #     en silencio (se sugiere el parecido y el usuario decide). ──
@@ -2162,7 +2298,7 @@ class NutritionChatbot:
         for nombre_pedido in auto_names:
             m = await self.search_foods(nombre_pedido, limit=1)
             if not m:
-                not_found.append({"buscado": nombre_pedido, "razon": "No encontrado en la base de datos"})
+                not_found.append({"buscado": nombre_pedido, "razon": self._NO_LO_TENGO})
             elif m[0].get("_match_parcial"):
                 not_found.append({"buscado": nombre_pedido, "razon": "No lo tengo en la base de datos",
                                   "sugerencia": f"Lo más parecido que tengo es \"{(m[0].get('nombre') or '').strip()}\". Escríbelo si lo quieres."})
@@ -2244,6 +2380,9 @@ class NutritionChatbot:
         if choices:
             flat = [op for c in choices for op in (c.get("opciones") or [])]
             self.state["last_options"] = flat
+            # De qué iba la lista, para poder darle MÁS de lo mismo si pide otras.
+            self.state["last_termino"] = choices[-1]["termino"]
+            self.state["termino_vistos"] = [op.get("alimento_id") for op in flat]
             terms = ", ".join(f'"{c["termino"]}"' for c in choices)
             msgs.append(f"Tengo varios tipos de {terms}. Dime cuál quieres (p.ej. \"el 1\"):\n"
                         f"{self._format_options_lines(flat)}")
@@ -2575,7 +2714,14 @@ class NutritionChatbot:
                            "que faltan: combina un par, o añade otro alimento después.")
         else:
             motivo = "vacio"
-            message = "No encuentro alimentos que cuadren con lo que te falta ahora mismo."
+            # Un "no encuentro nada" a secas deja al usuario parado sin saber qué hacer.
+            # Se dice qué falta y se le pregunta, que es la forma de seguir avanzando.
+            falta = [f"{restante[m]} g de {MACRO_LBL[m]}" for m in ("P", "H", "G") if restante[m] > 4]
+            message = (
+                f"No encuentro nada que cuadre con lo que falta"
+                + (f" ({' y '.join(falta)})" if falta else "")
+                + ". ¿Te digo alimentos aunque se pasen un poco, o prefieres decirme tú qué te apetece?"
+            )
         return {
             "action": "suggestions",
             "fase": fase,
@@ -2741,7 +2887,8 @@ class NutritionChatbot:
             '{"intent": "add|suggest|complete|remove|clear|status|summary|rebalance|goto|list|question|none", '
             '"foods": [{"nombre": "...", "cantidad": <numero o null>, "unidad": "g"|"ud"|null}], '
             '"remove": "<alimento a quitar o null>", "goto": <numero de comida, "post", "intra", "ultima", "actual" o null>, '
-            '"macro": "P"|"H"|"G"|null, "marca": "<marca pedida o null>"}. '
+            '"macro": "P"|"H"|"G"|null, "marca": "<marca pedida o null>", '
+            '"termino": "<tipo de alimento del que pide MAS opciones, o null>"}. '
             "Intenciones: "
             "'add' = dice qué alimentos quiere comer/añadir o CAMBIAR DE CANTIDAD "
             "(ej: 'quiero tortilla de claras y pan', 'pon 80 g de arroz', 'cambia el arroz a 100g'). "
@@ -2759,6 +2906,10 @@ class NutritionChatbot:
             "MARCAS: si pide algo de una MARCA ('recomiéndame algo de FullGas', 'algún alimento Hacendado', "
             "'un yogur de Mercadona'), es 'suggest' con la marca en 'marca' y 'macro' a null. Una marca NUNCA "
             "es un macro: 'fullgas' NO es grasa. Si no nombra ninguna marca, 'marca' va a null. "
+            "MAS OPCIONES DE LO MISMO: si acabas de ofrecerle una lista de un tipo de alimento y pide "
+            "otras ('hay otras opciones de tostadas?', 'dame mas tostadas', 'otras', 'alguna mas'), es "
+            "'suggest' con ese tipo en 'termino' ('tostadas'). Si dice solo 'otras' sin decir de qué, "
+            "'termino' va a null y el código ya sabe de qué hablaba. 'termino' NO es una marca ni un macro. "
             "OJO CON QUIÉN SUGIERE: 'suggest' es SOLO cuando pide que TÚ elijas. Si el que va a decir el "
             "alimento es ÉL ('quiero añadir un alimento', 'quiero sugerir un alimento', 'voy a poner algo', "
             "'quiero meter un alimento'), NO es 'suggest': es 'add' con 'foods' vacío, para preguntarle cuál. "
@@ -2847,6 +2998,12 @@ class NutritionChatbot:
             marca = None
         else:
             marca = marca.strip()
+        # Tipo de alimento del que pide más opciones ("otras tostadas").
+        termino = raw.get("termino")
+        if not isinstance(termino, str) or not termino.strip():
+            termino = None
+        else:
+            termino = termino.strip()
         return {
             "intent": intent,
             "foods": self._normalize_food_items(raw.get("foods") or []),
@@ -2854,6 +3011,7 @@ class NutritionChatbot:
             "goto": goto,
             "macro": macro,
             "marca": marca,
+            "termino": termino,
         }
 
     async def process_message(self, user_input: str) -> dict:
@@ -3045,6 +3203,17 @@ class NutritionChatbot:
             return {"action": "complete_request"}
 
         if intent == "suggest":
+            # "¿hay otras opciones de tostadas?" pedía MÁS DE LO MISMO, y se contestaba con
+            # una lista de proteína: callos, batidos y fiambre cuando había pedido tostadas.
+            # Si se puede saber de qué habla, se le dan más de eso.
+            # El término solo se hereda si la lista sigue en pantalla sin elegir: un
+            # "dame opciones" tres comidas después no puede seguir sacando tostadas.
+            heredado = self.state.get("last_termino") if self.state.get("last_options") else None
+            termino = data.get("termino") or heredado
+            if termino and not data.get("marca"):
+                mas = await self._mas_opciones_termino(termino)
+                if mas is not None:
+                    return mas
             return await self.suggest_foods_for_current_meal(macro=data.get("macro"),
                                                              marca=data.get("marca"))
 
