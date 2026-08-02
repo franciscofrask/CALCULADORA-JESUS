@@ -425,7 +425,12 @@ const ReportsPage = () => {
                                         : <InformeMensual informe={informe} onPedirFotos={() => setActiveTab('form')} />}
                                 </div>
                             )}
-                            {(report.training_compliance != null || report.nutrition_compliance != null) && (
+                            {/* Con el informe abierto, estos dos sobran: el cumplimiento de
+                                verdad (el de lo registrado) y la explicación del coach ya van
+                                dentro, y verlos dos veces confunde sobre cuál es el bueno.
+                                Los deslizadores además son justo lo que la especificación
+                                manda sustituir por la confirmación de huecos. */}
+                            {informeAbierto !== report.id && (report.training_compliance != null || report.nutrition_compliance != null) && (
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="bg-muted rounded-xl px-3 py-2 flex items-center gap-2">
                                         <Activity className="w-3.5 h-3.5" style={{ color: ORANGE }} />
@@ -437,7 +442,7 @@ const ReportsPage = () => {
                                     </div>
                                 </div>
                             )}
-                            {report.trainer_feedback && (
+                            {informeAbierto !== report.id && report.trainer_feedback && (
                                 <div className="mt-3 p-3 rounded-xl border" style={{ backgroundColor: `${ORANGE}10`, borderColor: `${ORANGE}30` }}>
                                     <p className="text-xs font-bold mb-1" style={{ color: ORANGE }}>Feedback del entrenador</p>
                                     <p className="text-sm text-foreground/70">{report.trainer_feedback}</p>
