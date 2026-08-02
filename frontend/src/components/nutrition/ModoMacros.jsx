@@ -48,6 +48,7 @@ export const sumaDeVista = (alimentos, modo) =>
         return { P: t.P + (m.P || 0), H: t.H + (m.H || 0), G: t.G + (m.G || 0) };
     }, { P: 0, H: 0, G: 0 });
 
+
 export const ModoMacrosSelector = ({ modo, onCambiar }) => (
     <div className="inline-flex items-center gap-1.5">
         <span className="hidden sm:inline text-[10px] uppercase tracking-wider text-muted-foreground">Macros</span>
@@ -71,11 +72,11 @@ export const ModoMacrosSelector = ({ modo, onCambiar }) => (
     </div>
 );
 
-/** Aviso de que lo que se ve no es lo que cuenta. Solo aparece en modo "reales". */
+/** Aviso de que lo que se ve en la lista no es lo que cuenta. Solo en modo "reales". */
 export const AvisoMacrosReales = () => (
     <p className="text-[11px] text-amber-600 dark:text-amber-400">
-        Estás viendo lo que dice la etiqueta. El método no cuenta todo esto, así que las
-        cantidades y los objetivos siguen calculándose con los macros del método.
+        Cada alimento muestra lo que dice su etiqueta. Los totales, los objetivos y el
+        estado de cada comida siguen siendo los del método.
     </p>
 );
 

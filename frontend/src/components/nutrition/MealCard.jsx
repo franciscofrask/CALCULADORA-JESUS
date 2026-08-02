@@ -95,11 +95,10 @@ export const MealTab = ({ mealKey, mealInfo, getMealStatus, isLocked, selected, 
 };
 
 // ===== Macro progress block =====
-const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFoods, modoMacros = 'metodo' }) => {
+const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFoods }) => {
     const target = getMealTarget(mealKey);
     const served = calculateMealMacros(mealKey);
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
-    const reales = modoMacros === 'reales';
 
     const macroState = (servedVal, tgtVal) => {
         if (!(servedVal > 0)) return { label: null, cls: '', over: false };
@@ -127,12 +126,9 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
                     <span className="text-[11px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
                     <span className="text-[11px] font-bold sm:hidden" style={{ color }}>{label}</span>
                     <span className={`font-data text-[11px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
-                    {/* En modo "reales" no se dice cuanto falta o sobra: el objetivo es del
-                        metodo y restarselo a una cifra de etiqueta no significa nada. */}
-                    {hasFoods && !reales && st.label && <span className={`font-data text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
+                    {hasFoods && st.label && <span className={`font-data text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
                 </div>
             ))}
-            {reales && <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400">etiqueta</span>}
         </div>
     );
 };
@@ -140,8 +136,15 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
 // ===== Ingredient row =====
 const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
     moveFoodUp, removeFood, updateFoodQuantity, updateFoodQuantityDirect,
-    setEditingQuantity, formatFoodQuantity, modoMacros = 'metodo' }) => {
+    setEditingQuantity, formatFoodQuantity, modoMacros = 'metodo',
+    esPorUnidad, pesoUnidad }) => {
     const macros = macrosDeVista(food, modoMacros);
+    // Los alimentos por unidades se escriben en unidades ("2 huevos"), no en gramos.
+    const porUnidad = esPorUnidad ? esPorUnidad(food) : false;
+    const peso = pesoUnidad ? pesoUnidad(food) : 100;
+    const valorEditable = porUnidad
+        ? Math.round(((food.cantidad_g || 0) / peso) * 2) / 2
+        : (food.cantidad_g || 0);
     return (
         // Todo el alimento en una linea: prioridad, nombre + macros, cantidad y eliminar.
         // El nombre se recorta con puntos suspensivos (completo en el title) para que
@@ -186,12 +189,16 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
 
             {/* Cantidad (gramos) - stepper conectado. En movil se pega a la derecha (ml-auto),
                 con la prioridad a la izquierda y el nombre encima. */}
-            <div className="order-3 ml-auto sm:ml-0 inline-flex items-stretch h-9 rounded-lg border border-border bg-card overflow-hidden flex-shrink-0" title="Cantidad en gramos">
-                <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, -increment)} aria-label="Menos gramos">
+            <div className="order-3 ml-auto sm:ml-0 inline-flex items-stretch h-9 rounded-lg border border-border bg-card overflow-hidden flex-shrink-0"
+                title={porUnidad ? 'Cantidad en unidades' : 'Cantidad en gramos'}>
+                <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, -increment)}
+                    aria-label={porUnidad ? 'Menos unidades' : 'Menos gramos'}>
                     <Minus className="w-3.5 h-3.5" />
                 </button>
                 {isEditing ? (
-                    <input type="number" defaultValue={food.cantidad_g || 0} autoFocus
+                    <input type="number" defaultValue={valorEditable} autoFocus
+                        step={porUnidad ? '0.5' : '1'} min="0"
+                        aria-label={porUnidad ? 'Unidades' : 'Gramos'}
                         className="w-14 text-center text-sm font-bold font-data bg-transparent border-x border-border text-foreground focus:outline-none"
                         onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value); if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null }); }} />
@@ -201,7 +208,8 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                         {formatFoodQuantity ? formatFoodQuantity(food) : `${food.cantidad_g || 0}g`}
                     </button>
                 )}
-                <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, increment)} aria-label="Más gramos">
+                <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, increment)}
+                    aria-label={porUnidad ? 'Más unidades' : 'Más gramos'}>
                     <Plus className="w-3.5 h-3.5" />
                 </button>
             </div>
@@ -221,12 +229,12 @@ const MealCard = ({
     loadMenuOptions, setBuildMealModal, openRepeatModal,
     removeFood, moveFoodUp, updateFoodQuantity, updateFoodQuantityDirect,
     editingQuantity, setEditingQuantity, getQuantityIncrement,
-    clearMeal, formatFoodQuantity,
+    clearMeal, formatFoodQuantity, esPorUnidad, pesoUnidad,
     isLocked = false, canVolcar = false, onVolcar, onCuadrar,
     mealMode = 'auto', setMealMode, forceExpanded = false, denso = false,
-    // Solo cambia la cifra que se enseña; el estado de la comida y las cantidades
-    // siguen saliendo del metodo. Ver components/nutrition/ModoMacros.jsx
-    modoMacros = 'metodo', calculateMealMacrosVista,
+    // Solo cambia lo que pone en la LISTA de ingredientes. Los totales de la comida,
+    // su estado y las cantidades siguen siendo del metodo, pase lo que pase.
+    modoMacros = 'metodo',
 }) => {
     const isExpanded = forceExpanded ? true : expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
@@ -297,9 +305,9 @@ const MealCard = ({
                         </div>
                     )}
 
+                    {/* Siempre los del metodo: el switch solo cambia la lista de abajo. */}
                     <MealProgressBars mealKey={mealKey} getMealTarget={getMealTarget}
-                        calculateMealMacros={calculateMealMacrosVista || calculateMealMacros}
-                        hasFoods={foods.length > 0} modoMacros={modoMacros} />
+                        calculateMealMacros={calculateMealMacros} hasFoods={foods.length > 0} />
 
                     {isLocked && (
                         <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 rounded-xl px-3 py-2">
@@ -380,7 +388,7 @@ const MealCard = ({
                                             moveFoodUp={moveFoodUp} removeFood={removeFood}
                                             updateFoodQuantity={updateFoodQuantity} updateFoodQuantityDirect={updateFoodQuantityDirect}
                                             setEditingQuantity={setEditingQuantity} formatFoodQuantity={formatFoodQuantity}
-                                            modoMacros={modoMacros} />
+                                            modoMacros={modoMacros} esPorUnidad={esPorUnidad} pesoUnidad={pesoUnidad} />
                                     ))}
                                 </div>
                             </div>

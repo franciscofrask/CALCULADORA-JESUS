@@ -19,7 +19,7 @@ import FavoritesModal from '../components/nutrition/FavoritesModal';
 import DayHeader from '../components/nutrition/DayHeader';
 import MealCard, { MealSelectorItem, MealTab } from '../components/nutrition/MealCard';
 import { VistaComidasSelector, leerVista, guardarVista } from '../components/nutrition/VistaComidas';
-import { ModoMacrosSelector, leerModoMacros, guardarModoMacros, sumaDeVista } from '../components/nutrition/ModoMacros';
+import { ModoMacrosSelector, AvisoMacrosReales, leerModoMacros, guardarModoMacros } from '../components/nutrition/ModoMacros';
 import { SearchFoodModal } from '../components/nutrition/SearchFoodModal';
 import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
@@ -792,22 +792,6 @@ const NutritionPage = () => {
         }, { P: 0, H: 0, G: 0 });
     };
 
-    // ── Solo para ENSEÑAR (el switch Método / Reales) ────────────────────────────
-    // Ojo: nada que decida algo puede llamar a esto. Las cantidades, el reparto, el
-    // "cuadrar" y el estado de cada comida usan calculateMealMacros, que cuenta con
-    // las reglas del metodo. Aqui solo se cambia la cifra que ve el usuario.
-    const macrosVistaComida = (mealKey) =>
-        modoMacros === 'reales'
-            ? sumaDeVista(mealsData[mealKey]?.alimentos, 'reales')
-            : calculateMealMacros(mealKey);
-
-    const macrosVistaDia = () =>
-        modoMacros === 'reales'
-            ? getMealOrder().reduce((t, k) => {
-                const m = sumaDeVista(mealsData[k]?.alimentos, 'reales');
-                return { P: t.P + m.P, H: t.H + m.H, G: t.G + m.G };
-            }, { P: 0, H: 0, G: 0 })
-            : calculateDayMacros();
 
     // Guard: only honor the volcado if its meal still exists in the current layout (e.g. the
     // user dropped from 4 to 3 meals after volcando to C4 → ignore, don't lock everything).
@@ -938,10 +922,8 @@ const NutritionPage = () => {
     const getQuantityIncrement = (food) => {
         const cat = food.categorias?.split(' | ')[0]?.split('.')[0] || '';
         const subCat = food.categorias?.split(' | ')[0] || '';
-        const racion = food.racion || 100;
-        
-        // Alimentos con unidades: incrementar 1 unidad = racion gramos
-        if (food.unidades) return racion;
+        // Alimentos con unidades: incrementar 1 unidad = lo que pesa una unidad
+        if (esPorUnidad(food)) return pesoUnidad(food);
         
         // Verduras (cat 13): ±50g
         if (cat === '13') return 50;
@@ -956,12 +938,23 @@ const NutritionPage = () => {
         return 1;
     };
 
+    // ¿Este alimento se cuenta por unidades (huevos, piezas de fruta, lonchas)?
+    // Segun por donde haya entrado, el campo se llama de tres maneras distintas:
+    // `unidades` (catalogo y handleAddFood), `por_unidad` (algunos menus) y `unidad`
+    // ('unidades' | 'g', que es lo que se guarda en la dieta). Mirar solo uno dejaba
+    // huevos moviendose de gramo en gramo.
+    const esPorUnidad = (food) =>
+        Boolean(food && (food.por_unidad ?? food.unidades ?? (food.unidad === 'unidades')));
+
+    // Lo que pesa una unidad. Nunca 0: dividir por el peso es como se pasa a unidades.
+    const pesoUnidad = (food) => (food?.peso_unidad || food?.racion || 100) || 100;
+
     // Format quantity for display: "2 ud" for unit foods, "120g" for gram foods
     const formatFoodQuantity = (food) => {
         if (!food) return '0g';
         const qty = food.cantidad_g || 0;
-        const isPorUnidad = food.por_unidad ?? food.unidades;
-        const unitWeight = food.peso_unidad || food.racion || 100;
+        const isPorUnidad = esPorUnidad(food);
+        const unitWeight = pesoUnidad(food);
         if (isPorUnidad && unitWeight > 0) {
             const units = qty / unitWeight;
             const rounded = Math.round(units * 2) / 2;
@@ -1035,41 +1028,95 @@ const NutritionPage = () => {
         }
     };
 
-    // Calma computes a food's macros synchronously on the client (K() = raw post-regla
-    // macros × quantity), never per-keystroke server calls. We do the same: scale the
-    // stored raw fields locally. This is race-free (no await between read and write) - the
-    // old version read mealsData from the render closure and awaited an API call, so rapid
-    // clicks overwrote each other and left cantidad_g out of sync with macros_efectivos
-    // (the "suma de a poco" lag). Calma also lets you set ANY quantity past the target
-    // (bars just go red); no block.
+    /**
+     * Cambia la cantidad de un alimento y reajusta sus macros, sin llamar al servidor.
+     *
+     * Calma lo hace igual (K() = macros POST-REGLA x cantidad) y sin await, para que
+     * pulsar -/+ rapido no deje `cantidad_g` desincronizada de los macros.
+     *
+     * La clave es "post-regla". Antes esto escalaba los campos crudos del catalogo
+     * (`food.proteinas`...), que son los de la ETIQUETA: al tocar -/+ en un pan se le
+     * colaban 6,8 g de proteina y 1,4 g de grasa que el metodo no cuenta, y el dia
+     * pasaba a contar de mas hasta que el servidor recalculaba. Peor aun: como al
+     * guardar un alimento no se guardan esos campos crudos, en los dias normales
+     * `food.proteinas` ni existe y los macros se iban a 0.
+     *
+     * Ahora se escalan los `macros_efectivos` que ya tiene el alimento, que salieron
+     * del motor con las reglas aplicadas. Es EQUIVALENTE a recalcular porque los
+     * macros del metodo son lineales con la cantidad: las reglas (que() y el 25%)
+     * deciden que cuenta y cuanto por 100 g / racion, no dependen de cuanto pongas.
+     *
+     * La calibracion progresiva del dia (cereales/panes y frutos secos por acumulado)
+     * SI depende del resto del dia, pero de eso ya se encarga el recalculo del
+     * servidor que se dispara tras cada cambio; esto es solo el eco inmediato.
+     */
     const scaleFood = (food, newQty) => {
-        const isUnit = food.por_unidad ?? food.unidades;
-        const racion = food.racion || 100;
-        // unidades: raw fields are per-unit -> scale by units (qty/racion). granel: per-100g.
-        const mult = isUnit ? (racion ? newQty / racion : 0) : newQty / 100;
-        const m = (k) => Math.round((food[k] || 0) * mult * 10) / 10;
-        return { ...food, cantidad_g: newQty, macros_efectivos: { P: m('proteinas'), H: m('hidratos'), G: m('grasas') } };
+        const qtyPrevia = food.cantidad_g || 0;
+        const ef = food.macros_efectivos;
+        const r1 = (x) => Math.round((x || 0) * 10) / 10;
+
+        if (qtyPrevia > 0 && ef && typeof ef.P === 'number') {
+            const factor = newQty / qtyPrevia;
+            return {
+                ...food,
+                cantidad_g: newQty,
+                macros_efectivos: { P: r1(ef.P * factor), H: r1(ef.H * factor), G: r1(ef.G * factor) },
+            };
+        }
+
+        // Sin cantidad previa (o sin macros ya calculados) no hay proporcion que aplicar.
+        // Se deja la cantidad y se conservan los macros que hubiera: el recalculo del
+        // servidor los pondra bien. Inventarlos con los crudos es lo que fallaba antes.
+        return { ...food, cantidad_g: newQty };
     };
 
+    // Lo minimo que tiene sentido de un alimento: de los que van por unidades, una
+    // unidad entera (medio huevo no se pone en una dieta); del resto, 1 g.
+    const cantidadMinima = (food) => (esPorUnidad(food) ? pesoUnidad(food) : 1);
+
+    /**
+     * Cambia la cantidad de un alimento, y lo QUITA si baja de su minimo.
+     *
+     * Antes el suelo era `Math.max(1, ...)`: 1 gramo. En un alimento por unidades eso
+     * dejaba "0 ud" en pantalla -- un huevo que ni esta ni deja de estar -- pero
+     * seguia contando su gramo en los macros de la comida. Bajar del minimo es decir
+     * "quitalo", asi que se quita.
+     */
     const updateFoodQuantity = (mealKey, foodIndex, delta) => {
         setMealsData(prev => {
             const foods = [...(prev[mealKey]?.alimentos || [])];
             const food = foods[foodIndex];
             if (!food) return prev;
             const increment = delta !== null ? delta : getQuantityIncrement(food);
-            const newQuantity = Math.max(1, (food.cantidad_g || 0) + (delta !== null ? delta : increment));
-            foods[foodIndex] = scaleFood(food, newQuantity);
+            const bruta = (food.cantidad_g || 0) + increment;
+            const minimo = cantidadMinima(food);
+            if (bruta < minimo) {
+                return { ...prev, [mealKey]: { alimentos: foods.filter((_, i) => i !== foodIndex) } };
+            }
+            foods[foodIndex] = scaleFood(food, bruta);
             return { ...prev, [mealKey]: { alimentos: foods } };
         });
     };
 
-    const updateFoodQuantityDirect = (mealKey, foodIndex, newQuantity) => {
-        const quantity = Math.max(1, parseInt(newQuantity) || 1);
+    /**
+     * Cantidad escrita a mano. En los alimentos por unidades se escriben UNIDADES,
+     * que es como los piensa el usuario ("2 huevos", no "126 g de huevo"); aqui se
+     * pasan a gramos, que es como se guardan. Acepta medias unidades.
+     */
+    const updateFoodQuantityDirect = (mealKey, foodIndex, valor) => {
         setMealsData(prev => {
             const foods = [...(prev[mealKey]?.alimentos || [])];
             const food = foods[foodIndex];
             if (!food) return prev;
-            foods[foodIndex] = scaleFood(food, quantity);
+            const escrito = parseFloat(String(valor).replace(',', '.'));
+            const porUnidad = esPorUnidad(food);
+            const gramos = Number.isFinite(escrito)
+                ? (porUnidad ? escrito * pesoUnidad(food) : escrito)
+                : 0;
+            if (gramos < cantidadMinima(food)) {
+                return { ...prev, [mealKey]: { alimentos: foods.filter((_, i) => i !== foodIndex) } };
+            }
+            foods[foodIndex] = scaleFood(food, Math.round(gramos));
             return { ...prev, [mealKey]: { alimentos: foods } };
         });
         setEditingQuantity({ mealKey: null, foodIndex: null });
@@ -1470,13 +1517,6 @@ const NutritionPage = () => {
     const servedPeriP = (calculateMealMacros('Intra').P || 0) + (calculateMealMacros('Post').P || 0);
     const servedPeriH = (calculateMealMacros('Intra').H || 0) + (calculateMealMacros('Post').H || 0);
 
-    // Las mismas cifras en el modo elegido, solo para la cabecera. Los objetivos no
-    // cambian nunca: son los del metodo, que es lo que reparte el dia.
-    const dayMacrosVista = macrosVistaDia();
-    const vistaPeri = (k) => macrosVistaComida(k);
-    const servedPeriPVista = (vistaPeri('Intra').P || 0) + (vistaPeri('Post').P || 0);
-    const servedPeriHVista = (vistaPeri('Intra').H || 0) + (vistaPeri('Post').H || 0);
-    const servedPeriGVista = (vistaPeri('Intra').G || 0) + (vistaPeri('Post').G || 0);
 
     // Day status calculation
     const getDayStatus = () => {
@@ -1612,7 +1652,7 @@ const NutritionPage = () => {
         getMealStatus, loadMenuOptions, setBuildMealModal, openRepeatModal, removeFood, moveFoodUp,
         updateFoodQuantity, updateFoodQuantityDirect, editingQuantity, setEditingQuantity,
         getQuantityIncrement, clearMeal, getFoodEmoji, formatFoodQuantity, setMealMode,
-        modoMacros, calculateMealMacrosVista: macrosVistaComida,
+        modoMacros, esPorUnidad, pesoUnidad,
     };
     const renderMealCard = (mealKey, forceExpanded, denso = false) => (
         <MealCard
@@ -1731,16 +1771,13 @@ const NutritionPage = () => {
                     tipoDia={tipoDia}
                     summaryExpanded={summaryExpanded}
                     setSummaryExpanded={setSummaryExpanded}
-                    dayMacros={dayMacrosVista}
+                    dayMacros={dayMacros}
                     dayTarget={dayTarget}
-                    servedPeriP={servedPeriPVista}
-                    servedPeriH={servedPeriHVista}
-                    servedPeriG={servedPeriGVista}
+                    servedPeriP={servedPeriP}
+                    servedPeriH={servedPeriH}
+                    servedPeriG={servedPeriG}
                     totalPeriP={totalPeriP}
                     totalPeriH={totalPeriH}
-                    modoMacros={modoMacros}
-                    onCambiarModoMacros={cambiarModoMacros}
-                    calculateMealMacrosVista={macrosVistaComida}
                     mealOrder={getMealOrder()}
                     mealInfo={mealInfo}
                     calculateMealMacros={calculateMealMacros}
@@ -1768,11 +1805,17 @@ const NutritionPage = () => {
                         </div>
                     )}
 
-                    {/* Cabecera de sección: el título y, a la derecha, cómo quiere verlas */}
-                    <div className="flex items-center justify-between gap-3 mb-2.5">
+                    {/* Cabecera de sección: el título y, a la derecha, cómo quiere verlas.
+                        El switch de macros vive aquí porque solo cambia lo que pone en
+                        la lista de ingredientes; ni los totales ni el reparto se mueven. */}
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2.5">
                         <p className="caption">Comidas del día</p>
-                        <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
+                        <div className="flex items-center gap-3">
+                            <ModoMacrosSelector modo={modoMacros} onCambiar={cambiarModoMacros} />
+                            <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
+                        </div>
                     </div>
+                    {modoMacros === 'reales' && <div className="mb-3"><AvisoMacrosReales /></div>}
 
                     {vistaComidas === 'actual' && (
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">

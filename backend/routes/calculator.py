@@ -6,6 +6,7 @@ from bson import Binary
 from datetime import datetime, timezone, timedelta, date
 import math
 import copy
+import re
 from typing import List, Dict, Any, Optional
 import uuid
 
@@ -20,7 +21,7 @@ from calma_engine import (
     run_tests as calma_run_tests,
     parse_categories,
 )
-from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal, get_all_foods_cached
+from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal, get_all_foods_cached, normalize_text
 from calma_suggest import (
     ajustar_cantidad as ajustar_cantidad_calma,
     macros_at as macros_at_calma,
@@ -572,6 +573,29 @@ async def search_foods_endpoint(
         a["peso_unidad"] = cfg.get("peso_unidad", 0)
         a["is_promocionado"] = _es_promocionado(a)  # PROMOCIONADO badge (Calma esPromocionado)
 
+    # ── Relevancia del texto escrito ─────────────────────────────────────────────
+    # El filtro de nombre es "cada palabra de la query esta en el nombre", en cualquier
+    # posicion. Con eso solo, buscar "huevo" mezclaba los huevos con un "Doble McExtreme
+    # BBQ Bourbon Huevo", y ni siquiera salian "Huevos enteros M/XL": el orden lo decidian
+    # la diferencia de macros o la frecuencia, que no saben lo que se ha escrito.
+    #
+    # Aqui se antepone lo evidente: primero lo que EMPIEZA por lo escrito, luego donde lo
+    # escrito arranca una palabra, y al final donde solo aparece suelto. Dentro de cada
+    # grupo manda el orden de siempre (diferencia de macros / frecuencia), asi que el
+    # motor de Calma sigue decidiendo entre alimentos igual de relevantes.
+    q_norm = normalize_text(q).strip() if q else ""
+    _re_palabra = re.compile(r"\b" + re.escape(q_norm)) if q_norm else None
+
+    def _relevancia(alimento) -> int:
+        if not q_norm:
+            return 0
+        nombre = normalize_text(alimento.get("nombre", ""))
+        if nombre.startswith(q_norm):
+            return 0
+        if _re_palabra and _re_palabra.search(nombre):
+            return 1
+        return 2
+
     has_macros_context = p_rest is not None or h_rest is not None or g_rest is not None
     # Calma's remaining uses raw-gram macros keyed proteinas/hidratos/grasas.
     # Unspecified macro -> inf (unconstrained); negatives clamped inside the engine.
@@ -662,6 +686,7 @@ async def search_foods_endpoint(
                     return (idx - 0.5) if _is_pro(f) else idx
             return float('inf')
         alimentos.sort(key=lambda f: (
+            _relevancia(f),
             (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
             _prioridad(f),
             _diff(f),
@@ -677,6 +702,7 @@ async def search_foods_endpoint(
             a["is_favorite"] = str(a.get("id", "")) in fav_ids
 
         alimentos.sort(key=lambda f: (
+            _relevancia(f),
             (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
             -food_freq.get(str(f.get("id", "")), 0),
             f.get("nombre", "")

@@ -17,7 +17,6 @@ import React from 'react';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import ConfigSection, { MOMENTO_OPTIONS, PERI_OPTIONS } from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
-import { ModoMacrosSelector, AvisoMacrosReales } from './ModoMacros';
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
@@ -47,10 +46,7 @@ const DayHeader = ({
     // detalle
     summaryExpanded, setSummaryExpanded,
     mealOrder, mealInfo, calculateMealMacros, getMealStatus,
-    // Solo afecta a lo que se enseña; ver components/nutrition/ModoMacros.jsx
-    modoMacros = 'metodo', onCambiarModoMacros, calculateMealMacrosVista,
 }) => {
-    const macrosParaVer = calculateMealMacrosVista || calculateMealMacros;
     // El peri lleva su propia cuenta: ni el total del día ni su objetivo lo incluyen.
     const mainP = dayMacros.P - servedPeriP;
     const mainH = dayMacros.H - servedPeriH;
@@ -125,16 +121,8 @@ const DayHeader = ({
                 </div>
             )}
 
-            {/* Macros del día */}
-            <div className="mt-5 flex items-center justify-between gap-3 max-w-2xl">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {modoMacros === 'reales' ? 'Lo que llevas segun la etiqueta' : 'Lo que cuenta el metodo'}
-                </span>
-                {onCambiarModoMacros && (
-                    <ModoMacrosSelector modo={modoMacros} onCambiar={onCambiarModoMacros} />
-                )}
-            </div>
-            <div className="mt-2 max-w-2xl space-y-2">
+            {/* Macros del día: siempre los del método, que es lo que reparte el día */}
+            <div className="mt-5 max-w-2xl space-y-2">
                 {macros.map(({ key, label, val, tgt, color }) => {
                     const over = tgt > 0 && val > tgt + 4;
                     return (
@@ -176,12 +164,10 @@ const DayHeader = ({
                 </span>
             </div>
 
-            {modoMacros === 'reales' && <div className="mt-2 max-w-2xl"><AvisoMacrosReales /></div>}
-
             {summaryExpanded && (
                 <div className="mt-3 max-w-2xl">
                     <DayDetailTable
-                        mealOrder={mealOrder} mealInfo={mealInfo} calculateMealMacros={macrosParaVer}
+                        mealOrder={mealOrder} mealInfo={mealInfo} calculateMealMacros={calculateMealMacros}
                         tipoDia={tipoDia} opcionPeri={opcionPeri}
                         mainP={mainP} mainH={mainH} mainG={mainG}
                         tgtP={tgtP} tgtH={tgtH} tgtG={tgtG}
