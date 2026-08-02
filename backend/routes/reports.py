@@ -198,10 +198,22 @@ async def _ritmos_de_su_perfil(perfil: dict) -> List[float]:
     if not sexo or not objetivo:
         return []
 
+    # El campo `sex` mezcla dos vocabularios: 138 perfiles dicen "hombre" y 4 dicen
+    # "male" (y "mujer"/"female"). Comparando en crudo, un cliente guardado como "male"
+    # solo encontraba a los otros 3 "male" y se quedaba sin cohorte para siempre. Se
+    # buscan todas las formas del mismo sexo.
+    EQUIVALENTES = {
+        "hombre": ["hombre", "male", "m", "h"],
+        "male": ["hombre", "male", "m", "h"],
+        "mujer": ["mujer", "female", "f"],
+        "female": ["mujer", "female", "f"],
+    }
+    formas = EQUIVALENTES.get(str(sexo).strip().lower(), [sexo])
+
     grasa = perfil.get("body_fat")
     filtro = {
         "id": {"$ne": perfil.get("id")},
-        "sex": sexo,
+        "sex": {"$in": formas},
         "goal": objetivo,
         "status": "activo",
     }
