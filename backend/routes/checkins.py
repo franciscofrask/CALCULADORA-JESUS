@@ -113,6 +113,32 @@ def _compute_health_score(checkins: List[dict], profile: dict) -> dict:
 # ==================== CHECK-INS ====================
 
 @router.post("/checkins", response_model=CheckInResponse)
+async def _dieta_y_entreno_del_dia(profile: dict, fecha: str) -> Dict[str, Any]:
+    """Lo que ese día ya consta en la base, para no preguntárselo.
+
+    Sustituye a las preguntas de dieta y entreno del check-in diario (documento 7.2).
+
+    OJO con el entrenamiento: hoy NO hay registro de sesiones hechas. `db.routines` guarda
+    el plan (qué le toca), no lo que hizo, así que no hay de dónde deducirlo y aquí no se
+    rellena. Antes el único origen del dato era esta misma pregunta; al quitarla, el conteo
+    de entrenos del informe se queda sin fuente hasta que exista un registro de sesiones.
+    Inventarlo (dar por entrenado el día que tocaba) seria peor: contaria entrenos que
+    nadie ha hecho.
+    """
+    out: Dict[str, Any] = {}
+
+    dieta = await db.diets.find_one(
+        {"user_id": profile.get("user_id"), "fecha": fecha}, {"_id": 0, "comidas": 1}
+    )
+    if dieta:
+        tiene_algo = any(
+            (c or {}).get("alimentos") for c in (dieta.get("comidas") or {}).values()
+        )
+        out["nutrition_followed"] = bool(tiene_algo)
+
+    return out
+
+
 async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     if data.type not in VALID_CHECKIN_TYPES:
         raise HTTPException(status_code=400, detail=f"Tipo invalido. Usa uno de: {VALID_CHECKIN_TYPES}")
@@ -129,6 +155,15 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
         "trainer_feedback": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # El check-in diario son DOS campos (documento, parte 7.2). La dieta y el entreno no
+    # se preguntan: ya constan. Preguntar por algo que el sistema sabe es hacerle trabajar
+    # para nada, y encima su respuesta puede contradecir al registro.
+    if data.type == "daily":
+        deducido = await _dieta_y_entreno_del_dia(profile, checkin["created_at"][:10])
+        checkin.update(deducido)
+        checkin["autorrelleno"] = list(deducido.keys())
+
     await db.checkins.insert_one(checkin)
 
     # Sync de peso al perfil si lo aporta (weekly/monthly).

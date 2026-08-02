@@ -172,7 +172,7 @@ const CheckInsPage = () => {
     const [submitting, setSubmitting] = useState(false);
     const [openForm, setOpenForm] = useState(null);
 
-    const [daily, setDaily] = useState({ mood: null, energy: null, trained: null, nutrition_followed: null, notes: '' });
+    const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null });
     const [weekly, setWeekly] = useState({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
     const [monthly, setMonthly] = useState({ weight: '', body_fat_pct: '', chest: '', waist: '', hip: '', arm: '', thigh: '', goals_progress: '', challenges: '', notes: '' });
 
@@ -217,14 +217,14 @@ const CheckInsPage = () => {
     const todayDaily = checkins.find(c => c.type === 'daily' && isSameDay(c.created_at));
 
     const submitDaily = async () => {
-        if (daily.mood == null || daily.energy == null || daily.trained == null || daily.nutrition_followed == null) {
-            return toast.error('Completa todos los campos');
+        if (daily.energy == null || daily.hunger_anxiety == null) {
+            return toast.error('Dinos cómo vas de energía y de hambre');
         }
         setSubmitting(true);
         try {
-            await api.post('/checkins', { type: 'daily', ...daily, notes: daily.notes || null });
+            await api.post('/checkins', { type: 'daily', ...daily });
             toast.success('Check-in diario enviado');
-            setDaily({ mood: null, energy: null, trained: null, nutrition_followed: null, notes: '' });
+            setDaily({ energy: null, hunger_anxiety: null });
             fetchAll();
         } catch { toast.error('Error al enviar check-in'); }
         finally { setSubmitting(false); }
@@ -318,9 +318,10 @@ const CheckInsPage = () => {
                     <div>
                         <p className="font-bold text-foreground">Check-in de hoy hecho</p>
                         <p className="text-sm text-foreground/60 mt-0.5">
-                            Ánimo {todayDaily.mood}/5 · Energía {todayDaily.energy}/5 ·
-                            {todayDaily.trained ? ' Entrenó' : ' Sin entrenar'} ·
-                            {todayDaily.nutrition_followed ? ' Plan ✓' : ' Plan ✗'}
+                            Energía {todayDaily.energy}/5
+                            {todayDaily.hunger_anxiety != null && ` · Hambre ${todayDaily.hunger_anxiety}/5`}
+                            {/* La dieta la rellena el sistema con lo registrado, no él. */}
+                            {todayDaily.nutrition_followed != null && (todayDaily.nutrition_followed ? ' · Dieta registrada' : ' · Sin dieta registrada')}
                         </p>
                     </div>
                 </Card>
@@ -331,21 +332,9 @@ const CheckInsPage = () => {
                         <p className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Check-in diario · 10 segundos</p>
                     </div>
                     <div className="px-5 pb-5 space-y-5">
-                        <div>
-                            <span className="text-sm text-foreground/70 mb-2 block">¿Cómo te sientes hoy?</span>
-                            <div className="flex gap-2 justify-between">
-                                {MOOD_FACES.map(m => {
-                                    const Icon = m.icon; const active = daily.mood === m.value;
-                                    return (
-                                        <button key={m.value} type="button" onClick={() => setDaily({ ...daily, mood: m.value })}
-                                            className={`flex-1 p-3 rounded-xl border transition-all ${active ? 'border-brand bg-brand/10' : 'border-border bg-muted hover:border-white/30'}`}>
-                                            <Icon className={`w-5 h-5 mx-auto ${active ? m.color : 'text-foreground/30'}`} />
-                                            <p className="text-[10px] text-foreground/50 mt-1">{m.label}</p>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        {/* DOS campos, ni uno más (documento 31-07, partes 6 y 7.2): solo lo
+                            que no está en ningún dato. El ánimo salió, y la dieta y el
+                            entreno no se preguntan porque ya constan en lo registrado. */}
                         <div>
                             <span className="text-sm text-foreground/70 mb-2 block">Nivel de energía</span>
                             <div className="flex gap-2">
@@ -353,6 +342,7 @@ const CheckInsPage = () => {
                                     const active = daily.energy === v;
                                     return (
                                         <button key={v} type="button" onClick={() => setDaily({ ...daily, energy: v })}
+                                            data-testid={`daily-energy-${v}`}
                                             className={`flex-1 py-3 rounded-xl border transition-all flex items-center justify-center gap-1 font-bold text-sm ${active ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-muted text-foreground/50 hover:border-white/30'}`}>
                                             <Zap className="w-3.5 h-3.5" />{v}
                                         </button>
@@ -360,12 +350,22 @@ const CheckInsPage = () => {
                                 })}
                             </div>
                         </div>
-                        <BoolPicker icon={Dumbbell} label="¿Entrenaste hoy?" value={daily.trained} onChange={v => setDaily({ ...daily, trained: v })} />
-                        <BoolPicker icon={Apple} label="¿Seguiste tu plan nutricional?" value={daily.nutrition_followed} onChange={v => setDaily({ ...daily, nutrition_followed: v })} />
-                        <Field label="Notas (opcional)">
-                            <textarea value={daily.notes} onChange={e => setDaily({ ...daily, notes: e.target.value })}
-                                placeholder="¿Algo que quieras compartir con tu coach?" rows={2} className={inputCls} />
-                        </Field>
+                        <div>
+                            <span className="text-sm text-foreground/70 mb-2 block">Ansiedad y hambre</span>
+                            <div className="flex gap-2">
+                                {[1, 2, 3, 4, 5].map(v => {
+                                    const active = daily.hunger_anxiety === v;
+                                    return (
+                                        <button key={v} type="button" onClick={() => setDaily({ ...daily, hunger_anxiety: v })}
+                                            data-testid={`daily-hunger-${v}`}
+                                            className={`flex-1 py-3 rounded-xl border transition-all flex items-center justify-center gap-1 font-bold text-sm ${active ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-muted text-foreground/50 hover:border-white/30'}`}>
+                                            {v}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[11px] text-foreground/40 mt-1.5">1 = nada · 5 = mucha</p>
+                        </div>
                         <button onClick={submitDaily} disabled={submitting}
                             className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
                             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar check-in
@@ -432,9 +432,11 @@ const CheckInsPage = () => {
                                 </div>
                                 {c.type === 'daily' ? (
                                     <p className="text-sm text-foreground/70">
-                                        Ánimo {c.mood}/5 · Energía {c.energy}/5 ·
-                                        {c.trained ? ' Entrenó' : ' No entrenó'} ·
-                                        {c.nutrition_followed ? ' Plan ✓' : ' Plan ✗'}
+                                        {/* Los check-ins viejos traen ánimo y entreno; los nuevos, no. */}
+                                        {c.mood != null && `Ánimo ${c.mood}/5 · `}Energía {c.energy}/5
+                                        {c.hunger_anxiety != null && ` · Hambre ${c.hunger_anxiety}/5`}
+                                        {c.trained != null && (c.trained ? ' · Entrenó' : ' · No entrenó')}
+                                        {c.nutrition_followed != null && (c.nutrition_followed ? ' · Dieta ✓' : ' · Dieta ✗')}
                                     </p>
                                 ) : (
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-foreground/70">

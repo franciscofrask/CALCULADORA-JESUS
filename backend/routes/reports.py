@@ -2,7 +2,7 @@
 Rutas de reportes: crear, listar, evolución.
 """
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
 
@@ -35,6 +35,31 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     if now > state["window_close"]:
         raise HTTPException(status_code=403, detail="La ventana de esta semana ya se cerró. Espera a la semana que viene.")
 
+    # Confirmación de huecos: el cumplimiento sale del registro, no de que se puntúe
+    # (documento, parte 7.1). Si el cliente contestó a los huecos, ese cumplimiento manda
+    # sobre lo que llegue en los campos viejos, que quedan solo por compatibilidad.
+    from core.confirmacion_huecos import (
+        huecos_del_periodo, cumplimiento as _cumplimiento, limpiar_respuestas)
+
+    respuestas_huecos = limpiar_respuestas(getattr(data, "huecos", None))
+    cumpl = None
+    if respuestas_huecos:
+        prev_rep = await db.reports.find_one(
+            {"client_id": profile["id"]}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)]
+        )
+        desde = now - timedelta(days=28)
+        if prev_rep and prev_rep.get("created_at"):
+            try:
+                desde = datetime.fromisoformat(str(prev_rep["created_at"]).replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                pass
+        d_per, d_dieta, d_entreno, _ = await _actividad_del_periodo(
+            profile, desde.isoformat(), now.isoformat())
+        por_semana = profile.get("training_days") or profile.get("dias_entreno")
+        previstos = round(float(por_semana) * d_per / 7) if por_semana else None
+        cumpl = _cumplimiento(
+            huecos_del_periodo(d_per, d_dieta, d_entreno, previstos), respuestas_huecos)
+
     report_id = str(uuid.uuid4())
     report = {
         "id": report_id,
@@ -42,8 +67,10 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "weight": data.weight,
         "measurements": data.measurements,
         "photos": data.photos,
-        "training_compliance": data.training_compliance,
-        "nutrition_compliance": data.nutrition_compliance,
+        "huecos": respuestas_huecos or None,
+        "cumplimiento": cumpl,
+        "training_compliance": (cumpl or {}).get("entreno_pct", data.training_compliance),
+        "nutrition_compliance": (cumpl or {}).get("dieta_pct", data.nutrition_compliance),
         "sleep_quality": data.sleep_quality,
         "energy_level": data.energy_level,
         "stress_level": data.stress_level,
@@ -90,6 +117,44 @@ async def get_previous_report(user = Depends(get_current_user)):
     return prev or {}
 
 
+@router.get("/confirmacion-huecos")
+async def get_confirmacion_huecos(user = Depends(get_current_user)):
+    """Lo que se le pregunta ANTES de rellenar el reporte (documento, partes 6 y 7).
+
+    Sustituye a los deslizadores de cumplimiento: en vez de pedirle que se puntúe, se le
+    enseñan los días que no registró y se le pregunta si es que no lo hizo o que no lo
+    apuntó. El cumplimiento sale de ahí.
+    """
+    from core.confirmacion_huecos import huecos_del_periodo
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    # Desde el reporte anterior hasta hoy: es el periodo del que se le pregunta.
+    prev = await db.reports.find_one(
+        {"client_id": profile["id"]}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)]
+    )
+    hasta = datetime.now(timezone.utc)
+    desde = hasta - timedelta(days=28)
+    if prev and prev.get("created_at"):
+        try:
+            desde = datetime.fromisoformat(str(prev["created_at"]).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+
+    dias_periodo, dias_dieta, dias_entreno, _ = await _actividad_del_periodo(
+        profile, desde.isoformat(), hasta.isoformat()
+    )
+
+    # Entrenos que TOCABAN: los días de entreno por semana del perfil, prorrateados. Sin
+    # ese dato no se pregunta por el entrenamiento (lo dice el módulo, no se fuerza aquí).
+    por_semana = profile.get("training_days") or profile.get("dias_entreno")
+    previstos = round(float(por_semana) * dias_periodo / 7) if por_semana else None
+
+    return huecos_del_periodo(dias_periodo, dias_dieta, dias_entreno, previstos)
+
+
 @router.get("/evolution")
 async def get_evolution_data(user = Depends(get_current_user)):
     """Obtener datos de evolución para gráficos."""
@@ -116,6 +181,53 @@ async def get_evolution_data(user = Depends(get_current_user)):
         "weight": weight_data,
         "measurements": measurements_data
     }
+
+
+async def _ritmos_de_su_perfil(perfil: dict) -> List[float]:
+    """Cambio semanal de peso (%) de OTROS clientes con el mismo perfil.
+
+    Mismo sexo, mismo objetivo y tramo de grasa parecido (±5 puntos). De cada uno se coge
+    su ultimo tramo entre reportes, que es lo comparable con el tramo de este cliente.
+
+    Solo devuelve numeros: ni nombres, ni ids, ni nada que identifique a nadie.
+    """
+    # Sin sexo y objetivo no hay "gente de su perfil" que valga: comparar el ritmo de
+    # alguien en volumen con el de alguien en definición no significa nada, y sin sexo
+    # tampoco. Antes que comparar con cualquiera, no se compara.
+    sexo, objetivo = perfil.get("sex"), perfil.get("goal")
+    if not sexo or not objetivo:
+        return []
+
+    grasa = perfil.get("body_fat")
+    filtro = {
+        "id": {"$ne": perfil.get("id")},
+        "sex": sexo,
+        "goal": objetivo,
+        "status": "activo",
+    }
+    if grasa:
+        filtro["body_fat"] = {"$gte": float(grasa) - 5, "$lte": float(grasa) + 5}
+
+    pares = await db.client_profiles.find(filtro, {"_id": 0, "id": 1}).to_list(400)
+    ritmos: List[float] = []
+    for p in pares:
+        reps = await db.reports.find(
+            {"client_id": p["id"], "weight": {"$ne": None}},
+            {"_id": 0, "weight": 1, "created_at": 1},
+        ).sort("created_at", -1).to_list(2)
+        if len(reps) < 2:
+            continue
+        nuevo, viejo = reps[0], reps[1]
+        try:
+            d1 = datetime.fromisoformat(str(nuevo["created_at"]).replace("Z", "+00:00"))
+            d0 = datetime.fromisoformat(str(viejo["created_at"]).replace("Z", "+00:00"))
+            semanas = max(0.5, (d1 - d0).days / 7.0)
+            p0 = float(viejo["weight"])
+            if p0 > 0:
+                ritmos.append((float(nuevo["weight"]) - p0) / p0 * 100.0 / semanas)
+        except (ValueError, TypeError, KeyError):
+            continue
+    return ritmos
 
 
 @router.get("/{report_id}/informe")
@@ -173,6 +285,7 @@ async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
         reporte=reporte,
         reporte_anterior=anterior,
         fotos_dia_cero=(primero or {}).get("photos"),
+        ritmos_cohorte=await _ritmos_de_su_perfil(perfil),
         semanas_ciclo=(plan.get("ciclo") or {}).get("semanas"),
         dias_dieta=dias_dieta,
         dias_entreno=dias_entreno,

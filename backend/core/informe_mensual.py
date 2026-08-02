@@ -204,9 +204,73 @@ def explicacion_del_sistema(peso: Dict[str, Any], cumplimiento: Dict[str, Any],
     return "Seguimos con los mismos macros este mes."
 
 
+# ---------------------------------------------------------------------------
+# La evolucion de referencia (octavo apartado): "como va respecto a gente de su perfil".
+# ---------------------------------------------------------------------------
+
+# Por debajo de esto no se enseña nada. Con tres o cuatro personas detras, decirle a
+# alguien que va "mejor que la media" es ruido disfrazado de dato, y encima permitiria
+# deducir el progreso de un cliente concreto.
+COHORTE_MINIMA = 8
+
+
+def evolucion_de_referencia(ritmo_semanal_pct: Optional[float],
+                            ritmos_cohorte: Optional[List[float]],
+                            sentido: str = "bajar") -> Dict[str, Any]:
+    """Donde queda su ritmo entre el de la gente con su mismo perfil.
+
+    `ritmos_cohorte` son los cambios semanales de peso en % de OTROS clientes del mismo
+    sexo, objetivo y tramo de grasa. Se devuelve un percentil y una frase, nunca datos de
+    nadie: la comparacion sirve para situarse, no para cotillear.
+
+    Con `sentido` "bajar", perder mas es ir mejor; con "subir", al reves. En mantenimiento
+    no se compara: ahi "mejor" no significa nada.
+    """
+    if sentido == "mantener":
+        return {"disponible": False,
+                "motivo": "En mantenimiento no tiene sentido comparar el ritmo con nadie"}
+    if ritmo_semanal_pct is None:
+        return {"disponible": False, "motivo": "Hace falta el peso de este mes y el del anterior"}
+
+    otros = [r for r in (ritmos_cohorte or []) if isinstance(r, (int, float))]
+    if len(otros) < COHORTE_MINIMA:
+        return {"disponible": False, "cohorte": len(otros),
+                "motivo": ("Todavía no hay suficientes personas con tu perfil para comparar. "
+                           "Aparecerá cuando las haya")}
+
+    # Mejor = mas negativo al bajar, mas positivo al subir.
+    if sentido == "bajar":
+        peores = sum(1 for r in otros if r > ritmo_semanal_pct)
+    else:
+        peores = sum(1 for r in otros if r < ritmo_semanal_pct)
+    percentil = int(round(100 * peores / len(otros)))
+
+    media = sum(otros) / len(otros)
+    if percentil >= 75:
+        frase = "Vas por delante de la mayoría de la gente con tu perfil."
+    elif percentil >= 40:
+        frase = "Vas en la media de la gente con tu perfil."
+    else:
+        frase = ("Vas por detrás de la media de tu perfil. No es un suspenso: "
+                 "el ritmo que te toca a ti es el de arriba, no el de los demás.")
+
+    return {
+        "disponible": True,
+        "percentil": percentil,
+        "cohorte": len(otros),
+        "tu_ritmo_semanal_pct": round(ritmo_semanal_pct, 2),
+        "media_cohorte_pct": round(media, 2),
+        "texto": frase,
+        # El aviso importa: el objetivo de cada uno sale de SU perfil (parte 6 del
+        # documento). Esto es contexto, no la vara de medir.
+        "nota": "Tu objetivo sigue siendo el tuyo; esto es solo para situarte.",
+    }
+
+
 def montar_informe(*, perfil: Dict[str, Any], reporte: Dict[str, Any],
                    reporte_anterior: Optional[Dict[str, Any]],
                    fotos_dia_cero: Optional[List[str]],
+                   ritmos_cohorte: Optional[List[float]] = None,
                    semanas_ciclo: Optional[int],
                    dias_dieta: int, dias_entreno: int, dias_periodo: int,
                    macros_comidos: Dict[str, Any],
@@ -266,8 +330,11 @@ def montar_informe(*, perfil: Dict[str, Any], reporte: Dict[str, Any],
             "la_escribe": "equipo" if la_escribe_el_equipo else "sistema",
             "pendiente": la_escribe_el_equipo and not explicacion,
         },
-        # Parte 8 del documento: todavia no hay de donde sacarlo. Se dice, no se inventa.
-        "referencia": {"disponible": False,
-                       "motivo": "La comparación con perfiles parecidos aún no está disponible"},
+        # Octavo apartado: como va respecto a gente de su perfil (parte 8 del documento).
+        "referencia": evolucion_de_referencia(
+            peso.get("semanal_pct") if peso.get("disponible") else None,
+            ritmos_cohorte,
+            (peso.get("objetivo") or {}).get("sentido", "bajar"),
+        ),
         "generado_at": datetime.now(timezone.utc).isoformat(),
     }

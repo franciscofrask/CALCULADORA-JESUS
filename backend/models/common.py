@@ -38,6 +38,10 @@ class ReportCreate(BaseModel):
     weight: float
     measurements: Optional[Dict[str, float]] = None
     photos: Optional[List[str]] = None
+    # Confirmación de huecos: {"dieta": "no_lo_hice"|"si_pero_no_apunte", "entrenamiento": ...}.
+    # De aquí sale el cumplimiento; los dos campos de abajo quedan por compatibilidad con
+    # los reportes viejos, que sí traían los deslizadores.
+    huecos: Optional[Dict[str, str]] = None
     training_compliance: Optional[int] = None
     nutrition_compliance: Optional[int] = None
     sleep_quality: Optional[int] = None
@@ -64,9 +68,13 @@ class ReportResponse(BaseModel):
 # Check-In Models (3 niveles: daily, weekly, monthly) - portado de calmajp
 class CheckInCreate(BaseModel):
     type: str  # "daily" | "weekly" | "monthly"
-    # Daily (check-in de 10 segundos)
-    mood: Optional[int] = None              # 1-5
+    # Daily · DOS campos (documento 31-07-2026, partes 6 y 7.2): "solo lo que no está en
+    # ningún dato: energía, y ansiedad y hambre. Lo de la dieta y el entreno se rellena
+    # solo con lo registrado". `mood`, `trained` y `nutrition_followed` ya no se piden:
+    # los dos últimos los deduce el servidor, y se conservan aquí por los check-ins viejos.
     energy: Optional[int] = None            # 1-5 (o 1-10 en weekly)
+    hunger_anxiety: Optional[int] = None    # 1-5 · ansiedad y hambre (saturación en volumen)
+    mood: Optional[int] = None
     trained: Optional[bool] = None
     nutrition_followed: Optional[bool] = None
     # Weekly

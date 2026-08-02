@@ -253,6 +253,9 @@ async def get_my_due_report(user=Depends(get_current_user)):
         "opens_label": opens_label,
         "closes_label": closes_label,
         "tipo_label": label,
+        # Los tipos en crudo: el formulario los necesita porque no pide lo mismo en el
+        # quincenal que en el mensual (las medidas solo van en el mensual, parte 7.3).
+        "tipos": state["tipos"],
     }
 
     items = []

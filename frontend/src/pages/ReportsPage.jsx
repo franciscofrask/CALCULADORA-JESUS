@@ -89,6 +89,13 @@ const ReportsPage = () => {
     const [activeTab, setActiveTab] = useState('form');
     const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
     const [prev, setPrev] = useState(null);                 // último reporte (referencia de medidas)
+    // Confirmación de huecos: lo que se le pregunta ANTES de rellenar, en vez de pedirle
+    // que puntúe su propio cumplimiento (documento, parte 7.1).
+    const [huecos, setHuecos] = useState(null);
+    const [huecosResp, setHuecosResp] = useState({});
+    // Las medidas solo van en el mensual, y allí solo la cintura es obligatoria; el resto,
+    // plegado (documento, parte 7.3). Si no se sabe qué toca, no se piden.
+    const [verMasMedidas, setVerMasMedidas] = useState(false);
 
     // El informe del mes: se pide solo cuando abre uno, porque cruza dietas, check-ins
     // y macros de todo el periodo y no tiene sentido calcularlo para la lista entera.
@@ -115,8 +122,6 @@ const ReportsPage = () => {
     const [reportData, setReportData] = useState({
         weight: '',
         measurements: { chest: '', waist: '', hip: '', arm: '', thigh: '' },
-        training_compliance: 80,
-        nutrition_compliance: 80,
         sleep_quality: 7,
         energy_level: 7,
         stress_level: 5,
@@ -128,17 +133,19 @@ const ReportsPage = () => {
 
     const fetchData = async () => {
         try {
-            const [reportsRes, evolutionRes, dueRes, prevRes] = await Promise.all([
+            const [reportsRes, evolutionRes, dueRes, prevRes, huecosRes] = await Promise.all([
                 api.get('/reports'),
                 api.get('/reports/evolution'),
                 api.get('/reports/due').catch(() => ({ data: { window: null } })),
                 api.get('/reports/previous').catch(() => ({ data: null })),
+                api.get('/reports/confirmacion-huecos').catch(() => ({ data: null })),
             ]);
             setReports(reportsRes.data);
             setHasMore(reportsRes.data.length === 50);
             setEvolution(evolutionRes.data);
             setWindowState(dueRes.data?.window || null);
             setPrev(prevRes.data && Object.keys(prevRes.data).length ? prevRes.data : null);
+            setHuecos(huecosRes.data || null);
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
@@ -159,9 +166,18 @@ const ReportsPage = () => {
         finally { setLoadingMore(false); }
     };
 
+    // Qué reporte toca esta semana. Sin el dato no se piden medidas: es preferible no
+    // pedirlas que pedirlas en el quincenal, que es justo lo que el documento quita.
+    const esMensual = (windowState?.tipos || []).includes('mensual');
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!reportData.weight) { toast.error('El peso es obligatorio'); return; }
+        // En el mensual la cintura es obligatoria; el resto de medidas, no (parte 7.3).
+        if (esMensual && !reportData.measurements.waist) {
+            toast.error('La cintura es obligatoria en el reporte mensual');
+            return;
+        }
         setSubmitting(true);
         try {
             const payload = {
@@ -171,8 +187,8 @@ const ReportsPage = () => {
                         .filter(([_, v]) => v)
                         .map(([k, v]) => [k, parseFloat(v)])
                 ),
-                training_compliance: reportData.training_compliance,
-                nutrition_compliance: reportData.nutrition_compliance,
+                // El cumplimiento lo calcula el servidor a partir de esto y del registro.
+                huecos: huecosResp,
                 sleep_quality: reportData.sleep_quality,
                 energy_level: reportData.energy_level,
                 stress_level: reportData.stress_level,
@@ -182,11 +198,10 @@ const ReportsPage = () => {
             toast.success('Reporte enviado correctamente');
             fetchData();
             setActiveTab('history');
+            setHuecosResp({});
             setReportData({
                 weight: '',
                 measurements: { chest: '', waist: '', hip: '', arm: '', thigh: '' },
-                training_compliance: 80,
-                nutrition_compliance: 80,
                 sleep_quality: 7,
                 energy_level: 7,
                 stress_level: 5,
@@ -290,25 +305,29 @@ const ReportsPage = () => {
                         )}
                     </div>
 
-                    {/* Measurements */}
-                    <div className="bg-card border border-border rounded-2xl p-4">
+                    {/* Medidas: SOLO en el mensual (documento, parte 7.3). En el quincenal
+                        no se piden; ahí el reporte es "dos minutos" y sacar la cinta métrica
+                        cada dos semanas para un dato que apenas se mueve no compensa.
+                        En el mensual, la cintura es obligatoria y el resto va plegado. */}
+                    {esMensual && (
+                    <div className="bg-card border border-border rounded-2xl p-4" data-testid="medidas">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center">
                                 <Ruler className="w-4 h-4 text-foreground/40" />
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-foreground">Medidas (cm)</p>
-                                <p className="text-xs text-foreground/30">Opcional</p>
+                                <p className="text-sm font-bold text-foreground">Cintura (cm)</p>
+                                <p className="text-xs text-foreground/30">Obligatoria</p>
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            {[
-                                { key: 'chest', label: 'Pecho' },
+                            {(verMasMedidas ? [
                                 { key: 'waist', label: 'Cintura' },
+                                { key: 'chest', label: 'Pecho' },
                                 { key: 'hip', label: 'Cadera' },
                                 { key: 'arm', label: 'Brazo' },
-                                { key: 'thigh', label: 'Muslo' }
-                            ].map(({ key, label }) => (
+                                { key: 'thigh', label: 'Muslo' },
+                            ] : [{ key: 'waist', label: 'Cintura' }]).map(({ key, label }) => (
                                 <div key={key}>
                                     <label className={labelCls}>{label}</label>
                                     <input
@@ -325,12 +344,47 @@ const ReportsPage = () => {
                                 </div>
                             ))}
                         </div>
+                        <button type="button" onClick={() => setVerMasMedidas(v => !v)}
+                            data-testid="ver-mas-medidas"
+                            className="mt-3 text-xs text-foreground/50 hover:text-foreground underline underline-offset-4">
+                            {verMasMedidas ? 'Solo la cintura' : 'Añadir el resto de medidas (opcional)'}
+                        </button>
                     </div>
+                    )}
 
-                    {/* Sliders */}
+                    {/* Confirmación de huecos: sustituye a los dos deslizadores de
+                        cumplimiento (documento 31-07, parte 7.1). El cumplimiento sale del
+                        registro, no de que se puntúe a sí mismo. Los deslizadores que
+                        quedan son los que NO se pueden deducir: sueño, energía y estrés. */}
+                    {huecos?.hay_que_preguntar && (
+                        <div className="bg-card border border-border rounded-2xl p-4 space-y-4" data-testid="confirmacion-huecos">
+                            <p className="text-sm font-bold text-foreground">Antes de rellenar</p>
+                            {huecos.huecos.map(h => (
+                                <div key={h.tipo}>
+                                    <p className="text-sm text-foreground/70 mb-2">{h.pregunta}</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { v: 'no_lo_hice', t: h.tipo === 'dieta' ? 'No la hice' : 'No los hice' },
+                                            { v: 'si_pero_no_apunte', t: h.tipo === 'dieta' ? 'Sí, no la apunté' : 'Sí, no los apunté' },
+                                        ].map(op => (
+                                            <button key={op.v} type="button"
+                                                onClick={() => setHuecosResp({ ...huecosResp, [h.tipo]: op.v })}
+                                                data-testid={`hueco-${h.tipo}-${op.v}`}
+                                                className={`py-2.5 px-3 rounded-xl border text-sm transition-all ${
+                                                    huecosResp[h.tipo] === op.v
+                                                        ? 'border-brand bg-brand/10 text-brand font-bold'
+                                                        : 'border-border bg-muted text-foreground/60 hover:border-white/30'}`}>
+                                                {op.t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Sliders: solo lo que no se puede deducir de lo registrado */}
                     <div className="bg-card border border-border rounded-2xl p-4 space-y-5">
-                        <SliderRow icon={Activity} iconColor={ORANGE}    label="Cumplimiento entrenamiento" value={reportData.training_compliance}  max={100} unit="%" onChange={(v) => set('training_compliance', v)} />
-                        <SliderRow icon={Activity} iconColor="#22C55E"   label="Cumplimiento nutrición"      value={reportData.nutrition_compliance} max={100} unit="%" onChange={(v) => set('nutrition_compliance', v)} />
                         <SliderRow icon={Moon}     iconColor="#818CF8"   label="Calidad del sueño"           value={reportData.sleep_quality}        max={10}  unit="/10" onChange={(v) => set('sleep_quality', v)} />
                         <SliderRow icon={Zap}      iconColor="#F59E0B"   label="Nivel de energía"            value={reportData.energy_level}         max={10}  unit="/10" onChange={(v) => set('energy_level', v)} />
                         <SliderRow icon={Brain}    iconColor="#F43F5E"   label="Nivel de estrés"             value={reportData.stress_level}         max={10}  unit="/10" onChange={(v) => set('stress_level', v)} />

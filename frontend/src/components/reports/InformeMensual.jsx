@@ -12,7 +12,7 @@
  *     Un -0,4 % semanal es ir bien o ir lento según quién lo firme.
  */
 import React from 'react';
-import { Camera, TrendingDown, TrendingUp, Minus, Check, AlertCircle, Lock } from 'lucide-react';
+import { Camera, TrendingDown, TrendingUp, Minus, Check, AlertCircle, Lock, Users } from 'lucide-react';
 
 const COLOR = {
     verde: 'text-emerald-500',
@@ -201,12 +201,27 @@ export const InformeMensual = ({ informe, onPedirFotos }) => {
                 )}
             </Apartado>
 
-            {/* Octavo apartado: aún no hay de dónde sacarlo. Se dice, no se finge. */}
-            {!referencia?.disponible && (
+            {/* Octavo apartado: cómo va respecto a gente de su perfil. */}
+            {referencia?.disponible ? (
+                <Apartado icono={Users} titulo="Cómo vas respecto a gente como tú">
+                    <p className="text-sm text-foreground/80 leading-relaxed">{referencia.texto}</p>
+                    <div className="flex items-baseline gap-2 mt-3">
+                        <span className="font-heading text-3xl font-bold text-brand tabular-nums">
+                            {referencia.percentil}%
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                            de las {referencia.cohorte} personas con tu perfil van más lento que tú
+                        </span>
+                    </div>
+                    {/* El objetivo de ritmo sale de SU perfil, no de la media: que no se
+                        lea como un ranking donde lo importante es adelantar a alguien. */}
+                    <p className="text-[11px] text-muted-foreground mt-3">{referencia.nota}</p>
+                </Apartado>
+            ) : (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-border">
                     <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                     <p className="text-[11px] text-muted-foreground">
-                        Cómo vas respecto a gente con tu mismo punto de partida: llegará pronto.
+                        {referencia?.motivo || 'Cómo vas respecto a gente con tu mismo punto de partida: llegará pronto.'}
                     </p>
                 </div>
             )}
