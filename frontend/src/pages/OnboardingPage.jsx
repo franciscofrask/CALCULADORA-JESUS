@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { Check, ArrowRight, ArrowLeft, Loader2, Star } from 'lucide-react';
-import BrandArrow from '../components/BrandArrow';
+import Logo12EN12 from '../components/Logo12EN12';
 import { habilitacionesToList } from '../lib/planAccess';
 
 // Presentación de cada plan (orden, badge, descripción comercial). Los datos reales
@@ -60,9 +60,12 @@ const OnboardingPage = () => {
 
     // Planes comercialmente activos del catálogo, con su capa de presentación.
     // Solo se muestra el precio principal (precios[0]): es el único que existe en Stripe.
+    // Fuera la Membresía (`solo_salida`): no es un plan que se compre, es donde cae el
+    // que no renueva su ciclo. Ofrecerla aquí, al lado de los tres niveles, invitaba a
+    // entrar por 97 € a algo que no es un programa.
     const plans = useMemo(() => (
         Object.entries(planCatalog || {})
-            .filter(([, p]) => p.estado === 'activo' && p.stripe_price_env)
+            .filter(([, p]) => p.estado === 'activo' && p.stripe_price_env && !p.solo_salida)
             .map(([code, p]) => ({
                 id: code,
                 name: p.name,
@@ -135,10 +138,11 @@ const OnboardingPage = () => {
                 </button>
                 {/* Header */}
                 <div className="text-center mb-10">
-                    <div className="inline-flex items-center text-5xl mb-4" style={{ fontFamily: 'Barlow Condensed' }}>
-                        <span className="text-foreground">JG</span>
-                        <span className="text-foreground">12</span>
-                        <BrandArrow className="text-[#FF671F] h-[1em] w-[1em] -ml-0.5" />
+                    {/* La marca es 12EN12, no JG12: esta pantalla se habia quedado con el
+                        nombre viejo. Se usa el componente de logo para que no se vuelva a
+                        desviar de como se escribe en el resto de la app. */}
+                    <div className="flex justify-center mb-4">
+                        <Logo12EN12 size="lg" />
                     </div>
                     <h1 className="heading-1 text-foreground mb-2">ELIGE TU PLAN</h1>
                     <p className="text-foreground/60 uppercase tracking-wider text-sm">
