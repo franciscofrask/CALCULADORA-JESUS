@@ -65,6 +65,7 @@ async def post_quiz_venta(data: Dict[str, Any] = Body(default={})):
 
 
 _RE_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+_RE_DIGITOS = re.compile(r"\D")
 
 
 @router.post("/quiz-venta/guardar")
@@ -88,27 +89,49 @@ async def guardar_quiz_venta(data: Dict[str, Any] = Body(default={})):
         raise HTTPException(status_code=400, detail="Necesitamos un correo válido")
 
     nombre = str((data or {}).get("nombre") or "").strip()[:80]
+    telefono = str((data or {}).get("telefono") or "").strip()[:30]
     respuestas = (data or {}).get("respuestas") or {}
     recomendado = str((data or {}).get("recomendado") or "")[:20]
     quiere_llamada = bool((data or {}).get("quiere_llamada"))
+
+    # Si pide que le llamen, hace falta a quien llamar y a que numero. Sin esto el aviso
+    # del panel llegaria sin con que atenderlo, que es peor que no llegar.
+    if quiere_llamada:
+        if not nombre:
+            raise HTTPException(status_code=400, detail="Necesitamos tu nombre para llamarte")
+        if len(_RE_DIGITOS.sub("", telefono)) < 9:
+            raise HTTPException(status_code=400, detail="Necesitamos un teléfono válido")
 
     ahora = datetime.now(timezone.utc).isoformat()
     ya_cliente = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 1})
     ya_lead = await db.leads.find_one({"email": email}, {"_id": 0, "id": 1})
 
-    # Al que ya esta dentro no se le crea un lead duplicado; se le responde igual.
-    if not ya_cliente and not ya_lead:
+    quiz = {
+        "respuestas": {str(k): str(v)[:2] for k, v in list(respuestas.items())[:10]},
+        "recomendado": recomendado,
+        "quiere_llamada": quiere_llamada,
+        "fecha": ahora,
+    }
+
+    if ya_lead:
+        # Ya estaba en el CRM: no se duplica, pero si ahora pide llamada eso SI se anota.
+        # Perder la peticion por haber dejado el correo antes seria perder la venta.
+        if quiere_llamada:
+            await db.leads.update_one({"id": ya_lead["id"]}, {"$set": {
+                "quiz_venta": quiz, "updated_at": ahora,
+                **({"phone": telefono} if telefono else {}),
+            }})
+    elif not ya_cliente:
         await db.leads.insert_one({
             "id": str(uuid.uuid4()),
             "name": nombre or email.split("@")[0],
             "email": email,
-            "phone": "",
+            "phone": telefono,
             "source": "web",
             "status": "nuevo",
             "notes": (f"Test de nivel: sale {recomendado}."
                       + (" PIDE LLAMADA (Nivel 3)." if quiere_llamada else "")),
-            "quiz_venta": {"respuestas": {str(k): str(v)[:2] for k, v in list(respuestas.items())[:10]},
-                           "recomendado": recomendado, "fecha": ahora},
+            "quiz_venta": quiz,
             "assigned_to": None,
             "next_action_date": None,
             "created_at": ahora,

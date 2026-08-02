@@ -14,7 +14,7 @@ import {
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
     AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple, Layers,
-    Menu, X
+    Menu, X, Phone
 } from 'lucide-react';
 
 // Colores para el desglose por plan (cualquier plan sin color cae en el gris).
@@ -76,6 +76,54 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
     );
 };
 
+// Alerta: quien ha elegido el Nivel 3 en el test y espera que le llamen. Solo aparece
+// cuando hay alguna: un aviso que está siempre deja de ser un aviso. Va arriba del todo
+// porque es lo único del panel donde hay alguien esperando al otro lado del teléfono.
+const LlamadasPendientes = ({ llamadas, onAtendida }) => {
+    if (!llamadas || llamadas.length === 0) return null;
+    return (
+        <Card className="bg-[#FF671F]/10 border-[#FF671F]/40" data-testid="llamadas-pendientes">
+            <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                    <Phone className="w-4 h-4 text-[#FF671F]" />
+                    <span className="text-sm font-bold text-white uppercase tracking-wider">
+                        Piden que les llamemos
+                    </span>
+                    <Badge className="bg-[#FF671F] text-white border-0 text-xs">{llamadas.length}</Badge>
+                    <span className="text-[11px] text-white/40 ml-auto">Nivel 3 desde el test</span>
+                </div>
+                <div className="space-y-2">
+                    {llamadas.map(l => (
+                        <div key={l.id} data-testid={`llamada-${l.id}`}
+                            className="bg-[#0A0A0A] rounded-xl border border-[#222] p-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <div className="min-w-0">
+                                <p className="text-sm font-bold text-white truncate">{l.name}</p>
+                                <p className="text-[11px] text-white/40 truncate">{l.email}</p>
+                            </div>
+                            {/* El teléfono es el dato accionable: grande y pulsable para llamar. */}
+                            <a href={`tel:${(l.phone || '').replace(/\s/g, '')}`}
+                                className="text-base font-bold text-[#FF671F] hover:underline tabular-nums">
+                                {l.phone || 'sin teléfono'}
+                            </a>
+                            {l.dias_esperando > 0 && (
+                                <span className={`text-[10px] font-bold uppercase tracking-wide ${
+                                    l.dias_esperando >= 2 ? 'text-red-400' : 'text-white/40'}`}>
+                                    {l.dias_esperando === 1 ? 'de ayer' : `hace ${l.dias_esperando} días`}
+                                </span>
+                            )}
+                            <Button size="sm" variant="ghost" onClick={() => onAtendida(l)}
+                                data-testid={`llamada-atendida-${l.id}`}
+                                className="ml-auto text-xs text-white/60 hover:text-white">
+                                Ya le he llamado
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
 // Admin Dashboard Home
 const AdminDashboard = () => {
     const { api, planCatalog } = useAuth();
@@ -90,6 +138,18 @@ const AdminDashboard = () => {
     // "Por hacer esta semana": sin macros / sin rutina / reporte pendiente (tarea 19).
     const [todo, setTodo] = useState(null);
     const [soloAlCorriente, setSoloAlCorriente] = useState(false);
+    // Nivel 3: piden llamada desde el test de nivel y esperan a que alguien marque.
+    const [llamadas, setLlamadas] = useState([]);
+
+    const marcarLlamadaAtendida = async (l) => {
+        try {
+            await api.post(`/leads/${l.id}/llamada-atendida`);
+            setLlamadas(prev => prev.filter(x => x.id !== l.id));
+            toast.success(`${l.name} queda como contactado`);
+        } catch {
+            toast.error('No se pudo marcar la llamada');
+        }
+    };
 
     const resolverRevision = async (rev) => {
         try {
@@ -124,13 +184,14 @@ const AdminDashboard = () => {
     useEffect(() => {
         const fetchAll = async () => {
             try {
-                const [statsRes, upcomingRes, clientsRes, cadenceRes, revisionesRes, todoRes] = await Promise.all([
+                const [statsRes, upcomingRes, clientsRes, cadenceRes, revisionesRes, todoRes, llamadasRes] = await Promise.all([
                     api.get('/admin/dashboard-stats'),
                     api.get('/admin/upcoming-payments'),
                     api.get('/admin/clients'),
                     api.get('/admin/report-cadence'),
                     api.get('/admin/macro-revisiones').catch(() => ({ data: { items: [] } })),
                     api.get('/admin/todo-semana').catch(() => ({ data: null })),
+                    api.get('/leads/llamadas-pendientes').catch(() => ({ data: { llamadas: [] } })),
                 ]);
                 setStats(statsRes.data);
                 setUpcoming(upcomingRes.data.upcoming || []);
@@ -138,6 +199,7 @@ const AdminDashboard = () => {
                 setCadence(cadenceRes.data.items || []);
                 setRevisiones(revisionesRes.data.items || []);
                 setTodo(todoRes.data || null);
+                setLlamadas(llamadasRes.data?.llamadas || []);
             } catch (error) {
                 console.error('Error fetching dashboard:', error);
                 toast.error('Error al cargar dashboard');
@@ -224,6 +286,9 @@ const AdminDashboard = () => {
                     )}
                 </div>
             </div>
+
+            {/* Piden llamada (Nivel 3): por encima de los KPIs porque hay gente esperando */}
+            <LlamadasPendientes llamadas={llamadas} onAtendida={marcarLlamadaAtendida} />
 
             {/* KPI Row */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="kpi-row">

@@ -87,6 +87,45 @@ async def create_lead(data: dict, user=Depends(get_admin_user)):
     return {k: v for k, v in lead.items() if k != "_id"}
 
 
+# ==================== LLAMADAS DEL NIVEL 3 ====================
+# El Nivel 3 se contrata hablando, asi que quien lo elige en el test de nivel deja
+# nombre y telefono y aparece aqui. Estas dos rutas van ANTES de "/{lead_id}": FastAPI
+# resuelve por orden y esa ruta se tragaria "llamadas-pendientes" como si fuera un id.
+
+@router.get("/llamadas-pendientes")
+async def llamadas_pendientes(user=Depends(get_admin_user)):
+    """Quien ha pedido que le llamen y todavia no ha sido atendido."""
+    docs = await db.leads.find(
+        {"quiz_venta.quiere_llamada": True, "status": "nuevo"},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "quiz_venta": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(200)
+
+    ahora = datetime.now(timezone.utc)
+    for d in docs:
+        # Cuantos dias lleva esperando: una peticion de llamada de hace una semana no es
+        # lo mismo que una de esta mañana, y en el panel tiene que notarse.
+        try:
+            pedida = datetime.fromisoformat(d.get("quiz_venta", {}).get("fecha") or d["created_at"])
+            d["dias_esperando"] = max(0, (ahora - pedida).days)
+        except (ValueError, KeyError, TypeError):
+            d["dias_esperando"] = 0
+    return {"llamadas": docs, "total": len(docs)}
+
+
+@router.post("/{lead_id}/llamada-atendida")
+async def marcar_llamada_atendida(lead_id: str, user=Depends(get_admin_user)):
+    """Ya se le ha contactado: sale del aviso, pero sigue siendo lead en el CRM."""
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    await db.leads.update_one({"id": lead_id}, {"$set": {
+        "status": "contactado",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    await audit(user, "lead", f"Atendió la petición de llamada de {lead.get('name') or lead_id}")
+    return {"ok": True}
+
+
 @router.get("/{lead_id}")
 async def get_lead(lead_id: str, user=Depends(get_admin_user)):
     """Obtener un lead por ID."""

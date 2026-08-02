@@ -30,7 +30,9 @@ const QuizVentaPage = () => {
     const [pidiendo, setPidiendo] = useState(null);
     const [email, setEmail] = useState('');
     const [nombre, setNombre] = useState('');
+    const [telefono, setTelefono] = useState('');
     const [guardado, setGuardado] = useState(false);
+    const esLlamada = pidiendo === 'llamada';
 
     useEffect(() => {
         axios.get(`${API}/api/quiz-venta`)
@@ -77,10 +79,10 @@ const QuizVentaPage = () => {
         setEnviando(true);
         try {
             await axios.post(`${API}/api/quiz-venta/guardar`, {
-                email, nombre,
+                email, nombre, telefono,
                 respuestas: resultado.respuestas,
                 recomendado: resultado.recomendado,
-                quiere_llamada: pidiendo === 'llamada',
+                quiere_llamada: esLlamada,
             });
             setGuardado(true);
         } catch (err) {
@@ -145,35 +147,42 @@ const QuizVentaPage = () => {
                             <div className="surface p-5 text-center" data-testid="quiz-guardado">
                                 <Check className="w-6 h-6 text-brand mx-auto mb-2" />
                                 <p className="font-bold">
-                                    {pidiendo === 'llamada' ? 'Te llamamos' : 'Guardado'}
+                                    {esLlamada ? 'Te llamamos' : 'Guardado'}
                                 </p>
                                 <p className="text-sm text-muted-foreground mt-1">
-                                    {pidiendo === 'llamada'
-                                        ? 'Nos pondremos en contacto contigo para hablar del Nivel 3.'
+                                    {esLlamada
+                                        ? 'Te llamamos al número que nos has dejado para hablar del Nivel 3.'
                                         : 'Te lo hemos guardado. Puedes volver cuando quieras.'}
                                 </p>
                             </div>
                         ) : pidiendo ? (
                             <form onSubmit={guardar} className="surface p-5" data-testid="quiz-form-email">
                                 <p className="font-bold mb-1">
-                                    {pidiendo === 'llamada' ? 'El Nivel 3 se contrata hablando' : 'Te lo guardamos'}
+                                    {esLlamada ? 'El Nivel 3 se contrata hablando' : 'Te lo guardamos'}
                                 </p>
                                 <p className="text-sm text-muted-foreground mb-4">
-                                    {pidiendo === 'llamada'
-                                        ? 'Déjanos tu correo y te escribimos para agendar la llamada.'
+                                    {esLlamada
+                                        ? 'Déjanos tu nombre y tu teléfono y te llamamos nosotros.'
                                         : 'Déjanos tu correo y tendrás este resultado a mano.'}
                                 </p>
                                 <div className="grid sm:grid-cols-2 gap-2 mb-3">
                                     <input value={nombre} onChange={e => setNombre(e.target.value)}
-                                        placeholder="Tu nombre" data-testid="quiz-nombre"
+                                        required={esLlamada} placeholder="Tu nombre" data-testid="quiz-nombre"
                                         className="h-11 px-3 rounded-xl bg-muted text-base sm:text-sm" />
                                     <input value={email} onChange={e => setEmail(e.target.value)}
                                         type="email" required placeholder="Tu correo" data-testid="quiz-email"
                                         className="h-11 px-3 rounded-xl bg-muted text-base sm:text-sm" />
+                                    {/* El telefono solo cuando hay que llamarle: pedirlo para
+                                        guardar un resultado seria pedirlo por pedirlo. */}
+                                    {esLlamada && (
+                                        <input value={telefono} onChange={e => setTelefono(e.target.value)}
+                                            type="tel" required placeholder="Tu teléfono" data-testid="quiz-telefono"
+                                            className="h-11 px-3 rounded-xl bg-muted text-base sm:text-sm sm:col-span-2" />
+                                    )}
                                 </div>
                                 <button type="submit" disabled={enviando} data-testid="quiz-guardar"
                                     className="w-full h-11 rounded-xl bg-brand text-white font-bold disabled:opacity-60">
-                                    {enviando ? 'Enviando…' : pidiendo === 'llamada' ? 'Que me llamen' : 'Guardar'}
+                                    {enviando ? 'Enviando…' : esLlamada ? 'Que me llamen' : 'Guardar'}
                                 </button>
                             </form>
                         ) : (
