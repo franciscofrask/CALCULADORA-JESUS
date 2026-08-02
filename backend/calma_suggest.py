@@ -338,3 +338,27 @@ def macros_efectivos(food: dict, cantidad_g: float) -> Dict[str, float]:
     return {"P": round(m["proteinas"], 2),
             "H": round(m["hidratos"], 2),
             "G": round(m["grasas"], 2)}
+
+
+def macros_reales(food: dict, cantidad_g: float) -> Dict[str, float]:
+    """Macros de la ETIQUETA de `food` a `cantidad_g` gramos, {"P","H","G"}.
+
+    Lo que lleva el alimento de verdad, sin las reglas del metodo: aqui no se aplica
+    ye() ni la regla del 25%, asi que la proteina de un pan o los hidratos de unos
+    frutos secos aparecen aunque el metodo no los cuente.
+
+    Es SOLO informativo (el switch de la pestaña de Nutricion). Nada que decida
+    cantidades, reparto o si una comida esta cuadrada debe usar esto: para contar
+    esta `macros_efectivos`.
+
+    Escala igual que `macros_efectivos` -- granel por 100 g, unidades por racion --
+    para que las dos cifras del switch sean comparables. `calma_engine.
+    calcular_macros_brutos` divide SIEMPRE por racion, y da otro numero en los
+    alimentos con racion != 100 (platos preparados).
+    """
+    es_unidad = bool(food.get("unidades"))
+    racion = float(food.get("racion") or 100) or 100.0
+    escala = (cantidad_g / racion) if es_unidad else (cantidad_g / 100.0)
+    return {"P": round(float(food.get("proteinas") or 0) * escala, 2),
+            "H": round(float(food.get("hidratos") or 0) * escala, 2),
+            "G": round(float(food.get("grasas") or 0) * escala, 2)}

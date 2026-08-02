@@ -10,6 +10,7 @@ import uuid
 
 from core.database import db
 from core.security import get_current_user
+from calma_suggest import macros_reales
 from pdf_generator import generate_diet_pdf
 
 router = APIRouter(prefix="/diets", tags=["diets"])
@@ -276,12 +277,18 @@ async def copy_day(data: dict, user = Depends(get_current_user)):
 
 async def _adjuntar_urls(diet: dict) -> None:
     """
-    Pone la URL de ficha en cada alimento del dia (los de marca la tienen; los genericos no).
+    Pone en cada alimento del dia lo que hay que resolver contra el catalogo:
 
-    Se resuelve aqui y no al guardar por dos motivos: los dias ya guardados no la tienen, y los
-    alimentos entran por muchas puertas (buscador, chatbot, menu sugerido, copiar dia, favoritas),
-    asi que guardarla en cada una seria facil de olvidar. Ademas, si se corrige la URL de un
-    alimento, los dias antiguos la cogen sola. Es una unica consulta por dia.
+      - `url`: la ficha del producto (los de marca la tienen; los genericos no).
+      - `macros_reales`: lo que dice la etiqueta, para el switch de la pestaña de
+        Nutricion. Es SOLO para enseñarlo: no se guarda, no cuenta y no cambia el
+        reparto; lo que cuenta sigue siendo `macros_efectivos`.
+
+    Se resuelve aqui y no al guardar por dos motivos: los dias ya guardados no lo tienen
+    (de 3365 alimentos guardados, solo 95 traian los macros de etiqueta), y los alimentos
+    entran por muchas puertas (buscador, chatbot, menu sugerido, copiar dia, favoritas),
+    asi que guardarlo en cada una seria facil de olvidar. Ademas, si se corrige un
+    alimento, los dias antiguos lo cogen solos. Es una unica consulta por dia.
     """
     comidas = diet.get("comidas") or {}
     ids = {
@@ -293,16 +300,26 @@ async def _adjuntar_urls(diet: dict) -> None:
     if not ids:
         return
 
-    urls = {
-        f["id"]: f.get("url")
-        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0, "id": 1, "url": 1})
+    catalogo = {
+        f["id"]: f
+        async for f in db.foods.find(
+            {"id": {"$in": list(ids)}},
+            {"_id": 0, "id": 1, "url": 1, "proteinas": 1, "hidratos": 1, "grasas": 1,
+             "racion": 1, "unidades": 1},
+        )
     }
     for comida in comidas.values():
         for a in ((comida or {}).get("alimentos") or []):
             clave = a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
-            url = urls.get(clave)
-            if url:
-                a["url"] = url
+            ficha = catalogo.get(clave)
+            if not ficha:
+                continue
+            if ficha.get("url"):
+                a["url"] = ficha["url"]
+            try:
+                a["macros_reales"] = macros_reales(ficha, float(a.get("cantidad_g") or 0))
+            except (TypeError, ValueError):
+                pass  # un alimento raro no puede tumbar la carga del dia
 
 
 @router.get("/{fecha}")

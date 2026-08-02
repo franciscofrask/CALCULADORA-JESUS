@@ -1,5 +1,6 @@
 import React from 'react';
 import { StatusDot } from './DaySummary';
+import { macrosDeVista } from './ModoMacros';
 import {
     ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download
 } from 'lucide-react';
@@ -94,10 +95,11 @@ export const MealTab = ({ mealKey, mealInfo, getMealStatus, isLocked, selected, 
 };
 
 // ===== Macro progress block =====
-const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFoods }) => {
+const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFoods, modoMacros = 'metodo' }) => {
     const target = getMealTarget(mealKey);
     const served = calculateMealMacros(mealKey);
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
+    const reales = modoMacros === 'reales';
 
     const macroState = (servedVal, tgtVal) => {
         if (!(servedVal > 0)) return { label: null, cls: '', over: false };
@@ -125,9 +127,12 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
                     <span className="text-[11px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
                     <span className="text-[11px] font-bold sm:hidden" style={{ color }}>{label}</span>
                     <span className={`font-data text-[11px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
-                    {hasFoods && st.label && <span className={`font-data text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
+                    {/* En modo "reales" no se dice cuanto falta o sobra: el objetivo es del
+                        metodo y restarselo a una cifra de etiqueta no significa nada. */}
+                    {hasFoods && !reales && st.label && <span className={`font-data text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
                 </div>
             ))}
+            {reales && <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400">etiqueta</span>}
         </div>
     );
 };
@@ -135,8 +140,8 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
 // ===== Ingredient row =====
 const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
     moveFoodUp, removeFood, updateFoodQuantity, updateFoodQuantityDirect,
-    setEditingQuantity, formatFoodQuantity }) => {
-    const macros = food.macros_efectivos || {};
+    setEditingQuantity, formatFoodQuantity, modoMacros = 'metodo' }) => {
+    const macros = macrosDeVista(food, modoMacros);
     return (
         // Todo el alimento en una linea: prioridad, nombre + macros, cantidad y eliminar.
         // El nombre se recorta con puntos suspensivos (completo en el title) para que
@@ -219,6 +224,9 @@ const MealCard = ({
     clearMeal, formatFoodQuantity,
     isLocked = false, canVolcar = false, onVolcar, onCuadrar,
     mealMode = 'auto', setMealMode, forceExpanded = false, denso = false,
+    // Solo cambia la cifra que se enseña; el estado de la comida y las cantidades
+    // siguen saliendo del metodo. Ver components/nutrition/ModoMacros.jsx
+    modoMacros = 'metodo', calculateMealMacrosVista,
 }) => {
     const isExpanded = forceExpanded ? true : expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
@@ -289,7 +297,9 @@ const MealCard = ({
                         </div>
                     )}
 
-                    <MealProgressBars mealKey={mealKey} getMealTarget={getMealTarget} calculateMealMacros={calculateMealMacros} hasFoods={foods.length > 0} />
+                    <MealProgressBars mealKey={mealKey} getMealTarget={getMealTarget}
+                        calculateMealMacros={calculateMealMacrosVista || calculateMealMacros}
+                        hasFoods={foods.length > 0} modoMacros={modoMacros} />
 
                     {isLocked && (
                         <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 rounded-xl px-3 py-2">
@@ -369,7 +379,8 @@ const MealCard = ({
                                             increment={getQuantityIncrement(food)}
                                             moveFoodUp={moveFoodUp} removeFood={removeFood}
                                             updateFoodQuantity={updateFoodQuantity} updateFoodQuantityDirect={updateFoodQuantityDirect}
-                                            setEditingQuantity={setEditingQuantity} formatFoodQuantity={formatFoodQuantity} />
+                                            setEditingQuantity={setEditingQuantity} formatFoodQuantity={formatFoodQuantity}
+                                            modoMacros={modoMacros} />
                                     ))}
                                 </div>
                             </div>

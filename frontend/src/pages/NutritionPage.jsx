@@ -19,6 +19,7 @@ import FavoritesModal from '../components/nutrition/FavoritesModal';
 import DayHeader from '../components/nutrition/DayHeader';
 import MealCard, { MealSelectorItem, MealTab } from '../components/nutrition/MealCard';
 import { VistaComidasSelector, leerVista, guardarVista } from '../components/nutrition/VistaComidas';
+import { ModoMacrosSelector, leerModoMacros, guardarModoMacros, sumaDeVista } from '../components/nutrition/ModoMacros';
 import { SearchFoodModal } from '../components/nutrition/SearchFoodModal';
 import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
@@ -129,6 +130,11 @@ const NutritionPage = () => {
     // Se recuerda de un dia para otro; ver components/nutrition/VistaComidas.jsx.
     const [vistaComidas, setVistaComidas] = useState(leerVista);
     const cambiarVistaComidas = useCallback((v) => { guardarVista(v); setVistaComidas(v); }, []);
+
+    // Macros del metodo o de la etiqueta. SOLO cambia lo que se enseña: el conteo, el
+    // reparto y el estado de cada comida siguen saliendo de calculateMealMacros.
+    const [modoMacros, setModoMacros] = useState(leerModoMacros);
+    const cambiarModoMacros = useCallback((v) => { guardarModoMacros(v); setModoMacros(v); }, []);
 
     // Intro guiado de primera visita (una sola vez por dispositivo)
     const [showIntro, setShowIntro] = useState(() => localStorage.getItem('nutrition-intro-seen') !== '1');
@@ -785,6 +791,23 @@ const NutritionPage = () => {
             return { P: total.P + m.P, H: total.H + m.H, G: total.G + m.G };
         }, { P: 0, H: 0, G: 0 });
     };
+
+    // ── Solo para ENSEÑAR (el switch Método / Reales) ────────────────────────────
+    // Ojo: nada que decida algo puede llamar a esto. Las cantidades, el reparto, el
+    // "cuadrar" y el estado de cada comida usan calculateMealMacros, que cuenta con
+    // las reglas del metodo. Aqui solo se cambia la cifra que ve el usuario.
+    const macrosVistaComida = (mealKey) =>
+        modoMacros === 'reales'
+            ? sumaDeVista(mealsData[mealKey]?.alimentos, 'reales')
+            : calculateMealMacros(mealKey);
+
+    const macrosVistaDia = () =>
+        modoMacros === 'reales'
+            ? getMealOrder().reduce((t, k) => {
+                const m = sumaDeVista(mealsData[k]?.alimentos, 'reales');
+                return { P: t.P + m.P, H: t.H + m.H, G: t.G + m.G };
+            }, { P: 0, H: 0, G: 0 })
+            : calculateDayMacros();
 
     // Guard: only honor the volcado if its meal still exists in the current layout (e.g. the
     // user dropped from 4 to 3 meals after volcando to C4 → ignore, don't lock everything).
@@ -1447,6 +1470,14 @@ const NutritionPage = () => {
     const servedPeriP = (calculateMealMacros('Intra').P || 0) + (calculateMealMacros('Post').P || 0);
     const servedPeriH = (calculateMealMacros('Intra').H || 0) + (calculateMealMacros('Post').H || 0);
 
+    // Las mismas cifras en el modo elegido, solo para la cabecera. Los objetivos no
+    // cambian nunca: son los del metodo, que es lo que reparte el dia.
+    const dayMacrosVista = macrosVistaDia();
+    const vistaPeri = (k) => macrosVistaComida(k);
+    const servedPeriPVista = (vistaPeri('Intra').P || 0) + (vistaPeri('Post').P || 0);
+    const servedPeriHVista = (vistaPeri('Intra').H || 0) + (vistaPeri('Post').H || 0);
+    const servedPeriGVista = (vistaPeri('Intra').G || 0) + (vistaPeri('Post').G || 0);
+
     // Day status calculation
     const getDayStatus = () => {
         const margin = 0;
@@ -1581,6 +1612,7 @@ const NutritionPage = () => {
         getMealStatus, loadMenuOptions, setBuildMealModal, openRepeatModal, removeFood, moveFoodUp,
         updateFoodQuantity, updateFoodQuantityDirect, editingQuantity, setEditingQuantity,
         getQuantityIncrement, clearMeal, getFoodEmoji, formatFoodQuantity, setMealMode,
+        modoMacros, calculateMealMacrosVista: macrosVistaComida,
     };
     const renderMealCard = (mealKey, forceExpanded, denso = false) => (
         <MealCard
@@ -1699,13 +1731,16 @@ const NutritionPage = () => {
                     tipoDia={tipoDia}
                     summaryExpanded={summaryExpanded}
                     setSummaryExpanded={setSummaryExpanded}
-                    dayMacros={dayMacros}
+                    dayMacros={dayMacrosVista}
                     dayTarget={dayTarget}
-                    servedPeriP={servedPeriP}
-                    servedPeriH={servedPeriH}
-                    servedPeriG={servedPeriG}
+                    servedPeriP={servedPeriPVista}
+                    servedPeriH={servedPeriHVista}
+                    servedPeriG={servedPeriGVista}
                     totalPeriP={totalPeriP}
                     totalPeriH={totalPeriH}
+                    modoMacros={modoMacros}
+                    onCambiarModoMacros={cambiarModoMacros}
+                    calculateMealMacrosVista={macrosVistaComida}
                     mealOrder={getMealOrder()}
                     mealInfo={mealInfo}
                     calculateMealMacros={calculateMealMacros}
