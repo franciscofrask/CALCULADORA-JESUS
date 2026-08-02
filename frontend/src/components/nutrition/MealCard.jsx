@@ -71,26 +71,24 @@ export const MealSelectorItem = ({ mealKey, mealInfo, getMealTarget, calculateMe
     );
 };
 
-// ===== Tab (desktop) =====
-export const MealTab = ({ mealKey, mealInfo, getMealTarget, calculateMealMacros, getMealStatus, isLocked, selected, onSelect }) => {
+// ===== Tab =====
+// Pestañas de verdad: solo el punto de estado y el nombre, y una línea naranja bajo la
+// abierta. Las cajas con los macros dentro pesaban tanto como el detalle que abrían.
+export const MealTab = ({ mealKey, mealInfo, getMealStatus, isLocked, selected, onSelect }) => {
     const info = mealInfo[mealKey];
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
     const status = getMealStatus(mealKey);
-    const target = getMealTarget(mealKey);
-    const served = calculateMealMacros(mealKey);
-    const r = (x) => Math.round(x || 0);
     return (
         <button onClick={onSelect} data-testid={`meal-tab-${mealKey}`} role="tab" aria-selected={selected}
-            className={`text-left rounded-xl px-3 py-2.5 border transition-all min-w-0 ${selected ? 'bg-brand text-white border-brand shadow-sm' : 'bg-card text-foreground border-border hover:border-foreground/25'} ${isLocked ? 'opacity-60' : ''}`}>
-            <div className="flex items-center gap-1.5 mb-1.5">
-                {isPeri && <Zap className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-white' : 'text-brand'}`} />}
-                <span className="font-heading font-bold uppercase tracking-wide text-sm leading-none truncate">{info.name}</span>
-                {isLocked && <Lock className={`w-3 h-3 flex-shrink-0 ${selected ? 'text-white' : 'text-amber-500'}`} />}
-                <StatusDot status={status} className="flex-shrink-0 ml-auto" />
-            </div>
-            <div className={`font-data text-[10px] leading-none truncate ${selected ? 'text-white/85' : 'text-muted-foreground'}`}>
-                {r(served.P)}/{r(target.P)}P·{r(served.H)}/{r(target.H)}H{!isPeri && `·${r(served.G)}/${r(target.G)}G`}
-            </div>
+            className={`flex items-center gap-2 whitespace-nowrap px-3 py-2.5 -mb-px border-b-2 transition-colors ${
+                selected
+                    ? 'border-brand text-foreground font-semibold'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+            } ${isLocked ? 'opacity-60' : ''}`}>
+            <StatusDot status={status} className="flex-shrink-0" />
+            {isPeri && <Zap className="w-3.5 h-3.5 flex-shrink-0 text-brand" />}
+            <span className="text-sm">{info.name}</span>
+            {isLocked && <Lock className="w-3 h-3 flex-shrink-0 text-amber-500" />}
         </button>
     );
 };
@@ -220,7 +218,7 @@ const MealCard = ({
     editingQuantity, setEditingQuantity, getQuantityIncrement,
     clearMeal, formatFoodQuantity,
     isLocked = false, canVolcar = false, onVolcar, onCuadrar,
-    mealMode = 'auto', setMealMode, forceExpanded = false,
+    mealMode = 'auto', setMealMode, forceExpanded = false, denso = false,
 }) => {
     const isExpanded = forceExpanded ? true : expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
@@ -232,12 +230,12 @@ const MealCard = ({
     const HeaderInner = (
         <>
             <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-heading font-bold text-lg ${isPeri ? 'bg-brand/10 text-brand' : 'bg-muted text-foreground'}`}>
-                    {isPeri ? <Zap className="w-5 h-5" /> : info.shortName}
+                <div className={`${denso ? 'w-9 h-9 text-sm' : 'w-12 h-12 text-lg'} rounded-xl flex items-center justify-center flex-shrink-0 font-heading font-bold ${isPeri ? 'bg-brand/10 text-brand' : 'bg-muted text-foreground'}`}>
+                    {isPeri ? <Zap className={denso ? 'w-4 h-4' : 'w-5 h-5'} /> : info.shortName}
                 </div>
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                        <h3 className="font-heading font-bold uppercase tracking-wide text-foreground text-lg truncate">{info.name}</h3>
+                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-base' : 'text-lg'}`}>{info.name}</h3>
                         <StatusDot status={status} className="flex-shrink-0" />
                         {isLocked && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </div>
@@ -246,6 +244,17 @@ const MealCard = ({
                     </p>
                 </div>
             </div>
+            {/* Con el día entero desplegado el modo va aquí, en pequeño: la banda de
+                "Modo de cálculo" repetida seis veces no cabía, pero esconderla dejaba
+                sin Automático/Manual a las comidas que aún no tienen alimentos. */}
+            {denso && !isPeri && !isLocked && setMealMode && (
+                <div className="inline-flex rounded-lg bg-muted p-0.5 flex-shrink-0" title="Automático ajusta las cantidades a tus macros; manual las deja como las pongas">
+                    <button className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors ${mealMode !== 'manual' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={() => setMealMode(mealKey, 'auto')} data-testid={`mode-auto-${mealKey}`}>Automático</button>
+                    <button className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors ${mealMode === 'manual' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={() => setMealMode(mealKey, 'manual')} data-testid={`mode-manual-${mealKey}`}>Manual</button>
+                </div>
+            )}
             {!forceExpanded && (isExpanded ? <ChevronUp className="w-5 h-5 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-5 h-5 text-muted-foreground flex-shrink-0" />)}
         </>
     );
@@ -254,7 +263,7 @@ const MealCard = ({
         <div className={`surface overflow-hidden ${isPeri ? 'border-l-4 border-l-brand' : ''} ${isLocked ? 'opacity-70' : ''} ${!forceExpanded && !isExpanded ? 'surface-hover' : ''}`} data-testid={`meal-card-${mealKey}`}>
             {/* Header */}
             {forceExpanded ? (
-                <div className="p-4 sm:p-5 flex items-center justify-between gap-3 border-b border-border">{HeaderInner}</div>
+                <div className={`${denso ? 'p-3 sm:p-3.5' : 'p-4 sm:p-5'} flex items-center justify-between gap-3 border-b border-border`}>{HeaderInner}</div>
             ) : (
                 <button className="w-full text-left p-3.5 sm:p-4 flex items-center justify-between gap-3"
                     onClick={() => setExpandedMeals(prev => ({ ...prev, [mealKey]: !isExpanded }))}>
@@ -263,9 +272,9 @@ const MealCard = ({
             )}
 
             {isExpanded && (
-                <div className={forceExpanded ? 'p-4 sm:p-5 space-y-4' : 'px-3.5 sm:px-4 pb-4 pt-1 space-y-3'}>
-                    {/* Modo de cálculo */}
-                    {!isPeri && !isLocked && setMealMode && (
+                <div className={forceExpanded ? (denso ? 'p-3 sm:p-3.5 space-y-3' : 'p-4 sm:p-5 space-y-4') : 'px-3.5 sm:px-4 pb-4 pt-1 space-y-3'}>
+                    {/* Modo de cálculo. En denso no va aquí: está en la cabecera de la comida. */}
+                    {!isPeri && !isLocked && setMealMode && !denso && (
                         <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-3.5 py-3">
                             <div className="min-w-0">
                                 <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Modo de cálculo</p>
@@ -289,8 +298,29 @@ const MealCard = ({
                         </div>
                     )}
 
-                    {/* Empty states */}
+                    {/* Empty states. En denso (día entero desplegado) las tres maneras de
+                        empezar caben en una sola fila: el bloque alto repetido seis veces
+                        convertía la pantalla en un pasillo de botones naranjas. */}
                     {foods.length === 0 && !isPeri && !isLocked && (
+                        denso ? (
+                            // Mismas tres opciones y con su nombre entero; solo cambia que caben
+                            // en una fila, con "Sugiéreme un menú" del doble de ancho porque es
+                            // la principal. En móvil pasan a dos filas para no recortar el texto.
+                            <div className="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr] gap-2">
+                                <button className="btn-brand h-11 col-span-2 sm:col-span-1 flex items-center justify-center gap-2 text-sm uppercase tracking-wide"
+                                    onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
+                                    <Zap className="w-4 h-4" /> Sugiéreme un menú
+                                </button>
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                    onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'normal' })} data-testid={`build-meal-${mealKey}`}>
+                                    <Wrench className="w-4 h-4" /> Lo hago yo
+                                </button>
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                    onClick={() => openRepeatModal(mealKey)} data-testid={`repeat-meal-${mealKey}`}>
+                                    <RefreshCw className="w-4 h-4" /> Repetir
+                                </button>
+                            </div>
+                        ) : (
                         <div className="space-y-2">
                             <button className="btn-brand w-full h-12 flex items-center justify-center gap-2 uppercase tracking-wide"
                                 onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
@@ -307,30 +337,19 @@ const MealCard = ({
                                 </button>
                             </div>
                         </div>
+                        )
                     )}
                     {/* Peri (Intra/Post): sugeridor de biblioteca (solo menús Peri, separados
                         server-side por tipo_comida) + constructor manual */}
-                    {foods.length === 0 && mealKey === 'Intra' && !isLocked && (
-                        <div className="space-y-2">
-                            <button className="btn-brand w-full h-12 flex items-center justify-center gap-2 uppercase tracking-wide"
+                    {foods.length === 0 && isPeri && !isLocked && (
+                        <div className={denso ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : 'space-y-2'}>
+                            <button className={`btn-brand flex items-center justify-center gap-2 uppercase tracking-wide ${denso ? 'h-11 text-sm' : 'w-full h-12'}`}
                                 onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
-                                <Zap className="w-5 h-5" /> Sugiéreme un menú
+                                <Zap className={denso ? 'w-4 h-4' : 'w-5 h-5'} /> Sugiéreme un menú
                             </button>
-                            <button className="w-full h-11 rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5"
-                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'intra' })}>
-                                <Zap className="w-4 h-4" /> Construir Intra
-                            </button>
-                        </div>
-                    )}
-                    {foods.length === 0 && mealKey === 'Post' && !isLocked && (
-                        <div className="space-y-2">
-                            <button className="btn-brand w-full h-12 flex items-center justify-center gap-2 uppercase tracking-wide"
-                                onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
-                                <Zap className="w-5 h-5" /> Sugiéreme un menú
-                            </button>
-                            <button className="w-full h-11 rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5"
-                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'post' })}>
-                                <Zap className="w-4 h-4" /> Construir Post
+                            <button className={`rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5 ${denso ? 'h-11 text-sm' : 'w-full h-11'}`}
+                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: mealKey === 'Intra' ? 'intra' : 'post' })}>
+                                <Zap className="w-4 h-4" /> Construir {mealKey === 'Intra' ? 'Intra' : 'Post'}
                             </button>
                         </div>
                     )}

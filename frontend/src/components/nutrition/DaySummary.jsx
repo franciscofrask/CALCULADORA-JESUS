@@ -35,7 +35,93 @@ export const StatusDot = ({ status, className = '' }) => (
     <span className={`inline-block w-2.5 h-2.5 rounded-full ${STATUS_DOT[status] || STATUS_DOT.empty} ${className}`} />
 );
 
+/**
+ * Tabla del día: lo que lleva cada comida, el total y el objetivo. Extraída para que
+ * la cabecera nueva (DayHeader) la pueda desplegar sin duplicarla.
+ */
+export const DayDetailTable = ({
+    mealOrder, mealInfo, calculateMealMacros, tipoDia, opcionPeri,
+    mainP, mainH, mainG, tgtP, tgtH, tgtG, totalPeriP, totalPeriH,
+}) => {
+    const esPeri = (k) => k === 'Intra' || k === 'Post';
+    const comidasPrincipales = mealOrder.filter(k => !esPeri(k));
+    const comidasPeri = mealOrder.filter(esPeri);
+    const hayPeri = comidasPeri.length > 0 && tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri';
+
+    return (
+        <div>
+            <table className="w-full text-xs">
+                <thead><tr className="text-muted-foreground">
+                    <th className="text-left font-medium py-1.5">Comida</th>
+                    <th className="text-right font-medium py-1.5 w-14">P</th>
+                    <th className="text-right font-medium py-1.5 w-14">H</th>
+                    <th className="text-right font-medium py-1.5 w-14">G</th>
+                </tr></thead>
+                <tbody>
+                    {comidasPrincipales.map(mealKey => {
+                        const served = calculateMealMacros(mealKey);
+                        return (
+                            <tr key={mealKey} className="border-t border-border">
+                                <td className="py-1.5 text-foreground">{mealInfo[mealKey].name}</td>
+                                <td className="text-right font-data text-muted-foreground">{served.P.toFixed(0)}</td>
+                                <td className="text-right font-data text-muted-foreground">{served.H.toFixed(0)}</td>
+                                <td className="text-right font-data text-muted-foreground">{served.G.toFixed(0)}</td>
+                            </tr>
+                        );
+                    })}
+                    {/* TOTAL y OBJETIVO van SIN peri, para que se puedan comparar entre si.
+                        Antes el total sumaba el peri en P y H pero no en G, y el objetivo no
+                        lo contaba nunca: las dos filas no cuadraban y no habia forma de saber
+                        por que. El peri tiene su propio objetivo y va debajo, aparte. */}
+                    <tr className="border-t-2 border-border font-bold text-foreground">
+                        <td className="py-1.5">TOTAL</td>
+                        <td className="text-right font-data">{mainP.toFixed(0)}</td>
+                        <td className="text-right font-data">{mainH.toFixed(0)}</td>
+                        <td className="text-right font-data">{mainG.toFixed(0)}</td>
+                    </tr>
+                    <tr className="text-muted-foreground">
+                        <td className="py-1">OBJETIVO</td>
+                        <td className="text-right font-data">{(tgtP || 0).toFixed(0)}</td>
+                        <td className="text-right font-data">{(tgtH || 0).toFixed(0)}</td>
+                        <td className="text-right font-data">{(tgtG || 0).toFixed(0)}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            {hayPeri && (
+                <div className="mt-3 pt-2.5 border-t border-dashed border-border">
+                    <p className="caption mb-1">Peri-entreno</p>
+                    <table className="w-full text-xs">
+                        <tbody>
+                            {comidasPeri.map(mealKey => {
+                                const served = calculateMealMacros(mealKey);
+                                return (
+                                    <tr key={mealKey}>
+                                        <td className="py-1 text-foreground">{mealInfo[mealKey].name}</td>
+                                        <td className="text-right font-data text-muted-foreground w-14">{served.P.toFixed(0)}</td>
+                                        <td className="text-right font-data text-muted-foreground w-14">{served.H.toFixed(0)}</td>
+                                        <td className="text-right font-data text-muted-foreground w-14">-</td>
+                                    </tr>
+                                );
+                            })}
+                            <tr className="border-t border-border text-muted-foreground">
+                                <td className="py-1">OBJETIVO PERI</td>
+                                <td className="text-right font-data w-14">{(totalPeriP || 0).toFixed(0)}</td>
+                                <td className="text-right font-data w-14">{(totalPeriH || 0).toFixed(0)}</td>
+                                <td className="text-right font-data w-14">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // Day Summary
+// SIN USO desde que la cabecera es DayHeader. Se conserva mientras se decide si la nueva
+// se queda; si se queda, esto se borra (ProgressBar, StatusDot y DayDetailTable siguen
+// usándose desde MealCard y DayHeader).
 const DaySummary = ({
     tipoDia, summaryExpanded, setSummaryExpanded,
     dayMacros, dayTarget, servedPeriP, servedPeriH, servedPeriG = 0, totalPeriP, totalPeriH,

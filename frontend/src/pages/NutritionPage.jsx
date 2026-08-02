@@ -6,8 +6,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
-    ChevronLeft, ChevronRight,
-    Copy, Calendar, FileDown, SlidersHorizontal, Star, Check, AlertCircle
+    Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle
 } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
@@ -17,9 +16,9 @@ import BuildMealModal from '../components/nutrition/BuildMealModal';
 import RepeatMealModal from '../components/nutrition/RepeatMealModal';
 import CopyDietModal from '../components/nutrition/CopyDietModal';
 import FavoritesModal from '../components/nutrition/FavoritesModal';
-import DaySummary from '../components/nutrition/DaySummary';
-import ConfigSection from '../components/nutrition/ConfigSection';
-import MealCard, { MealSelectorItem } from '../components/nutrition/MealCard';
+import DayHeader from '../components/nutrition/DayHeader';
+import MealCard, { MealSelectorItem, MealTab } from '../components/nutrition/MealCard';
+import { VistaComidasSelector, leerVista, guardarVista } from '../components/nutrition/VistaComidas';
 import { SearchFoodModal } from '../components/nutrition/SearchFoodModal';
 import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
@@ -122,6 +121,15 @@ const NutritionPage = () => {
     const [avoidedCategories, setAvoidedCategories] = useState([]);
     const [avoidedKeywords, setAvoidedKeywords] = useState([]);
     const [preferencesLoading, setPreferencesLoading] = useState(true);
+    // La configuracion del dia (comidas / horario / peri) va plegada: se resume en una
+    // linea de texto y solo se despliega cuando de verdad se quiere cambiar algo.
+    const [configExpanded, setConfigExpanded] = useState(false);
+
+    // Como quiere ver las comidas del dia (lista y detalle, pestañas o todo seguido).
+    // Se recuerda de un dia para otro; ver components/nutrition/VistaComidas.jsx.
+    const [vistaComidas, setVistaComidas] = useState(leerVista);
+    const cambiarVistaComidas = useCallback((v) => { guardarVista(v); setVistaComidas(v); }, []);
+
     // Intro guiado de primera visita (una sola vez por dispositivo)
     const [showIntro, setShowIntro] = useState(() => localStorage.getItem('nutrition-intro-seen') !== '1');
     const dismissIntro = useCallback(() => {
@@ -1574,10 +1582,11 @@ const NutritionPage = () => {
         updateFoodQuantity, updateFoodQuantityDirect, editingQuantity, setEditingQuantity,
         getQuantityIncrement, clearMeal, getFoodEmoji, formatFoodQuantity, setMealMode,
     };
-    const renderMealCard = (mealKey, forceExpanded) => (
+    const renderMealCard = (mealKey, forceExpanded, denso = false) => (
         <MealCard
             key={mealKey + (forceExpanded ? '-d' : '-m')}
             forceExpanded={forceExpanded}
+            denso={denso}
             mealKey={mealKey}
             {...mealCardProps}
             isLocked={isMealLocked(mealKey)}
@@ -1671,8 +1680,22 @@ const NutritionPage = () => {
                 </div>
             </header>
 
-            {/* Resumen del día */}
-                <DaySummary
+            {/* Cabecera del día: fecha, tipo de día, configuración resumida y macros */}
+                <DayHeader
+                    currentDate={currentDate}
+                    formatDate={formatDate}
+                    changeDate={changeDate}
+                    setCalendarOpen={setCalendarOpen}
+                    handleSetTipoDia={handleSetTipoDia}
+                    numComidas={numComidas}
+                    setNumComidas={handleSetNumComidas}
+                    momentoEntreno={momentoEntreno}
+                    setMomentoEntreno={handleSetMomentoEntreno}
+                    opcionPeri={opcionPeri}
+                    setOpcionPeri={handleSetOpcionPeri}
+                    singleMeal={singleMeal}
+                    configExpanded={configExpanded}
+                    setConfigExpanded={setConfigExpanded}
                     tipoDia={tipoDia}
                     summaryExpanded={summaryExpanded}
                     setSummaryExpanded={setSummaryExpanded}
@@ -1683,7 +1706,6 @@ const NutritionPage = () => {
                     servedPeriG={servedPeriG}
                     totalPeriP={totalPeriP}
                     totalPeriH={totalPeriH}
-                    opcionPeri={opcionPeri}
                     mealOrder={getMealOrder()}
                     mealInfo={mealInfo}
                     calculateMealMacros={calculateMealMacros}
@@ -1691,59 +1713,7 @@ const NutritionPage = () => {
                     getDayStatus={getDayStatus}
                 />
 
-                {/* ── Controles del día (2 tarjetas compactas: Día unificado + Configuración) ── */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-stretch mt-6 mb-6" data-testid="nutrition-controls">
-                    {/* Tarjeta Día: navegación de fecha + tipo de día unificados */}
-                    <div className="surface p-4 sm:p-5 lg:col-span-5 flex flex-col gap-3.5">
-                        <div className="flex items-center justify-between gap-3">
-                            <button onClick={() => changeDate(-1)} aria-label="Día anterior" className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-brand hover:bg-brand/10 transition-colors flex-shrink-0">
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-                            <button onClick={() => setCalendarOpen(true)} data-testid="open-calendar-btn" className="flex items-center justify-center gap-2.5 flex-1 min-w-0 h-10 rounded-xl hover:bg-muted/60 transition-colors">
-                                <Calendar className="w-5 h-5 text-brand flex-shrink-0" />
-                                <span className="font-heading font-bold text-xl text-foreground capitalize truncate">{formatDate(currentDate)}</span>
-                            </button>
-                            <button onClick={() => changeDate(1)} aria-label="Día siguiente" className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-brand hover:bg-brand/10 transition-colors flex-shrink-0">
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2.5 flex-1">
-                            <button
-                                className={`h-full min-h-[48px] px-3 rounded-2xl text-sm font-bold transition-all ${tipoDia === 'entrenamiento' ? 'bg-brand text-white shadow-sm' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
-                                onClick={() => handleSetTipoDia('entrenamiento')}
-                                data-testid="tipo-dia-entrenamiento"
-                            >
-                                <span className="sm:hidden">Entreno</span>
-                                <span className="hidden sm:inline">Día de entrenamiento</span>
-                            </button>
-                            <button
-                                className={`h-full min-h-[48px] px-3 rounded-2xl text-sm font-bold transition-all ${tipoDia === 'descanso' ? 'bg-brand text-white shadow-sm' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
-                                onClick={() => handleSetTipoDia('descanso')}
-                                data-testid="tipo-dia-descanso"
-                            >
-                                <span className="sm:hidden">Descanso</span>
-                                <span className="hidden sm:inline">Día de descanso</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Tarjeta Configuración (3 selects en una línea) */}
-                    <div className="surface p-4 sm:p-5 lg:col-span-7 flex flex-col justify-center">
-                        <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-5">
-                            <ConfigSection
-                                inline
-                                tipoDia={tipoDia}
-                                momentoEntreno={momentoEntreno}
-                                setMomentoEntreno={handleSetMomentoEntreno}
-                                opcionPeri={opcionPeri}
-                                setOpcionPeri={handleSetOpcionPeri}
-                                numComidas={numComidas}
-                                setNumComidas={handleSetNumComidas}
-                                singleMeal={singleMeal}
-                            />
-                        </div>
-                    </div>
-                </div>
+                <div className="border-t border-border my-6" />
 
                 {/* ── Comidas: selector en columna + detalle ── */}
                 <div data-testid="nutrition-meals">
@@ -1763,45 +1733,87 @@ const NutritionPage = () => {
                         </div>
                     )}
 
-                    {/* Cabecera de sección (desktop): alinea selector y detalle a la misma altura */}
-                    <p className="hidden lg:block caption mb-2.5">Comidas del día</p>
+                    {/* Cabecera de sección: el título y, a la derecha, cómo quiere verlas */}
+                    <div className="flex items-center justify-between gap-3 mb-2.5">
+                        <p className="caption">Comidas del día</p>
+                        <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
+                    </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
-                        {/* Selector de comidas (columna) - desktop lg+ */}
-                        <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 lg:sticky lg:top-6 self-start space-y-2" data-testid="meal-selector">
-                            {getMealOrder().map(mealKey => (
-                                <MealSelectorItem
-                                    key={mealKey}
-                                    mealKey={mealKey}
-                                    mealInfo={mealInfo}
-                                    getMealTarget={getMealTarget}
-                                    calculateMealMacros={calculateMealMacros}
-                                    getMealStatus={getMealStatus}
-                                    isLocked={isMealLocked(mealKey)}
-                                    selected={selectedMeal === mealKey}
-                                    onSelect={() => setSelectedMeal(mealKey)}
-                                />
-                            ))}
-                        </aside>
+                    {vistaComidas === 'actual' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
+                            {/* Selector de comidas (columna) - desktop lg+ */}
+                            <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 lg:sticky lg:top-6 self-start space-y-2" data-testid="meal-selector">
+                                {getMealOrder().map(mealKey => (
+                                    <MealSelectorItem
+                                        key={mealKey}
+                                        mealKey={mealKey}
+                                        mealInfo={mealInfo}
+                                        getMealTarget={getMealTarget}
+                                        calculateMealMacros={calculateMealMacros}
+                                        getMealStatus={getMealStatus}
+                                        isLocked={isMealLocked(mealKey)}
+                                        selected={selectedMeal === mealKey}
+                                        onSelect={() => setSelectedMeal(mealKey)}
+                                    />
+                                ))}
+                            </aside>
 
-                        {/* Detalle (desktop) + acordeón (móvil) */}
-                        <main className="lg:col-span-8 xl:col-span-9 min-w-0 space-y-5">
-                            {/* Desktop: detalle de la comida seleccionada */}
-                            <div className="hidden lg:block" data-testid="meal-detail">
+                            {/* Detalle (desktop) + acordeón (móvil) */}
+                            <main className="lg:col-span-8 xl:col-span-9 min-w-0 space-y-5">
+                                {/* Desktop: detalle de la comida seleccionada */}
+                                <div className="hidden lg:block" data-testid="meal-detail">
+                                    {getMealOrder().includes(selectedMeal) && renderMealCard(selectedMeal, true)}
+                                </div>
+
+                                {/* Móvil/tablet (<lg): acordeón de comidas en una sola columna */}
+                                <div className="lg:hidden space-y-3" data-testid="meals-accordion">
+                                    {getMealOrder().map(mealKey => renderMealCard(mealKey, false))}
+                                </div>
+
+                                {/* Acciones (móvil <sm: tras las comidas; en sm+ van en la tarjeta de config) */}
+                                <div className="sm:hidden">
+                                    {renderActions('-mobile')}
+                                </div>
+                            </main>
+                        </div>
+                    )}
+
+                    {/* Pestañas: las comidas arriba y la abierta a todo el ancho. Las pestañas
+                        se desplazan en horizontal cuando no caben (móvil, o día con peri). */}
+                    {vistaComidas === 'pestanas' && (
+                        <div className="space-y-4">
+                            <div className="overflow-x-auto border-b border-border" role="tablist" data-testid="meal-tabs">
+                                <div className="flex gap-1 min-w-min">
+                                    {getMealOrder().map(mealKey => (
+                                        <MealTab
+                                            key={mealKey}
+                                            mealKey={mealKey}
+                                            mealInfo={mealInfo}
+                                            getMealStatus={getMealStatus}
+                                            isLocked={isMealLocked(mealKey)}
+                                            selected={selectedMeal === mealKey}
+                                            onSelect={() => setSelectedMeal(mealKey)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                            <div data-testid="meal-detail">
                                 {getMealOrder().includes(selectedMeal) && renderMealCard(selectedMeal, true)}
                             </div>
+                            <div className="sm:hidden">{renderActions('-mobile')}</div>
+                        </div>
+                    )}
 
-                            {/* Móvil/tablet (<lg): acordeón de comidas en una sola columna */}
-                            <div className="lg:hidden space-y-3" data-testid="meals-accordion">
-                                {getMealOrder().map(mealKey => renderMealCard(mealKey, false))}
-                            </div>
-
-                            {/* Acciones (móvil <sm: tras las comidas; en sm+ van en la tarjeta de config) */}
-                            <div className="sm:hidden">
-                                {renderActions('-mobile')}
-                            </div>
-                        </main>
-                    </div>
+                    {/* Todo seguido: el día entero abierto, como la dieta de Calma. Sin
+                        seleccionar nada, se edita cualquier comida donde está. */}
+                    {vistaComidas === 'continua' && (
+                        <div className="space-y-4" data-testid="meals-continua">
+                            {getMealOrder().map(mealKey => (
+                                <div key={mealKey}>{renderMealCard(mealKey, true, true)}</div>
+                            ))}
+                            <div className="sm:hidden">{renderActions('-mobile')}</div>
+                        </div>
+                    )}
                 </div>
 
             {/* Search Food Modal */}
