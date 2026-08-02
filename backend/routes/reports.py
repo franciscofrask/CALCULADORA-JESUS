@@ -3,7 +3,7 @@ Rutas de reportes: crear, listar, evolución.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 import uuid
 
 from core.database import db
@@ -116,6 +116,125 @@ async def get_evolution_data(user = Depends(get_current_user)):
         "weight": weight_data,
         "measurements": measurements_data
     }
+
+
+@router.get("/{report_id}/informe")
+async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
+    """
+    El informe que recibe el cliente tras su reporte (especificacion 31-07-2026, parte 6).
+
+    Junta lo que ya esta repartido por la base -- el reporte, el anterior, sus dietas
+    registradas, sus check-ins y sus macros -- y lo devuelve montado en los ocho
+    apartados. No calcula nada de macros: eso ya esta hecho y guardado.
+
+    Lo puede pedir el propio cliente o su coach.
+    """
+    from core.informe_mensual import montar_informe
+    from core.plan_access import plan_grants_feature  # noqa: F401  (mismo modulo que arriba)
+
+    reporte = await db.reports.find_one({"id": report_id}, {"_id": 0})
+    if not reporte:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+
+    perfil = await db.client_profiles.find_one({"id": reporte["client_id"]}, {"_id": 0})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    # El cliente ve el suyo; el staff, el de cualquiera de sus clientes.
+    if perfil.get("user_id") != user["id"] and user.get("role") not in ("admin", "trainer"):
+        raise HTTPException(status_code=403, detail="Este informe no es tuyo")
+
+    anterior = await db.reports.find_one(
+        {"client_id": reporte["client_id"], "created_at": {"$lt": reporte["created_at"]}},
+        {"_id": 0}, sort=[("created_at", -1)],
+    )
+    # Las fotos del punto de partida son las del PRIMER reporte que las tuviera: son la
+    # comparacion que de verdad enseña el cambio, no la del mes pasado.
+    primero = await db.reports.find_one(
+        {"client_id": reporte["client_id"], "photos": {"$ne": []}},
+        {"_id": 0, "photos": 1}, sort=[("created_at", 1)],
+    )
+
+    desde = (anterior or {}).get("created_at") or perfil.get("created_at")
+    dias_periodo, dias_dieta, dias_entreno, macros_comidos = await _actividad_del_periodo(
+        perfil, desde, reporte.get("created_at"))
+
+    ultimos_macros = await db.macro_history.find_one(
+        {"client_id": reporte["client_id"]}, {"_id": 0}, sort=[("created_at", -1)])
+
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+    catalogo = merged_catalog(await _overrides_by_code())
+    plan = catalogo.get(perfil.get("plan") or "", {})
+    hab = plan.get("habilitaciones", {})
+
+    return montar_informe(
+        perfil=perfil,
+        reporte=reporte,
+        reporte_anterior=anterior,
+        fotos_dia_cero=(primero or {}).get("photos"),
+        semanas_ciclo=(plan.get("ciclo") or {}).get("semanas"),
+        dias_dieta=dias_dieta,
+        dias_entreno=dias_entreno,
+        dias_periodo=dias_periodo,
+        macros_comidos=macros_comidos,
+        macros_nuevos=({"training": ultimos_macros.get("training"),
+                        "rest": ultimos_macros.get("rest"),
+                        "periworkout": ultimos_macros.get("periworkout"),
+                        "fecha": ultimos_macros.get("created_at")} if ultimos_macros else None),
+        explicacion_equipo=reporte.get("trainer_feedback"),
+        # "En los niveles 2 y 3 la explicacion la escribe el equipo. En el 1, el sistema."
+        # Aqui eso es: si el plan trae entrenador detras, la escribe una persona.
+        la_escribe_el_equipo=hab.get("acompanamiento", "solo_app") != "solo_app",
+    )
+
+
+async def _actividad_del_periodo(perfil: dict, desde: Optional[str], hasta: Optional[str]):
+    """Que hizo de verdad entre los dos reportes: dias con dieta, entrenos y macros medios.
+
+    El cumplimiento sale de aqui y no de preguntarle cuanto cree que ha cumplido, que es
+    justo lo que el documento manda quitar.
+    """
+    def _fecha(v):
+        try:
+            return datetime.fromisoformat(str(v).replace("Z", "+00:00")).date()
+        except (ValueError, TypeError):
+            return None
+
+    d0, d1 = _fecha(desde), _fecha(hasta)
+    if not d0 or not d1:
+        return 28, 0, 0, {}
+
+    dias_periodo = max(1, (d1 - d0).days)
+    filtro_fecha = {"$gte": d0.isoformat(), "$lte": d1.isoformat()}
+
+    dietas = await db.diets.find(
+        {"user_id": perfil.get("user_id"), "fecha": filtro_fecha},
+        {"_id": 0, "comidas": 1},
+    ).to_list(200)
+
+    con_comida, suma = 0, {"protein": 0.0, "carbs": 0.0, "fat": 0.0}
+    for d in dietas:
+        total = {"protein": 0.0, "carbs": 0.0, "fat": 0.0}
+        for comida in (d.get("comidas") or {}).values():
+            for a in ((comida or {}).get("alimentos") or []):
+                m = a.get("macros_efectivos") or {}
+                total["protein"] += float(m.get("P") or 0)
+                total["carbs"] += float(m.get("H") or 0)
+                total["fat"] += float(m.get("G") or 0)
+        if total["protein"] or total["carbs"] or total["fat"]:
+            con_comida += 1
+            for k in suma:
+                suma[k] += total[k]
+
+    medios = {k: round(v / con_comida, 1) for k, v in suma.items()} if con_comida else {}
+
+    entrenos = await db.checkins.count_documents({
+        "client_id": perfil.get("id"), "trained": True,
+        "created_at": {"$gte": d0.isoformat(), "$lte": d1.isoformat() + "T23:59:59"},
+    })
+
+    return dias_periodo, con_comida, entrenos, medios
 
 
 @router.put("/{report_id}/feedback")

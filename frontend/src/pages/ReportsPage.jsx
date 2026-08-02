@@ -9,6 +9,7 @@ import {
     Activity, Moon, Zap, Brain, Send, ChevronRight,
     Calendar
 } from 'lucide-react';
+import InformeMensual from '../components/reports/InformeMensual';
 
 const ORANGE = '#FF671F';
 
@@ -88,6 +89,28 @@ const ReportsPage = () => {
     const [activeTab, setActiveTab] = useState('form');
     const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
     const [prev, setPrev] = useState(null);                 // último reporte (referencia de medidas)
+
+    // El informe del mes: se pide solo cuando abre uno, porque cruza dietas, check-ins
+    // y macros de todo el periodo y no tiene sentido calcularlo para la lista entera.
+    const [informeAbierto, setInformeAbierto] = useState(null);   // id del reporte abierto
+    const [informe, setInforme] = useState(null);
+    const [cargandoInforme, setCargandoInforme] = useState(false);
+
+    const verInforme = async (reportId) => {
+        if (informeAbierto === reportId) { setInformeAbierto(null); setInforme(null); return; }
+        setInformeAbierto(reportId);
+        setInforme(null);
+        setCargandoInforme(true);
+        try {
+            const r = await api.get(`/reports/${reportId}/informe`);
+            setInforme(r.data);
+        } catch (e) {
+            toast.error('No hemos podido montar tu informe');
+            setInformeAbierto(null);
+        } finally {
+            setCargandoInforme(false);
+        }
+    };
 
     const [reportData, setReportData] = useState({
         weight: '',
@@ -379,7 +402,8 @@ const ReportsPage = () => {
                 <div className="space-y-3">
                     {reports.length > 0 ? reports.map((report) => (
                         <div key={report.id} className="bg-card border border-border rounded-2xl p-4">
-                            <div className="flex items-start justify-between mb-3">
+                            <button onClick={() => verInforme(report.id)} data-testid={`ver-informe-${report.id}`}
+                                className="w-full text-left flex items-start justify-between mb-3">
                                 <div>
                                     <p className="text-xs text-foreground/40 uppercase tracking-wider">
                                         {new Date(report.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -387,9 +411,20 @@ const ReportsPage = () => {
                                     <p className="text-2xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed' }}>
                                         {report.weight} <span className="text-base text-foreground/40">kg</span>
                                     </p>
+                                    <p className="text-[11px] mt-0.5" style={{ color: ORANGE }}>
+                                        {informeAbierto === report.id ? 'Ocultar mi informe' : 'Ver mi informe del mes'}
+                                    </p>
                                 </div>
-                                <ChevronRight className="w-4 h-4 text-foreground/20 mt-1" />
-                            </div>
+                                <ChevronRight className={`w-4 h-4 text-foreground/20 mt-1 transition-transform ${informeAbierto === report.id ? 'rotate-90' : ''}`} />
+                            </button>
+
+                            {informeAbierto === report.id && (
+                                <div className="mb-3">
+                                    {cargandoInforme
+                                        ? <p className="text-sm text-foreground/40 py-4 text-center">Montando tu informe...</p>
+                                        : <InformeMensual informe={informe} onPedirFotos={() => setActiveTab('form')} />}
+                                </div>
+                            )}
                             {(report.training_compliance != null || report.nutrition_compliance != null) && (
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="bg-muted rounded-xl px-3 py-2 flex items-center gap-2">
