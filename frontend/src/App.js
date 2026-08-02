@@ -32,6 +32,7 @@ import AdminFoodSuggestionsPage from "./pages/AdminFoodSuggestionsPage";
 import AdminPlansPage from "./pages/AdminPlansPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 import WelcomePage from "./pages/WelcomePage";
+import PlanesPage from "./pages/PlanesPage";
 import InstallPrompt from "./components/InstallPrompt";
 
 // Protected Route Component
@@ -128,6 +129,17 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <OnboardingPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Elegir nivel. Fuera del layout de cliente a proposito: aqui llega tanto
+                el que todavia no tiene plan como el que viene a cambiarlo. */}
+            <Route
+                path="/planes"
+                element={
+                    <ProtectedRoute>
+                        <PlanesPage />
                     </ProtectedRoute>
                 }
             />

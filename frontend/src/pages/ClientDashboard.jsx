@@ -461,6 +461,30 @@ const ClientDashboard = () => {
                 </button>
             )}
 
+            {/* Sin plan contratado no puede hacer casi nada, y hasta ahora no habia forma de
+                llegar a contratarlo desde dentro de la app. Va lo primero a proposito. */}
+            {!myPlan && (
+                <button onClick={() => navigate('/planes')} data-testid="elegir-plan-banner"
+                    className="surface surface-hover w-full p-4 flex items-center justify-between group border border-brand/40">
+                    <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center">
+                            <Sparkles className="w-5 h-5 text-brand" />
+                        </div>
+                        <div className="text-left">
+                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">
+                                {planUnpaid ? 'Te quedó un pago a medias' : 'Elige cómo quieres hacerlo'}
+                            </p>
+                            <p className="text-muted-foreground text-sm">
+                                {planUnpaid
+                                    ? 'Retoma donde lo dejaste y empieza.'
+                                    : 'Tres niveles, el mismo método. Cambia cuánta gente hay detrás de tus números.'}
+                            </p>
+                        </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
+                </button>
+            )}
+
             {/* Revisión suelta: solo para quien se autogestiona y ya tiene sus macros afinados.
                 Es la puerta de entrada a tener coach: prueba lo que se siente y, si sube de plan
                 en 30 días, lo que pagó se le descuenta. */}
