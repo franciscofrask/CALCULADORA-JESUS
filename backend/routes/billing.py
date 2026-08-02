@@ -20,6 +20,7 @@ from models.common import (
     PaymentResponse, AlertResponse,
 )
 from models.user import PLAN_CATALOG
+from core.calendario_arranque import plan_de_arranque
 from core.stripe_billing import (
     get_stripe_module, stripe_api_call, require_stripe_test_mode,
     get_plan_info, get_stripe_price_id_for_plan, build_frontend_url,
@@ -99,7 +100,25 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
         session_kwargs["payment_intent_data"] = {"metadata": checkout_metadata}
     else:
         session_kwargs["mode"] = "subscription"
-        session_kwargs["subscription_data"] = {"metadata": checkout_metadata}
+        subscription_data = {"metadata": checkout_metadata}
+
+        # Todos arrancan en lunes (parte 2 de la especificacion). Se cobra el ciclo
+        # completo HOY y se ancla la facturacion al lunes que le toca, de forma que el
+        # cobro del ciclo siguiente cae el dia que acaba el suyo y no 84 dias despues
+        # del pago. Asi el dinero entra ANTES de ponerse a preparar el ciclo que viene:
+        # si no renueva, no se trabaja en balde.
+        #
+        # Esto es justo lo que hoy se hacia a mano cancelando la suscripcion y creando
+        # otra, con el riesgo de cobrarle antes de tiempo que el propio SOP advierte. Y
+        # ademas, recrear la suscripcion es lo que le rompia el precio congelado.
+        #
+        # Los dias de la Semana 0 se le REGALAN: proration_behavior="none".
+        semanas = int(plan_info.get("billing_cycle_weeks") or 12)
+        arranque = plan_de_arranque(semanas_ciclo=semanas)
+        subscription_data["billing_cycle_anchor"] = arranque["anchor_timestamp"]
+        subscription_data["proration_behavior"] = "none"
+
+        session_kwargs["subscription_data"] = subscription_data
     # Con cupón no se pueden ofrecer códigos promocionales a la vez: Stripe no admite las dos cosas.
     if cupon_id:
         session_kwargs["discounts"] = [{"coupon": cupon_id}]
@@ -110,6 +129,17 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
 
     cambios = {"stripe_customer_id": customer_id, "stripe_price_id": stripe_price_id,
                "checkout_status": "created"}
+
+    if session_kwargs["mode"] == "subscription":
+        # El precio de alta se congela mientras no se de de baja (parte 1). Stripe ya lo
+        # respeta por si solo -- una suscripcion renueva con el price con el que se creo,
+        # no con el del catalogo -- pero se guarda ademas aqui por dos motivos: para
+        # poder enseñarselo y, sobre todo, para que se note si alguien recrea la
+        # suscripcion y le cambia el precio sin querer.
+        cambios["precio_alta"] = float(plan_info.get("price") or 0)
+        cambios["precio_alta_at"] = datetime.now(timezone.utc).isoformat()
+        cambios["arranque_lunes"] = arranque["arranque"].isoformat()
+        cambios["fin_de_ciclo"] = arranque["fin_de_ciclo"].isoformat()
     if cupon_id:
         cambios["revision_suelta.descuento_aplicado"] = True
         cambios["revision_suelta.descuento_cupon"] = cupon_id
