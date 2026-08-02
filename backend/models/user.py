@@ -68,9 +68,72 @@ def validar_dict_macros(v):
 #   billing_cycle_weeks  Longitud del ciclo de cobro recurrente (semanas).
 
 PLAN_CATALOG = {
+    # ---------------- LOS TRES NIVELES (especificacion 31-07-2026, parte 1) ----------
+    # Sustituyen a lo anterior como lo unico que se puede contratar. Ciclos de 12 semanas.
+    # Al que ya tiene un plan viejo no se le cambia nada: sigue igual hasta que le toque
+    # renovar, y entonces elige entre estos tres (ver RENOVACION_A y planes_contratables).
+    #
+    # OJO: no se pueden comprar hasta que existan sus productos en Stripe. Las variables
+    # de .env de abajo estan vacias a proposito: hasta que se creen, el checkout devuelve
+    # un 503 con un mensaje claro en vez de cobrar mal.
+    "nivel1": {
+        "name": "Nivel 1", "estado": "activo", "asignable": True,
+        "ciclo": {"tipo": "trimestral", "semanas": 12},
+        "precio": 297.0, "precio_nota": "297€ por ciclo de 12 semanas",
+        "precios": [{"label": "Ciclo", "importe": 297.0, "periodo": "12 semanas"}],
+        "responsable": "Operaciones",
+        "habilitaciones": {"calculadora": "autogestion", "rutina": "ninguna",
+                           "reportes": ["mensual"], "suplementacion": False, "harbiz": False,
+                           "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
+        "stripe_price_env": "STRIPE_PRICE_NIVEL1", "billing_cycle_weeks": 12,
+    },
+    "nivel2": {
+        "name": "Nivel 2", "estado": "activo", "asignable": True,
+        "ciclo": {"tipo": "trimestral", "semanas": 12},
+        "precio": 897.0, "precio_nota": "897€ por ciclo de 12 semanas",
+        "precios": [{"label": "Ciclo", "importe": 897.0, "periodo": "12 semanas"}],
+        "responsable": "CEO",
+        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
+                           "reportes": ["quincenal", "mensual"], "suplementacion": True,
+                           "harbiz": False, "acompanamiento": "con_entrenador",
+                           "frecuencia_contacto": "quincenal"},
+        "stripe_price_env": "STRIPE_PRICE_NIVEL2", "billing_cycle_weeks": 12,
+    },
+    "nivel3": {
+        # "Cómo se compra: por llamada". No lleva a un pago, lleva a agendar.
+        "name": "Nivel 3", "estado": "activo", "asignable": True,
+        "ciclo": {"tipo": "trimestral", "semanas": 12},
+        "precio": 1497.0, "precio_nota": "1.497€ por ciclo de 12 semanas · se contrata por llamada",
+        "precios": [{"label": "Ciclo", "importe": 1497.0, "periodo": "12 semanas"}],
+        "responsable": "CEO",
+        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
+                           "reportes": ["quincenal", "mensual"], "suplementacion": True,
+                           "harbiz": False, "acompanamiento": "con_entrenador_y_llamadas",
+                           "frecuencia_contacto": "semanal"},
+        "stripe_price_env": "STRIPE_PRICE_NIVEL3", "billing_cycle_weeks": 12,
+    },
+    "membresia": {
+        # "Membresia 97 EUR/mes: ya no es la entrada, es la SALIDA para el que no renueva."
+        # Nueva y separada de ELM a proposito, para que el de salida no arrastre las
+        # condiciones antiguas (ELM tenia precios de 67 y 87 EUR, anual de 800 y Harbiz).
+        #
+        # `solo_salida` es lo que la distingue: no se ofrece al comprar -- ahi solo estan
+        # los tres niveles -- pero si a quien acaba su ciclo y no renueva.
+        "name": "Membresía", "estado": "activo", "asignable": True, "solo_salida": True,
+        "ciclo": {"tipo": "mensual", "semanas": None},
+        "precio": 97.0, "precio_nota": "97€/mes · para quien no renueva su ciclo",
+        "precios": [{"label": "Mensual", "importe": 97.0, "periodo": "mes"}],
+        "responsable": "Operaciones",
+        "habilitaciones": {"calculadora": "autogestion", "rutina": "ninguna",
+                           "reportes": [], "suplementacion": False, "harbiz": False,
+                           "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
+        "stripe_price_env": "STRIPE_PRICE_MEMBRESIA", "billing_cycle_weeks": 4,
+    },
     # ---------------- ACTIVOS ----------------
     "elm": {
-        "name": "ELM (El Lunes Empiezo)", "estado": "activo", "asignable": True,
+        # Legacy desde el 31-07-2026: deja de ser la entrada. El documento lo nombra entre
+        # los que dejan de contratarse. Quien lo tiene sigue igual.
+        "name": "ELM (El Lunes Empiezo)", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
         "precio": 97.0, "precio_nota": "97€/mes (antiguos 67€ u 87€) · 800€/año",
         "precios": [{"label": "Mensual", "importe": 97.0, "periodo": "mes"},
@@ -81,7 +144,8 @@ PLAN_CATALOG = {
         "stripe_price_env": "STRIPE_PRICE_ELM", "billing_cycle_weeks": 4,
     },
     "reto12en12_gold": {
-        "name": "Reto 12en12 - Gold", "estado": "activo", "asignable": True,
+        # El "Reto de 1.500" del documento. Legacy desde el 31-07-2026.
+        "name": "Reto 12en12 - Gold", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 1500.0, "precio_nota": "1.500€/trimestre o 600€/mes",
         "precios": [{"label": "Trimestral", "importe": 1500.0, "periodo": "trimestre"},
@@ -92,7 +156,8 @@ PLAN_CATALOG = {
         "stripe_price_env": "STRIPE_PRICE_RETO12EN12_GOLD", "billing_cycle_weeks": 12,
     },
     "reto12en12_silver": {
-        "name": "Reto 12en12 - Silver", "estado": "activo", "asignable": True,
+        # Misma familia que el Reto Gold: legacy desde el 31-07-2026.
+        "name": "Reto 12en12 - Silver", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 600.0, "precio_nota": "600€/trimestre o 250€/mes",
         "precios": [{"label": "Trimestral", "importe": 600.0, "periodo": "trimestre"},
@@ -103,7 +168,8 @@ PLAN_CATALOG = {
         "stripe_price_env": "STRIPE_PRICE_RETO12EN12_SILVER", "billing_cycle_weeks": 12,
     },
     "reto60": {
-        "name": "Reto 60 días", "estado": "activo", "asignable": True,
+        # Legacy desde el 31-07-2026: los tres niveles son lo unico contratable.
+        "name": "Reto 60 días", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "bimestral", "semanas": 8},
         "precio": 547.0, "precio_nota": "547€ (pago único)",
         "precios": [{"label": "Único", "importe": 547.0, "periodo": "único"}],
@@ -113,7 +179,8 @@ PLAN_CATALOG = {
         "stripe_price_env": "STRIPE_PRICE_RETO60", "billing_cycle_weeks": 8,
     },
     "calculadora_jp": {
-        "name": "Calculadora JP", "estado": "activo", "asignable": True,
+        # Legacy desde el 31-07-2026: se solapa con el Nivel 1.
+        "name": "Calculadora JP", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
         "precio": 60.0, "precio_nota": "60€/mes",
         "precios": [{"label": "Mensual", "importe": 60.0, "periodo": "mes"}],
@@ -123,7 +190,8 @@ PLAN_CATALOG = {
         "stripe_price_env": "STRIPE_PRICE_CALCULADORA_JP", "billing_cycle_weeks": 4,
     },
     "mantenimiento": {
-        "name": "Mantenimiento", "estado": "activo", "asignable": True,
+        # Legacy desde el 31-07-2026: su sitio lo ocupa la Membresia de salida.
+        "name": "Mantenimiento", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
         "precio": 60.0, "precio_nota": "60€/mes",
         "precios": [{"label": "Mensual", "importe": 60.0, "periodo": "mes"}],
@@ -300,6 +368,58 @@ def get_plan(code: Optional[str]) -> Optional[Dict[str, Any]]:
 def assignable_plan_codes() -> List[str]:
     """Códigos de planes que pueden asignarse como membresía de un cliente."""
     return [code for code, p in PLAN_CATALOG.items() if p.get("asignable")]
+
+
+# Los tres niveles son lo unico que se puede contratar desde el 31-07-2026.
+NIVELES = ("nivel1", "nivel2", "nivel3")
+
+
+def planes_contratables(catalogo: Optional[Dict[str, Dict[str, Any]]] = None,
+                        incluir_salida: bool = False) -> List[str]:
+    """Lo que alguien puede contratar HOY: los planes en estado 'activo'.
+
+    Un plan legacy sigue funcionando para quien lo tiene -- eso no se toca nunca -- pero
+    no se le puede vender a nadie mas, ni siquiera al que ya lo tenia: cuando le toque
+    renovar elige entre los nuevos (`opciones_de_renovacion`).
+
+    La Membresia queda fuera salvo que se pida `incluir_salida`: no es un plan que se
+    compre, es donde cae el que no renueva.
+    """
+    cat = catalogo or PLAN_CATALOG
+    return [code for code, p in cat.items()
+            if p.get("estado") == "activo" and p.get("asignable")
+            and (incluir_salida or not p.get("solo_salida"))]
+
+
+def opciones_de_renovacion(plan_actual: Optional[str],
+                           catalogo: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Que se le ofrece a un cliente cuando acaba su ciclo.
+
+    Regla: al renovar se elige entre los planes que se venden hoy, venga de donde venga.
+    Al que esta en un plan legacy no se le cambia nada mientras dure su ciclo, pero al
+    renovar no puede quedarse en el suyo porque ya no se vende.
+
+    Devuelve tambien `mantiene_precio`: el precio se congela mientras no se de de baja
+    (parte 1), asi que si renueva en su MISMO plan paga lo que pagaba. Si cambia de
+    plan, paga el precio del nuevo.
+    """
+    cat = catalogo or PLAN_CATALOG
+    actual = (plan_actual or "").lower().strip()
+    info = cat.get(actual) or {}
+    es_legacy = info.get("estado") in ("legacy", None) and actual not in NIVELES
+
+    return {
+        "plan_actual": actual or None,
+        "puede_seguir_igual": not es_legacy and info.get("estado") == "activo",
+        "opciones": planes_contratables(cat),
+        # La tercera salida del documento ("renovar, subir de nivel, o salir a la
+        # membresia"): no es una opcion de compra, es donde cae el que no renueva.
+        "salida": next((c for c, p in cat.items()
+                        if p.get("solo_salida") and p.get("estado") == "activo"), None),
+        "mantiene_precio": not es_legacy,
+        "motivo": ("Tu plan ya no se ofrece: al renovar eliges entre los actuales"
+                   if es_legacy else None),
+    }
 
 
 def plan_habilitaciones(code: Optional[str]) -> Dict[str, Any]:
