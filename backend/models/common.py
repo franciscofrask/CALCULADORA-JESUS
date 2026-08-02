@@ -160,7 +160,9 @@ class PaymentResponse(BaseModel):
 # ---- Stripe billing ----
 class CheckoutSessionRequest(BaseModel):
     plan: str
-    success_path: Optional[str] = "/onboarding?checkout=success"
+    # La pantalla de planes es /planes (documento 31-07). /onboarding redirige allí, así
+    # que un pago que volviera a la vieja perdía el session_id por el camino.
+    success_path: Optional[str] = "/planes?checkout=success"
     cancel_path: Optional[str] = "/onboarding?checkout=canceled"
 
 class CheckoutSessionResponse(BaseModel):

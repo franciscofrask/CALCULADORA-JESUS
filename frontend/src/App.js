@@ -8,7 +8,6 @@ import { ThemeProvider } from "./context/ThemeContext";
 
 // Pages
 import AuthPage from "./pages/AuthPage";
-import OnboardingPage from "./pages/OnboardingPage";
 import { ClientDashboard, ClientLayout } from "./pages/ClientDashboard";
 import RoutinePage from "./pages/RoutinePage";
 import NutritionPage from "./pages/NutritionPage";
@@ -135,7 +134,15 @@ function AppRoutes() {
                 path="/onboarding"
                 element={
                     <ProtectedRoute>
-                        <OnboardingPage />
+                        {/* Una sola pantalla de planes. /onboarding es la vieja: se hizo
+                            para los planes de antes y listaba cualquier plan activo con
+                            precio, así que al añadir los tres niveles cogió el Nivel 3
+                            con botón de pagar — cuando el documento dice que se contrata
+                            hablando. Además le faltaban los textos de los niveles nuevos.
+                            Manda /planes, que es la que cumple el documento.
+                            Se conserva la query para no perder la vuelta de Stripe de un
+                            pago que se hubiera iniciado antes de este cambio. */}
+                        <Navigate to={`/planes${window.location.search}`} replace />
                     </ProtectedRoute>
                 }
             />

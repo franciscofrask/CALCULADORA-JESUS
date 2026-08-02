@@ -52,7 +52,7 @@ const Texto = ({ children }) => (
 );
 
 const PlanesPage = () => {
-    const { api, profile } = useAuth();
+    const { api, profile, refreshProfile } = useAuth();
     const navigate = useNavigate();
     const [planes, setPlanes] = useState(null);
     const [comprando, setComprando] = useState(null);
@@ -63,13 +63,41 @@ const PlanesPage = () => {
             .catch(() => toast.error('No hemos podido cargar los planes'));
     }, [api]);
 
+    // Vuelta de Stripe. Antes esta pantalla mandaba a /dashboard?alta=ok y NADIE
+    // confirmaba el pago: el cliente pagaba, aterrizaba en su panel y su plan solo se
+    // activaba cuando llegara el webhook. Si tardaba o fallaba, había pagado y no veía
+    // nada. Esto lo hacía bien /onboarding y se trae aquí al unificar las dos pantallas.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const checkout = params.get('checkout');
+        if (checkout === 'success') {
+            const sessionId = params.get('session_id');
+            (async () => {
+                try {
+                    if (sessionId) {
+                        await api.post('/billing/checkout-session/sync', { session_id: sessionId });
+                    }
+                    await refreshProfile();
+                    toast.success('¡Pago confirmado! Tu plan está activo');
+                    navigate('/dashboard', { replace: true });
+                } catch {
+                    toast.error('No pudimos confirmar el pago. Si te cobraron, recarga en unos segundos.');
+                }
+            })();
+        } else if (checkout === 'canceled') {
+            toast.info('Pago cancelado. Puedes elegir un plan cuando quieras.');
+            window.history.replaceState({}, '', '/planes');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
+    }, []);
+
     const comprar = async (code) => {
         setComprando(code);
         try {
             const r = await api.post('/billing/checkout-session', {
                 plan: code,
-                success_path: '/dashboard?alta=ok',
-                cancel_path: '/planes',
+                success_path: '/planes?checkout=success',
+                cancel_path: '/planes?checkout=canceled',
             });
             if (r.data?.checkout_url) window.location.href = r.data.checkout_url;
             else toast.error('No hemos podido abrir el pago');
