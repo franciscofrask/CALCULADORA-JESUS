@@ -262,6 +262,39 @@ class NutritionChatbot:
             "G": round(objetivo["G"] - macros_usados.get("G", 0), 1)
         }
     
+    async def buscar_con_interpretacion(self, nombre: str, interpretacion: Optional[str] = None,
+                                        limit: int = 5) -> list:
+        """Busca lo que ha pedido y, si hace falta, lo que eso significa en la tabla.
+
+        La gente no habla como está escrito el catálogo: pide "tostadas" y ahí pone "pan
+        tostado". El router ya traduce (`busqueda`), y aquí se usa esa traducción SOLO
+        como segunda vía:
+
+          1. se busca lo que dijo el usuario, tal cual;
+          2. si no sale nada, o lo que sale es un parecido flojo, se busca la traducción.
+
+        En ese orden a propósito. Lo que el usuario escribe manda: si pide "arroz" y ya
+        hay "Arroz blanco", no queremos que una traducción del LLM se cuele por delante.
+        La traducción solo entra donde antes no había nada.
+        """
+        directo = await self.search_foods(nombre, limit=limit)
+        if directo and not directo[0].get("_match_parcial"):
+            return directo
+        if not interpretacion:
+            return directo
+
+        traducido = await self.search_foods(interpretacion, limit=limit)
+        traducido = [f for f in traducido if not f.get("_match_parcial")]
+        if not traducido:
+            return directo
+
+        # Se marca de dónde sale, para poder decírselo al usuario en vez de colar un
+        # alimento con otro nombre en silencio.
+        salida = [dict(f) for f in traducido]
+        for f in salida:
+            f["_interpretado"] = nombre
+        return salida
+
     async def search_foods(self, query: str, limit: int = 5, _remap: bool = True) -> list:
         """
         Busca alimentos en la base de datos.
@@ -2239,6 +2272,9 @@ class NutritionChatbot:
 
         explicit = [it for it in real_items if tiene_cantidad(it)]
         auto_names = [it["nombre"] for it in real_items if not tiene_cantidad(it)]
+        # Cómo se llamaría cada cosa en la tabla, según el router ("tostadas" -> "pan
+        # tostado"). Se lleva aparte porque el nombre que dijo el usuario no se toca.
+        interpretacion = {it["nombre"]: it.get("busqueda") for it in real_items if it.get("busqueda")}
 
         # ── 0) Desambiguación: términos GENÉRICOS (p.ej. "lomo", "pavo") que en la base
         #     corresponden a alimentos muy distintos NO se adivinan; se ofrecen OPCIONES
@@ -2297,12 +2333,18 @@ class NutritionChatbot:
         #     en silencio (se sugiere el parecido y el usuario decide). ──
         nombres_ok = []
         for nombre_pedido in auto_names:
-            m = await self.search_foods(nombre_pedido, limit=1)
+            m = await self.buscar_con_interpretacion(
+                nombre_pedido, interpretacion.get(nombre_pedido), limit=1)
             if not m:
                 not_found.append({"buscado": nombre_pedido, "razon": self._NO_LO_TENGO})
             elif m[0].get("_match_parcial"):
                 not_found.append({"buscado": nombre_pedido, "razon": "No lo tengo en la base de datos",
                                   "sugerencia": f"Lo más parecido que tengo es \"{(m[0].get('nombre') or '').strip()}\". Escríbelo si lo quieres."})
+            elif m[0].get("_interpretado"):
+                # Se ha entendido lo que quería, pero en la tabla se llama de otra forma.
+                # Se añade con su nombre real y se le dice, para que no parezca un cambiazo.
+                nombres_ok.append(m[0].get("nombre"))
+                avisos.append(f"\"{nombre_pedido}\" lo tengo como \"{(m[0].get('nombre') or '').strip()}\".")
             else:
                 nombres_ok.append(nombre_pedido)
 
@@ -2875,7 +2917,15 @@ class NutritionChatbot:
                 unidad = "g"
             if unidad not in ("g", "ud"):
                 unidad = None
-            items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad, "sumar": bool(f.get("sumar"))})
+            # Cómo se llamaría en la tabla ("tostadas" -> "pan tostado"). Se guarda aparte:
+            # el nombre que dijo el usuario NO se toca, porque es lo que se le enseña y lo
+            # que se busca primero. Esto es una segunda vía, no un reemplazo.
+            busq = (f.get("busqueda") or "").strip() if isinstance(f.get("busqueda"), str) else ""
+            if busq.lower() == nombre.lower():
+                busq = ""
+            items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad,
+                          "sumar": bool(f.get("sumar")),
+                          "busqueda": busq or None})
         return items
 
     async def understand(self, text: str) -> dict:
@@ -2886,10 +2936,25 @@ class NutritionChatbot:
             "Eres el router de un asistente de nutrición. El usuario está montando una comida. "
             "Clasifica su mensaje en UNA intención y extrae lo necesario. Devuelve SOLO JSON: "
             '{"intent": "add|suggest|complete|remove|clear|status|summary|rebalance|goto|list|question|none", '
-            '"foods": [{"nombre": "...", "cantidad": <numero o null>, "unidad": "g"|"ud"|null}], '
+            '"foods": [{"nombre": "...", "cantidad": <numero o null>, "unidad": "g"|"ud"|null, '
+            '"busqueda": "<como se llamaria eso en una tabla de alimentos, o null>"}], '
             '"remove": "<alimento a quitar o null>", "goto": <numero de comida, "post", "intra", "ultima", "actual" o null>, '
             '"macro": "P"|"H"|"G"|null, "marca": "<marca pedida o null>", '
             '"termino": "<tipo de alimento del que pide MAS opciones, o null>"}. '
+            # La gente no habla como está escrito el catálogo. Pide "tostadas" y en la tabla
+            # pone "pan tostado"; pide "cereales" y pone "copos de maíz". Aquí se traduce.
+            "CÓMO SE LLAMA EN LA TABLA ('busqueda'): la gente no pide la comida como está "
+            "escrita en una tabla de alimentos. Por cada alimento, di también cómo se "
+            "llamaría ahí. Ejemplos: 'tostadas' -> 'pan tostado'; 'cereales' -> 'copos de "
+            "maíz'; 'fiambre' -> 'jamón de york'; 'pasta' -> 'macarrones'; 'refresco' -> "
+            "'bebida de cola'; 'embutido' -> 'chorizo'. "
+            "DOS REGLAS que no se saltan: "
+            "(a) si lo que ha dicho YA es como se llamaría en la tabla ('pechuga de pollo', "
+            "'arroz blanco', 'huevos'), 'busqueda' va a null: no hay nada que traducir. "
+            "(b) NO concretes lo que es ambiguo a propósito. Si dice 'pavo', 'lomo', "
+            "'filete', 'queso' o 'yogur', déjalo tal cual con 'busqueda' a null: son "
+            "términos que el sistema pregunta al usuario, y concretarlos le quitaría la "
+            "elección. Traduce solo cuando la palabra que ha usado NO aparecería en la tabla. "
             "Intenciones: "
             "'add' = dice qué alimentos quiere comer/añadir o CAMBIAR DE CANTIDAD "
             "(ej: 'quiero tortilla de claras y pan', 'pon 80 g de arroz', 'cambia el arroz a 100g'). "
