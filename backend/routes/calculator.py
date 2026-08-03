@@ -21,7 +21,7 @@ from calma_engine import (
     run_tests as calma_run_tests,
     parse_categories,
 )
-from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal, get_all_foods_cached, normalize_text
+from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal, get_all_foods_cached, normalize_text, cat_in_list
 from calma_suggest import (
     ajustar_cantidad as ajustar_cantidad_calma,
     macros_at as macros_at_calma,
@@ -1547,6 +1547,14 @@ _LIBRARY_MARGEN_MAX = 15.0
 _LIBRARY_CANDIDATOS_MAX = 4000
 _LIBRARY_TRABAJO_MAX = 300  # solo los mejores N se materializan con macros por item
 
+# Lo que convierte un menú en UNA COMIDA y no en un desayuno o una merienda: una fuente
+# proteica sólida o un plato preparado. Deja fuera a propósito la proteína en polvo (4) y
+# los lácteos (5): un batido o un yogur con cereales cuadran los macros igual de bien, pero
+# nadie llama a eso "la comida". La biblioteca guarda en qué NÚMERO de comida se comió cada
+# menú, no a qué hora ni cuándo entrenaba esa persona, así que sin esto la Comida 2 de quien
+# desayuna tarde acaba ofreciéndose como la Comida 2 de quien acaba de entrenar.
+_CATS_DE_PLATO = ['1', '2', '3', '6', '10', '28', '32', '39', '40', '45', '49', '50', '53']
+
 
 @router.post("/library-menus")
 async def library_menus(data: dict, user = Depends(get_current_user)):
@@ -1688,6 +1696,8 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         menus.append({
             "biblioteca_id": c["id"],
             "items": items,
+            # ¿Es una comida de verdad o un desayuno/merienda que cuadra por macros?
+            "es_plato": any(cat_in_list(get_categoria_principal(f), _CATS_DE_PLATO) for f in food_list),
             # macros del método que el cliente SE LLEVA (tras palancas)
             "macros_metodo": metodo_final,
             # macros del menú base tal cual se guardó (sin ajustar)
@@ -1706,12 +1716,35 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
             "fuente": "biblioteca",
         })
 
+    # ── Dos filtros de sentido común, ambos con red: solo se aplican si después de
+    # aplicarlos SIGUE habiendo menús de sobra. Antes que quedarse corto, se relajan.
+
+    # 1) Coherencia con el momento del día. Solo la primera comida admite formato
+    # desayuno, y solo si NO entrena en ayunas: si entrena antes de desayunar, su C1 es
+    # la comida de después del entreno y toca plato, no yogur con cereales. El peri se
+    # queda fuera de esta regla (son bebidas y batidos por definición).
+    momento = int(data.get("momento_entreno", 1) or 0)
+    admite_desayuno = (meal_key == "C1" and momento != 0)
+    solo_platos = False
+    if tipo_comida != "Peri" and not admite_desayuno:
+        platos = [m for m in menus if m["es_plato"]]
+        if len(platos) >= limit:
+            menus, solo_platos = platos, True
+
+    # 2) Las variantes (mismo menú real con las cantidades escaladas, veces=0) son el
+    # relleno para objetivos que no encuentran nada: si hay comida de cliente de sobra,
+    # no se ofrecen.
+    de_cliente = [m for m in menus if m.get("origen") != "variante"]
+    solo_cliente = len(de_cliente) >= limit
+    if solo_cliente:
+        menus = de_cliente
+
     # Orden final sobre el resultado REAL (tras palancas), no sobre el menú base.
     if orden == "usado":
         menus.sort(key=lambda m: (-m["veces"], m["err"]))
     else:
         menus.sort(key=lambda m: (m["err"], -m["veces"]))
-    total = len(menus)   # menús que cuadran a ±margen DESPUÉS de palancas
+    total = len(menus)   # menús ofrecibles: cuadran a ±margen y pasan los dos filtros
     menus = menus[:limit]
 
     return {
@@ -1721,6 +1754,8 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         "margen": margen,
         "orden": orden,
         "tipo_comida": tipo_comida,
+        # Para saber por qué salió lo que salió sin tener que adivinarlo.
+        "filtros": {"solo_platos": solo_platos, "solo_cliente": solo_cliente},
     }
 
 
