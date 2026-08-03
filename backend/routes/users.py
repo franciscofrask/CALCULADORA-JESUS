@@ -17,6 +17,7 @@ from target_calculator import calcular_targets, targets_to_profile_macros
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
 from core.plan_access import tiene_entrenador_detras, dias_hasta_la_revision
 from core.quiz_store import guardar_quiz_respuestas, registrar_revision
+from core.avisos_equipo import avisar_al_equipo
 from core.cycle import enrich_cycle
 
 router = APIRouter(tags=["users"])
@@ -519,19 +520,18 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
         if profile.get("trainer_id"):
             coach = await db.users.find_one({"id": profile["trainer_id"]}, {"_id": 0, "name": 1})
         entrega["coach"] = (coach or {}).get("name")
-        # Aviso al coach por la campanita, con lo justo para que sepa que hacer.
-        if profile.get("trainer_id"):
-            await db.notifications.insert_one({
-                "id": str(uuid.uuid4()),
-                "user_id": profile["trainer_id"],
-                "type": "macros_propuestos",
-                "title": "Macros propuestos por el cuestionario",
-                "message": f"{profile.get('name') or 'Un cliente'} ha rellenado el formulario. "
-                           f"Revisa la propuesta antes de aplicarla.",
-                "client_id": client_id,
-                "read": False,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
+        # Aviso por la campanita, con lo justo para que sepa que hacer. Si el cliente no
+        # tiene entrenador asignado (que es lo normal: nada lo asigna al pagar), se avisa
+        # a todo el staff. Antes el aviso colgaba de tener entrenador y no salia nunca.
+        await avisar_al_equipo(
+            db,
+            tipo="macros_propuestos",
+            titulo="Macros propuestos por el cuestionario",
+            mensaje=f"{profile.get('name') or user.get('name') or 'Un cliente'} ha rellenado el "
+                    f"formulario. Revisa la propuesta antes de aplicarla.",
+            client_id=client_id,
+            trainer_id=profile.get("trainer_id"),
+        )
 
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado,
@@ -577,6 +577,20 @@ async def submit_questionnaire_nivel1(data: Nivel1Submit, user = Depends(get_cur
         client_id=client_id,
         origen="nivel1",
         respuestas=nivel1,
+    )
+
+    # Este es el formulario que se le vende como "tu coach usará todo esto para tu
+    # estrategia": si no avisa a nadie, esa frase es mentira. No avisaba a nadie, ni
+    # siquiera con entrenador asignado.
+    await avisar_al_equipo(
+        db,
+        tipo="perfil_completo",
+        titulo="Perfil completo del cliente",
+        mensaje=f"{profile.get('name') or user.get('name') or 'Un cliente'} ha rellenado el "
+                f"cuestionario largo: historial, salud, entreno y alimentos. Ya puedes montarle "
+                f"la estrategia.",
+        client_id=client_id,
+        trainer_id=profile.get("trainer_id"),
     )
 
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})

@@ -359,7 +359,7 @@ const STEPS_ONBOARD = [
 
 // NIVEL 1 - solo planes con coach. Alimenta el perfil y el caso gemelo; NO toca macros.
 const STEPS_NIVEL1 = [
-    { type: 'statement', title: 'Ahora, tu perfil completo', desc: 'Unas preguntas más para tu coach: le sirven para tu estrategia, tu rutina y tus menús. Estas ya no cambian tus macros.', cta: 'Seguir' },
+    { type: 'statement', title: 'Ahora, tu perfil completo', desc: 'Unas preguntas más para el equipo: le sirven para tu estrategia, tu rutina y tus menús. Estas ya no cambian tus macros.', cta: 'Seguir' },
     { type: 'biotype_intro', title: 'Ahora tienes que elegir tu biotipo, es decir, tu tipo de cuerpo.', desc: 'Es la tendencia natural de tu cuerpo según tu genética (independientemente de tu estado físico actual o los hábitos que tengas en este momento). Antes te explico los 7 que hay (después eliges):' },
     { type: 'biotype', key: 'biotype', title: 'Indica cuál de los 7 biotipos corporales es el tuyo', desc: 'Puedes volver atrás y leer las descripciones. Si no te identificas claramente con ninguno, elige el que más se acerque a ti.' },
     { type: 'number', key: 'height', title: '¿Cuánto mides?', desc: 'Tu altura, en cm.', unit: 'cm', required: true },
@@ -380,7 +380,7 @@ const STEPS_NIVEL1 = [
     {
         // P14. La respuesta se guarda; la regla de como afecta a los macros la dara Jesus.
         type: 'choice', key: 'trt', title: '¿Sigues algún tratamiento hormonal tipo TRT?',
-        desc: 'Es información médica y la trata tu entrenador. No cambia tus macros.',
+        desc: 'Es información médica y la trata el equipo. No cambia tus macros.',
         options: [
             { value: 'si', label: 'Sí' },
             { value: 'no', label: 'No' },
@@ -399,7 +399,7 @@ const STEPS_NIVEL1 = [
             { value: 'reparto', label: 'Se me reparte por igual' },
         ],
     },
-    { type: 'pesos', title: 'Tu historial de peso', desc: 'Aproximado, en kg. Ayuda a tu coach a entender tu recorrido.' },
+    { type: 'pesos', title: 'Tu historial de peso', desc: 'Aproximado, en kg. Ayuda al equipo a entender tu recorrido.' },
     { type: 'historia', title: 'Tu recorrido', desc: 'Cuándo fue cada cosa y hasta dónde quieres llegar.' },
     {
         // P22
@@ -458,7 +458,7 @@ const STEPS_NIVEL1 = [
         ],
     },
     { type: 'text', key: 'alergias', title: '¿Alergias o intolerancias alimentarias?', desc: 'Si no tienes, escribe "no".', textarea: true },
-    { type: 'final1', title: 'Perfil completo.', desc: 'Tu coach usará todo esto para tu estrategia. Las fotos de progreso te las pedirá por el chat. Si quieres revisar algo, ve hacia atrás.' },
+    { type: 'final1', title: 'Perfil completo.', desc: 'El equipo usará todo esto para tu estrategia. Las fotos de progreso te las pedirán por el chat. Si quieres revisar algo, ve hacia atrás.' },
 ];
 
 // A nivel de módulo para que los inputs conserven el FOCO al teclear: definidos
@@ -1042,7 +1042,7 @@ const QuestionnairePage = () => {
                 motivo_apuntarse: answers.motivo_apuntarse || null,
             });
             await refreshProfile();
-            toast.success('¡Perfil completo! Tu coach ya tiene toda la información.');
+            toast.success('¡Perfil completo! El equipo ya tiene toda la información.');
             navigate('/welcome');
         } catch (e) {
             toast.error(e.response?.data?.detail || 'Error al guardar el perfil');
@@ -1167,8 +1167,11 @@ const QuestionnairePage = () => {
                 <p className="text-foreground/60 mb-6 text-sm md:text-base">
                     {!modoAjuste
                         ? 'Ya puedes empezar a comer hoy. Termina de ajustarlos para afinarlos a tu caso.'
+                        /* Sin entrenador asignado no se dice "tu entrenador": casi ningún
+                           cliente tiene uno puesto y prometer una persona que no existe se
+                           nota. Quien lo revisa entonces es el equipo, que es la verdad. */
                         : entrega?.con_entrenador
-                            ? `${entrega.coach || 'Tu entrenador'} los va a revisar contigo${entrega.proxima_revision ? ` el ${entrega.proxima_revision}` : ''} y los ajustará a tu caso.`
+                            ? `${entrega.coach || 'El equipo'} los va a revisar contigo${entrega.proxima_revision ? ` el ${entrega.proxima_revision}` : ''} y los ajustará a tu caso.`
                             : `Calculados con el método a partir de tus respuestas.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ' Los verás siempre en tu panel.'}`}
                 </p>
                 {m ? (
@@ -1190,7 +1193,7 @@ const QuestionnairePage = () => {
                         <DesgloseChips desglose={resultado.desglose} />
                         {resultado.revision?.requiere_revision && (
                             <p className="text-xs text-amber-500 font-medium">
-                                Lo que comes ahora no cuadra con lo esperado para tu % graso: tu entrenador lo revisará.
+                                Lo que comes ahora no cuadra con lo esperado para tu % graso: el equipo lo revisará.
                             </p>
                         )}
                     </div>

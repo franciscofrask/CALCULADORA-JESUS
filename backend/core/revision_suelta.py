@@ -35,6 +35,7 @@ async def activar_tras_pago(profile: Dict, importe_eur: Optional[float] = None) 
     import uuid
 
     from core.database import db
+    from core.avisos_equipo import avisar_al_equipo
 
     actual = profile.get("revision_suelta") or {}
     if actual.get("estado") in ("pendiente", "hecha"):
@@ -61,22 +62,17 @@ async def activar_tras_pago(profile: Dict, importe_eur: Optional[float] = None) 
         "created_at": ahora,
     })
 
-    aviso = {
-        "id": str(uuid.uuid4()),
-        "type": "revision_suelta_pagada",
-        "title": "Revisión de macros pagada",
-        "message": f"{profile.get('name') or 'Un cliente'} ha pagado una revisión de sus macros. "
-                   f"Revísalos y aplícaselos.",
-        "client_id": client_id,
-        "read": False,
-        "created_at": ahora,
-    }
-    if coach_id:
-        await db.notifications.insert_one({**aviso, "user_id": coach_id})
-    else:
-        # Sin coach asignado: se avisa a todo el staff para que lo coja alguien.
-        async for u in db.users.find({"role": {"$in": ["admin", "trainer"]}}, {"_id": 0, "id": 1}):
-            await db.notifications.insert_one({**aviso, "id": str(uuid.uuid4()), "user_id": u["id"]})
+    # Con coach, a su coach; sin coach, a todo el staff. La regla vivía aquí y ahora está
+    # en core/avisos_equipo.py, compartida con los avisos del cuestionario.
+    await avisar_al_equipo(
+        db,
+        tipo="revision_suelta_pagada",
+        titulo="Revisión de macros pagada",
+        mensaje=f"{profile.get('name') or 'Un cliente'} ha pagado una revisión de sus macros. "
+                f"Revísalos y aplícaselos.",
+        client_id=client_id,
+        trainer_id=coach_id,
+    )
 
     await db.client_profiles.update_one(
         {"id": client_id},
