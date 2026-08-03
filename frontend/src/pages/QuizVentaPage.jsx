@@ -19,6 +19,17 @@ import Logo12EN12 from '../components/Logo12EN12';
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
 
+// El resultado se deja aquí para que la pantalla de planes pueda enseñarlo y marcar el
+// nivel que le salió. sessionStorage y no localStorage: es de esta visita, no para
+// siempre. Sobrevive al registro porque es la misma pestaña.
+const CLAVE_TEST = 'quiz_venta_resultado';
+
+// Esta pantalla funciona SIN sesión a propósito (no usa el contexto de auth), así que la
+// sesión se mira donde vive el token, no por contexto.
+const haySesion = () => {
+    try { return !!localStorage.getItem('token'); } catch { return false; }
+};
+
 const QuizVentaPage = () => {
     const navigate = useNavigate();
     const [preguntas, setPreguntas] = useState([]);
@@ -52,11 +63,32 @@ const QuizVentaPage = () => {
         try {
             const r = await axios.post(`${API}/api/quiz-venta`, { respuestas: nuevas });
             setResultado(r.data);
+            guardarParaPlanes(r.data, null);   // vale ya, sin tener que elegir nivel
         } catch {
             toast.error('No hemos podido calcular tu resultado');
         } finally {
             setEnviando(false);
         }
+    };
+
+    // Deja el resultado a mano de la pantalla de planes. Se llama en dos momentos: al
+    // calcularlo (para que valga aunque no pulse nada y vuelva atrás) y al elegir nivel.
+    // `plan` a null significa "el recomendado".
+    const guardarParaPlanes = (res, plan) => {
+        if (!res) return;
+        const recomendado = res.niveles.find(n => n.recomendado);
+        const elegido = res.niveles.find(n => n.plan === plan) || recomendado;
+        if (!elegido) return;
+        try {
+            sessionStorage.setItem(CLAVE_TEST, JSON.stringify({
+                plan: elegido.plan,
+                nombre: elegido.nombre,
+                // El porqué explica el nivel RECOMENDADO. Si se queda con otro, no se
+                // manda: pegarlo debajo de otro nombre sería explicar una cosa por otra.
+                por_que: elegido.plan === recomendado?.plan ? res.por_que : null,
+            }));
+            sessionStorage.setItem('plan_elegido', elegido.plan);
+        } catch { /* modo privado */ }
     };
 
     const elegir = (plan, porLlamada) => {
@@ -66,11 +98,14 @@ const QuizVentaPage = () => {
             setPidiendo('llamada');
             return;
         }
-        // Sin sesión no se puede cobrar: se le lleva a registrarse. El plan elegido viaja
-        // en sessionStorage porque /auth no lee query params — si se pasara en la URL se
-        // perdería igual, y aquí al menos sobrevive hasta la pantalla de planes.
-        try { sessionStorage.setItem('plan_elegido', plan); } catch { /* modo privado */ }
-        navigate('/auth');
+        // El plan elegido viaja en sessionStorage porque /auth no lee query params - si se
+        // pasara en la URL se perdería igual, y aquí al menos sobrevive hasta la pantalla
+        // de planes, incluso pasando por el registro.
+        guardarParaPlanes(resultado, plan);
+        // Con sesión, a los planes; sin ella, a registrarse (sin cuenta no se puede cobrar).
+        // Mandar a /auth con la sesión abierta rebotaba al panel y tiraba el resultado:
+        // /auth vive dentro de PublicRoute, que echa de allí a quien ya ha entrado.
+        navigate(haySesion() ? '/planes' : '/auth');
     };
 
     const guardar = async (e) => {
@@ -141,7 +176,17 @@ const QuizVentaPage = () => {
                         ))}
                     </div>
 
-                    {/* El correo, DESPUES de haber visto el resultado y nunca antes. */}
+                    {/* Quien ya ha entrado viene de la pantalla de planes: se le deja volver
+                        sin contratar nada. Y no se le pide el correo, que ya lo tenemos:
+                        "guardar el resultado" solo tiene sentido para quien no tiene cuenta. */}
+                    {haySesion() ? (
+                        <button onClick={() => { guardarParaPlanes(resultado, null); navigate('/planes'); }}
+                            data-testid="quiz-volver-planes"
+                            className="w-full mt-8 text-sm text-muted-foreground hover:text-foreground underline underline-offset-4">
+                            Volver a los planes y decidir con calma
+                        </button>
+                    ) : (
+                    /* El correo, DESPUES de haber visto el resultado y nunca antes. */
                     <div className="mt-8">
                         {guardado ? (
                             <div className="surface p-5 text-center" data-testid="quiz-guardado">
@@ -192,6 +237,7 @@ const QuizVentaPage = () => {
                             </button>
                         )}
                     </div>
+                    )}
 
                     <p className="text-center text-[11px] text-muted-foreground mt-8">
                         Todos los ciclos son de 12 semanas. Tu precio se congela mientras no te des de baja.
