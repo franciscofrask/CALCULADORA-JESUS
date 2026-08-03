@@ -216,7 +216,7 @@ const AuthPage = () => {
                 
                 {/* Footer */}
                 <p className="text-white/30 text-xs mt-10 text-center">
-                    © 2026 Jesús Gallego · 12EN12 Training System
+                    © 2026 12EN12 Training System
                 </p>
             </div>
         </div>

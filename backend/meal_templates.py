@@ -1,6 +1,6 @@
 """
 Meal Templates - Menús preestablecidos de "Sugiéreme un menú".
-Método Jesús Gallego - 12en12.
+Método 12en12.
 
 Los menús viven en db.menu_templates y se gestionan desde el panel de admin
 (sección Menús). Ya NO hay plantillas hardcodeadas: aquí solo queda la lógica de

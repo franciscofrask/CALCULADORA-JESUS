@@ -1758,7 +1758,7 @@ async def get_food_config_endpoint(food_id: int, user = Depends(get_current_user
 async def calculate_client_targets(data: dict, user = Depends(get_current_user)):
     """
     Calcula los macros objetivo del cliente basado en peso, sexo, %graso y objetivo.
-    Usa las tablas de Jesús Gallego (macros_tables.json).
+    Usa las tablas del método (macros_tables.json).
 
     Body: {"peso": 80, "sexo": "hombre", "porcentaje_graso": 20, "objetivo": "volumen"}
 

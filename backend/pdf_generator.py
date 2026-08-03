@@ -56,7 +56,7 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
     doc = SimpleDocTemplate(
         buffer, pagesize=A4,
         rightMargin=16 * mm, leftMargin=16 * mm, topMargin=14 * mm, bottomMargin=16 * mm,
-        title=f"Plan de nutricion - {user_name}", author="12EN12 - Jesus Gallego",
+        title=f"Plan de nutricion - {user_name}", author="12EN12",
     )
 
     styles = getSampleStyleSheet()
@@ -93,7 +93,7 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
 
     # ---- Cabecera de marca (banda naranja) ----
     izq = [Paragraph("12EN12", st_brand),
-           Paragraph("Método 12en12 · Jesús Gallego", st_brand_sub)]
+           Paragraph("Método 12en12", st_brand_sub)]
     der = [Paragraph("Plan de nutrición", st_head_r),
            Paragraph(_fecha_larga(fecha), st_head_r2)]
     header = Table([[izq, der]], colWidths=[100 * mm, 78 * mm])
@@ -313,7 +313,7 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
     elements.append(HRFlowable(width="100%", thickness=0.6, color=LINE))
     elements.append(Spacer(1, 2 * mm))
     elements.append(Paragraph(
-        f"Generado con la app 12EN12 de Jesús Gallego · {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        f"Generado con la app 12EN12 · {datetime.now().strftime('%d/%m/%Y %H:%M')}",
         st_footer))
 
     doc.build(elements)

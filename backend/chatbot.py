@@ -34,7 +34,7 @@ from macro_distribution import distribuir_macros
 # CONSTANTES
 # =====================================================
 
-SYSTEM_PROMPT = """Eres un asistente de nutrición del método 12en12 de Jesús Gallego. 
+SYSTEM_PROMPT = """Eres un asistente de nutrición del método 12en12.
 Tu trabajo es ayudar al cliente a preparar su dieta del día, comida por comida.
 
 REGLAS IMPORTANTES:

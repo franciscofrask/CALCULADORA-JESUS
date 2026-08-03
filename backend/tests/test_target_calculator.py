@@ -1,7 +1,7 @@
 """
 Test suite for Target Calculator (Capa de Targets) - JG12 Platform
 Tests the automatic macro calculation based on weight, sex, body fat %, and goal.
-Uses Jesús Gallego's tables (macros_tables.json) with 404 combinations.
+Uses the method's tables (macros_tables.json) with 404 combinations.
 
 Endpoints tested:
 - POST /api/calculator/targets - Calculate macros

@@ -114,7 +114,7 @@ class Persona:
 
 
 NOMBRES_TRAINER = [
-    "Jesús Gallego", "Laura Prieto", "Marcos Díaz", "Nuria Sáez", "Álvaro Ruiz",
+    "Jesús Prieto", "Laura Prieto", "Marcos Díaz", "Nuria Sáez", "Álvaro Ruiz",
     "Elena Vidal", "Iván Torres", "Carla Moreno", "Rubén Ortega", "Sofía Navarro",
 ]
 NOMBRES_CLIENTE = [

@@ -4,7 +4,7 @@ CAPA DE TARGETS - Motor de cálculo de macros objetivo del cliente
 Dado (peso, sexo, %graso, objetivo), devuelve los macros objetivo
 para los tres tipos de día: entrenamiento, perientreno y descanso.
 
-Basado en las tablas del Excel de Jesús Gallego (macros_tables.json).
+Basado en las tablas del Excel del método (macros_tables.json).
 Las tablas son discretas (no fórmulas continuas). Para valores intermedios
 se redondea al escalón más cercano. Para valores fuera de rango se usa el extremo.
 

@@ -1,5 +1,5 @@
 """
-Distribución de Macros por Comida - Método Jesús Gallego
+Distribución de Macros por Comida - Método 12en12
 =========================================================
 Toma los macros totales del día y los reparte entre las comidas
 según el escenario (cantidad de H, momento de entreno, tipo de día).

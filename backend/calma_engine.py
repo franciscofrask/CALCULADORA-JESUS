@@ -1,6 +1,6 @@
 """
 CALMA v2 - Motor de calculo de macros efectivos
-Metodo Jesus Gallego - 12en12
+Metodo 12en12
 Basado en BIBLIA_ALIMENTOS_v2 (Marzo 2026)
 
 REESCRITO el 25/03/2026 segun la Biblia de Alimentos definitiva.

@@ -1,6 +1,6 @@
 """
 Calculator CALMA v2 - Búsqueda, ajuste automático, sugerencias
-Método Jesús Gallego - 12en12
+Método 12en12
 
 Funciones principales:
 - buscar_alimentos: búsqueda con filtros de categoría
