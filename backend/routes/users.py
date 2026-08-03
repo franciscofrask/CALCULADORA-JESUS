@@ -613,13 +613,21 @@ async def save_user_preferences(data: dict, user = Depends(get_current_user)):
     if len(preferences) < 3:
         raise HTTPException(status_code=400, detail="Debes seleccionar al menos 3 categorías")
 
+    # Este upsert puede CREAR el perfil: es lo primero que ofrece Nutrición y se puede
+    # hacer antes de contratar plan. Al nacer aquí, el perfil se marca pendiente_pago
+    # (no da acceso a nada) y lleva su created_at; antes salía sin fecha y el perfil
+    # quedaba ilegible para el resto de la app.
     await db.client_profiles.update_one(
         {"user_id": user["id"]},
         {"$set": {
             "food_preferences": preferences,
             "avoided_categories": avoided_categories,
             "avoided_keywords": avoided_keywords,
-        }, "$setOnInsert": {"id": str(uuid.uuid4())}},
+        }, "$setOnInsert": {
+            "id": str(uuid.uuid4()),
+            "status": "pendiente_pago",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
         upsert=True
     )
 

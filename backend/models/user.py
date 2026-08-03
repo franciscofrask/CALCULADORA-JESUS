@@ -487,8 +487,13 @@ class ClientProfile(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     user_id: str
-    plan: str
-    price: float
+    # OJO: plan y price son opcionales A PROPOSITO. El perfil se crea en cuanto el
+    # usuario guarda sus preferencias de comida, que puede hacer ANTES de contratar
+    # nada; exigirlos hacia que GET /clients/profile devolviera 500 y el frontend se
+    # quedara sin perfil (sin plan, sin cuestionario inicial y con el acceso cerrado
+    # aunque hubiera pagado). Sin plan = plan no contratado, que es un estado real.
+    plan: Optional[str] = None
+    price: Optional[float] = None
     week: int = 1
     # Ciclo calculado (ver core/cycle.py): inicio del ciclo y progreso derivado.
     cycle_start: Optional[str] = None
@@ -561,7 +566,9 @@ class ClientProfile(BaseModel):
     payment_method_exp_year: Optional[int] = None
     payment_failure_count: Optional[int] = None
     last_payment_error: Optional[str] = None
-    created_at: str
+    # Opcional por lo mismo que plan/price: hay perfiles creados por upsert (preferencias,
+    # webhook de leads) que nunca lo escribieron.
+    created_at: Optional[str] = None
 
 class ClientProfileCreate(BaseModel):
     plan: str

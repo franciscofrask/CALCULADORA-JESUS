@@ -231,6 +231,10 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
         }
         if trainer_id is not None:
             update_data["trainer_id"] = trainer_id
+        # Perfiles nacidos de un upsert (preferencias, webhook de leads) pueden no tener
+        # fecha de alta: se rellena aquí para no arrastrar el perfil incompleto al plan.
+        if not profile.get("created_at"):
+            update_data["created_at"] = now_iso
         await db.client_profiles.update_one({"id": profile["id"]}, {"$set": update_data})
         profile = await db.client_profiles.find_one({"id": profile["id"]}, {"_id": 0})
     else:
