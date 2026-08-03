@@ -1244,11 +1244,12 @@ const NutritionPage = () => {
         toast.success(`Copiada ${mealInfo[sourceMealKey]?.name || sourceMealKey} del ${formatDate(sourceDiet.fecha)}`);
     };
 
-    // "Sugiéreme un menú": biblioteca REAL (db.meal_library, 266k comidas de clientes
-    // ya cuadradas con el método). Sustituye al catálogo del recetario + menu-apply
-    // (2026-07-17): ahora se ofrecen menús por CERCANÍA al objetivo de la comida y
-    // se vuelcan TAL CUAL, sin reescalar cantidades ni tocar los macros. El modal
-    // carga sus propios datos (library-menus); aquí solo se abre y se aplica.
+    // "Sugiéreme un menú": modal con dos pestañas. Biblioteca REAL (db.meal_library,
+    // 266k comidas de clientes ya cuadradas con el método): menús por CERCANÍA al
+    // objetivo de la comida, que se vuelcan tal cual (o ajustados con sus palancas).
+    // Recetario (menu_templates, recetas ELM): la receta se cuadra a los macros al
+    // elegirla (menu-apply). El modal carga sus propios datos; aquí solo se abre y
+    // se vuelca lo que devuelve, que en ambos casos viene con la misma forma.
     const loadMenuOptions = (mealKey) => {
         setMenuOptionsModal({ open: true, mealKey });
     };
@@ -1270,6 +1271,15 @@ const NutritionPage = () => {
         }));
         setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
         setMenuOptionsModal({ open: false, mealKey: null });
+        if (menu.origen === 'recetario') {
+            // Pestaña Recetario: el backend ya ha cuadrado la receta a los macros
+            toast.success(menu.clavado
+                ? `${menu.nombre}: clava tu objetivo`
+                : menu.cuadrada
+                    ? `${menu.nombre}, cuadrada a tu objetivo`
+                    : `${menu.nombre} añadida, ajusta a mano lo que falte`);
+            return;
+        }
         toast.success(menu.clavado
             ? 'Menú añadido: clava tu objetivo'
             : (menu.cuadrada || menu.ajustado)
