@@ -79,7 +79,7 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
 // Alerta: quien ha elegido el Nivel 3 en el test y espera que le llamen. Solo aparece
 // cuando hay alguna: un aviso que está siempre deja de ser un aviso. Va arriba del todo
 // porque es lo único del panel donde hay alguien esperando al otro lado del teléfono.
-const LlamadasPendientes = ({ llamadas, onAtendida }) => {
+const LlamadasPendientes = ({ llamadas, onAtendida, onCobrar, generandoEnlace }) => {
     if (!llamadas || llamadas.length === 0) return null;
     return (
         <Card className="bg-[#FF671F]/10 border-[#FF671F]/40" data-testid="llamadas-pendientes">
@@ -111,11 +111,19 @@ const LlamadasPendientes = ({ llamadas, onAtendida }) => {
                                     {l.dias_esperando === 1 ? 'de ayer' : `hace ${l.dias_esperando} días`}
                                 </span>
                             )}
-                            <Button size="sm" variant="ghost" onClick={() => onAtendida(l)}
-                                data-testid={`llamada-atendida-${l.id}`}
-                                className="ml-auto text-xs text-white/60 hover:text-white">
-                                Ya le he llamado
-                            </Button>
+                            <div className="ml-auto flex items-center gap-2">
+                                {/* Ya hablado: se le cobra con tarjeta como a los demas. */}
+                                <Button size="sm" onClick={() => onCobrar(l)} disabled={generandoEnlace === l.id}
+                                    data-testid={`enlace-pago-${l.id}`}
+                                    className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs disabled:opacity-60">
+                                    {generandoEnlace === l.id ? 'Creando...' : 'Enlace de pago'}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => onAtendida(l)}
+                                    data-testid={`llamada-atendida-${l.id}`}
+                                    className="text-xs text-white/60 hover:text-white">
+                                    Ya le he llamado
+                                </Button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -148,6 +156,31 @@ const AdminDashboard = () => {
             toast.success(`${l.name} queda como contactado`);
         } catch {
             toast.error('No se pudo marcar la llamada');
+        }
+    };
+
+    // Cobro del Nivel 3 despues de la llamada (doc 03-08): se genera el enlace de pago
+    // con tarjeta y se copia para mandarselo por WhatsApp. Es pago unico del ciclo, no
+    // suscripcion, y al pagarlo salta el aviso al equipo para darle el alta.
+    const [generandoEnlace, setGenerandoEnlace] = useState(null);
+    const generarEnlacePago = async (l) => {
+        setGenerandoEnlace(l.id);
+        try {
+            const r = await api.post(`/leads/${l.id}/enlace-pago`, { plan: 'nivel3' });
+            const url = r.data?.url;
+            try {
+                await navigator.clipboard.writeText(url);
+                toast.success(`Enlace de pago copiado (${r.data.importe_eur}€). Pégaselo por WhatsApp.`);
+            } catch {
+                // Sin permiso de portapapeles (http, o el navegador lo bloquea): se enseña
+                // para copiar a mano, que es mejor que perder el enlace recien creado.
+                toast.success('Enlace de pago creado', { description: url, duration: 30000 });
+            }
+            setLlamadas(prev => prev.filter(x => x.id !== l.id));
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'No se pudo crear el enlace de pago');
+        } finally {
+            setGenerandoEnlace(null);
         }
     };
 
@@ -288,7 +321,8 @@ const AdminDashboard = () => {
             </div>
 
             {/* Piden llamada (Nivel 3): por encima de los KPIs porque hay gente esperando */}
-            <LlamadasPendientes llamadas={llamadas} onAtendida={marcarLlamadaAtendida} />
+            <LlamadasPendientes llamadas={llamadas} onAtendida={marcarLlamadaAtendida}
+                onCobrar={generarEnlacePago} generandoEnlace={generandoEnlace} />
 
             {/* KPI Row */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="kpi-row">

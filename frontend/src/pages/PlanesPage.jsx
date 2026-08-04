@@ -6,7 +6,7 @@
  *
  * Dos cosas que no son de estilo:
  *   - El Nivel 3 no lleva a un pago, lleva a agendar una llamada ("cómo se compra: por
- *     llamada"). Cobrar 1.497 € sin hablar antes con la persona no es lo que se quiere.
+ *     llamada"). Cobrar 1.500 € sin hablar antes con la persona no es lo que se quiere.
  *   - Lo que se enseña sale del catálogo del servidor, no de una copia aquí. Si Jesús
  *     cambia un precio o una habilitación desde el panel, esta pantalla cambia con él.
  *     Solo las filas descriptivas que no tienen equivalente en el catálogo (llamada

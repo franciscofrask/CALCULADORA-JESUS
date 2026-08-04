@@ -156,16 +156,65 @@ class TestModificadores:
 
 
 class TestFarmacologia:
-    def test_trt_se_guarda_pero_no_se_aplica(self):
-        # Doc 29-07: la regla de la TRT llegara cuando Jesus la confirme. Hasta entonces el
-        # motor la registra y NO toca los macros (antes sumaba +10% de proteina en descanso
-        # por su cuenta). APLICAR_FARMACOLOGIA = False.
-        res = calcular_macros_v2(80, "hombre", 20, "volumen", farmacologia=True)
+    """Doc 03-08: +10 g de proteina en descanso, y la regla dura de que entreno + peri
+    tiene que quedar por encima del descanso."""
+
+    def test_ejemplo_del_doc(self):
+        # Hombre 80 kg / 20% / volumen. Tabla: 190 entreno, 45 peri, 225 descanso.
+        # Con farmacologia el descanso sube a 235, con lo que 190+45=235 ya no lo supera:
+        # se suben tambien 10 g en entreno -> 200 + 45 = 245 > 235.
         base = calcular_macros_v2(80, "hombre", 20, "volumen")
-        assert m8(res) == m8(base)
-        assert res["macros"]["descanso"]["proteina"] == 225
-        assert any(d["paso"] == "farmacologia" and d["estado"] == "no_aplicado"
+        assert (base["macros"]["entreno"]["proteina"], base["macros"]["perientreno"]["proteina"],
+                base["macros"]["descanso"]["proteina"]) == (190, 45, 225)
+
+        res = calcular_macros_v2(80, "hombre", 20, "volumen", farmacologia=True)
+        assert res["macros"]["descanso"]["proteina"] == 235
+        assert res["macros"]["entreno"]["proteina"] == 200
+        assert any(d["paso"] == "farmacologia" and d["estado"] == "aplicado"
                    for d in res["desglose"])
+        assert any(d["paso"] == "farmacologia_nivelar_entreno" for d in res["desglose"])
+
+    def test_entreno_no_se_toca_si_la_regla_dura_se_sigue_cumpliendo(self):
+        # Si entreno + peri sigue por encima del descanso tras los +10, el entreno no se mueve.
+        for peso, bf, obj in ((80, 15, "definicion"), (70, 20, "volumen"), (90, 25, "volumen")):
+            base = calcular_macros_v2(peso, "hombre", bf, obj)
+            res = calcular_macros_v2(peso, "hombre", bf, obj, farmacologia=True)
+            pr_e, pr_pe = base["macros"]["entreno"]["proteina"], base["macros"]["perientreno"]["proteina"]
+            pr_d = base["macros"]["descanso"]["proteina"]
+            assert res["macros"]["descanso"]["proteina"] == pr_d + 10
+            if pr_e + pr_pe > pr_d + 10:
+                assert res["macros"]["entreno"]["proteina"] == pr_e, (peso, bf, obj)
+
+    def test_la_regla_dura_nunca_se_rompe_por_la_farmacologia(self):
+        # Ojo: hay 79 celdas de la tabla (de 2.244) donde entreno + peri YA no supera al
+        # descanso sin farmacologia, todas de hombre con grasa alta (80 kg / 28% da
+        # 180 + 40 = 220 contra 220). Eso es de la tabla y no lo arregla esta excepcion.
+        # Lo que si se exige: si la combinacion lo cumplia, con farmacologia lo sigue
+        # cumpliendo.
+        for peso in (60, 70, 80, 90, 100):
+            for bf in (10, 15, 20, 25, 30):
+                for obj in ("volumen", "definicion"):
+                    for sexo in ("hombre", "mujer"):
+                        b = calcular_macros_v2(peso, sexo, bf, obj)["macros"]
+                        if b["entreno"]["proteina"] + b["perientreno"]["proteina"] <= b["descanso"]["proteina"]:
+                            continue  # ya venia roto de la tabla
+                        m = calcular_macros_v2(peso, sexo, bf, obj, farmacologia=True)["macros"]
+                        assert m["entreno"]["proteina"] + m["perientreno"]["proteina"] > m["descanso"]["proteina"], \
+                            (peso, sexo, bf, obj)
+
+    def test_sin_farmacologia_no_cambia_nada(self):
+        base = calcular_macros_v2(80, "hombre", 20, "volumen")
+        res = calcular_macros_v2(80, "hombre", 20, "volumen", farmacologia=False)
+        assert m8(res) == m8(base)
+        assert not any(d["paso"].startswith("farmacologia") for d in res["desglose"])
+
+    def test_hidratos_y_grasas_no_se_tocan(self):
+        base = calcular_macros_v2(80, "hombre", 20, "volumen")["macros"]
+        con = calcular_macros_v2(80, "hombre", 20, "volumen", farmacologia=True)["macros"]
+        for dia in ("entreno", "descanso"):
+            assert con[dia]["hidratos"] == base[dia]["hidratos"]
+            assert con[dia]["grasa"] == base[dia]["grasa"]
+        assert con["perientreno"] == base["perientreno"]
 
 
 class TestDietaReportada:

@@ -101,7 +101,7 @@ const FoodRow = ({ food }) => {
                 <div className="min-w-0">
                     {food.url ? (
                         <a href={food.url} target="_blank" rel="noopener noreferrer"
-                            className="text-sm font-medium text-[#FF671F] hover:underline break-words">
+                            className="text-sm font-medium text-[#FF671F] underline underline-offset-2 break-words">
                             {food.nombre}
                         </a>
                     ) : (
@@ -139,7 +139,7 @@ const FoodRow = ({ food }) => {
                 <p className="text-xs text-brand-orange">{food.sugerencia}</p>
             )}
             {food.info_etiqueta && (
-                <p className="text-xs text-muted-foreground">Información de etiqueta: {food.info_etiqueta}</p>
+                <p className="text-xs text-muted-foreground">Macros reales: {food.info_etiqueta}</p>
             )}
         </div>
     );

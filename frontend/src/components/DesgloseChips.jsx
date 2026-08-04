@@ -10,7 +10,9 @@ const CHIP_LABELS = {
         : 'El +20% aún no se aplica en mujeres (guardado)',
     veto_engorda_enseguida: () => 'Engordas enseguida: sin subidas de hidratos',
     tope: () => 'Tope de subida aplicado (+30% entreno / +40% descanso)',
-    farmacologia: () => '+10% proteína en descanso',
+    farmacologia: (d) => d.estado === 'aplicado' ? '+10 g de proteína en descanso'
+        : 'Farmacología guardada (aún no mueve macros)',
+    farmacologia_nivelar_entreno: () => '+10 g también en entreno, para que entreno + peri siga por encima del descanso',
     dieta_reportada: (d) => d.rama === 'volumen' ? 'Dieta reportada: mismos hidratos, repartidos'
         : d.rama === 'def_ultimas' ? 'Llegas en las últimas: arranque mínimo'
         : 'Dieta reportada: primer recorte ~13%',

@@ -32,9 +32,24 @@ class TestLosTresNiveles:
         for code in NIVELES:
             assert code in PLAN_CATALOG, f"falta {code}"
 
-    @pytest.mark.parametrize("code,precio", [("nivel1", 297.0), ("nivel2", 897.0), ("nivel3", 1497.0)])
+    @pytest.mark.parametrize("code,precio", [("nivel1", 297.0), ("nivel2", 897.0), ("nivel3", 1500.0)])
     def test_los_precios_del_documento(self, code, precio):
         assert PLAN_CATALOG[code]["precio"] == precio
+
+    def test_son_pago_unico_y_no_suscripcion(self):
+        """Doc 03-08: "Los tres niveles son pago unico de 12 semanas, no suscripcion
+        recurrente" y "la renovacion no se cobra sola". De esto depende que el checkout
+        vaya con mode="payment": si `one_time` se cayera, Stripe crearia una suscripcion
+        que volveria a cobrar a las 12 semanas sin hablar con nadie."""
+        from models.user import PLAN_TYPES
+        for code in NIVELES:
+            assert PLAN_TYPES[code]["one_time"] is True, f"{code} cobraria como suscripcion"
+
+    def test_la_membresia_si_es_mensual_recurrente(self):
+        """La unica que sigue siendo suscripcion: 97 EUR/mes mientras no se de de baja."""
+        from models.user import PLAN_TYPES
+        assert PLAN_TYPES["membresia"]["one_time"] is False
+        assert PLAN_CATALOG["membresia"]["ciclo"]["tipo"] == "mensual"
 
     def test_todos_de_12_semanas(self):
         for code in NIVELES:

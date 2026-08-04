@@ -86,6 +86,9 @@ PLAN_CATALOG = {
                            "reportes": ["mensual"], "suplementacion": False, "harbiz": False,
                            "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
         "stripe_price_env": "STRIPE_PRICE_NIVEL1", "billing_cycle_weeks": 12,
+        # Doc 03-08: PAGO UNICO del ciclo. No es una suscripcion: al llegar la
+        # semana 12 se le habla y decide, nunca se le cobra solo.
+        "pago_unico": True,
     },
     "nivel2": {
         "name": "Nivel 2", "estado": "activo", "asignable": True,
@@ -98,19 +101,25 @@ PLAN_CATALOG = {
                            "harbiz": False, "acompanamiento": "con_entrenador",
                            "frecuencia_contacto": "quincenal"},
         "stripe_price_env": "STRIPE_PRICE_NIVEL2", "billing_cycle_weeks": 12,
+        # Doc 03-08: PAGO UNICO del ciclo. No es una suscripcion: al llegar la
+        # semana 12 se le habla y decide, nunca se le cobra solo.
+        "pago_unico": True,
     },
     "nivel3": {
         # "Cómo se compra: por llamada". No lleva a un pago, lleva a agendar.
         "name": "Nivel 3", "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
-        "precio": 1497.0, "precio_nota": "1.497€ por ciclo de 12 semanas · se contrata por llamada",
-        "precios": [{"label": "Ciclo", "importe": 1497.0, "periodo": "12 semanas"}],
+        "precio": 1500.0, "precio_nota": "1.500€ por ciclo de 12 semanas · se contrata por llamada",
+        "precios": [{"label": "Ciclo", "importe": 1500.0, "periodo": "12 semanas"}],
         "responsable": "CEO",
         "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
                            "reportes": ["quincenal", "mensual"], "suplementacion": True,
                            "harbiz": False, "acompanamiento": "con_entrenador_y_llamadas",
                            "frecuencia_contacto": "semanal"},
         "stripe_price_env": "STRIPE_PRICE_NIVEL3", "billing_cycle_weeks": 12,
+        # Doc 03-08: PAGO UNICO del ciclo. No es una suscripcion: al llegar la
+        # semana 12 se le habla y decide, nunca se le cobra solo.
+        "pago_unico": True,
     },
     "membresia": {
         # "Membresia 97 EUR/mes: ya no es la entrada, es la SALIDA para el que no renueva."
@@ -311,8 +320,10 @@ PLAN_TYPES = {
         "price": p["precio"],
         "stripe_price_env": p.get("stripe_price_env", ""),
         "billing_cycle_weeks": p.get("billing_cycle_weeks", 4),
-        # Pago único (p.ej. reto60): cobra una vez y el acceso dura el ciclo, sin renovar.
-        "one_time": (p.get("precios") or [{}])[0].get("periodo") == "único",
+        # Pago único: cobra una vez y el acceso dura el ciclo, sin renovar. Lo marca
+        # `pago_unico` (los tres niveles, doc 03-08) o un precio de periodo "único"
+        # (reto60 y compañía, que ya venían así).
+        "one_time": bool(p.get("pago_unico")) or (p.get("precios") or [{}])[0].get("periodo") == "único",
         "features": derive_features(p.get("habilitaciones", {})),
     }
     for code, p in PLAN_CATALOG.items()
@@ -586,6 +597,9 @@ class ClientProfileUpdate(BaseModel):
     macros_periworkout: Optional[Dict[str, float]] = None
     macros_source: Optional[str] = None
     single_meal_mode: Optional[bool] = None
+    # Uso ACTUAL de farmacologia -> +10 g de proteina en descanso. Solo por la ruta de
+    # admin: en PUT /users/clients/profile se descarta (el cliente no se lo marca solo).
+    farmacologia: Optional[bool] = None
     weight: Optional[float] = None
     height: Optional[float] = None
     age: Optional[int] = None

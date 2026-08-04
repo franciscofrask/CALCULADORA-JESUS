@@ -112,6 +112,92 @@ async def llamadas_pendientes(user=Depends(get_admin_user)):
     return {"llamadas": docs, "total": len(docs)}
 
 
+@router.post("/{lead_id}/enlace-pago")
+async def crear_enlace_pago(lead_id: str, data: dict = None, user=Depends(get_admin_user)):
+    """Genera el enlace de pago con tarjeta para un lead, ya hablado con el por telefono.
+
+    Doc del 03-08: el Nivel 3 se vende por llamada, pero se cobra por Stripe con tarjeta
+    igual que los demas. Esto es la via de cobro de despues de la llamada: el equipo saca
+    el enlace y se lo manda por WhatsApp.
+
+    Dos decisiones que conviene tener presentes:
+      - `mode="payment"`: PAGO UNICO del ciclo de 12 semanas, no suscripcion. No se
+        renueva solo; al llegar la semana 12 se le vuelve a hablar (doc 03-08).
+      - El importe va en linea (`price_data`) desde el precio del catalogo, no por
+        `STRIPE_PRICE_NIVEL3`. Esa variable esta vacia a proposito y con ella el checkout
+        daria 503; asi el enlace se puede generar hoy y siempre cobra lo que diga el
+        catalogo (overrides del panel incluidos).
+    """
+    from core.stripe_billing import (
+        get_stripe_module, stripe_api_call, require_stripe_test_mode, build_frontend_url,
+    )
+    from models.user import merged_catalog
+
+    data = data or {}
+    plan_code = (data.get("plan") or "nivel3").lower().strip()
+
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+
+    overrides = {o["code"]: o.get("fields", {})
+                 async for o in db.plan_overrides.find({}, {"_id": 0, "code": 1, "fields": 1})}
+    plan = merged_catalog(overrides).get(plan_code)
+    if not plan:
+        raise HTTPException(status_code=400, detail="Plan no válido")
+    if plan.get("estado") != "activo":
+        raise HTTPException(status_code=400, detail="Ese plan ya no se contrata.")
+
+    importe_eur = float(plan.get("precio") or 0)
+    if importe_eur <= 0:
+        raise HTTPException(status_code=400, detail="Ese plan no tiene precio para cobrar.")
+
+    stripe_module = get_stripe_module()
+    require_stripe_test_mode("La creación del enlace de pago")
+
+    semanas = int((plan.get("ciclo") or {}).get("semanas") or plan.get("billing_cycle_weeks") or 12)
+    metadata = {"tipo": "cobro_lead", "lead_id": lead_id, "plan": plan_code,
+                "creado_por": user["id"]}
+    session = await stripe_api_call(
+        stripe_module.checkout.Session.create,
+        mode="payment",
+        client_reference_id=lead_id,
+        **({"customer_email": lead["email"]} if lead.get("email") else {}),
+        line_items=[{
+            "price_data": {
+                "currency": "eur",
+                "unit_amount": int(round(importe_eur * 100)),
+                "product_data": {"name": plan.get("name") or plan_code,
+                                 "description": f"Ciclo de {semanas} semanas. Pago único, no se renueva solo."},
+            },
+            "quantity": 1,
+        }],
+        invoice_creation={"enabled": True},
+        payment_intent_data={"metadata": metadata},
+        billing_address_collection="auto",
+        success_url=build_frontend_url("/planes?pago=ok", include_session_placeholder=True),
+        cancel_url=build_frontend_url("/planes"),
+        metadata=metadata,
+    )
+
+    ahora = datetime.now(timezone.utc).isoformat()
+    enlace = {"url": session["url"], "session_id": session["id"], "plan": plan_code,
+              "importe_eur": importe_eur, "estado": "enviado",
+              "creado_at": ahora, "creado_por": user["id"]}
+    await db.leads.update_one({"id": lead_id}, {"$set": {
+        "enlace_pago": enlace,
+        # Ya se le ha hablado y se le manda la propuesta: sale de la lista de llamadas
+        # pendientes y queda en el CRM como propuesta enviada.
+        "status": "propuesta_enviada",
+        "quiz_venta.quiere_llamada": False,
+        "updated_at": ahora,
+    }})
+    await audit(user, "lead",
+                f"Generó el enlace de pago de {plan.get('name')} ({importe_eur:.0f}€) "
+                f"para {lead.get('name') or lead_id}")
+    return enlace
+
+
 @router.post("/{lead_id}/llamada-atendida")
 async def marcar_llamada_atendida(lead_id: str, user=Depends(get_admin_user)):
     """Ya se le ha contactado: sale del aviso, pero sigue siendo lead en el CRM."""

@@ -22,6 +22,24 @@ const MACRO_STYLE = {
     G: 'text-yellow-500',
 };
 
+const MACRO_NOMBRE = {
+    P: 'proteína',
+    H: 'hidratos',
+    G: 'grasa',
+};
+
+// A partir de esta desviación (g por macro) la receta NO se vuelca sin que el usuario
+// lo vea: se le enseña de cuánto se pasa y decide. Mismo umbral laxo que usa el motor
+// (MARGEN_MENU_RELAX en backend/meal_templates.py). El recetario va en best_effort, o sea
+// que el backend nunca rechaza la receta elegida; este es el único freno que hay.
+const MARGEN_AVISO = 12;
+
+// Macros que se salen del margen al cuadrar la receta, con su diferencia en gramos
+// (positiva = te pasas, negativa = te falta).
+const desviosFuera = (totales, objetivo) => ['P', 'H', 'G']
+    .map(m => ({ m, diff: Math.round(((totales?.[m] || 0) - (objetivo?.[m] || 0)) * 10) / 10 }))
+    .filter(d => Math.abs(d.diff) > MARGEN_AVISO);
+
 // Momentos del recetario (campo `momento` de menu_templates) -> etiqueta del chip
 const MOMENTO_LABEL = {
     desayuno: 'Desayunos',
@@ -63,6 +81,8 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
     const [recetarioError, setRecetarioError] = React.useState(null);
     const [momento, setMomento] = React.useState('todos');
     const [aplicandoId, setAplicandoId] = React.useState(null);
+    // Receta ya cuadrada pero lejos del objetivo, esperando el OK del usuario
+    const [confirmacion, setConfirmacion] = React.useState(null);
 
     React.useEffect(() => {
         if (open) {
@@ -72,6 +92,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
             setError(null);
             setRecetarioError(null);
             setMomento('todos');
+            setConfirmacion(null);
         }
     }, [open, mealKey]);
 
@@ -158,6 +179,9 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
 
     // Recetario: la receta no trae cantidades cerradas, las cuadra el backend a tus
     // macros al elegirla; lo que devuelve ya viene listo para volcar en la comida.
+    // Si aun cuadrada se queda a más de MARGEN_AVISO de tu objetivo, NO se vuelca:
+    // primero se enseña de cuánto se pasa y el usuario decide (vídeo de Jesús 04-08:
+    // "para mí es poco visual, yo no me di cuenta y me preparo esta receta").
     const aplicarReceta = async (receta) => {
         if (aplicandoId) return;
         setAplicandoId(receta.id);
@@ -172,12 +196,25 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                     ...(dayConfig || {}),
                 }),
             });
-            await onApply({ ...res, nombre: res.nombre || receta.nombre, origen: 'recetario' });
+            const menu = { ...res, nombre: res.nombre || receta.nombre, origen: 'recetario' };
+            const fuera = desviosFuera(res.macros_totales, res.macros_objetivo || obj);
+            if (fuera.length) {
+                setConfirmacion({ menu, fuera });
+                return;
+            }
+            await onApply(menu);
         } catch (err) {
             setRecetarioError('No se pudo montar esa receta con tus macros. Prueba con otra.');
         } finally {
             setAplicandoId(null);
         }
+    };
+
+    const confirmarReceta = async () => {
+        if (!confirmacion) return;
+        const { menu } = confirmacion;
+        setConfirmacion(null);
+        await onApply(menu);
     };
 
     const chips = ['todos', ...recetarioMomentos];
@@ -345,7 +382,51 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                             </div>
                         )
                     ) : (
-                        recetarioLoading ? (
+                        confirmacion ? (
+                            <div className="p-6" data-testid="recetario-confirmar-desvio">
+                                <span className="text-4xl mb-3 block text-center">⚠️</span>
+                                <p className="font-bold text-foreground text-center leading-snug mb-1">
+                                    {confirmacion.menu.nombre}
+                                </p>
+                                <p className="text-sm text-muted-foreground text-center mb-4">
+                                    Cuadrada a tus macros, esta receta se te va del objetivo de esta comida:
+                                </p>
+                                <div className="space-y-1.5 mb-4">
+                                    {confirmacion.fuera.map(({ m, diff }) => (
+                                        <p key={m} className={`text-center text-sm font-black ${MACRO_STYLE[m]}`}>
+                                            {diff > 0
+                                                ? `Te sobran ${diff} g de ${MACRO_NOMBRE[m]}`
+                                                : `Te faltan ${Math.abs(diff)} g de ${MACRO_NOMBRE[m]}`}
+                                        </p>
+                                    ))}
+                                </div>
+                                <div className="flex items-start justify-center gap-6 bg-muted/50 rounded-2xl py-3 mb-5">
+                                    <div className="text-center">
+                                        <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Tu objetivo</span>
+                                        <MacroTrio macros={confirmacion.menu.macros_objetivo || obj} size="sm" />
+                                    </div>
+                                    <div className="text-center">
+                                        <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">La receta</span>
+                                        <MacroTrio macros={confirmacion.menu.macros_totales} size="sm" />
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setConfirmacion(null)}
+                                        className="flex-1 py-3 rounded-xl bg-muted text-foreground font-bold text-sm hover:bg-muted/70 transition-colors"
+                                        data-testid="recetario-elegir-otra">
+                                        Elegir otra
+                                    </button>
+                                    <button onClick={confirmarReceta}
+                                        className="flex-1 py-3 rounded-xl bg-brand-orange text-white font-bold text-sm hover:opacity-90 transition-opacity"
+                                        data-testid="recetario-meter-igual">
+                                        Meterla igual
+                                    </button>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground text-center mt-3">
+                                    Si la metes igual, tendrás que ajustar las cantidades a mano.
+                                </p>
+                            </div>
+                        ) : recetarioLoading ? (
                             <div className="flex flex-col items-center justify-center py-16">
                                 <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent mb-4" />
                                 <p className="text-muted-foreground">Cargando el recetario...</p>

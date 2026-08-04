@@ -46,16 +46,19 @@ RESPUESTAS_QUE_SUBEN = ("casi_no", "normal")
 TOPE_SUBIDA_ENTRENO = 0.30
 TOPE_SUBIDA_DESCANSO = 0.40
 
-# Excepcion que toca proteina: farmacologia / TRT (+10% SOLO descanso)
-MOD_FARMACOLOGIA_PROTEINA_DESCANSO = 0.10
+# Excepcion que toca proteina: farmacologia / TRT.
+# Doc del 03-08: son +10 GRAMOS en el dia de descanso (antes estaba como +10%, que en un
+# cliente de 225 g de proteina eran 22,5). En entreno no se toca... salvo que la subida
+# rompa la regla dura de abajo, y entonces se suben otros 10 g en entreno.
+MOD_FARMACOLOGIA_PROTEINA_DESCANSO_G = 10.0
 
 # NO PROGRAMADOS AUN (guardar el dato, no aplicar):
 APLICAR_HISTORIAL_DIETA = False   # +-10% por historial de dieta: en pausa, sin validar
 APLICAR_ENGORDA_EN_MUJERES = False  # +20% "no engorda" en mujeres: n=11, sin validar
-# TRT / farmacologia: el doc del 29-07 dice que la pregunta se guarda y que la regla se activara
-# cuando Jesus confirme como afecta. Hasta entonces NO se aplica (antes sumaba +10% de proteina
-# en descanso, que es justo lo que el doc deja pendiente de definir).
-APLICAR_FARMACOLOGIA = False
+# TRT / farmacologia: el doc del 29-07 dejaba la regla en pausa hasta que Jesus confirmara como
+# afecta. Lo confirmo el 03-08 (+10 g en descanso y la regla dura de entreno+peri), asi que se
+# activa. Solo cuenta el uso ACTUAL: quien lo uso en el pasado y ya no, va con proteina normal.
+APLICAR_FARMACOLOGIA = True
 # El VETO ("engordo enseguida") SI aplica a ambos sexos: es lo conservador.
 
 # Suelos (la tabla ya cumple la proteina; se dejan como red de seguridad).
@@ -241,13 +244,21 @@ def calcular_macros_v2(
                          "detalle": f"El descanso ({hc_d:.0f} g) superaba al entreno ({hc_e_antes:.0f} g): se sube el entreno para igualarlo"})
 
     # -----------------------------------------------------
-    # 2) Excepcion proteina: farmacologia / TRT (+10% SOLO descanso)
+    # 2) Excepcion proteina: farmacologia / TRT (+10 g SOLO descanso)
     # -----------------------------------------------------
     if farmacologia:
         if APLICAR_FARMACOLOGIA:
-            pr_d = pr_d * (1 + MOD_FARMACOLOGIA_PROTEINA_DESCANSO)
+            pr_d = pr_d + MOD_FARMACOLOGIA_PROTEINA_DESCANSO_G
             desglose.append({"paso": "farmacologia", "estado": "aplicado",
-                             "detalle": "+10% proteina solo en descanso"})
+                             "detalle": f"+{MOD_FARMACOLOGIA_PROTEINA_DESCANSO_G:.0f} g de proteina solo en descanso"})
+            # Regla dura del doc 03-08: la proteina de entreno + peri tiene que quedar POR ENCIMA
+            # de la de descanso. Si la subida la rompe, se suben los mismos 10 g en entreno.
+            if pr_e + pr_pe <= pr_d:
+                pr_e = pr_e + MOD_FARMACOLOGIA_PROTEINA_DESCANSO_G
+                desglose.append({"paso": "farmacologia_nivelar_entreno", "estado": "aplicado",
+                                 "detalle": (f"Entreno + peri ({pr_e - MOD_FARMACOLOGIA_PROTEINA_DESCANSO_G:.0f} + {pr_pe:.0f}) "
+                                             f"ya no superaba al descanso ({pr_d:.0f}): "
+                                             f"+{MOD_FARMACOLOGIA_PROTEINA_DESCANSO_G:.0f} g tambien en entreno")})
         else:
             no_aplicados["farmacologia"] = True
             desglose.append({"paso": "farmacologia", "estado": "no_aplicado",

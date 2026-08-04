@@ -11,7 +11,7 @@ puede elegir otro: la recomendacion orienta, no encierra.
 Sobre la logica: la tabla del documento no cubre las 256 combinaciones posibles. Cuando
 encajan VARIAS reglas se aplica lo que dice, "en caso de duda, se recomienda el nivel
 mayor". Cuando no encaja NINGUNA se recomienda el 2, que es el intermedio; recomendar
-el 3 a todo el que se sale de la tabla seria ponerle 1.497 EUR delante a alguien que
+el 3 a todo el que se sale de la tabla seria ponerle 1.500 EUR delante a alguien que
 igual solo necesita que la dieta le encaje. Esto ultimo es una decision de desarrollo,
 no del documento: si Jesus prefiere otra cosa, se cambia NIVEL_POR_DEFECTO.
 """

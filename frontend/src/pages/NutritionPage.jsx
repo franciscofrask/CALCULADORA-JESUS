@@ -1268,6 +1268,7 @@ const NutritionPage = () => {
             categorias: item.categorias,
             racion: item.racion,
             unidades: item.unidades,
+            url: item.url || null,   // para que el enlace salga ya, sin esperar a recargar el dia
         }));
         setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: foods } }));
         setMenuOptionsModal({ open: false, mealKey: null });

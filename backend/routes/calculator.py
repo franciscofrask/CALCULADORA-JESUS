@@ -1481,6 +1481,8 @@ async def menu_apply(data: dict, user = Depends(get_current_user)):
             "categorias": (food or {}).get("categorias", ""),
             "racion": (food or {}).get("racion"),
             "unidades": por_unidades,
+            # los de marca llevan enlace a la ficha del producto: el front lo subraya
+            "url": (food or {}).get("url"),
         })
 
     totales = {m: round(tot[m], 1) for m in ("P", "H", "G")}
@@ -1690,6 +1692,8 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
                 "categorias": food.get("categorias", ""),
                 "racion": food.get("racion"),
                 "unidades": bool(food.get("unidades")),
+                # los de marca llevan enlace a la ficha del producto: el front lo subraya
+                "url": food.get("url"),
             })
 
         err = sum(abs(obj[m] - metodo_final[m]) for m in ("P", "H", "G"))

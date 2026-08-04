@@ -397,6 +397,49 @@ async def stripe_webhooks(request: Request):
     return {"received": True}
 
 
+async def _registrar_cobro_de_lead(session: Dict[str, Any], metadata: Dict[str, Any]) -> None:
+    """Un lead ha pagado por el enlace que le mandó el equipo tras la llamada.
+
+    No se le activa el plan solo: el Nivel 3 se vende hablando y puede que ni tenga
+    cuenta todavía. Se marca el lead como convertido, se deja el pago registrado y se
+    avisa al equipo para que le dé el alta desde el panel.
+    """
+    from core.avisos_equipo import avisar_al_equipo
+
+    lead_id = metadata.get("lead_id")
+    if not lead_id:
+        return
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        logger.warning("Cobro de lead sin lead: %s", lead_id)
+        return
+
+    importe = (session.get("amount_total") or 0) / 100.0
+    ahora = datetime.now(timezone.utc).isoformat()
+    ya_estaba = (lead.get("enlace_pago") or {}).get("estado") == "pagado"
+    await db.leads.update_one({"id": lead_id}, {"$set": {
+        "enlace_pago.estado": "pagado",
+        "enlace_pago.pagado_at": ahora,
+        "enlace_pago.importe_pagado_eur": importe,
+        "status": "convertido",
+        "updated_at": ahora,
+    }})
+    if ya_estaba:
+        return  # webhook repetido: no se duplica el aviso
+
+    plan = metadata.get("plan") or "nivel3"
+    nombre = lead.get("name") or lead.get("email") or "Un lead"
+    await avisar_al_equipo(
+        db,
+        tipo="lead_pagado",
+        titulo=f"{nombre} ha pagado el {plan}",
+        mensaje=(f"{nombre} ha pagado {importe:.0f}€ por el enlace que se le mandó. "
+                 f"Dale el alta del plan desde el panel. Teléfono: {lead.get('phone') or 'sin teléfono'}."),
+        extra={"lead_id": lead_id, "plan": plan, "importe_eur": importe,
+               "email": lead.get("email"), "phone": lead.get("phone")},
+    )
+
+
 async def _process_stripe_event(event: Dict[str, Any]) -> None:
     stripe_module = get_stripe_module()
     event_type = event["type"]
@@ -418,7 +461,12 @@ async def _process_stripe_event(event: Dict[str, Any]) -> None:
                 subscription, profile_id=metadata.get("profile_id"),
                 user_id=metadata.get("user_id"), customer_id=obj.get("customer"))
         elif obj.get("mode") == "payment":
-            if metadata.get("tipo") == "revision_suelta":
+            if metadata.get("tipo") == "cobro_lead":
+                # Enlace de pago mandado a un lead tras la llamada (Nivel 3). Aqui no hay
+                # perfil que activar todavia: el lead puede no tener ni cuenta. Se deja
+                # cobrado y avisado, y el alta la hace el equipo desde el panel.
+                await _registrar_cobro_de_lead(obj, metadata)
+            elif metadata.get("tipo") == "revision_suelta":
                 # Revisión de macros comprada suelta: NO toca el plan ni el acceso, solo deja la
                 # revisión pendiente para el entrenador.
                 from core.revision_suelta import activar_tras_pago

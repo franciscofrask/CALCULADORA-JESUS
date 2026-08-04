@@ -493,6 +493,19 @@ const ClientDetailPage = () => {
         } catch (error) { toast.error('Error actualizando estructura de dieta'); }
     };
 
+    // Farmacologia en uso ACTUAL: +10 g de proteina en descanso (doc 03-08). Lo marca el
+    // coach, nunca el cliente. Es un dato del perfil: entra en juego en el siguiente
+    // calculo de macros con el motor, no reescribe los macros vigentes.
+    const handleToggleFarmacologia = async (val) => {
+        try {
+            await api.put(`/admin/clients/${clientId}`, { farmacologia: val });
+            toast.success(val
+                ? 'Farmacología activada: +10 g de proteína en descanso al recalcular'
+                : 'Farmacología desactivada: proteína normal al recalcular');
+            fetchClient();
+        } catch (error) { toast.error('Error actualizando la farmacología'); }
+    };
+
     const handleGenerateRoutine = async () => {
         setGeneratingRoutine(true);
         try {
@@ -814,6 +827,31 @@ const ClientDetailPage = () => {
                                 className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all ${profile?.single_meal_mode ? 'bg-[#FF671F] text-white' : 'bg-[#1a1a1a] text-white/60 border border-[#222] hover:text-white'}`}
                             >{profile?.single_meal_mode ? 'Comida única: ON' : 'Activar comida única'}</button>
                         </div>
+                    </CardContent></Card>
+
+                    {/* Farmacologia en uso actual: excepcion de proteina del doc 03-08 */}
+                    <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Farmacología</p>
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="text-sm text-white font-medium">
+                                    {profile?.farmacologia ? 'La usa actualmente' : 'No la usa'}
+                                </p>
+                                <p className="text-xs text-white/40">
+                                    {profile?.farmacologia
+                                        ? '+10 g de proteína en el día de descanso (y otros 10 en entreno si hiciera falta para que entreno + peri siga por encima).'
+                                        : 'Marcar solo si la usa AHORA. Si la usó en el pasado y ya no, va con proteína normal.'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => handleToggleFarmacologia(!profile?.farmacologia)}
+                                data-testid="toggle-farmacologia"
+                                className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all ${profile?.farmacologia ? 'bg-[#FF671F] text-white' : 'bg-[#1a1a1a] text-white/60 border border-[#222] hover:text-white'}`}
+                            >{profile?.farmacologia ? 'Farmacología: ON' : 'Marcar farmacología'}</button>
+                        </div>
+                        <p className="text-white/30 text-[10px] leading-relaxed mt-3">
+                            Es un dato del perfil: entra en el siguiente cálculo de macros con el motor. No toca los macros que tiene puestos hoy.
+                        </p>
                     </CardContent></Card>
 
                     {/* Historial de macros (tabla + filtro por fechas) */}

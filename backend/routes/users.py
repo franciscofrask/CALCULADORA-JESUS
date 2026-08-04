@@ -77,8 +77,10 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
     # El perfil del cliente NO es la via para fijar macros: para eso esta PUT /macros,
     # que ademas los versiona en macro_history. Aqui se ignoran (antes se guardaban tal
     # cual, con lo que un cliente podia saltarse a su coach).
+    # `farmacologia` mueve la proteina de descanso: la fija el coach desde la ficha del
+    # cliente, nunca el propio cliente desde su perfil.
     for campo in ("macros_training", "macros_rest", "macros_periworkout", "macros_source",
-                  "plan", "price", "week", "status", "trainer_id"):
+                  "plan", "price", "week", "status", "trainer_id", "farmacologia"):
         update_data.pop(campo, None)
 
     # Auto-calculate macros if body data is provided and macros_source is not 'manual'

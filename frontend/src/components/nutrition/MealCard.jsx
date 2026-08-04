@@ -161,7 +161,7 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
             <div className="order-1 w-full min-w-0 sm:order-2 sm:w-auto sm:flex-1">
                 {food.url ? (
                     <a href={food.url} target="_blank" rel="noopener noreferrer"
-                        className="block text-sm font-semibold text-brand hover:underline truncate"
+                        className="block text-sm font-semibold text-brand underline underline-offset-2 truncate"
                         title={`${food.nombre} (abre la ficha del producto)`}>
                         {food.nombre}
                     </a>

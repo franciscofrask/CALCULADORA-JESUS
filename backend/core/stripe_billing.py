@@ -404,9 +404,16 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
     # El acceso se ancla a la FECHA DEL PAGO (created de la sesión), no a cuándo se
     # procesa: recuperar una sesión antigua vía admin sync no regala ciclo extra.
     created_ts = session.get("created")
-    start = (datetime.fromtimestamp(created_ts, tz=timezone.utc)
-             if created_ts else datetime.now(timezone.utc))
-    end = start + timedelta(days=plan_info["billing_cycle_weeks"] * 7)
+    pago = (datetime.fromtimestamp(created_ts, tz=timezone.utc)
+            if created_ts else datetime.now(timezone.utc))
+    # "Todos arrancan en lunes" (parte 2 de la especificacion): el ciclo empieza el lunes
+    # que le toca y los dias sueltos hasta entonces son la Semana 0, que se le regalan (ya
+    # tiene acceso desde que paga). Los pagos unicos lo hacian a su aire, contando el ciclo
+    # desde el minuto del pago; ahora usan el mismo calendario que las suscripciones.
+    from core.calendario_arranque import plan_de_arranque
+    arranque = plan_de_arranque(pago, semanas_ciclo=plan_info["billing_cycle_weeks"])
+    start = arranque["arranque"]
+    end = arranque["fin_de_ciclo"]
     await db.client_profiles.update_one(
         {"id": profile["id"]},
         {"$set": {
@@ -418,7 +425,9 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
             "checkout_status": "completed",
             "current_period_start": start.isoformat(),
             "current_period_end": end.isoformat(),
+            # El acceso corre desde que paga (Semana 0 incluida) hasta el fin del ciclo.
             "access_until": end.isoformat(),
+            "fecha_pago": pago.isoformat(),
             "next_payment": None,
             "cancel_at_period_end": False,
             "billing_cycle_days": plan_info["billing_cycle_weeks"] * 7,

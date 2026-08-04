@@ -62,8 +62,6 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
     styles = getSampleStyleSheet()
     st_brand = ParagraphStyle('brand', parent=styles['Normal'], fontName='Helvetica-Bold',
                               fontSize=19, textColor=colors.white, leading=21)
-    st_brand_sub = ParagraphStyle('brandsub', parent=styles['Normal'], fontName='Helvetica',
-                                  fontSize=9.5, textColor=colors.white, leading=12)
     st_head_r = ParagraphStyle('headr', parent=styles['Normal'], fontName='Helvetica-Bold',
                                fontSize=11, textColor=colors.white, alignment=TA_RIGHT, leading=14)
     st_head_r2 = ParagraphStyle('headr2', parent=styles['Normal'], fontName='Helvetica',
@@ -92,8 +90,7 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
     elements = []
 
     # ---- Cabecera de marca (banda naranja) ----
-    izq = [Paragraph("12EN12", st_brand),
-           Paragraph("Método 12en12", st_brand_sub)]
+    izq = [Paragraph("12EN12", st_brand)]
     der = [Paragraph("Plan de nutrición", st_head_r),
            Paragraph(_fecha_larga(fecha), st_head_r2)]
     header = Table([[izq, der]], colWidths=[100 * mm, 78 * mm])

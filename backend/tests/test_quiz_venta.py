@@ -63,7 +63,7 @@ class TestEnCasoDeDuda:
 
     def test_lo_que_no_esta_en_la_tabla_cae_en_el_intermedio(self):
         """Decision de desarrollo, no del documento: la tabla no cubre las 256
-        combinaciones y poner 1.497 EUR delante del que se sale de ella es demasiado."""
+        combinaciones y poner 1.500 EUR delante del que se sale de ella es demasiado."""
         r = recomendar(resp("A", "A", "D"))
         assert r["nivel"] == 2 and r["reglas_aplicadas"] == 0
 
@@ -109,7 +109,7 @@ class TestElResultadoQueSeLeEnseña:
 
     def test_trae_los_precios_del_catalogo(self):
         precios = {n["plan"]: n["precio"] for n in self._resultado("A", "A", "A")["niveles"]}
-        assert precios == {"nivel1": 297.0, "nivel2": 897.0, "nivel3": 1497.0}
+        assert precios == {"nivel1": 297.0, "nivel2": 897.0, "nivel3": 1500.0}
 
     def test_el_nivel_3_va_marcado_como_por_llamada(self):
         """No lleva a un pago: "como se compra: por llamada"."""
