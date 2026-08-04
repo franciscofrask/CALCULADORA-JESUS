@@ -8,6 +8,84 @@ import ChatSuggestions from '../components/nutrition/ChatSuggestions';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+const sinTildes = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/**
+ * Lee un cambio de configuración del día escrito en lenguaje normal.
+ *
+ * Devuelve solo lo que el mensaje diga de verdad (`{}` si no habla de configuración),
+ * para poder mezclarlo con lo que ya había. Los patrones piden la palabra clave entera
+ * ("3 comidas", no un "3" suelto) porque este mismo cuadro de texto se usa para pedir
+ * comida: "ponme 3 huevos" no puede acabar cambiando el día a 3 comidas.
+ */
+export const leerCambioDeConfig = (texto, periActual = 'intra_post') => {
+  const t = sinTildes(texto);
+  const cambio = {};
+
+  // "elimina el intra del día", "fuera el perientreno", "no quiero post". Quitar el intra
+  // NO es vaciar la comida del intra: es sacarlo del día y repartir su presupuesto. El
+  // asistente lo entendía como vaciarla, así que decías "elimínalo" y seguía ahí.
+  const quitarPeri = t.match(/\b(?:elimina\w*|quita\w*|saca\w*|borra\w*|fuera|no quiero|no hago|nada de|sin)\s+(?:el\s+|la\s+|los\s+|las\s+|mi\s+)?(intra\w*|post\w*|peri\w*)\b/);
+  if (quitarPeri) {
+    const que = quitarPeri[1];
+    if (que.startsWith('peri')) cambio.opcion_peri = 'sin_peri';
+    else if (que.startsWith('intra')) cambio.opcion_peri = periActual === 'solo_intra' ? 'sin_peri' : 'solo_post';
+    else cambio.opcion_peri = periActual === 'solo_post' ? 'sin_peri' : 'solo_intra';
+  }
+
+  if (/\b(dia de |hoy )?(es )?(de )?descanso\b/.test(t) || /\bno entreno\b/.test(t)) {
+    cambio.tipo_dia = 'descanso';
+  } else if (/\b(dia de |hoy )(es )?(de )?(entreno|entrenamiento)\b/.test(t)
+             || /\bhoy si entreno\b/.test(t)) {
+    cambio.tipo_dia = 'entrenamiento';
+  }
+
+  if (/\b(bloque unico|comida unica|una sola comida)\b/.test(t)) {
+    cambio.num_comidas = 1;
+    cambio.single_meal = true;
+  } else {
+    const m = t.match(/\b([1345])\s*comidas?\b/);
+    if (m) {
+      cambio.num_comidas = Number(m[1]);
+      cambio.single_meal = cambio.num_comidas === 1;
+    }
+  }
+
+  if (/\bsin peri\b|\bsin perientreno\b|\bnada de peri\b/.test(t)) cambio.opcion_peri = 'sin_peri';
+  else if (/\bsolo post\b/.test(t)) cambio.opcion_peri = 'solo_post';
+  else if (/\bsolo intra\b/.test(t)) cambio.opcion_peri = 'solo_intra';
+  else if (/\bintra\s*(\+|y|e)\s*post\b/.test(t)) cambio.opcion_peri = 'intra_post';
+
+  if (/\ben ayunas\b/.test(t)) cambio.momento_entreno = 0;
+  else {
+    // "entreno tras la comida 2", "entreno despues de la 3"
+    const m = t.match(/entren\w*\s+(?:tras|despues de|luego de)\s+(?:la\s+)?(?:comida\s+)?([0-3])/);
+    if (m) cambio.momento_entreno = Number(m[1]);
+  }
+
+  return cambio;
+};
+
+const ETIQUETA_PERI = {
+  intra_post: 'intra + post', solo_post: 'solo post',
+  solo_intra: 'solo intra', sin_peri: 'sin peri',
+};
+const ETIQUETA_MOMENTO = {
+  0: 'entrenas en ayunas', 1: 'entrenas tras la Comida 1',
+  2: 'entrenas tras la Comida 2', 3: 'entrenas tras la Comida 3',
+};
+
+/** El resumen de la configuración, en una línea y en el mismo orden siempre. */
+const resumenConfig = ({ tipo_dia, num_comidas, single_meal, momento_entreno, opcion_peri }) => {
+  const partes = [`día de ${tipo_dia === 'descanso' ? 'descanso' : 'entreno'}`];
+  partes.push(single_meal || num_comidas === 1 ? 'bloque único' : `${num_comidas} comidas`);
+  if (tipo_dia !== 'descanso') {
+    partes.push(ETIQUETA_MOMENTO[momento_entreno] || ETIQUETA_MOMENTO[1]);
+    partes.push(ETIQUETA_PERI[opcion_peri] || 'intra + post');
+  }
+  return partes.join(', ');
+};
+
 // Persistencia de la conversación durante la sesión (sobrevive a navegación y recargas
 // de la pestaña; se limpia al cerrar la pestaña o al reiniciar el chat).
 const PERSIST_KEY = 'chatbot_session_state';
@@ -39,8 +117,9 @@ export default function ChatbotPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(p.step ?? 'init'); // init, config, building_meal, complete
-  // Config conversacional híbrida: subfases mientras step === 'config'
-  const [configStage, setConfigStage] = useState(p.configStage ?? 'date'); // date, tipo, comidas
+  // Ya no hay fases de configuración (el día sale de Nutrición). Se conserva el estado
+  // porque el snapshot de sesiones anteriores lo trae y para no romper la persistencia.
+  const [configStage, setConfigStage] = useState(p.configStage ?? 'date');
   const [targetDate, setTargetDate] = useState(p.targetDate ?? null); // YYYY-MM-DD destino del volcado
   const [tipoDia, setTipoDia] = useState(p.tipoDia ?? null);
   const [numComidas, setNumComidas] = useState(p.numComidas ?? 4);
@@ -138,6 +217,31 @@ export default function ChatbotPage() {
   const stripAccents = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 
   // Convierte texto/botón en YYYY-MM-DD; null si no se entiende.
+  /**
+   * ¿El mensaje pide montar OTRO día? Devuelve la fecha o null.
+   *
+   * Pide la palabra suelta a propósito: "mañana" cambia el día, pero "dejo esto para
+   * mañana" no debería, y "quiero pollo" desde luego que no. Con "hoy" pasa lo mismo,
+   * así que solo cuenta si el mensaje va de eso y de poco más.
+   */
+  const leerCambioDeDia = (texto) => {
+    const t = stripAccents(texto.trim().toLowerCase());
+    if (/^(hoy|manana|pasado manana)\b/.test(t) || /\bpara (hoy|manana|pasado manana)\b/.test(t)
+        || /\b(el )?dia (de )?(hoy|manana)\b/.test(t)) {
+      if (t.includes('pasado manana')) {
+        const d = new Date(todayLocal() + 'T12:00:00');
+        d.setDate(d.getDate() + 2);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+      return parseTargetDate(t.includes('manana') ? 'manana' : 'hoy');
+    }
+    const iso = t.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (iso) return iso[1];
+    const dm = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\b/);
+    if (dm) return parseTargetDate(dm[0]);
+    return null;
+  };
+
   const parseTargetDate = (raw) => {
     if (!raw) return null;
     const t = stripAccents(raw.toString().trim().toLowerCase());
@@ -180,8 +284,12 @@ export default function ChatbotPage() {
       if (data.session_id) {
         setSessionId(data.session_id);
         setStep('config');
-        setConfigStage('date');
-        addMessage('¡Hola! Soy tu asistente de nutrición. ¿Para qué día quieres montar la dieta?', false);
+        // Ni una pregunta de configuración: el día que se está mirando en Nutrición y lo
+        // que hay puesto ahí. Lo que el cliente quiera cambiar (otro día, descanso, otro
+        // número de comidas) lo dice cuando quiera y se recoloca.
+        const dia = localStorage.getItem('nutrition_last_date') || todayLocal();
+        setTargetDate(dia);
+        arrancarConLaConfigDeNutricion(dia, {}, data.session_id);
       }
     } catch (error) {
       addMessage('Error al iniciar el chatbot. Por favor, recarga la página.', false);
@@ -189,103 +297,55 @@ export default function ChatbotPage() {
     setLoading(false);
   };
 
-  // Maneja una respuesta de configuración (desde botón o texto libre)
-  const submitConfig = (rawValue) => {
-    const value = (rawValue ?? '').toString().trim();
-    if (!value || loading) return;
+  /**
+   * Arranca el día con la configuración que el cliente ya tiene puesta, en vez de
+   * preguntarle cuatro cosas que ya ha contestado en Nutrición.
+   *
+   * Orden: la dieta guardada de ESE día manda (es lo que ve en la pestaña); si no hay
+   * ninguna, sus preferencias guardadas (num de comidas, horario de entreno y peri), y
+   * entonces lo único que no se puede adivinar es si hoy entrena: eso sí se pregunta.
+   */
+  const arrancarConLaConfigDeNutricion = async (iso, encima = {}, sid = null) => {
+    setLoading(true);
+    const cabecera = { Authorization: `Bearer ${getToken()}` };
+    let dieta = null;
+    let prefs = null;
+    try {
+      const r = await fetch(`${API_URL}/api/diets/${iso}`, { headers: cabecera });
+      if (r.ok) dieta = await r.json();
+    } catch { /* sin dieta: se sigue con las preferencias */ }
+    try {
+      const r = await fetch(`${API_URL}/api/user/diet-config`, { headers: cabecera });
+      if (r.ok) prefs = await r.json();
+    } catch { /* sin preferencias: se usan los valores por defecto */ }
+    setLoading(false);
 
-    if (configStage === 'date') {
-      const iso = parseTargetDate(value);
-      if (!iso) {
-        addMessage(value, true);
-        addMessage('No entendí la fecha. Dime "Hoy", "Mañana" o una fecha como 2026-07-01.', false);
-        return;
-      }
-      setTargetDate(iso);
-      addMessage(formatDateLabel(iso), true);
-      addMessage('¿Es día de entrenamiento o de descanso?', false);
-      setConfigStage('tipo');
-      return;
-    }
+    const n = (dieta?.exists ? dieta.num_comidas : prefs?.num_comidas) ?? 4;
+    // Mismos valores por defecto que la pantalla de Nutrición cuando ese día aún no tiene
+    // dieta guardada (NutritionPage.loadDiet): día de entrenamiento y las preferencias del
+    // cliente. Así el chat y la pestaña dicen siempre lo mismo, y no hay que preguntar.
+    const cfg = {
+      tipo_dia: (dieta?.exists ? dieta.tipo_dia : null) || 'entrenamiento',
+      num_comidas: n,
+      single_meal: n === 1,
+      momento_entreno: (dieta?.exists ? dieta.momento_entreno : prefs?.momento_entreno) ?? 1,
+      opcion_peri: (dieta?.exists ? dieta.opcion_peri : prefs?.opcion_peri) || 'intra_post',
+      // Lo que venga dicho en el mismo mensaje manda sobre lo guardado: en "mañana
+      // descanso" hay un día Y un tipo de día, y perder la mitad seria raro.
+      ...encima,
+    };
+    if (cfg.tipo_dia === 'descanso') cfg.opcion_peri = 'sin_peri';
+    setNumComidas(cfg.num_comidas);
+    setSingleMeal(cfg.single_meal);
+    setMomentoEntreno(cfg.momento_entreno);
+    setOpcionPeri(cfg.opcion_peri);
+    setTipoDia(cfg.tipo_dia);
 
-    if (configStage === 'tipo') {
-      const v = stripAccents(value.toLowerCase());
-      const tipo = v.includes('entren') ? 'entrenamiento' : v.includes('descan') ? 'descanso' : null;
-      if (!tipo) {
-        addMessage(value, true);
-        addMessage('Dime "Entrenamiento" o "Descanso".', false);
-        return;
-      }
-      setTipoDia(tipo);
-      addMessage(tipo === 'entrenamiento' ? 'Día de entrenamiento' : 'Día de descanso', true);
-      addMessage('¿Cuántas comidas vas a hacer, 3 o 4?', false);
-      setConfigStage('comidas');
-      return;
-    }
-
-    if (configStage === 'comidas') {
-      const v = stripAccents(value.toLowerCase());
-      const isSingle = v.includes('bloque') || v.includes('unic') || v.includes('una comida') || value.trim() === '1';
-      const n = isSingle ? 1 : (value.includes('3') ? 3 : value.includes('4') ? 4 : null);
-      if (!n) {
-        addMessage(value, true);
-        addMessage('Dime 3 comidas, 4 comidas o bloque único.', false);
-        return;
-      }
-      setNumComidas(n);
-      setSingleMeal(isSingle);
-      addMessage(isSingle ? 'Bloque único (1 comida)' : `${n} comidas`, true);
-      if (tipoDia === 'entrenamiento') {
-        addMessage('¿Cómo gestionas el peri-entreno (Intra/Post)?', false);
-        setConfigStage('peri');
-      } else {
-        configureDay(tipoDia, n, 'sin_peri', 1, isSingle);
-      }
-      return;
-    }
-
-    if (configStage === 'peri') {
-      const v = stripAccents(value.toLowerCase());
-      let op = null;
-      if (v.includes('intra') && v.includes('post')) op = 'intra_post';
-      else if (v.includes('solo') && v.includes('post')) op = 'solo_post';
-      else if (v.includes('solo') && v.includes('intra')) op = 'solo_intra';
-      else if (v.includes('sin') || v.includes('nada') || v.includes('ningun')) op = 'sin_peri';
-      else if (v.includes('post')) op = 'solo_post';
-      else if (v.includes('intra')) op = 'solo_intra';
-      if (!op) {
-        addMessage(value, true);
-        addMessage('Elige: "Intra + Post", "Solo Post", "Solo Intra" o "Sin peri".', false);
-        return;
-      }
-      setOpcionPeri(op);
-      addMessage(periLabel(op), true);
-      // En bloque único las peri van tras la comida única: no preguntamos el momento.
-      if (singleMeal) {
-        configureDay(tipoDia, numComidas, op, 1, true);
-      } else {
-        addMessage('¿Cuándo entrenas?', false);
-        setConfigStage('momento');
-      }
-      return;
-    }
-
-    if (configStage === 'momento') {
-      const v = stripAccents(value.toLowerCase());
-      let m = null;
-      if (v.includes('ayun')) m = 0;
-      else if (v.includes('3')) m = 3;
-      else if (v.includes('2')) m = 2;
-      else if (v.includes('1')) m = 1;
-      if (m === null) {
-        addMessage(value, true);
-        addMessage('Dime: "En ayunas", o "Después de la comida 1/2/3".', false);
-        return;
-      }
-      setMomentoEntreno(m);
-      addMessage(momentoLabel(m), true);
-      configureDay(tipoDia, numComidas, opcionPeri, m, singleMeal);
-    }
+    addMessage(`Vamos con ${formatDateLabel(iso)}, con lo que tienes en Nutrición: `
+      + `${resumenConfig(cfg)}. Si quieres otro día o cambiar algo, dímelo cuando quieras: `
+      + '"mañana", "hoy descanso", "3 comidas", "en ayunas" o "sin peri".', false);
+    configureDay(cfg.tipo_dia, cfg.num_comidas, cfg.opcion_peri, cfg.momento_entreno,
+                 cfg.single_meal, sid);
   };
 
   const periLabel = (op) => ({
@@ -303,10 +363,12 @@ export default function ChatbotPage() {
   }[m] || `Momento ${m}`);
 
   // Configurar el día (llama al backend con tipo, nº de comidas, peri, momento y bloque único)
-  const configureDay = async (tipo, comidas, opPeri, momento = 1, single = false) => {
+  const configureDay = async (tipo, comidas, opPeri, momento = 1, single = false, sid = null) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/configure?session_id=${sessionId}`, {
+      // `sid` explicito para el arranque: ahi el sessionId recien creado todavia no
+      // esta en el estado de React y la peticion se iba con session_id=null.
+      const res = await fetch(`${API_URL}/api/chatbot/configure?session_id=${sid || sessionId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getToken()}`,
@@ -345,6 +407,45 @@ export default function ChatbotPage() {
     const userMessage = input.trim();
     setInput('');
     addMessage(userMessage, true);
+
+    // "Mañana", "el 5/8": cambiar de día. Se recarga la configuración de ESE día desde
+    // Nutrición (cada día tiene la suya) y se vuelve a montar.
+    const cambio = leerCambioDeConfig(userMessage, opcionPeri);
+    const otroDia = leerCambioDeDia(userMessage);
+    if (otroDia && otroDia !== targetDate) {
+      setTargetDate(otroDia);
+      await arrancarConLaConfigDeNutricion(otroDia, cambio);
+      inputRef.current?.focus();
+      return;
+    }
+
+    // "Hoy descanso", "mejor 3 comidas", "en ayunas": eso no es pedir comida, es cambiar
+    // el día. Se resuelve aquí y no se manda al asistente, que no sabe reconfigurar.
+    if (Object.keys(cambio).length) {
+      const cfg = {
+        tipo_dia: cambio.tipo_dia ?? tipoDia ?? 'entrenamiento',
+        num_comidas: cambio.num_comidas ?? numComidas,
+        single_meal: cambio.single_meal ?? singleMeal,
+        momento_entreno: cambio.momento_entreno ?? momentoEntreno,
+        opcion_peri: cambio.opcion_peri ?? opcionPeri,
+      };
+      if (cfg.tipo_dia === 'descanso') cfg.opcion_peri = 'sin_peri';
+      setTipoDia(cfg.tipo_dia);
+      setNumComidas(cfg.num_comidas);
+      setSingleMeal(cfg.single_meal);
+      setMomentoEntreno(cfg.momento_entreno);
+      setOpcionPeri(cfg.opcion_peri);
+      const habiaComidas = currentFoods.length > 0 || currentMeal > 1;
+      addMessage(`Cambiado: ${resumenConfig(cfg)}.`
+        + (habiaComidas ? ' Ojo: al cambiar el reparto, los objetivos de cada comida cambian. '
+                        + 'Lo que ya tenías montado se queda; solo desaparece lo que ya no '
+                        + 'existe en el día nuevo.' : ''), false);
+      await configureDay(cfg.tipo_dia, cfg.num_comidas, cfg.opcion_peri,
+                         cfg.momento_entreno, cfg.single_meal);
+      inputRef.current?.focus();
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -415,8 +516,10 @@ export default function ChatbotPage() {
         break;
       case 'suggestions':
         // Las opciones las pinta <ChatSuggestions> (tarjetas que se pulsan) a partir de
-        // resp.suggestions; el texto se queda con la frase de contexto.
-        addMessage(resp.message || 'No encuentro alimentos que cuadren ahora mismo.', false, resp);
+        // resp.suggestions; el texto se queda con la frase de contexto, que a propósito
+        // viene vacía cuando la tarjeta ya lo dice. El "no encuentro nada" SOLO cuando de
+        // verdad no hay nada: se estaba imprimiendo encima de seis sugerencias.
+        addMessage(resp.message || (resp.suggestions?.length ? '' : 'No encuentro alimentos que cuadren ahora mismo.'), false, resp);
         break;
       case 'complete_request':
         await completeMeal();
@@ -425,7 +528,9 @@ export default function ChatbotPage() {
         addMessage(formatDayOverview(resp.day_overview), false);
         break;
       case 'status':
-        addMessage(formatMealsStatus(resp.meals_status), false);
+        // El mensaje va DELANTE del listado: a "¿qué comida sigue?" hay que contestarle
+        // en una línea, y el desglose de lo que falta es el detalle, no la respuesta.
+        addMessage([resp.message, formatMealsStatus(resp.meals_status)].filter(Boolean).join('\n\n'), false);
         break;
       case 'no_foods':
       default:
@@ -904,78 +1009,6 @@ export default function ChatbotPage() {
         {step === 'config' && (
           <div className="mt-4">
             {messages.map(renderMessage)}
-            <div className="flex flex-wrap gap-3 justify-center mt-4">
-              {configStage === 'date' && [
-                { label: 'Hoy', value: 'hoy' },
-                { label: 'Mañana', value: 'manana' },
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => submitConfig(opt.value)}
-                  disabled={loading}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
-                >
-                  {opt.label}
-                </button>
-              ))}
-              {configStage === 'tipo' && [
-                { label: 'Día de Entrenamiento', value: 'entrenamiento' },
-                { label: 'Día de Descanso', value: 'descanso' },
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => submitConfig(opt.value)}
-                  disabled={loading}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
-                >
-                  {opt.label}
-                </button>
-              ))}
-              {configStage === 'comidas' && [
-                { label: '3 comidas', value: '3' },
-                { label: '4 comidas', value: '4' },
-                { label: 'Bloque único', value: 'bloque unico' },
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => submitConfig(opt.value)}
-                  disabled={loading}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
-                >
-                  {opt.label}
-                </button>
-              ))}
-              {configStage === 'peri' && [
-                { label: 'Intra + Post', value: 'intra y post' },
-                { label: 'Solo Post', value: 'solo post' },
-                { label: 'Solo Intra', value: 'solo intra' },
-                { label: 'Sin peri', value: 'sin peri' },
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => submitConfig(opt.value)}
-                  disabled={loading}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
-                >
-                  {opt.label}
-                </button>
-              ))}
-              {configStage === 'momento' && [
-                { label: 'En ayunas', value: 'ayunas' },
-                ...Array.from({ length: Math.max(1, numComidas - 1) }, (_, i) => ({
-                  label: `Después de comida ${i + 1}`, value: `comida ${i + 1}`,
-                })),
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => submitConfig(opt.value)}
-                  disabled={loading}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50"
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
@@ -998,32 +1031,6 @@ export default function ChatbotPage() {
 
         <div ref={messagesEndRef} />
       </div>
-
-      {/* Input de texto libre durante la configuración (fecha, tipo, comidas) */}
-      {step === 'config' && (
-        <div className="border-t border-border p-4 bg-card relative z-40">
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { submitConfig(input); setInput(''); } }}
-              placeholder={configStage === 'date' ? 'O escribe una fecha (ej: 2026-07-01)…' : 'O escríbelo aquí…'}
-              className="flex-1 bg-muted border border-input rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand"
-              disabled={loading}
-              data-testid="config-input"
-            />
-            <button
-              onClick={() => { submitConfig(input); setInput(''); }}
-              disabled={loading || !input.trim()}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl transition-colors disabled:opacity-50"
-            >
-              <Send size={20} />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Input + controles de montaje */}
       {step === 'building_meal' && (
@@ -1077,8 +1084,12 @@ export default function ChatbotPage() {
               // queda debajo. Un scroll al enfocar lo devuelve a la vista.
               onFocus={(e) => setTimeout(
                 () => e.target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 250)}
+              // Mientras guarda o piensa, el input se deshabilita: si además dice lo de
+              // siempre, parece colgado. Que diga lo que está pasando.
               // En movil el placeholder largo se corta a mitad de frase y no se entiende.
-              placeholder={esMovil
+              placeholder={saving ? 'Guardando la comida y pasándola a Nutrición…'
+                : loading ? 'Un momento, estoy con ello…'
+                : esMovil
                 ? 'Escribe qué quieres comer…'
                 : 'Escribe qué quieres comer, o pídeme cosas como "edita la comida 2" o "vacía el post-entreno"…'}
               // 16px de fuente: por debajo, iOS hace zoom al enfocar y descuadra la pantalla.
