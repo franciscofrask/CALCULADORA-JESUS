@@ -46,6 +46,8 @@ const lookup = (map, v, fallbackDash = true) => {
 export const sexoLabel = (v) => lookup(SEXO, v);
 export const objetivoLabel = (v) => lookup(OBJETIVO, v);
 export const equipamientoLabel = (v) => lookup(EQUIPAMIENTO, v, false);
+// Para poder pintar el equipamiento como opciones marcables en la ficha del coach.
+export const EQUIPAMIENTO_OPCIONES = Object.entries(EQUIPAMIENTO).map(([value, label]) => ({ value, label }));
 export const experienciaLabel = (v) => lookup(EXPERIENCIA, v);
 export const actividadLabel = (v) => lookup(ACTIVIDAD, v);
 export const biotipoLabel = (v) => lookup(BIOTIPO, v);

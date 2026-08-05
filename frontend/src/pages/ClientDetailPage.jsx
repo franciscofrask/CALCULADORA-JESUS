@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { PlanBadge } from './ClientDashboard';
-import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel } from '../lib/labels';
+import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES } from '../lib/labels';
 import CoachCheckins from '../components/CoachCheckins';
 import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -262,6 +262,10 @@ const ClientDetailPage = () => {
 
     // Suplementos
     const [supProtocol, setSupProtocol] = useState({ actual: [], siguiente: [], siguiente_fecha: '', nota: '' });
+    // Pestaña de entrenamiento: maquinaria, lesiones y observaciones (2.5)
+    const [entrenoForm, setEntrenoForm] = useState({ equipment: [], injuries: [], training_notes: '' });
+    const [nuevaLesion, setNuevaLesion] = useState('');
+    const [savingEntreno, setSavingEntreno] = useState(false);
     const [supCatalog, setSupCatalog] = useState([]);
     const [supSaving, setSupSaving] = useState(false);
     const [supSuggesting, setSupSuggesting] = useState(false);
@@ -320,6 +324,11 @@ const ClientDetailPage = () => {
                 porcentaje_graso: p?.body_fat != null ? String(p.body_fat) : '',
                 peso: p?.weight != null ? String(p.weight) : '',
                 effective_date: hoyISO(1),
+            });
+            setEntrenoForm({
+                equipment: Array.isArray(p?.equipment) ? p.equipment : [],
+                injuries: Array.isArray(p?.injuries) ? p.injuries : [],
+                training_notes: p?.training_notes || '',
             });
         } catch (error) {
             toast.error('Error al cargar datos del cliente');
@@ -552,6 +561,11 @@ const ClientDetailPage = () => {
         setSupProtocol(prev => ({ ...prev, [bloque]: [...prev[bloque], catalogToItem(c)] }));
     };
     const supRemove = (bloque, idx) => setSupProtocol(prev => ({ ...prev, [bloque]: prev[bloque].filter((_, i) => i !== idx) }));
+    // Editar un suplemento ya puesto (2.7): dosis, momento u observaciones.
+    const supEdit = (bloque, idx, campo, valor) => setSupProtocol(prev => ({
+        ...prev,
+        [bloque]: prev[bloque].map((it, i) => i === idx ? { ...it, [campo]: valor } : it),
+    }));
     const supSuggest = async () => {
         setSupSuggesting(true);
         try {
@@ -561,6 +575,21 @@ const ClientDetailPage = () => {
         } catch (e) { toast.error('Error al sugerir'); }
         finally { setSupSuggesting(false); }
     };
+    // Maquinaria, lesiones y observaciones del entrenamiento (2.5)
+    const guardarEntreno = async () => {
+        setSavingEntreno(true);
+        try {
+            await api.put(`/admin/clients/${clientId}`, {
+                equipment: entrenoForm.equipment,
+                injuries: entrenoForm.injuries,
+                training_notes: entrenoForm.training_notes || '',
+            });
+            toast.success('Entrenamiento actualizado');
+            fetchClient();
+        } catch (e) { toast.error('No se pudo guardar'); }
+        finally { setSavingEntreno(false); }
+    };
+
     const supSave = async () => {
         // Misma confirmación que en macros (2.4): "lo mismo al guardar la suplementación".
         const n = (supProtocol.actual || []).length, s = (supProtocol.siguiente || []).length;
@@ -602,6 +631,11 @@ const ClientDetailPage = () => {
     };
     const bfActual = profile?.body_fat != null ? String(profile.body_fat) : '';
     const pesoActual = profile?.weight != null ? String(profile.weight) : '';
+    // ¿Se ha tocado algo de la pestaña de entrenamiento respecto a lo guardado?
+    const _mismo = (a, b) => JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort());
+    const entrenoTocado = !_mismo(entrenoForm.equipment, profile?.equipment)
+        || !_mismo(entrenoForm.injuries, profile?.injuries)
+        || (entrenoForm.training_notes || '') !== (profile?.training_notes || '');
     // Peso con el que se hizo el ajuste anterior: es contra el que compara el coach.
     // Sin useMemo a propósito: aquí ya se ha pasado por los early returns del componente
     // y un hook a estas alturas rompe las reglas de hooks (y el orden entre renders).
@@ -1126,15 +1160,66 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB 6: ENTRENAMIENTO ========== */}
                 <TabsContent value="entrenamiento" className="space-y-4">
-                    {/* Equipment & injuries */}
+                    {/* Maquinaria, lesiones y observaciones: EDITABLES aquí (2.5). Es lo que el
+                        coach actualiza al leer el reporte, y el entrenamiento lo lleva aparte
+                        de la nutrición, así que no tiene sentido que estuvieran de solo lectura. */}
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Equipamiento</p>
-                                {Array.isArray(profile?.equipment) && profile.equipment.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{equipamientoLabel(e)}</Badge>)}</div> : <p className="text-white/30 text-sm">No especificado</p>}
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                            <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Maquinaria, lesiones y observaciones</p>
+                            <div className="flex items-center gap-2">
+                                {entrenoTocado && <Badge className="border-0 text-[10px] bg-[#FF671F]/20 text-[#FF671F]">sin guardar</Badge>}
+                                <Button size="sm" onClick={guardarEntreno} disabled={savingEntreno || !entrenoTocado}
+                                    className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs disabled:opacity-40" data-testid="save-entreno-btn">
+                                    {savingEntreno ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Save className="w-3.5 h-3.5 mr-1" />Guardar</>}
+                                </Button>
                             </div>
-                            <div><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Lesiones activas</p>
-                                {Array.isArray(profile?.injuries) && profile.injuries.length > 0 ? <div className="flex flex-wrap gap-1.5">{profile.injuries.map((l, i) => <Badge key={i} className="bg-red-500/10 text-red-400 border-0 text-xs">{l}</Badge>)}</div> : <p className="text-white/30 text-sm">Sin lesiones</p>}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <p className="text-xs text-white/40 uppercase tracking-wider mb-2">Maquinaria disponible</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {EQUIPAMIENTO_OPCIONES.map(o => {
+                                        const activo = entrenoForm.equipment.includes(o.value);
+                                        return (
+                                            <button key={o.value} type="button" data-testid={`equip-${o.value}`}
+                                                onClick={() => setEntrenoForm(f => ({ ...f, equipment: activo ? f.equipment.filter(x => x !== o.value) : [...f.equipment, o.value] }))}
+                                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                                                    activo ? 'bg-[#FF671F]/15 text-[#FF671F] border-[#FF671F]/40' : 'bg-[#0A0A0A] text-white/40 border-[#222] hover:text-white/70'}`}>
+                                                {o.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
+                            <div>
+                                <p className="text-xs text-white/40 uppercase tracking-wider mb-2">Lesiones activas</p>
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {entrenoForm.injuries.length === 0 && <span className="text-white/30 text-sm">Sin lesiones</span>}
+                                    {entrenoForm.injuries.map((l, i) => (
+                                        <span key={i} className="inline-flex items-center gap-1 bg-red-500/10 text-red-400 rounded-lg px-2 py-1 text-xs">
+                                            {l}
+                                            <button type="button" onClick={() => setEntrenoForm(f => ({ ...f, injuries: f.injuries.filter((_, j) => j !== i) }))}
+                                                className="hover:text-white"><X className="w-3 h-3" /></button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <Input value={nuevaLesion} onChange={e => setNuevaLesion(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && nuevaLesion.trim()) {
+                                            e.preventDefault();
+                                            setEntrenoForm(f => ({ ...f, injuries: [...f.injuries, nuevaLesion.trim()] }));
+                                            setNuevaLesion('');
+                                        }
+                                    }}
+                                    placeholder="Escribe una lesión y pulsa Enter" className="bg-[#0A0A0A] border-[#333] text-white text-sm" data-testid="nueva-lesion" />
+                            </div>
+                        </div>
+                        <div className="mt-4">
+                            <Label className="text-white/60 text-xs">Observaciones del entrenamiento</Label>
+                            <Textarea value={entrenoForm.training_notes} onChange={e => setEntrenoForm(f => ({ ...f, training_notes: e.target.value }))}
+                                placeholder="Ej: no le va bien la sentadilla libre, la sustituye por hack…"
+                                className="bg-[#0A0A0A] border-[#333] text-white mt-1 min-h-[60px]" data-testid="entreno-notas" />
+                            <p className="text-[10px] text-white/30 mt-1">Para ti. Aquí, no en suplementación: el entrenamiento va aparte.</p>
                         </div>
                     </CardContent></Card>
 
@@ -1187,13 +1272,27 @@ const ClientDetailPage = () => {
                         <Card key={bloque} className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">{titulo}</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
                                 {supProtocol[bloque].length === 0 && <p className="text-white/30 text-sm">Sin suplementos.</p>}
+                                {/* La dosis, el momento y las observaciones se EDITAN aquí aunque el
+                                    suplemento venga del catálogo (2.7): el protocolo cargado es el punto
+                                    de partida, no algo cerrado. El título se queda fijo para que siga
+                                    correspondiendo con su ficha del catálogo. */}
                                 {supProtocol[bloque].map((it, i) => (
-                                    <div key={i} className="flex items-start justify-between gap-2 p-2.5 bg-[#0A0A0A] rounded-lg border border-[#222]">
-                                        <div className="min-w-0">
-                                            <p className="text-white text-sm font-medium">{it.titulo}</p>
-                                            <p className="text-white/40 text-xs">{[it.cuanto, it.cuando].filter(Boolean).join(' · ')}</p>
+                                    <div key={i} className="p-2.5 bg-[#0A0A0A] rounded-lg border border-[#222]">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <p className="text-white text-sm font-medium min-w-0">{it.titulo}</p>
+                                            <button onClick={() => supRemove(bloque, i)} className="text-white/30 hover:text-red-400 flex-shrink-0"><X className="w-4 h-4" /></button>
                                         </div>
-                                        <button onClick={() => supRemove(bloque, i)} className="text-white/30 hover:text-red-400 flex-shrink-0"><X className="w-4 h-4" /></button>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                                            <Input value={it.cuanto || ''} onChange={e => supEdit(bloque, i, 'cuanto', e.target.value)}
+                                                placeholder="Cuánto (ej: 1 cápsula)" data-testid={`sup-cuanto-${bloque}-${i}`}
+                                                className="bg-[#111] border-[#333] text-white text-xs h-8" />
+                                            <Input value={it.cuando || ''} onChange={e => supEdit(bloque, i, 'cuando', e.target.value)}
+                                                placeholder="Cuándo (ej: con el desayuno)" data-testid={`sup-cuando-${bloque}-${i}`}
+                                                className="bg-[#111] border-[#333] text-white text-xs h-8" />
+                                        </div>
+                                        <Input value={it.observaciones || ''} onChange={e => supEdit(bloque, i, 'observaciones', e.target.value)}
+                                            placeholder="Observaciones (opcional)" data-testid={`sup-obs-${bloque}-${i}`}
+                                            className="bg-[#111] border-[#333] text-white text-xs h-8 mt-2" />
                                     </div>
                                 ))}
                                 {bloque === 'siguiente' && (

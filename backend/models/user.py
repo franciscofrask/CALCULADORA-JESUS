@@ -528,6 +528,10 @@ class ClientProfile(BaseModel):
     body_fat: Optional[float] = None
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None
+    # Observaciones del coach sobre el ENTRENAMIENTO: van con la maquinaria y las lesiones
+    # porque es lo que se actualiza al leer el reporte (Jesus 05-08, punto 2.5: "el
+    # entrenamiento lo llevo aparte").
+    training_notes: Optional[str] = None
     training_days: Optional[int] = None
     # Cuestionario inicial obligatorio (ELM): respuestas y flag de completado.
     questionnaire_completed: Optional[bool] = None
@@ -608,6 +612,10 @@ class ClientProfileUpdate(BaseModel):
     body_fat: Optional[float] = None
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None
+    # Observaciones del coach sobre el ENTRENAMIENTO: van con la maquinaria y las lesiones
+    # porque es lo que se actualiza al leer el reporte (Jesus 05-08, punto 2.5: "el
+    # entrenamiento lo llevo aparte").
+    training_notes: Optional[str] = None
     training_days: Optional[int] = None
 
     @field_validator("macros_training", "macros_rest", "macros_periworkout")
