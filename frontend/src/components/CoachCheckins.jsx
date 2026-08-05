@@ -237,23 +237,46 @@ const CoachCheckins = ({ clientId }) => {
                                e.body_fat_pct != null && `${e.body_fat_pct}% graso`]
                                .filter(Boolean).join(' · ')} />
 
-            {/* Diarios: resumen compacto, sin feedback. Si no hay, no se pinta. */}
+            {/* Diarios: resumen compacto, sin feedback. Si no hay, no se pinta.
+                CADA DATO SOLO SI EXISTE. Desde el 31-07 el check-in diario son dos preguntas
+                (energía y hambre/ansiedad): `mood` y `trained` ya no se piden y
+                `nutrition_followed` lo deduce el servidor del registro de dieta. Pintarlos a
+                secas ponía "Ánimo undefined/5" y, peor, "No entrenó" en rojo sobre alguien al
+                que nunca se le preguntó: información falsa delante de quien decide el ajuste. */}
             {daily.length > 0 && (
                 <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden">
                     <div className="px-5 pt-5 pb-3 border-b border-[#222]">
                         <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Check-ins diarios (últimos 14)</p>
                     </div>
                     <ul className="divide-y divide-[#222]">
-                        {daily.map(c => (
-                            <li key={c.id} className="px-5 py-2.5 flex items-center justify-between text-xs">
-                                <span className="text-white/50">{fmt(c.created_at)}</span>
-                                <span className="text-white/70">
-                                    Ánimo {c.mood}/5 · Energía {c.energy}/5 ·
-                                    <span className={c.trained ? 'text-emerald-300' : 'text-red-300'}>{c.trained ? ' Entrenó' : ' No entrenó'}</span> ·
-                                    <span className={c.nutrition_followed ? 'text-emerald-300' : 'text-red-300'}>{c.nutrition_followed ? ' Plan ✓' : ' Plan ✗'}</span>
-                                </span>
-                            </li>
-                        ))}
+                        {daily.map(c => {
+                            const escalas = [
+                                c.energy != null && `Energía ${c.energy}/5`,
+                                c.hunger_anxiety != null && `Hambre y ansiedad ${c.hunger_anxiety}/5`,
+                                c.mood != null && `Ánimo ${c.mood}/5`,
+                            ].filter(Boolean);
+                            const sinDatos = !escalas.length && c.trained == null && c.nutrition_followed == null;
+                            return (
+                                <li key={c.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-xs">
+                                    <span className="text-white/50 whitespace-nowrap">{fmt(c.created_at)}</span>
+                                    <span className="text-white/70 text-right">
+                                        {escalas.join(' · ')}
+                                        {c.trained != null && (
+                                            <span className={c.trained ? 'text-emerald-300' : 'text-red-300'}>
+                                                {escalas.length ? ' · ' : ''}{c.trained ? 'Entrenó' : 'No entrenó'}
+                                            </span>
+                                        )}
+                                        {c.nutrition_followed != null && (
+                                            <span className={c.nutrition_followed ? 'text-emerald-300' : 'text-red-300'}>
+                                                {(escalas.length || c.trained != null) ? ' · ' : ''}
+                                                {c.nutrition_followed ? 'Dieta registrada' : 'Sin dieta registrada'}
+                                            </span>
+                                        )}
+                                        {sinDatos && <span className="text-white/30 italic">sin respuestas</span>}
+                                    </span>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </div>
             )}

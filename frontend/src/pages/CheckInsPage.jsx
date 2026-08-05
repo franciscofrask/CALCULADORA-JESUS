@@ -433,7 +433,8 @@ const CheckInsPage = () => {
                                 {c.type === 'daily' ? (
                                     <p className="text-sm text-foreground/70">
                                         {/* Los check-ins viejos traen ánimo y entreno; los nuevos, no. */}
-                                        {c.mood != null && `Ánimo ${c.mood}/5 · `}Energía {c.energy}/5
+                                        {c.mood != null && `Ánimo ${c.mood}/5 · `}
+                                        {c.energy != null && `Energía ${c.energy}/5`}
                                         {c.hunger_anxiety != null && ` · Hambre ${c.hunger_anxiety}/5`}
                                         {c.trained != null && (c.trained ? ' · Entrenó' : ' · No entrenó')}
                                         {c.nutrition_followed != null && (c.nutrition_followed ? ' · Dieta ✓' : ' · Dieta ✗')}
