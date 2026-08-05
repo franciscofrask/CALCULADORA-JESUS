@@ -2603,7 +2603,7 @@ class NutritionChatbot:
         from routes.calculator import AVOIDABLE_PREFIXES
         from calculator import (
             CATS_PROTEINA_PURAS, CATS_HIDRATOS, CATS_GRASAS, CATS_CUADRAR_GRASAS,
-            filtrar_por_tipo_comida, cat_in_list, get_categoria_principal,
+            filtrar_por_tipo_comida, cat_in_list, get_categoria_principal, es_sugerible,
         )
         restante = self.get_remaining_macros()
         key = self.current_meal_key()
@@ -2637,6 +2637,7 @@ class NutritionChatbot:
         veto = ("16",) if es_peri else self.CATS_NO_PLATO
         pool = [a for a in pool
                 if not cat_hit(a.get("categorias"), veto)
+                and es_sugerible(a)
                 and not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
                 and not (avoid_prefixes and cat_hit(a.get("categorias"), avoid_prefixes))]
 
@@ -2759,6 +2760,7 @@ class NutritionChatbot:
         from calculator import (
             CATS_PROTEINA_PURAS, CATS_HIDRATOS, CATS_GRASAS, CATS_CUADRAR_GRASAS,
             filtrar_por_tipo_comida, cat_in_list, get_categoria_principal,
+            es_sugerible, prioridad_post,
         )
 
         MACRO_LBL = {"P": "proteína", "H": "hidratos", "G": "grasa"}
@@ -2819,10 +2821,13 @@ class NutritionChatbot:
             }[fase]
             pool = [a for a in all_foods if cat_in_list(get_categoria_principal(a), cats)]
 
-        # Quitar SOLO los evitados (las categorías de la fase ya acotan; los preferidos
-        # solo priorizan, no excluyen - si el usuario no marcó "arroces" igual debe ver arroz)
+        # Quitar los evitados y lo que no se propone por iniciativa propia (ingredientes
+        # crudos y condimentos: masa de pizza, harina de repostería, mermelada, azúcar
+        # suelto, salsas, refrescos). Las categorías de la fase ya acotan; los preferidos
+        # solo priorizan, no excluyen - si el usuario no marcó "arroces" igual debe ver arroz.
         pool = [a for a in pool
-                if not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
+                if es_sugerible(a)
+                and not any(kw in (a.get("nombre", "") or "").lower() for kw in avoid_keywords)
                 and not (avoid_prefixes and cat_hit(a.get("categorias"), avoid_prefixes))]
 
         # Marca pedida ("algo de FullGas"): se busca en TODO el catálogo, no solo en las
@@ -2843,6 +2848,8 @@ class NutritionChatbot:
         # Dimensionar; agrupar por TIPO de alimento (categoría a 2 niveles) para diversificar
         from collections import defaultdict
         buckets = defaultdict(list)  # coarse_cat -> [(aporte, es_pref, item)]
+        mejor_bucket = {}            # coarse_cat -> mejor aporte real (antes de barajar)
+        prio_bucket = {}             # coarse_cat -> puesto en el orden del post
         for a in pool:
             sized = self._size_food(a, restante)
             if not sized:
@@ -2857,6 +2864,8 @@ class NutritionChatbot:
             coarse = ".".join(cats[0].split(".")[:2]) if cats else "?"
             es_pref = bool(pref_prefixes and cat_hit(a.get("categorias"), pref_prefixes))
             config = get_food_config(a)
+            mejor_bucket[coarse] = max(mejor_bucket.get(coarse, 0), macros[driver])
+            prio_bucket[coarse] = min(prio_bucket.get(coarse, 999), prioridad_post(a))
             buckets[coarse].append((macros[driver], es_pref, {
                 "alimento_id": a.get("id"),
                 "nombre": a.get("nombre"),
@@ -2870,7 +2879,10 @@ class NutritionChatbot:
         seen = set(self.state.setdefault("seen_sugg", {}).get(key, []))
         for b in buckets:
             buckets[b].sort(key=lambda x: -x[0])
-            head = buckets[b][:8]
+            # Barajar para dar variedad, pero solo entre los que resuelven parecido: si en
+            # el mismo tipo hay un aislado que pone 45 g de proteína y otro que pone 3, el
+            # azar no puede sacar el de 3 ("5 g de caseína" no es una sugerencia).
+            head = [x for x in buckets[b][:8] if x[0] >= buckets[b][0][0] * 0.6] or buckets[b][:1]
             random.shuffle(head)
             buckets[b] = ([x for x in head if x[2]["alimento_id"] not in seen]
                           + [x for x in head if x[2]["alimento_id"] in seen])
@@ -2880,6 +2892,19 @@ class NutritionChatbot:
             buckets.keys(),
             key=lambda b: (0 if any(p for _, p, _ in buckets[b]) else 1, -buckets[b][0][0])
         )
+        # En el POST el orden lo marca el método, no el que más macro lleve: primero la
+        # proteína rápida y el hidrato de asimilación rápida (crema de arroz, cereales,
+        # dextrosa, fruta) y el pan al final (CATS_POST_PRIORIDAD, del propio Calma).
+        # La prioridad solo decide entre los tipos que de verdad cubren lo que falta: un
+        # aislado con 3 g de hidrato no puede ir primero cuando lo que faltan son hidratos.
+        if key == "Post":
+            tope = min(max(mejor_bucket.values(), default=0), max(restante[driver], 0))
+            cat_order.sort(key=lambda b: (
+                0 if any(p for _, p, _ in buckets[b]) else 1,
+                0 if mejor_bucket.get(b, 0) >= tope * 0.5 else 1,
+                prio_bucket.get(b, 999),
+                -mejor_bucket.get(b, 0),
+            ))
 
         # Round-robin entre tipos → variedad (pollo, carne, huevo, pescado…)
         chosen = []

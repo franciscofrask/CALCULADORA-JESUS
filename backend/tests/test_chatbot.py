@@ -22,6 +22,7 @@ Periworkout: P=35, H=15
 import pytest
 import requests
 import os
+import re
 import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000').rstrip('/')
@@ -413,11 +414,16 @@ class TestChatbotMacroDistribution:
         
         if resp.get("action") == "meal_updated":
             for food in resp.get("foods_added", []):
-                # Huevos should be at least 1 unit (55g)
+                # Los huevos van por unidades: nunca menos de 1. La cantidad viaja en
+                # `cantidad_display` ("2 ud" / "120g"), que es lo que pinta el front;
+                # no hay campo `cantidad` en foods_added.
                 if "huevo" in food.get("nombre", "").lower():
-                    cantidad = food.get("cantidad", 0)
-                    assert cantidad >= 55, f"Huevos should be at least 55g (1 unit), got {cantidad}g"
-                    print(f"✅ Huevos quantity respects minimum: {cantidad}g")
+                    display = str(food.get("cantidad_display", "")).strip()
+                    assert display, f"Huevos sin cantidad en la respuesta: {food}"
+                    valor = float(re.sub(r"[^\d.,]", "", display).replace(",", ".") or 0)
+                    minimo = 1 if "ud" in display else 55
+                    assert valor >= minimo, f"Huevos por debajo del mínimo: {display}"
+                    print(f"✅ Huevos quantity respects minimum: {display}")
     
     def test_food_rejected_when_minimum_exceeds_remaining(self, auth_headers):
         """Test that foods are rejected when minimum exceeds remaining macros"""

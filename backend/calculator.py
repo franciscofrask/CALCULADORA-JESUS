@@ -60,6 +60,58 @@ CATS_POST = ['4', '5', '46', '7', '8', '11', '27', '24', '18', '19', '37', '36',
 # Categorías para CUADRAR GRASAS AL FINAL
 CATS_CUADRAR_GRASAS = ['17.1.1', '17.1', '42']
 
+# ORDEN de preferencia en el POST-ENTRENO. Es `prioritarias.postentreno` del bundle
+# original de Calma (group-home-utils.js): primero la proteína rápida, luego el hidrato
+# de asimilación rápida (crema de arroz, cereales, dextrosa, zumo, fruta) y el pan al
+# final. Al portar la calculadora se copiaron las categorías PERMITIDAS (CATS_POST) pero
+# no este orden, y sin él las sugerencias del post las ganaba lo más denso en hidrato:
+# masa de pizza, biscotes o azúcar por delante de una crema de arroz.
+CATS_POST_PRIORIDAD = [
+    '4.1.1', '4.1.2', '4.1', '4.2',          # aislado, nativa, suero, caseína
+    '5.4', '5.2.3', '5.2.2', '5.1', '4.3',   # batidos, yogur proteico, desnatado, leche, vegetal
+    '27', '21.3', '7.1.1', '7.1.2.1',        # sustitutivos, crema de arroz, cereales
+    '18.3', '11.5', '11.2.1', '11.2.2',      # hidrato en polvo, zumos
+    '11.1', '11.4', '11.6', '11.7',          # fruta fresca, congelada, potitos, secas
+    '21.2', '7.3.1', '8', '24',              # tortas de arroz, maíz, pan, bebida vegetal
+    '19.1', '18.1', '18.2', '37', '16.5', '16.1',
+]
+
+# Lo que el asistente NO propone por iniciativa propia: ingredientes crudos que nadie se
+# come tal cual (masas de pizza y hojaldre, harinas de repostería) y condimentos o
+# azúcares que no son un plato (salsas, siropes, mermeladas, azúcar suelto, refrescos).
+# Se siguen buscando y añadiendo a mano: esto solo afecta a las SUGERENCIAS.
+CATS_NO_SUGERIBLES = [
+    '8.10',        # masa de pizza, obleas y hojaldre
+    '7.2.1',       # harinas de trigo (las de avena, 7.2.2, sí valen: tortitas y batidos)
+    '7.2.3',       # harinas de maíz y otros cereales, tapioca
+    '16',          # salsas, siropes y konjac
+    '11.9',        # mermeladas
+    '37',          # cacao en polvo, azúcares, chucherías y miel
+    '19',          # bebidas energéticas, refrescos y cafés
+]
+
+# Excepción a lo anterior: el hidrato de entrenar (dextrosa, ciclodextrina, palatinosa)
+# lleva la categoría 37 por ser azúcar, y en el intra y el post es justo lo que toca.
+CATS_RESCATE_SUGERIBLE = ['18', '14', '41', '46']
+
+
+def prioridad_post(alimento: dict) -> int:
+    """Puesto del alimento en el orden de preferencia del post-entreno.
+    Menor = antes. 999 si no está en la lista (va al final)."""
+    cats = get_categorias(alimento)
+    for i, code in enumerate(CATS_POST_PRIORIDAD):
+        if any(cat_matches(c, code) for c in cats):
+            return i
+    return 999
+
+
+def es_sugerible(alimento: dict) -> bool:
+    """Si el asistente puede PROPONER este alimento por su cuenta (ver CATS_NO_SUGERIBLES)."""
+    cats = get_categorias(alimento)
+    if not any(cat_in_list(c, CATS_NO_SUGERIBLES) for c in cats):
+        return True
+    return any(cat_in_list(c, CATS_RESCATE_SUGERIBLE) for c in cats)
+
 # Categorías de PROTEÍNA DETALLADAS (incluye subcategorías, usada para otras funciones)
 CATS_PROTEINA_DETALLADAS = [
     '1', '1.1', '1.2',           # Huevos
