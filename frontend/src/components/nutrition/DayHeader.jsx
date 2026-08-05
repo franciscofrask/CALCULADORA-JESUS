@@ -51,9 +51,15 @@ const DayHeader = ({
     const mainP = dayMacros.P - servedPeriP;
     const mainH = dayMacros.H - servedPeriH;
     const mainG = dayMacros.G - servedPeriG;
-    const tgtP = dayTarget.P_entreno ?? dayTarget.P_total;
-    const tgtH = dayTarget.H_entreno ?? dayTarget.H_total;
-    const tgtG = dayTarget.G_entreno ?? dayTarget.G_total;
+    // Objetivo de las COMIDAS = total del día menos el peri que se cuenta aparte. No vale
+    // usar P_entreno: en `sin_peri` (y en `solo_intra`) parte del presupuesto de perientreno
+    // se reparte ENTRE LAS COMIDAS, así que los objetivos por comida suman más que los macros
+    // de entreno. La cabecera pedía de menos justo ese peri repartido (30 P y 16 H en el caso
+    // que lo destapó): con las cuatro comidas cuadradas el día decía "te pasas", y como nunca
+    // quedaba UNA sola comida sin cuadrar tampoco aparecía "Volcar macros aquí".
+    const tgtP = (dayTarget.P_total ?? 0) - (totalPeriP || 0);
+    const tgtH = (dayTarget.H_total ?? 0) - (totalPeriH || 0);
+    const tgtG = dayTarget.G_total ?? 0;   // el objetivo del peri no lleva grasa
     const dayStatus = getDayStatus();
     const hayPeri = tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri';
 

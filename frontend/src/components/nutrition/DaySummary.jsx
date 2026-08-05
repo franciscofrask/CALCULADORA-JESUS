@@ -130,9 +130,12 @@ const DaySummary = ({
     const mainP = dayMacros.P - servedPeriP;
     const mainH = dayMacros.H - servedPeriH;
     const mainG = dayMacros.G - servedPeriG;
-    const tgtP = dayTarget.P_entreno ?? dayTarget.P_total;
-    const tgtH = dayTarget.H_entreno ?? dayTarget.H_total;
-    const tgtG = dayTarget.G_entreno ?? dayTarget.G_total;
+    // Mismo criterio que DayHeader: el objetivo de las comidas es el total del día menos el
+    // peri que se cuenta aparte (P_entreno se queda corto cuando el peri se reparte entre las
+    // comidas, que es lo que pasa en `sin_peri` y en `solo_intra`).
+    const tgtP = (dayTarget.P_total ?? 0) - (totalPeriP || 0);
+    const tgtH = (dayTarget.H_total ?? 0) - (totalPeriH || 0);
+    const tgtG = dayTarget.G_total ?? 0;
     const dayStatus = getDayStatus();
 
     // El peri (intra y post) se lleva su propia cuenta: no entra en el total del dia ni en su
