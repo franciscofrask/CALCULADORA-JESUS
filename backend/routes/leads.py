@@ -370,13 +370,22 @@ async def convert_lead_to_client(lead_id: str, data: dict, user=Depends(get_admi
     await db.users.insert_one(new_user)
 
     # Create client profile
-    plan_prices = {"gold": 149, "silver": 99, "bronze": 69, "elm": 39}
+    # El precio sale del CATALOGO (con los overrides del panel), no de una tabla fija: la de
+    # antes tenia gold/silver/bronze/elm, planes que ya no se venden, y a un cliente nuevo se
+    # le grababa un importe que no coincidia con lo que se le cobra (peticion de Jesus 05-08).
+    from models.user import merged_catalog
+    overrides = {o["code"]: o.get("fields", {})
+                 async for o in db.plan_overrides.find({}, {"_id": 0, "code": 1, "fields": 1})}
+    plan_cat = merged_catalog(overrides).get(plan) or {}
+    precio = plan_cat.get("precio")
     from datetime import timedelta
     profile = {
         "id": str(uuid.uuid4()),
         "user_id": new_user["id"],
         "plan": plan,
-        "price": plan_prices.get(plan, 99),
+        # Sin precio en el catalogo se deja a None: mejor vacio y visible que un numero
+        # inventado, que es lo que acababa en la ficha y en los informes.
+        "price": float(precio) if precio not in (None, "") else None,
         "week": 1,
         "status": "activo",
         "trainer_id": trainer_id,

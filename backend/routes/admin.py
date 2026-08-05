@@ -808,6 +808,14 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
         "porcentaje_graso": float(bf),
         "sexo": sexo,
         "objetivo": objetivo,
+        # Rastro del ajuste (peticion de Jesus 05-08): de que camino salio y por que. Sin
+        # `origen`, en el historial no se distingue una decision del coach de un calculo
+        # automatico, y el agente los aprendia todos como si fueran criterio suyo.
+        "origen": "coach_calculadora",
+        "criterio": data.get("criterio"),
+        # Explicito, no por el fallback a created_at: asi el coach puede decir desde cuando
+        # aplica, igual que en el guardado manual.
+        "effective_date": data.get("effective_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "motor": {"version": resultado["version_motor"], "desglose": resultado["desglose"],
                   "ajustes": ajustes},
         "created_at": datetime.now(timezone.utc).isoformat()

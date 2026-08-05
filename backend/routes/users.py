@@ -224,6 +224,10 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
             "peri": peri,
             "effective_date": effective_date,
             "note": "Cuestionario inicial",
+            # De que camino salio (peticion de Jesus 05-08): esto NO es una decision del
+            # coach, lo calculo el cuestionario. Sin marcarlo, en el historial parecia un
+            # ajuste suyo y el agente lo aprendia como tal.
+            "origen": "quiz_alta",
             "changed_by": user.get("name", user.get("email", "cliente")),
             "client_weight": data.weight,
             "peso": data.weight,
@@ -466,6 +470,7 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
             "peri": update.get("macros_periworkout"),
             "effective_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "note": "Cuestionario de ajuste de macros",
+            "origen": "quiz_ajuste",     # lo recalculo el cuestionario, no el coach
             "changed_by": user.get("name", user.get("email", "cliente")),
             "client_weight": peso,
             "peso": peso,
@@ -836,6 +841,7 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         "peri": peri,
         "effective_date": effective_date,
         "note": data.note,
+        "origen": "cliente_calculadora",   # lo movio el propio cliente desde su calculadora
         "changed_by": user.get("name", user.get("email", "cliente")),
         "client_weight": data.peso if data.peso is not None else profile.get("weight"),
         # Calc inputs guardados POR cambio → trazabilidad de cómo se derivaron los macros.

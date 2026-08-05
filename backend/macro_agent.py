@@ -228,7 +228,17 @@ def construir_contexto(
                 L.append(f"      criterio del coach: {h['criterio']}")
             # Que hizo el coach con TU propuesta anterior de ese mes: la mejor correccion
             # que existe, porque es sobre esta persona y sobre un numero concreto.
-            if h.get("origen") == "ia":
+            # De donde salio ese ajuste. Los que calculo un cuestionario NO son criterio del
+            # coach: son el punto de partida de la calculadora. Aprender de ellos como si
+            # fueran decisiones suyas ensucia el patron.
+            NO_ES_DEL_COACH = {
+                "quiz_alta": "no lo decidio el coach: son los macros de arranque que calculo el cuestionario inicial",
+                "quiz_ajuste": "no lo decidio el coach: lo recalculo el cuestionario de ajuste del cliente",
+                "cliente_calculadora": "no lo decidio el coach: lo cambio el propio cliente desde su calculadora",
+            }
+            if h.get("origen") in NO_ES_DEL_COACH:
+                L.append(f"      OJO: {NO_ES_DEL_COACH[h['origen']]}")
+            elif h.get("origen") == "ia":
                 L.append("      esa propuesta la hiciste TU y el coach la guardo TAL CUAL")
             elif h.get("origen") == "ia_corregida":
                 corr = h.get("correccion_coach") or {}
