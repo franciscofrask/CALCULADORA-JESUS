@@ -675,6 +675,21 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB 2: MACROS ========== */}
                 <TabsContent value="macros" className="space-y-4">
+                    {/* LA TABLA VA ARRIBA, ANTES DEL EDITOR (vídeo del 05-08): el coach no pone un
+                        número en abstracto, decide comparando con la escalera anterior. Con la
+                        tabla debajo tenía que subir y bajar por la pantalla o acordarse. La fila
+                        que está escribiendo aparece aquí en gris hasta que guarda. */}
+                    <MacroHistoryTable items={macro_history} onEdit={openEditEntry} onRepeat={openRepeatEntry}
+                        onDelete={deleteMacroEntry} onEvaluar={openEvaluar}
+                        borrador={macrosTocados ? {
+                            _borrador: true,
+                            effective_date: macrosForm.effective_date,
+                            training: macrosForm.training, peri: macrosForm.peri, rest: macrosForm.rest,
+                            peso: profile?.weight,
+                            body_fat: macrosForm.porcentaje_graso !== '' ? Number(macrosForm.porcentaje_graso) : null,
+                            criterio: macrosForm.criterio, note: macrosForm.note,
+                        } : null} />
+
                     {/* Editor de macros siempre a la vista, precargado con los actuales:
                         el coach edita a mano o vuelca la propuesta de la IA y guarda aqui. */}
                     <Card className="bg-[#111] border-[#222]" ref={editorMacrosRef}><CardContent className="p-5">
@@ -854,8 +869,6 @@ const ClientDetailPage = () => {
                         </p>
                     </CardContent></Card>
 
-                    {/* Historial de macros (tabla + filtro por fechas) */}
-                    <MacroHistoryTable items={macro_history} onEdit={openEditEntry} onRepeat={openRepeatEntry} onDelete={deleteMacroEntry} onEvaluar={openEvaluar} />
 
                     {/* Evaluacion de la fase que abrio un ajuste (modelo predictivo, paso 1) */}
                     <Dialog open={!!evalEntry} onOpenChange={(o) => !o && setEvalEntry(null)}>
@@ -1243,11 +1256,24 @@ const _fechaEntrada = (h) => h.effective_date || (h.created_at || '').slice(0, 1
 const _fechaCorta = (f) => f ? f.split('-').reverse().join('/') : '-';
 
 // Celdas P/H/G de un bloque de macros dentro de la tabla del historial.
-const MacroCeldas = ({ m, showG = true }) => (
+// EN ROJO LO QUE CAMBIÓ respecto al ajuste anterior, como en Calma: el coach no lee
+// números sueltos, lee la escalera. Con todo del mismo color hay que comparar fila a
+// fila a ojo; en rojo, el cambio salta solo (vídeo del 05-08, minuto 1:47).
+const _CAMPOS = [['protein', 'proteinas'], ['carbs', 'hidratos'], ['fat', 'grasas']];
+const MacroCeldas = ({ m, prev, showG = true, apagado = false }) => (
     <>
-        <td className="px-2 py-2 text-right tabular-nums font-bold text-orange-400">{m ? _mv(m, ['protein', 'proteinas']) : '-'}</td>
-        <td className="px-2 py-2 text-right tabular-nums font-bold text-blue-400">{m ? _mv(m, ['carbs', 'hidratos']) : '-'}</td>
-        {showG && <td className="px-2 py-2 text-right tabular-nums font-bold text-yellow-400">{m ? _mv(m, ['fat', 'grasas']) : '-'}</td>}
+        {(showG ? _CAMPOS : _CAMPOS.slice(0, 2)).map((keys, i) => {
+            const v = m ? _mv(m, keys) : null;
+            const p = prev ? _mv(prev, keys) : null;
+            const cambio = v != null && p != null && v !== p;
+            return (
+                <td key={i} className={`px-2 py-2 text-right tabular-nums font-bold ${
+                    apagado ? 'text-white/40' : cambio ? 'text-red-400' : 'text-white/70'}`}
+                    title={cambio ? `antes ${p} g (${v > p ? '+' : ''}${v - p})` : undefined}>
+                    {v ?? '-'}
+                </td>
+            );
+        })}
     </>
 );
 
@@ -1262,16 +1288,45 @@ const EvaluacionBadge = ({ ev }) => (
 );
 
 // Historial de macros en tabla, con filtro por rango de fechas.
-const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar }) => {
+const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar, borrador }) => {
     const [desde, setDesde] = useState('');
     const [hasta, setHasta] = useState('');
+    // El ajuste que se está escribiendo abajo entra como una fila más, en gris, en el sitio
+    // que le toca por fecha: así se ve cómo queda la escalera ANTES de guardar.
     const todas = useMemo(
-        () => [...(items || [])].sort((a, b) => _fechaEntrada(b).localeCompare(_fechaEntrada(a))),
-        [items]);
+        () => [...(items || []), ...(borrador ? [borrador] : [])]
+            .sort((a, b) => _fechaEntrada(b).localeCompare(_fechaEntrada(a))),
+        [items, borrador]);
+    // Peso máximo y mínimo del recorrido. Se marca UNA sola fila de cada: con 170 ajustes
+    // hay empates de sobra y pintar quince "máximos" no señala nada.
+    const { filaMax, filaMin } = useMemo(() => {
+        let max = null, min = null;
+        for (const h of (items || [])) {
+            const p = h.peso ?? h.client_weight;
+            if (typeof p !== 'number') continue;
+            if (!max || p > (max.peso ?? max.client_weight)) max = h;
+            if (!min || p < (min.peso ?? min.client_weight)) min = h;
+        }
+        return { filaMax: max, filaMin: min };
+    }, [items]);
     const filas = useMemo(() => todas.filter(h => {
         const f = _fechaEntrada(h);
         return !((desde && f < desde) || (hasta && f > hasta));
     }), [todas, desde, hasta]);
+    // La tabla va arriba para poder comparar antes de ajustar, pero un cliente con 170
+    // ajustes dejaría el editor a media pantalla de scroll. Por defecto se ven los últimos
+    // (que es con los que se compara) y el resto se despliega, como el "ocultar macros" de Calma.
+    const [verTodo, setVerTodo] = useState(false);
+    const RECIENTES = 12;
+    const visibles = useMemo(() => {
+        if (verTodo) return filas;
+        const corte = filas.slice(0, RECIENTES);
+        // El ajuste en curso se ve SIEMPRE, aunque su fecha lo mande fuera del recorte:
+        // si el coach lo pone vigente desde una fecha vieja, la fila no puede desaparecer.
+        const b = filas.find(h => h._borrador);
+        return (!b || corte.includes(b)) ? corte
+            : [...corte, b].sort((x, y) => _fechaEntrada(y).localeCompare(_fechaEntrada(x)));
+    }, [filas, verTodo]);
     const filtrando = !!(desde || hasta);
     const inputFecha = "bg-[#0A0A0A] border border-[#333] text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#FF671F]";
 
@@ -1283,7 +1338,8 @@ const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar }) => 
                         <History className="w-4 h-4" />Historial de macros
                     </CardTitle>
                     <div className="flex items-center gap-2">
-                        <span className="text-white/30 text-[11px] tabular-nums">{filtrando ? `${filas.length} de ${todas.length}` : `${todas.length} cambios`}</span>
+                        {/* El ajuste en curso no cuenta como cambio: todavía no está guardado */}
+                        <span className="text-white/30 text-[11px] tabular-nums">{filtrando ? `${filas.length} de ${(items || []).length}` : `${(items || []).length} cambios`}</span>
                         <input type="date" value={desde} max={hasta || undefined} onChange={e => setDesde(e.target.value)} title="Desde" className={inputFecha} data-testid="macro-hist-desde" />
                         <span className="text-white/30 text-xs">a</span>
                         <input type="date" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)} title="Hasta" className={inputFecha} data-testid="macro-hist-hasta" />
@@ -1321,24 +1377,41 @@ const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar }) => 
                                 </tr>
                             </thead>
                             <tbody>
-                                {filas.map((h, i) => {
+                                {visibles.map((h, i) => {
                                     const peso = h.peso ?? h.client_weight;
                                     const peri = h.peri || h.macros_periworkout;
                                     const nota = h.note && h.note !== 'Importado de Calma' ? h.note : '';
+                                    // El ajuste inmediatamente ANTERIOR en el tiempo (la tabla va de más
+                                    // reciente a más antigua, así que es el siguiente de la lista). Se busca
+                                    // en `filas`, no en las visibles: si no, la última fila a la vista no
+                                    // tendría con qué compararse y parecería que no cambió nada.
+                                    const ant = filas[filas.indexOf(h) + 1];
+                                    const antPeri = ant && (ant.peri || ant.macros_periworkout);
+                                    const esBorrador = !!h._borrador;
+                                    const esMax = h === filaMax, esMin = h === filaMin;
+                                    const tonoPeso = esMax ? 'bg-red-500/20 text-red-300'
+                                        : esMin ? 'bg-emerald-500/20 text-emerald-300'
+                                        : 'text-[#FF671F]';
                                     return (
-                                        <tr key={h.id || i} className="border-b border-[#1a1a1a] last:border-0 hover:bg-white/[0.03]">
+                                        <tr key={h.id || i} data-testid={esBorrador ? 'macro-fila-borrador' : undefined}
+                                            className={`border-b border-[#1a1a1a] last:border-0 ${
+                                                esBorrador ? 'bg-white/[0.06] border-dashed border-[#FF671F]/40' : 'hover:bg-white/[0.03]'}`}>
                                             <td className="px-2 py-2 whitespace-nowrap font-medium tabular-nums">
-                                                {_fechaCorta(_fechaEntrada(h))}
+                                                <span className={esBorrador ? 'text-white/50' : ''}>{_fechaCorta(_fechaEntrada(h))}</span>
+                                                {esBorrador && <span className="ml-1.5 text-[9px] uppercase text-[#FF671F]">sin guardar</span>}
                                                 {h.origen === 'ia' && <span className="ml-1.5 text-[9px] uppercase text-[#FF671F]" title="Propuesta de la IA aceptada tal cual">IA</span>}
                                                 {h.origen === 'ia_corregida' && <span className="ml-1.5 text-[9px] uppercase text-amber-500" title={`Propuesta de la IA corregida por el coach: ${JSON.stringify(h.correccion_coach || {})}`}>IA·corr</span>}
                                             </td>
                                             <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
-                                                <span className="text-[#FF671F] font-bold">{peso != null ? `${peso} kg` : '-'}</span>
+                                                <span className={`font-bold rounded px-1 ${esBorrador ? 'text-white/40' : tonoPeso}`}
+                                                    title={esMax ? 'Peso máximo del recorrido' : esMin ? 'Peso mínimo del recorrido' : undefined}>
+                                                    {peso != null ? `${peso} kg` : '-'}
+                                                </span>
                                                 {h.body_fat != null && <span className="text-white/40 text-xs"> · {h.body_fat}%</span>}
                                             </td>
-                                            <MacroCeldas m={h.training} />
-                                            <MacroCeldas m={peri} showG={false} />
-                                            <MacroCeldas m={h.rest} />
+                                            <MacroCeldas m={h.training} prev={ant?.training} apagado={esBorrador} />
+                                            <MacroCeldas m={peri} prev={antPeri} showG={false} apagado={esBorrador} />
+                                            <MacroCeldas m={h.rest} prev={ant?.rest} apagado={esBorrador} />
                                             <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]"><span className="block truncate" title={h.criterio || ''}>{h.criterio || '-'}</span></td>
                                             <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]"><span className="block truncate" title={nota}>{nota || '-'}</span></td>
                                             <td className="px-2 py-2 whitespace-nowrap">
@@ -1351,11 +1424,14 @@ const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar }) => 
                                             </td>
                                             {(onEdit || onRepeat || onDelete) && (
                                                 <td className="px-2 py-2">
-                                                    <div className="flex items-center justify-end gap-0.5">
-                                                        {onRepeat && <button onClick={() => onRepeat(h)} title="Repetir estos macros (aplicar hoy)" className="p-1 rounded text-white/40 hover:text-[#FF671F] hover:bg-[#FF671F]/10"><RotateCcw className="w-3.5 h-3.5" /></button>}
-                                                        {onEdit && <button onClick={() => onEdit(h)} title="Editar esta entrada" className="p-1 rounded text-white/40 hover:text-white hover:bg-white/10"><Pencil className="w-3.5 h-3.5" /></button>}
-                                                        {onDelete && <button onClick={() => onDelete(h)} title="Eliminar esta entrada" className="p-1 rounded text-white/40 hover:text-red-400 hover:bg-red-500/10"><Trash2 className="w-3.5 h-3.5" /></button>}
-                                                    </div>
+                                                    {/* La fila en curso todavía no existe: no se puede repetir, editar ni borrar */}
+                                                    {!esBorrador && (
+                                                        <div className="flex items-center justify-end gap-0.5">
+                                                            {onRepeat && <button onClick={() => onRepeat(h)} title="Repetir estos macros (aplicar hoy)" className="p-1 rounded text-white/40 hover:text-[#FF671F] hover:bg-[#FF671F]/10"><RotateCcw className="w-3.5 h-3.5" /></button>}
+                                                            {onEdit && <button onClick={() => onEdit(h)} title="Editar esta entrada" className="p-1 rounded text-white/40 hover:text-white hover:bg-white/10"><Pencil className="w-3.5 h-3.5" /></button>}
+                                                            {onDelete && <button onClick={() => onDelete(h)} title="Eliminar esta entrada" className="p-1 rounded text-white/40 hover:text-red-400 hover:bg-red-500/10"><Trash2 className="w-3.5 h-3.5" /></button>}
+                                                        </div>
+                                                    )}
                                                 </td>
                                             )}
                                         </tr>
@@ -1363,6 +1439,12 @@ const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar }) => 
                                 })}
                             </tbody>
                         </table>
+                        {filas.length > RECIENTES && (
+                            <button onClick={() => setVerTodo(!verTodo)} data-testid="macro-hist-ver-todo"
+                                className="w-full mt-2 py-2 text-xs font-semibold text-white/50 hover:text-[#FF671F] transition-colors">
+                                {verTodo ? `Ver solo los ${RECIENTES} últimos` : `Ver el historial entero (${filas.length} ajustes)`}
+                            </button>
+                        )}
                     </div>
                 )}
             </CardContent>
