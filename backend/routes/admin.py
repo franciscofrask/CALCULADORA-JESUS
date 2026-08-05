@@ -356,6 +356,12 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
             "porcentaje_graso": h.get("body_fat"),
             "criterio": h.get("criterio"),
             "evaluacion": h.get("evaluacion"),
+            # Senal de correccion: si ese ajuste salio de una sugerencia de la IA, si el coach
+            # la guardo tal cual o cuanto la corrigio (macro a macro). Se venia guardando desde
+            # el 26-07 pero no se le devolvia al agente, asi que tropezaba dos veces con la
+            # misma piedra en el mismo cliente.
+            "origen": h.get("origen"),
+            "correccion_coach": h.get("correccion_coach"),
             "macros": {"entreno": h.get("training") or {}, "perientreno": h.get("peri") or {},
                        "descanso": h.get("rest") or {}},
         })

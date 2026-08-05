@@ -74,6 +74,12 @@ COMO AJUSTAR:
    son lo mas valioso que tienes: repite lo que funciono y no repitas un ajuste que ya
    se marco como malo. Ojo a de quien fue la culpa: si la fase salio mal porque el
    CLIENTE no cumplio, el ajuste no estaba mal y no hay que cambiar la estrategia.
+   TUS PROPIAS PROPUESTAS: el historial te dice cuales las hiciste tu y que hizo el coach
+   con ellas. Si te la guardo TAL CUAL, vas bien con esta persona. Si te la CORRIGIO, ahi
+   tienes en gramos exactos en que te pasaste o te quedaste corto CON ELLA: aplicalo antes
+   de volver a proponer ese mismo movimiento, y si el coach te corrigio dos veces en la
+   misma direccion, es un patron suyo y ya no es casualidad. Una correccion suya vale mas
+   que cualquier mediana de casos parecidos.
 3. PAUTADO-VS-REAL (clave), con tres escalones segun el cumplimiento:
    - NO ha cumplido: el fallo no es del ajuste, es de la persona. NO toques nada
      ("ponte los del mes pasado") y dilo en el feedback.
@@ -220,6 +226,16 @@ def construir_contexto(
                      + (f" | cumplio: {h.get('cumplimiento')}" if h.get('cumplimiento') else ""))
             if h.get("criterio"):
                 L.append(f"      criterio del coach: {h['criterio']}")
+            # Que hizo el coach con TU propuesta anterior de ese mes: la mejor correccion
+            # que existe, porque es sobre esta persona y sobre un numero concreto.
+            if h.get("origen") == "ia":
+                L.append("      esa propuesta la hiciste TU y el coach la guardo TAL CUAL")
+            elif h.get("origen") == "ia_corregida":
+                corr = h.get("correccion_coach") or {}
+                partes = [f"{bloque} {campo} {valor:+g}"
+                          for bloque, campos in corr.items() for campo, valor in campos.items()]
+                L.append("      esa propuesta la hiciste TU y el coach la CORRIGIO"
+                         + (f": {', '.join(partes)} respecto a lo que propusiste" if partes else ""))
             ev = h.get("evaluacion") or {}
             if ev.get("resultado"):
                 culpa = {"ajuste": "el ajuste no fue bueno", "cliente": "el cliente no cumplio",
