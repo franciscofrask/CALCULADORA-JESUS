@@ -242,7 +242,10 @@ const ClientDetailPage = () => {
         // Modelo predictivo (paso 1): criterio interno del coach y % graso del momento.
         criterio: '',
         porcentaje_graso: '',
-        effective_date: hoyISO(),
+        // El peso con el que se hace el ajuste: el de HOY, no el del ajuste anterior (2.2).
+        peso: '',
+        // Manana, no hoy (2.3): el ajuste se pone para que empiece al dia siguiente.
+        effective_date: hoyISO(1),
     };
     const [macrosForm, setMacrosForm] = useState(MACROS_FORM_VACIO);
     const [entryForm, setEntryForm] = useState(MACROS_FORM_VACIO);
@@ -315,7 +318,8 @@ const ClientDetailPage = () => {
                 note: '',
                 criterio: '',
                 porcentaje_graso: p?.body_fat != null ? String(p.body_fat) : '',
-                effective_date: hoyISO(),
+                peso: p?.weight != null ? String(p.weight) : '',
+                effective_date: hoyISO(1),
             });
         } catch (error) {
             toast.error('Error al cargar datos del cliente');
@@ -442,6 +446,7 @@ const ClientDetailPage = () => {
         note: f.note,
         criterio: (f.criterio || '').trim() || null,
         porcentaje_graso: f.porcentaje_graso === '' || f.porcentaje_graso == null ? null : parseFloat(f.porcentaje_graso),
+        peso: f.peso === '' || f.peso == null ? null : parseFloat(f.peso),
         effective_date: f.effective_date,
     });
     const macrosFormIncompleto = (f) => ['training', 'rest'].some(
@@ -452,6 +457,19 @@ const ClientDetailPage = () => {
     const handleSaveMacros = async () => {
         if (macrosFormIncompleto(macrosForm)) { toast.error('Completa proteína, hidratos y grasa de entrenamiento y descanso'); return; }
         if (!macrosForm.note.trim()) { toast.error('El feedback para el cliente es obligatorio'); return; }
+        // Confirmación antes de guardar (2.4): "a veces guardo por error y ya me salta como
+        // último macro". Se resume lo que se va a guardar para poder repasarlo de un vistazo.
+        const f = macrosForm;
+        if (!await confirm({
+            title: '¿Guardar estos macros?',
+            description: `Entreno ${f.training.protein}/${f.training.carbs}/${f.training.fat} · `
+                + `Intra ${f.peri.protein || 0}/${f.peri.carbs || 0} · `
+                + `Descanso ${f.rest.protein}/${f.rest.carbs}/${f.rest.fat}`
+                + `\nVigente desde el ${_fechaLarga(f.effective_date)}`
+                + (f.peso ? ` · peso ${f.peso} kg` : '')
+                + '\nEl cliente recibe el feedback como novedad.',
+            confirmLabel: 'Guardar macros',
+        })) return;
         setSavingMacros(true);
         try {
             await api.put(`/admin/clients/${clientId}/macros`, { ...macrosFormToBody(macrosForm), sugerencia_id: sugerenciaId });
@@ -544,6 +562,15 @@ const ClientDetailPage = () => {
         finally { setSupSuggesting(false); }
     };
     const supSave = async () => {
+        // Misma confirmación que en macros (2.4): "lo mismo al guardar la suplementación".
+        const n = (supProtocol.actual || []).length, s = (supProtocol.siguiente || []).length;
+        if (!await confirm({
+            title: '¿Guardar la suplementación?',
+            description: `${n} suplemento${n === 1 ? '' : 's'} ahora`
+                + (s ? ` y ${s} para el siguiente protocolo${supProtocol.siguiente_fecha ? ` (desde el ${_fechaLarga(supProtocol.siguiente_fecha)})` : ''}` : '')
+                + '. El cliente lo ve en su apartado de suplementación.',
+            confirmLabel: 'Guardar',
+        })) return;
         setSupSaving(true);
         try {
             await api.post(`/admin/supplements/save?client_id=${clientId}`, {
@@ -574,13 +601,23 @@ const ClientDetailPage = () => {
         peri: { protein: _cur(mp, 'protein', 'proteinas'), carbs: _cur(mp, 'carbs', 'hidratos') },
     };
     const bfActual = profile?.body_fat != null ? String(profile.body_fat) : '';
+    const pesoActual = profile?.weight != null ? String(profile.weight) : '';
+    // Peso con el que se hizo el ajuste anterior: es contra el que compara el coach.
+    // Sin useMemo a propósito: aquí ya se ha pasado por los early returns del componente
+    // y un hook a estas alturas rompe las reglas de hooks (y el orden entre renders).
+    const pesoUltimoAjuste = (() => {
+        const orden = [...(macro_history || [])].sort((a, b) => _fechaEntrada(b).localeCompare(_fechaEntrada(a)));
+        for (const h of orden) { const p = h.peso ?? h.client_weight; if (typeof p === 'number') return p; }
+        return null;
+    })();
     const macrosTocados = ['training', 'rest', 'peri'].some(
         b => Object.keys(macrosActuales[b]).some(k => String(macrosForm[b][k] ?? '') !== macrosActuales[b][k])
-    ) || String(macrosForm.porcentaje_graso ?? '') !== bfActual;
+    ) || String(macrosForm.porcentaje_graso ?? '') !== bfActual
+      || String(macrosForm.peso ?? '') !== pesoActual;
     const setMacroCampo = (bloque, campo, valor) => setMacrosForm(prev => ({ ...prev, [bloque]: { ...prev[bloque], [campo]: valor } }));
     const descartarCambiosMacros = () => (setSugerenciaId(null), setMacrosForm({
-        ...macrosActuales, note: '', criterio: '', porcentaje_graso: bfActual,
-        effective_date: hoyISO(),
+        ...macrosActuales, note: '', criterio: '', porcentaje_graso: bfActual, peso: pesoActual,
+        effective_date: hoyISO(1),
     }));
 
     const TAB_CONFIG = [
@@ -719,28 +756,51 @@ const ClientDetailPage = () => {
                             ]} />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-3 gap-3">
                                 <div>
                                     <Label className="text-white/60 text-xs">Vigente desde</Label>
-                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({ ...macrosForm, effective_date: e.target.value })} className={`bg-[#0A0A0A] text-white mt-1 ${macrosForm.effective_date !== hoyISO() ? 'border-[#FF671F]' : 'border-[#333]'}`} data-testid="macro-effective-date" />
-                                    {macrosForm.effective_date !== hoyISO() ? (
+                                    {/* Por defecto MAÑANA (2.3): el ajuste se pone para que arranque al día
+                                        siguiente, que es como trabaja. Solo se avisa si se sale de ahí. */}
+                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({ ...macrosForm, effective_date: e.target.value })} className={`bg-[#0A0A0A] text-white mt-1 ${macrosForm.effective_date !== hoyISO(1) ? 'border-[#FF671F]' : 'border-[#333]'}`} data-testid="macro-effective-date" />
+                                    {macrosForm.effective_date !== hoyISO(1) ? (
                                         <p className="text-[10px] text-[#FF671F] mt-1 leading-relaxed">
                                             {macrosForm.effective_date > hoyISO()
                                                 ? `No se aplican hasta el ${_fechaLarga(macrosForm.effective_date)}: hasta ese día sigue con los actuales. `
                                                 : `Se aplican hacia atrás, desde el ${_fechaLarga(macrosForm.effective_date)}. `}
                                             <button type="button" className="underline font-bold"
-                                                onClick={() => setMacrosForm({ ...macrosForm, effective_date: hoyISO() })}>Poner hoy</button>
+                                                onClick={() => setMacrosForm({ ...macrosForm, effective_date: hoyISO(1) })}>Poner mañana</button>
                                         </p>
                                     ) : (
-                                        <p className="text-[10px] text-white/30 mt-1">Las dietas anteriores conservan los macros previos.</p>
+                                        <p className="text-[10px] text-white/30 mt-1">Empieza mañana. Los días anteriores conservan los macros previos.</p>
                                     )}
+                                </div>
+                                <div>
+                                    <Label className="text-white/60 text-xs">Peso</Label>
+                                    <Input type="number" step="0.1" min="25" max="300" value={macrosForm.peso}
+                                        onChange={e => setMacrosForm({ ...macrosForm, peso: e.target.value })}
+                                        placeholder="-" className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-peso" />
+                                    {/* El peso del ajuste es el de HOY, no el del ajuste anterior (2.2). Y la
+                                        diferencia con el anterior es lo primero que mira el coach. */}
+                                    {(() => {
+                                        const p = parseFloat(macrosForm.peso);
+                                        if (isNaN(p) || pesoUltimoAjuste == null) return <p className="text-[10px] text-white/30 mt-1">Queda registrado con la fecha del ajuste.</p>;
+                                        const d = Math.round((p - pesoUltimoAjuste) * 10) / 10;
+                                        return (
+                                            <p className="text-[10px] mt-1 text-white/40">
+                                                Últimos macros: {pesoUltimoAjuste} kg ·{' '}
+                                                <b className={d > 0 ? 'text-red-400' : d < 0 ? 'text-emerald-400' : 'text-white/50'}>
+                                                    {d > 0 ? `ha ganado ${d}` : d < 0 ? `ha perdido ${Math.abs(d)}` : 'sin cambios'}{d !== 0 ? ' kg' : ''}
+                                                </b>
+                                            </p>
+                                        );
+                                    })()}
                                 </div>
                                 <div>
                                     <Label className="text-white/60 text-xs">% graso</Label>
                                     <Input type="number" step="0.1" min="3" max="60" value={macrosForm.porcentaje_graso}
                                         onChange={e => setMacrosForm({ ...macrosForm, porcentaje_graso: e.target.value })}
                                         placeholder="-" className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-body-fat" />
-                                    <p className="text-[10px] text-white/30 mt-1">El del momento del ajuste. Queda en el historial.</p>
+                                    <p className="text-[10px] text-white/30 mt-1">Opcional. Solo cuando lo estimes.</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 gap-3">

@@ -586,6 +586,14 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     if data.porcentaje_graso is not None:
         set_data["body_fat"] = data.porcentaje_graso
 
+    # El PESO con el que se hace el ajuste (peticion de Jesus 05-08, punto 2.2). Es el del
+    # reporte de esta semana, que puede no ser el que tiene el perfil, y va con la fecha del
+    # ajuste: "88 kilos con fecha de manana para tener el registro de ese peso, aunque el
+    # pesaje sea de hace una semana". Si lo informa, manda y actualiza el perfil.
+    peso_ajuste = data.peso if data.peso is not None else profile.get("weight")
+    if data.peso is not None:
+        set_data["weight"] = data.peso
+
     if data.peri is not None:
         peri = data.peri.model_dump()
         peri["calories"] = peri["protein"] * 4 + peri["carbs"] * 4
@@ -620,7 +628,8 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         "criterio": data.criterio,
         "body_fat": body_fat,
         "changed_by": user.get("name", user.get("email", "admin")),
-        "client_weight": profile.get("weight"),
+        "client_weight": peso_ajuste,
+        "peso": peso_ajuste,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 
