@@ -22,7 +22,7 @@ import {
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
     ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp, ChevronRight,
     AlertCircle, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw,
-    Headphones, CalendarClock
+    Headphones, CalendarClock, Camera
 } from 'lucide-react';
 import { etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
 
@@ -760,6 +760,11 @@ const ClientDetailPage = () => {
                             body_fat: macrosForm.porcentaje_graso !== '' ? Number(macrosForm.porcentaje_graso) : null,
                             criterio: macrosForm.criterio, note: macrosForm.note,
                         } : null} />
+
+                    {/* Las fotos, todas juntas y aquí mismo (3.1): las mira mientras ajusta y
+                        no quiere un comparador en este punto del flujo. */}
+                    <MuralFotos api={api} clientId={clientId} calmaFotos={calma_raw?.fotos_descargadas}
+                        reports={reports} macroHistory={macro_history} />
 
                     {/* Editor de macros siempre a la vista, precargado con los actuales:
                         el coach edita a mano o vuelca la propuesta de la IA y guarda aqui. */}
@@ -1904,6 +1909,101 @@ const DateSelect = ({ fotos, value, onChange, pesos }) => (
         })}
     </select>
 );
+
+// MURAL DE FOTOS para la pantalla donde el coach ajusta (punto 3.1 del documento del
+// 05-08): "yo las veo todas de golpe, y así las quiero; no me montes aquí un comparador".
+// Una fila por día con fotos, con la fecha y el peso de ese día, de lo más reciente a lo
+// más antiguo. El comparador de dos sigue existiendo en Seguimiento, que es otra cosa
+// (la del cliente en su informe, punto 3.2).
+const MuralFotos = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
+    const [appFotos, setAppFotos] = useState([]);
+    const [verTodas, setVerTodas] = useState(false);
+    const [abierto, setAbierto] = useState(true);
+
+    useEffect(() => {
+        let alive = true;
+        api.get(`/admin/clients/${clientId}/photos`)
+            .then(r => { if (alive) setAppFotos(r.data?.photos || []); })
+            .catch(() => {});
+        return () => { alive = false; };
+    }, [api, clientId]);
+
+    const pesos = useMemo(() => {
+        const arr = [];
+        (reports || []).forEach(r => { if (r.weight != null && r.created_at) arr.push({ date: r.created_at, w: r.weight }); });
+        (macroHistory || []).forEach(h => {
+            const w = h.peso ?? h.client_weight;
+            const d = h.effective_date || h.created_at;
+            if (w != null && d) arr.push({ date: d, w });
+        });
+        return arr;
+    }, [reports, macroHistory]);
+
+    // Todas las fotos (Calma + app) agrupadas por día, del más reciente al más antiguo.
+    const sesiones = useMemo(() => {
+        const todas = [
+            ...(calmaFotos || []).map(f => ({ key: `calma:${f.file}`, source: 'calma', file: f.file, date: f.fecha || '', pose: _poseDeKind(f.kind) })),
+            ...(appFotos || []).map(p => ({ key: `app:${p.id}`, source: 'app', foto: p, date: (p.taken_at || p.uploaded_at || '').slice(0, 10), pose: 'Sin clasificar' })),
+        ].filter(f => f.date);
+        const porDia = new Map();
+        for (const f of todas) {
+            if (!porDia.has(f.date)) porDia.set(f.date, []);
+            porDia.get(f.date).push(f);
+        }
+        return [...porDia.entries()]
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([date, fotos]) => ({
+                date,
+                peso: _pesoCercano(pesos, date),
+                fotos: fotos.sort((a, b) => _POSE_ORDER.indexOf(a.pose) - _POSE_ORDER.indexOf(b.pose)),
+            }));
+    }, [calmaFotos, appFotos, pesos]);
+
+    if (!sesiones.length) return null;
+    const visibles = verTodas ? sesiones : sesiones.slice(0, 3);
+    const totalFotos = sesiones.reduce((n, s) => n + s.fotos.length, 0);
+
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2">
+                <button onClick={() => setAbierto(!abierto)} className="flex items-center justify-between w-full gap-2">
+                    <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                        <Camera className="w-4 h-4 text-[#FF671F]" />Fotos ({totalFotos})
+                    </CardTitle>
+                    <span className="text-white/30 text-xs">{abierto ? 'ocultar' : 'ver'}</span>
+                </button>
+            </CardHeader>
+            {abierto && (
+                <CardContent className="space-y-4" data-testid="mural-fotos">
+                    {visibles.map(s => (
+                        <div key={s.date}>
+                            <p className="text-xs text-white/50 mb-1.5 tabular-nums">
+                                {_fechaCorta(s.date)}
+                                {s.peso != null && <span className="text-[#FF671F] font-bold"> · {s.peso} kg</span>}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {s.fotos.map(f => (
+                                    <div key={f.key} className="w-28">
+                                        {f.source === 'calma'
+                                            ? <CalmaFoto api={api} clientId={clientId} foto={{ file: f.file }} />
+                                            : <AppFoto api={api} foto={f.foto} />}
+                                        <p className="text-[10px] text-white/30 text-center mt-0.5 truncate">{f.pose}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                    {sesiones.length > 3 && (
+                        <button onClick={() => setVerTodas(!verTodas)} data-testid="mural-ver-todas"
+                            className="w-full py-2 text-xs font-semibold text-white/50 hover:text-[#FF671F] transition-colors">
+                            {verTodas ? 'Ver solo las últimas' : `Ver todas (${sesiones.length} días con fotos)`}
+                        </button>
+                    )}
+                </CardContent>
+            )}
+        </Card>
+    );
+};
 
 const ProgressComparator = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
     const [appFotos, setAppFotos] = useState([]);
