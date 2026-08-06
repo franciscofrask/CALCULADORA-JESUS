@@ -1,14 +1,21 @@
 /**
- * QuizVentaPage - Las cuatro preguntas de antes de comprar.
+ * QuizVentaPage - Las seis preguntas de antes de comprar.
  *
- * Especificación 31-07-2026, partes 3 y 4. Cuatro preguntas, y al final el nivel que le
- * pega explicado con sus propias palabras, con los otros dos debajo por si prefiere otro.
+ * Documento del test de nivel (06-08-2026). Portada, seis preguntas, y al final el nivel
+ * que le pega explicado con sus propias palabras, con los otros dos debajo por si
+ * prefiere otro.
  *
- * Lo que no se toca: **ve su resultado sin dar el correo**. Es una decisión cerrada del
- * documento y aquí se nota en que esta pantalla no pide nada para funcionar — ni sesión,
- * ni email. El correo se ofrece DESPUÉS, para guardar el resultado o recibirlo.
+ * La portada existe porque aquí llega gente que no conoce a Jesús — el 63 % le descubre
+ * en Instagram — y antes aterrizaba directamente en "¿entrenas ahora mismo?" sin saber
+ * quién le pregunta. El sitio habla antes de la primera pregunta.
  *
- * Y el Nivel 3 no lleva a un pago, lleva a una llamada.
+ * Lo que no se toca: **ve su resultado sin dar el correo**. Es una decisión cerrada y
+ * aquí se nota en que esta pantalla no pide nada para funcionar — ni sesión, ni email.
+ * El correo se ofrece DESPUÉS, para guardar el resultado o recibirlo.
+ *
+ * Y el Nivel 3 no lleva a un pago, lleva a una llamada: se propone con los otros dos
+ * precios delante y lo elige él. Quien pide la llamada habiendo visto los tres viene ya
+ * decidido.
  */
 import React, { useEffect, useState } from 'react';
 import { euros } from '../lib/precios';
@@ -25,6 +32,15 @@ const API = process.env.REACT_APP_BACKEND_URL || '';
 // nivel que le salió. sessionStorage y no localStorage: es de esta visita, no para
 // siempre. Sobrevive al registro porque es la misma pestaña.
 const CLAVE_TEST = 'quiz_venta_resultado';
+
+// Cuándo llamarle. Franjas y no una hora exacta: pedir hora concreta es pedirle que
+// cuadre una agenda antes de saber si le interesa, y aquí solo hace falta acertar el rato.
+const FRANJAS = [
+    'Cuando podáis',
+    'Por la mañana (9-14)',
+    'Por la tarde (14-18)',
+    'A última hora (18-21)',
+];
 
 // Esta pantalla funciona SIN sesión a propósito (no usa el contexto de auth), así que la
 // sesión se mira donde vive el token, no por contexto.
@@ -44,13 +60,23 @@ const QuizVentaPage = () => {
     const [email, setEmail] = useState('');
     const [nombre, setNombre] = useState('');
     const [telefono, setTelefono] = useState('');
+    const [franja, setFranja] = useState(FRANJAS[0]);
     const [guardado, setGuardado] = useState(false);
+    // Aquí llega gente que no conoce a Jesús: el 63 % le descubre en Instagram. Aterrizar
+    // en "¿entrenas ahora mismo?" sin saber quién pregunta es lo que había, y por eso
+    // primero está la portada (documento del test de nivel, 06-08-2026).
+    const [empezado, setEmpezado] = useState(false);
+    const [personas, setPersonas] = useState(null);
     const esLlamada = pidiendo === 'llamada';
 
     useEffect(() => {
         axios.get(`${API}/api/quiz-venta`)
             .then(r => setPreguntas(r.data.preguntas || []))
             .catch(() => toast.error('No hemos podido cargar el test'));
+        // El contador es prueba social: si no carga, no se enseña y no pasa nada.
+        axios.get(`${API}/api/comunidad`)
+            .then(r => setPersonas(r.data?.personas || null))
+            .catch(() => {});
     }, []);
 
     const responder = async (opcionId) => {
@@ -122,6 +148,7 @@ const QuizVentaPage = () => {
         try {
             await axios.post(`${API}/api/quiz-venta/guardar`, {
                 email, nombre, telefono,
+                franja: esLlamada ? franja : null,
                 respuestas: resultado.respuestas,
                 recomendado: resultado.recomendado,
                 quiere_llamada: esLlamada,
@@ -231,6 +258,15 @@ const QuizVentaPage = () => {
                                             type="tel" required placeholder="Tu teléfono" data-testid="quiz-telefono"
                                             className="h-11 px-3 rounded-xl bg-muted text-base sm:text-sm sm:col-span-2" />
                                     )}
+                                    {/* "Te llamo yo, dime cuándo te viene bien": sin esto se
+                                        llama a ciegas y se queman la mitad de los intentos. */}
+                                    {esLlamada && (
+                                        <select value={franja} onChange={e => setFranja(e.target.value)}
+                                            data-testid="quiz-franja"
+                                            className="h-11 px-3 rounded-xl bg-muted text-base sm:text-sm sm:col-span-2">
+                                            {FRANJAS.map(f => <option key={f} value={f}>{f}</option>)}
+                                        </select>
+                                    )}
                                 </div>
                                 <button type="submit" disabled={enviando} data-testid="quiz-guardar"
                                     className="w-full h-11 rounded-xl bg-brand text-white font-bold disabled:opacity-60">
@@ -255,6 +291,52 @@ const QuizVentaPage = () => {
     }
 
     // ── Preguntas ────────────────────────────────────────────────────────────
+    // ── La portada ────────────────────────────────────────────────────────────────
+    // "Con ella el sitio habla antes de la primera pregunta". El fondo es la foto del
+    // gimnasio con el neón, de donde sale la paleta de la app entera: negro y naranja.
+    // Mientras no esté el fichero (public/portada-test.jpg) se ve solo el degradado, que
+    // ya es esa paleta, y en cuanto se suba aparece sin tocar nada.
+    if (!empezado && !resultado) {
+        return (
+            <div className="min-h-screen bg-black text-white relative overflow-hidden flex flex-col">
+                <div className="absolute inset-0 opacity-40 bg-cover bg-center"
+                    style={{ backgroundImage: "url('/portada-test.jpg')" }} />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black" />
+                <div className="absolute -top-32 -right-24 w-[420px] h-[420px] bg-brand/25 rounded-full blur-[140px]" />
+
+                <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-12 text-center max-w-xl mx-auto">
+                    <Logo12EN12 size="md" />
+
+                    <h1 className="font-heading text-3xl sm:text-5xl font-bold uppercase leading-[1.05] mt-10">
+                        ¿Cuánto tiempo llevas<br />intentándolo solo?
+                    </h1>
+
+                    {/* PENDIENTE DE CONFIRMAR con Jesús: el documento pide que el sitio
+                        hable antes de preguntar, pero no cierra el texto. Este es mío. */}
+                    <p className="text-white/70 mt-5 text-[15px] sm:text-base leading-relaxed">
+                        Soy Jesús Gallego. Llevo años ajustando dietas persona a persona, y casi
+                        siempre el problema no es la fuerza de voluntad: es que nadie te ha dicho
+                        qué te toca a ti.
+                    </p>
+                    <p className="text-white/70 mt-3 text-[15px] sm:text-base leading-relaxed">
+                        Seis preguntas y te digo cómo lo harías conmigo. No hace falta que dejes
+                        el correo para ver el resultado.
+                    </p>
+
+                    <button onClick={() => setEmpezado(true)} data-testid="quiz-empezar"
+                        className="mt-9 w-full sm:w-auto px-10 h-14 rounded-2xl bg-brand hover:bg-brand/90 text-white font-bold text-lg inline-flex items-center justify-center gap-2 transition-colors">
+                        Empezar <ArrowRight className="w-5 h-5" />
+                    </button>
+
+                    <p className="text-white/40 text-xs mt-5">
+                        Un minuto. Sin registro.
+                        {personas ? ` Ya han pasado por aquí ${personas.toLocaleString('es-ES')} personas.` : ''}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     const pregunta = preguntas[idx];
     if (!pregunta) {
         return (

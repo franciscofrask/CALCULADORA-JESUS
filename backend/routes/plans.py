@@ -35,6 +35,24 @@ async def get_plans(estado: Optional[str] = None):
     return catalog
 
 
+@router.get("/comunidad")
+async def get_comunidad():
+    """Cuánta gente ha pasado ya por el método. PUBLICO: es prueba social, va debajo del
+    Nivel 1 ("y debajo, el contador: tantas personas han pasado ya por aquí", documento
+    del test de nivel del 06-08-2026).
+
+    Se cuentan los clientes de verdad, incluidos los que vienen de Calma, y se dejan
+    fuera los borrados y las cuentas internas. El número tiene que poder decirse en voz
+    alta: si un día hay que explicarlo, se explica.
+    """
+    n = await db.users.count_documents({
+        "role": "client",
+        "deleted_at": None,
+        "email": {"$not": {"$regex": r"@(jg12|test)\.(com|local)$|@jg12test\.com$"}},
+    })
+    return {"personas": n}
+
+
 @router.get("/quiz-venta")
 async def get_quiz_venta():
     """Las cuatro preguntas del quiz de venta. PUBLICO: se responde antes de registrarse."""
@@ -93,6 +111,9 @@ async def guardar_quiz_venta(data: Dict[str, Any] = Body(default={})):
     respuestas = (data or {}).get("respuestas") or {}
     recomendado = str((data or {}).get("recomendado") or "")[:20]
     quiere_llamada = bool((data or {}).get("quiere_llamada"))
+    # "Te llamo yo, dime cuándo te viene bien": sin esto el equipo llama a ciegas y
+    # quema la mitad de los intentos (documento del test de nivel, 06-08-2026).
+    franja = str((data or {}).get("franja") or "").strip()[:40]
 
     # Si pide que le llamen, hace falta a quien llamar y a que numero. Sin esto el aviso
     # del panel llegaria sin con que atenderlo, que es peor que no llegar.
@@ -104,21 +125,29 @@ async def guardar_quiz_venta(data: Dict[str, Any] = Body(default={})):
 
     ahora = datetime.now(timezone.utc).isoformat()
     ya_cliente = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 1})
-    ya_lead = await db.leads.find_one({"email": email}, {"_id": 0, "id": 1})
+    ya_lead = await db.leads.find_one({"email": email}, {"_id": 0, "id": 1, "notes": 1})
 
     quiz = {
         "respuestas": {str(k): str(v)[:2] for k, v in list(respuestas.items())[:10]},
         "recomendado": recomendado,
         "quiere_llamada": quiere_llamada,
+        "franja": franja or None,
         "fecha": ahora,
     }
+    # La franja va también en las notas del lead: es lo que se lee de un vistazo en el
+    # panel, y el que va a llamar no abre el JSON del quiz.
+    cuando = f" Llamarle: {franja}." if (quiere_llamada and franja) else ""
 
     if ya_lead:
         # Ya estaba en el CRM: no se duplica, pero si ahora pide llamada eso SI se anota.
         # Perder la peticion por haber dejado el correo antes seria perder la venta.
         if quiere_llamada:
+            # Las notas se AÑADEN, no se pisan: ahí escribe el comercial.
+            previas = (ya_lead.get("notes") or "").strip()
+            aviso = f"Test de nivel: sale {recomendado}. PIDE LLAMADA (Nivel 3).{cuando}"
             await db.leads.update_one({"id": ya_lead["id"]}, {"$set": {
                 "quiz_venta": quiz, "updated_at": ahora,
+                "notes": f"{previas}\n{aviso}".strip() if previas else aviso,
                 **({"phone": telefono} if telefono else {}),
             }})
     elif not ya_cliente:
@@ -130,7 +159,8 @@ async def guardar_quiz_venta(data: Dict[str, Any] = Body(default={})):
             "source": "web",
             "status": "nuevo",
             "notes": (f"Test de nivel: sale {recomendado}."
-                      + (" PIDE LLAMADA (Nivel 3)." if quiere_llamada else "")),
+                      + (" PIDE LLAMADA (Nivel 3)." if quiere_llamada else "")
+                      + cuando),
             "quiz_venta": quiz,
             "assigned_to": None,
             "next_action_date": None,

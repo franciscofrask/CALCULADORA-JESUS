@@ -40,7 +40,11 @@ const leerResultadoTest = () => {
 // añadir un nivel no obligue a tocar la tabla entera.
 const DETALLE = {
     nivel1: {
-        gancho: 'Te lo montas tú, con el método detrás',
+        // "Te lo montas tú, con el método detrás" suena a que se queda solo, y no es eso.
+        // Documento del 06-08-2026: "hay que venderlo como acceso al método... hay gente
+        // que no necesita la supervisión de un entrenador para poder cumplir". El titular
+        // pasa a ser el acceso, no el hazlo-tú.
+        gancho: 'El método completo, en tus manos',
         macros: 'Automáticos',
         ajuste: 'Cada 4 semanas',
         chat: false, llamadaInicial: false, videollamada: false, seguimiento: null,
@@ -75,6 +79,9 @@ const PlanesPage = () => {
     // Se lee UNA vez al montar: el test lo borra de sessionStorage nada más leerlo, para
     // que no persiga al cliente por toda la sesión, pero sigue en pantalla mientras elige.
     const [resultadoTest] = useState(leerResultadoTest);
+    // Cuánta gente ha pasado por el método: va debajo del Nivel 1. Si no carga, no se
+    // enseña; un contador a cero o roto vende peor que no ponerlo.
+    const [personas, setPersonas] = useState(0);
     // Volviendo de pagar no se enseña la comparativa ni un fotograma: acaba de elegir plan,
     // volver a ponerle los tres delante mientras se confirma el cobro es desconcertante.
     // Se decide en el primer render, antes de pintar nada.
@@ -96,6 +103,7 @@ const PlanesPage = () => {
         api.get('/plans?estado=activo')
             .then(r => setPlanes(r.data))
             .catch(() => toast.error('No hemos podido cargar los planes'));
+        api.get('/comunidad').then(r => setPersonas(r.data?.personas || 0)).catch(() => {});
     }, [api]);
 
     // Vuelta de Stripe. Antes esta pantalla mandaba a /dashboard?alta=ok y NADIE
@@ -310,7 +318,15 @@ const PlanesPage = () => {
                             <h2 className="font-heading text-xl font-bold uppercase text-foreground">{plan.name}</h2>
                             <span className="font-heading text-2xl font-bold text-brand">{euros(plan.precio)}</span>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1 mb-4">{plan.gancho}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{plan.gancho}</p>
+                        {/* El contador va debajo del Nivel 1: es el que necesita que se
+                            note que detrás hay gente, no un PDF (documento del 06-08). */}
+                        {plan.code === 'nivel1' && personas > 0 && (
+                            <p className="text-xs text-brand font-semibold mt-1" data-testid="contador-personas">
+                                {personas.toLocaleString('es-ES')} personas han pasado ya por aquí
+                            </p>
+                        )}
+                        <div className="mb-4" />
                         <dl className="space-y-2 mb-5">
                             {FILAS.slice(2).map(f => (
                                 <div key={f.etiqueta} className="flex items-center justify-between gap-3 text-[13px]">
@@ -345,6 +361,11 @@ const PlanesPage = () => {
                                     )}
                                     <p className="font-heading text-xl font-bold uppercase text-foreground">{plan.name}</p>
                                     <p className="text-[13px] text-muted-foreground mt-1 min-h-[2.5rem]">{plan.gancho}</p>
+                                    {plan.code === 'nivel1' && personas > 0 && (
+                                        <p className="text-[11px] text-brand font-semibold -mt-1 mb-1">
+                                            {personas.toLocaleString('es-ES')} personas han pasado ya por aquí
+                                        </p>
+                                    )}
                                 </th>
                             ))}
                         </tr>
