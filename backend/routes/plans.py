@@ -5,7 +5,7 @@ Fuente única: PLAN_CATALOG (código) + overrides editables por el admin (db.pla
 El catálogo refleja el documento "JG - Catálogo de Planes y Membresías".
 """
 from fastapi import APIRouter, Body, HTTPException, Depends
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import re
 import uuid
@@ -35,21 +35,48 @@ async def get_plans(estado: Optional[str] = None):
     return catalog
 
 
+# Cuánta gente ha pasado por el método. Se recuerda unos minutos porque va en la portada
+# del test, que es la pantalla más visitada, y cruzar las dos listas en cada visita es
+# leer 1.300 correos para un número que no cambia de un segundo a otro.
+_COMUNIDAD_CACHE: Dict[str, Any] = {"n": None, "hasta": None}
+_COMUNIDAD_MINUTOS = 10
+
+_CORREO_INTERNO = re.compile(r"@(jg12|test)\.(com|local)$|@jg12test\.com$", re.I)
+
+
 @router.get("/comunidad")
 async def get_comunidad():
-    """Cuánta gente ha pasado ya por el método. PUBLICO: es prueba social, va debajo del
-    Nivel 1 ("y debajo, el contador: tantas personas han pasado ya por aquí", documento
-    del test de nivel del 06-08-2026).
+    """Cuánta gente se ha dado de alta alguna vez. PUBLICO: es prueba social.
 
-    Se cuentan los clientes de verdad, incluidos los que vienen de Calma, y se dejan
-    fuera los borrados y las cuentas internas. El número tiene que poder decirse en voz
-    alta: si un día hay que explicarlo, se explica.
+    Criterio de Jesús (documento del acceso gratis): "sale de los registros de la
+    calculadora antigua -- cuánta gente se dio de alta alguna vez [...] a eso se le suman
+    algunos más aparte. Y es un contador VIVO, no un número escrito a mano: sube con cada
+    alta nueva. Esa es la diferencia entre prueba social y publicidad".
+
+    Así que son las personas de la calculadora antigua MÁS las que se han dado de alta en
+    la app y no estaban allí. Sin contar a nadie dos veces: 168 de los 170 clientes
+    actuales ya estaban en la lista vieja, porque migraron de Calma.
+
+    Fuera quedan las cuentas internas y de prueba. El número tiene que poder decirse en
+    voz alta y explicarse si alguien pregunta.
     """
-    n = await db.users.count_documents({
-        "role": "client",
-        "deleted_at": None,
-        "email": {"$not": {"$regex": r"@(jg12|test)\.(com|local)$|@jg12test\.com$"}},
-    })
+    ahora = datetime.now(timezone.utc)
+    if _COMUNIDAD_CACHE["n"] is not None and _COMUNIDAD_CACHE["hasta"] > ahora:
+        return {"personas": _COMUNIDAD_CACHE["n"]}
+
+    de_la_calculadora = {
+        e.strip().lower() for e in await db.calma_raw.distinct("email")
+        if e and not _CORREO_INTERNO.search(e)
+    }
+    nuevos = set()
+    async for u in db.users.find({"role": "client", "deleted_at": None},
+                                 {"_id": 0, "email": 1}):
+        correo = (u.get("email") or "").strip().lower()
+        if correo and not _CORREO_INTERNO.search(correo) and correo not in de_la_calculadora:
+            nuevos.add(correo)
+
+    n = len(de_la_calculadora) + len(nuevos)
+    _COMUNIDAD_CACHE.update({"n": n, "hasta": ahora + timedelta(minutes=_COMUNIDAD_MINUTOS)})
     return {"personas": n}
 
 
