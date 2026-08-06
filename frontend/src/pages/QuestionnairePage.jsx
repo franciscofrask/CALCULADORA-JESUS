@@ -1201,8 +1201,10 @@ const QuestionnairePage = () => {
                             ? `${entrega.coach || 'El equipo'} los va a revisar contigo${entrega.proxima_revision ? ` el ${entrega.proxima_revision}` : ''} y los ajustará a tu caso.`
                             /* Texto cerrado por Jesús el 06-08-2026 (momento 1 de la revisión
                                suelta): lo que sostiene el número es el perfil parecido, y así
-                               se le cuenta. */
-                            : 'Están adaptados a tu perfil, a partir de tus respuestas y tomando como referencia otros perfiles parecidos al tuyo.'}
+                               se le cuenta. La próxima revisión automática se queda donde
+                               estaba, al final de la misma línea: el documento no dice nada de
+                               ella, y lo que no toca se deja como está. */
+                            : `Están adaptados a tu perfil, a partir de tus respuestas y tomando como referencia otros perfiles parecidos al tuyo.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ''}`}
                 </p>
                 {m ? (
                     <div className="space-y-4">
@@ -1231,19 +1233,11 @@ const QuestionnairePage = () => {
                     <p className="text-foreground/60">Tus macros se han guardado y los verás en tu panel.</p>
                 )}
 
-                {/* La próxima revisión automática: la decía el texto anterior y sigue siendo
-                    útil saberlo, así que se queda como línea suelta. */}
-                {modoAjuste && !entrega?.con_entrenador && entrega?.proxima_revision && (
-                    <p className="text-xs text-foreground/50 mt-4">
-                        Tu próxima revisión automática será el {entrega.proxima_revision}.
-                    </p>
-                )}
-
                 {/* MOMENTO 1 de la revisión suelta (documento del 06-08-2026): al recibir sus
                     macros de inicio. Línea pequeña y sin botón, nunca un popup: si interrumpe,
                     es publicidad aunque el texto sea suave. */}
                 {modoAjuste && !entrega?.con_entrenador && seLeOfreceLaRevision(profile, can) && (
-                    <p className="text-xs text-foreground/50 mt-2" data-testid="revision-partida">
+                    <p className="text-xs text-foreground/50 mt-4" data-testid="revision-partida">
                         Si consideras que tu caso necesita una revisión más profunda, puedes{' '}
                         <button onClick={() => navigate('/dashboard/revision')}
                             className="underline text-brand hover:text-brand/80 font-medium">
