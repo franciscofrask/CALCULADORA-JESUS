@@ -1371,11 +1371,10 @@ const ClientDetailPage = () => {
                 <TabsContent value="seguimiento" className="space-y-4">
                     <WeightEvolution reports={reports} />
                     {/* La comparativa con etiquetas (3.2): cuatro fotos como mucho y cada una
-                        responde a algo. Va delante del comparador libre de dos, que se queda
-                        para cuando haga falta mirar una pareja concreta. */}
+                        responde a algo. Sustituye al comparador de dos con selectores de pose,
+                        que ya no hace falta (decisión del 05-08). */}
                     <ComparativaFases api={api} clientId={clientId} calmaFotos={calma_raw?.fotos_descargadas}
                         reports={reports} macroHistory={macro_history} faseDesde={profile?.fase_desde} fase={profile?.goal} />
-                    <ProgressComparator api={api} clientId={clientId} calmaFotos={calma_raw?.fotos_descargadas} reports={reports} macroHistory={macro_history} />
                     <EvolutionTimeline api={api} clientId={clientId} reportes={calma_raw?.formularios_mensuales} calmaFotos={calma_raw?.fotos_descargadas} reports={reports} macroHistory={macro_history} />
                     <CoachCheckins clientId={clientId} />
                     <ReportsFeedbackList initialReports={reports} />
@@ -1896,12 +1895,6 @@ const _mesLabel = (key) => {
     return isNaN(dt) ? key : dt.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 };
 
-const _fmtFotoFecha = (d) => {
-    if (!d) return '?';
-    const dt = new Date(d.length <= 10 ? d + 'T12:00:00' : d);
-    return isNaN(dt) ? d : dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
 // Peso más cercano a una fecha (dentro de ~21 días), best-effort para anotar la foto.
 const _pesoCercano = (pesos, fecha) => {
     if (!fecha || !pesos?.length) return null;
@@ -1913,35 +1906,6 @@ const _pesoCercano = (pesos, fecha) => {
     }
     return bestDiff <= 21 * 864e5 ? best : null;
 };
-
-// Carga el blob de una foto (Calma o subida por la app) y la muestra a tamaño grande.
-const ComparePhoto = ({ api, clientId, foto }) => {
-    const [url, setUrl] = useState(null);
-    const [err, setErr] = useState(false);
-    useEffect(() => {
-        let obj; let alive = true;
-        setUrl(null); setErr(false);
-        const req = foto.source === 'calma'
-            ? api.get(`/admin/clients/${clientId}/calma-foto`, { params: { file: foto.file }, responseType: 'blob' })
-            : api.get(`/reports/photos/${foto.id}`, { responseType: 'blob' });
-        req.then(r => { if (!alive) return; obj = URL.createObjectURL(r.data); setUrl(obj); })
-            .catch(() => { if (alive) setErr(true); });
-        return () => { alive = false; if (obj) URL.revokeObjectURL(obj); };
-    }, [api, clientId, foto.key, foto.source, foto.file, foto.id]);
-    if (err) return <div className="w-full aspect-[3/4] rounded-lg border border-[#222] bg-[#0A0A0A] flex items-center justify-center text-white/30 text-xs">No disponible</div>;
-    if (!url) return <div className="w-full aspect-[3/4] rounded-lg border border-[#222] bg-[#0A0A0A] animate-pulse" />;
-    return <img src={url} alt={foto.date} className="w-full aspect-[3/4] object-cover rounded-lg border border-[#222] bg-[#0A0A0A]" />;
-};
-
-const DateSelect = ({ fotos, value, onChange, pesos }) => (
-    <select value={value || ''} onChange={e => onChange(e.target.value)}
-        className="w-full bg-[#0A0A0A] border border-[#222] rounded-lg px-2 py-1.5 text-xs text-white/80 focus:border-[#FF671F]/50 outline-none">
-        {fotos.map(f => {
-            const peso = _pesoCercano(pesos, f.date);
-            return <option key={f.key} value={f.key}>{_fmtFotoFecha(f.date)}{peso != null ? ` · ${peso} kg` : ''}</option>;
-        })}
-    </select>
-);
 
 // MURAL DE FOTOS para la pantalla donde el coach ajusta (punto 3.1 del documento del
 // 05-08): "yo las veo todas de golpe, y así las quiero; no me montes aquí un comparador".
@@ -2156,124 +2120,6 @@ const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, fa
                         Sin cambio de fase registrado: la comparativa se queda en tres. La fase se
                         fecha cuando el cliente marca otro objetivo en su reporte.
                     </p>
-                )}
-            </CardContent>
-        </Card>
-    );
-};
-
-const ProgressComparator = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
-    const [appFotos, setAppFotos] = useState([]);
-    const [pose, setPose] = useState(null);
-    const [leftKey, setLeftKey] = useState(null);
-    const [rightKey, setRightKey] = useState(null);
-
-    // Fotos subidas desde la app (client_photos). Las de Calma llegan por prop.
-    useEffect(() => {
-        let alive = true;
-        api.get(`/admin/clients/${clientId}/photos`)
-            .then(r => { if (alive) setAppFotos(r.data?.photos || []); })
-            .catch(() => {});
-        return () => { alive = false; };
-    }, [api, clientId]);
-
-    // Timeline de pesos (reportes de la app + historial de macros) para anotar cada foto.
-    const pesos = useMemo(() => {
-        const arr = [];
-        (reports || []).forEach(r => { if (r.weight != null && r.created_at) arr.push({ date: r.created_at, w: r.weight }); });
-        (macroHistory || []).forEach(h => {
-            const w = h.peso ?? h.client_weight;
-            const d = h.effective_date || h.created_at;
-            if (w != null && d) arr.push({ date: d, w });
-        });
-        return arr;
-    }, [reports, macroHistory]);
-
-    // Lista unificada de fotos (Calma + app), descartando las que no tienen fecha.
-    const todas = useMemo(() => {
-        const cal = (calmaFotos || []).map(f => ({
-            key: `calma:${f.file}`, source: 'calma', file: f.file,
-            date: f.fecha || '', pose: _poseDeKind(f.kind),
-        }));
-        const app = (appFotos || []).map(p => ({
-            key: `app:${p.id}`, source: 'app', id: p.id,
-            date: (p.taken_at || p.uploaded_at || '').slice(0, 10), pose: 'Sin clasificar',
-        }));
-        return [...cal, ...app].filter(f => f.date);
-    }, [calmaFotos, appFotos]);
-
-    // Poses con al menos una foto, en el orden canónico.
-    const poses = useMemo(() => {
-        const set = new Set(todas.map(f => f.pose));
-        return _POSE_ORDER.filter(p => set.has(p));
-    }, [todas]);
-
-    useEffect(() => {
-        if (poses.length && (!pose || !poses.includes(pose))) setPose(poses[0]);
-    }, [poses, pose]);
-
-    // Fotos de la pose actual, ordenadas por fecha ascendente.
-    const fotosPose = useMemo(
-        () => todas.filter(f => f.pose === pose).sort((a, b) => a.date.localeCompare(b.date)),
-        [todas, pose]
-    );
-
-    // Al cambiar de pose: izquierda = primera, derecha = última.
-    useEffect(() => {
-        if (!fotosPose.length) { setLeftKey(null); setRightKey(null); return; }
-        setLeftKey(fotosPose[0].key);
-        setRightKey(fotosPose[fotosPose.length - 1].key);
-    }, [pose, fotosPose.length]);  // eslint-disable-line react-hooks/exhaustive-deps
-
-    if (!todas.length) return null;
-
-    const left = fotosPose.find(f => f.key === leftKey) || fotosPose[0];
-    const right = fotosPose.find(f => f.key === rightKey) || fotosPose[fotosPose.length - 1];
-    const pLeft = left && _pesoCercano(pesos, left.date);
-    const pRight = right && _pesoCercano(pesos, right.date);
-    const dPeso = (pLeft != null && pRight != null) ? Math.round((pRight - pLeft) * 10) / 10 : null;
-
-    return (
-        <Card className="bg-[#111] border-[#222]">
-            <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4" />Comparador antes / después
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-                {poses.length > 1 && (
-                    <div className="flex flex-wrap gap-1.5">
-                        {poses.map(p => (
-                            <button key={p} onClick={() => setPose(p)}
-                                className={`px-3 py-1 rounded-full text-xs font-medium transition ${p === pose ? 'bg-[#FF671F] text-white' : 'bg-[#0A0A0A] text-white/50 border border-[#222] hover:text-white/80'}`}>
-                                {p}
-                            </button>
-                        ))}
-                    </div>
-                )}
-                {fotosPose.length === 0 ? (
-                    <p className="text-white/30 text-sm text-center py-4">Sin fotos en esta pose</p>
-                ) : (
-                    <>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                                {left && <ComparePhoto api={api} clientId={clientId} foto={left} />}
-                                <DateSelect fotos={fotosPose} value={leftKey} onChange={setLeftKey} pesos={pesos} />
-                            </div>
-                            <div className="space-y-1.5">
-                                {right && <ComparePhoto api={api} clientId={clientId} foto={right} />}
-                                <DateSelect fotos={fotosPose} value={rightKey} onChange={setRightKey} pesos={pesos} />
-                            </div>
-                        </div>
-                        {dPeso != null && (
-                            <div className="text-center text-sm">
-                                <span className="text-white/40">Diferencia de peso: </span>
-                                <span className={`font-bold ${dPeso < 0 ? 'text-green-400' : dPeso > 0 ? 'text-[#FF671F]' : 'text-white'}`}>
-                                    {dPeso > 0 ? '+' : ''}{dPeso} kg
-                                </span>
-                            </div>
-                        )}
-                    </>
                 )}
             </CardContent>
         </Card>
