@@ -131,3 +131,6 @@ backend/_backup_catalogo_*.json
 
 # Capturas que dejan los scripts de comprobacion (se regeneran solas)
 _internos_proceso/*.png
+
+# Volcados de coleccciones (copias de seguridad, decenas de MB: no van al repo)
+_internos_proceso/*.jsonl.gz

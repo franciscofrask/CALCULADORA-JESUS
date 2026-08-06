@@ -1275,9 +1275,11 @@ async def get_menu_options(data: dict, user = Depends(get_current_user)):
     Respeta las preferencias/alimentos evitados del usuario.
     """
     from meal_templates import generar_opciones_menu
+    from meal_library import BIBLIOTECA_DE_CLIENTES
 
     # Biblioteca real en las sugerencias del CLIENTE: DESACTIVADA (petición 2026-07-12).
-    # El coach la sigue usando desde su buscador (envía `fuentes` explícitamente).
+    # El coach la seguía usando desde su buscador (envía `fuentes` explícitamente),
+    # hasta que el 06-08-2026 se apagó para todos con BIBLIOTECA_DE_CLIENTES.
     BIBLIOTECA_EN_SUGERENCIAS_CLIENTE = False
 
     momento = data.get("momento", "comida")
@@ -1288,6 +1290,10 @@ async def get_menu_options(data: dict, user = Depends(get_current_user)):
         fuentes = set(data["fuentes"])
     else:
         fuentes = {"recetario", "clientes"} if BIBLIOTECA_EN_SUGERENCIAS_CLIENTE else {"recetario"}
+    # Con la biblioteca apagada manda el interruptor, aunque el que llama pida
+    # "clientes" a las claras (el buscador del coach lo hacía).
+    if not BIBLIOTECA_DE_CLIENTES:
+        fuentes = {"recetario"}
     tipo = "peri" if (data.get("tipo") or "").strip().lower() == "peri" else "comida"
 
     # El coach puede buscar PARA un cliente: se usan las preferencias de ese cliente
@@ -1511,7 +1517,10 @@ async def library_search(data: dict, user = Depends(get_current_user)):
 
     Body: {macros_objetivo: {P,H,G}, alimento_ids?: [int], tipo?: 'comida'|'peri', limit?: int}
     """
-    from meal_library import buscar_en_biblioteca
+    from meal_library import buscar_en_biblioteca, BIBLIOTECA_DE_CLIENTES
+
+    if not BIBLIOTECA_DE_CLIENTES:
+        return {"opciones": [], "total": 0, "biblioteca_apagada": True}
 
     macros_objetivo = data.get("macros_objetivo") or {}
     alimento_ids = data.get("alimento_ids") or []
@@ -1578,10 +1587,19 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
            orden?: 'cuadrado'|'usado', limit?: <=60,
            fecha?, tipo_dia?, num_comidas?, momento_entreno?, opcion_peri? (fallback)}
     """
+    from meal_library import BIBLIOTECA_DE_CLIENTES
+
     meal_key = (data.get("mealKey") or data.get("meal_key") or "").strip()
     tipo_comida = data.get("tipo_comida") or _LIBRARY_TIPOS.get(meal_key)
     if tipo_comida not in ("Comida 1", "Comida 2", "Comida 3", "Comida 4", "Peri"):
         raise HTTPException(status_code=422, detail="mealKey o tipo_comida inválido")
+
+    # Biblioteca apagada (06-08-2026): no hay menús de clientes que ofrecer. Se
+    # responde con la lista vacía y la bandera, para que quien llame enseñe el
+    # recetario en su lugar en vez de un hueco sin explicación.
+    if not BIBLIOTECA_DE_CLIENTES:
+        return {"menus": [], "total": 0, "biblioteca_apagada": True,
+                "objetivo": await _objetivo_de_comida(data, user, meal_key)}
 
     # El objetivo lo manda la calculadora; el 0/0/0 se resuelve repartiendo el día.
     obj = await _objetivo_de_comida(data, user, meal_key)

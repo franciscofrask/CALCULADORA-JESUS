@@ -13,6 +13,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Search, X, Check } from 'lucide-react';
+import { BIBLIOTECA_DE_CLIENTES } from '../../lib/menuFuentes';
 
 const normalizar = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -62,7 +63,7 @@ const MacroTrio = ({ macros, size = 'lg' }) => (
 );
 
 const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayConfig, onApply }) => {
-    const [tab, setTab] = React.useState('biblioteca');
+    const [tab, setTab] = React.useState(BIBLIOTECA_DE_CLIENTES ? 'biblioteca' : 'recetario');
     const [margen, setMargen] = React.useState(5);
     const [orden, setOrden] = React.useState('cuadrado');
     const [verReales, setVerReales] = React.useState(false);
@@ -86,7 +87,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
 
     React.useEffect(() => {
         if (open) {
-            setTab('biblioteca');
+            setTab(BIBLIOTECA_DE_CLIENTES ? 'biblioteca' : 'recetario');
             setTextFilter('');
             setVerReales(false);
             setError(null);
@@ -97,7 +98,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
     }, [open, mealKey]);
 
     React.useEffect(() => {
-        if (!open || !mealKey) return;
+        if (!open || !mealKey || !BIBLIOTECA_DE_CLIENTES) return;
         let cancelado = false;
         const cargar = async () => {
             setLoading(true);
@@ -245,15 +246,18 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                     </div>
                 </DialogHeader>
 
-                {/* Pestañas: biblioteca real / recetario ELM */}
-                <div className="px-4 pt-3 pb-2 bg-card flex-shrink-0">
-                    <div className="inline-flex w-full rounded-lg bg-muted p-0.5 border border-border">
-                        <button className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${tab === 'biblioteca' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
-                            onClick={() => setTab('biblioteca')} data-testid="menus-tab-biblioteca">Biblioteca</button>
-                        <button className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${tab === 'recetario' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
-                            onClick={() => setTab('recetario')} data-testid="menus-tab-recetario">Recetario</button>
+                {/* Pestañas: biblioteca real / recetario ELM. Con la biblioteca apagada
+                    (06-08-2026) no hay dos fuentes que elegir: sobra la barra entera. */}
+                {BIBLIOTECA_DE_CLIENTES && (
+                    <div className="px-4 pt-3 pb-2 bg-card flex-shrink-0">
+                        <div className="inline-flex w-full rounded-lg bg-muted p-0.5 border border-border">
+                            <button className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${tab === 'biblioteca' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
+                                onClick={() => setTab('biblioteca')} data-testid="menus-tab-biblioteca">Biblioteca</button>
+                            <button className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${tab === 'recetario' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
+                                onClick={() => setTab('recetario')} data-testid="menus-tab-recetario">Recetario</button>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {tab === 'biblioteca' ? (
                     /* Controles de la biblioteca: margen, orden, método/reales */

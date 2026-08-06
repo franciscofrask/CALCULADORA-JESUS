@@ -15,6 +15,7 @@ import { useConfirm } from '../components/ui/confirm';
 import { PlanBadge } from './ClientDashboard';
 import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES } from '../lib/labels';
 import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
+import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import CoachCheckins from '../components/CoachCheckins';
 import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -61,7 +62,7 @@ const _fechaLarga = (iso) => iso
 const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
     const [macros, setMacros] = useState({ P: '', H: '', G: '' });
     const [momento, setMomento] = useState('comida');
-    const [fuente, setFuente] = useState('ambas');
+    const [fuente, setFuente] = useState(BIBLIOTECA_DE_CLIENTES ? 'ambas' : 'recetario');
     const [foods, setFoods] = useState([]);
     const [resultados, setResultados] = useState(null);
     const [relajado, setRelajado] = useState(false);
@@ -143,15 +144,19 @@ const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
                             {['desayuno', 'comida', 'merienda', 'cena'].map(x => <option key={x} value={x}>{x}</option>)}
                         </select>
                     </div>
-                    <div>
-                        <Label className="text-white/50 text-xs">Fuente</Label>
-                        <select value={fuente} onChange={e => setFuente(e.target.value)}
-                            className="w-full mt-1 h-10 rounded-md bg-[#1A1A1A] border border-[#333] text-white text-sm px-3" data-testid="menufinder-fuente">
-                            <option value="ambas">Ambas fuentes</option>
-                            <option value="clientes">Solo menús reales (clientes)</option>
-                            <option value="recetario">Solo recetario</option>
-                        </select>
-                    </div>
+                    {/* Con la biblioteca de clientes apagada (06-08-2026) solo queda una
+                        fuente: un desplegable de una opción es ruido. */}
+                    {BIBLIOTECA_DE_CLIENTES && (
+                        <div>
+                            <Label className="text-white/50 text-xs">Fuente</Label>
+                            <select value={fuente} onChange={e => setFuente(e.target.value)}
+                                className="w-full mt-1 h-10 rounded-md bg-[#1A1A1A] border border-[#333] text-white text-sm px-3" data-testid="menufinder-fuente">
+                                <option value="ambas">Ambas fuentes</option>
+                                <option value="clientes">Solo menús reales (clientes)</option>
+                                <option value="recetario">Solo recetario</option>
+                            </select>
+                        </div>
+                    )}
                 </div>
                 <div className="rounded-xl border border-[#222]">
                     <FoodFilterBar api={fetchApi} selected={foods} onChange={cambiarFoods} />

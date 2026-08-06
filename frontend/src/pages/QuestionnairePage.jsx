@@ -639,20 +639,46 @@ const QuestionnairePage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx]);
 
-    // Momento mágico: pedir los primeros menús del banco (la biblioteca filtrada
-    // por sus macros recién calculados y sus gustos recién guardados).
+    // Momento mágico: tres recetas del recetario cuadradas a los macros que acaba de
+    // calcular. Antes salían de la biblioteca de menús de clientes; desde el 06-08-2026
+    // esa fuente está apagada (ver lib/menuFuentes) y el recetario es la única.
+    // Se piden por separado -- el catálogo no trae cantidades, las pone menu-apply al
+    // elegir cada receta -- y a cambio el menú viene con su nombre.
     useEffect(() => {
         const s = flow[idx];
         if (s?.type !== 'magia' || menusMagia !== null) return;
-        api.post('/calculator/library-menus', {
+        const config = {
             mealKey: 'C1',
             macros_objetivo: {},   // el backend reparte el día y toma el target de C1
-            margen: 5,
-            limit: 3,
             num_comidas: answers.pref_num_comidas || 4,
             momento_entreno: answers.pref_momento ?? 1,
-        }).then(r => setMenusMagia(r.data?.menus || []))
-          .catch(() => setMenusMagia([]));
+        };
+        (async () => {
+            try {
+                const cat = await api.get('/calculator/menu-catalog');
+                // Si entrena en ayunas su primera comida es la de después del entreno, y
+                // ahí toca plato, no un desayuno.
+                const enAyunas = (answers.pref_momento ?? 1) === 1;
+                const quiero = enAyunas ? 'comida' : 'desayuno';
+                const todas = cat.data?.menus || [];
+                const pegan = todas.filter(m => (m.momentos || []).includes(quiero));
+                // Se cuadran más de las que se enseñan y se muestran las tres que mejor
+                // encajan: una receta cualquiera puede quedarse lejos de sus macros, y el
+                // momento mágico es justo donde no puede verse flojo.
+                const candidatas = (pegan.length >= 3 ? pegan : todas).slice(0, 8);
+                if (!candidatas.length) { setMenusMagia([]); return; }
+                const cuadradas = await Promise.all(candidatas.map(r =>
+                    api.post('/calculator/menu-apply', { plantilla_id: r.id, ...config })
+                        .then(res => ({ ...res.data, macros_metodo: res.data.macros_totales }))
+                        .catch(() => null)
+                ));
+                setMenusMagia(cuadradas.filter(Boolean)
+                    .sort((a, b) => (a.err ?? 999) - (b.err ?? 999))
+                    .slice(0, 3));
+            } catch {
+                setMenusMagia([]);
+            }
+        })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx]);
 
@@ -1264,7 +1290,7 @@ const QuestionnairePage = () => {
                     Estas son comidas que puedes comer hoy
                 </h2>
                 <p className="text-foreground/60 mb-6 text-sm md:text-base">
-                    De tu banco personal: menús reales que cuadran con tus macros y tus gustos.
+                    Recetas del recetario, con las cantidades ya puestas para tus macros.
                 </p>
                 {menusMagia === null ? (
                     <div className="flex justify-center py-10">
@@ -1272,13 +1298,16 @@ const QuestionnairePage = () => {
                     </div>
                 ) : menusMagia.length === 0 ? (
                     <p className="text-foreground/60 text-sm mb-4">
-                        Tu banco de menús te espera en <span className="font-bold text-foreground">Nutrición</span>:
-                        en cada comida, pulsa "Sugiéreme un menú" y elige entre comida real que ya cuadra contigo.
+                        El recetario te espera en <span className="font-bold text-foreground">Nutrición</span>:
+                        en cada comida, pulsa "Sugiéreme un menú" y elige la receta que te apetezca.
                     </p>
                 ) : (
                     <div className="space-y-3 mb-2">
                         {menusMagia.map((menu, i) => (
-                            <div key={menu.biblioteca_id || i} className="rounded-xl border-2 border-[#222222] bg-card p-4">
+                            <div key={menu.plantilla_id || menu.biblioteca_id || i} className="rounded-xl border-2 border-[#222222] bg-card p-4">
+                                {menu.nombre && (
+                                    <p className="text-base font-black text-foreground mb-1">{menu.nombre}</p>
+                                )}
                                 <div className="flex items-center justify-between gap-2 mb-1.5">
                                     <p className="text-sm font-black text-brand">
                                         {Math.round(menu.macros_metodo?.P || 0)}P · {Math.round(menu.macros_metodo?.H || 0)}H · {Math.round(menu.macros_metodo?.G || 0)}G
@@ -1297,7 +1326,7 @@ const QuestionnairePage = () => {
                             </div>
                         ))}
                         <p className="text-xs text-foreground/50">
-                            Tienes muchos más en Nutrición, en "Sugiéreme un menú" de cada comida.
+                            Tienes el recetario entero en Nutrición, en "Sugiéreme un menú" de cada comida.
                         </p>
                     </div>
                 )}
