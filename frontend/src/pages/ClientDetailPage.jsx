@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { PlanBadge } from './ClientDashboard';
 import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES } from '../lib/labels';
+import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import CoachCheckins from '../components/CoachCheckins';
 import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -1369,6 +1370,11 @@ const ClientDetailPage = () => {
                 {/* ========== TAB: SEGUIMIENTO (evolución de peso + check-ins + reportes) ========== */}
                 <TabsContent value="seguimiento" className="space-y-4">
                     <WeightEvolution reports={reports} />
+                    {/* La comparativa con etiquetas (3.2): cuatro fotos como mucho y cada una
+                        responde a algo. Va delante del comparador libre de dos, que se queda
+                        para cuando haga falta mirar una pareja concreta. */}
+                    <ComparativaFases api={api} clientId={clientId} calmaFotos={calma_raw?.fotos_descargadas}
+                        reports={reports} macroHistory={macro_history} faseDesde={profile?.fase_desde} fase={profile?.goal} />
                     <ProgressComparator api={api} clientId={clientId} calmaFotos={calma_raw?.fotos_descargadas} reports={reports} macroHistory={macro_history} />
                     <EvolutionTimeline api={api} clientId={clientId} reportes={calma_raw?.formularios_mensuales} calmaFotos={calma_raw?.fotos_descargadas} reports={reports} macroHistory={macro_history} />
                     <CoachCheckins clientId={clientId} />
@@ -1734,15 +1740,31 @@ const CalmaReportItem = ({ r, hideHeader }) => {
     );
 };
 
+// Cache de miniaturas por foto. La misma foto la piden ahora varios sitios de la ficha
+// (la comparativa, el mural de la pestaña de macros, la línea temporal y el comparador),
+// y sin esto se pedían 108 veces para 49 fotos: el navegador encolaba y no se pintaba
+// ninguna. Con la caché, cada foto se descarga UNA vez y la comparten todos.
+const _thumbs = new Map();   // clave -> Promise<objectURL>
+const _thumb = (clave, descargar) => {
+    if (!_thumbs.has(clave)) {
+        _thumbs.set(clave, descargar()
+            .then(blob => URL.createObjectURL(blob))
+            .catch(e => { _thumbs.delete(clave); throw e; }));   // si falla, se puede reintentar
+    }
+    return _thumbs.get(clave);
+};
+
 // Foto subida desde la app (client_photos) como miniatura; abre la original al hacer clic.
 const AppFoto = ({ api, foto }) => {
     const [thumb, setThumb] = useState(null);
     useEffect(() => {
-        let url; let alive = true;
-        api.get(`/reports/photos/${foto.id}`, { responseType: 'blob' })
-            .then(r => { if (!alive) return; url = URL.createObjectURL(r.data); setThumb(url); })
+        let alive = true;
+        _thumb(`app:${foto.id}`, () => api.get(`/reports/photos/${foto.id}`, { responseType: 'blob' }).then(r => r.data))
+            .then(url => { if (alive) setThumb(url); })
             .catch(() => {});
-        return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+        // El objectURL lo comparte la caché: no se revoca al desmontar, o la siguiente
+        // pantalla que pida esa foto se quedaría con una imagen rota.
+        return () => { alive = false; };
     }, [api, foto.id]);
     const openFull = async (e) => {
         e.preventDefault();
@@ -2016,6 +2038,130 @@ const MuralFotos = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
     );
 };
 
+// COMPARATIVA CON ETIQUETAS (documento del 05-08, punto 3.2). Cuatro fotos como mucho,
+// cada una respondiendo a algo, con la fecha, el peso de ese día y las medidas debajo.
+// Las reglas viven en lib/comparativaFotos.js, compartidas con el informe del cliente.
+const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, faseDesde, fase }) => {
+    const [appFotos, setAppFotos] = useState([]);
+    const [ampliada, setAmpliada] = useState(false);
+    const [verTodas, setVerTodas] = useState(false);
+
+    useEffect(() => {
+        let alive = true;
+        api.get(`/admin/clients/${clientId}/photos`)
+            .then(r => { if (alive) setAppFotos(r.data?.photos || []); })
+            .catch(() => {});
+        return () => { alive = false; };
+    }, [api, clientId]);
+
+    const pesos = useMemo(() => {
+        const arr = [];
+        (reports || []).forEach(r => { if (r.weight != null && r.created_at) arr.push({ date: r.created_at, w: r.weight }); });
+        (macroHistory || []).forEach(h => {
+            const w = h.peso ?? h.client_weight;
+            const d = h.effective_date || h.created_at;
+            if (w != null && d) arr.push({ date: d, w });
+        });
+        return arr;
+    }, [reports, macroHistory]);
+
+    // Medidas por fecha, para poder ponerlas debajo de su foto.
+    const medidasPorFecha = useMemo(() => {
+        const m = {};
+        (reports || []).forEach(r => {
+            const f = (r.created_at || '').slice(0, 10);
+            if (f && r.measurements && Object.keys(r.measurements).length) m[f] = r.measurements;
+        });
+        return m;
+    }, [reports]);
+
+    const sesiones = useMemo(() => {
+        const todas = [
+            ...(calmaFotos || []).map(f => ({ key: `calma:${f.file}`, source: 'calma', file: f.file, date: f.fecha || '', pose: _poseDeKind(f.kind) })),
+            ...(appFotos || []).map(p => ({ key: `app:${p.id}`, source: 'app', foto: p, date: (p.taken_at || p.uploaded_at || '').slice(0, 10), pose: 'Sin clasificar' })),
+        ].filter(f => f.date);
+        const porDia = new Map();
+        for (const f of todas) {
+            if (!porDia.has(f.date)) porDia.set(f.date, []);
+            porDia.get(f.date).push(f);
+        }
+        return [...porDia.entries()].map(([fecha, fotos]) => ({
+            fecha,
+            peso: _pesoCercano(pesos, fecha),
+            medidas: medidasPorFecha[fecha] || null,
+            fotos: fotos.sort((a, b) => _POSE_ORDER.indexOf(a.pose) - _POSE_ORDER.indexOf(b.pose)),
+        }));
+    }, [calmaFotos, appFotos, pesos, medidasPorFecha]);
+
+    const comparativa = useMemo(() => construirComparativa(sesiones, faseDesde), [sesiones, faseDesde]);
+    if (!comparativa.length) return null;
+
+    const pintaFoto = (f) => f.source === 'calma'
+        ? <CalmaFoto api={api} clientId={clientId} foto={{ file: f.file }} />
+        : <AppFoto api={api} foto={f.foto} />;
+
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                    <Camera className="w-4 h-4 text-[#FF671F]" />Comparativa
+                    {fase && <span className="text-white/25 normal-case">· en {fase}{faseDesde ? ` desde el ${_fechaCorta(faseDesde)}` : ''}</span>}
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3" data-testid="comparativa-fases">
+                {verTodas ? (
+                    <div className="flex flex-wrap gap-2">
+                        {[...sesiones].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(s => s.fotos.map(f => (
+                            <div key={f.key} className="w-24">
+                                {pintaFoto(f)}
+                                <p className="text-[10px] text-white/30 text-center mt-0.5">{_fechaCorta(s.fecha)}</p>
+                            </div>
+                        )))}
+                    </div>
+                ) : (
+                    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${comparativa.length}, minmax(0, 1fr))` }}>
+                        {comparativa.map(c => (
+                            <div key={c.fecha} className="space-y-1">
+                                <div className={ampliada ? 'grid grid-cols-2 gap-1' : ''}>
+                                    {(ampliada ? c.fotos : c.fotos.slice(0, 1)).map(f => (
+                                        <div key={f.key}>{pintaFoto(f)}</div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-[#FF671F] leading-tight">
+                                    {c.etiquetas.map(e => TITULO_ETIQUETA[e] || e).join(' · ')}
+                                </p>
+                                <p className="text-[11px] text-white/40 leading-tight">
+                                    {_fechaCorta(c.fecha)}
+                                    {c.peso != null && <span className="block text-white font-bold">{c.peso} kg</span>}
+                                    {c.medidas && Object.entries(c.medidas).slice(0, 3).map(([k, v]) => (
+                                        <span key={k} className="block">{k} {v} cm</span>
+                                    ))}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <div className="flex gap-2">
+                    <button onClick={() => { setAmpliada(!ampliada); setVerTodas(false); }} data-testid="ampliar-comparativa"
+                        className="flex-1 py-2 text-xs font-semibold text-white/50 hover:text-[#FF671F] border border-[#222] rounded-lg transition-colors">
+                        {ampliada ? 'Ver solo de frente' : 'Ampliar comparativa'}
+                    </button>
+                    <button onClick={() => setVerTodas(!verTodas)} data-testid="mostrar-todas-fotos"
+                        className="flex-1 py-2 text-xs font-semibold text-white/50 hover:text-[#FF671F] border border-[#222] rounded-lg transition-colors">
+                        {verTodas ? 'Volver a la comparativa' : 'Mostrar todas'}
+                    </button>
+                </div>
+                {!faseDesde && (
+                    <p className="text-[10px] text-white/25 leading-relaxed">
+                        Sin cambio de fase registrado: la comparativa se queda en tres. La fase se
+                        fecha cuando el cliente marca otro objetivo en su reporte.
+                    </p>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
 const ProgressComparator = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
     const [appFotos, setAppFotos] = useState([]);
     const [pose, setPose] = useState(null);
@@ -2138,11 +2284,14 @@ const ProgressComparator = ({ api, clientId, calmaFotos, reports, macroHistory }
 const CalmaFoto = ({ api, clientId, foto }) => {
     const [thumb, setThumb] = useState(null);
     useEffect(() => {
-        let url; let alive = true;
-        api.get(`/admin/clients/${clientId}/calma-foto`, { params: { file: foto.file, w: 300 }, responseType: 'blob' })
-            .then(r => { if (!alive) return; url = URL.createObjectURL(r.data); setThumb(url); })
+        let alive = true;
+        // Por la caché compartida: la misma foto sale en la comparativa, en el mural y en la
+        // línea temporal, y antes se descargaba una vez por sitio.
+        _thumb(`calma:${clientId}:${foto.file}`,
+            () => api.get(`/admin/clients/${clientId}/calma-foto`, { params: { file: foto.file, w: 300 }, responseType: 'blob' }).then(r => r.data))
+            .then(url => { if (alive) setThumb(url); })
             .catch(() => {});
-        return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+        return () => { alive = false; };
     }, [api, clientId, foto.file]);
     const openFull = async (e) => {
         e.preventDefault();
