@@ -8,6 +8,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 
 // Pages
 import AuthPage from "./pages/AuthPage";
+import RecuperarPage from "./pages/RecuperarPage";
 import { leerDestino } from "./lib/navegacion";
 import { ClientDashboard, ClientLayout } from "./pages/ClientDashboard";
 import RoutinePage from "./pages/RoutinePage";
@@ -113,6 +114,12 @@ function AppRoutes() {
                 el correo" (parte 10), y PublicRoute redirige al panel al que ya ha
                 entrado alguna vez, que es justo a quien se le manda el enlace. */}
             <Route path="/test" element={<QuizVentaPage />} />
+
+            {/* Recuperar la contraseña. SIN PublicRoute a propósito: si no puedes entrar,
+                no puedes estar dentro para arreglarlo, y PublicRoute echa de aquí a quien
+                tenga sesión abierta -- justo el que llega desde el enlace del correo en
+                el móvil donde sigue logueado. */}
+            <Route path="/recuperar" element={<RecuperarPage />} />
 
             {/* Cuestionario inicial obligatorio (antes del plan) */}
             <Route

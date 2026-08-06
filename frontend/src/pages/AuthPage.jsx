@@ -183,11 +183,15 @@ const AuthPage = () => {
                         </button>
                     </div>
                     
+                    {/* Este botón existía y lo único que hacía era decirle que escribiera
+                        a su entrenador por WhatsApp. Ahora lleva a recuperarla por correo:
+                        con el registro abierto hay gente sin entrenador a quien escribir. */}
                     {!isRegister && (
-                        <button 
+                        <button
                             type="button"
                             className="text-brand text-sm hover:underline w-full text-right"
-                            onClick={() => toast.info('Escribe a tu entrenador por WhatsApp y te generará una contraseña nueva en un minuto')}
+                            onClick={() => navigate('/recuperar')}
+                            data-testid="login-olvidada"
                         >
                             ¿Olvidaste tu contraseña?
                         </button>

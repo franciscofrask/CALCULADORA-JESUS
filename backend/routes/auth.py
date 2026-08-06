@@ -107,3 +107,90 @@ async def change_password(data: dict, user = Depends(get_current_user)):
         raise HTTPException(status_code=401, detail="La contraseña actual no es correcta")
     await db.users.update_one({"id": user["id"]}, {"$set": {"password": hash_password(new)}})
     return {"ok": True}
+
+
+# ── Recuperar la contraseña ──────────────────────────────────────────────────────
+# Hasta hoy no existía: quien la perdía tenía que escribirle a su entrenador por
+# WhatsApp. Eso se aguanta con clientes que conoces; con el registro abierto y gente
+# que llega de Instagram sin entrenador detrás, se rompe el primer día.
+
+HORAS_VALIDEZ_ENLACE = 2
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: dict):
+    """Pide el correo con el enlace para cambiarla. PUBLICO.
+
+    Responde SIEMPRE lo mismo, exista el correo o no. Si dijera "ese correo no está
+    registrado" cualquiera podría averiguar quién es cliente probando correos, que es
+    justo lo que no se quiere en una app donde estar dentro dice algo de ti.
+    """
+    import hashlib
+    import os
+    import secrets
+    from datetime import timedelta
+
+    from core.correo import enviar, texto_recuperar
+
+    email = str((data or {}).get("email") or "").strip().lower()[:120]
+    respuesta = {"ok": True,
+                 "mensaje": "Si ese correo tiene cuenta, te llega un enlace en un minuto."}
+    if not email or "@" not in email:
+        return respuesta
+
+    user = await db.users.find_one({"email": email, "deleted_at": None},
+                                   {"_id": 0, "id": 1, "name": 1})
+    if not user:
+        return respuesta
+
+    # El token viaja en el enlace; en la base solo se guarda su hash. Si alguien leyera
+    # la colección no podría usar los enlaces pendientes.
+    token = secrets.token_urlsafe(32)
+    ahora = datetime.now(timezone.utc)
+    await db.password_resets.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "token_hash": hashlib.sha256(token.encode()).hexdigest(),
+        "expira_en": (ahora + timedelta(hours=HORAS_VALIDEZ_ENLACE)).isoformat(),
+        "usado_en": None,
+        "creado_en": ahora.isoformat(),
+    })
+
+    base = (os.environ.get("APP_URL") or "https://12en12app.jesusgallegopt.com").rstrip("/")
+    enlace = f"{base}/recuperar?token={token}"
+    await enviar(db, email, "Cambiar tu contraseña de 12EN12",
+                 texto_recuperar(user.get("name"), enlace, HORAS_VALIDEZ_ENLACE),
+                 tipo="recuperar_password")
+    return respuesta
+
+
+@router.post("/reset-password")
+async def reset_password(data: dict):
+    """Cambia la contraseña con el token del correo. PUBLICO.
+
+    El token vale una vez y dos horas. Al usarlo se cierran también las sesiones que
+    hubiera abiertas por el camino de Calma: si alguien recupera su cuenta, la
+    contraseña vieja de Firebase no puede seguir sirviendo.
+    """
+    import hashlib
+
+    token = str((data or {}).get("token") or "").strip()
+    nueva = (data or {}).get("password")
+    if not token or not isinstance(nueva, str) or len(nueva) < 8:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+
+    doc = await db.password_resets.find_one(
+        {"token_hash": hashlib.sha256(token.encode()).hexdigest()}, {"_id": 0})
+    if not doc or doc.get("usado_en"):
+        raise HTTPException(status_code=400, detail="Este enlace ya no vale. Pide otro.")
+    if doc["expira_en"] < datetime.now(timezone.utc).isoformat():
+        raise HTTPException(status_code=400, detail="Este enlace ha caducado. Pide otro.")
+
+    await db.users.update_one(
+        {"id": doc["user_id"]},
+        {"$set": {"password": hash_password(nueva)},
+         "$unset": {"firebase_password_hash": "", "firebase_password_salt": ""}},
+    )
+    await db.password_resets.update_one(
+        {"id": doc["id"]}, {"$set": {"usado_en": datetime.now(timezone.utc).isoformat()}})
+    return {"ok": True}
