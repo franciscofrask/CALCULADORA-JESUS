@@ -583,6 +583,47 @@ async def assign_client_trainer(client_id: str, data: TrainerAssign, user = Depe
         await audit(user, "coach", f"Coach de {client_name}: {trainer_name or 'sin asignar'}")
     return {"ok": True, "trainer_id": new_trainer, "trainer_name": trainer_name}
 
+@router.put("/clients/{client_id}/body-fat")
+async def anotar_body_fat(client_id: str, data: dict, user = Depends(get_admin_user)):
+    """Anota el % graso de una FECHA concreta, la de una sesion de fotos.
+
+    Jesus lo estima mirando las fotos y solo cuando decide ponerlo (documento 05-08,
+    punto 3.3): "solo lo estimo en los momentos en que hay foto". Por eso se anota desde
+    la foto y no en un campo suelto, y por eso va a una SERIE por fecha y no a un unico
+    valor: el % graso en dos momentos es lo que permite medir el eje respondedor del
+    perfil, que hoy solo se podia calcular con el historico traido de Calma.
+
+    Guarda en `porcentajes_grasos` del perfil, con el mismo formato que la serie de Calma
+    (`{fecha, valor}`), para que las dos se puedan leer juntas.
+    """
+    profile = await db.client_profiles.find_one({"id": client_id})
+    assert_client_access(user, profile)
+
+    fecha = str(data.get("fecha") or "")[:10]
+    if not fecha:
+        raise HTTPException(status_code=400, detail="Falta la fecha")
+    valor = data.get("valor")
+    serie = [x for x in (profile.get("porcentajes_grasos") or []) if str(x.get("fecha"))[:10] != fecha]
+    if valor not in (None, ""):
+        try:
+            v = round(float(valor), 1)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="El % graso tiene que ser un número")
+        if not (3 <= v <= 60):
+            raise HTTPException(status_code=400, detail="Un % graso fuera de 3-60 no es un dato, es un error")
+        serie.append({"fecha": fecha, "valor": v, "anotado_por": user.get("name", user.get("email", "coach"))})
+    serie.sort(key=lambda x: str(x.get("fecha")))
+
+    cambios = {"porcentajes_grasos": serie}
+    # El del perfil es el mas reciente de la serie: es el que se ensena y el que entra en
+    # el siguiente calculo de macros.
+    if serie:
+        cambios["body_fat"] = serie[-1]["valor"]
+    await db.client_profiles.update_one({"id": client_id}, {"$set": cambios})
+    _refrescar_casos()   # el eje respondedor depende de esta serie
+    return {"porcentajes_grasos": serie, "body_fat": cambios.get("body_fat")}
+
+
 @router.put("/clients/{client_id}/macros")
 async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depends(get_admin_user)):
     """Actualizar macros de un cliente (admin). Marca como override manual."""

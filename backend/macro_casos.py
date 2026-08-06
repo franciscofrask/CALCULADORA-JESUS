@@ -112,7 +112,11 @@ async def _cartera() -> List[Dict]:
     """Un dict por cliente con todo lo necesario para reconstruir su camino."""
     clientes = []
     async for p in db.client_profiles.find({}, {"_id": 0, "id": 1, "user_id": 1, "sex": 1, "goal": 1,
-                                                "body_fat": 1, "height": 1}):
+                                                "body_fat": 1, "height": 1,
+                                                # Los % grasos que va anotando el coach desde las
+                                                # fotos (05-08, 3.3). Sin esto, el eje respondedor
+                                                # se quedaba congelado en lo que vino de Calma.
+                                                "porcentajes_grasos": 1}):
         raw = await db.calma_raw.find_one(
             {"$or": [{"client_id": p["id"]}, {"user_id": p.get("user_id")}]},
             {"_id": 0, "macros_historial": 1, "pesos": 1, "porcentajes_grasos": 1,
@@ -126,10 +130,12 @@ async def _cartera() -> List[Dict]:
         # Serie de % graso de Calma: es lo que permite medir el indice hidrato-grasa
         # (el eje RESPONDEDOR del doc). Se mide poco, asi que se busca con mas margen.
         grasos = {}
-        for x in (raw.get("porcentajes_grasos") or []):
+        # Primero los de Calma y encima los que anota el coach desde las fotos: si hay dos
+        # para el mismo dia manda el suyo, que es el que acaba de mirar.
+        for x in list(raw.get("porcentajes_grasos") or []) + list(p.get("porcentajes_grasos") or []):
             v = _num(x.get("valor"))
             if v and 3 <= v <= 60 and x.get("fecha"):
-                grasos[x["fecha"][:10]] = round(v, 1)
+                grasos[str(x["fecha"])[:10]] = round(v, 1)
         async for r in db.reports.find({"client_id": p["id"]}, {"_id": 0, "created_at": 1, "weight": 1}):
             w = _sanea_peso(r.get("weight"))
             if w and r.get("created_at"):

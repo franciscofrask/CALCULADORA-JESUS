@@ -1374,7 +1374,8 @@ const ClientDetailPage = () => {
                         responde a algo. Sustituye al comparador de dos con selectores de pose,
                         que ya no hace falta (decisión del 05-08). */}
                     <ComparativaFases api={api} clientId={clientId} calmaFotos={calma_raw?.fotos_descargadas}
-                        reports={reports} macroHistory={macro_history} faseDesde={profile?.fase_desde} fase={profile?.goal} />
+                        reports={reports} macroHistory={macro_history} faseDesde={profile?.fase_desde} fase={profile?.goal}
+                        porcentajesGrasos={[...(calma_raw?.porcentajes_grasos || []), ...(profile?.porcentajes_grasos || [])]} />
                     <EvolutionTimeline api={api} clientId={clientId} reportes={calma_raw?.formularios_mensuales} calmaFotos={calma_raw?.fotos_descargadas} reports={reports} macroHistory={macro_history} />
                     <CoachCheckins clientId={clientId} />
                     <ReportsFeedbackList initialReports={reports} />
@@ -1744,9 +1745,25 @@ const CalmaReportItem = ({ r, hideHeader }) => {
 // y sin esto se pedían 108 veces para 49 fotos: el navegador encolaba y no se pintaba
 // ninguna. Con la caché, cada foto se descarga UNA vez y la comparten todos.
 const _thumbs = new Map();   // clave -> Promise<objectURL>
+
+// Y con la cola de descargas limitada. El navegador solo abre 6 conexiones por host: al
+// abrir la ficha se piden decenas de fotos de golpe y CUALQUIER otra llamada (guardar el
+// % graso, los macros...) se queda en cola detrás de todas ellas, sin salir ni fallar.
+// Con tres a la vez, las fotos siguen entrando rápido y el resto de la ficha responde.
+const _MAX_EN_VUELO = 3;
+let _enVuelo = 0;
+const _cola = [];
+const _tirarDeLaCola = () => {
+    if (_enVuelo >= _MAX_EN_VUELO || !_cola.length) return;
+    const { fn, ok, ko } = _cola.shift();
+    _enVuelo++;
+    fn().then(ok, ko).finally(() => { _enVuelo--; _tirarDeLaCola(); });
+};
+const _encolar = (fn) => new Promise((ok, ko) => { _cola.push({ fn, ok, ko }); _tirarDeLaCola(); });
+
 const _thumb = (clave, descargar) => {
     if (!_thumbs.has(clave)) {
-        _thumbs.set(clave, descargar()
+        _thumbs.set(clave, _encolar(descargar)
             .then(blob => URL.createObjectURL(blob))
             .catch(e => { _thumbs.delete(clave); throw e; }));   // si falla, se puede reintentar
     }
@@ -2005,10 +2022,54 @@ const MuralFotos = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
 // COMPARATIVA CON ETIQUETAS (documento del 05-08, punto 3.2). Cuatro fotos como mucho,
 // cada una respondiendo a algo, con la fecha, el peso de ese día y las medidas debajo.
 // Las reglas viven en lib/comparativaFotos.js, compartidas con el informe del cliente.
-const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, faseDesde, fase }) => {
+// Campo para anotar el % graso de una sesión de fotos. Se guarda al salir del campo:
+// es un dato que el coach pone de pasada mientras mira, no un formulario.
+const BodyFatFoto = ({ api, clientId, fecha, valor, onGuardado }) => {
+    const [v, setV] = useState(valor != null ? String(valor) : '');
+    const [guardando, setGuardando] = useState(false);
+    useEffect(() => { setV(valor != null ? String(valor) : ''); }, [valor]);
+
+    const guardar = async () => {
+        const limpio = v.trim();
+        if (limpio === (valor != null ? String(valor) : '')) return;   // no ha cambiado
+        setGuardando(true);
+        try {
+            const r = await api.put(`/admin/clients/${clientId}/body-fat`, { fecha, valor: limpio === '' ? null : limpio });
+            onGuardado?.(r.data?.porcentajes_grasos || []);
+            toast.success(limpio === '' ? '% graso quitado' : `% graso de ${_fechaCorta(fecha)} guardado`);
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'No se pudo guardar el % graso');
+            setV(valor != null ? String(valor) : '');
+        } finally { setGuardando(false); }
+    };
+
+    return (
+        <div className="flex items-center gap-1 mt-1">
+            <input type="number" step="0.1" min="3" max="60" value={v} placeholder="% graso"
+                onChange={e => setV(e.target.value)} onBlur={guardar}
+                onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+                data-testid={`body-fat-${fecha}`} disabled={guardando}
+                className="w-full bg-[#0A0A0A] border border-[#222] rounded px-1.5 py-1 text-[11px] text-white/80 focus:border-[#FF671F]/60 outline-none disabled:opacity-50" />
+            {v !== '' && <span className="text-[11px] text-white/30">%</span>}
+        </div>
+    );
+};
+
+const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, faseDesde, fase, porcentajesGrasos }) => {
     const [appFotos, setAppFotos] = useState([]);
     const [ampliada, setAmpliada] = useState(false);
     const [verTodas, setVerTodas] = useState(false);
+    // Serie de % grasos. `recien` son los que se acaban de anotar aquí; mientras no se
+    // toque nada mandan los que vienen del cliente.
+    // OJO: `porcentajesGrasos` llega como array nuevo en cada render del padre, así que NO
+    // puede ser dependencia de un useEffect con setState: eso monta un bucle de renders que
+    // llega a abortar la petición de guardado a medio vuelo. Con useMemo solo recalcula.
+    const [recien, setRecien] = useState(null);
+    const grasosPorFecha = useMemo(() => {
+        const m = {};
+        (recien || porcentajesGrasos || []).forEach(g => { if (g?.fecha) m[String(g.fecha).slice(0, 10)] = g.valor; });
+        return m;
+    }, [recien, porcentajesGrasos]);
 
     useEffect(() => {
         let alive = true;
@@ -2101,6 +2162,12 @@ const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, fa
                                         <span key={k} className="block">{k} {v} cm</span>
                                     ))}
                                 </p>
+                                {/* El % graso se estima MIRANDO LA FOTO y solo cuando toca (3.3),
+                                    así que se anota aquí, no en un campo suelto. Cada anotación
+                                    engorda la serie por fecha, que es de donde sale el eje
+                                    respondedor del perfil. */}
+                                <BodyFatFoto api={api} clientId={clientId} fecha={c.fecha}
+                                    valor={grasosPorFecha[c.fecha]} onGuardado={setRecien} />
                             </div>
                         ))}
                     </div>
