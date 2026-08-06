@@ -257,6 +257,80 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado}
 
 
+@router.post("/clients/mi-cuerpo")
+async def calcular_mi_cuerpo(data: dict, user = Depends(get_current_user)):
+    """De qué está hecho hoy, a cambio de tres datos. GRATIS: no exige plan ni pago.
+
+    Es el regalo del acceso gratis: se registra, da peso, altura y su % de grasa, y
+    recibe algo suyo -- cuánto músculo lleva para su altura, cuántos kilos son de músculo
+    y cuántos de grasa, y cuánto pesaría definido.
+
+    El sexo y el objetivo NO se le vuelven a preguntar: vienen del test de nivel, y si no
+    hizo el test se cogen de su ficha. Preguntar dos veces lo mismo es la forma más rápida
+    de que alguien cierre la pestaña.
+
+    Los tres datos se guardan en su ficha, que es lo que hace que esto no sea una
+    calculadora suelta: al día siguiente siguen ahí.
+    """
+    from core.ficha_partida import composicion_de, peso_si_se_define, referencia_de_parecidos
+
+    def _num(v, minimo, maximo):
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            return None
+        return n if minimo <= n <= maximo else None
+
+    peso = _num(data.get("peso"), 30, 300)
+    altura = _num(data.get("altura"), 120, 230)
+    bf = _num(data.get("porcentaje_graso"), 3, 60)
+    if peso is None or bf is None:
+        raise HTTPException(status_code=400, detail="Necesitamos tu peso y tu % de grasa")
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    sexo = (data.get("sexo") or profile.get("sex") or "hombre").lower()
+    sexo = "mujer" if sexo.startswith("muj") or sexo in ("f", "femenino") else "hombre"
+    objetivo = (data.get("objetivo") or profile.get("goal") or "definicion").lower()
+    fase = "volumen" if "vol" in objetivo else "definicion"
+
+    cambios = {"weight": peso, "body_fat": bf, "sex": sexo, "goal": fase}
+    if altura:
+        cambios["height"] = altura
+
+    # Y con esos datos ya salen sus macros de tabla: los ocho números, sin modificar. No
+    # es un extra -- sin macros no hay a qué cuadrar los menús, y el momento mágico
+    # ("estas son comidas que puedes comer hoy") se quedaría vacío, que es justo la parte
+    # que convence. La app queda usable desde aquí.
+    if profile.get("macros_source") != "manual":
+        try:
+            targets = calcular_targets(peso, sexo, bf, fase)
+            m = targets_to_profile_macros(targets)
+            cambios.update({
+                "macros_training": m["macros_training"],
+                "macros_rest": m["macros_rest"],
+                "macros_periworkout": m["macros_periworkout"],
+                "macros_source": "auto",
+                "macros_multiplicadores": targets["multiplicadores"],
+            })
+        except (ValueError, KeyError):
+            pass   # sin macros el regalo principal se enseña igual
+
+    await db.client_profiles.update_one({"id": profile["id"]}, {"$set": cambios})
+
+    composicion = composicion_de(peso, bf, altura or profile.get("height"), sexo)
+    return {
+        "composicion": composicion,
+        "definido": peso_si_se_define(composicion["masa_magra"], sexo),
+        "referencia": await referencia_de_parecidos(
+            sexo, fase, peso, bf, excluir_client_id=profile.get("id")),
+        "sexo": sexo,
+        "fase": fase,
+    }
+
+
 @router.get("/clients/mi-ficha")
 async def mi_ficha_de_partida(user = Depends(get_current_user)):
     """

@@ -9,6 +9,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 // Pages
 import AuthPage from "./pages/AuthPage";
 import RecuperarPage from "./pages/RecuperarPage";
+import MiCuerpoPage from "./pages/MiCuerpoPage";
 import { leerDestino } from "./lib/navegacion";
 import { ClientDashboard, ClientLayout } from "./pages/ClientDashboard";
 import RoutinePage from "./pages/RoutinePage";
@@ -155,6 +156,18 @@ function AppRoutes() {
                             Se conserva la query para no perder la vuelta de Stripe de un
                             pago que se hubiera iniciado antes de este cambio. */}
                         <Navigate to={`/planes${window.location.search}`} replace />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* El regalo del acceso gratis: "te digo cuanto musculo tienes". Pide sesion
+                -- hay que registrarse para recibirlo -- pero NO plan: es lo unico de la
+                app que se da sin pagar, y ese es justo el punto. */}
+            <Route
+                path="/mi-cuerpo"
+                element={
+                    <ProtectedRoute>
+                        <MiCuerpoPage />
                     </ProtectedRoute>
                 }
             />

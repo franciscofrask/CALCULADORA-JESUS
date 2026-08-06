@@ -220,7 +220,39 @@ const QuizVentaPage = () => {
                             Volver a los planes y decidir con calma
                         </button>
                     ) : (
-                    /* El correo, DESPUES de haber visto el resultado y nunca antes. */
+                    <>
+                    {/* EL ACCESO GRATIS, debajo de los precios. Antes de aquí, quien no
+                        compraba se iba y no dejaba rastro; y le pedíamos 297 € por algo que
+                        no había visto funcionar. Esto le da algo suyo primero.
+
+                        Va debajo del precio a propósito: si va encima, es una excusa para
+                        no mirar los planes. */}
+                    <div className="mt-8 rounded-2xl border-2 border-brand/40 bg-brand/5 p-5"
+                        data-testid="quiz-acceso-gratis">
+                        {personas > 0 && (
+                            <p className="text-xs font-bold text-brand uppercase tracking-wider mb-2">
+                                {personas.toLocaleString('es-ES')} personas han hecho este camino conmigo
+                            </p>
+                        )}
+                        <p className="font-heading font-bold text-xl leading-tight">
+                            Antes de irte, te digo cuánto músculo tienes. Gratis.
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1.5">
+                            Tres datos y te digo de qué estás hecho hoy, cuánto pesarías definido y
+                            qué podrías comer. Sin pagar nada.
+                        </p>
+                        <button
+                            onClick={() => {
+                                if (!haySesion()) dejarDestino('/mi-cuerpo');
+                                navigate(haySesion() ? '/mi-cuerpo' : '/auth');
+                            }}
+                            data-testid="quiz-quiero-gratis"
+                            className="mt-4 w-full h-12 rounded-xl bg-brand hover:bg-brand/90 text-white font-bold inline-flex items-center justify-center gap-2 transition-colors">
+                            Quiero saberlo <ArrowRight className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* El correo, DESPUES de haber visto el resultado y nunca antes. */}
                     <div className="mt-8">
                         {guardado ? (
                             <div className="surface p-5 text-center" data-testid="quiz-guardado">
@@ -280,6 +312,7 @@ const QuizVentaPage = () => {
                             </button>
                         )}
                     </div>
+                    </>
                     )}
 
                     <p className="text-center text-[11px] text-muted-foreground mt-8">

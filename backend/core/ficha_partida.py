@@ -59,6 +59,29 @@ def composicion_de(peso: float, porcentaje_graso: float, altura_cm: Optional[flo
     return salida
 
 
+# A qué % de grasa se considera "definido". No es un objetivo que se le ponga a nadie: es
+# la referencia con la que se hace la resta de abajo.
+#
+# PENDIENTE DE JESÚS: el documento pone el ejemplo con el 15 % (que es de hombre) y no dice
+# el de mujer. El 25 % es la referencia habitual equivalente en mujeres, pero es mío.
+GRASA_DEFINIDO = {"hombre": 15.0, "mujer": 25.0}
+
+
+def peso_si_se_define(masa_magra: float, sexo: str = "hombre") -> Optional[Dict]:
+    """Cuánto pesaría manteniendo su músculo y bajando al % de definido.
+
+    "Si mantienes tu músculo y bajas al 15 %, pesarías 77 kg". No es una promesa ni un
+    pronóstico: es una resta con sus propios números, y así hay que enseñarlo. Si su grasa
+    ya está por debajo de esa referencia no se enseña nada, porque la resta le diría que
+    tiene que ENGORDAR para definirse, que es justo lo contrario de lo que ha venido a leer.
+    """
+    if not masa_magra or masa_magra <= 0:
+        return None
+    objetivo = GRASA_DEFINIDO.get(sexo, GRASA_DEFINIDO["hombre"])
+    peso = masa_magra / (1 - objetivo / 100.0)
+    return {"grasa_objetivo": objetivo, "peso": round(peso, 1)}
+
+
 async def referencia_de_parecidos(sexo: str, fase: str, peso: float, porcentaje_graso: float,
                                   hc_total: Optional[float] = None,
                                   excluir_client_id: Optional[str] = None) -> Optional[Dict]:
