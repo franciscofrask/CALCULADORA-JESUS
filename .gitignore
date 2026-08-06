@@ -128,3 +128,6 @@ backend/_fotos_calma/
 
 # Backups que dejan los scripts de mantenimiento de catalogo (datos, no codigo)
 backend/_backup_catalogo_*.json
+
+# Capturas que dejan los scripts de comprobacion (se regeneran solas)
+_internos_proceso/*.png
