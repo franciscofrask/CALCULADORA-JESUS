@@ -1,23 +1,83 @@
 """
-El quiz de venta (especificacion 31-07-2026, partes 3 y 4).
+El quiz de venta (documento del test de nivel, 06-08-2026).
 
-Cuatro preguntas antes de comprar. Ve su resultado SIN dar el correo -- eso es una
-decision cerrada del documento (parte 10) -- y despues se le ofrece guardarlo o
-recibirlo por email.
+Seis preguntas antes de comprar. Ve su resultado SIN dar el correo -- eso es una
+decision cerrada -- y despues se le ofrece guardarlo o recibirlo por email.
 
-Se le enseña el nivel recomendado con sus propias palabras, los otros dos debajo, y
-puede elegir otro: la recomendacion orienta, no encierra.
+QUE DECIDE EL NIVEL
+El test no clasifica personas: coloca producto. Y lo que coloca el producto es UNA
+pregunta, la de las seis frases: con cual se identifica. Las demas acompañan.
 
-Sobre la logica: la tabla del documento no cubre las 256 combinaciones posibles. Cuando
-encajan VARIAS reglas se aplica lo que dice, "en caso de duda, se recomienda el nivel
-mayor". Cuando no encaja NINGUNA se recomienda el 2, que es el intermedio; recomendar
-el 3 a todo el que se sale de la tabla seria ponerle 1.500 EUR delante a alguien que
-igual solo necesita que la dieta le encaje. Esto ultimo es una decision de desarrollo,
-no del documento: si Jesus prefiere otra cosa, se cambia NIVEL_POR_DEFECTO.
+  Estoy en forma pero harto del proceso   -> Nivel 1  (no le falta direccion, le falta libertad)
+  Voy bien, quiero dar un salto           -> Nivel 1  (sabe hacerlo; necesita afinar, no que le lleven)
+  Hago las cosas bien y no veo resultados  -> Nivel 2  (le falta que alguien mire sus numeros)
+  Lo consigo y vuelvo atras                -> Nivel 2  (le falta sostenerlo, y eso se sostiene con revision)
+  Nunca he estado en forma                 -> Nivel 2  (le falta guia desde el principio)
+  Se lo que tendria que hacer y no lo hago -> Nivel 3  (el unico al que no le falta metodo:
+                                                        le falta que alguien este encima)
+
+Y despues, COMO MUCHO UNA SUBIDA, por lo que llegue antes:
+  - fecha concreta                    sube uno
+  - mas de cinco años / toda la vida  sube uno
+
+Una, no dos. Si se acumulan, el que parte de cero con fecha y diez años acaba en Nivel
+3 sin haber entrenado nunca, y esa venta se cae en la llamada.
+
+LO QUE HABIA ANTES
+Cuatro preguntas y siete combinaciones; el resto caia en Nivel 2. La pregunta del
+tiempo se guardaba y no movia el nivel (se leia `r4` y no aparecia en ninguna regla), y
+ninguna de las cuatro preguntaba por el acompañamiento, que es justo lo que separa los
+tres niveles. De ahi la reescritura.
+
+Las cuatro viejas se siguen preguntando y guardando: dicen cosas del cliente que sirven
+luego, aunque ya no decidan el nivel por si solas.
 """
 from typing import Any, Dict, List, Optional
 
+# Con quien se identifica (P5) es lo que decide. Sin esa respuesta no hay decision, y el
+# intermedio es lo unico honesto: recomendar el 3 seria ponerle 1.500 EUR delante a
+# alguien que igual solo necesita que la dieta le encaje.
 NIVEL_POR_DEFECTO = 2
+
+# Las seis frases. Son los cuatro avatares de Jesus, mas el grupo del 23 % que faltaba en
+# su documento (el que contesto "si, era consciente de que haciendo las cosas asi no podia
+# esperar mejorar mucho mas": 21 de 92 clientes) y una sexta para el 27 % que decia que su
+# esfuerzo y su resultado iban en sintonia, gente que no viene con dolor.
+#
+# Dos cuidados suyos al escribirlas:
+#   - La de la constancia tiene que sonar a CONSTATACION, no a confesion. Escrita como
+#     "me falta constancia" no la marca nadie, y es una de cada cuatro personas.
+#   - El orden NO es de gravedad, a proposito: de mejor a peor la gente se para en la
+#     primera que le suena un poco y no busca la suya.
+FRASES: List[Dict[str, Any]] = [
+    {"id": "A", "texto": "Estoy en forma, pero estoy harto del proceso. Así no puedo seguir", "nivel": 1},
+    {"id": "B", "texto": "Sé perfectamente lo que tendría que hacer. Lo que no hago es hacerlo", "nivel": 3},
+    {"id": "C", "texto": "Hago las cosas bien y no veo los resultados que debería", "nivel": 2},
+    {"id": "D", "texto": "Voy bien, pero quiero dar un salto y no sé cómo darlo", "nivel": 1},
+    {"id": "E", "texto": "Nunca he estado en forma y no sé ni por dónde se empieza", "nivel": 2},
+    {"id": "F", "texto": "Lo he conseguido alguna vez, pero siempre acabo volviendo atrás", "nivel": 2},
+]
+
+# Por que sale ese nivel: es lo que se le enseña para que la recomendacion no parezca
+# sacada de un sombrero.
+#
+# PENDIENTE DE JESUS. Su documento deja abiertos justo estos seis textos ("te los escribo
+# yo con el mismo criterio del documento 18 y me los confirmas"). Los de aqui salen de la
+# columna "Por que" de su propia tabla, que es lo mas fiel que hay hasta que los mande.
+# Cuando lleguen se sustituyen aqui, y solo aqui.
+PORQUE = {
+    "A": "No te falta dirección: te falta libertad. Con la calculadora y los menús te lo "
+         "montas tú, sin comer siempre lo mismo ni pedirle permiso a nadie.",
+    "B": "No te falta método, lo sabes de sobra. Te falta que alguien esté encima, y para "
+         "eso hace falta una persona, no otra app.",
+    "C": "Si haces las cosas bien y no ves lo que deberías, no es cuestión de esfuerzo: "
+         "hay algo en tus números que no cuadra y alguien tiene que mirarlo.",
+    "D": "Sabes hacerlo. Lo que necesitas es afinar, no que te lleven de la mano.",
+    "E": "Empezar de cero solo, con lo que hay por ahí, es la forma más rápida de acabar "
+         "dejándolo. Te hace falta guía desde el principio.",
+    "F": "Llegar ya has llegado. Lo que falla es sostenerlo, y eso se sostiene con alguien "
+         "revisando cómo vas.",
+}
 
 PREGUNTAS: List[Dict[str, Any]] = [
     {
@@ -51,6 +111,8 @@ PREGUNTAS: List[Dict[str, Any]] = [
         ],
     },
     {
+        # Esta ya SI decide: C y D suben un nivel. Es la que le hace decir en voz alta
+        # "llevo toda la vida con esto" justo antes de ver el precio.
         "id": 4,
         "texto": "¿Cuánto tiempo llevas intentándolo?",
         "opciones": [
@@ -60,7 +122,29 @@ PREGUNTAS: List[Dict[str, Any]] = [
             {"id": "D", "texto": "Toda la vida"},
         ],
     },
+    {
+        # La que coloca el producto. Solo se marca UNA: en el test cada pantalla de mas
+        # cuesta gente, y lo de "marca todas y luego dime cual es LA tuya" va en el alta,
+        # donde ya ha pagado.
+        "id": 5,
+        "texto": "¿Con cuál de estas te identificas más?",
+        "opciones": [{"id": f["id"], "texto": f["texto"]} for f in FRASES],
+    },
+    {
+        "id": 6,
+        "texto": "¿Tienes una fecha?",
+        "opciones": [
+            {"id": "A", "texto": "Sí, tengo una fecha concreta en mente"},
+            {"id": "B", "texto": "Más o menos, pero sin fecha fija"},
+            {"id": "C", "texto": "No, cuando llegue"},
+        ],
+    },
 ]
+
+_TIEMPO_LARGO = ("C", "D")      # mas de 5 años / toda la vida
+_HAY_FECHA = ("A",)             # fecha concreta
+
+_NIVEL_POR_FRASE = {f["id"]: f["nivel"] for f in FRASES}
 
 
 def _r(respuestas: Dict[int, str], n: int) -> Optional[str]:
@@ -69,53 +153,40 @@ def _r(respuestas: Dict[int, str], n: int) -> Optional[str]:
     return (v or "").strip().upper() or None
 
 
-# La tabla del documento. Cada regla: (condicion, nivel, por que).
-# El "por que" no es decoracion: es lo que se le enseña para que la recomendacion no
-# parezca sacada de un sombrero.
-def _reglas(r1, r2, r3, r4):
-    return [
-        (r1 == "D", 3,
-         "Nunca has entrenado en serio. Empezar de cero solo, con la información que hay "
-         "por ahí, es la forma más rápida de acabar dejándolo."),
-        (r1 == "B" and r2 == "A", 3,
-         "Vas al gimnasio pero sin plan, y nunca has llegado a verte como querías. No es "
-         "cuestión de esfuerzo: te falta que alguien ordene el trabajo."),
-        (r3 == "C", 3,
-         "Lo que te cuesta es arrancar, no saber qué hacer. Para eso hace falta alguien "
-         "detrás, no otro PDF."),
-        (r1 == "A" and r2 in ("A", "B") and r3 == "A", 2,
-         "Entrenas de forma regular y lo que te falta es saber si vas bien. Con alguien "
-         "revisando tus números cada dos semanas, eso se acaba."),
-        (r1 == "C" and r2 == "B" and r3 == "D", 2,
-         "Ya has estado ahí y sabes que puedes. Lo que falla es sostenerlo, y eso se "
-         "arregla con seguimiento."),
-        (r1 == "A" and r2 == "D" and r3 == "B", 1,
-         "Entrenas, estás bien y solo quieres afinar. Con la calculadora y los menús "
-         "tienes de sobra para hacerlo tú."),
-        (r1 == "A" and r2 == "C" and r3 == "B", 1,
-         "Sabes lo que haces y ya has llegado antes. Lo que necesitas es una herramienta "
-         "que te cuadre la comida, no que te lleven de la mano."),
-    ]
-
-
 def recomendar(respuestas: Dict[int, str]) -> Dict[str, Any]:
     """Devuelve el nivel recomendado y por que, sin pedir nada a cambio."""
-    r1, r2, r3, r4 = (_r(respuestas, n) for n in (1, 2, 3, 4))
+    frase = _r(respuestas, 5)
+    r4, r6 = _r(respuestas, 4), _r(respuestas, 6)
 
-    encajan = [(nivel, porque) for cond, nivel, porque in _reglas(r1, r2, r3, r4) if cond]
-
-    if not encajan:
+    base = _NIVEL_POR_FRASE.get(frase)
+    if base is None:
         return {
             "nivel": NIVEL_POR_DEFECTO,
             "por_que": ("Por lo que cuentas, lo que más te va a servir es tener a alguien "
                         "revisando tus números y tu entrenamiento cada dos semanas."),
-            "reglas_aplicadas": 0,
+            "subida": None,
         }
 
-    # "En caso de duda, se recomienda el nivel mayor".
-    mayor = max(n for n, _ in encajan)
-    porque = next(p for n, p in encajan if n == mayor)
-    return {"nivel": mayor, "por_que": porque, "reglas_aplicadas": len(encajan)}
+    porque = PORQUE.get(frase, "")
+
+    # UNA subida como mucho, la que llegue antes. La fecha va primero porque es la que
+    # aprieta: quien tiene un día señalado no tiene tiempo de probar solo.
+    subida = None
+    if r6 in _HAY_FECHA:
+        subida = "fecha"
+    elif r4 in _TIEMPO_LARGO:
+        subida = "tiempo"
+
+    nivel = base
+    if subida and base < 3:
+        nivel = base + 1
+        porque += (" Y como tienes una fecha, no vale con ir haciendo: toca apretar, y para "
+                   "apretar hace falta alguien detrás."
+                   if subida == "fecha" else
+                   " Y llevas demasiado tiempo intentándolo como para volver a intentarlo "
+                   "igual que las otras veces.")
+
+    return {"nivel": nivel, "por_que": porque, "subida": subida}
 
 
 def resultado_completo(respuestas: Dict[int, str],
@@ -124,6 +195,10 @@ def resultado_completo(respuestas: Dict[int, str],
 
     "Nivel recomendado con sus propias palabras, los otros dos visibles debajo, y puede
     elegir otro." La recomendacion orienta; no esconde las alternativas.
+
+    Y el Nivel 3 se PROPONE, no se impone: como va a llamada, lo elige el con los otros
+    dos precios delante. Quien pide la llamada habiendo visto los tres precios viene ya
+    decidido.
     """
     rec = recomendar(respuestas)
     code = f"nivel{rec['nivel']}"
@@ -137,13 +212,14 @@ def resultado_completo(respuestas: Dict[int, str],
             "nombre": info.get("name") or f"Nivel {n}",
             "precio": info.get("precio"),
             "recomendado": c == code,
-            # El Nivel 3 se contrata por llamada, no con un boton (parte 1).
+            # El Nivel 3 se contrata por llamada, no con un boton.
             "por_llamada": n == 3,
         })
 
     return {
         "recomendado": code,
         "por_que": rec["por_que"],
+        "subida": rec["subida"],
         "niveles": niveles,
         "respuestas": {str(k): v for k, v in respuestas.items()},
     }
