@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { Mail, Lock, Loader2, Eye, EyeOff, User, Phone } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
+import { dejarDestino, leerDestino } from '../lib/navegacion';
 
 // 12EN12 Logo Component
 const Logo12EN12 = ({ size = 'lg' }) => {
@@ -52,6 +53,11 @@ const AuthPage = () => {
         
         try {
             if (isRegister) {
+                // El que acaba de crear la cuenta no tiene plan: va a elegirlo. Esto ya lo
+                // intentaba el navigate de abajo, pero PublicRoute se le adelantaba y le
+                // soltaba en el panel (ver lib/navegacion); dejando el destino, manda este.
+                // Si viene del test ya hay uno puesto y es el mismo, así que no se pisa.
+                if (!leerDestino()) dejarDestino('/planes');
                 await register(formData);
                 toast.success('¡Cuenta creada! Bienvenido a 12EN12');
                 navigate('/onboarding');

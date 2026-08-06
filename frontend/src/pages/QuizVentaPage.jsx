@@ -17,6 +17,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { ArrowLeft, ArrowRight, Check, Loader2, Phone } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
+import { dejarDestino } from '../lib/navegacion';
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -106,6 +107,11 @@ const QuizVentaPage = () => {
         // Con sesión, a los planes; sin ella, a registrarse (sin cuenta no se puede cobrar).
         // Mandar a /auth con la sesión abierta rebotaba al panel y tiraba el resultado:
         // /auth vive dentro de PublicRoute, que echa de allí a quien ya ha entrado.
+        //
+        // Y al que NO tiene cuenta hay que dejarle dicho a dónde iba: nada más registrarse,
+        // ese mismo PublicRoute le mandaba al panel sin pasar por los planes, y el que venía
+        // de Instagram acababa dentro de la app sin ver un precio.
+        if (!haySesion()) dejarDestino('/planes');
         navigate(haySesion() ? '/planes' : '/auth');
     };
 

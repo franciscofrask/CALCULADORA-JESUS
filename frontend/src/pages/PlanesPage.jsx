@@ -16,6 +16,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { euros } from '../lib/precios';
+import { limpiarDestino } from '../lib/navegacion';
 import { toast } from 'sonner';
 import { Check, Minus, Phone, Loader2, ArrowLeft, ArrowRight, Compass, RotateCcw } from 'lucide-react';
 
@@ -84,6 +85,11 @@ const PlanesPage = () => {
         if (resultadoTest) {
             try { sessionStorage.removeItem(CLAVE_TEST); } catch { /* modo privado */ }
         }
+        // Ya ha llegado: el destino pendiente que le trajo aquí desde el registro ha
+        // cumplido. Se limpia AQUÍ y no al leerlo, porque quien lo lee (PublicRoute) se
+        // renderiza dos veces al entrar y borrarlo en la primera dejaba a la segunda sin
+        // destino, mandando al panel y pisando esta pantalla.
+        limpiarDestino();
     }, [resultadoTest]);
 
     useEffect(() => {

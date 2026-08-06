@@ -8,6 +8,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 
 // Pages
 import AuthPage from "./pages/AuthPage";
+import { leerDestino } from "./lib/navegacion";
 import { ClientDashboard, ClientLayout } from "./pages/ClientDashboard";
 import RoutinePage from "./pages/RoutinePage";
 import NutritionPage from "./pages/NutritionPage";
@@ -85,7 +86,10 @@ const PublicRoute = ({ children }) => {
         if (user?.role === 'admin' || user?.role === 'trainer') {
             return <Navigate to="/admin" replace />;
         }
-        return <Navigate to="/dashboard" replace />;
+        // Iba a algún sitio antes de identificarse (el test de nivel): manda ahí, no al
+        // panel. Ver lib/navegacion: sin esto la venta del test se perdía.
+        const pendiente = leerDestino();
+        return <Navigate to={pendiente || '/dashboard'} replace />;
     }
 
     return children;
