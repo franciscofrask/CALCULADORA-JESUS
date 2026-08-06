@@ -19,19 +19,51 @@ async def register(data: UserRegister):
         raise HTTPException(status_code=400, detail="Email ya registrado")
     
     user_id = str(uuid.uuid4())
+    ahora = datetime.now(timezone.utc).isoformat()
     user = {
         "id": user_id,
         "email": data.email,
         "password": hash_password(data.password),
-        "name": data.name,
+        # Sin nombre se usa la parte de delante del correo: la app lo saluda por su
+        # nombre en muchos sitios y "Hola, undefined" es peor que "Hola, marcos".
+        "name": (data.name or "").strip() or data.email.split("@")[0],
         "phone": data.phone,
         "role": "client",
         "plan": None,
         "trainer_id": None,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": ahora,
     }
     await db.users.insert_one(user)
-    
+
+    # La ficha se crea AQUÍ, al registrarse, y no al iniciar el pago como hasta ahora.
+    # En el acceso gratis el regalo ES la ficha: su índice de muscularidad, sus kilos de
+    # músculo y grasa. Sin ficha no hay dónde ponerlo.
+    #
+    # Nace en "registrado", que NO da acceso a nada de pago: has_active_access solo deja
+    # pasar con status "activo" o suscripción de Stripe al día. Es una ficha vacía
+    # esperando datos, no un cliente.
+    await db.client_profiles.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "plan": None,
+        "price": None,
+        "week": None,
+        "status": "registrado",
+        "trainer_id": None,
+        "macros_training": None,
+        "macros_rest": None,
+        "weight": None,
+        "height": None,
+        "age": None,
+        "sex": None,
+        "goal": None,
+        "body_fat": None,
+        "equipment": [],
+        "injuries": [],
+        "training_days": None,
+        "created_at": ahora,
+    })
+
     token = create_token(user_id, "client")
     user_response = {k: v for k, v in user.items() if k != "password"}
     return TokenResponse(access_token=token, user=UserResponse(**user_response))

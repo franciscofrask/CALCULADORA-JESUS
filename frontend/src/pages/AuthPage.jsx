@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Eye, EyeOff, User, Phone } from 'lucide-react';
+import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 import { dejarDestino, leerDestino } from '../lib/navegacion';
 
@@ -40,12 +40,8 @@ const AuthPage = () => {
     const [isRegister, setIsRegister] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     
-    const [formData, setFormData] = useState({ 
-        email: '', 
-        password: '',
-        name: '',
-        phone: ''
-    });
+    // Solo lo imprescindible para tener cuenta.
+    const [formData, setFormData] = useState({ email: '', password: '' });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -108,41 +104,10 @@ const AuthPage = () => {
                 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="w-full space-y-4">
-                    {isRegister && (
-                        <div className="relative">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand/20 flex items-center justify-center">
-                                <User className="w-3 h-3 text-brand" />
-                            </div>
-                            <Input
-                                type="text"
-                                placeholder="Nombre completo"
-                                className="pl-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                required={isRegister}
-                                data-testid="register-name"
-                            />
-                        </div>
-                    )}
-
-                    {/* El telefono se pide aqui, en el registro, y no dentro del quiz de macros:
-                        el quiz solo pregunta lo que hace falta para calcular. */}
-                    {isRegister && (
-                        <div className="relative">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand/20 flex items-center justify-center">
-                                <Phone className="w-3 h-3 text-brand" />
-                            </div>
-                            <Input
-                                type="tel"
-                                placeholder="Teléfono"
-                                className="pl-12 h-14 bg-bg-input-dark border-0 text-white placeholder:text-white/40 rounded-xl focus:ring-2 focus:ring-brand"
-                                value={formData.phone}
-                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                required={isRegister}
-                                data-testid="register-phone"
-                            />
-                        </div>
-                    )}
+                    {/* Ni nombre ni teléfono: crear cuenta es correo y contraseña.
+                        Pedirle el teléfono a quien viene a por un dato gratis espanta a
+                        la mitad. El nombre se pide después, con algo suyo ya delante, y
+                        el teléfono al comprar, que es cuando hace falta llamar. */}
 
                     <div className="relative">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-brand/20 flex items-center justify-center">

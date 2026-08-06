@@ -468,9 +468,15 @@ def merged_catalog(overrides_by_code: Optional[Dict[str, Dict[str, Any]]] = None
 
 # Auth Models
 class UserRegister(BaseModel):
+    """Crear cuenta: correo y contraseña, nada más.
+
+    El nombre y el teléfono eran obligatorios. Pedirle el teléfono a alguien que viene a
+    por un dato gratis espanta a la mitad, y el nombre se puede pedir después, cuando ya
+    tiene algo suyo delante. Siguen aceptándose porque el registro del panel los manda.
+    """
     email: EmailStr
     password: str
-    name: str
+    name: Optional[str] = None
     phone: Optional[str] = None
 
 class UserLogin(BaseModel):
