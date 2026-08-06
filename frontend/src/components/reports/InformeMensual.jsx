@@ -70,6 +70,89 @@ const Peso = ({ peso }) => {
 };
 
 /** Cumplimiento: sale de lo registrado, no de lo que él crea que ha cumplido. */
+// La comparativa de fotos con etiquetas (documento del 05-08, punto 3.2). Cada foto
+// responde a algo: de dónde vengo · dónde empezó esta fase · qué he hecho este mes ·
+// cómo estoy hoy. Debajo, la fecha, el peso de ese día y las medidas de ese momento.
+const TITULO_ETIQUETA = {
+    inicial: 'De dónde vengo',
+    inicio_fase: 'Dónde empezó esta fase',
+    mes_anterior: 'Qué he hecho este mes',
+    actual: 'Cómo estoy hoy',
+};
+const _fechaFoto = (f) => {
+    if (!f) return '';
+    const d = new Date(f + 'T12:00:00');
+    return isNaN(d) ? f : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const ComparativaFotos = ({ comparativa, todas }) => {
+    const [ampliada, setAmpliada] = React.useState(false);
+    const [verTodas, setVerTodas] = React.useState(false);
+
+    if (verTodas) {
+        return (
+            <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                    {todas.map((src, i) => (
+                        <div key={i} className="aspect-[3/4] rounded-xl overflow-hidden bg-muted">
+                            <img src={src} alt="" className="w-full h-full object-cover" />
+                        </div>
+                    ))}
+                </div>
+                <button type="button" onClick={() => setVerTodas(false)}
+                    className="w-full py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-brand">
+                    Volver a la comparativa
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-3" data-testid="comparativa-fotos">
+            <div className={`grid gap-2 ${ampliada ? 'grid-cols-1 sm:grid-cols-2' : `grid-cols-${Math.min(comparativa.length, 4)}`}`}
+                style={!ampliada ? { gridTemplateColumns: `repeat(${Math.min(comparativa.length, 4)}, minmax(0, 1fr))` } : undefined}>
+                {comparativa.map((c, i) => {
+                    // Por defecto solo la primera pose (de frente); ampliada, todas.
+                    const fotos = ampliada ? c.fotos : c.fotos.slice(0, 1);
+                    return (
+                        <div key={i} className="space-y-1">
+                            <div className={ampliada ? 'grid grid-cols-3 gap-1' : ''}>
+                                {fotos.map((src, j) => (
+                                    <div key={j} className="aspect-[3/4] rounded-xl overflow-hidden bg-muted">
+                                        <img src={src} alt="" className="w-full h-full object-cover" />
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-brand leading-tight">
+                                {c.etiquetas.map(e => TITULO_ETIQUETA[e] || e).join(' · ')}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground leading-tight">
+                                {_fechaFoto(c.fecha)}
+                                {c.peso != null && <span className="block font-bold text-foreground">{c.peso} kg</span>}
+                                {c.medidas && Object.entries(c.medidas).slice(0, 3).map(([k, v]) => (
+                                    <span key={k} className="block">{k}: {v} cm</span>
+                                ))}
+                            </p>
+                        </div>
+                    );
+                })}
+            </div>
+            <div className="flex gap-2">
+                <button type="button" onClick={() => setAmpliada(!ampliada)} data-testid="ampliar-comparativa"
+                    className="flex-1 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-brand border border-border rounded-xl">
+                    {ampliada ? 'Ver solo de frente' : 'Ampliar comparativa'}
+                </button>
+                {todas?.length > 0 && (
+                    <button type="button" onClick={() => setVerTodas(true)} data-testid="mostrar-todas-fotos"
+                        className="flex-1 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-brand border border-border rounded-xl">
+                        Mostrar todas
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const Barra = ({ etiqueta, dato, sufijo }) => (
     <div>
         <div className="flex items-baseline justify-between mb-1">
@@ -134,7 +217,14 @@ export const InformeMensual = ({ informe, onPedirFotos }) => {
                 </Apartado>
             )}
 
-            {todasLasFotos.length > 0 && (
+            {/* La comparativa: como mucho cuatro fotos y cada una responde a algo (3.2 del
+                documento del 05-08). Por defecto solo de frente; "Ampliar comparativa" las
+                agranda y saca el resto de poses, y "Mostrar todas" despliega el histórico. */}
+            {fotos.comparativa?.length > 0 ? (
+                <Apartado titulo="Tú, mes a mes">
+                    <ComparativaFotos comparativa={fotos.comparativa} todas={todasLasFotos} />
+                </Apartado>
+            ) : todasLasFotos.length > 0 && (
                 <Apartado titulo={fotos.dia_cero?.length ? 'Tú, al empezar y ahora' : 'Tus fotos'}>
                     <div className="grid grid-cols-3 gap-2">
                         {todasLasFotos.slice(0, 6).map((src, i) => (

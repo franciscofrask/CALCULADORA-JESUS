@@ -285,8 +285,19 @@ async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
     # comparacion que de verdad enseña el cambio, no la del mes pasado.
     primero = await db.reports.find_one(
         {"client_id": reporte["client_id"], "photos": {"$ne": []}},
-        {"_id": 0, "photos": 1}, sort=[("created_at", 1)],
+        {"_id": 0}, sort=[("created_at", 1)],
     )
+    # La foto de INICIO DE FASE (3.2): la del primer reporte con fotos desde que empezo la
+    # fase actual. `fase_desde` lo pone el propio cliente al marcar otro objetivo en su
+    # reporte (punto 5). Sin fase_desde no hay etiqueta de fase, y entonces la comparativa
+    # se queda en tres fotos, que es justo lo que dice su tabla para "sin cambio de fase".
+    inicio_fase = None
+    if perfil.get("fase_desde"):
+        inicio_fase = await db.reports.find_one(
+            {"client_id": reporte["client_id"], "photos": {"$ne": []},
+             "created_at": {"$gte": perfil["fase_desde"]}},
+            {"_id": 0}, sort=[("created_at", 1)],
+        )
 
     desde = (anterior or {}).get("created_at") or perfil.get("created_at")
     dias_periodo, dias_dieta, dias_entreno, macros_comidos = await _actividad_del_periodo(
@@ -306,6 +317,8 @@ async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
         reporte=reporte,
         reporte_anterior=anterior,
         fotos_dia_cero=(primero or {}).get("photos"),
+        reporte_inicial=primero,
+        reporte_inicio_fase=inicio_fase,
         ritmos_cohorte=await _ritmos_de_su_perfil(perfil),
         semanas_ciclo=(plan.get("ciclo") or {}).get("semanas"),
         dias_dieta=dias_dieta,

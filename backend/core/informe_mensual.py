@@ -267,9 +267,63 @@ def evolucion_de_referencia(ritmo_semanal_pct: Optional[float],
     }
 
 
+def comparativa_de_fotos(*, reporte: Dict[str, Any],
+                         reporte_anterior: Optional[Dict[str, Any]],
+                         reporte_inicial: Optional[Dict[str, Any]],
+                         reporte_inicio_fase: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Las CUATRO fotos del informe, cada una respondiendo a algo (documento 05-08, 3.2):
+
+        de donde vengo · donde empezo esta fase · que he hecho este mes · como estoy hoy
+
+    Reglas suyas:
+      - La inicial no se mueve nunca de la izquierda; lo que rota es la del medio.
+      - Si dos etiquetas apuntan a la MISMA foto, se ensena una sola vez con las dos
+        etiquetas. Pasa el primer mes de una fase nueva, cuando nunca ha cambiado de
+        fase, y en el mes 2.
+      - Nunca mas de cuatro, nunca la misma dos veces.
+
+    Con eso, el numero de fotos sale solo: mes 1 -> 1, mes 2 -> 2, mes 3 en adelante
+    -> 3, y 4 solo cuando ha habido un cambio de fase que no cae en otra etiqueta.
+    """
+    candidatos = [
+        ("inicial", "De dónde vengo", reporte_inicial),
+        ("inicio_fase", "Dónde empezó esta fase", reporte_inicio_fase),
+        ("mes_anterior", "Qué he hecho este mes", reporte_anterior),
+        ("actual", "Cómo estoy hoy", reporte),
+    ]
+    salida: List[Dict[str, Any]] = []
+    por_reporte: Dict[str, Dict[str, Any]] = {}
+    for etiqueta, titulo, rep in candidatos:
+        if not rep or not [f for f in (rep.get("photos") or []) if f]:
+            continue
+        clave = rep.get("id") or str(rep.get("created_at"))
+        ya = por_reporte.get(clave)
+        if ya:                      # misma foto que una etiqueta anterior: no se repite
+            ya["etiquetas"].append(etiqueta)
+            ya["titulos"].append(titulo)
+            continue
+        item = {
+            "etiquetas": [etiqueta],
+            "titulos": [titulo],
+            "fecha": str(rep.get("created_at") or "")[:10],
+            "peso": rep.get("weight"),
+            "medidas": rep.get("measurements") or None,
+            "fotos": [f for f in (rep.get("photos") or []) if f],
+        }
+        por_reporte[clave] = item
+        salida.append(item)
+    # De izquierda a derecha, en orden de tiempo: asi la inicial (la mas antigua) nunca se
+    # mueve de la izquierda y la actual queda a la derecha, aunque una etiqueta del medio
+    # caiga sobre una foto que ya estaba (por ejemplo el inicio de fase siendo la de hoy).
+    salida.sort(key=lambda x: x["fecha"])
+    return salida[:4]
+
+
 def montar_informe(*, perfil: Dict[str, Any], reporte: Dict[str, Any],
                    reporte_anterior: Optional[Dict[str, Any]],
                    fotos_dia_cero: Optional[List[str]],
+                   reporte_inicial: Optional[Dict[str, Any]] = None,
+                   reporte_inicio_fase: Optional[Dict[str, Any]] = None,
                    ritmos_cohorte: Optional[List[float]] = None,
                    semanas_ciclo: Optional[int],
                    dias_dieta: int, dias_entreno: int, dias_periodo: int,
@@ -321,7 +375,14 @@ def montar_informe(*, perfil: Dict[str, Any], reporte: Dict[str, Any],
             "actual": perfil.get("body_fat"),
             "anterior": (reporte_anterior or {}).get("body_fat"),
         },
-        "fotos": {"ahora": fotos_ahora[:3], "dia_cero": fotos_antes},
+        "fotos": {
+            "ahora": fotos_ahora[:3], "dia_cero": fotos_antes,
+            # La comparativa con etiquetas (3.2). Se deja `ahora`/`dia_cero` al lado para
+            # no romper lo que ya lee la pantalla vieja.
+            "comparativa": comparativa_de_fotos(
+                reporte=reporte, reporte_anterior=reporte_anterior,
+                reporte_inicial=reporte_inicial, reporte_inicio_fase=reporte_inicio_fase),
+        },
         "cumplimiento": cumplimiento,
         "macros": macros,
         "macros_nuevos": macros_nuevos,
