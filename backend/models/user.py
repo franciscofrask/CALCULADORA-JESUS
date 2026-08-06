@@ -4,7 +4,7 @@ Modelos Pydantic para usuarios y autenticación.
 import math
 
 from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Union
 
 # Limites de cordura para los macros del perfil. Sin ellos cualquier PUT podia
 # dejar guardado un valor absurdo (p. ej. protein=1e308) que luego se pintaba
@@ -646,7 +646,11 @@ class AjustesMacros(BaseModel):
     deporte_extra: Optional[bool] = None        # P2
     facilidad_engordar: Optional[str] = None    # P3: enseguida | normal | casi_no
     cuesta_definir: Optional[str] = None        # P5: se guarda, no modifica
-    sigue_dieta: Optional[bool] = None          # P6
+    # P6. Tres respuestas, no dos: True (la sigue y la mide), False (come lo que surge) y
+    # "parecido" (come siempre parecido pero no lo tiene medido), que es el caso más común
+    # y el que faltaba. El "parecido" cuenta como que trae dieta -- se le pide un día tipo
+    # y se lee igual -- pero queda registrado que no venía medido.
+    sigue_dieta: Optional[Union[bool, str]] = None
     tiempo_dieta: Optional[str] = None          # P7: menos_1m | 1_3m | 3_6m | mas_6m (se guarda)
     # P8: decide que se hace con la dieta que trae (paso 4 del metodo). Definicion:
     # bien | lento | mantengo | cogiendo_peso. Volumen: bien | lento | mucha_grasa |

@@ -115,17 +115,21 @@ const STEPS_AJUSTE = [
         ],
     },
     {
-        type: 'choice', key: 'sigue_dieta', title: '¿Sigues una dieta ahora mismo y sabes lo que comes?',
+        // Tres respuestas, no dos. Faltaba la de en medio, que es la más común: come
+        // siempre parecido pero no lo tiene medido. Con dos opciones esa persona marcaba
+        // "no controlo" y se perdía su dieta real, que es el mejor dato que hay.
+        type: 'choice', key: 'sigue_dieta', title: '¿Sigues una dieta ahora mismo?',
         desc: 'Si controlas más o menos tus cantidades, podremos partir de lo que ya comes.',
         options: [
-            { value: true, label: 'Sí, sé lo que como.' },
-            { value: false, label: 'No, como sin controlar.' },
+            { value: true, label: 'Sí, y sé exactamente lo que como.' },
+            { value: 'parecido', label: 'Como siempre parecido, pero no lo tengo medido.' },
+            { value: false, label: 'No, como lo que surge.' },
         ],
     },
     {
         // P7: se guarda. Un mes comiendo asi no dice lo mismo que seis.
         type: 'choice', key: 'tiempo_dieta', title: '¿Cuánto tiempo llevas con esa dieta, o con una parecida?',
-        cond: a => a.sigue_dieta === true,
+        cond: a => a.sigue_dieta !== false && a.sigue_dieta != null,
         options: [
             { value: 'menos_1m', label: 'Menos de un mes' },
             { value: '1_3m', label: 'Entre 1 y 3 meses' },
@@ -136,9 +140,16 @@ const STEPS_AJUSTE = [
     {
         // P8: la que decide que se hace con su dieta (paso 4 del metodo). Las opciones cambian
         // segun el objetivo, porque "ir bien" no es lo mismo definiendo que en volumen.
-        type: 'choice', key: 'como_va', title: '¿Cómo te está funcionando?',
+        // A LOS TRES, también al que come lo que surge. Es la mejor pregunta del
+        // cuestionario: sitúa su comida respecto a su mantenimiento sin pedirle un solo
+        // número. Si dice que mantiene, lo que come ES su mantenimiento, y eso pesa más
+        // que "como bastante", que es una opinión. Antes solo se le preguntaba al que
+        // seguía una dieta medida, que es justo el que menos falta le hace.
+        type: 'choice', key: 'como_va',
+        title: a => (a.sigue_dieta === false
+            ? 'Con lo que comes ahora, ¿mantienes el peso, ganas o pierdes?'
+            : '¿Cómo te está funcionando?'),
         desc: 'Sé sincero: de esto depende que partamos de lo que comes o de lo que te toca comer.',
-        cond: a => a.sigue_dieta === true,
         options: a => (a.goal === 'volumen' ? [
             { value: 'bien', label: 'Bien: estoy subiendo peso.' },
             { value: 'lento', label: 'Regular: subo, pero muy lento.' },
@@ -157,7 +168,7 @@ const STEPS_AJUSTE = [
         type: 'choice', key: 'hambre_saturacion',
         title: a => (a.goal === 'volumen' ? '¿Estás saturado de comer?' : '¿Pasas hambre o ansiedad comiendo así?'),
         desc: 'No cambia tus macros de hoy: nos dice con cuánta mano irán los ajustes de cada mes.',
-        cond: a => a.sigue_dieta === true,
+        cond: a => a.sigue_dieta !== false && a.sigue_dieta != null,
         options: a => (a.goal === 'volumen' ? [
             { value: 'no_puedo_mas', label: 'No estoy saturado, pero tampoco me veo capaz de comer más.' },
             { value: 'puedo_mas', label: 'Puedo comer más sin problema.' },
@@ -167,7 +178,17 @@ const STEPS_AJUSTE = [
             { value: 'aguanto_mas', label: 'Nada: aguanto mucho más que esto.' },
         ]),
     },
-    { type: 'dieta', title: 'Cuéntanos qué comes', desc: 'Con esto partimos de tu dieta real en vez de empezar de cero.', cond: a => a.sigue_dieta === true },
+    {
+        // Al que no lo tiene medido se le pide UN DÍA, no "lo que comes en general".
+        // Nadie sabe lo que come en general; todo el mundo se acuerda de lo que comió
+        // ayer. Con un día tipo el sistema ya puede leerlo, y la pregunta imposible se
+        // convierte en una fácil.
+        type: 'dieta', title: 'Cuéntanos qué comes',
+        desc: a => (a.sigue_dieta === 'parecido'
+            ? 'Aunque no comas siempre lo mismo, ponme un día tipo. El de ayer, por ejemplo.'
+            : 'Con esto partimos de tu dieta real en vez de empezar de cero.'),
+        cond: a => a.sigue_dieta !== false && a.sigue_dieta != null,
+    },
     { type: 'final0', title: 'Y ya estaría.', desc: 'Si quieres revisar alguna respuesta, ve hacia atrás. Al calcular verás tus macros personalizados.' },
     { type: 'result', title: 'Tus macros' },
 ];
