@@ -48,6 +48,18 @@ class ReportCreate(BaseModel):
     energy_level: Optional[int] = None
     stress_level: Optional[int] = None
     notes: Optional[str] = None
+    # Las tres preguntas del formulario de siempre de Jesus que faltaban (punto 5 del
+    # documento del 05-08):
+    #  - `proximo_objetivo` DISPARA EL CAMBIO DE FASE: sin ella un Nivel 1 no puede cambiar
+    #    de fase nunca, porque no tiene coach que se la cambie. Ademas es la que permite
+    #    fechar el inicio de la fase (foto de "inicio de fase" del informe).
+    #  - `viabilidad_ajuste` es el margen de la persona preguntado directamente: hasta ahora
+    #    solo se sabia del cuestionario inicial, que se responde una vez y envejece.
+    #  - `cumplimiento_entreno` devuelve la fuente a la barra de entrenos del informe, que
+    #    se quedo sin dato en julio al recortar el check-in diario.
+    proximo_objetivo: Optional[str] = None       # definicion | volumen | mantenimiento
+    viabilidad_ajuste: Optional[str] = None      # me_adapto | necesito_mas | necesito_menos
+    cumplimiento_entreno: Optional[str] = None   # todos | casi_todos | la_mitad | pocos | ninguno
 
 class ReportResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -62,6 +74,9 @@ class ReportResponse(BaseModel):
     energy_level: Optional[int] = None
     stress_level: Optional[int] = None
     notes: Optional[str] = None
+    proximo_objetivo: Optional[str] = None
+    viabilidad_ajuste: Optional[str] = None
+    cumplimiento_entreno: Optional[str] = None
     trainer_feedback: Optional[str] = None
     created_at: str
 

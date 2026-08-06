@@ -75,17 +75,26 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "energy_level": data.energy_level,
         "stress_level": data.stress_level,
         "notes": data.notes,
+        # Las tres preguntas del formulario de siempre (punto 5 del 05-08)
+        "proximo_objetivo": data.proximo_objetivo,
+        "viabilidad_ajuste": data.viabilidad_ajuste,
+        "cumplimiento_entreno": data.cumplimiento_entreno,
         "trainer_feedback": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.reports.insert_one(report)
-    
-    # Update client profile weight
-    await db.client_profiles.update_one(
-        {"id": profile["id"]},
-        {"$set": {"weight": data.weight}}
-    )
-    
+
+    # El objetivo que marca el cliente MANDA sobre la fase del perfil: es lo que dispara el
+    # cambio de fase, y sin esto un Nivel 1 no cambiaria de fase nunca (no tiene coach que se
+    # la cambie). `fase_desde` guarda CUANDO empezo, que es lo que necesita el informe para
+    # la foto de "inicio de fase".
+    set_perfil = {"weight": data.weight}
+    if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
+        if profile.get("goal") != data.proximo_objetivo:
+            set_perfil["goal"] = data.proximo_objetivo
+            set_perfil["fase_desde"] = report["created_at"][:10]
+    await db.client_profiles.update_one({"id": profile["id"]}, {"$set": set_perfil})
+
     return ReportResponse(**report)
 
 @router.get("", response_model=List[ReportResponse])

@@ -80,6 +80,41 @@ const WindowBanner = ({ w }) => {
     );
 };
 
+// Las tres preguntas del formulario de siempre de Jesús que faltaban en la app
+// (punto 5 del documento del 05-08). Los textos son los suyos.
+const PREGUNTAS_REPORTE = [
+    {
+        campo: 'proximo_objetivo',
+        titulo: 'Próximo objetivo',
+        ayuda: 'De cara a las próximas 4 semanas, que puede ser lo mismo o puedes cambiar.',
+        opciones: [
+            { value: 'definicion', label: 'Definición' },
+            { value: 'volumen', label: 'Volumen' },
+            { value: 'mantenimiento', label: 'Mantenimiento' },
+        ],
+    },
+    {
+        campo: 'viabilidad_ajuste',
+        titulo: '¿Cómo de viable sería un nuevo ajuste de macros?',
+        opciones: [
+            { value: 'me_adapto', label: 'Me adapto a lo que me pongas' },
+            { value: 'necesito_mas', label: 'Necesito comer más para poder cumplir' },
+            { value: 'necesito_menos', label: 'Necesito comer menos para poder cumplir' },
+        ],
+    },
+    {
+        campo: 'cumplimiento_entreno',
+        titulo: '¿En qué grado has cumplido con el entrenamiento?',
+        opciones: [
+            { value: 'todos', label: 'Todos los entrenos' },
+            { value: 'casi_todos', label: 'Casi todos' },
+            { value: 'la_mitad', label: 'La mitad' },
+            { value: 'pocos', label: 'Pocos' },
+            { value: 'ninguno', label: 'Ninguno' },
+        ],
+    },
+];
+
 const ReportsPage = () => {
     const { api } = useAuth();
     const [reports, setReports] = useState([]);
@@ -125,7 +160,11 @@ const ReportsPage = () => {
         sleep_quality: 7,
         energy_level: 7,
         stress_level: 5,
-        notes: ''
+        notes: '',
+        // Las tres preguntas del formulario de siempre (punto 5 del 05-08)
+        proximo_objetivo: '',
+        viabilidad_ajuste: '',
+        cumplimiento_entreno: '',
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch solo al montar
@@ -192,7 +231,10 @@ const ReportsPage = () => {
                 sleep_quality: reportData.sleep_quality,
                 energy_level: reportData.energy_level,
                 stress_level: reportData.stress_level,
-                notes: reportData.notes || null
+                notes: reportData.notes || null,
+                proximo_objetivo: reportData.proximo_objetivo || null,
+                viabilidad_ajuste: reportData.viabilidad_ajuste || null,
+                cumplimiento_entreno: reportData.cumplimiento_entreno || null,
             };
             await api.post('/reports', payload);
             toast.success('Reporte enviado correctamente');
@@ -401,6 +443,31 @@ const ReportsPage = () => {
                             data-testid="notes-textarea"
                             className="w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors resize-none"
                         />
+                    </div>
+
+                    {/* Las tres preguntas del formulario de siempre de Jesús (punto 5 del 05-08).
+                        La del próximo objetivo es la que dispara el cambio de fase. */}
+                    <div className="bg-card border border-border rounded-2xl p-4 space-y-4" data-testid="preguntas-reporte">
+                        {PREGUNTAS_REPORTE.map(p => (
+                            <div key={p.campo}>
+                                <p className="text-sm font-bold text-foreground mb-1">{p.titulo}</p>
+                                {p.ayuda && <p className="text-xs text-foreground/50 mb-2">{p.ayuda}</p>}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    {p.opciones.map(o => {
+                                        const activo = reportData[p.campo] === o.value;
+                                        return (
+                                            <button key={o.value} type="button" data-testid={`${p.campo}-${o.value}`}
+                                                onClick={() => set(p.campo, o.value)}
+                                                className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition-all ${
+                                                    activo ? 'border-[#FF671F] bg-[#FF671F]/10 text-[#FF671F]'
+                                                           : 'border-border bg-muted text-foreground/60 hover:border-white/30'}`}>
+                                                {o.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
                     <button

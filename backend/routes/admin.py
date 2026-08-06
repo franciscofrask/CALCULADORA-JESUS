@@ -237,6 +237,24 @@ def _delta_vs_propuesta(propuesta, training, rest, peri):
     return delta
 
 
+# Lo que contesta el cliente en el reporte ("¿como de viable seria un nuevo ajuste?",
+# punto 5 del 05-08) traducido al lenguaje del prompt del agente. Es el MARGEN de la
+# persona: cuanto se le puede apretar. Manda sobre el dato del cuestionario inicial,
+# que se responde una vez y luego envejece.
+_VIABILIDAD_A_MARGEN = {
+    "me_adapto": "normal",
+    "necesito_mas": "mucho",         # pasa hambre: ajustes suaves
+    "necesito_menos": "no_puedo_mas",  # no puede comer mas: subidas suaves
+}
+
+
+def _margen_del_cliente(profile: dict, reporte_app: Optional[dict]) -> Optional[str]:
+    v = (reporte_app or {}).get("viabilidad_ajuste")
+    if v in _VIABILIDAD_A_MARGEN:
+        return _VIABILIDAD_A_MARGEN[v]
+    return (profile.get("ajustes_macros") or {}).get("hambre_saturacion")
+
+
 def _contexto_decision(evolucion, reporte):
     """B9: consolida lo que mira el coach (lo que Jesus revisa a mano): ultimo peso
     y fecha, dias desde el pesaje anterior, kg desde el ultimo y desde el inicio, y
@@ -337,6 +355,13 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
             fase = "definicion"
     fase = "volumen" if str(fase).lower().startswith("vol") else "definicion"
 
+    # El ultimo reporte hecho EN LA APP (los de arriba son los importados de Calma). De aqui
+    # salen el margen del cliente y su proximo objetivo, que es el que dispara la fase.
+    reporte_app = await db.reports.find_one(
+        {"client_id": client_id}, {"_id": 0}, sort=[("created_at", -1)])
+    if (reporte_app or {}).get("proximo_objetivo") in ("definicion", "volumen"):
+        fase = reporte_app["proximo_objetivo"]
+
     # historial de ajustes de ESTA persona (para que el agente aprenda su patron):
     # los importados de Calma + los hechos en la app (estos si traen criterio,
     # evaluacion de la fase y % graso: el paso 1 del modelo predictivo).
@@ -402,7 +427,10 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         casos_gemelos=macro_casos.formatear_gemelos(gemelos),
         perfil=macro_indices.formatear_para_prompt(perfil_ix, reglas_perfil),
         # P9 del cuestionario: con cuanta mano se le puede ajustar (hambre o saturacion).
-        hambre_saturacion=(profile.get("ajustes_macros") or {}).get("hambre_saturacion"))
+        # El margen del cliente. Manda lo que haya contestado en el REPORTE de este mes
+        # (pregunta "¿como de viable seria un nuevo ajuste?", punto 5 del 05-08): el dato del
+        # cuestionario inicial se responde una vez y envejece.
+        hambre_saturacion=_margen_del_cliente(profile, reporte_app))
     out = await macro_agent.sugerir_ajuste(ctx)
     if isinstance(out, dict) and out.get("propuesta"):
         out["guardarrail"] = macro_agent.validar(out["propuesta"], macros_actuales, out.get("avisos", []))

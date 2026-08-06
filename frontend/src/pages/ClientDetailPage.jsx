@@ -1443,6 +1443,17 @@ const MacroCeldas = ({ m, prev, showG = true, apagado = false }) => (
 
 const CAUSA_LABEL = { ajuste: 'fallo del ajuste', cliente: 'no cumplió', otro: 'otros motivos' };
 
+// Respuestas de las tres preguntas del reporte (punto 5 del 05-08), en legible.
+const OBJETIVO_REPORTE = { definicion: 'Definición', volumen: 'Volumen', mantenimiento: 'Mantenimiento' };
+const VIABILIDAD_REPORTE = {
+    me_adapto: 'se adapta a lo que le pongas',
+    necesito_mas: 'necesita comer MÁS para cumplir',
+    necesito_menos: 'necesita comer MENOS para cumplir',
+};
+const ENTRENO_REPORTE = {
+    todos: 'todos', casi_todos: 'casi todos', la_mitad: 'la mitad', pocos: 'pocos', ninguno: 'ninguno',
+};
+
 const EvaluacionBadge = ({ ev }) => (
     <span className={`text-xs font-semibold ${ev.resultado === 'buena' ? 'text-emerald-400' : 'text-red-400'}`}
         title={[ev.resultado === 'buena' ? 'Fase buena' : 'Fase mala', CAUSA_LABEL[ev.causa], ev.nota].filter(Boolean).join(' · ')}>
@@ -2304,6 +2315,28 @@ const ReportsFeedbackList = ({ initialReports }) => {
                             {abierto.training_compliance != null && <span className="text-white/50">Entreno <b className="text-white">{abierto.training_compliance}%</b></span>}
                             {abierto.nutrition_compliance != null && <span className="text-white/50">Nutrición <b className="text-white">{abierto.nutrition_compliance}%</b></span>}
                         </div>
+                        {/* Las tres preguntas del formulario de siempre (punto 5 del 05-08).
+                            El próximo objetivo es el que dispara el cambio de fase, así que se
+                            marca cuando cambia respecto a la fase que tenía. */}
+                        {(abierto.proximo_objetivo || abierto.viabilidad_ajuste || abierto.cumplimiento_entreno) && (
+                            <div className="space-y-1.5 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
+                                {abierto.proximo_objetivo && (
+                                    <p className="text-white/50">Próximo objetivo{' '}
+                                        <b className="text-[#FF671F] uppercase">{OBJETIVO_REPORTE[abierto.proximo_objetivo] || abierto.proximo_objetivo}</b>
+                                    </p>
+                                )}
+                                {abierto.viabilidad_ajuste && (
+                                    <p className="text-white/50">Margen para ajustar{' '}
+                                        <b className="text-white">{VIABILIDAD_REPORTE[abierto.viabilidad_ajuste] || abierto.viabilidad_ajuste}</b>
+                                    </p>
+                                )}
+                                {abierto.cumplimiento_entreno && (
+                                    <p className="text-white/50">Entrenamientos{' '}
+                                        <b className="text-white">{ENTRENO_REPORTE[abierto.cumplimiento_entreno] || abierto.cumplimiento_entreno}</b>
+                                    </p>
+                                )}
+                            </div>
+                        )}
                         {abierto.notes && <p className="text-white/70 text-sm italic">"{abierto.notes}"</p>}
                         <div>
                             <Label className="text-white/60 text-xs">Feedback para el cliente</Label>
