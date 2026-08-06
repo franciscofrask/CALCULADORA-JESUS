@@ -15,6 +15,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { euros } from '../lib/precios';
 import { toast } from 'sonner';
 import { Check, Minus, Phone, Loader2, ArrowLeft, ArrowRight, Compass, RotateCcw } from 'lucide-react';
 
@@ -174,7 +175,7 @@ const PlanesPage = () => {
 
     const FILAS = [
         { etiqueta: 'Precio por ciclo', render: p => (
-            <span className="font-heading text-2xl font-bold text-foreground">{p.precio} €</span>) },
+            <span className="font-heading text-2xl font-bold text-foreground">{euros(p.precio)}</span>) },
         { etiqueta: 'Duración', render: p => <Texto>{p.ciclo?.semanas} semanas</Texto> },
         { etiqueta: 'Calculadora y menús', render: () => <Si /> },
         { etiqueta: 'Macros iniciales', render: p => <Texto>{p.macros}</Texto> },
@@ -301,7 +302,7 @@ const PlanesPage = () => {
                         )}
                         <div className="flex items-baseline justify-between gap-3">
                             <h2 className="font-heading text-xl font-bold uppercase text-foreground">{plan.name}</h2>
-                            <span className="font-heading text-2xl font-bold text-brand">{plan.precio} €</span>
+                            <span className="font-heading text-2xl font-bold text-brand">{euros(plan.precio)}</span>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1 mb-4">{plan.gancho}</p>
                         <dl className="space-y-2 mb-5">

@@ -111,16 +111,33 @@ async def get_admin_only_user(user: dict = Depends(get_current_user)) -> dict:
 def assert_client_access(user: dict, profile: Optional[dict]) -> None:
     """Autorización a nivel de recurso para endpoints staff que operan sobre un cliente.
 
-    - admin y trainer: acceso a cualquier cliente (decisión del usuario 21-07: los
-      entrenadores ven y gestionan a todos, también los asignados a otro coach).
+    - admin: cualquier cliente.
+    - trainer: los SUYOS y los que no tienen coach.
     - resto: denegado.
 
+    Los que no tienen coach quedan a la vista de todos a propósito: son de donde
+    cualquiera puede coger (y al cogerlo se lo asigna, ver PUT /clients/{id}/trainer).
+    Lo que no se puede es entrar en el cliente de otro: si hay que cubrir a un
+    compañero, se reasigna el cliente, no se abre el acceso.
+
+    Documento de Jesús del 06-08-2026, que revierte a propósito la decisión del 21-07
+    ("los entrenadores ven y gestionan a todos"): hasta hoy un coach podía abrir la
+    ficha de un cliente de otro y cambiarle los macros sin que su coach se enterase.
+
     `profile` es el documento de client_profiles del cliente objetivo (o None si no existe).
-    Lanza 404 si el perfil no existe y 403 si el rol no es staff.
+    Lanza 404 si el perfil no existe y 403 si no le corresponde.
     """
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     role = (user or {}).get("role")
-    if role in ("admin", "trainer"):
+    if role == "admin":
         return
+    if role == "trainer":
+        de_quien_es = profile.get("trainer_id") or None
+        if de_quien_es is None or de_quien_es == (user or {}).get("id"):
+            return
+        raise HTTPException(
+            status_code=403,
+            detail="Este cliente lo lleva otro entrenador. Si tienes que cubrirle, que te lo reasignen.",
+        )
     raise HTTPException(status_code=403, detail="No tienes acceso a este cliente")

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import ThemeToggle from '../components/ThemeToggle';
+import { seLeOfreceLaRevision } from '../lib/revision';
 
 // ===== Macro colors (identidad 12EN12) =====
 const MACRO = { protein: '#FF671F', carbs: '#2196F3', fat: '#FFA500' };
@@ -150,7 +151,6 @@ const ClientDashboard = () => {
     const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
     const [routine, setRoutine] = useState(null);
-    const [pidiendoRevision, setPidiendoRevision] = useState(false);
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [macros, setMacros] = useState(null);
     const [todayConsumed, setTodayConsumed] = useState({ P: 0, H: 0, G: 0 });
@@ -160,19 +160,8 @@ const ClientDashboard = () => {
     const [dashDataLoaded, setDashDataLoaded] = useState(false);
     const [dueReports, setDueReports] = useState([]);
 
-    // Compra suelta de una revisión por entrenador: lleva al pago de Stripe. Al volver, el
-    // dashboard ya muestra "revisión en marcha".
-    const pedirRevisionSuelta = async () => {
-        setPidiendoRevision(true);
-        try {
-            const r = await api.post('/billing/revision-suelta/checkout', {});
-            if (r.data?.checkout_url) window.location.href = r.data.checkout_url;
-            else throw new Error('Sin enlace de pago');
-        } catch (e) {
-            toast.error(e.response?.data?.detail || 'No hemos podido abrir el pago');
-            setPidiendoRevision(false);
-        }
-    };
+    // La compra de la revisión suelta vive ahora en su pantalla (/dashboard/revision):
+    // desde aquí solo se entra, que es lo que pide el documento del 06-08-2026.
 
     // El cierre/completado vive en el perfil (backend); localStorage es solo caché local.
     useEffect(() => {
@@ -487,27 +476,21 @@ const ClientDashboard = () => {
 
             {/* Revisión suelta: solo para quien se autogestiona y ya tiene sus macros afinados.
                 Es la puerta de entrada a tener coach: prueba lo que se siente y, si sube de plan
-                en 30 días, lo que pagó se le descuenta. */}
-            {!can('macros_personalizados') && profile?.ajuste_macros_completado
-                && !profile?.revision_suelta?.estado && (
-                <button onClick={pedirRevisionSuelta} disabled={pidiendoRevision}
-                    data-testid="revision-suelta-banner"
-                    className="surface surface-hover w-full p-4 flex items-center justify-between group border border-border disabled:opacity-60">
-                    <div className="flex items-center gap-4">
-                        <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center">
-                            <ClipboardCheck className="w-5 h-5 text-brand" />
-                        </div>
-                        <div className="text-left">
-                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">
-                                ¿Quieres que un entrenador revise tus macros?
-                            </p>
-                            <p className="text-muted-foreground text-sm">
-                                Una revisión suelta, sin cambiar de plan. Si luego subes de plan, te lo descontamos.
-                            </p>
-                        </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
-                </button>
+                en 30 días, lo que pagó se le descuenta.
+
+                Era una tarjeta grande con su flecha. El documento de Jesús del 06-08-2026 dice
+                que esto va "como una línea pequeña, sin botón grande", y que nunca interrumpa:
+                lo que vende es la pantalla (/dashboard/revision), no el sitio desde el que se
+                entra. Los dos momentos de verdad son al recibir los macros de inicio y al
+                recibir el ajuste del mes; esto es solo la puerta que queda siempre a mano. */}
+            {profile?.ajuste_macros_completado && seLeOfreceLaRevision(profile, can) && (
+                <p className="text-xs text-muted-foreground px-1" data-testid="revision-suelta-banner">
+                    ¿Prefieres que lo miremos nosotros?{' '}
+                    <button onClick={() => navigate('/dashboard/revision')}
+                        className="underline text-brand hover:text-brand/80 font-medium">
+                        Solicita tu revisión personalizada
+                    </button>.
+                </p>
             )}
 
             {/* Ya la pagó: que sepa en qué punto está. */}

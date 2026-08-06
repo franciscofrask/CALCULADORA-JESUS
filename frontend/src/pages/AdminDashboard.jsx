@@ -590,6 +590,11 @@ const AdminClientsList = () => {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [planFilter, setPlanFilter] = useState('all');
+    // Cartera: cada coach lleva la suya, y los que no tienen coach quedan a la vista de
+    // todos para que cualquiera pueda cogerlos (documento del 06-08-2026). El admin
+    // arranca viéndolo todo; el coach, en los suyos.
+    const esAdmin = user?.role === 'admin';
+    const [cartera, setCartera] = useState(esAdmin ? 'todos' : 'mios');
 
     useEffect(() => {
         fetchClients();
@@ -628,18 +633,42 @@ const AdminClientsList = () => {
         }
     };
 
-    const filteredClients = clients.filter(c => 
+    const deLaCartera = (c) => {
+        if (cartera === 'sin_coach') return !c.trainer_id;
+        if (cartera === 'mios') return c.trainer_id === user?.id;
+        return true;
+    };
+
+    const filteredClients = clients.filter(c => deLaCartera(c) && (
         c.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.user?.email?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    ));
+
+    const cuantos = (cual) => clients.filter(c =>
+        cual === 'sin_coach' ? !c.trainer_id : cual === 'mios' ? c.trainer_id === user?.id : true).length;
+
+    const CARTERAS = esAdmin
+        ? [['todos', 'Todos'], ['sin_coach', 'Sin coach']]
+        : [['mios', 'Mis clientes'], ['sin_coach', 'Sin coach']];
 
     return (
         <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="heading-2 text-white">CLIENTES</h1>
-                    <p className="text-white/50 uppercase tracking-wider text-sm">{clients.length} {clients.length === 1 ? 'cliente' : 'clientes'}</p>
+                    <p className="text-white/50 uppercase tracking-wider text-sm">{filteredClients.length} {filteredClients.length === 1 ? 'cliente' : 'clientes'}</p>
                 </div>
+            </div>
+
+            {/* Mi cartera / los que no lleva nadie */}
+            <div className="inline-flex rounded-lg bg-[#111111] p-0.5 border border-[#333]">
+                {CARTERAS.map(([valor, etiqueta]) => (
+                    <button key={valor} onClick={() => setCartera(valor)}
+                        data-testid={`cartera-${valor}`}
+                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${cartera === valor ? 'bg-[#FF671F] text-white' : 'text-white/50 hover:text-white'}`}>
+                        {etiqueta} <span className="opacity-60">({cuantos(valor)})</span>
+                    </button>
+                ))}
             </div>
 
             {/* Filters */}

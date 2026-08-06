@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CAP } from '../lib/planAccess';
+import { seLeOfreceLaRevision } from '../lib/revision';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
@@ -1188,7 +1189,7 @@ const QuestionnairePage = () => {
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
                     {!modoAjuste ? 'Tus macros de partida'
                         : entrega?.con_entrenador ? 'Tus macros de partida'
-                        : 'Estos son tus macros'}
+                        : 'Estos son tus macros de inicio'}
                 </h2>
                 <p className="text-foreground/60 mb-6 text-sm md:text-base">
                     {!modoAjuste
@@ -1198,7 +1199,10 @@ const QuestionnairePage = () => {
                            nota. Quien lo revisa entonces es el equipo, que es la verdad. */
                         : entrega?.con_entrenador
                             ? `${entrega.coach || 'El equipo'} los va a revisar contigo${entrega.proxima_revision ? ` el ${entrega.proxima_revision}` : ''} y los ajustará a tu caso.`
-                            : `Calculados con el método a partir de tus respuestas.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ' Los verás siempre en tu panel.'}`}
+                            /* Texto cerrado por Jesús el 06-08-2026 (momento 1 de la revisión
+                               suelta): lo que sostiene el número es el perfil parecido, y así
+                               se le cuenta. */
+                            : 'Están adaptados a tu perfil, a partir de tus respuestas y tomando como referencia otros perfiles parecidos al tuyo.'}
                 </p>
                 {m ? (
                     <div className="space-y-4">
@@ -1226,6 +1230,28 @@ const QuestionnairePage = () => {
                 ) : (
                     <p className="text-foreground/60">Tus macros se han guardado y los verás en tu panel.</p>
                 )}
+
+                {/* La próxima revisión automática: la decía el texto anterior y sigue siendo
+                    útil saberlo, así que se queda como línea suelta. */}
+                {modoAjuste && !entrega?.con_entrenador && entrega?.proxima_revision && (
+                    <p className="text-xs text-foreground/50 mt-4">
+                        Tu próxima revisión automática será el {entrega.proxima_revision}.
+                    </p>
+                )}
+
+                {/* MOMENTO 1 de la revisión suelta (documento del 06-08-2026): al recibir sus
+                    macros de inicio. Línea pequeña y sin botón, nunca un popup: si interrumpe,
+                    es publicidad aunque el texto sea suave. */}
+                {modoAjuste && !entrega?.con_entrenador && seLeOfreceLaRevision(profile, can) && (
+                    <p className="text-xs text-foreground/50 mt-2" data-testid="revision-partida">
+                        Si consideras que tu caso necesita una revisión más profunda, puedes{' '}
+                        <button onClick={() => navigate('/dashboard/revision')}
+                            className="underline text-brand hover:text-brand/80 font-medium">
+                            solicitar tu revisión de partida
+                        </button>.
+                    </p>
+                )}
+
                 <div className="flex flex-col sm:flex-row gap-3 mt-8">
                     {modoAjuste ? (
                         <Button onClick={goNext}

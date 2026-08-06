@@ -80,10 +80,19 @@ async def get_all_clients(
         query["status"] = status
     if trainer_id:
         query["trainer_id"] = trainer_id
-    # Admin y entrenador ven a TODOS los clientes, incluidos los ya asignados a otro
-    # coach (decisión del usuario 21-07). El filtro por coach solo aplica si se pide
-    # explícitamente con el parámetro trainer_id.
     es_trainer = user.get("role") == "trainer"
+
+    # El admin ve a todos. El entrenador ve LOS SUYOS y los que no tienen coach, que
+    # son de donde puede coger (documento del 06-08-2026, que revierte la decisión del
+    # 21-07). Los de otro coach no salen ni en la lista: no es solo que no pueda
+    # entrar, es que no tiene por qué verlos.
+    if es_trainer:
+        if not trainer_id:
+            query["trainer_id"] = {"$in": [user["id"], None, ""]}
+        elif trainer_id == user["id"]:
+            query["trainer_id"] = user["id"]        # "solo los míos", sin los libres
+        else:
+            return []                               # los de otro coach no son cosa suya
 
     # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
     # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).

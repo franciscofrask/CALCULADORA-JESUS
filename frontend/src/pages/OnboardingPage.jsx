@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Check, ArrowRight, ArrowLeft, Loader2, Star } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import { habilitacionesToList } from '../lib/planAccess';
+import { formatEuros } from '../lib/precios';
 
 // Presentación de cada plan (orden, badge, descripción comercial). Los datos reales
 // (nombre, precios, qué incluye) vienen del catálogo del backend (GET /api/plans),
@@ -45,9 +46,9 @@ const PLAN_UI = {
     },
 };
 
-// "1500" -> "1.500" (formato es-ES, sin decimales si es entero).
-const formatEuros = (n) =>
-    Number(n).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+// El formato de los precios vive en lib/precios: esta pantalla tenía su propia copia
+// que prometía "1500 -> 1.500" y no lo hacía (toLocaleString no agrupa cuatro cifras
+// en español). Ver el porqué allí.
 
 // Etiqueta del periodo del precio principal ("mes" -> "/mes", "único" -> "pago único").
 const periodoLabel = (periodo) => (periodo === 'único' ? ' · pago único' : `/${periodo}`);

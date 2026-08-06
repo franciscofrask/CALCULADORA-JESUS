@@ -13,6 +13,7 @@
  * muro: es donde decide si quiere cambiar algo antes de que le cobren.
  */
 import React, { useEffect, useState } from 'react';
+import { euros } from '../lib/precios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
@@ -175,7 +176,7 @@ const RenovacionPage = () => {
                             <p className="text-sm text-muted-foreground mt-0.5">{s.detalle}</p>
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
-                            <span className="font-heading text-lg font-bold text-foreground">{s.precio} €</span>
+                            <span className="font-heading text-lg font-bold text-foreground">{euros(s.precio)}</span>
                             {yendo === s.plan
                                 ? <Loader2 className="w-4 h-4 animate-spin text-brand" />
                                 : s.tipo === 'renovar'

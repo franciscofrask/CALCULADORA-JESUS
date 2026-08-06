@@ -26,6 +26,7 @@ import AdminRoutinesPage from "./pages/AdminRoutinesPage";
 import SupplementsPage from "./pages/SupplementsPage";
 import CheckInsPage from "./pages/CheckInsPage";
 import MacroCalculatorClientPage from "./pages/MacroCalculatorClientPage";
+import RevisionPage from "./pages/RevisionPage";
 import FoodSearchPage from "./pages/FoodSearchPage";
 import AdminFoodSuggestionsPage from "./pages/AdminFoodSuggestionsPage";
 import AdminPlansPage from "./pages/AdminPlansPage";
@@ -188,6 +189,8 @@ function AppRoutes() {
                 <Route path="checkins" element={<CapabilityRoute cap="reportes"><CheckInsPage /></CapabilityRoute>} />
                 <Route path="macro-calculator" element={<MacroCalculatorClientPage />} />
                 <Route path="foods" element={<FoodSearchPage />} />
+                {/* La revisión suelta: pantalla, no popup (documento del 06-08-2026) */}
+                <Route path="revision" element={<RevisionPage />} />
             </Route>
 
             {/* Admin Routes */}

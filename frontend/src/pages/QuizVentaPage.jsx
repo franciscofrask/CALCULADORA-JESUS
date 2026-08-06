@@ -11,6 +11,7 @@
  * Y el Nivel 3 no lleva a un pago, lleva a una llamada.
  */
 import React, { useEffect, useState } from 'react';
+import { euros } from '../lib/precios';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -147,7 +148,7 @@ const QuizVentaPage = () => {
                     <div className="surface p-5 border-brand mb-3">
                         <div className="flex items-baseline justify-between mb-4">
                             <span className="font-heading text-2xl font-bold uppercase">{recomendado?.nombre}</span>
-                            <span className="font-heading text-2xl font-bold text-brand">{recomendado?.precio} €</span>
+                            <span className="font-heading text-2xl font-bold text-brand">{euros(recomendado?.precio)}</span>
                         </div>
                         <button onClick={() => elegir(recomendado.plan, recomendado.por_llamada)}
                             data-testid="quiz-elegir-recomendado"
@@ -167,7 +168,7 @@ const QuizVentaPage = () => {
                                 className="surface surface-hover p-4 text-left">
                                 <div className="flex items-baseline justify-between">
                                     <span className="font-bold">{n.nombre}</span>
-                                    <span className="font-heading text-lg font-bold">{n.precio} €</span>
+                                    <span className="font-heading text-lg font-bold">{euros(n.precio)}</span>
                                 </div>
                                 <span className="text-sm text-muted-foreground">
                                     {n.por_llamada ? 'Se contrata por llamada' : 'Empezar con este'}

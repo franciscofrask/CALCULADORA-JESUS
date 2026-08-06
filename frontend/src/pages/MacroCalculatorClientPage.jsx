@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SlidersHorizontal, Calculator, Loader2, CheckCircle2, CalendarDays, Save, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { seLeOfreceLaRevision } from '../lib/revision';
 import { MACRO } from './ClientDashboard';
 import DesgloseChips from '../components/DesgloseChips';
 
@@ -70,7 +72,8 @@ const AJUSTES_VACIOS = {
 };
 
 const MacroCalculatorClientPage = () => {
-    const { api, profile } = useAuth();
+    const { api, profile, can } = useAuth();
+    const navigate = useNavigate();
 
     // ── Manual macros editor (the primary feature) ───────────────────────────
     const [macros, setMacros] = useState({
@@ -236,6 +239,20 @@ const MacroCalculatorClientPage = () => {
                     <p className="text-sm text-muted-foreground mt-1">Modifica tus macros y elige desde qué fecha aplican</p>
                 </div>
             </header>
+
+            {/* MOMENTO 2 de la revisión suelta (documento del 06-08-2026): al recibir su
+                ajuste del mes. Línea pequeña y sin botón, nunca un popup. La pantalla de
+                venta entera vive en /dashboard/revision. */}
+            {seLeOfreceLaRevision(profile, can) && (
+                <p className="text-xs text-muted-foreground" data-testid="revision-personalizada">
+                    El ajuste mira tus números.{' '}
+                    <button onClick={() => navigate('/dashboard/revision')}
+                        className="underline text-brand hover:text-brand/80 font-medium">
+                        Solicita tu revisión personalizada
+                    </button>{' '}
+                    si quieres que lo miremos nosotros.
+                </p>
+            )}
 
             {loadingMacros ? (
                 <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-muted-foreground" /></div>
