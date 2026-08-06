@@ -18,7 +18,7 @@
  * decidido.
  */
 import React, { useEffect, useState } from 'react';
-import { euros } from '../lib/precios';
+import { euros, numero } from '../lib/precios';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -231,7 +231,7 @@ const QuizVentaPage = () => {
                         data-testid="quiz-acceso-gratis">
                         {personas > 0 && (
                             <p className="text-xs font-bold text-brand uppercase tracking-wider mb-2">
-                                {personas.toLocaleString('es-ES')} personas han hecho este camino conmigo
+                                {numero(personas)} personas han hecho este camino conmigo
                             </p>
                         )}
                         <p className="font-heading font-bold text-xl leading-tight">
@@ -363,7 +363,7 @@ const QuizVentaPage = () => {
 
                     <p className="text-white/40 text-xs mt-5">
                         Un minuto. Sin registro.
-                        {personas ? ` Ya han pasado por aquí ${personas.toLocaleString('es-ES')} personas.` : ''}
+                        {personas ? ` Ya han pasado por aquí ${numero(personas)} personas.` : ''}
                     </p>
                 </div>
             </div>

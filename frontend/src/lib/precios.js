@@ -25,3 +25,7 @@ export const formatEuros = (n) => {
 
 // 1500 -> "1.500 €"
 export const euros = (n) => `${formatEuros(n)} €`;
+
+// Lo mismo para cualquier otro número que se enseñe (el contador de personas: 1.325).
+// Existe para no volver a tirar de toLocaleString y quedarse otra vez sin el punto.
+export const numero = formatEuros;

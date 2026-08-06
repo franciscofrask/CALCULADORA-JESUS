@@ -15,7 +15,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { euros } from '../lib/precios';
+import { euros, numero } from '../lib/precios';
 import { limpiarDestino } from '../lib/navegacion';
 import { toast } from 'sonner';
 import { Check, Minus, Phone, Loader2, ArrowLeft, ArrowRight, Compass, RotateCcw } from 'lucide-react';
@@ -323,7 +323,7 @@ const PlanesPage = () => {
                             note que detrás hay gente, no un PDF (documento del 06-08). */}
                         {plan.code === 'nivel1' && personas > 0 && (
                             <p className="text-xs text-brand font-semibold mt-1" data-testid="contador-personas">
-                                {personas.toLocaleString('es-ES')} personas han pasado ya por aquí
+                                {numero(personas)} personas han pasado ya por aquí
                             </p>
                         )}
                         <div className="mb-4" />
@@ -363,7 +363,7 @@ const PlanesPage = () => {
                                     <p className="text-[13px] text-muted-foreground mt-1 min-h-[2.5rem]">{plan.gancho}</p>
                                     {plan.code === 'nivel1' && personas > 0 && (
                                         <p className="text-[11px] text-brand font-semibold -mt-1 mb-1">
-                                            {personas.toLocaleString('es-ES')} personas han pasado ya por aquí
+                                            {numero(personas)} personas han pasado ya por aquí
                                         </p>
                                     )}
                                 </th>
