@@ -35,6 +35,10 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
         { key: 'macros', label: 'Sin macros', icon: Apple, color: '#FF671F', sub: 'Necesitan macros del coach', items: flt(todo.sin_macros) },
         { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina, sin una activa', items: flt(todo.sin_rutina) },
         { key: 'reportes', label: 'Reporte pendiente', icon: FileText, color: '#EAB308', sub: 'No enviado esta semana', items: flt(todo.reporte_pendiente) },
+        // "Hoy no puedes ver si un cliente de 1.500 lleva tres semanas sin que nadie le
+        // hable". Solo salen los planes con chat, ordenados de más abandonado a menos, y
+        // con los días a la vista para que se note de un vistazo.
+        { key: 'contacto', label: 'Sin contacto', icon: MessageCircle, color: '#A855F7', sub: 'Días desde que alguien le habló', items: flt(todo.sin_contacto) },
     ];
     return (
         <Card className="bg-[#111111] border-[#222]" data-testid="todo-semana">
@@ -47,7 +51,7 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
                         Solo al corriente de pago
                     </label>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                     {cols.map(col => (
                         <div key={col.key} className="bg-[#0A0A0A] rounded-xl border border-[#222] p-3">
                             <div className="flex items-center gap-2 mb-1">
@@ -63,6 +67,13 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
                                         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 text-left">
                                         <span className="flex-1 min-w-0 truncate text-sm text-white/80">{c.name}</span>
                                         {col.key === 'reportes' && c.overdue && <span className="text-[9px] text-red-400 font-bold uppercase tracking-wide">tarde</span>}
+                                        {/* Los días, y a partir de dos semanas en rojo: no es
+                                            un umbral del servidor, es lo que salta a la vista. */}
+                                        {col.key === 'contacto' && (
+                                            <span className={`text-[10px] font-bold tabular-nums ${c.dias >= 14 ? 'text-red-400' : 'text-white/40'}`}>
+                                                {c.nunca ? 'nunca' : `${c.dias} d`}
+                                            </span>
+                                        )}
                                         {!c.al_corriente && <span title="Pago pendiente" className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
                                         <ChevronRight className="w-3.5 h-3.5 text-white/20 flex-shrink-0" />
                                     </button>

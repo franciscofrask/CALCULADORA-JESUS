@@ -10,6 +10,7 @@ from core.config import SUPPORT_EMAILS
 from core.database import db
 from core.security import get_current_user, get_admin_user
 from models.common import MessageCreate, MessageResponse
+from routes.notifications import notify
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
@@ -59,6 +60,26 @@ async def send_message(data: MessageCreate, user = Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.messages.insert_one(message)
+
+    # Avisar a quien lo recibe. Hasta hoy el mensaje se guardaba y ya: le escribías a un
+    # cliente de 897 o de 1.500 y se enteraba SI entraba por su cuenta. Y ese es el canal
+    # por el que se le acompaña.
+    #
+    # Se avisa en las dos direcciones: al cliente cuando le escribe su coach, y al coach
+    # cuando le escribe un cliente, que es el que no puede quedarse sin contestar.
+    quien = (user.get("name") or "").strip()
+    de_staff = user.get("role") in ("admin", "trainer")
+    titulo = (f"{quien or 'Tu entrenador'} te ha escrito" if de_staff
+              else f"{quien or 'Un cliente'} te ha escrito")
+    # El propio mensaje va en el cuerpo, recortado: se lee en la campana sin tener que
+    # entrar, y si es largo se entra.
+    texto = (data.content or "").strip()
+    # El enlace es el del que RECIBE: si escribe el coach, el cliente va a su panel de
+    # mensajes; si escribe el cliente, el coach va al suyo, que es otra pantalla.
+    destino = "/dashboard/messages" if de_staff else "/admin/messages"
+    await notify(receiver_id, "mensaje", titulo, destino,
+                 body=(texto[:140] + "…") if len(texto) > 140 else texto)
+
     return MessageResponse(**message)
 
 @router.get("", response_model=List[MessageResponse])

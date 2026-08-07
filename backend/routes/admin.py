@@ -1193,7 +1193,20 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         if cid and (cid not in last_report or ca > last_report[cid]):
             last_report[cid] = ca
 
-    sin_macros, sin_rutina, reporte_pendiente = [], [], []
+    # Cuándo se le habló por última vez. Solo cuentan los mensajes que SALEN del equipo:
+    # que el cliente escriba no es contacto, es justo lo contrario -- si escribió y nadie
+    # le contestó, ese cliente tiene que salir en rojo, no desaparecer de la lista.
+    staff_ids = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
+    ultimo_contacto: Dict[str, str] = {}
+    async for m in db.messages.find(
+        {"sender_id": {"$in": list(staff_ids)}},
+        {"_id": 0, "receiver_id": 1, "created_at": 1},
+    ):
+        uid, ca = m.get("receiver_id"), m.get("created_at")
+        if uid and ca and (uid not in ultimo_contacto or ca > ultimo_contacto[uid]):
+            ultimo_contacto[uid] = ca
+
+    sin_macros, sin_rutina, reporte_pendiente, sin_contacto = [], [], [], []
     for p in profiles:
         u = umap.get(p.get("user_id"), {})
         base = {
@@ -1211,6 +1224,30 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         if plan_grants_feature(p.get("plan"), "rutina") and p["id"] not in active_routine_clients:
             sin_rutina.append(base)
 
+        # Sin contacto: cuántos días lleva sin que nadie del equipo le hable. Solo para
+        # los planes que incluyen chat -- al de autogestión no se le acompaña por ahí, así
+        # que sacarlo en esta lista sería ruido todos los días.
+        #
+        # Y no hay umbral: se enseñan todos con sus días. Poner el corte en el panel (en
+        # rojo a partir de X) es decisión de quien mira, no del servidor, y cada plan tiene
+        # su ritmo: al de 1.500 con llamada semanal, quince días es un escándalo; al de 897
+        # con reporte quincenal, no tanto.
+        # El chat NO está en `habilitaciones` (ahí viven calculadora, rutina, reportes,
+        # suplementación, harbiz y acompañamiento): está en las features del plan.
+        if plan_grants_feature(p.get("plan"), "chat"):
+            visto = ultimo_contacto.get(p.get("user_id"))
+            desde = visto or p.get("cycle_start") or p.get("created_at")
+            dias = None
+            if desde:
+                try:
+                    d = datetime.fromisoformat(str(desde).replace("Z", "+00:00"))
+                    if d.tzinfo is None:
+                        d = d.replace(tzinfo=timezone.utc)
+                    dias = (now - d).days
+                except (ValueError, TypeError):
+                    dias = None
+            sin_contacto.append({**base, "dias": dias, "nunca": visto is None})
+
         # Reporte de esta semana pendiente (no enviado dentro de la semana de ciclo).
         state = compute_client_report_state(p, catalog, now)
         if state["due"]:
@@ -1225,6 +1262,9 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         "sin_macros": sin_macros,
         "sin_rutina": sin_rutina,
         "reporte_pendiente": reporte_pendiente,
+        # De más abandonado a menos: el que lleva más tiempo sin que nadie le hable va
+        # arriba, que es donde hay que mirar primero.
+        "sin_contacto": sorted(sin_contacto, key=lambda x: -(x["dias"] or 0)),
         "generated_at": now.isoformat(),
     }
 
