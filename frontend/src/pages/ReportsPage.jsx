@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import InformeMensual from '../components/reports/InformeMensual';
 import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
+import TresFotos from '../components/reports/TresFotos';
 
 const ORANGE = '#FF671F';
 
@@ -117,7 +118,7 @@ const PREGUNTAS_REPORTE = [
 ];
 
 const ReportsPage = () => {
-    const { api } = useAuth();
+    const { api, token } = useAuth();
     const [reports, setReports] = useState([]);
     const [evolution, setEvolution] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -412,6 +413,10 @@ const ReportsPage = () => {
                         </div>
                     </div>
                     )}
+
+                    {/* Las tres fotos, aquí y no en los check-ins: un solo sitio para
+                        subirlas, y la rejilla de check-ins se queda para verlas. */}
+                    {esMensual && <TresFotos api={api} token={token} />}
 
                     {/* Confirmación de huecos: sustituye a los dos deslizadores de
                         cumplimiento (documento 31-07, parte 7.1). El cumplimiento sale del

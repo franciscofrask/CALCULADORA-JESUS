@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import {
@@ -108,53 +109,41 @@ const PhotoThumb = ({ photo, api, onDeleted }) => {
     );
 };
 
+/**
+ * La rejilla de fotos: solo para VERLAS.
+ *
+ * Se subían aquí y también se borraban aquí. Desde el 06-08-2026 hay un solo sitio para
+ * subirlas -- el reporte, con sus tres poses y la del mes pasado al lado para colocarse
+ * igual -- y esta pantalla se queda para mirarlas, que es lo que se viene a hacer aquí.
+ */
 const PhotosSection = ({ api }) => {
     const [photos, setPhotos] = useState([]);
-    const [uploading, setUploading] = useState(false);
+    const navigate = useNavigate();
 
     const load = useCallback(() => {
         api.get('/reports/photos').then(r => setPhotos(r.data?.photos || [])).catch(() => {});
     }, [api]);
     useEffect(() => { load(); }, [load]);
 
-    const onPick = async (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = '';
-        if (!file) return;
-        setUploading(true);
-        try {
-            const fd = new FormData();
-            fd.append('file', file);
-            await api.post('/reports/photos', fd);
-            toast.success('Foto subida');
-            load();
-        } catch (err) {
-            toast.error(err.response?.data?.detail || 'Error subiendo la foto');
-        } finally {
-            setUploading(false);
-        }
-    };
-
     const remove = async (id) => {
         try { await api.delete(`/reports/photos/${id}`); setPhotos(p => p.filter(x => x.id !== id)); }
-        catch { toast.error('Error borrando la foto'); }
+        catch (err) { toast.error(err.response?.data?.detail || 'Error borrando la foto'); }
     };
 
     return (
         <Card className="p-5">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
                     <Camera className="w-4 h-4 text-brand" />
                     <p className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Fotos de progreso</p>
                 </div>
-                <label className="cursor-pointer inline-flex items-center gap-2 text-sm font-bold text-white bg-[#FF671F] hover:bg-[#FF671F]/90 px-3 py-2 rounded-xl transition-colors">
-                    {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                    {uploading ? 'Subiendo...' : 'Subir foto'}
-                    <input type="file" accept="image/*" className="hidden" onChange={onPick} disabled={uploading} />
-                </label>
+                <button onClick={() => navigate('/dashboard/reports')}
+                    className="text-xs text-brand hover:underline underline-offset-4 font-semibold">
+                    Se suben en tu reporte
+                </button>
             </div>
             {photos.length === 0 ? (
-                <p className="text-foreground/40 text-center py-6 text-sm">Aún no has subido fotos</p>
+                <p className="text-foreground/40 text-center py-6 text-sm">Aún no has subido fotos. Se suben al rellenar tu reporte.</p>
             ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                     {photos.map(p => <PhotoThumb key={p.id} photo={p} api={api} onDeleted={remove} />)}

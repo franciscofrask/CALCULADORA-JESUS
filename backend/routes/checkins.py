@@ -271,6 +271,10 @@ def _photo_meta(doc: dict) -> dict:
         "size":         doc.get("size"),
         "taken_at":     doc.get("taken_at"),
         "uploaded_at":  doc.get("uploaded_at"),
+        # Sin la pose, tres fotos de un mes son tres fotos; con ella son la misma foto de
+        # meses distintos, que es lo único que se puede comparar.
+        "pose":         doc.get("pose"),
+        "inicial":      bool(doc.get("inicial")),
     }
 
 
@@ -283,9 +287,15 @@ async def _resolve_client_id_for_user(user: dict) -> Optional[str]:
 async def upload_progress_photo(
     file: UploadFile = File(..., description="Foto de progreso (JPEG, PNG, WebP, HEIC). Máx 4 MB."),
     taken_at: Optional[str] = Query(None, description="Fecha ISO de la foto (por defecto ahora)."),
+    pose: Optional[str] = Query(None, description="frente | espalda | perfil"),
     user = Depends(get_current_user),
 ):
-    """El cliente sube una foto de progreso. Guardada en `client_photos`. Devuelve metadatos."""
+    """El cliente sube una foto de progreso. Guardada en `client_photos`. Devuelve metadatos.
+
+    La `pose` es lo que permite comparar: sin ella, tres fotos de un mes son tres fotos, y
+    con ella son la misma foto de tres meses distintos. Se acepta vacía porque las que ya
+    estaban subidas no la tienen.
+    """
     content_type = (file.content_type or "").lower()
     if content_type not in ALLOWED_PHOTO_TYPES:
         raise HTTPException(
@@ -313,6 +323,19 @@ async def upload_progress_photo(
         except Exception:
             taken_at = None
 
+    pose_norm = (pose or "").strip().lower()
+    if pose_norm not in ("frente", "espalda", "perfil"):
+        pose_norm = None
+
+    # ¿Es la primera de esta pose? Esa no se borra nunca: es contra la que se compara todo
+    # lo demás, y sin ella la comparativa pierde el "de dónde vengo".
+    es_inicial = False
+    if pose_norm:
+        es_inicial = await db.client_photos.count_documents(
+            {"client_id": client_id, "pose": pose_norm}) == 0
+    else:
+        es_inicial = await db.client_photos.count_documents({"client_id": client_id}) == 0
+
     doc = {
         "id":           str(uuid.uuid4()),
         "client_id":    client_id,
@@ -322,6 +345,8 @@ async def upload_progress_photo(
         "size":         len(contents),
         "taken_at":     taken_at or now_iso,
         "uploaded_at":  now_iso,
+        "pose":         pose_norm,
+        "inicial":      es_inicial,
         "data":         Binary(contents),
     }
     await db.client_photos.insert_one(doc)
@@ -364,11 +389,19 @@ async def get_photo(photo_id: str, user = Depends(get_current_user)):
 @router.delete("/reports/photos/{photo_id}")
 async def delete_photo(photo_id: str, user = Depends(get_current_user)):
     """El dueño o staff borra una foto."""
-    photo = await db.client_photos.find_one({"id": photo_id}, {"_id": 0, "user_id": 1, "client_id": 1})
+    photo = await db.client_photos.find_one(
+        {"id": photo_id}, {"_id": 0, "user_id": 1, "client_id": 1, "inicial": 1})
     if not photo:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     if photo.get("user_id") != user["id"]:
         await _assert_staff_photo_access(user, photo.get("user_id"))
+    # La inicial no se borra. Es contra la que se compara todo lo demás: sin ella la
+    # comparativa se queda sin el "de dónde vengo", que es la que más dice de las cuatro.
+    if photo.get("inicial"):
+        raise HTTPException(
+            status_code=400,
+            detail="Esta es tu foto inicial y no se puede borrar: es contra la que se comparan las demás.",
+        )
     await db.client_photos.delete_one({"id": photo_id})
     return {"ok": True}
 
