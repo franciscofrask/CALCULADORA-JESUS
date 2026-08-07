@@ -723,6 +723,24 @@ class Nivel1Submit(BaseModel):
     por_que_fallaron: Optional[str] = None      # P25
     motivo_apuntarse: Optional[str] = None      # P26
 
+    # Bloque 3 del documento del 06-08-2026. Lo que hace falta para montarle la rutina, y
+    # que faltaba: entrenar AHORA no es lo mismo que llevar años (se puede llevar diez y
+    # estar parado desde marzo), y lo que NO tiene pesa tanto como lo que tiene -- una
+    # rutina con jaula de sentadilla no vale si en su gimnasio no hay.
+    entrena_ahora: Optional[str] = None             # si | irregular | no
+    maquinas_que_faltan: Optional[str] = None
+    ejercicios_imposibles: Optional[str] = None
+
+    # Bloque 5: su suplementacion. No existia, y sin esto se le pauta a ciegas: repitiendole
+    # algo que ya toma o chocando con lo que lleva.
+    suplementos_ahora: Optional[str] = None
+    suplementos_antes: Optional[str] = None
+    quiere_pauta_suplementos: Optional[str] = None  # si | lo_justo | no
+
+    # Bloque 4: la intencion cuenta tanto como el uso. Hay que saberlo ANTES, no cuando ya
+    # lo ha hecho.
+    farmacologia_uso: Optional[str] = None          # uso | use | intencion | nunca
+
 # Macros Models
 class MacrosData(BaseModel):
     protein: float = Field(ge=0, le=MACRO_MAX_GRAMOS)

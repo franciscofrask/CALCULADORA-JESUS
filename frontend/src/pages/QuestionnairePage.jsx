@@ -269,6 +269,44 @@ const STEPS_NIVEL1 = [
         ],
     },
     {
+        // Bloque 4: la intención cuenta tanto como el uso. Quien piensa empezar hay que
+        // saberlo ANTES, no cuando ya lo ha hecho.
+        type: 'choice', key: 'farmacologia_uso',
+        title: '¿Usas o has usado ayudas farmacológicas?',
+        desc: 'Sin juicios: se pregunta porque cambia lo que se te puede pedir y lo que hay que vigilar.',
+        options: [
+            { value: 'uso', label: 'Sí, ahora mismo' },
+            { value: 'use', label: 'He usado antes, ahora no' },
+            { value: 'intencion', label: 'No, pero tengo intención' },
+            { value: 'nunca', label: 'No, ni me lo planteo' },
+        ],
+    },
+    // ── Bloque 5 · Tu suplementación ────────────────────────────────────────────
+    // No existía. El equipo le pauta suplementos sin saber qué está tomando ya, que es
+    // la forma más rápida de repetirle algo o de chocar con lo que lleva.
+    {
+        type: 'text', key: 'suplementos_ahora',
+        title: '¿Qué suplementos tomas ahora?',
+        desc: 'Cuáles y a qué dosis, si la sabes. Si no tomas ninguno, escribe "ninguno".',
+        textarea: true,
+    },
+    {
+        type: 'text', key: 'suplementos_antes',
+        title: '¿Y cuáles has tomado antes?',
+        desc: 'Sobre todo si notaste algo, bueno o malo. Si no has tomado nada, escribe "nada".',
+        textarea: true,
+    },
+    {
+        type: 'choice', key: 'quiere_pauta_suplementos',
+        title: '¿Quieres que te pautemos suplementación?',
+        desc: 'Nunca hace falta para conseguir resultados. Es tu decisión.',
+        options: [
+            { value: 'si', label: 'Sí, quiero que me lo pautéis' },
+            { value: 'lo_justo', label: 'Solo lo imprescindible' },
+            { value: 'no', label: 'No, prefiero no tomar nada' },
+        ],
+    },
+    {
         // P15
         type: 'choice', key: 'zona_grasa', title: '¿Dónde acumulas más grasa?',
         options: [
@@ -319,6 +357,16 @@ const STEPS_NIVEL1 = [
     // bloque de preferencias del Nivel 0 (no repetir); los alimentos a evitar
     // se eligen con el selector visual de preferencias, no en texto libre.
     {
+        // Bloque 3: si entrena AHORA no es lo mismo que cuántos años lleva. Uno puede
+        // llevar diez años entrenando y estar parado desde marzo.
+        type: 'choice', key: 'entrena_ahora', title: '¿Entrenas ahora mismo de forma regular?',
+        options: [
+            { value: 'si', label: 'Sí, con constancia' },
+            { value: 'irregular', label: 'Voy, pero de forma irregular' },
+            { value: 'no', label: 'Ahora mismo no entreno' },
+        ],
+    },
+    {
         type: 'multiselect', key: 'material', title: '¿Con qué material cuentas para entrenar?',
         desc: 'Marca todo lo que tengas disponible.',
         options: [
@@ -329,6 +377,20 @@ const STEPS_NIVEL1 = [
             { value: 'bandas', label: 'Bandas elásticas' },
             { value: 'nada', label: 'Nada (solo peso corporal)' },
         ],
+    },
+    {
+        // Lo que NO tiene importa tanto como lo que tiene: una rutina con jaula de
+        // sentadilla no vale de nada si en su gimnasio no hay.
+        type: 'text', key: 'maquinas_que_faltan',
+        title: '¿Hay alguna máquina básica que no tengas?',
+        desc: 'Jaula de sentadilla, prensa, poleas... Si lo tienes todo, escribe "no".',
+        textarea: true,
+    },
+    {
+        type: 'text', key: 'ejercicios_imposibles',
+        title: '¿Hay algún ejercicio que no puedas hacer?',
+        desc: 'Por una lesión, por dolor o porque nunca te ha ido bien. Si no hay ninguno, escribe "no".',
+        textarea: true,
     },
     {
         type: 'choice', key: 'cardio', title: '¿Haces cardio?',
@@ -965,6 +1027,17 @@ const QuestionnairePage = () => {
                 hora_entreno: null,
                 material: answers.material || null,
                 cardio: answers.cardio || null,
+                // Bloque 3: lo que hace falta para montarle la rutina. Entrenar AHORA no es
+                // lo mismo que llevar años, y lo que NO tiene pesa tanto como lo que tiene.
+                entrena_ahora: answers.entrena_ahora || null,
+                maquinas_que_faltan: answers.maquinas_que_faltan || null,
+                ejercicios_imposibles: answers.ejercicios_imposibles || null,
+                // Bloque 5: su suplementación. Sin esto se le pauta a ciegas.
+                suplementos_ahora: answers.suplementos_ahora || null,
+                suplementos_antes: answers.suplementos_antes || null,
+                quiere_pauta_suplementos: answers.quiere_pauta_suplementos || null,
+                // Bloque 4: la intención cuenta tanto como el uso.
+                farmacologia_uso: answers.farmacologia_uso || null,
                 alimentos_evitados: null,
                 alergias: answers.alergias || null,
                 num_comidas: answers.pref_num_comidas ?? null,
@@ -1100,12 +1173,20 @@ const QuestionnairePage = () => {
                     hay entrenador detrás. Al que paga más no se le deja esperando con peores
                     números: ya tiene los suyos y encima se los van a repasar. */}
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
-                    {!modoAjuste ? 'Tus macros de partida'
+                    {/* Al del plan con coach hay que decirle con estas palabras que lo que
+                        tiene NO es lo definitivo: si no, se queda con estos números
+                        creyendo que son los suyos y luego le cambian sin entender por qué. */}
+                    {!modoAjuste && tieneCoach ? 'Estos son tus macros provisionales'
+                        : !modoAjuste ? 'Tus macros de partida'
                         : entrega?.con_entrenador ? 'Tus macros de partida'
                         : 'Estos son tus macros de inicio'}
                 </h2>
                 <p className="text-foreground/60 mb-6 text-sm md:text-base">
-                    {!modoAjuste
+                    {!modoAjuste && tieneCoach
+                        /* Texto de Jesús, literal. Así tiene con qué empezar desde el
+                           minuto uno y sabe que lo que tiene no es lo definitivo. */
+                        ? 'No son los definitivos. Son para que puedas empezar a usar la app desde hoy, mientras tu entrenador revisa tu caso. Completa tu cuestionario inicial y en menos de 48 horas tendrás tus macros definitivos.'
+                        : !modoAjuste
                         ? 'Ya puedes empezar a comer hoy. Termina de ajustarlos para afinarlos a tu caso.'
                         /* Sin entrenador asignado no se dice "tu entrenador": casi ningún
                            cliente tiene uno puesto y prometer una persona que no existe se
@@ -1169,7 +1250,9 @@ const QuestionnairePage = () => {
                         <>
                             <Button onClick={() => navigate('/questionnaire?ajustar=1')}
                                 className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                                Ajustar mis macros <ArrowRight className="w-5 h-5 ml-2" />
+                                {/* Para el de coach no es "ajustar macros": es completar su
+                                    cuestionario, que es lo que espera su entrenador. */}
+                                {tieneCoach ? 'Completar mi cuestionario' : 'Ajustar mis macros'} <ArrowRight className="w-5 h-5 ml-2" />
                             </Button>
                             <Button variant="ghost" onClick={() => navigate('/dashboard')}
                                 className="text-foreground/60 py-6 text-base">

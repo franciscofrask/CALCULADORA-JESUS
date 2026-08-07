@@ -1166,6 +1166,10 @@ const ClientDetailPage = () => {
                             )}
                         </CardContent></Card>
                     ) : (!calma_raw?.formulario_inicial && <EmptyState icon={ClipboardList} message="Cuestionario pendiente." />)}
+                    {/* El cuestionario largo. Se rellenaba entero y NO se veía en ninguna
+                        parte de la ficha: treinta preguntas de historia, salud, entreno,
+                        suplementación y comida que el cliente contestaba para nadie. */}
+                    <PerfilLargo nivel1={profile?.nivel1} />
                     {calma_raw?.formulario_inicial && <CalmaCuestionario fi={calma_raw.formulario_inicial} />}
                 </TabsContent>
 
@@ -1662,6 +1666,139 @@ const CalmaField = ({ label, value }) => {
             <p className="text-[10px] text-white/40 uppercase tracking-wider mb-0.5">{label}</p>
             <p className="text-white/90 text-sm whitespace-pre-wrap break-words">{text}</p>
         </div>
+    );
+};
+
+/**
+ * El cuestionario largo del cliente (perfil.nivel1), agrupado como en el documento.
+ *
+ * Existe porque no existía: el cliente contestaba las treinta preguntas -- su historia,
+ * su salud, con qué entrena, qué suplementos toma -- y no se pintaban en ninguna parte de
+ * la ficha. Se le vendía "tu coach usará todo esto para tu estrategia" y el coach no
+ * tenía dónde leerlo.
+ *
+ * Se pinta lo que HAY: si un bloque está vacío no se enseña, para que no parezca que el
+ * cliente dejó cosas sin contestar cuando lo que pasa es que no se le preguntaron.
+ */
+const ETIQUETAS_NIVEL1 = {
+    // Tu historia
+    peso_maximo: 'Peso máximo', peso_maximo_cuando: '¿Cuándo?',
+    peso_minimo: 'Peso mínimo', peso_habitual: 'Peso habitual',
+    peso_mejor_momento: 'Peso en su mejor momento',
+    mejor_definicion_cuando: 'Mejor punto de definición',
+    hasta_donde: 'Hasta dónde quiere llegar',
+    vario_peso_3m: '¿Ha variado su peso en 3 meses?',
+    tiempo_intentandolo: 'Tiempo intentándolo',
+    motivo_apuntarse: 'Por qué se apuntó',
+    dietas_previas: 'Dietas que ha hecho',
+    dieta_que_funciona: 'La que mejor le funcionó',
+    por_que_fallaron: 'Por qué fallaron',
+    entrenador_anterior: 'Entrenador anterior',
+    // Tu entrenamiento
+    training_experience: 'Años entrenando',
+    entrena_ahora: '¿Entrena ahora?',
+    material: 'Material',
+    maquinas_que_faltan: 'Máquinas que le faltan',
+    ejercicios_imposibles: 'Ejercicios que no puede hacer',
+    cardio: 'Cardio',
+    dias_entreno: 'Días de entreno',
+    // Tu salud
+    trt: 'TRT', farmacologia_uso: 'Farmacología',
+    zona_grasa: 'Dónde acumula grasa',
+    // Tu suplementación
+    suplementos_ahora: 'Toma ahora',
+    suplementos_antes: 'Ha tomado antes',
+    quiere_pauta_suplementos: '¿Quiere que le pauten?',
+    // Tu comida
+    alergias: 'Alergias e intolerancias',
+    num_comidas: 'Comidas al día',
+    // Otros
+    biotype: 'Biotipo', height: 'Altura', birthdate: 'Fecha de nacimiento',
+};
+
+const BLOQUES_NIVEL1 = [
+    ['Su historia', ['peso_maximo', 'peso_maximo_cuando', 'peso_minimo', 'peso_habitual',
+                     'peso_mejor_momento', 'mejor_definicion_cuando', 'hasta_donde',
+                     'vario_peso_3m', 'tiempo_intentandolo', 'motivo_apuntarse',
+                     'dietas_previas', 'dieta_que_funciona', 'por_que_fallaron',
+                     'entrenador_anterior']],
+    ['Su entrenamiento', ['training_experience', 'entrena_ahora', 'material',
+                          'maquinas_que_faltan', 'ejercicios_imposibles', 'cardio',
+                          'dias_entreno']],
+    ['Su salud', ['trt', 'farmacologia_uso', 'zona_grasa']],
+    ['Su suplementación', ['suplementos_ahora', 'suplementos_antes', 'quiere_pauta_suplementos']],
+    ['Su comida', ['alergias', 'num_comidas']],
+];
+
+// Los valores se guardan en clave ('3_10', 'irregular'); el coach lee castellano.
+const VALORES_NIVEL1 = {
+    menos_1: 'Menos de 1 año', '1_3': 'Entre 1 y 3 años', '3_10': 'Entre 3 y 10 años',
+    mas_10: 'Más de 10 años', parado: 'Entrenó antes, lleva tiempo parado',
+    si: 'Sí', no: 'No', antes: 'Antes sí, ahora no',
+    irregular: 'Va, pero de forma irregular',
+    uso: 'Sí, ahora mismo', use: 'Ha usado antes, ahora no',
+    intencion: 'No, pero tiene intención', nunca: 'No, ni se lo plantea',
+    lo_justo: 'Solo lo imprescindible',
+};
+
+const PerfilLargo = ({ nivel1 }) => {
+    if (!nivel1 || !Object.keys(nivel1).length) return null;
+
+    const valor = (v) => {
+        if (v == null || v === '') return null;
+        if (Array.isArray(v)) return v.length ? v.map(equipamientoLabel).join(' · ') : null;
+        return VALORES_NIVEL1[v] || String(v);
+    };
+
+    const salud = nivel1.salud || {};
+    const hayAlgoDeSalud = Object.values(salud).some(v => v);
+
+    return (
+        <Card className="bg-[#111] border-[#222]" data-testid="perfil-largo">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4" />Cuestionario completo
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+                {BLOQUES_NIVEL1.map(([titulo, claves]) => {
+                    const filas = claves
+                        .map(k => [ETIQUETAS_NIVEL1[k] || k, valor(nivel1[k])])
+                        .filter(([, v]) => v);
+                    if (!filas.length) return null;
+                    return (
+                        <div key={titulo}>
+                            <p className="text-xs text-[#FF671F] uppercase tracking-wider font-bold mb-2">{titulo}</p>
+                            <div className="space-y-2">
+                                {filas.map(([etiqueta, v]) => (
+                                    <div key={etiqueta} className="grid grid-cols-[minmax(0,11rem)_1fr] gap-3 text-sm">
+                                        <span className="text-white/40">{etiqueta}</span>
+                                        <span className="text-white/90 whitespace-pre-wrap break-words">{v}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+
+                {hayAlgoDeSalud && (
+                    <div>
+                        <p className="text-xs text-[#FF671F] uppercase tracking-wider font-bold mb-2">Sueño, estrés y lesiones</p>
+                        <div className="space-y-2">
+                            {[['sueno', 'Sueño'], ['estres', 'Estrés'], ['medicacion', 'Medicación'],
+                              ['hormonal', 'Hormonal'], ['lesiones', 'Lesiones']]
+                                .filter(([k]) => salud[k])
+                                .map(([k, etiqueta]) => (
+                                    <div key={k} className="grid grid-cols-[minmax(0,11rem)_1fr] gap-3 text-sm">
+                                        <span className="text-white/40">{etiqueta}</span>
+                                        <span className="text-white/90 whitespace-pre-wrap break-words">{String(salud[k])}</span>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 };
 
