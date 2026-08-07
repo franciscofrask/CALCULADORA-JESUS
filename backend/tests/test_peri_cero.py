@@ -141,9 +141,9 @@ class TestArranqueNoAplicaEnSinPeri:
         assert leer_peri({"protein": 40.0, "carbs": 30.0}, "intra_post") == (40.0, 30.0)
 
     def test_peri_configurado_con_sin_peri_se_reparte_en_las_comidas(self):
-        # Decision del 22-06 y PENDIENTE de confirmar con Jesus: quitar la bebida no le quita
-        # los gramos del dia, se los come en solido. Este test fija el comportamiento actual
-        # para que un cambio de criterio salte aqui y no en la dieta de un cliente.
+        # Quitar la bebida no le quita los gramos del dia: se los come en solido. Confirmado
+        # por el doc de Jesus del 07-08, que ademas fija COMO se reparten (entran en el total
+        # del dia y pasan por las tablas, no a partes iguales; ver test_reparto_calma_paridad).
         assert totales(reparto({"protein": 40.0, "carbs": 30.0},
                                opcion_peri="sin_peri")) == (230.0, 270.0, 50.0)
 

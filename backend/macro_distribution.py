@@ -46,7 +46,7 @@ def leer_peri(peri: Optional[Dict], opcion_peri: Optional[str]) -> tuple:
     dicho que no toma peri, no hay presupuesto ninguno que repartir, y inventarle 35/15 le
     meteria en las comidas gramos que nadie le ha asignado. Ojo: esto NO toca al cliente que
     si tiene peri asignado y elige `sin_peri`; ese presupuesto es real y se sigue repartiendo
-    entre las comidas (decision del 22-06, pendiente de confirmar con Jesus).
+    entre las comidas (confirmado en el doc de Jesus del 07-08).
     """
     if opcion_peri == "sin_peri":
         por_defecto_p = por_defecto_h = 0.0
@@ -390,37 +390,41 @@ def distribuir_macros(
     extra_P = peri.get("extra_comidas", {}).get("P", 0.0)
     extra_H = peri.get("extra_comidas", {}).get("H", 0.0)
 
-    # 2. Distribuir comidas principales
+    # 2. El presupuesto de peri que el cliente no se toma en bebida (modos `sin_peri` y el
+    # resto del `solo_intra`) se lo come en las comidas, asi que entra en el total del dia
+    # ANTES de repartir: el tramo de hidratos y los porcentajes de las tablas se aplican
+    # sobre lo que de verdad va a las comidas.
+    #
+    # Antes se sumaba DESPUES, a partes iguales entre las 4 comidas, y eso deshacia la forma
+    # del reparto: 50 H de entreno + 15 de peri en modo `sin_peri` daba 18,8 / 18,8 / 13,8 /
+    # 13,8 en vez de los 22,5 / 22,5 / 10 / 10 del tramo de 50-100 g (doc de Jesus del 07-08).
+    # El total del dia no cambia; cambia como se reparte.
+    p_comidas = p_entreno + extra_P
+    h_comidas = h_entreno + extra_H
+    g_comidas = g_entreno
+
+    # 3. Distribuir comidas principales
     if single_meal:
         # Modo comida única: la única comida recibe TODO el presupuesto de entreno (no-peri);
         # el peri (intra/post) queda aparte. Sin escenarios de H ni reparto.
-        comidas = {"C1": {"P": round(p_entreno, 1), "H": round(h_entreno, 1), "G": round(g_entreno, 1)}}
+        comidas = {"C1": {"P": round(p_comidas, 1), "H": round(h_comidas, 1), "G": round(g_comidas, 1)}}
         escenario = 0
     elif num_comidas == 3:
         # 3 comidas: reparto equitativo, sin escenarios de H
-        comidas = _distribuir_3_comidas(p_entreno, h_entreno, g_entreno)
+        comidas = _distribuir_3_comidas(p_comidas, h_comidas, g_comidas)
         escenario = 0
     else:
         # 4 comidas: usar escenarios según H
-        escenario = _get_escenario(h_entreno)
+        escenario = _get_escenario(h_comidas)
 
         if escenario == 1:
-            comidas = _distribuir_escenario_1_2(p_entreno, h_entreno, g_entreno, momento_entreno, 1)
+            comidas = _distribuir_escenario_1_2(p_comidas, h_comidas, g_comidas, momento_entreno, 1)
         elif escenario == 2:
-            comidas = _distribuir_escenario_1_2(p_entreno, h_entreno, g_entreno, momento_entreno, 2)
+            comidas = _distribuir_escenario_1_2(p_comidas, h_comidas, g_comidas, momento_entreno, 2)
         elif escenario == 3:
-            comidas = _distribuir_escenario_3(p_entreno, h_entreno, g_entreno, momento_entreno)
+            comidas = _distribuir_escenario_3(p_comidas, h_comidas, g_comidas, momento_entreno)
         else:
-            comidas = _distribuir_escenario_4(p_entreno, h_entreno, g_entreno, momento_entreno)
-
-    # 3. Sumar extra del peri a las comidas (si solo_intra o sin_peri)
-    if extra_P > 0 or extra_H > 0:
-        num = len(comidas)
-        extra_P_per = round(extra_P / num, 1)
-        extra_H_per = round(extra_H / num, 1)
-        for key in comidas:
-            comidas[key]["P"] = round(comidas[key]["P"] + extra_P_per, 1)
-            comidas[key]["H"] = round(comidas[key]["H"] + extra_H_per, 1)
+            comidas = _distribuir_escenario_4(p_comidas, h_comidas, g_comidas, momento_entreno)
 
     # 4. Construir periworkout (sin el campo extra_comidas)
     periworkout_result = {}
