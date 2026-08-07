@@ -76,7 +76,12 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                     "tipo": "macros",
                     "titulo": "Tus macros son provisionales",
                     "cuerpo": "Quince minutos y los tienes finos.",
-                    "link": "/dashboard/ajustar-macros",
+                    # OJO: la pantalla se llama "Ajustar macros" pero su ruta es
+                    # /dashboard/macro-calculator. Aqui ponia /dashboard/ajustar-macros, que
+                    # no existe, y al no existir caia en el comodin del router y echaba al
+                    # cliente al login. Y este aviso lo recibe casi todo el mundo a las 2 h
+                    # de darse de alta, asi que era la primera cosa que tocaban de la app.
+                    "link": "/dashboard/macro-calculator",
                     "calendario": True,
                 })
 

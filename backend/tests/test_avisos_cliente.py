@@ -173,20 +173,24 @@ class TestCalendario:
         assert avisos_de_calendario(perfil=perfil, ahora=AHORA, semanas_ciclo=12) == []
 
 
+# Todos los avisos que la app sabe mandar, forzando a la vez cada condición que los dispara.
+TODOS_LOS_AVISOS = (
+    avisos_condicionados(ahora=AHORA, dias_sin_peso=30, dias_sin_dieta=30,
+                         semanas_sin_ajustar=8, reporte_sin_fotos=True,
+                         estancado=True, dias_sin_entrar=30)
+    + avisos_de_calendario(perfil={"created_at": (AHORA - timedelta(days=1)).isoformat(),
+                                   "week": 11, "id": "c1"},
+                           ahora=AHORA, semanas_ciclo=12,
+                           arranque=AHORA + timedelta(days=1),
+                           proximo_ajuste=AHORA,
+                           rutina_caduca=AHORA + timedelta(days=3))
+)
+
+
 class TestElTono:
     """"todas escritas desde el alivio, no desde la exigencia"."""
 
-    TODOS = (
-        avisos_condicionados(ahora=AHORA, dias_sin_peso=30, dias_sin_dieta=30,
-                             semanas_sin_ajustar=8, reporte_sin_fotos=True,
-                             estancado=True, dias_sin_entrar=30)
-        + avisos_de_calendario(perfil={"created_at": (AHORA - timedelta(days=1)).isoformat(),
-                                       "week": 11, "id": "c1"},
-                               ahora=AHORA, semanas_ciclo=12,
-                               arranque=AHORA + timedelta(days=1),
-                               proximo_ajuste=AHORA,
-                               rutina_caduca=AHORA + timedelta(days=3))
-    )
+    TODOS = TODOS_LOS_AVISOS
 
     @pytest.mark.parametrize("prohibida", [
         "fuerza de voluntad", "excusa", "vago", "deberías", "deberias",
@@ -211,3 +215,62 @@ class TestElTono:
         """Un aviso sin sitio al que ir es solo ruido."""
         for a in self.TODOS:
             assert a.get("link"), f"«{a['titulo']}» no lleva a ninguna parte"
+
+
+# ── Los enlaces existen de verdad (punto 10 del doc del 07-08) ───────────────
+#
+# El aviso de los macros provisionales llevaba a /dashboard/ajustar-macros, que no existe
+# porque la pantalla está en /dashboard/macro-calculator. Una dirección que no existe cae en
+# el comodín del router, y el comodín mandaba al login: el cliente nuevo pulsaba la primera
+# notificación de su vida en la app y acababa en la pantalla de identificarse.
+#
+# Esto lee las rutas de verdad del router y las cruza con los enlaces de los avisos, así que
+# renombrar una pantalla y olvidarse de un aviso vuelve a saltar aquí y no en el móvil de un
+# cliente.
+
+import os
+import re
+
+APP_JS = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "src", "App.js")
+
+
+def _rutas_declaradas():
+    """Las direcciones que el router sabe pintar, montadas desde App.js."""
+    with open(APP_JS, encoding="utf-8") as fh:
+        fuente = fh.read()
+    sueltas, hijas, padre = set(), set(), None
+    for linea in fuente.splitlines():
+        m = re.search(r'path="([^"]+)"', linea)
+        if not m:
+            continue
+        ruta = m.group(1)
+        if ruta.startswith("/"):
+            padre = ruta.rstrip("/")
+            sueltas.add(padre or "/")
+        elif ruta != "*" and padre:
+            hijas.add(f"{padre}/{ruta}")
+    return sueltas | hijas
+
+
+class TestLosEnlacesLlevanADondeDicen:
+
+    @pytest.fixture(scope="class")
+    def rutas(self):
+        r = _rutas_declaradas()
+        assert "/dashboard/macro-calculator" in r, "no se han podido leer las rutas de App.js"
+        return r
+
+    @pytest.mark.parametrize("aviso", TODOS_LOS_AVISOS)
+    def test_el_enlace_existe_en_el_router(self, aviso, rutas):
+        link = (aviso.get("link") or "").split("?")[0].rstrip("/") or "/"
+        assert link in rutas, (
+            f"«{aviso['titulo']}» lleva a {link}, que no es ninguna pantalla de la app: "
+            f"el cliente acabaría fuera de donde quería ir")
+
+    def test_el_de_los_macros_provisionales_va_a_la_pantalla_de_macros(self):
+        """El caso concreto que echaba al cliente al login: lo recibe casi todo el mundo a
+        las dos horas de darse de alta, así que suele ser lo primero que toca de la app."""
+        provisionales = [a for a in TODOS_LOS_AVISOS
+                         if a["titulo"] == "Tus macros son provisionales"]
+        assert provisionales, "ya no existe ese aviso: si se quitó, quitar también este test"
+        assert provisionales[0]["link"] == "/dashboard/macro-calculator"

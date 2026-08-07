@@ -316,7 +316,7 @@ ficha del producto para corregirlos. Salen 17, de los cuales unos 7 son claramen
 el resto son etiquetas mal redondeadas. **Corregir los valores es cosa de Jesús**: hay que
 mirar la etiqueta real de cada uno, y no se pueden inventar.
 
-### Punto 10 - Una ruta que echa al cliente al login · LOCALIZADA (sin tocar, por indicación)
+### Punto 10 - Una ruta que echa al cliente al login · CERRADO
 
 Es el aviso **"Tus macros son provisionales"**, que la app le manda a casi todos los clientes
 nuevos a las dos horas de darse de alta. El aviso lleva un enlace a `/dashboard/ajustar-macros`
@@ -329,8 +329,23 @@ Como la ruta no existe, cae en el comodín del router, que es
 recibe de la app y acaba en la pantalla de login. Es, literalmente, la peor primera impresión
 posible, y le pasa a casi todos.
 
-El arreglo son dos líneas (apuntar el aviso a la ruta buena, y que el comodín respete la
-sesión), pero **no se ha tocado nada** porque así se pidió.
+Se han arreglado las dos cosas, porque la segunda es la que convierte cualquier enlace roto
+del futuro en una expulsión:
+
+1. El aviso apunta ya a `/dashboard/macro-calculator`, que es donde está de verdad la pantalla.
+2. El comodín del router ya no manda al login sin mirar. Ahora, si hay sesión, deja al cliente
+   en su panel (y al entrenador en el suyo); al login solo va quien no ha entrado. Y mientras
+   se está comprobando la sesión no redirige a ninguna parte, porque hacerlo antes de saber
+   quién es era la otra forma de acabar en el login sin motivo.
+
+Además queda un test que **lee las rutas de verdad del router** y las cruza con los enlaces de
+todos los avisos. Si mañana alguien renombra una pantalla y se olvida de un aviso, salta ahí y
+no en el móvil de un cliente. Los 33 destinos del router y los 12 enlaces de avisos están
+cuadrados ahora mismo.
+
+Comprobado en la app: entrando a `/dashboard/ajustar-macros` con la sesión abierta ya no
+aparece el login, y el aviso que genera la app para un cliente recién dado de alta sale con el
+enlace bueno.
 
 ---
 

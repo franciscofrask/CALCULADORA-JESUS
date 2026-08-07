@@ -72,6 +72,18 @@ const CapabilityRoute = ({ cap, children }) => {
     return children;
 };
 
+// A dónde va una dirección que no existe. Al login SOLO si no hay sesión; si el usuario ya
+// está dentro se le deja en su panel, que es lo que esperaría de un enlace que no lleva a
+// ninguna parte. Mientras se comprueba la sesión no se redirige a nada: hacerlo antes de
+// saber quién es era la otra forma de acabar en el login sin motivo.
+const ADondeSea = () => {
+    const { isAuthenticated, user, loading } = useAuth();
+    if (loading) return null;
+    if (!isAuthenticated) return <Navigate to="/auth" replace />;
+    const esDelEquipo = user?.role === 'admin' || user?.role === 'trainer';
+    return <Navigate to={esDelEquipo ? '/admin' : '/dashboard'} replace />;
+};
+
 // Public Route - Redirect if authenticated
 const PublicRoute = ({ children }) => {
     const { isAuthenticated, user, loading } = useAuth();
@@ -243,8 +255,11 @@ function AppRoutes() {
                 } />
             </Route>
 
-            {/* Catch all */}
-            <Route path="*" element={<Navigate to="/auth" replace />} />
+            {/* Cualquier dirección que no exista. Antes mandaba al login sin más, así que
+                un enlace roto echaba de la app a un cliente con la sesión abierta: es lo que
+                pasaba con el aviso de los macros provisionales. Ahora al login solo va quien
+                no ha entrado; al que ya está dentro se le deja en su sitio. */}
+            <Route path="*" element={<ADondeSea />} />
         </Routes>
     );
 }
