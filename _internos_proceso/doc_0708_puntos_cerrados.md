@@ -74,6 +74,11 @@ siguen pasando, más los 141 nuevos.
 **Sin pendientes.** El detalle de los 10 g en la Comida 4 entrenando en ayunas se dejó como
 está, por indicación expresa de Jesús.
 
+**En producción desde el 7 de agosto** (commit `c080f07`). Se subió solo `macro_distribution.py`,
+que es el único fichero de ejecución que cambia, para no arrastrar el trabajo en curso del
+asistente. Comprobado dentro del pod: en modo "sin peri" da 22,5 · 22,5 · 10 · 10 y en
+"intra + post" sigue dando 15 · 15 · 10 · 10, y la web y la API responden.
+
 ---
 
 ## Pendientes que no dependen de nosotros
