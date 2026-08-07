@@ -741,6 +741,20 @@ class Nivel1Submit(BaseModel):
     # lo ha hecho.
     farmacologia_uso: Optional[str] = None          # uso | use | intencion | nunca
 
+    # Bloque 6: su comida. Lo que decide si los menus le encajan en la vida o los abandona
+    # en tres dias. Las 36 categorias y el momento del dia van aparte, en las preferencias.
+    cocina_o_rapido: Optional[str] = None           # cocinar | normal | rapido
+    conserva_o_fresco: Optional[str] = None         # conserva | ambos | fresco
+    come_fuera: Optional[str] = None                # no | 1_2 | 3_4 | casi_todos
+    que_le_apetece: Optional[str] = None
+    favoritos_y_no_gustos: Optional[str] = None
+    plato_imprescindible: Optional[str] = None
+    # Las intolerancias, ESTRUCTURADAS y no en texto libre: de "soy intolerante a la
+    # lactosa" no se puede sacar si puede comer yogur o queso curado, y de eso depende
+    # media lista de la compra. Lo mismo con celiaquia contra sensibilidad.
+    lactosa: Optional[str] = None                   # bien | tolera_algo | nada
+    gluten: Optional[str] = None                    # bien | sensibilidad | celiaquia
+
 # Macros Models
 class MacrosData(BaseModel):
     protein: float = Field(ge=0, le=MACRO_MAX_GRAMOS)

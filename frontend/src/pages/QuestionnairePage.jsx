@@ -400,7 +400,79 @@ const STEPS_NIVEL1 = [
             { value: '3+_semana', label: '3 o más veces por semana' },
         ],
     },
-    { type: 'text', key: 'alergias', title: '¿Alergias o intolerancias alimentarias?', desc: 'Si no tienes, escribe "no".', textarea: true },
+    // ── Bloque 6 · Tu comida ────────────────────────────────────────────────────
+    // Lo que decide si sus menús le encajan en la vida o los abandona en tres días. Las
+    // 36 categorías y el momento del día se preguntan aparte, en las preferencias.
+    {
+        type: 'choice', key: 'cocina_o_rapido',
+        title: '¿Te gusta cocinar o prefieres cosas rápidas?',
+        desc: 'No hay respuesta buena. Lo que hay que evitar es mandarte recetas de media hora si no vas a hacerlas.',
+        options: [
+            { value: 'cocinar', label: 'Me gusta cocinar y tengo tiempo' },
+            { value: 'normal', label: 'Cocino lo justo, sin complicarme' },
+            { value: 'rapido', label: 'Cuanto más rápido, mejor' },
+        ],
+    },
+    {
+        type: 'choice', key: 'conserva_o_fresco',
+        title: '¿Te vale la conserva o lo quieres fresco?',
+        options: [
+            { value: 'conserva', label: 'La conserva me facilita la vida' },
+            { value: 'ambos', label: 'Me da igual, según el día' },
+            { value: 'fresco', label: 'Lo prefiero fresco' },
+        ],
+    },
+    {
+        type: 'choice', key: 'come_fuera',
+        title: '¿Comes fuera de casa entre semana?',
+        desc: 'Si comes fuera casi todos los días, la dieta tiene que contar con eso desde el principio.',
+        options: [
+            { value: 'no', label: 'No, como en casa' },
+            { value: '1_2', label: '1 o 2 días por semana' },
+            { value: '3_4', label: '3 o 4 días' },
+            { value: 'casi_todos', label: 'Casi todos los días' },
+        ],
+    },
+    {
+        type: 'text', key: 'que_le_apetece',
+        title: '¿Qué tipo de desayuno, comida, merienda y cena te apetecen?',
+        desc: 'Cuéntamelo con tus palabras: qué sueles comer o qué te gustaría comer en cada momento del día.',
+        textarea: true,
+    },
+    {
+        type: 'text', key: 'favoritos_y_no_gustos',
+        title: '¿Qué alimentos te encantan y cuáles no piensas comer?',
+        desc: 'Por grupos: carnes, pescados, verduras, lácteos, hidratos... Lo que no te gusta pesa tanto como lo que sí.',
+        textarea: true,
+    },
+    {
+        type: 'text', key: 'plato_imprescindible',
+        title: '¿Hay algún plato que quieras sí o sí?',
+        desc: 'Ese que si no está, la dieta no te dura. Si no hay ninguno, escribe "no".',
+        textarea: true,
+    },
+    // Las intolerancias, por separado y no en texto libre: de "soy intolerante a la
+    // lactosa" no se puede sacar si puede comer yogur o queso curado, y de ahí depende
+    // media lista de la compra.
+    {
+        type: 'choice', key: 'lactosa',
+        title: '¿Llevas bien la lactosa?',
+        options: [
+            { value: 'bien', label: 'Sí, sin problema' },
+            { value: 'tolera_algo', label: 'Regular: tolero el yogur y el queso curado' },
+            { value: 'nada', label: 'No, nada de lactosa' },
+        ],
+    },
+    {
+        type: 'choice', key: 'gluten',
+        title: '¿Y el gluten?',
+        options: [
+            { value: 'bien', label: 'Sí, sin problema' },
+            { value: 'sensibilidad', label: 'Sensibilidad: me sienta mal, pero no soy celíaco' },
+            { value: 'celiaquia', label: 'Celiaquía diagnosticada' },
+        ],
+    },
+    { type: 'text', key: 'alergias', title: '¿Alguna otra alergia o intolerancia?', desc: 'Frutos secos, marisco, huevo... Si no tienes, escribe "no".', textarea: true },
     { type: 'final1', title: 'Perfil completo.', desc: 'El equipo usará todo esto para tu estrategia. Las fotos de progreso te las pedirán por el chat. Si quieres revisar algo, ve hacia atrás.' },
 ];
 
@@ -1038,6 +1110,15 @@ const QuestionnairePage = () => {
                 quiere_pauta_suplementos: answers.quiere_pauta_suplementos || null,
                 // Bloque 4: la intención cuenta tanto como el uso.
                 farmacologia_uso: answers.farmacologia_uso || null,
+                // Bloque 6: lo que decide si sus menús le encajan en la vida.
+                cocina_o_rapido: answers.cocina_o_rapido || null,
+                conserva_o_fresco: answers.conserva_o_fresco || null,
+                come_fuera: answers.come_fuera || null,
+                que_le_apetece: answers.que_le_apetece || null,
+                favoritos_y_no_gustos: answers.favoritos_y_no_gustos || null,
+                plato_imprescindible: answers.plato_imprescindible || null,
+                lactosa: answers.lactosa || null,
+                gluten: answers.gluten || null,
                 alimentos_evitados: null,
                 alergias: answers.alergias || null,
                 num_comidas: answers.pref_num_comidas ?? null,

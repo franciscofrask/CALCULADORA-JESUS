@@ -1710,7 +1710,15 @@ const ETIQUETAS_NIVEL1 = {
     suplementos_antes: 'Ha tomado antes',
     quiere_pauta_suplementos: '¿Quiere que le pauten?',
     // Tu comida
-    alergias: 'Alergias e intolerancias',
+    cocina_o_rapido: '¿Cocina o quiere rápido?',
+    conserva_o_fresco: '¿Conserva o fresco?',
+    come_fuera: '¿Come fuera?',
+    que_le_apetece: 'Qué le apetece en cada comida',
+    favoritos_y_no_gustos: 'Favoritos y no-gustos',
+    plato_imprescindible: 'Plato imprescindible',
+    lactosa: 'Lactosa',
+    gluten: 'Gluten',
+    alergias: 'Otras alergias',
     num_comidas: 'Comidas al día',
     // Otros
     biotype: 'Biotipo', height: 'Altura', birthdate: 'Fecha de nacimiento',
@@ -1727,7 +1735,9 @@ const BLOQUES_NIVEL1 = [
                           'dias_entreno']],
     ['Su salud', ['trt', 'farmacologia_uso', 'zona_grasa']],
     ['Su suplementación', ['suplementos_ahora', 'suplementos_antes', 'quiere_pauta_suplementos']],
-    ['Su comida', ['alergias', 'num_comidas']],
+    ['Su comida', ['cocina_o_rapido', 'conserva_o_fresco', 'come_fuera', 'que_le_apetece',
+                   'favoritos_y_no_gustos', 'plato_imprescindible', 'lactosa', 'gluten',
+                   'alergias', 'num_comidas']],
 ];
 
 // Los valores se guardan en clave ('3_10', 'irregular'); el coach lee castellano.
@@ -1739,6 +1749,14 @@ const VALORES_NIVEL1 = {
     uso: 'Sí, ahora mismo', use: 'Ha usado antes, ahora no',
     intencion: 'No, pero tiene intención', nunca: 'No, ni se lo plantea',
     lo_justo: 'Solo lo imprescindible',
+    // Su comida
+    cocinar: 'Le gusta cocinar y tiene tiempo', normal: 'Cocina lo justo',
+    rapido: 'Cuanto más rápido, mejor',
+    conserva: 'La conserva le facilita la vida', ambos: 'Le da igual', fresco: 'Lo prefiere fresco',
+    '1_2': '1 o 2 días por semana', '3_4': '3 o 4 días', casi_todos: 'Casi todos los días',
+    // Intolerancias
+    bien: 'Sin problema', tolera_algo: 'Tolera yogur y queso curado', nada: 'Nada de lactosa',
+    sensibilidad: 'Sensibilidad, no celiaquía', celiaquia: 'Celiaquía diagnosticada',
 };
 
 const PerfilLargo = ({ nivel1 }) => {
