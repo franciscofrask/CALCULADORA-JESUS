@@ -1003,6 +1003,18 @@ const NutritionPage = () => {
                 })
             });
 
+            // Por debajo de su cantidad mínima el alimento se descarta, no entra a cero. Sin
+            // esto, la comida acababa con líneas tipo "Queso Havarti · 0 ud": el backend
+            // devolvía 0 para decir "no cabe" y aquí ese 0, al no tener macros, se tomaba por
+            // un alimento libre y se colaba igual.
+            if (result.cabe === false || !(result.cantidad_g > 0)) {
+                const min = result.cantidad_minima_g;
+                toast.error(min
+                    ? `${food.nombre} no cabe: lo mínimo son ${min} g y no queda hueco.`
+                    : `${food.nombre} no cabe en esta comida.`);
+                return;
+            }
+
             // Free foods (all zeros: konjac, salsas zero, verduras libres) always pass
             const ef = result.macros_efectivos || {};
             const isFreeFood = !ef.P && !ef.H && !ef.G;

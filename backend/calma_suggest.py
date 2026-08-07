@@ -41,6 +41,20 @@ Z_MIN = {
     "41": 5, "43": 20,
 }
 
+# Ajustes de Jesus SOBRE el mapa de arriba. Se mantienen aparte a proposito: Z_MIN es el
+# mapa portado tal cual de la calculadora antigua, y esto es lo que el ha decidido cambiar,
+# asi que de un vistazo se ve que es suyo y que es heredado.
+#
+# 17.2 (frutos secos naturales) = 10 g. En el mapa antiguo heredan el 5 de la 17, y el doc
+# del 07-08 pide 10. Los demas minimos que nombra ese documento (aceites 5, verduras 50,
+# bebidas vegetales 100) ya coincidian y no hace falta tocarlos.
+#
+# El resto del mapa esta PENDIENTE de repasar con Jesus: en el doc queda como "media hora de
+# repasarlas con Jesus". El caso que el pone como ejemplo son los copos de avena, que hoy
+# salen a 10 g (una cucharada) porque la categoria 7 tiene ese minimo.
+MINIMOS_JESUS = {"17.2": 10}
+Z_MIN.update(MINIMOS_JESUS)
+
 # ── Granel step map X (utils_) ─────────────────────────────────────────────
 X_STEP = {"13": 50, "16.1": 5, "16.4": 50, "16.5": 5, "24": 50}
 

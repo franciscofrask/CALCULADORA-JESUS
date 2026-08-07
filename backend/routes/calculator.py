@@ -296,16 +296,21 @@ async def calculate_meal(foods: List[Dict[str, Any]], user = Depends(get_current
 
 # ==================== CALMA ENGINE ====================
 
-def _redondear_para_el_cliente(alimento: dict, cantidad_g: float) -> float:
-    """La cantidad en gramos, redondeada a la baja al múltiplo que le toca (redondeo_salida).
+def _minimo_en_gramos(alimento: dict) -> float:
+    """La cantidad mínima del alimento, en gramos.
 
-    El mínimo del alimento viaja en las unidades del motor (unidades si va por unidades,
-    gramos si va a granel), así que aquí se pasa a gramos antes de usarlo como suelo.
+    El motor la da en las unidades con las que trabaja (unidades si el alimento va por
+    unidades, gramos si va a granel), y de cara al cliente todo son gramos.
     """
     minimo = cantidad_minima_calma(alimento)
     if alimento.get("unidades"):
         minimo = minimo * (float(alimento.get("racion") or 100) or 100.0)
-    return redondear_cantidad(alimento, cantidad_g, minimo_g=minimo)
+    return round(float(minimo), 1)
+
+
+def _redondear_para_el_cliente(alimento: dict, cantidad_g: float) -> float:
+    """La cantidad en gramos, redondeada a la baja al múltiplo que le toca (redondeo_salida)."""
+    return redondear_cantidad(alimento, cantidad_g, minimo_g=_minimo_en_gramos(alimento))
 
 
 def _efectivos_calma(alimento: dict, cantidad_g: float):
@@ -393,6 +398,23 @@ async def adjust_food_quantity(data: dict, user = Depends(get_current_user)):
     # va a granel. El frontend espera gramos, así que se convierte. Sin esto salían "1 g"
     # de aceite (era 1 cucharada) y "2 g" de pollo (eran 2 latas de 52 g).
     cantidad = ajustar_cantidad(alimento, remaining)
+    # 0 no es una cantidad: es la forma que tiene el motor de decir que el alimento no cabe
+    # ni a su cantidad mínima (media lata, 5 g de aceite, 50 g de verdura). Si se devolviera
+    # como cantidad, el alimento entraría en la comida ocupando una línea a 0 ud, que es lo
+    # que pasaba con el "Queso Havarti · 0 ud". Por debajo del mínimo se descarta, no se deja
+    # a cero (regla del doc del 07-08, punto 5).
+    if cantidad <= 0:
+        return {
+            "alimento_id": alimento.get("id"),
+            "nombre": alimento.get("nombre"),
+            "cantidad_g": 0.0,
+            "macros_efectivos": {"P": 0.0, "H": 0.0, "G": 0.0},
+            "macros_brutos": {"P": 0.0, "H": 0.0, "G": 0.0},
+            "que_cuenta": {"P": False, "H": False, "G": False},
+            "cabe": False,
+            "motivo": "no_llega_al_minimo",
+            "cantidad_minima_g": _minimo_en_gramos(alimento),
+        }
     if alimento.get("unidades"):
         cantidad_g = cantidad * (float(alimento.get("racion") or 100) or 100.0)
     else:

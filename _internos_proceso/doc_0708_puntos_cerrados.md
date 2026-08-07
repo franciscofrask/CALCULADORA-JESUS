@@ -219,6 +219,39 @@ menús siguen saliendo cuadrados y el error mayor respecto al objetivo es de 1,5
 
 ---
 
+### Punto 5 - Cantidades mínimas por categoría, y descartar por debajo · CERRADO EN PARTE
+
+Este punto son dos cosas distintas, y solo una depende de nosotros.
+
+**El mapa de mínimos ya estaba.** Están las 56 categorías con su mínimo, portadas de la
+calculadora antigua (`backend/calma_suggest.py`, `Z_MIN`). De los cuatro valores que nombra el
+documento, tres ya coincidían: aceites 5 g, verduras 50 g y bebidas vegetales 100 g. El de
+frutos secos no (heredaban el 5 de la categoría de grasas y el documento pide 10), y ese sí se
+ha corregido, en un sitio aparte del mapa portado para que se vea de un vistazo qué es decisión
+de Jesús y qué viene heredado.
+
+**Lo que no podemos hacer solos es repasar los 56 valores**, que es lo que el documento cifra
+en media hora con él. Para que esa media hora sea de decidir y no de buscar, queda preparada la
+tabla completa en `_internos_proceso/minimos_por_categoria_para_jesus.md`: cada categoría con
+su nombre, el mínimo de hoy y una columna en blanco para el valor nuevo. El ejemplo que él pone
+son los copos de avena, que salen a 10 g (una cucharada) porque la categoría de cereales tiene
+ese mínimo.
+
+**La regla de descarte sí era un fallo nuestro, y está arreglado.** El caso de los "Queso
+Havarti · 0 ud" y "Huevos enteros M · 0 ud" se reprodujo con esos dos alimentos exactos: al
+pedir añadirlos a una comida sin hueco, la app devolvía cantidad 0 y, encima, decía que cabían.
+El motor usa el 0 para decir "no cabe ni a su cantidad mínima", pero la ruta lo entregaba como
+si 0 fuese una cantidad. Y la pantalla, al ver un alimento con los tres macros a cero, lo
+tomaba por un alimento libre (konjac, salsas zero, que sí pueden ir sin gastar macros) y lo
+dejaba entrar igual. De ahí la línea a cero.
+
+Ahora la ruta dice que no cabe y por qué, con el mínimo del alimento, y la pantalla lo descarta
+avisando: "Queso Havarti no cabe: lo mínimo son 25 g y no queda hueco". Comprobado que los
+alimentos libres siguen entrando (el konjac sin hueco sigue dando 1000 g) y que con hueco de
+sobra el queso entra normal, a 125 g.
+
+---
+
 ## Pendientes que no dependen de nosotros
 
 *(Se irán anotando aquí según aparezcan: decisiones de Jesús, datos que faltan o terceros.)*
@@ -229,6 +262,11 @@ para leer el código como lo describe el documento (nombres de fichero, números
 funciones a medio desminificar). Si Jesús quiere que revisemos algo concreto de ese código, hace
 falta acceso al repositorio. Hasta ahora no ha hecho falta: el reparto se pudo portar y validar
 contra el bundle.
+
+**Los 56 mínimos por categoría están sin repasar** (punto 5). El mapa existe y funciona, pero
+los valores vienen de la calculadora antigua y Jesús quiere revisarlos; él mismo lo cifra en
+media hora. La tabla lista para repasar está en
+`_internos_proceso/minimos_por_categoria_para_jesus.md`. **Decide Jesús.**
 
 **Los dos criterios del tercio no coinciden, y conviven.** La calculadora antigua tiene su
 propia forma de decidir si la proteína de un cereal o de un fruto seco cuenta, y no es la del
