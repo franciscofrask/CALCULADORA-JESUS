@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CAP } from '../lib/planAccess';
 import { seLeOfreceLaRevision } from '../lib/revision';
+import { MEDIDAS, VIDEO_MEDIDAS } from '../lib/medidas';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
@@ -884,11 +885,18 @@ const QuestionnairePage = () => {
     };
 
     const guardarPuntoDePartida = async () => {
+        // Las MISMAS diez que en el reporte. Había tres listas distintas en la app -- aquí
+        // cuatro (cintura, abdomen, cadera y la altura), en el check-in cinco y en el
+        // reporte otras cinco -- y ninguna era la suya. Con listas distintas, la medida
+        // del punto de partida no se puede comparar con la del mes siguiente, que es lo
+        // único para lo que sirve tomarla.
+        //
+        // La altura NO va aquí: es un dato fijo, no una medida de seguimiento. Se pregunta
+        // una vez en el cuestionario y se manda aparte.
         const medidas = {};
-        for (const [clave, campo] of [['cintura', 'medida_cintura'], ['abdomen', 'medida_abdomen'],
-                                      ['cadera', 'medida_cadera']]) {
-            const n = num(answers[campo]);
-            if (n) medidas[clave] = n;
+        for (const { key } of MEDIDAS) {
+            const n = num(answers[`medida_${key}`]);
+            if (n) medidas[key] = n;
         }
         try {
             await api.post('/clients/punto-de-partida', { medidas, altura: num(answers.height) });
@@ -1603,14 +1611,33 @@ const QuestionnairePage = () => {
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        <MiniInput {...mini} k="medida_cintura" label="Cintura" type="number" unit="cm" placeholder="85" />
-                        <MiniInput {...mini} k="medida_abdomen" label="Abdomen" type="number" unit="cm" placeholder="90" />
-                        <MiniInput {...mini} k="medida_cadera" label="Cadera" type="number" unit="cm" placeholder="98" />
-                        {!answers.height && (
-                            <MiniInput {...mini} k="height" label="Altura" type="number" unit="cm" placeholder="178" />
-                        )}
+                    {/* Las MISMAS diez que en el reporte, para que la del día 1 se pueda
+                        comparar con la del mes que viene. Antes aquí se pedían cuatro
+                        (cintura, abdomen, cadera y la altura), en el check-in cinco y en el
+                        reporte otras cinco: tres listas distintas y ninguna comparable. */}
+                    <div>
+                        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">
+                            Tus medidas de hoy
+                        </label>
+                        <div className="rounded-xl overflow-hidden bg-black mb-3" style={{ aspectRatio: '16 / 9' }}>
+                            <iframe src={VIDEO_MEDIDAS} title="Cómo medir los perímetros"
+                                allow="fullscreen; picture-in-picture" className="w-full h-full border-0" />
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {MEDIDAS.map(({ key, label }) => (
+                                <MiniInput key={key} {...mini} k={`medida_${key}`} label={label}
+                                    type="number" unit="cm" placeholder="--" />
+                            ))}
+                        </div>
                     </div>
+
+                    {/* La altura es un dato FIJO, no una medida de seguimiento: va aparte y
+                        solo si todavía no la ha dado. */}
+                    {!answers.height && (
+                        <div className="max-w-[10rem]">
+                            <MiniInput {...mini} k="height" label="Tu altura" type="number" unit="cm" placeholder="178" />
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex flex-wrap gap-3">

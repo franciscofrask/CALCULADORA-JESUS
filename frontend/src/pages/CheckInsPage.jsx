@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { MEDIDAS } from '../lib/medidas';
 import { toast } from 'sonner';
 import {
     Heart, Activity, TrendingUp, CheckCircle2, Smile, Frown, Meh,
@@ -98,10 +99,20 @@ const PhotoThumb = ({ photo, api, onDeleted }) => {
             {url
                 ? <img src={url} alt="" className="w-full h-full object-cover" />
                 : <div className="w-full h-full flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-foreground/40" /></div>}
-            <button onClick={() => onDeleted(photo.id)}
-                className="absolute top-1.5 right-1.5 w-7 h-7 rounded-lg bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {/* La inicial no lleva papelera. El backend también la protege, pero enseñar
+                un botón que va a fallar es peor que no enseñarlo: la app le dice que esa
+                foto no se puede recuperar y a la vez le ofrece borrarla. */}
+            {photo.inicial ? (
+                <span title="Tu foto inicial: no se puede borrar"
+                    className="absolute top-1.5 right-1.5 text-[9px] font-bold uppercase tracking-wide bg-black/60 text-white/90 px-1.5 py-1 rounded">
+                    inicial
+                </span>
+            ) : (
+                <button onClick={() => onDeleted(photo.id)}
+                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-lg bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Trash2 className="w-3.5 h-3.5" />
+                </button>
+            )}
             <span className="absolute bottom-1 left-1.5 text-[10px] text-white/90 bg-black/50 px-1.5 py-0.5 rounded">
                 {new Date(photo.taken_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
             </span>
@@ -163,7 +174,8 @@ const CheckInsPage = () => {
 
     const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null });
     const [weekly, setWeekly] = useState({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
-    const [monthly, setMonthly] = useState({ weight: '', body_fat_pct: '', chest: '', waist: '', hip: '', arm: '', thigh: '', goals_progress: '', challenges: '', notes: '' });
+    const [monthly, setMonthly] = useState({ weight: '', body_fat_pct: '', goals_progress: '', challenges: '', notes: '',
+        ...Object.fromEntries(MEDIDAS.map(m => [m.key, ''])) });
 
     // Historial paginado: se muestran 12, "Cargar más" amplía y pide más al backend si hace falta
     const [histShown, setHistShown] = useState(12);
@@ -245,7 +257,7 @@ const CheckInsPage = () => {
         setSubmitting(true);
         try {
             const measurements = {};
-            ['chest', 'waist', 'hip', 'arm', 'thigh'].forEach(k => { if (monthly[k]) measurements[k] = parseFloat(monthly[k]); });
+            MEDIDAS.forEach(({ key }) => { if (monthly[key]) measurements[key] = parseFloat(monthly[key]); });
             await api.post('/checkins', {
                 type: 'monthly',
                 weight: parseFloat(monthly.weight),
@@ -388,10 +400,17 @@ const CheckInsPage = () => {
                         <Field label="Peso (kg)"><input type="number" step="0.1" value={monthly.weight} onChange={e => setMonthly({ ...monthly, weight: e.target.value })} className={inputCls} /></Field>
                         <Field label="% Grasa"><input type="number" step="0.1" value={monthly.body_fat_pct} onChange={e => setMonthly({ ...monthly, body_fat_pct: e.target.value })} className={inputCls} /></Field>
                     </div>
+                    {/* Las MISMAS diez que en el reporte y en el punto de partida. Había
+                        tres listas distintas en la app y ninguna era la suya, así que la
+                        medida de un sitio no se podía comparar con la de otro. */}
                     <span className="text-xs font-bold text-foreground/40 uppercase tracking-wider block">Medidas (cm)</span>
-                    <div className="grid grid-cols-3 gap-2">
-                        {[['chest', 'Pecho'], ['waist', 'Cintura'], ['hip', 'Cadera'], ['arm', 'Brazo'], ['thigh', 'Muslo']].map(([k, l]) => (
-                            <Field key={k} label={l}><input type="number" step="0.1" value={monthly[k]} onChange={e => setMonthly({ ...monthly, [k]: e.target.value })} className={inputCls} /></Field>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {MEDIDAS.map(({ key, label }) => (
+                            <Field key={key} label={label}>
+                                <input type="number" step="0.1" value={monthly[key] ?? ''}
+                                    onChange={e => setMonthly({ ...monthly, [key]: e.target.value })}
+                                    className={inputCls} />
+                            </Field>
                         ))}
                     </div>
                     <Field label="Progreso hacia tus objetivos"><textarea rows={2} value={monthly.goals_progress} onChange={e => setMonthly({ ...monthly, goals_progress: e.target.value })} className={inputCls} /></Field>
