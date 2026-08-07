@@ -35,6 +35,7 @@ from target_calculator import calcular_targets, targets_to_profile_macros, run_t
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
 from core.quiz_store import guardar_quiz_respuestas
 from macro_distribution import distribuir_macros as dist_macros, leer_macro, leer_peri
+from redondeo_salida import redondear_cantidad
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
@@ -295,6 +296,18 @@ async def calculate_meal(foods: List[Dict[str, Any]], user = Depends(get_current
 
 # ==================== CALMA ENGINE ====================
 
+def _redondear_para_el_cliente(alimento: dict, cantidad_g: float) -> float:
+    """La cantidad en gramos, redondeada a la baja al múltiplo que le toca (redondeo_salida).
+
+    El mínimo del alimento viaja en las unidades del motor (unidades si va por unidades,
+    gramos si va a granel), así que aquí se pasa a gramos antes de usarlo como suelo.
+    """
+    minimo = cantidad_minima_calma(alimento)
+    if alimento.get("unidades"):
+        minimo = minimo * (float(alimento.get("racion") or 100) or 100.0)
+    return redondear_cantidad(alimento, cantidad_g, minimo_g=minimo)
+
+
 def _efectivos_calma(alimento: dict, cantidad_g: float):
     """Macros efectivos/brutos at `cantidad_g` using the SAME engine as the suggestion/
     add path (calma_suggest), so editing a food's quantity stays consistent with how it
@@ -384,6 +397,10 @@ async def adjust_food_quantity(data: dict, user = Depends(get_current_user)):
         cantidad_g = cantidad * (float(alimento.get("racion") or 100) or 100.0)
     else:
         cantidad_g = cantidad
+    # El número que se le enseña al cliente va redondeado (nadie pesa 223 g de pechuga), y
+    # los macros se calculan sobre esa cantidad ya redondeada para que lo que ve cuadre con
+    # lo que suma.
+    cantidad_g = _redondear_para_el_cliente(alimento, cantidad_g)
     efectivos, brutos, cuenta = _efectivos_calma(alimento, cantidad_g)
 
     return {
@@ -684,11 +701,18 @@ async def search_foods_endpoint(
             # Frontend expects grams in _cantidad_sugerida + peso_unidad = g/unit.
             a["por_unidad"] = es_unidad
             a["peso_unidad"] = racion
-            a["_cantidad_sugerida"] = (cant * racion) if es_unidad else cant
+            # El ORDEN de las sugerencias lo sigue decidiendo la cantidad exacta del motor
+            # (misma diferencia de macros que Calma); lo que se redondea es el número que se
+            # enseña, y sus macros con él. Redondear antes de ordenar cambiaría qué alimento
+            # sale el primero, que no es lo que se pide.
+            cant_mostrada = (cant * racion) if es_unidad else cant
+            cant_mostrada = _redondear_para_el_cliente(a, cant_mostrada)
+            a["_cantidad_sugerida"] = cant_mostrada
+            contrib_mostrado = macros_at_calma(a, (cant_mostrada / racion) if es_unidad else cant_mostrada)
             a["_macros_sugeridos"] = {
-                "P": round(contrib["proteinas"], 1),
-                "H": round(contrib["hidratos"], 1),
-                "G": round(contrib["grasas"], 1),
+                "P": round(contrib_mostrado["proteinas"], 1),
+                "H": round(contrib_mostrado["hidratos"], 1),
+                "G": round(contrib_mostrado["grasas"], 1),
             }
             a["_diferencia"] = diferencia_de_macros_calma(contrib, remaining)
             a["_aporte_total"] = contrib["proteinas"] + contrib["hidratos"] + contrib["grasas"]
@@ -983,7 +1007,10 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                     "paso_unidad": peso_unidad if (es_unidad and peso_unidad > 0) else None,
                 })
             afinar_cantidades(opt_foods, obj_fino)
-            for rf, of in zip(refit_foods, opt_foods):
+            for rf, of, food in zip(refit_foods, opt_foods, food_docs):
+                # El afinado trabaja fino y deja cantidades como 182,5 o 120,1: al salir se
+                # bajan al múltiplo redondo, y los macros se recalculan con la cantidad final.
+                of["cantidad"] = redondear_cantidad(food, of["cantidad"], minimo_g=of["minimo"])
                 fac = of["cantidad"] / 100.0
                 rf["cantidad_g"] = round(of["cantidad"], 1)
                 rf["macros_efectivos"] = {
@@ -1677,8 +1704,17 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
             })
         ajuste = _ajustar_menu(adj_items, obj, c.get("macros", {}))
         if ajuste:
-            finales = [it["cantidad_g"] for it in ajuste["items"]]
-            metodo_final = {m: round(ajuste["totales"][m], 1) for m in ("P", "H", "G")}
+            # Las palancas escalan fino y dejan cantidades como 182,5: al cliente se le dan
+            # números redondos, así que se bajan a su múltiplo y los macros del menú se
+            # recalculan con las cantidades finales. Se hace ANTES de mirar el margen (abajo)
+            # para no aceptar un menú por unos macros que luego no son los que se enseñan.
+            finales = [_redondear_para_el_cliente(food, it["cantidad_g"])
+                       for food, it in zip(food_list, ajuste["items"])]
+            metodo_final = {m: 0.0 for m in ("P", "H", "G")}
+            for it, cant in zip(adj_items, finales):
+                for m in ("P", "H", "G"):
+                    metodo_final[m] += (it["_ef"].get(m, 0) or 0) * cant / 100.0
+            metodo_final = {m: round(v, 1) for m, v in metodo_final.items()}
         else:
             finales = [float(a["cantidad_g"]) for a in alimentos_c]
             metodo_final = {m: float(c.get("macros", {}).get(m, 0) or 0) for m in ("P", "H", "G")}

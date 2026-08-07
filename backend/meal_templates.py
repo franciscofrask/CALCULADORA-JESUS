@@ -12,6 +12,7 @@ import math
 
 from typing import Dict, List, Optional
 from calma_engine import _redondear_cantidad, parse_categories
+from redondeo_salida import redondear_cantidad
 
 
 
@@ -413,6 +414,14 @@ async def _ajustar_plantilla(
 
     # Paso 3.5: afinado fino GLOBAL (compartido con el botón "Cuadrar" del refit).
     afinar_cantidades(foods, obj)
+
+    # Paso 3.6: redondeo de salida. El afinado deja cantidades finas (182,5 · 120,1 · 62,8) y
+    # al cliente se le dan números redondos, así que cada una baja a su múltiplo. Va DESPUÉS
+    # del afinado y ANTES de validar el margen: así lo que se valida y lo que se muestra son
+    # las mismas cantidades, y un menú no se anuncia como cuadrado con unos números para
+    # acabar enseñando otros.
+    for f in foods:
+        f["cantidad"] = redondear_cantidad(f["alimento"], f["cantidad"], minimo_g=f["minimo"])
 
     # Paso 4: validar. Se ACEPTA si está dentro del margen laxo; se marca "cuadrada" solo si
     # está dentro del margen estricto (±MARGEN_MENU). Así salen más opciones y el usuario ve

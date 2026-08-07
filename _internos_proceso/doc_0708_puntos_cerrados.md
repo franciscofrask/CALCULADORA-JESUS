@@ -170,6 +170,55 @@ reintentar a mano.
 
 ---
 
+### Punto 4 - Redondear las cantidades a múltiplos · CERRADO
+
+**Lo que se pide.** Los números que se le dan a un cliente son redondos: unidades enteras o
+medias, verduras y bebidas vegetales de 50 en 50, salsas y todo lo demás de 5 en 5, y los
+macros del día con la proteína y la grasa enteras y los hidratos de 5 en 5. Redondeando al
+salir, no durante el cálculo.
+
+**Cómo estaba.** Había tres criterios de redondeo distintos conviviendo, y ninguno hacía lo
+que pide Jesús:
+
+- El del buscador, heredado de la calculadora antigua, que sí redondea las verduras y las
+  bebidas vegetales de 50 en 50 y las salsas de 5 en 5 (eso ya coincidía), pero para todo lo
+  demás usa un paso de **1 gramo**. De ahí los 223 g de pechuga y los 42 g de proteína en polvo.
+- El de los menús del recetario, con otra tabla propia (pan de 10 en 10, carnes de 25 en 25,
+  huevos de 55 en 55).
+- El afinado fino que cuadra los menús, que no redondea nada y dejaba los 182,5 · 120,1 · 62,8.
+
+**Lo que se ha hecho.** Un módulo nuevo, `backend/redondeo_salida.py`, con la regla de Jesús y
+nada más, aplicado en los cuatro sitios por donde una cantidad llega al cliente: el buscador,
+el añadir un alimento, los menús del recetario y la biblioteca de menús. Los motores siguen
+calculando con la cantidad exacta; el redondeo va encima, justo antes de entregar el número, y
+los macros se recalculan con la cantidad ya redondeada para que lo que se ve cuadre con lo que
+suma.
+
+Siempre a la baja, como en el código antiguo, porque pasarse hace que el alimento aporte más
+de lo que queda en esa comida y quedarse corto lo absorbe el resto del menú. La función de la
+calculadora antigua tenía un parámetro llamado `redondear` que en realidad significaba
+"a la baja"; aquí eso va en el nombre de la función y explicado, que es lo que pedía el aviso.
+
+Dos detalles que hubo que resolver por el camino. El primero: un paso de 50 no puede hacer
+desaparecer un alimento del plato, así que 30 g de una verdura no se redondean a cero sino que
+caen al múltiplo de 5, y si ni eso llega al mínimo del alimento se deja la cantidad como
+venía. El segundo: en el buscador el **orden** de las sugerencias lo sigue decidiendo la
+cantidad exacta del motor, no la redondeada, porque redondear antes de ordenar cambiaría qué
+alimento sale el primero, y eso sí rompería la paridad con la calculadora antigua.
+
+**Los macros del día ya cumplían la regla**, así que ahí no se ha tocado nada: el motor da la
+proteína y la grasa enteras y los hidratos de 5 en 5, y el agente del ajuste mensual también.
+Se revisaron los 232 clientes de la base y ninguno la incumple. Queda un test que lo vigila,
+que es más útil que aplicar un redondeo donde no hace falta.
+
+**Comprobado en la app real.** Aplicando la receta "Avena Fusion Cake" a la Comida 1 salen 45 g
+de harina de avena, 30 de cacao, 50 de yogur, 20 de proteína, 200 de fresas, 5 de nueces y las
+unidades enteras (1 huevo, 1 cucharadita de aceite, 1 Skyr). Por la API se generaron 40 menús y
+**ninguna** cantidad quedó con decimales ni fuera de múltiplo. El cuadre no se resiente: los
+menús siguen saliendo cuadrados y el error mayor respecto al objetivo es de 1,5 g.
+
+---
+
 ## Pendientes que no dependen de nosotros
 
 *(Se irán anotando aquí según aparezcan: decisiones de Jesús, datos que faltan o terceros.)*
