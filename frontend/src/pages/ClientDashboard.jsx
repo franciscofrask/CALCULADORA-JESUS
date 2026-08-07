@@ -10,7 +10,7 @@ import {
     LogOut, Bell, ChevronRight, CreditCard, Target, Bot,
     Flame, Activity, Scale, Search, SlidersHorizontal, Pill,
     ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen,
-    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle
+    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import ThemeToggle from '../components/ThemeToggle';
@@ -430,25 +430,38 @@ const ClientDashboard = () => {
                 provisionales del alta, porque hasta que lo rellene sus numeros no estan afinados.
                 En el plan con coach el boton se llama "Rellena tu formulario", que es lo que es:
                 el coach lo revisa con el despues. */}
-            {profile?.questionnaire_completed && !profile?.ajuste_macros_completado && (
-                <button onClick={() => navigate('/questionnaire?ajustar=1')} data-testid="ajustar-macros-banner"
-                    className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">
-                    <div className="flex items-center gap-4">
-                        <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center">
-                            <SlidersHorizontal className="w-5 h-5 text-brand" />
+            {/* Aquí se separan los planes: el mismo hueco dice tres cosas distintas.
+                El Nivel 3 no rellena nada -- se lo preguntan en la llamada -- así que ni
+                se le manda al cuestionario ni se le dice que le falta algo por hacer. */}
+            {profile?.questionnaire_completed && !profile?.ajuste_macros_completado && (() => {
+                const porLlamada = (profile?.plan || '') === 'nivel3';
+                const conCoach = can('macros_personalizados');
+                const texto = porLlamada
+                    ? { titulo: 'Agenda tu llamada',
+                        desc: 'Tus macros los sacamos contigo en la llamada. No tienes que rellenar nada.' }
+                    : conCoach
+                        ? { titulo: 'Completa tu cuestionario inicial',
+                            desc: 'Unas preguntas más y tus números pasan a tu entrenador.' }
+                        : { titulo: 'Termina de ajustar tus macros iniciales',
+                            desc: 'Unas preguntas más y los tienes finos.' };
+                return (
+                    <button onClick={() => navigate(porLlamada ? '/dashboard/messages' : '/questionnaire?ajustar=1')}
+                        data-testid="ajustar-macros-banner"
+                        className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">
+                        <div className="flex items-center gap-4">
+                            <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center">
+                                {porLlamada ? <Phone className="w-5 h-5 text-brand" />
+                                            : <SlidersHorizontal className="w-5 h-5 text-brand" />}
+                            </div>
+                            <div className="text-left">
+                                <p className="font-bold text-foreground text-sm uppercase tracking-wide">{texto.titulo}</p>
+                                <p className="text-muted-foreground text-sm">{texto.desc}</p>
+                            </div>
                         </div>
-                        <div className="text-left">
-                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">
-                                {can('macros_personalizados') ? 'Rellena tu formulario' : 'Ajusta tus macros'}
-                            </p>
-                            <p className="text-muted-foreground text-sm">
-                                Tus macros son provisionales. Unas preguntas más y quedan afinados a tu caso.
-                            </p>
-                        </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
-                </button>
-            )}
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
+                    </button>
+                );
+            })()}
 
             {/* Sin plan contratado no puede hacer casi nada, y hasta ahora no habia forma de
                 llegar a contratarlo desde dentro de la app. Va lo primero a proposito. */}
