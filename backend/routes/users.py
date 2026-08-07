@@ -496,6 +496,14 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     update = {"ajustes_macros": ajustes, "ajuste_macros_completado": True,
               "ajuste_macros_progreso": None}
 
+    # El biotipo y la altura viajan con el ajuste desde el 06-08-2026 y viven en el perfil,
+    # no dentro de `ajustes_macros`: los lee la ficha, el índice de muscularidad y la
+    # búsqueda de casos parecidos, y ninguno de esos sabe de cuestionarios. No tocan macros.
+    if data.biotype:
+        update["biotype"] = data.biotype
+    if data.height:
+        update["height"] = float(data.height)
+
     try:
         resultado = calcular_macros_v2(
             float(peso), sexo, float(bf), objetivo,

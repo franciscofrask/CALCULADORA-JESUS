@@ -115,6 +115,34 @@ const STEPS_AJUSTE = [
         ],
     },
     {
+        // ── El biotipo y la altura, para LOS TRES PLANES ──────────────────────────
+        // Estaban en el perfil largo, que solo ven los planes con coach, así que el de
+        // 297 € nunca decía qué biotipo cree que es ni cuánto mide. Y sin altura no hay
+        // índice de muscularidad, que es justo el regalo del acceso gratis.
+        //
+        // No mueven macros: el biotipo es una hipótesis de partida que el coach corrige
+        // viendo cómo responde. Pero se guardan, y sin ellos no hay ni ficha ni modelo.
+        type: 'biotype_intro',
+        title: 'Ahora tienes que elegir tu biotipo, es decir, tu tipo de cuerpo.',
+        desc: 'Es la tendencia natural de tu cuerpo según tu genética (independientemente de tu estado físico actual o los hábitos que tengas en este momento). Antes te explico los 7 que hay (después eliges):',
+        // EN MUJERES NO SE ENSEÑA. Las siete fotos de los biotipos son de hombre y no hay
+        // versión de mujer: enseñárselas para que se identifique es pedirle que elija mal.
+        // Petición explícita del documento del 06-08-2026 ("que el test de mujer no
+        // muestre la pantalla del biotipo"). Cuando existan las fotos, se quitan las dos
+        // condiciones de aquí y de la pantalla siguiente.
+        cond: a => a.sex !== 'mujer',
+    },
+    {
+        type: 'biotype', key: 'biotype',
+        title: 'Indica cuál de los 7 biotipos corporales es el tuyo',
+        desc: 'Puedes volver atrás y leer las descripciones. Si no te identificas claramente con ninguno, elige el que más se acerque a ti.',
+        cond: a => a.sex !== 'mujer',
+    },
+    {
+        type: 'number', key: 'height', title: '¿Cuánto mides?', desc: 'Tu altura, en cm.',
+        unit: 'cm', required: true,
+    },
+    {
         // Tres respuestas, no dos. Faltaba la de en medio, que es la más común: come
         // siempre parecido pero no lo tiene medido. Con dos opciones esa persona marcaba
         // "no controlo" y se perdía su dieta real, que es el mejor dato que hay.
@@ -210,11 +238,12 @@ const STEPS_ONBOARD = [
 ];
 
 // NIVEL 1 - solo planes con coach. Alimenta el perfil y el caso gemelo; NO toca macros.
+//
+// El biotipo y la altura SE FUERON DE AQUÍ a las preguntas que ven los tres planes
+// (06-08-2026): estando aquí, el de 297 € no los daba nunca, y sin altura no hay índice
+// de muscularidad. Preguntarlos otra vez aquí sería preguntar dos veces lo mismo.
 const STEPS_NIVEL1 = [
     { type: 'statement', title: 'Ahora, tu perfil completo', desc: 'Unas preguntas más para el equipo: le sirven para tu estrategia, tu rutina y tus menús. Estas ya no cambian tus macros.', cta: 'Seguir' },
-    { type: 'biotype_intro', title: 'Ahora tienes que elegir tu biotipo, es decir, tu tipo de cuerpo.', desc: 'Es la tendencia natural de tu cuerpo según tu genética (independientemente de tu estado físico actual o los hábitos que tengas en este momento). Antes te explico los 7 que hay (después eliges):' },
-    { type: 'biotype', key: 'biotype', title: 'Indica cuál de los 7 biotipos corporales es el tuyo', desc: 'Puedes volver atrás y leer las descripciones. Si no te identificas claramente con ninguno, elige el que más se acerque a ti.' },
-    { type: 'number', key: 'height', title: '¿Cuánto mides?', desc: 'Tu altura, en cm.', unit: 'cm', required: true },
     { type: 'date', key: 'birthdate', title: 'Fecha de nacimiento', desc: 'La verdadera, no me engañes.', required: true },
     {
         // P13 del doc: los tramos son los suyos (menos de 1, 1-3, 3-10, mas de 10, y el que
@@ -578,6 +607,27 @@ const QuestionnairePage = () => {
         }));
     }, [user]);
 
+    // El sexo y el objetivo se contestaron en el ALTA y viven en el perfil, no en las
+    // respuestas de este cuestionario. Se siembran aquí porque hay preguntas que dependen
+    // de ellos: las opciones cambian según el objetivo, y la pantalla del biotipo no se
+    // le enseña a una mujer (las siete fotos son de hombre). Sin esto, en el cuestionario
+    // de ajuste `answers.sex` venía vacío y la condición no se cumplía nunca.
+    useEffect(() => {
+        if (!profile) return;
+        // También en la ref: quien decide qué pantallas se saltan (`visible`) lee de
+        // answersRef, no del estado, así que sembrar solo el estado no cambiaba nada.
+        answersRef.current = {
+            ...answersRef.current,
+            sex: answersRef.current.sex ?? profile.sex ?? undefined,
+            goal: answersRef.current.goal ?? profile.goal ?? undefined,
+        };
+        setAnswers(a => ({
+            ...a,
+            sex: a.sex ?? profile.sex ?? undefined,
+            goal: a.goal ?? profile.goal ?? undefined,
+        }));
+    }, [profile]);
+
     // ── Macros en vivo (doc 29-07) ────────────────────────────────────────────
     // Tras cada respuesta se recalcula y el cliente ve moverse los numeros. Si contesta y no
     // pasa nada visible, no contesta la siguiente. Se calcula sin aplicar nada: lo definitivo
@@ -837,14 +887,26 @@ const QuestionnairePage = () => {
         facilidad_engordar: answers.facilidad_engordar ?? null,
         cuesta_definir: answers.cuesta_definir ?? null,
         sigue_dieta: answers.sigue_dieta ?? null,
-        tiempo_dieta: answers.sigue_dieta ? (answers.tiempo_dieta ?? null) : null,
-        como_va: answers.sigue_dieta ? (answers.como_va ?? null) : null,
-        hambre_saturacion: answers.sigue_dieta ? (answers.hambre_saturacion ?? null) : null,
-        dieta_texto: answers.sigue_dieta ? (answers.dieta_texto || null) : null,
-        dieta_hc_entreno: answers.sigue_dieta ? num(answers.dieta_hc_entreno) : null,
-        dieta_grasa_entreno: answers.sigue_dieta ? num(answers.dieta_grasa_entreno) : null,
+        // Lo que solo tiene sentido si trae dieta. `parecido` cuenta como que la trae.
+        tiempo_dieta: conDieta() ? (answers.tiempo_dieta ?? null) : null,
+        hambre_saturacion: conDieta() ? (answers.hambre_saturacion ?? null) : null,
+        dieta_texto: conDieta() ? (answers.dieta_texto || null) : null,
+        dieta_hc_entreno: conDieta() ? num(answers.dieta_hc_entreno) : null,
+        dieta_grasa_entreno: conDieta() ? num(answers.dieta_grasa_entreno) : null,
         dieta_confirmada: answers.dieta_confirmada === true,
+        // Esta va SIEMPRE: ahora se le pregunta a los tres, también al que come lo que
+        // surge, y ahí es donde más dice. Condicionarla a que siga una dieta era tirar la
+        // respuesta de quien no la sigue.
+        como_va: answers.como_va ?? null,
+        // El biotipo y la altura ya no están en el perfil largo: se contestan aquí, en el
+        // cuestionario que ven los tres planes, así que aquí se guardan.
+        biotype: answers.biotype || null,
+        height: num(answers.height),
     });
+
+    // Trae dieta: la mide (true) o come parecido sin medirla ('parecido'). Solo el
+    // "no, como lo que surge" (false) se queda fuera.
+    const conDieta = () => answers.sigue_dieta !== false && answers.sigue_dieta != null;
 
     // CALCULAR. En el alta van los cuatro datos de la tabla y salen macros provisionales; en el
     // cuestionario de ajuste van las respuestas que afinan y salen los definitivos.

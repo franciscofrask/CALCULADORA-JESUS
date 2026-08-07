@@ -664,6 +664,13 @@ class AjustesMacros(BaseModel):
     dieta_grasa_entreno: Optional[float] = None # P10: grasa aproximada (opcional)
     dieta_confirmada: Optional[bool] = None     # P10: sin confirmar, la dieta NO se aplica
     historial_dietas: Optional[str] = None      # +-10%: guardar, NO aplicar (spec)
+    # El biotipo y la altura se preguntan aqui desde el 06-08-2026: estaban en el perfil
+    # largo, que solo ven los planes con coach, asi que el de 297 EUR no los daba nunca.
+    # NO mueven macros -- el biotipo es una hipotesis de partida que el coach corrige
+    # viendo como responde -- pero sin ellos no hay ni ficha ni caso parecido, y sin
+    # altura no hay indice de muscularidad.
+    biotype: Optional[str] = None
+    height: Optional[float] = Field(default=None, ge=120, le=230)
 
 # Cuestionario inicial (ELM) - Nivel 0
 class QuestionnaireSubmit(BaseModel):
