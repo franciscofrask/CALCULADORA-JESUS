@@ -786,6 +786,10 @@ async def _get_food_frequency(user_id: str) -> dict:
     Calma's `alimentosFrecuentes` = Ge(Pe(dietas).ingredientes): repeticiones++ per
     occurrence, no time decay. Returns {food_id_str: count}.
     Calculado EN MongoDB con agregación (antes venían las dietas completas a Python).
+
+    OJO: lo que se devuelve es el dict CACHEADO, no una copia (copiarlo en cada búsqueda
+    costaría más que el ahorro del cache). Es de SOLO LECTURA: quien lo mute se lo estará
+    mutando a las demás peticiones del mismo usuario durante el TTL.
     """
     import time as _time
     now = _time.monotonic()

@@ -81,8 +81,61 @@ asistente. Comprobado dentro del pod: en modo "sin peri" da 22,5 · 22,5 · 10 �
 
 ---
 
+### Punto 2 - Los tres avisos sobre el código antiguo · CERRADO
+
+Este punto no pedía construir nada: avisaba de tres defectos del código de la calculadora
+antigua para que no se copiaran. Lo que se hizo fue comprobar, uno a uno, si se nos habían
+colado, y blindar el nuestro para que no vuelvan a entrar.
+
+**Aviso uno: el objeto de constantes que se escribe encima.** En el código antiguo,
+`getMealsPortions` escribía sobre el propio objeto de porcentajes, así que una llamada se
+llevaba lo que había dejado la anterior. Nuestro reparto no hace eso: las tablas son de solo
+lectura y cada llamada construye su resultado desde cero. Queda fijado con dos tests nuevos, uno
+que comprueba que dos llamadas iguales dan lo mismo aunque se intercale otra distinta, y otro
+que verifica que las tablas siguen intactas después de recorrer todos los tramos y momentos.
+
+Sobre el mismo patrón se auditó el resto del backend, porque el sitio donde de verdad podía
+mordernos es el catálogo de alimentos: está cacheado en memoria y el motor le anota campos
+encima. Ahí ya estaba resuelto: `get_all_foods_cached` devuelve una copia por petición.
+
+**Aviso dos: la tabla por defecto que no cuadra** (133 % de hidratos y 80 % de grasas en el
+código antiguo). No se copió, y ahora hay un test que recorre nuestras dos tablas y comprueba
+que las tres columnas suman 100 % en los cuatro momentos de entreno. No tenemos ningún reparto
+por defecto equivalente al suyo: el único valor de arranque que manejamos es el presupuesto de
+perientreno de 35 P / 15 H, que sí se usa a propósito cuando el cliente todavía no lo tiene
+asignado.
+
+**Aviso tres: las funciones llamadas `unknown`.** No las podemos leer: de la calculadora
+antigua solo tenemos el bundle compilado en `_calma_ref/`, no el repositorio fuente
+(`jgl-calma-web-next`) donde alguien las dejó a medio desminificar. Sí se pudo identificar qué
+hay en esa zona del código, y son cuatro funciones de composición corporal que proyectan, semana
+a semana y en tramos de cuatro semanas, cuánta masa grasa y cuánta masa libre de grasa cambia
+según el punto de partida de grasa corporal, más una que responde a si un objetivo de peso es
+alcanzable en un plazo dado. **Nosotros no tenemos eso**: calculamos la composición de hoy
+(`target_calculator.py`), pero no la proyección ni la validación del objetivo. Queda anotado
+abajo como decisión, no como fallo, porque nadie ha pedido esa funcionalidad.
+
+**De propina, un fallo que apareció mirando esto.** El momento de entreno indexa las tablas
+directamente, así que cualquier valor fuera de 0 a 3 rompía el reparto con un error, y eso
+llega a la pantalla de Nutrición como todos los objetivos por comida a cero. Ahora un valor
+que no existe cae en "después de la Comida 1", que es el que ya asumían todas las rutas, y la
+configuración devuelta dice cuál se usó de verdad. Con test.
+
+---
+
 ## Pendientes que no dependen de nosotros
 
 *(Se irán anotando aquí según aparezcan: decisiones de Jesús, datos que faltan o terceros.)*
 
-Ninguno todavía.
+**No tenemos el repositorio fuente de la calculadora antigua** (`jgl-calma-web-next`). En
+`_calma_ref/` solo está el bundle compilado, que sirve para contrastar comportamiento pero no
+para leer el código como lo describe el documento (nombres de fichero, números de línea y las
+funciones a medio desminificar). Si Jesús quiere que revisemos algo concreto de ese código, hace
+falta acceso al repositorio. Hasta ahora no ha hecho falta: el reparto se pudo portar y validar
+contra el bundle.
+
+**La proyección de composición corporal del código antiguo no está en nuestra app.** Calma
+tiene un modelo que estima, semana a semana y por tramos de cuatro semanas, cuánta masa grasa y
+cuánta masa libre de grasa cambia según el punto de partida, y con él valida si un objetivo de
+peso es alcanzable en un plazo. Nosotros solo calculamos la composición actual. **Decide Jesús**
+si eso debe existir en la app nueva; encajaría en el bloque H, que es de después del lunes.

@@ -351,6 +351,17 @@ def distribuir_macros(
         }
     """
 
+    # El momento de entreno indexa las tablas, asi que cualquier valor fuera de 0-3 reventaba
+    # con un KeyError. Eso llega como un 500 a /distribute, y la pantalla de Nutricion se queda
+    # con TODOS los objetivos por comida a cero (se ve como "todo sobra"). Ante un valor que no
+    # existe se usa el de siempre, "despues de la Comida 1", que es el que ya asumen las rutas.
+    try:
+        momento_entreno = int(momento_entreno)
+    except (TypeError, ValueError):
+        momento_entreno = 1
+    if momento_entreno not in (0, 1, 2, 3):
+        momento_entreno = 1
+
     # === DÍA DE DESCANSO ===
     if tipo_dia == "descanso":
         # Modo comida única (Calma esModoSinRepartoDeMacrosPorComidas): 1 comida con TODO el

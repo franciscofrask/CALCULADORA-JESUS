@@ -161,5 +161,52 @@ class TestElPeriNoDeformaElReparto:
         assert [c[f"C{i}"]["H"] for i in (1, 2, 3, 4)] == [15.0, 15.0, 10, 10]
 
 
+class TestNoSeGuardaEstadoEntreLlamadas:
+    """Aviso 1 del doc del 07-08 sobre el codigo antiguo: alli `getMealsPortions` escribia
+    encima del objeto de constantes, asi que una llamada se llevaba lo que habia dejado la
+    anterior. Aqui las tablas son de solo lectura; estos tests lo dejan fijado."""
+
+    def test_dos_llamadas_iguales_dan_lo_mismo(self):
+        a = nuestro(120, 65, 50, 1)["comidas"]
+        nuestro(180, 250, 65, 3, opcion_peri="sin_peri", p_peri=40, h_peri=30)  # llamada intercalada
+        b = nuestro(120, 65, 50, 1)["comidas"]
+        assert a == b
+
+    def test_las_tablas_no_se_tocan(self):
+        import copy as _copy
+        import macro_distribution as md
+        antes = _copy.deepcopy((md.DIST_E1, md.DIST_E2))
+        for momento in (0, 1, 2, 3):
+            for h in (25, 40, 65, 120, 200):
+                nuestro(120, h, 50, momento, opcion_peri="sin_peri", p_peri=40, h_peri=30)
+        assert (md.DIST_E1, md.DIST_E2) == antes
+
+    @pytest.mark.parametrize("tabla", ["DIST_E1", "DIST_E2"])
+    def test_las_tablas_suman_cien(self, tabla):
+        # El otro aviso: en el codigo antiguo `defaultMealsPortions` sumaba 133 % de hidratos
+        # y 80 % de grasas. Ninguna de las nuestras puede hacer eso.
+        import macro_distribution as md
+        for momento, reparto in getattr(md, tabla).items():
+            for i, macro in enumerate(("P", "H", "G")):
+                assert sum(v[i] for v in reparto.values()) == 100, f"{tabla} momento {momento} {macro}"
+
+
+class TestUnMomentoRaroNoTumbaElDia:
+    """El momento de entreno indexa las tablas: fuera de 0-3 daba KeyError -> 500 en
+    /distribute -> la pantalla de Nutricion con todos los objetivos a cero."""
+
+    @pytest.mark.parametrize("momento", [4, -1, 99, None, "x", 1.7])
+    def test_cae_al_de_siempre(self, momento):
+        r = distribuir_macros(120, 65, 50, 35, 15, 120, 65, 50,
+                              "entrenamiento", 4, momento, "intra_post")
+        assert [r["comidas"][f"C{i}"]["H"] for i in (1, 2, 3, 4)] == [22.5, 22.5, 10, 10]
+        assert r["config"]["momento_entreno"] == 1  # el que se uso, no el que llego
+
+    def test_un_numero_en_texto_se_entiende(self):
+        r = distribuir_macros(120, 65, 50, 35, 15, 120, 65, 50,
+                              "entrenamiento", 4, "2", "intra_post")
+        assert [r["comidas"][f"C{i}"]["H"] for i in (1, 2, 3, 4)] == [10, 22.5, 22.5, 10]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
