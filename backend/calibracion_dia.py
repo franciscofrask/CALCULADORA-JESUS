@@ -55,6 +55,26 @@ def _base_regla(food: dict) -> dict:
     return fc
 
 
+def _por_100_de_etiqueta(food: dict) -> Tuple[float, float, float]:
+    """Los macros por 100 g del alimento tal y como vienen en su etiqueta (P, H, G).
+
+    La regla del tercio se mide SIEMPRE sobre estos, nunca sobre lo que quede después de
+    aplicar las reglas de categoría ni sobre el porcentaje del tramo. Ese es el orden que
+    fija el doc del 07-08: el filtro va antes de calibrar, y si se hace al revés los
+    números salen distintos.
+
+    Por eso, si el alimento ya pasó por `aplicar_regla_macros` (que pone a cero lo que no
+    cuenta), se leen los originales que aquella guardó en `_per100_orig`. Sin esto, unas
+    almendras que llegaran ya "reguladas" perderían sus 21 g de proteína: la regla de
+    categoría se los había puesto a cero, y el tercio los habría dado por no existentes.
+    """
+    orig = food.get("_per100_orig")
+    if orig:
+        return (float(orig.get("proteinas") or 0), float(orig.get("hidratos") or 0),
+                float(orig.get("grasas") or 0))
+    return (_per100(food, "proteinas"), _per100(food, "hidratos"), _per100(food, "grasas"))
+
+
 def macros_item_calibrados(food: dict, cantidad_g: float,
                            pct_cp: float, pct_fs: float) -> Dict[str, float]:
     """Macros efectivos {P,H,G} de UN alimento aplicando la calibración del día.
@@ -76,9 +96,7 @@ def macros_item_calibrados(food: dict, cantidad_g: float,
 
     fc = _base_regla(food)
     m = macros_at(fc, cant_motor)  # H y G según las reglas de categoría de siempre
-    p100 = _per100(food, "proteinas")
-    h100 = _per100(food, "hidratos")
-    g100 = _per100(food, "grasas")
+    p100, h100, g100 = _por_100_de_etiqueta(food)
     factor = cantidad_g / 100.0
 
     if bloque == "cereal_pan":

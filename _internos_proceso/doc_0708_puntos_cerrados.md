@@ -123,6 +123,53 @@ configuración devuelta dice cuál se usó de verdad. Con test.
 
 ---
 
+### Punto 3 - La regla del tercio va ANTES de calibrar · CERRADO
+
+**Lo que se pide.** La proteína del cereal o del pan solo cuenta si supera un tercio de sus
+hidratos; la de los frutos secos, solo si supera un tercio de su grasa. Ese filtro se decide
+antes de aplicar la calibración del día, no después.
+
+**Cómo estaba.** El orden ya era el correcto dentro del motor de calibración
+(`backend/calibracion_dia.py`): el tercio se mide sobre los macros por 100 g del alimento, que
+no dependen del tramo, y solo después se aplica el 0 / 50 / 100 % del acumulado del día. Se
+comprobó con números: unas almendras de 21 g de proteína y 54 de grasa pasan el filtro
+(21 > 18) y en el tramo del 50 % dan 10,5 g de proteína. Si el orden estuviera invertido, se
+calibraría primero a 10,5 y luego se preguntaría si 10,5 supera 18, que no, y la proteína caería
+a cero. Esa es exactamente la diferencia que avisaba el documento.
+
+**Lo que sí había que arreglar: el orden se podía romper desde fuera.** El filtro se medía
+sobre el alimento tal y como llegara, y hay otra regla en la app, heredada de la calculadora
+antigua, que pone a cero los macros que no cuentan según *su* criterio, que no es el mismo. Las
+dos no coinciden: se compararon sobre el catálogo entero y **discrepan en 69 alimentos** (39
+cereales y panes, 30 frutos secos). Con las almendras, por ejemplo, la regla heredada pone la
+proteína a cero y el criterio de Jesús la deja contar. Así que si alguien pasaba a la
+calibración un alimento por el que ya había pasado esa regla, el tercio leía un cero y la
+proteína se perdía. Se verificó que ocurría: las almendras pasaban de 21 g de proteína a 0.
+
+Ahora la regla heredada guarda los macros de etiqueta antes de tocar nada, y la calibración
+mide el tercio sobre esos. El resultado es el mismo llegue el alimento crudo o ya procesado, así
+que el orden ya no depende de que cada llamador acierte. Queda fijado con tests.
+
+**Comprobado en la app real**, con el navegador y la app en marcha: al añadir 22 g de almendras
+crudas a la Comida 1, la ficha del alimento muestra sus 5,1 g de proteína de etiqueta y la
+comida cuenta 2,5 g, que es la mitad, porque 22 g de frutos secos caen en el tramo del 50 %.
+Es decir, el filtro se pasó primero y el tramo escaló después. Si el orden estuviera invertido,
+la comida contaría 0.
+
+**Una cosa que conviene saber, aunque no es un fallo.** Mientras se está montando la comida, el
+buscador enseña los macros con el criterio heredado (a las almendras les pone 0 de proteína),
+y al guardar pasan a contar 2,5 g. El buscador no conoce el acumulado del día hasta que el
+alimento aterriza en una comida, así que ese salto es esperable, pero al cliente le puede
+chocar ver un número en el buscador y otro distinto un segundo después.
+
+**Y una grieta que se cerró de paso.** La calibración la hace el servidor, y la pantalla la
+pedía tras cada cambio; si esa llamada fallaba, se conservaban los macros anteriores **sin
+avisar de nada**, y esos números sin calibrar son los que se guardan y los que salen en el PDF.
+Ahora se reintenta una vez y, si aun así falla, sale un aviso en la barra de estado que permite
+reintentar a mano.
+
+---
+
 ## Pendientes que no dependen de nosotros
 
 *(Se irán anotando aquí según aparezcan: decisiones de Jesús, datos que faltan o terceros.)*
@@ -133,6 +180,18 @@ para leer el código como lo describe el documento (nombres de fichero, números
 funciones a medio desminificar). Si Jesús quiere que revisemos algo concreto de ese código, hace
 falta acceso al repositorio. Hasta ahora no ha hecho falta: el reparto se pudo portar y validar
 contra el bundle.
+
+**Los dos criterios del tercio no coinciden, y conviven.** La calculadora antigua tiene su
+propia forma de decidir si la proteína de un cereal o de un fruto seco cuenta, y no es la del
+tercio: sobre el catálogo entero discrepan en 69 alimentos. Hoy la app usa el criterio de Jesús
+(el tercio) para lo que el cliente ve y guarda en su día, y el heredado en el buscador mientras
+monta la comida y en las herramientas de menús. Funciona, pero significa que el mismo alimento
+puede enseñar dos cifras de proteína distintas según dónde se mire. **Decide Jesús** si el
+criterio del tercio debe sustituir al heredado también en esos sitios.
+
+**Un test falla desde antes de tocar nada** (`test_search_foods_by_category`): al buscar por la
+categoría de carnes aparece un "Caldo de cocido" que no es de esa categoría. Es un problema de
+cómo está clasificado ese alimento en el catálogo, no del buscador.
 
 **La proyección de composición corporal del código antiguo no está en nuestra app.** Calma
 tiene un modelo que estima, semana a semana y por tramos de cuatro semanas, cuánta masa grasa y

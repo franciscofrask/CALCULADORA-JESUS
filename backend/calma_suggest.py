@@ -111,6 +111,12 @@ def aplicar_regla_macros(food: dict) -> None:
     r = {"proteinas": _per100(food, "proteinas"),
          "hidratos": _per100(food, "hidratos"),
          "grasas": _per100(food, "grasas")}
+    # Los macros de etiqueta por 100 g, guardados ANTES de poner ninguno a cero. La
+    # calibracion del dia (calibracion_dia) necesita los originales para su regla del
+    # tercio; si alguien le pasa un alimento por el que ya paso esta funcion, sin esto
+    # leeria ceros y la proteina de unas almendras dejaria de contar (doc del 07-08,
+    # punto 3: el filtro va ANTES de calibrar).
+    food["_per100_orig"] = dict(r)
     n = max(r["proteinas"], r["hidratos"], r["grasas"])
     o = lambda lst: food_in_any(food, lst)
     d = lambda c: food_in_cat(food, c)

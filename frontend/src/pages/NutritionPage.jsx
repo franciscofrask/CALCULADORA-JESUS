@@ -172,6 +172,13 @@ const NutritionPage = () => {
     // los objetivos por comida se pintaban a 0 sin explicación.
     const [distribError, setDistribError] = useState(null);
     const [distribTargetsOverlay, setDistribTargetsOverlay] = useState(null);
+    // La calibración del día la hace el backend; si esa llamada falla, los macros que quedan
+    // en pantalla son los del conteo por alimento suelto, SIN el acumulado del día. Antes se
+    // fallaba en silencio y esos números se guardaban y salían en el PDF como buenos.
+    const [calibracionFallida, setCalibracionFallida] = useState(false);
+    // Sube al pulsar "Reintentar": el efecto de calibración se dispara con la firma del día,
+    // que al reintentar es la misma, así que hace falta algo que sí cambie.
+    const [calibracionIntento, setCalibracionIntento] = useState(0);
     // Calma comidaConMacrosVolcadas: the meal key that absorbs the day's remaining macros.
     // When set, every OTHER meal is locked (target = its served = cuadrada). null = no volcado.
     const [volcadoMeal, setVolcadoMeal] = useState(null);
@@ -875,20 +882,30 @@ const NutritionPage = () => {
         const order = getMealOrder();
         if (!order.some(k => (mealsData[k]?.alimentos || []).length > 0)) return;
         let cancelado = false;
+        const pedirCalibracion = () => api('/api/calculator/calibrar-dia', {
+            method: 'POST',
+            body: JSON.stringify({
+                meal_order: order,
+                comidas: Object.fromEntries(order.map(k => [k,
+                    (mealsData[k]?.alimentos || []).map(a => ({
+                        alimento_id: a.alimento_id ?? null,
+                        cantidad_g: a.cantidad_g ?? 0,
+                    }))])),
+            })
+        });
         const timer = setTimeout(async () => {
             try {
-                const res = await api('/api/calculator/calibrar-dia', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        meal_order: order,
-                        comidas: Object.fromEntries(order.map(k => [k,
-                            (mealsData[k]?.alimentos || []).map(a => ({
-                                alimento_id: a.alimento_id ?? null,
-                                cantidad_g: a.cantidad_g ?? 0,
-                            }))])),
-                    })
-                });
+                // Un reintento: la mayoría de los fallos aquí son un corte de red de un
+                // segundo, y perder la calibración cambia los macros que se ven y se guardan.
+                let res;
+                try {
+                    res = await pedirCalibracion();
+                } catch {
+                    if (cancelado) return;
+                    res = await pedirCalibracion();
+                }
                 if (cancelado || !res?.comidas) return;
+                setCalibracionFallida(false);
                 setMealsData(prev => {
                     const next = { ...prev };
                     for (const k of order) {
@@ -910,11 +927,15 @@ const NutritionPage = () => {
                     }
                     return next;
                 });
-            } catch (e) { /* si falla, se conservan los macros previos */ }
+            } catch (e) {
+                // Se conservan los macros previos, pero SIN calibrar: hay que decirlo, porque
+                // el día se guarda con estos números y son los que salen en el PDF.
+                if (!cancelado) setCalibracionFallida(true);
+            }
         }, 300);
         return () => { cancelado = true; clearTimeout(timer); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [calibracionSig]);
+    }, [calibracionSig, calibracionIntento]);
 
     // Get quantity increment based on food category
     // REGLA: Para alimentos con unidades, incrementar por 1 unidad (= racion gramos)
@@ -1683,6 +1704,18 @@ const NutritionPage = () => {
     // Aviso de guardado. Solo aparece cuando hay algo que contar: mientras guarda, cuando acaba
     // y, sobre todo, si ha fallado (antes fallaba en silencio y el dia se perdia sin avisar).
     const renderEstadoGuardado = () => {
+        // Manda sobre el resto: si el día no está calibrado, los macros que se ven no son los
+        // buenos, y decir "Guardado" tan tranquilo sería peor que no decir nada.
+        if (calibracionFallida) {
+            return (
+                <button onClick={() => { setCalibracionFallida(false); setCalibracionIntento(n => n + 1); }}
+                    title="Los macros no incluyen el acumulado del día. Toca para volver a intentarlo."
+                    data-testid="calibracion-error"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-amber-500 hover:underline">
+                    <AlertCircle className="w-3.5 h-3.5" /> Macros sin calibrar. Reintentar
+                </button>
+            );
+        }
         if (cargaFallida && guardadoEstado !== 'guardado') {
             return (
                 <button onClick={reintentarCarga} title="Vuelve a pedir el día al servidor"

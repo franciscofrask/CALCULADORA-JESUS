@@ -158,6 +158,64 @@ class TestFueraDeBloques:
         assert pcts["C1"]["pct_cp"] == 1.0
 
 
+class TestElTercioVaAntesDeCalibrar:
+    """Punto 3 del doc de Jesus del 07-08: "la regla del tercio va ANTES de calibrar".
+
+    El tercio (P > H/3 en cereales y panes, P > G/3 en frutos secos) se decide sobre los
+    macros POR 100 g del alimento, que no dependen del tramo. Solo despues se aplica el
+    0 / 50 / 100 % del acumulado del dia.
+
+    Si se hiciera al reves -- calibrar primero y mirar el tercio sobre el valor ya
+    reducido -- un alimento que pasa el filtro al 100 % dejaria de pasarlo al 50 %, y su
+    proteina caeria a cero en vez de a la mitad. Los numeros de estos tests son justo esa
+    diferencia.
+    """
+
+    def test_cereal_al_50_da_la_mitad_no_cero(self):
+        # CEREAL: P25 / H55, con H/3 = 18,33. Pasa el tercio (25 > 18,33).
+        # Al derecho: 25 x 0,5 = 12,5. Al reves: 12,5 > 18,33 es falso -> 0.
+        m = macros_item_calibrados(CEREAL, 100, 0.5, 0)
+        assert abs(m["P"] - 12.5) < 0.05
+
+    def test_fruto_seco_al_50_da_la_mitad_no_cero(self):
+        # ALMENDRAS: P21 / G54, con G/3 = 18. Pasa el tercio (21 > 18).
+        # Al derecho: 21 x 0,5 = 10,5. Al reves: 10,5 > 18 es falso -> 0.
+        m = macros_item_calibrados(ALMENDRAS, 100, 0, 0.5)
+        assert abs(m["P"] - 10.5) < 0.05
+
+    @pytest.mark.parametrize("pct,esperado", [(0.0, 0.0), (0.5, 12.5), (1.0, 25.0)])
+    def test_el_tramo_solo_escala_lo_que_ya_paso_el_filtro(self, pct, esperado):
+        # La proteina es proporcional al tramo: el filtro no se re-evalua en cada uno.
+        m = macros_item_calibrados(CEREAL, 100, pct, 0)
+        assert abs(m["P"] - esperado) < 0.05
+
+    @pytest.mark.parametrize("pct", [0.0, 0.5, 1.0])
+    def test_el_que_no_pasa_el_filtro_no_cuenta_en_ningun_tramo(self, pct):
+        # AVENA: P13 / H60, con H/3 = 20. No pasa (13 < 20): cero en los tres tramos.
+        assert macros_item_calibrados(AVENA, 100, pct, 0)["P"] == 0
+
+    def test_da_igual_que_el_alimento_llegue_ya_regulado(self):
+        """El otro modo de invertir el orden: pasarle a la calibracion un alimento por el
+        que ya paso `aplicar_regla_macros`. A las almendras esa regla les pone la proteina
+        a cero (su criterio es otro), asi que el tercio la habria dado por inexistente y
+        se perdian 21 g. Ahora se leen los macros de etiqueta guardados, y sale lo mismo."""
+        import copy as _copy
+        from calma_suggest import aplicar_regla_macros
+        for alimento in (ALMENDRAS, CEREAL, AVENA, NUECES):
+            crudo = macros_item_calibrados(_copy.deepcopy(alimento), 100, 1.0, 1.0)
+            regulado = _copy.deepcopy(alimento)
+            aplicar_regla_macros(regulado)
+            assert macros_item_calibrados(regulado, 100, 1.0, 1.0) == crudo, alimento["nombre"]
+
+    def test_la_cantidad_no_cambia_si_pasa_el_filtro(self):
+        # El tercio se mide por 100 g, asi que comer 20 g o 200 g no altera SI cuenta,
+        # solo CUANTO. (El tramo lo decide el acumulado, que es otra cosa.)
+        poco = macros_item_calibrados(ALMENDRAS, 20, 0, 1.0)["P"]
+        mucho = macros_item_calibrados(ALMENDRAS, 200, 0, 1.0)["P"]
+        assert abs(poco - 21 * 0.2) < 0.05
+        assert abs(mucho - 21 * 2.0) < 0.05
+
+
 if __name__ == "__main__":
     import pytest as _p
     raise SystemExit(_p.main([__file__, "-q"]))
