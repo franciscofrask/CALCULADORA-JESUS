@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { MEDIDAS } from '../lib/medidas';
 import { toast } from 'sonner';
 import {
-    Heart, Activity, TrendingUp, CheckCircle2, Smile, Frown, Meh,
+    Activity, TrendingUp, CheckCircle2, Smile, Frown, Meh,
     Zap, Apple, Dumbbell, Scale, Send, ChevronDown, ChevronUp, Calendar,
     Camera, Trash2, Loader2,
 } from 'lucide-react';
@@ -13,11 +13,11 @@ const ORANGE = '#FF671F';
 const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
 const labelCls = "block text-xs font-bold text-foreground/40 uppercase tracking-wider mb-1.5";
 
-const HEALTH_TONES = {
-    green:  { ring: 'border-emerald-500/30', bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-500', label: 'Saludable' },
-    yellow: { ring: 'border-amber-500/30',   bg: 'bg-amber-500/10',   text: 'text-amber-400',   dot: 'bg-amber-500',   label: 'Atención' },
-    red:    { ring: 'border-red-500/30',     bg: 'bg-red-500/10',     text: 'text-red-400',     dot: 'bg-red-500',     label: 'En riesgo' },
-};
+// Aquí había una tarjeta con la etiqueta de riesgo del cliente ("Saludable" / "Atención" /
+// "En riesgo") y el motivo debajo. Se quitó el 07-08 (punto 6 del documento de Jesús): esa
+// etiqueta es una nota de gestión del entrenador, para saber a quién hay que llamar, y sus
+// motivos hablan de cobros y de bajas. El cliente no tiene por qué verse etiquetado en su
+// propio panel. Vive solo en el lado del entrenador, y su ruta también.
 
 const MOOD_FACES = [
     { value: 1, icon: Frown, color: 'text-red-500', label: 'Mal' },
@@ -166,7 +166,6 @@ const PhotosSection = ({ api }) => {
 
 const CheckInsPage = () => {
     const { api } = useAuth();
-    const [healthScore, setHealthScore] = useState(null);
     const [checkins, setCheckins] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -184,11 +183,7 @@ const CheckInsPage = () => {
 
     const fetchAll = useCallback(async () => {
         try {
-            const [hsRes, ciRes] = await Promise.all([
-                api.get('/health-score').catch(() => ({ data: null })),
-                api.get('/checkins?limit=30'),
-            ]);
-            setHealthScore(hsRes.data);
+            const ciRes = await api.get('/checkins?limit=30');
             const list = Array.isArray(ciRes.data) ? ciRes.data : [];
             setCheckins(list);
             setHistHasMore(list.length === 30);
@@ -286,8 +281,6 @@ const CheckInsPage = () => {
         );
     }
 
-    const tone = healthScore && HEALTH_TONES[healthScore.score];
-
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1100px] mx-auto space-y-5 animate-fade-in" data-testid="checkins-page">
             <header className="flex items-center gap-3">
@@ -299,18 +292,6 @@ const CheckInsPage = () => {
                     <p className="text-sm text-muted-foreground mt-1">Tus check-ins diarios, semanales y mensuales</p>
                 </div>
             </header>
-
-            {tone && (
-                <Card className={`p-4 flex items-center gap-3 ${tone.bg} ${tone.ring}`}>
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${tone.dot}`}>
-                        <Heart className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className={`font-bold uppercase tracking-wider text-sm ${tone.text}`}>{tone.label}</p>
-                        <p className="text-sm text-foreground/60 truncate">{healthScore.factors?.[0] || 'Vas por buen camino'}</p>
-                    </div>
-                </Card>
-            )}
 
             {/* Diario */}
             {todayDaily ? (

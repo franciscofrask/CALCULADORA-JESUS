@@ -252,6 +252,88 @@ sobra el queso entra normal, a 125 g.
 
 ---
 
+## Bloque B - Limpieza antes de que entre nadie
+
+### Punto 6 - El cliente ve su propia etiqueta de riesgo · CERRADO
+
+Era peor de lo que decía el documento. La pantalla de Check-ins del cliente pintaba una
+tarjeta con su etiqueta ("Saludable" / "Atención" / "En riesgo") **y el motivo debajo**, y esos
+motivos los calcula la misma función que usa el panel del entrenador: "Baja automática por
+fallos de pago", "Pago atrasado", "2 intentos de cobro fallidos". El cliente estaba leyendo
+notas de cobro sobre sí mismo en su propio panel.
+
+Se han cerrado las dos puertas. La del servidor: la ruta que se la daba al cliente ya no
+existe, y queda solo la del entrenador, que pide permisos de administrador. Y la de la
+pantalla: la tarjeta se ha quitado. Comprobado que la ruta del cliente devuelve 404 y que sus
+check-ins siguen funcionando con normalidad.
+
+### Punto 7 - Hay dos pesos distintos en la misma app · DIAGNOSTICADO (se cierra en el 20)
+
+Son dos fuentes distintas, y ninguna está mal en sí:
+
+- **Reportes** enseña el peso del último reporte que mandó el cliente, con su fecha
+  (`ReportsPage.jsx:354`, el "Último: 118 kg · 21 feb").
+- **Ajustar macros** enseña el peso guardado en su ficha, que es con el que se calcularon los
+  macros que tiene hoy (`MacroCalculatorClientPage.jsx:107`, vía `GET /macros`).
+
+Si el cliente reporta 118 kg pero nadie ha recalculado sus macros desde que pesaba 94, las dos
+cifras son correctas y contradictorias a la vez. El arreglo de fondo es del punto 20 de este
+mismo documento, así que aquí solo queda el diagnóstico.
+
+### Punto 8 - Hay datos de prueba en producción · PREPARADO, PENDIENTE DE DAR LA ORDEN
+
+En producción hay **18 cuentas de prueba** sobre 203 usuarios. `francisco@test.com` se queda
+(decisión de Francisco) y también `clientedemo@test.com`, que es con la que se prueba la app.
+
+Queda el script `backend/_limpiar_datos_prueba.py`, que **simula por defecto** y solo borra si
+se le pasa `--ejecutar`. Ya se ha pasado en producción en modo simulación y la lista es esta:
+16 cuentas vacías (los `test01@jg12.com` a `test10@jg12.com`, `test@test.com` y varios
+`francisco*@test.com`) y **dos que sí tienen cosas dentro**:
+
+- `jose@test.com`: 7 dietas, 1 reporte, 3 check-ins, 1 foto y 12 cambios de macros.
+- `prueba@mail.com`: 1 reporte y 3 check-ins.
+
+Esas dos no se tocan sin que Francisco las mire: por el volumen de datos, alguien las usó de
+verdad. El backup del día está hecho (`/opt/jg12/backups/`, cron de las 4:30).
+
+### Punto 9 - Hay alimentos sin macros en el catálogo · MATIZADO
+
+El diagnóstico no se sostiene tal cual, y aplicarlo habría hecho daño. En el catálogo hay 15
+alimentos con los tres macros a cero, pero **no son un error**: son la lechuga, el pepino, el
+apio, las setas, el konjac y los refrescos zero. De verdad no aportan nada, y el método los usa
+a propósito como alimentos libres. Sacarlos del buscador sería quitar medio plato de verdura.
+
+Lo que sí rompe los números de un menú sin que nadie se entere es lo contrario: alimentos con
+macros **mal puestos**. Ahí hay casos de verdad, y son los que encaja la frase "si uno entra en
+un menú, los números salen mal y nadie se entera":
+
+- Una tortita de maíz de 7 g con 125 g de grasa: mete 1149 kcal en la comida.
+- Un turrón de coco con 79 g de proteína por 100 g.
+- Varios panes y galletas con los macros por 100 g pero la ración puesta a 1 g.
+
+Queda `backend/_auditar_catalogo.py`, que los lista ordenados por gravedad y con el enlace a la
+ficha del producto para corregirlos. Salen 17, de los cuales unos 7 son claramente erróneos y
+el resto son etiquetas mal redondeadas. **Corregir los valores es cosa de Jesús**: hay que
+mirar la etiqueta real de cada uno, y no se pueden inventar.
+
+### Punto 10 - Una ruta que echa al cliente al login · LOCALIZADA (sin tocar, por indicación)
+
+Es el aviso **"Tus macros son provisionales"**, que la app le manda a casi todos los clientes
+nuevos a las dos horas de darse de alta. El aviso lleva un enlace a `/dashboard/ajustar-macros`
+(`backend/core/avisos_cliente.py:79`) y **esa ruta no existe**: la pantalla de ajustar macros
+está en `/dashboard/macro-calculator` (`frontend/src/App.js:214`).
+
+Como la ruta no existe, cae en el comodín del router, que es
+`<Route path="*" element={<Navigate to="/auth" replace />} />` (`App.js:247`) y manda al login
+**sin comprobar si hay sesión**. O sea: el cliente nuevo pulsa la primera notificación que
+recibe de la app y acaba en la pantalla de login. Es, literalmente, la peor primera impresión
+posible, y le pasa a casi todos.
+
+El arreglo son dos líneas (apuntar el aviso a la ruta buena, y que el comodín respete la
+sesión), pero **no se ha tocado nada** porque así se pidió.
+
+---
+
 ## Pendientes que no dependen de nosotros
 
 *(Se irán anotando aquí según aparezcan: decisiones de Jesús, datos que faltan o terceros.)*

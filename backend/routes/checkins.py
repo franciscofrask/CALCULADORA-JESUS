@@ -236,17 +236,18 @@ async def admin_get_health_score(client_id: str, user = Depends(get_admin_user))
     return _compute_health_score(checkins, profile)
 
 
-@router.get("/health-score")
-async def get_my_health_score(user = Depends(get_current_user)):
-    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-    checkins = await db.checkins.find(
-        {"client_id": profile["id"], "created_at": {"$gte": cutoff}},
-        {"_id": 0},
-    ).sort("created_at", -1).to_list(60)
-    return _compute_health_score(checkins, profile)
+# La etiqueta de riesgo NO tiene ruta para el cliente, a proposito (doc del 07-08, punto 6).
+#
+# Habia un `GET /checkins/health-score` que se la daba a el mismo, y la pantalla de Check-ins
+# se la pintaba en una tarjeta roja que ponia "En riesgo". Es una nota de gestion del
+# entrenador: sirve para saber a quien hay que llamar, no para que el cliente se vea
+# etiquetado. Y ademas los motivos que acompanan a la etiqueta son de cobro y de gestion
+# interna ("Pago atrasado", "N intentos de cobro fallidos", "Baja automatica por fallos de
+# pago"), que el cliente no tiene por que leer en su panel.
+#
+# Se queda solo la de arriba, `admin/clients/{client_id}/health-score`, con get_admin_user.
+# Si algun dia se quiere ensenar algo al cliente sobre como va, que sea un texto pensado para
+# el y con otro nombre, no esta etiqueta.
 
 
 # ==================== FOTOS DE PROGRESO ====================
