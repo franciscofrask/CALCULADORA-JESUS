@@ -84,6 +84,37 @@ def _snap_to_nearest(value: float, steps: list) -> float:
     return float(closest)
 
 
+def _fuera_de_tabla(peso: float, bf: float, pesos: list, bfs: list) -> list:
+    """Qué se ha quedado fuera de la tabla, si algo.
+
+    La tabla llega hasta 120 kg y 45 % (50 % en mujeres). Quien pasa de ahí NO recibe su
+    fila: recibe la del extremo, y hasta hoy sin que nadie se enterara. El avatar más
+    numeroso es justo el que llega gordo -- hay clientes que entraron al 44 % -- así que
+    esto pasa de verdad, no es un caso de laboratorio.
+
+    No se toca el cálculo: se sigue usando el extremo, que es lo único que hay. Lo que
+    cambia es que ahora se puede decir.
+    """
+    avisos = []
+    if peso > pesos[-1]:
+        avisos.append({"campo": "peso", "valor": peso, "tope": pesos[-1],
+                       "detalle": f"Pesa {peso:.0f} kg y la tabla llega a {pesos[-1]:.0f}: "
+                                  f"se usa la fila de {pesos[-1]:.0f} kg"})
+    elif peso < pesos[0]:
+        avisos.append({"campo": "peso", "valor": peso, "tope": pesos[0],
+                       "detalle": f"Pesa {peso:.0f} kg y la tabla empieza en {pesos[0]:.0f}: "
+                                  f"se usa la fila de {pesos[0]:.0f} kg"})
+    if bf > bfs[-1]:
+        avisos.append({"campo": "porcentaje_graso", "valor": bf, "tope": bfs[-1],
+                       "detalle": f"Tiene {bf:.0f} % de grasa y la tabla llega al {bfs[-1]:.0f}: "
+                                  f"se usa la fila del {bfs[-1]:.0f} %"})
+    elif bf < bfs[0]:
+        avisos.append({"campo": "porcentaje_graso", "valor": bf, "tope": bfs[0],
+                       "detalle": f"Tiene {bf:.0f} % de grasa y la tabla empieza en el {bfs[0]:.0f}: "
+                                  f"se usa la fila del {bfs[0]:.0f} %"})
+    return avisos
+
+
 # =========================================================
 # FUNCIONES PÚBLICAS
 # =========================================================
@@ -153,12 +184,11 @@ def calcular_targets(
         raise ValueError(f"Objetivo no válido: {objetivo}. Usa 'volumen' o 'definicion'.")
 
     # Snap peso y bf al escalón más cercano
-    if sexo_norm == "hombre":
-        peso_snap = _snap_to_nearest(peso, PESOS_HOMBRE)
-        bf_snap = _snap_to_nearest(porcentaje_graso, BFS_HOMBRE)
-    else:
-        peso_snap = _snap_to_nearest(peso, PESOS_MUJER)
-        bf_snap = _snap_to_nearest(porcentaje_graso, BFS_MUJER)
+    pesos = PESOS_HOMBRE if sexo_norm == "hombre" else PESOS_MUJER
+    bfs = BFS_HOMBRE if sexo_norm == "hombre" else BFS_MUJER
+    peso_snap = _snap_to_nearest(peso, pesos)
+    bf_snap = _snap_to_nearest(porcentaje_graso, bfs)
+    fuera_de_tabla = _fuera_de_tabla(peso, porcentaje_graso, pesos, bfs)
 
     # Lookup
     key = (sexo_norm, peso_snap, bf_snap, obj_norm)
@@ -221,6 +251,9 @@ def calcular_targets(
         "lookup": {
             "peso_snap": peso_snap,
             "bf_snap": bf_snap,
+            # Vacío = su fila existe de verdad. Con algo dentro, se le está dando la del
+            # extremo de la tabla: el número sale igual, pero hay que poder decirlo.
+            "fuera_de_tabla": fuera_de_tabla,
         },
         "macros": macros,
         "kcal": {

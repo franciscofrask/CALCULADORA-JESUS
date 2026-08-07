@@ -12,8 +12,12 @@ Reglas del doc:
 - "Engordo enseguida" = VETO: anula todas las subidas de hidratos.
 - El descanso NUNCA por encima del entreno (comidas contra comidas, el peri
   aparte): si se pasa, se sube el entreno hasta igualarlo.
-- La dieta real manda sobre todo lo anterior, y lo que se hace con ella
-  depende de como le esta funcionando (matrices por objetivo).
+- La dieta real MODULA, no manda: es el factor que mas pesa, pero se queda a
+  +-20% de lo que dice la tabla ya modificada. Lo que se hace con ella depende
+  de como le esta funcionando (matrices por objetivo). Hasta el 06-08-2026 la
+  pisaba entera; Jesus lo corrigio el 15-07 y quedo pendiente de rediseñar.
+  Unica excepcion, que sigue entera: quien llega comiendo menos de 75 g de HC
+  en definicion recibe el arranque minimo fijo, porque eso es fisica.
 - hc_e de la tabla son los hidratos de COMIDAS del dia de entreno (el peri
   va aparte en hc_pe); por eso el suelo de comidas es 60 (con peri 15 => 75).
 
@@ -38,8 +42,15 @@ MOD_MUY_ACTIVO_DESCANSO = 0.10
 # cae en un dia marcado como descanso que en realidad es de entreno disfrazado.
 MOD_DEPORTE_EXTRA_DESCANSO_DEFINICION = 0.10
 MOD_DEPORTE_EXTRA_DESCANSO_VOLUMEN = 0.20
-MOD_NO_ENGORDA = 0.20                    # entreno y descanso; requiere bf <= 20
-BF_MAX_NO_ENGORDA = 20.0
+MOD_NO_ENGORDA = 0.20                    # entreno y descanso; requiere estar por debajo del umbral
+# El umbral NO es el mismo para los dos, y hasta el 06-08-2026 lo era. Con el 20 % para
+# todos, en mujeres el modificador estaba muerto: la tabla de ellas EMPIEZA en el 20 %, o
+# sea que hacía falta estar en el extremo exacto para cobrarlo.
+#
+# El 30 % es el mismo punto del recorrido: en hombres, el 20 % está al 29 % de su rango
+# (10-45); ese mismo punto en el rango de ellas (20-50) cae en 30. Decisión del documento
+# del 06-08-2026 -- "con eso se puede activar y se puede validar".
+BF_MAX_NO_ENGORDA = {"hombre": 20.0, "mujer": 30.0}
 # Desde el doc del 29-07 el +20% lo cobran "casi no lo noto" Y "engordo lo normal": las dos
 # condiciones (respuesta y grasa <= 20%) tienen que darse a la vez.
 RESPUESTAS_QUE_SUBEN = ("casi_no", "normal")
@@ -54,7 +65,15 @@ MOD_FARMACOLOGIA_PROTEINA_DESCANSO_G = 10.0
 
 # NO PROGRAMADOS AUN (guardar el dato, no aplicar):
 APLICAR_HISTORIAL_DIETA = False   # +-10% por historial de dieta: en pausa, sin validar
-APLICAR_ENGORDA_EN_MUJERES = False  # +20% "no engorda" en mujeres: n=11, sin validar
+# El +20% "no engorda" en mujeres. Estuvo apagado con la nota "n=11, sin validar", y esa
+# nota engañaba: no es que fallara con once casos, es que NO SE EJECUTÓ NI UNA VEZ. Había
+# dos barreras y esta cortaba antes de mirar siquiera el % de grasa; y la segunda (el
+# umbral del 20 %) tampoco lo habría dejado pasar, porque la tabla de mujeres empieza ahí.
+# Once respuestas guardadas, cero aplicaciones.
+#
+# Se enciende junto con el umbral del 30 % (documento del 06-08-2026): así se puede
+# aplicar y, sobre todo, se puede validar con datos de verdad.
+APLICAR_ENGORDA_EN_MUJERES = True
 # TRT / farmacologia: el doc del 29-07 dejaba la regla en pausa hasta que Jesus confirmara como
 # afecta. Lo confirmo el 03-08 (+10 g en descanso y la regla dura de entreno+peri), asi que se
 # activa. Solo cuenta el uso ACTUAL: quien lo uso en el pasado y ya no, va con proteina normal.
@@ -75,6 +94,22 @@ BANDAS_PERI = [(300, 40), (350, 50), (400, 60), (450, 75), (float("inf"), 90)]
 
 UMBRAL_HC_EN_LAS_ULTIMAS = 75     # < 75 g netos -> arranque minimo
 PERI_EN_LAS_ULTIMAS = 15
+
+# Cuanto puede mover la dieta que ya come, arriba o abajo, sobre lo que dice la tabla ya
+# modificada.
+#
+# Hasta el 06-08-2026 no habia tope: si la declaraba y la confirmaba, su dieta PISABA los
+# hidratos y se tiraban la tabla y todos los modificadores. Jesus lo corrigio el 15 de
+# julio -- "NO manda sobre todo, es un factor mas, el que mas pesa, pero no determinante"
+# -- y quedo pendiente de rediseñar.
+#
+# Ahora modula como los demas, que ya tenian sus topes del 30 y el 40 %. El +-20 % la deja
+# siendo el factor que mas pesa (ninguno de los otros llega solo a tanto) sin que se lleve
+# el calculo por delante.
+#
+# La excepcion del que viene comiendo muy poco NO pasa por aqui: si llega con menos de 75 g
+# en definicion se le da el arranque minimo fijo, porque eso es fisica y no criterio.
+TOPE_DIETA_REPORTADA = 0.20
 DESCANSO_SOBRE_COMIDAS = 0.80     # doc 29-07: el descanso va un 20% por debajo de las comidas
 
 # Grasa segun la dieta con la que llega el cliente (doc 29-07, paso 5). Tope 80, igual en
@@ -142,6 +177,26 @@ def _nivelar_descanso(hc_entreno: float, hc_descanso: float) -> tuple:
     return hc_entreno, hc_descanso
 
 
+def _acotar_a_la_tabla(total: float, T: float) -> tuple:
+    """La dieta que trae puede mover el total, pero no llevarselo.
+
+    `total` es lo que sale de aplicar la matriz a su dieta (X, el 75 % de X, X-10...) y
+    `T` lo que dice la tabla ya modificada. El resultado se queda a +-TOPE_DIETA_REPORTADA
+    de T.
+
+    Devuelve (total_acotado, cuanto_se_recorto). Si no se recorto, lo segundo es None.
+    """
+    if not T or T <= 0:
+        return total, None
+    techo = T * (1 + TOPE_DIETA_REPORTADA)
+    suelo = T * (1 - TOPE_DIETA_REPORTADA)
+    if total > techo:
+        return techo, f"+{TOPE_DIETA_REPORTADA:.0%}"
+    if total < suelo:
+        return suelo, f"-{TOPE_DIETA_REPORTADA:.0%}"
+    return total, None
+
+
 def calcular_macros_v2(
     peso: float,
     sexo: str,
@@ -181,6 +236,14 @@ def calcular_macros_v2(
     }]
     no_aplicados: Dict = {}
 
+    # Se ha salido de la tabla: se le está dando la fila del extremo, no la suya. El
+    # número es el mismo de siempre -- no hay otra fila que usar -- pero deja de ser
+    # silencioso: el coach tiene que saber que ese cálculo se apoya en un tope.
+    fuera_de_tabla = base["lookup"].get("fuera_de_tabla") or []
+    for aviso in fuera_de_tabla:
+        desglose.append({"paso": "fuera_de_tabla", "estado": "tope",
+                         "detalle": aviso["detalle"]})
+
     # -----------------------------------------------------
     # 1) Modificadores de hidratos (sumados, luego topes y veto)
     # -----------------------------------------------------
@@ -201,18 +264,19 @@ def calcular_macros_v2(
                          "detalle": f"+{mod_dep:.0%} HC solo descanso ({obj_norm})"})
 
     if facilidad_engordar in RESPUESTAS_QUE_SUBEN:
+        umbral = BF_MAX_NO_ENGORDA.get(sexo_norm, BF_MAX_NO_ENGORDA["hombre"])
         if sexo_norm == "mujer" and not APLICAR_ENGORDA_EN_MUJERES:
             no_aplicados["engorda_mujer"] = facilidad_engordar
             desglose.append({"paso": "no_engorda", "estado": "no_aplica_mujer",
                              "detalle": "Modificador sin validar en mujeres: se guarda, no se aplica"})
-        elif porcentaje_graso <= BF_MAX_NO_ENGORDA:
+        elif porcentaje_graso <= umbral:
             pct_e += MOD_NO_ENGORDA
             pct_d += MOD_NO_ENGORDA
             desglose.append({"paso": "no_engorda", "estado": "aplicado",
-                             "detalle": f"+20% HC entreno y descanso ('{facilidad_engordar}' con grasa <= {BF_MAX_NO_ENGORDA:.0f}%)"})
+                             "detalle": f"+20% HC entreno y descanso ('{facilidad_engordar}' con grasa <= {umbral:.0f}%)"})
         else:
             desglose.append({"paso": "no_engorda", "estado": "no_aplica_bf",
-                             "detalle": f"Requiere grasa <= {BF_MAX_NO_ENGORDA:.0f}%"})
+                             "detalle": f"Requiere grasa <= {umbral:.0f}%"})
 
     if facilidad_engordar == "enseguida" and (pct_e > 0 or pct_d > 0):
         desglose.append({"paso": "veto_engorda_enseguida", "estado": "vetado",
@@ -307,12 +371,16 @@ def calcular_macros_v2(
         elif obj_norm == "definicion" and columna == 1:
             # X < T en definicion: come por debajo de la tabla. Arranque atado por el doc.
             total = X - 10 if accion == "x_-10" else X
+            total, recorte = _acotar_a_la_tabla(total, T)
             hc_pe = float(PERI_EN_LAS_ULTIMAS)          # peri 15
             hc_e = total - hc_pe                       # el resto, a las comidas del entreno
             hc_d = hc_e * DESCANSO_SOBRE_COMIDAS       # descanso, un 20% por debajo
             gr_e, gr_d = 50.0, 60.0                    # excepcion de grasa del doc
             desglose.append({"paso": "dieta_reportada", "rama": "def_por_debajo",
                              "detalle": f"'{clave}' con X={X:.0f} < T={T:.0f}: {'X-10' if accion == 'x_-10' else 'X'} = {total:.0f}, peri 15, comidas {hc_e:.0f}, descanso -20%, grasa 50/60"})
+            if recorte:
+                desglose.append({"paso": "tope_dieta", "estado": "recortado",
+                                 "detalle": f"Su dieta se iba mas de un {TOPE_DIETA_REPORTADA:.0%} por debajo de la tabla ({T:.0f} g): se queda en {total:.0f}"})
 
         else:
             # Se le pone X (entero, al 75% o menos 10) y el peri sale de X por banda.
@@ -322,12 +390,17 @@ def calcular_macros_v2(
                 total = X - 10
             else:
                 total = X
+            total, recorte = _acotar_a_la_tabla(total, T)
             peri = _banda_peri(total)
             hc_pe = float(peri)
             hc_e = total - peri
             hc_d = hc_e * DESCANSO_SOBRE_COMIDAS
             desglose.append({"paso": "dieta_reportada", "rama": f"se_le_pone_{accion}",
                              "detalle": f"'{clave}' con X={X:.0f} vs T={T:.0f}: total {total:.0f}, peri {peri} por banda, comidas {hc_e:.0f}, descanso -20%"})
+            if recorte:
+                desglose.append({"paso": "tope_dieta", "estado": "recortado",
+                                 "detalle": (f"Su dieta se iba mas de un {TOPE_DIETA_REPORTADA:.0%} de la tabla "
+                                             f"({T:.0f} g): se queda en {total:.0f} ({recorte})")})
 
         # Paso 5 del doc: la grasa de partida sale de la que ya viene comiendo. La excepcion
         # (definicion por debajo de la tabla, que va 50/60) ya se ha fijado arriba.
@@ -393,6 +466,9 @@ def calcular_macros_v2(
         "desglose": desglose,
         "revision": revision,
         "no_aplicados": no_aplicados,
+        # Suelto y no solo dentro del desglose: quien enseña esto no tiene que rebuscar
+        # entre quince pasos para saber si el cálculo se apoya en un tope de la tabla.
+        "fuera_de_tabla": fuera_de_tabla,
         "version_motor": VERSION_MOTOR,
     }
 

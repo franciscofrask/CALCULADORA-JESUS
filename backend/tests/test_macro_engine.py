@@ -91,11 +91,14 @@ class TestModificadores:
         assert any(d["paso"] == "no_engorda" and d["estado"] == "no_aplica_bf"
                    for d in res["desglose"])
 
-    def test_casi_no_engorda_mujer_no_aplica_pero_se_guarda(self):
+    def test_casi_no_engorda_mujer_YA_aplica(self):
+        """Desde el 06-08-2026 sí se aplica en mujeres, con umbral del 30 % (el mismo
+        punto del recorrido que el 20 % en hombres). Antes estaba muerto: no se ejecutó
+        nunca. Lo suyo está en test_engorda_mujeres.py."""
         res = calcular_macros_v2(60, "mujer", 20, "volumen", facilidad_engordar="casi_no")
         base = calcular_macros_v2(60, "mujer", 20, "volumen")
-        assert m8(res) == m8(base)
-        assert res["no_aplicados"]["engorda_mujer"] == "casi_no"
+        assert m8(res) != m8(base)
+        assert "engorda_mujer" not in res["no_aplicados"]
 
     def test_ejemplo_spec_modificadores_al_max(self):
         # Ejemplo 5: def, muy activo + casi no engorda (bf 20) -> +30%/+30%
@@ -233,17 +236,22 @@ class TestDietaReportada:
         assert m["entreno"]["grasa"] == 60
         assert m["descanso"]["grasa"] == 60
 
-    def test_volumen_bestia_split(self):
-        # X=420: banda 400-450 -> peri 75. Comidas 345. Descanso 345*0.8 = 276 -> 275.
-        # Grasa: viene comiendo 75 (tramo 60-90) -> 70 en entreno Y en descanso.
+    def test_volumen_bestia_se_acota(self):
+        """X=420 con T=220: antes se le daban los 420 tal cual. Desde el 06-08-2026 la
+        dieta modula y no manda, así que se queda en el tope (+20 % = 264).
+
+        Lo que NO cambia: el reparto interno (peri por banda, descanso un 20 % por debajo)
+        y la grasa por la dieta que trae."""
         res = calcular_macros_v2(80, "hombre", 20, "volumen",
                                  dieta_reportada={"hc_entreno": 420, "grasa_entreno": 75})
         m = res["macros"]
-        assert m["perientreno"]["hidratos"] == 75
-        assert m["entreno"]["hidratos"] == 345
-        assert m["descanso"]["hidratos"] == 275
-        assert m["entreno"]["grasa"] == 70
+        total = m["entreno"]["hidratos"] + m["perientreno"]["hidratos"]
+        assert total == 265                        # 264 redondeado a múltiplo de 5
+        assert m["perientreno"]["hidratos"] == 40  # banda del total ya acotado
+        assert m["descanso"]["hidratos"] == redondear5(m["entreno"]["hidratos"] * 0.8)
+        assert m["entreno"]["grasa"] == 70         # 75 g de grasa -> tramo 60-90
         assert m["descanso"]["grasa"] == 70
+        assert any(d["paso"] == "tope_dieta" for d in res["desglose"])
 
     @pytest.mark.parametrize("grasa_reportada,esperada", [(50, 60), (60, 60), (75, 70),
                                                           (90, 70), (95, 80), (120, 80)])
@@ -258,11 +266,13 @@ class TestDietaReportada:
     @pytest.mark.parametrize("total,peri", [(250, 40), (300, 40), (350, 50), (400, 60),
                                             (450, 75), (500, 90)])
     def test_bandas_peri(self, total, peri):
-        # Bandas del doc 29-07 sobre el total ya decidido: <=300 -> 40, <=350 -> 50,
-        # <=400 -> 60, <=450 -> 75, resto 90. En volumen y con X > T el total es X.
-        res = calcular_macros_v2(80, "hombre", 20, "volumen",
-                                 dieta_reportada={"hc_entreno": total})
-        assert res["macros"]["perientreno"]["hidratos"] == peri
+        """Bandas del doc 29-07: <=300 -> 40, <=350 -> 50, <=400 -> 60, <=450 -> 75, resto 90.
+
+        Se prueba la función directamente. Antes se hacía a través del motor reportando
+        esas cantidades, pero desde que la dieta se acota a +-20 % ya no se puede llegar
+        a un total de 500 por esa vía: el motor lo recorta antes, y el test acababa
+        comprobando el tope en vez de las bandas."""
+        assert _banda_peri(total) == peri
 
     @pytest.mark.parametrize("hc", [150, 200])
     def test_volumen_por_debajo_de_la_tabla_manda_la_tabla(self, hc):
@@ -282,15 +292,16 @@ class TestDietaReportada:
 
     # Definicion, hombre 80/20: la tabla da 140 de comidas + 40 de peri, o sea T = 180.
     # Sin `como_va` se usa "mantengo": X > T -> el 75% de X ; X < T -> X - 10.
+    # Y desde el 06-08-2026 el resultado se queda a +-20% de T: entre 144 y 216.
     @pytest.mark.parametrize("hc,total_esperado", [
-        (200, 150.0),    # 200 > 180 -> 75% = 150
-        (250, 187.5),
-        (300, 225.0),
-        (350, 262.5),
-        (400, 300.0),
-        (480, 360.0),
+        (200, 150.0),    # 200 > 180 -> 75% = 150, dentro de la banda
+        (250, 187.5),    # 75% = 187,5, dentro
+        (300, 216.0),    # 75% = 225 -> se recorta al tope de 216
+        (350, 216.0),    # 75% = 262,5 -> tope
+        (400, 216.0),    # 75% = 300 -> tope
+        (480, 216.0),    # 75% = 360 -> tope
     ])
-    def test_definicion_por_encima_de_la_tabla_va_al_75(self, hc, total_esperado):
+    def test_definicion_por_encima_de_la_tabla_va_al_75_acotado(self, hc, total_esperado):
         res = calcular_macros_v2(80, "hombre", 20, "definicion",
                                  dieta_reportada={"hc_entreno": hc})
         m = res["macros"]
@@ -302,27 +313,39 @@ class TestDietaReportada:
         assert m["descanso"]["hidratos"] == max(50, redondear5((total_esperado - peri) * 0.8))
 
     def test_definicion_por_debajo_de_la_tabla_resta_10(self):
-        # X=150 < T=180 -> X-10 = 140. En esta rama el doc ata el arranque: peri 15, el resto
+        # X=150 < T=180 -> X-10 = 140, y 140 se va por debajo del suelo del -20% (144),
+        # asi que se queda en 144. En esta rama el doc ata el arranque: peri 15, el resto
         # a comidas, descanso un 20% por debajo y la grasa a 50/60.
         res = calcular_macros_v2(80, "hombre", 20, "definicion",
                                  dieta_reportada={"hc_entreno": 150})
         m = res["macros"]
         assert m["perientreno"]["hidratos"] == 15
-        assert m["entreno"]["hidratos"] == 125      # 140 - 15
-        assert m["descanso"]["hidratos"] == 100     # 125 * 0.8
+        assert m["entreno"]["hidratos"] == 130      # 144 - 15 = 129 -> 130
+        assert m["descanso"]["hidratos"] == 105     # 129 * 0,8 = 103,2 -> 105
         assert m["entreno"]["grasa"] == 50
         assert m["descanso"]["grasa"] == 60
 
     def test_como_va_cambia_el_resultado(self):
-        # "bien" deja X tal cual; "mantengo" (neutro) lo baja al 75%.
-        bien = calcular_macros_v2(80, "hombre", 20, "definicion", como_va="bien",
-                                  dieta_reportada={"hc_entreno": 300})
-        neutro = calcular_macros_v2(80, "hombre", 20, "definicion",
-                                    dieta_reportada={"hc_entreno": 300})
-        total_bien = bien["macros"]["entreno"]["hidratos"] + bien["macros"]["perientreno"]["hidratos"]
-        total_neutro = neutro["macros"]["entreno"]["hidratos"] + neutro["macros"]["perientreno"]["hidratos"]
-        assert total_bien == 300                    # se le deja lo que ya come
-        assert total_neutro == 225                  # el 75%
+        """"bien" deja X tal cual; "mantengo" (neutro) lo baja al 75 %.
+
+        Con X=300 los dos se salen del +20 % (T=180, tope 216) y acaban en el tope, así
+        que para ver la diferencia hace falta una X dentro de la banda. Que los dos topen
+        no es un fallo: es justo lo que hace el tope."""
+        def total(**kw):
+            r = calcular_macros_v2(80, "hombre", 20, "definicion",
+                                   dieta_reportada={"hc_entreno": 210}, **kw)
+            return r["macros"]["entreno"]["hidratos"] + r["macros"]["perientreno"]["hidratos"]
+        assert total(como_va="bien") == 210          # se le deja lo que ya come
+        assert total() == 160                        # el 75% de 210 = 157,5 -> 160
+        assert total(como_va="bien") > total()
+
+    def test_con_dietas_altas_los_dos_topan(self):
+        def total(**kw):
+            r = calcular_macros_v2(80, "hombre", 20, "definicion",
+                                   dieta_reportada={"hc_entreno": 300}, **kw)
+            return r["macros"]["entreno"]["hidratos"] + r["macros"]["perientreno"]["hidratos"]
+        assert total(como_va="bien") == 215          # 216 redondeado
+        assert total() == 215
 
     def test_revision_cuadra(self):
         # Recomendado H80/20 vol: 170 comidas + 50 peri = 220. Reporta 220 -> cuadra.
@@ -346,20 +369,23 @@ class TestDietaReportada:
 
 class TestSuelosYRedondeo:
     def test_suelo_hc_comidas_entreno(self):
-        # Doc 29-07: el suelo del dia de entreno son 75 g totales = 60 en comidas + 15 de peri
-        # (antes 50 + 15). Definicion reportando 80: X-10 = 70, peri 15, comidas 55 -> el
-        # suelo lo sube a 60.
-        res = calcular_macros_v2(80, "hombre", 20, "definicion",
-                                 dieta_reportada={"hc_entreno": 80})
-        assert res["macros"]["entreno"]["hidratos"] == 60
+        """Doc 29-07: el suelo del día de entreno son 75 g totales = 60 en comidas + 15 de peri.
+
+        Con una mujer pequeña en definición: la tabla da poco, y al restar llega al suelo.
+        Antes se llegaba aquí reportando 80 g en un hombre de 80 kg, pero eso ahora entra
+        por la excepción del que "llega en las últimas" (menos de 75 g) o se acota, así que
+        el suelo ya no era lo que se estaba probando."""
+        res = calcular_macros_v2(50, "mujer", 20, "definicion",
+                                 dieta_reportada={"hc_entreno": 95})
+        assert res["macros"]["entreno"]["hidratos"] >= 60
         assert res["macros"]["perientreno"]["hidratos"] == 15
-        assert any(d["paso"] == "suelos" for d in res["desglose"])
 
     def test_suelo_no_salta_si_ya_esta_por_encima(self):
-        # Reportando 90: X-10 = 80, peri 15, comidas 65 > 60 -> el suelo no interviene.
+        # Reportando 170 con T=180: X-10 = 160, dentro de la banda. Peri 15, comidas 145,
+        # muy por encima del suelo de 60 -> no interviene.
         res = calcular_macros_v2(80, "hombre", 20, "definicion",
-                                 dieta_reportada={"hc_entreno": 90})
-        assert res["macros"]["entreno"]["hidratos"] == 65
+                                 dieta_reportada={"hc_entreno": 170})
+        assert res["macros"]["entreno"]["hidratos"] == 145
         assert not any(d["paso"] == "suelos" for d in res["desglose"])
 
     def test_todo_multiplo_de_5(self):
