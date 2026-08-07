@@ -349,6 +349,69 @@ enlace bueno.
 
 ---
 
+## Bloque C - El alta y el quiz
+
+### Puntos 11 y 15 - Los modificadores y el cuestionario único · CERRADOS JUNTOS
+
+Resultaron ser la misma cosa. **El motor ya aplicaba los tres modificadores** y cumple las
+ocho reglas del documento; lo comprobé con 39 tests que las fijan una a una. Lo que pasaba es
+que **el cálculo se hacía antes de tenerlos**: el alta iba en dos cuestionarios, el primero
+calculaba con cuatro preguntas y entregaba unos macros *provisionales*, y los tres
+modificadores estaban en el segundo, detrás de un botón que había que volver a pulsar. De ahí
+la frase "el quiz calcula con menos información": no faltaban las preguntas, faltaba que el
+cálculo esperase a tenerlas.
+
+Ahora el alta es **un solo recorrido**: los cuatro datos de la tabla y, seguido y sin cortes,
+lo que afina los hidratos y lo que sirve para conocer al cliente. Se calcula una sola vez, al
+final, y lo que se le entrega son sus macros de verdad. Los cuatro datos de partida se guardan
+por el camino (crean su ficha), pero no se le enseña ningún número hasta el final.
+
+Con eso desaparecen de la app los "macros provisionales": ya no hay dos cuestionarios, ni el
+mensaje que decía que aquello no era lo definitivo, ni el botón de "Ajustar mis macros" al
+final del alta. Quien vuelva más adelante por el botón de ajustar sigue entrando directo al
+tramo de afinado, porque sus cuatro datos ya están en la ficha y no hay que volver a
+preguntárselos.
+
+**Dos cosas del punto 11 quedan pendientes de Jesús** y están anotadas abajo: quién cobra el
++20 % de "cómo engorda", y el umbral de grasa en mujeres.
+
+Y dos detalles que salieron al escribir los tests y conviene tener por escrito. El día de
+entreno **puede acabar por encima de su techo del +30 %**, pero solo para igualar al descanso:
+es lo que sale de juntar la regla del techo con la de la comprobación final, y en volumen pasa
+de verdad (234 de entreno contra 238 de descanso, y el entreno sube a 238). Y el deporte extra
+parece tocar el día de entreno cuando lo que hace es empujar el descanso por encima y que la
+comprobación final tire del entreno detrás.
+
+### Punto 12 - Se pueden calcular macros sin contestar nada · CERRADO
+
+Confirmado tal cual: mandando el cuestionario vacío, la app calculaba, guardaba los macros y
+marcaba el ajuste como completado. Los cuatro datos de la tabla salían de la ficha y los tres
+modificadores viajaban vacíos, así que no movían nada: el cliente se quedaba con unos macros
+calculados a medias creyendo que eran los suyos.
+
+Ahora hace falta haber contestado las tres que mueven el número, y se bloquea **en los dos
+sitios**: la pantalla no deja pulsar y dice cuáles faltan, y el servidor lo rechaza aunque se
+le llame por fuera. El resto de preguntas del recorrido, las que sirven para conocer al
+cliente, se pueden dejar en blanco, que para eso están.
+
+Comprobado por API: con el cuestionario vacío responde "falta que nos digas tu actividad
+diaria, si practicas otro deporte, con qué facilidad engordas"; contestando dos de las tres,
+nombra solo la que falta; y con las tres, calcula.
+
+### Punto 13 - El resultado del cálculo sale fuera de pantalla · HECHO, FALTA VERLO
+
+La pantalla de resultado va apretada: títulos más pequeños, menos aire entre bloques, las
+tarjetas de macros más compactas y **un solo botón** donde antes había dos (el segundo llevaba
+al cuestionario que ya no existe). Además el contenedor del cuestionario ya permite desplazarse
+en vertical: tenía `overflow-hidden`, así que en una pantalla baja lo que sobraba quedaba fuera
+y sin manera de llegar a ello.
+
+**Queda verlo con los ojos.** Para comprobarlo de verdad hay que completar un alta entera, y
+eso significa o alterar los datos de una cuenta real o crear una nueva; no he hecho ninguna de
+las dos. Es una revisión de un minuto en cuanto haya un alta de prueba a mano.
+
+---
+
 ## Pendientes que no dependen de nosotros
 
 *(Se irán anotando aquí según aparezcan: decisiones de Jesús, datos que faltan o terceros.)*
@@ -359,6 +422,20 @@ para leer el código como lo describe el documento (nombres de fichero, números
 funciones a medio desminificar). Si Jesús quiere que revisemos algo concreto de ese código, hace
 falta acceso al repositorio. Hasta ahora no ha hecho falta: el reparto se pudo portar y validar
 contra el bundle.
+
+**Quién cobra el +20 % de "cómo engorda"** (punto 11). Hoy lo cobran dos respuestas, "casi no
+lo noto" **y también "normal"**, por decisión del documento del 29-07, que está escrita en el
+código con esa fecha. El documento del 07-08 solo menciona "casi no lo noto". Como el nuevo
+dice que sustituye a todo lo anterior, puede ser un cambio querido o una redacción abreviada, y
+la diferencia es grande: hoy casi todo el mundo se lleva ese +20 %. **Decide Jesús.**
+
+**El umbral de grasa del mismo modificador en mujeres** (punto 11). En ellas es 30 % por
+decisión del documento del 06-08 (con el 20 % de ellos, el modificador estaba muerto: su tabla
+empieza justo en el 20 %). El documento del 07-08 dice "grasa ≤ 20 %" sin distinguir sexo.
+**Decide Jesús.**
+
+**Falta el documento «LOS TEXTOS DE LA APP»** (punto 14 y los textos del bloque C). Sin él no
+se puede localizar el texto roto, que el documento da por identificado allí.
 
 **Los 56 mínimos por categoría están sin repasar** (punto 5). El mapa existe y funciona, pero
 los valores vienen de la calculadora antigua y Jesús quiere revisarlos; él mismo lo cifra en

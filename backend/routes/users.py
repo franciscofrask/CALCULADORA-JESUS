@@ -492,6 +492,21 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
                             detail="Faltan tus datos de partida (peso, grasa y objetivo). Completa el alta primero.")
 
     ajustes = data.model_dump()
+
+    # Sin las tres respuestas que mueven los hidratos no hay macros que dar (punto 12 del doc
+    # del 07-08). Antes se podia llamar aqui con el cuestionario vacio: los cuatro datos de la
+    # tabla salian del perfil, los modificadores viajaban a None y no movian nada, y el
+    # resultado se guardaba igual marcado como completado. O sea, el cliente se quedaba con
+    # unos macros calculados a medias creyendo que eran los suyos.
+    ETIQUETAS = {"actividad_diaria": "tu actividad diaria",
+                 "deporte_extra": "si practicas otro deporte",
+                 "facilidad_engordar": "con que facilidad engordas"}
+    faltan = [texto for clave, texto in ETIQUETAS.items() if ajustes.get(clave) is None]
+    if faltan:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Antes de calcular tus macros falta que nos digas {', '.join(faltan)}.")
+
     # Terminado: el progreso a medias ya no hace falta.
     update = {"ajustes_macros": ajustes, "ajuste_macros_completado": True,
               "ajuste_macros_progreso": None}

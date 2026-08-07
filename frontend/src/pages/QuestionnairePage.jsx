@@ -42,8 +42,13 @@ import BodyFatSlider, { BF_PERCENTAGES, BF_DEFAULT } from '../components/Selecto
 // El nombre y el telefono se piden en el registro, no aqui.
 //
 // type: statement | text | email | tel | date | number | choice | bf | dieta | final0 | result
-const STEPS_ALTA = [
-    { type: 'statement', title: 'Empecemos', desc: 'Cuatro preguntas y tienes tus macros. Un minuto.' },
+// Los datos de la tabla: sexo, objetivo, peso y grasa. Ya NO terminan en un cálculo: desde
+// el 07-08 el alta es un único recorrido (punto 15 del documento) y estas preguntas son solo
+// su primer tramo. El cálculo va una sola vez, al final, cuando ya están también las
+// respuestas que mueven los hidratos; así lo que se le entrega son sus macros de verdad y no
+// unos provisionales que había que afinar después en otro cuestionario.
+const PREGUNTAS_ALTA = [
+    { type: 'statement', title: 'Empecemos', desc: 'Unas preguntas y tienes tus macros.' },
     {
         type: 'choice', key: 'sex', title: '¿Cuál es tu sexo?',
         desc: 'Lo usamos para calcular tus macros con la tabla correcta.',
@@ -68,8 +73,6 @@ const STEPS_ALTA = [
     },
     { type: 'number', key: 'weight', title: '¿Cuánto pesas?', desc: 'Pésate siempre igual: en ayunas, sin ropa y después de ir al baño.', unit: 'kg', required: true },
     { type: 'bf', key: 'body_fat', title: '¿Cuál dirías que es tu porcentaje de grasa actual?', desc: 'Elige el valor más cercano a tu % de grasa estimado.' },
-    { type: 'final0', title: 'Ya está.', desc: 'Con esto ya podemos calcular tus macros de partida. Si quieres revisar alguna respuesta, ve hacia atrás.' },
-    { type: 'result', title: 'Tus macros' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -531,8 +534,11 @@ const MacrosEnVivo = ({ macros, previos, calculando }) => {
     );
 };
 
+// overflow-x-hidden y no overflow-hidden: lo que sobra a los lados son los fondos difuminados
+// y hay que recortarlo, pero el eje vertical tiene que poder moverse. Con overflow-hidden, en
+// una pantalla baja el final de un paso largo quedaba fuera y sin forma de llegar a él.
 const Shell = ({ progress, children, tramo, cabecera }) => (
-    <div className="min-h-screen bg-background relative overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-background relative overflow-x-hidden flex flex-col">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand/10 rounded-full blur-[150px]" />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-brand/5 rounded-full blur-[120px]" />
         {/* Flecha de marca gigante de fondo */}
@@ -605,11 +611,18 @@ const QuestionnairePage = () => {
     const modoAjuste = pidioAjustar
         || (!!profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1);
 
+    // Un solo recorrido (punto 15 del doc del 07-08). Quien se da de alta contesta los datos
+    // de la tabla y sigue de largo con lo que afina los hidratos, sin cortes y sin un segundo
+    // cuestionario: por eso el alta es el mismo flujo que el ajuste con las cuatro preguntas
+    // de partida delante. Quien vuelve más adelante por el botón "Ajustar macros" ya tiene
+    // esos cuatro datos en su ficha, así que entra directo por el tramo de afinado.
+    const preguntasDeAjuste = [...STEPS_AJUSTE, ...STEPS_ONBOARD,
+                               ...(tieneCoach ? STEPS_NIVEL1 : [])];
     const flow = retomandoNivel1
         ? STEPS_NIVEL1
         : modoAjuste
-            ? [...STEPS_AJUSTE, ...STEPS_ONBOARD, ...(tieneCoach ? STEPS_NIVEL1 : [])]
-            : STEPS_ALTA;
+            ? preguntasDeAjuste
+            : [...PREGUNTAS_ALTA, ...preguntasDeAjuste];
 
     // PreferencesSetup espera el helper estilo fetch (endpoint, {method, body}).
     const fetchApi = useCallback(async (endpoint, options = {}) => {
@@ -1055,9 +1068,11 @@ const QuestionnairePage = () => {
     const submitNivel0 = async () => {
         setLoading(true);
         try {
-            const res = modoAjuste
-                ? await api.post('/clients/ajustar-macros', ajustesDelCuestionario())
-                : await api.post('/clients/questionnaire', {
+            // Los cuatro datos de la tabla van primero, porque son los que crean la ficha y
+            // sin ficha no hay nada que afinar. Pero no se le enseña ningún número todavía:
+            // el resultado que ve es uno solo, el de después, ya con los modificadores.
+            if (!profile?.questionnaire_completed) {
+                await api.post('/clients/questionnaire', {
                     name: answers.name,
                     email: answers.email,
                     phone: answers.phone,
@@ -1066,6 +1081,8 @@ const QuestionnairePage = () => {
                     weight: parseFloat(answers.weight),
                     body_fat: parseFloat(answers.body_fat),
                 });
+            }
+            const res = await api.post('/clients/ajustar-macros', ajustesDelCuestionario());
             setResultado(res.data?.resultado || null);
             setEntrega(res.data?.entrega || null);
             setNivel0Enviado(true);
@@ -1163,6 +1180,30 @@ const QuestionnairePage = () => {
         return true;
     };
 
+    // Lo que hace falta para poder calcular unos macros que signifiquen algo (punto 12 del
+    // doc del 07-08). Antes se podía llegar al botón de calcular sin haber contestado, y la
+    // app devolvía unos números como si fueran suyos: los cuatro datos de la tabla salían del
+    // perfil y los tres modificadores viajaban vacíos, así que no movían nada.
+    //
+    // Solo se exige lo que de verdad cambia el número. El resto de preguntas del recorrido
+    // (las que sirven para conocerle) se pueden dejar en blanco, que para eso están ahí.
+    const OBLIGATORIAS = [
+        { key: 'sex', label: 'tu sexo' },
+        { key: 'goal', label: 'tu objetivo' },
+        { key: 'weight', label: 'tu peso' },
+        { key: 'body_fat', label: 'tu porcentaje de grasa' },
+        { key: 'actividad_diaria', label: 'tu actividad diaria' },
+        { key: 'deporte_extra', label: 'si practicas otro deporte' },
+        { key: 'facilidad_engordar', label: 'con qué facilidad engordas' },
+    ];
+
+    // Las que este recorrido pregunta de verdad: en el ajuste los cuatro datos de partida ya
+    // están en la ficha y no se vuelven a preguntar, así que no se pueden exigir aquí.
+    const clavesDelFlujo = new Set(flow.map(s => s.key).filter(Boolean));
+    const faltanPorContestar = OBLIGATORIAS.filter(o =>
+        clavesDelFlujo.has(o.key) &&
+        (answers[o.key] === undefined || answers[o.key] === null || `${answers[o.key]}`.trim() === ''));
+
     // Selección de una opción de tipo choice → guarda y avanza.
     const pickChoice = (value) => {
         if (step.confirm) {
@@ -1237,13 +1278,23 @@ const QuestionnairePage = () => {
         );
     } else if (step.type === 'final0' || step.type === 'final1') {
         const isN0 = step.type === 'final0';
+        // Sin las respuestas que mueven el número no hay nada que calcular: el botón espera y
+        // se dice cuáles faltan, en vez de devolver unos macros que no son de nadie.
+        const bloqueado = isN0 && faltanPorContestar.length > 0;
         body = (
             <div>
                 <Title />
+                {bloqueado && (
+                    <p className="text-sm text-amber-500 mb-5 -mt-6" data-testid="faltan-obligatorias">
+                        Antes de calcular falta que nos digas {faltanPorContestar.map(o => o.label).join(', ')}.
+                        Vuelve atrás y complétalo.
+                    </p>
+                )}
                 <div className="flex gap-3">
                     <BackBtn />
-                    <Button onClick={isN0 ? submitNivel0 : submitNivel1} disabled={loading}
-                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg">
+                    <Button onClick={isN0 ? submitNivel0 : submitNivel1} disabled={loading || bloqueado}
+                        data-testid="calcular-macros-btn"
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg disabled:opacity-40">
                         {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Check className="w-5 h-5 mr-2" />}
                         {loading ? 'Enviando...' : isN0 ? 'Calcular mis macros' : 'Enviar'}
                     </Button>
@@ -1255,53 +1306,42 @@ const QuestionnairePage = () => {
         const m = resultado?.macros;
         body = (
             <div>
-                {/* En el alta son PROVISIONALES y hay que decirlo con esas palabras: ya puede comer
-                    hoy, y afinarlos es el paso siguiente. Tras el cuestionario, son los definitivos. */}
-                {/* Tres mensajes distintos (doc 29-07): provisionales en el alta; en el ajuste,
-                    definitivos si el plan se autogestiona, o "de partida, tu coach los revisa" si
-                    hay entrenador detrás. Al que paga más no se le deja esperando con peores
-                    números: ya tiene los suyos y encima se los van a repasar. */}
-                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
-                    {/* Al del plan con coach hay que decirle con estas palabras que lo que
-                        tiene NO es lo definitivo: si no, se queda con estos números
-                        creyendo que son los suyos y luego le cambian sin entender por qué. */}
-                    {!modoAjuste && tieneCoach ? 'Estos son tus macros provisionales'
-                        : !modoAjuste ? 'Tus macros de partida'
-                        : entrega?.con_entrenador ? 'Tus macros de partida'
-                        : 'Estos son tus macros de inicio'}
+                {/* Ya no hay macros "provisionales" que decir: desde que el alta es un solo
+                    recorrido (punto 15 del doc del 07-08), lo que se calcula aquí ya lleva
+                    dentro las respuestas que mueven los hidratos. Así que el mensaje solo
+                    depende de si hay un entrenador detrás que los vaya a repasar. */}
+                <h2 className="font-heading font-bold text-2xl md:text-3xl text-foreground mb-2 leading-tight">
+                    {entrega?.con_entrenador ? 'Tus macros de partida' : 'Estos son tus macros'}
                 </h2>
-                <p className="text-foreground/60 mb-6 text-sm md:text-base">
-                    {!modoAjuste && tieneCoach
-                        /* Texto de Jesús, literal. Así tiene con qué empezar desde el
-                           minuto uno y sabe que lo que tiene no es lo definitivo. */
-                        ? 'No son los definitivos. Son para que puedas empezar a usar la app desde hoy, mientras tu entrenador revisa tu caso. Completa tu cuestionario inicial y en menos de 48 horas tendrás tus macros definitivos.'
-                        : !modoAjuste
-                        ? 'Ya puedes empezar a comer hoy. Termina de ajustarlos para afinarlos a tu caso.'
-                        /* Sin entrenador asignado no se dice "tu entrenador": casi ningún
-                           cliente tiene uno puesto y prometer una persona que no existe se
-                           nota. Quien lo revisa entonces es el equipo, que es la verdad. */
-                        : entrega?.con_entrenador
-                            ? `${entrega.coach || 'El equipo'} los va a revisar contigo${entrega.proxima_revision ? ` el ${entrega.proxima_revision}` : ''} y los ajustará a tu caso.`
-                            /* Texto cerrado por Jesús el 06-08-2026 (momento 1 de la revisión
-                               suelta): lo que sostiene el número es el perfil parecido, y así
-                               se le cuenta. La próxima revisión automática se queda donde
-                               estaba, al final de la misma línea: el documento no dice nada de
-                               ella, y lo que no toca se deja como está. */
-                            : `Están adaptados a tu perfil, a partir de tus respuestas y tomando como referencia otros perfiles parecidos al tuyo.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ''}`}
+                <p className="text-foreground/60 mb-4 text-sm">
+                    {/* Sin entrenador asignado no se dice "tu entrenador": casi ningún cliente
+                        tiene uno puesto y prometer una persona que no existe se nota. Quien lo
+                        revisa entonces es el equipo, que es la verdad. */}
+                    {entrega?.con_entrenador
+                        ? `${entrega.coach || 'El equipo'} los va a revisar contigo${entrega.proxima_revision ? ` el ${entrega.proxima_revision}` : ''} y los ajustará a tu caso.`
+                        /* Texto cerrado por Jesús el 06-08-2026 (momento 1 de la revisión
+                           suelta): lo que sostiene el número es el perfil parecido, y así se
+                           le cuenta. */
+                        : `Están adaptados a tu perfil, a partir de tus respuestas y tomando como referencia otros perfiles parecidos al tuyo.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ''}`}
                 </p>
                 {m ? (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-3 gap-3 text-center">
+                    /* Punto 13 del doc del 07-08: los números tienen que verse enteros sin
+                       mover nada. Es el momento más importante del alta y antes había que
+                       bajar para llegar a ellos, así que todo lo de esta pantalla va apretado
+                       (títulos más pequeños, menos aire entre bloques) para que las tres
+                       tarjetas y los botones entren de una vez. */
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
                             {[
                                 ['Día de entreno', m.entreno.proteina, m.entreno.hidratos, m.entreno.grasa],
                                 ['Perientreno', m.perientreno.proteina, m.perientreno.hidratos, null],
                                 ['Día de descanso', m.descanso.proteina, m.descanso.hidratos, m.descanso.grasa],
                             ].map(([lbl, p, h, g]) => (
-                                <div key={lbl} className="rounded-xl border-2 border-[#222222] bg-card py-4 px-2">
-                                    <p className="text-[11px] text-foreground/50 uppercase font-bold mb-2">{lbl}</p>
-                                    <p className="font-heading font-extrabold text-2xl text-brand">{p}<span className="text-foreground/40 text-base">P</span></p>
-                                    <p className="font-heading font-extrabold text-2xl text-brand">{h}<span className="text-foreground/40 text-base">H</span></p>
-                                    {g != null && <p className="font-heading font-extrabold text-2xl text-brand">{g}<span className="text-foreground/40 text-base">G</span></p>}
+                                <div key={lbl} className="rounded-xl border-2 border-[#222222] bg-card py-3 px-2">
+                                    <p className="text-[10px] sm:text-[11px] text-foreground/50 uppercase font-bold mb-1.5 leading-tight">{lbl}</p>
+                                    <p className="font-heading font-extrabold text-xl sm:text-2xl text-brand">{p}<span className="text-foreground/40 text-sm sm:text-base">P</span></p>
+                                    <p className="font-heading font-extrabold text-xl sm:text-2xl text-brand">{h}<span className="text-foreground/40 text-sm sm:text-base">H</span></p>
+                                    {g != null && <p className="font-heading font-extrabold text-xl sm:text-2xl text-brand">{g}<span className="text-foreground/40 text-sm sm:text-base">G</span></p>}
                                 </div>
                             ))}
                         </div>
@@ -1329,26 +1369,14 @@ const QuestionnairePage = () => {
                     </p>
                 )}
 
-                <div className="flex flex-col sm:flex-row gap-3 mt-8">
-                    {modoAjuste ? (
-                        <Button onClick={goNext}
-                            className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                            Continuar <ArrowRight className="w-5 h-5 ml-2" />
-                        </Button>
-                    ) : (
-                        <>
-                            <Button onClick={() => navigate('/questionnaire?ajustar=1')}
-                                className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                                {/* Para el de coach no es "ajustar macros": es completar su
-                                    cuestionario, que es lo que espera su entrenador. */}
-                                {tieneCoach ? 'Completar mi cuestionario' : 'Ajustar mis macros'} <ArrowRight className="w-5 h-5 ml-2" />
-                            </Button>
-                            <Button variant="ghost" onClick={() => navigate('/dashboard')}
-                                className="text-foreground/60 py-6 text-base">
-                                Lo hago más tarde
-                            </Button>
-                        </>
-                    )}
+                {/* Un solo botón: el recorrido continúa donde estaba. Antes, al venir del
+                    alta, aquí se le mandaba a un SEGUNDO cuestionario ("Ajustar mis macros");
+                    ya no hay segundo cuestionario que ofrecer. */}
+                <div className="flex flex-col sm:flex-row gap-3 mt-5">
+                    <Button onClick={goNext}
+                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-5 text-base">
+                        Continuar <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
                 </div>
             </div>
         );
