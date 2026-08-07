@@ -4,7 +4,10 @@ import React from 'react';
 // qué ha pasado con su cálculo). Se usan en Ajustar macros y en el quiz inicial.
 const CHIP_LABELS = {
     muy_activo: () => 'Muy activo: +10% hidratos',
-    deporte_extra: () => 'Otro deporte: +10% hidratos en descanso',
+    // El porcentaje sale del propio cálculo y no de aquí: en definición es +10 % y en
+    // volumen +20 %, y este texto decía +10 % siempre. Al cliente de volumen se le estaba
+    // enseñando una subida distinta de la que le habían dado.
+    deporte_extra: (d) => `Otro deporte: ${(d.detalle || '').match(/\+\d+%/)?.[0] || '+10%'} hidratos en descanso`,
     casi_no_engorda: (d) => d.estado === 'aplicado' ? 'No engordas fácil: +20% hidratos'
         : d.estado === 'no_aplica_bf' ? 'Sin +20%: requiere % graso <= 20'
         : 'El +20% aún no se aplica en mujeres (guardado)',

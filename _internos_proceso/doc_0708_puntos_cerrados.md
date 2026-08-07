@@ -372,8 +372,24 @@ final del alta. Quien vuelva más adelante por el botón de ajustar sigue entran
 tramo de afinado, porque sus cuatro datos ya están en la ficha y no hay que volver a
 preguntárselos.
 
-**Dos cosas del punto 11 quedan pendientes de Jesús** y están anotadas abajo: quién cobra el
-+20 % de "cómo engorda", y el umbral de grasa en mujeres.
+**Las dos dudas del punto 11 quedaron resueltas el 07-08**: Francisco confirmó que el texto
+del documento suplanta a cualquier decisión anterior, así que se aplicó literal. El +20 % de
+"cómo engorda" lo cobra SOLO "casi no lo noto" (el 29-07 se lo daba también a "normal"), y el
+umbral de grasa es 20 % para todos (el 30 % de mujeres del 06-08 se retira; consecuencia
+asumida: la tabla de ellas empieza en el 20, así que en la práctica solo lo cobra quien esté
+en el arranque). Cambio en `macro_engine.py` (`RESPUESTAS_QUE_SUBEN`, `BF_MAX_NO_ENGORDA`)
+con sus tests reescritos: 162 en verde.
+
+Comprobado el efecto de esa regla nueva sobre el cálculo: un hombre de 80 kg en definición que
+contesta "normal" se queda en 140 · 130 de hidratos, los mismos que si no hubiera contestado
+(antes se llevaba un +20 %); con "casi no lo noto" y grasa ≤ 20 % sube a 170 · 155, y con 25 %
+de grasa no sube. En mujeres solo sube justo en el 20 %, como estaba previsto.
+
+**De paso apareció un texto que engañaba en el desglose del cálculo.** El resumen que ve el
+cliente al terminar decía "Otro deporte: +10 % hidratos en descanso" **siempre**, también a los
+de volumen, que son los que se llevan un +20 %. O sea, se le enseñaba una subida distinta de la
+que le habían dado. Ahora el porcentaje sale del propio cálculo en vez de estar escrito a mano,
+así que dice +10 % en definición y +20 % en volumen.
 
 Y dos detalles que salieron al escribir los tests y conviene tener por escrito. El día de
 entreno **puede acabar por encima de su techo del +30 %**, pero solo para igualar al descanso:
@@ -423,16 +439,10 @@ funciones a medio desminificar). Si Jesús quiere que revisemos algo concreto de
 falta acceso al repositorio. Hasta ahora no ha hecho falta: el reparto se pudo portar y validar
 contra el bundle.
 
-**Quién cobra el +20 % de "cómo engorda"** (punto 11). Hoy lo cobran dos respuestas, "casi no
-lo noto" **y también "normal"**, por decisión del documento del 29-07, que está escrita en el
-código con esa fecha. El documento del 07-08 solo menciona "casi no lo noto". Como el nuevo
-dice que sustituye a todo lo anterior, puede ser un cambio querido o una redacción abreviada, y
-la diferencia es grande: hoy casi todo el mundo se lleva ese +20 %. **Decide Jesús.**
-
-**El umbral de grasa del mismo modificador en mujeres** (punto 11). En ellas es 30 % por
-decisión del documento del 06-08 (con el 20 % de ellos, el modificador estaba muerto: su tabla
-empieza justo en el 20 %). El documento del 07-08 dice "grasa ≤ 20 %" sin distinguir sexo.
-**Decide Jesús.**
+~~**Quién cobra el +20 % de "cómo engorda"** y **el umbral de grasa en mujeres** (punto 11).~~
+**RESUELTAS el 07-08**: Francisco confirmó que el texto del documento suplanta a todo lo
+anterior y se aplicó literal (solo "casi no lo noto"; umbral 20 % sin distinción de sexo).
+Detalle y consecuencias en el propio punto 11.
 
 **Falta el documento «LOS TEXTOS DE LA APP»** (punto 14 y los textos del bloque C). Sin él no
 se puede localizar el texto roto, que el documento da por identificado allí.

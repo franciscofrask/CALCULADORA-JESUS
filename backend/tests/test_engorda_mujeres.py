@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
-"""El +20 % de "casi no engordo" en mujeres, que hasta hoy no se ejecutaba nunca.
+"""El +20 % de "casi no engordo" y su umbral de grasa, tras el documento del 07-08.
 
-Estaba apagado con la nota "n=11, sin validar", y esa nota engañaba: no es que fallara
-con once casos, es que NO SE EJECUTO NI UNA VEZ. Dos barreras a la vez:
-
-  1. APLICAR_ENGORDA_EN_MUJERES = False, que cortaba antes de mirar el % de grasa.
-  2. El umbral del 20 %, cuando la tabla de mujeres EMPIEZA en el 20: habia que estar en
-     el extremo exacto para cobrarlo.
-
-Documento del 06-08-2026: el umbral sube al 30 % en mujeres (el mismo punto del recorrido
-que el 20 % en hombres) y se enciende, para poder aplicarlo y validarlo.
+Historia del umbral, para leer los asserts sin sustos:
+  - Hasta el 06-08 estaba en 20 % para todos y en mujeres NO SE EJECUTO NI UNA VEZ
+    (su tabla empieza justo en el 20: once respuestas guardadas, cero aplicaciones).
+  - El doc del 06-08 lo subio al 30 % en ellas para poder activarlo y validarlo.
+  - El doc del 07-08 (punto 11) dice "grasa <= 20 %" SIN distinguir sexo, y suplanta
+    a todo lo anterior (decision de Francisco del 07-08). Vuelve el 20 para todos,
+    con su consecuencia asumida: en mujeres solo lo cobra quien este en el arranque.
 """
 import sys
 from pathlib import Path
@@ -25,42 +23,42 @@ def _paso(r, nombre):
     return next((p for p in r["desglose"] if p["paso"] == nombre), None)
 
 
-class TestElUmbralEsDistintoPorSexo:
-    def test_los_dos_umbrales(self):
+class TestElUmbralDelDoc0708:
+    def test_veinte_para_todos(self):
         assert BF_MAX_NO_ENGORDA["hombre"] == 20.0
-        assert BF_MAX_NO_ENGORDA["mujer"] == 30.0
+        assert BF_MAX_NO_ENGORDA["mujer"] == 20.0
 
-    def test_esta_encendido(self):
+    def test_sigue_encendido_en_mujeres(self):
         assert APLICAR_ENGORDA_EN_MUJERES is True, "vuelve a estar muerto"
 
 
 class TestEnMujeres:
-    @pytest.mark.parametrize("bf", [20, 25, 30])
-    def test_se_aplica_hasta_el_30(self, bf):
-        r = calcular_macros_v2(70, "mujer", bf, "definicion", facilidad_engordar="casi_no")
+    def test_en_el_arranque_de_su_tabla_si(self):
+        r = calcular_macros_v2(70, "mujer", 20, "definicion", facilidad_engordar="casi_no")
         assert _paso(r, "no_engorda")["estado"] == "aplicado"
 
-    @pytest.mark.parametrize("bf", [35, 40, 45])
-    def test_por_encima_del_30_no(self, bf):
+    @pytest.mark.parametrize("bf", [25, 30, 35])
+    def test_por_encima_del_20_no(self, bf):
+        """Con el doc del 06-08 el 25 y el 30 cobraban; el doc del 07-08 los quita."""
         r = calcular_macros_v2(70, "mujer", bf, "definicion", facilidad_engordar="casi_no")
         assert _paso(r, "no_engorda")["estado"] == "no_aplica_bf"
 
     def test_sube_los_hidratos_de_verdad(self):
         """Que se marque "aplicado" no basta: los números tienen que moverse."""
-        con = calcular_macros_v2(70, "mujer", 25, "definicion", facilidad_engordar="casi_no")
-        sin = calcular_macros_v2(70, "mujer", 25, "definicion", facilidad_engordar="enseguida")
+        con = calcular_macros_v2(70, "mujer", 20, "definicion", facilidad_engordar="casi_no")
+        sin = calcular_macros_v2(70, "mujer", 20, "definicion", facilidad_engordar="enseguida")
         assert con["macros"]["entreno"]["hidratos"] > sin["macros"]["entreno"]["hidratos"]
         assert con["macros"]["descanso"]["hidratos"] > sin["macros"]["descanso"]["hidratos"]
 
     def test_no_toca_ni_proteina_ni_grasa(self):
-        con = calcular_macros_v2(70, "mujer", 25, "definicion", facilidad_engordar="casi_no")
-        sin = calcular_macros_v2(70, "mujer", 25, "definicion", facilidad_engordar="enseguida")
+        con = calcular_macros_v2(70, "mujer", 20, "definicion", facilidad_engordar="casi_no")
+        sin = calcular_macros_v2(70, "mujer", 20, "definicion", facilidad_engordar="enseguida")
         assert con["macros"]["entreno"]["proteina"] == sin["macros"]["entreno"]["proteina"]
         assert con["macros"]["entreno"]["grasa"] == sin["macros"]["entreno"]["grasa"]
 
     def test_el_veto_sigue_mandando(self):
         """"Engordo enseguida" anula, y eso vale para los dos sexos."""
-        r = calcular_macros_v2(70, "mujer", 25, "definicion",
+        r = calcular_macros_v2(70, "mujer", 20, "definicion",
                                facilidad_engordar="enseguida", actividad_diaria="muy_activo")
         assert _paso(r, "veto_engorda_enseguida") is not None
 
@@ -74,7 +72,18 @@ class TestEnHombresNoCambiaNada:
         r = calcular_macros_v2(85, "hombre", 25, "definicion", facilidad_engordar="casi_no")
         assert _paso(r, "no_engorda")["estado"] == "no_aplica_bf"
 
-    def test_el_umbral_de_ella_no_se_le_aplica_a_el(self):
-        """Si se hubiera puesto el 30 para todos, un hombre al 30 % lo cobraría."""
-        r = calcular_macros_v2(85, "hombre", 30, "definicion", facilidad_engordar="casi_no")
-        assert _paso(r, "no_engorda")["estado"] == "no_aplica_bf"
+
+class TestSoloCasiNoLoNoto:
+    """Doc del 07-08: "engordo lo normal" deja de cobrar el +20 % (lo cobraba por el 29-07)."""
+
+    @pytest.mark.parametrize("sexo,bf", [("hombre", 20), ("mujer", 20)])
+    def test_normal_ya_no_sube(self, sexo, bf):
+        peso = 85 if sexo == "hombre" else 70
+        r = calcular_macros_v2(peso, sexo, bf, "definicion", facilidad_engordar="normal")
+        paso = _paso(r, "no_engorda")
+        assert paso is None or paso["estado"] != "aplicado"
+
+    def test_normal_y_casi_no_ya_no_son_iguales(self):
+        normal = calcular_macros_v2(85, "hombre", 20, "definicion", facilidad_engordar="normal")
+        casi_no = calcular_macros_v2(85, "hombre", 20, "definicion", facilidad_engordar="casi_no")
+        assert casi_no["macros"]["entreno"]["hidratos"] > normal["macros"]["entreno"]["hidratos"]

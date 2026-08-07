@@ -47,13 +47,14 @@ MOD_NO_ENGORDA = 0.20                    # entreno y descanso; requiere estar po
 # todos, en mujeres el modificador estaba muerto: la tabla de ellas EMPIEZA en el 20 %, o
 # sea que hacía falta estar en el extremo exacto para cobrarlo.
 #
-# El 30 % es el mismo punto del recorrido: en hombres, el 20 % está al 29 % de su rango
-# (10-45); ese mismo punto en el rango de ellas (20-50) cae en 30. Decisión del documento
-# del 06-08-2026 -- "con eso se puede activar y se puede validar".
-BF_MAX_NO_ENGORDA = {"hombre": 20.0, "mujer": 30.0}
-# Desde el doc del 29-07 el +20% lo cobran "casi no lo noto" Y "engordo lo normal": las dos
-# condiciones (respuesta y grasa <= 20%) tienen que darse a la vez.
-RESPUESTAS_QUE_SUBEN = ("casi_no", "normal")
+# Documento del 07-08-2026 (punto 11, suplanta a todos los anteriores por decisión de
+# Francisco del mismo día): "grasa <= 20 %" SIN distinguir sexo. Sustituye al 30 % de
+# mujeres del doc del 06-08. Consecuencia asumida del texto literal: la tabla de mujeres
+# empieza justo en el 20 %, así que en ellas solo lo cobra quien esté en el arranque.
+BF_MAX_NO_ENGORDA = {"hombre": 20.0, "mujer": 20.0}
+# Documento del 07-08 (misma decisión): el +20% lo cobra SOLO "casi no lo noto" (con
+# grasa <= 20%). Sustituye al doc del 29-07, que incluía también "engordo lo normal".
+RESPUESTAS_QUE_SUBEN = ("casi_no",)
 TOPE_SUBIDA_ENTRENO = 0.30
 TOPE_SUBIDA_DESCANSO = 0.40
 
@@ -65,14 +66,11 @@ MOD_FARMACOLOGIA_PROTEINA_DESCANSO_G = 10.0
 
 # NO PROGRAMADOS AUN (guardar el dato, no aplicar):
 APLICAR_HISTORIAL_DIETA = False   # +-10% por historial de dieta: en pausa, sin validar
-# El +20% "no engorda" en mujeres. Estuvo apagado con la nota "n=11, sin validar", y esa
-# nota engañaba: no es que fallara con once casos, es que NO SE EJECUTÓ NI UNA VEZ. Había
-# dos barreras y esta cortaba antes de mirar siquiera el % de grasa; y la segunda (el
-# umbral del 20 %) tampoco lo habría dejado pasar, porque la tabla de mujeres empieza ahí.
-# Once respuestas guardadas, cero aplicaciones.
-#
-# Se enciende junto con el umbral del 30 % (documento del 06-08-2026): así se puede
-# aplicar y, sobre todo, se puede validar con datos de verdad.
+# El +20% "no engorda" en mujeres: encendido (06-08) y se queda encendido. Con el umbral
+# del 20 % que fija el doc del 07-08 volverá a aplicarse muy poco en ellas (su tabla
+# empieza justo en el 20: once respuestas guardadas, cero aplicaciones en la era del
+# umbral al 20). Es la consecuencia del texto literal y queda aceptada; si Jesús quiere
+# reactivarlo de verdad en mujeres, el sitio es BF_MAX_NO_ENGORDA.
 APLICAR_ENGORDA_EN_MUJERES = True
 # TRT / farmacologia: el doc del 29-07 dejaba la regla en pausa hasta que Jesus confirmara como
 # afecta. Lo confirmo el 03-08 (+10 g en descanso y la regla dura de entreno+peri), asi que se

@@ -7,7 +7,8 @@ habia cambiado y los tests se quedaron atras.
 
 Lo que cambio, y donde se comprueba aqui:
   - Deporte extra: +10% en definicion y +20% en volumen (antes 10% fijo).
-  - "Engordo lo normal" cobra el +20% igual que "casi no lo noto" (grasa <= 20%).
+  - "Engordo lo normal" cobro el +20% del 31-07 al 07-08; el doc del 07-08 (punto 11)
+    lo devuelve SOLO a "casi no lo noto" (grasa <= 20%), y aqui se comprueba lo nuevo.
   - Regla dura nueva: el descanso NUNCA por encima del entreno; si se pasa, sube el entreno.
   - Bandas de peri: <=300 -> 40, <=350 -> 50, <=400 -> 60, <=450 -> 75, resto 90.
   - Suelo de hidratos de entreno: 60 en comidas (75 con el peri). Antes 50.
@@ -419,13 +420,20 @@ class TestAjustesToKwargs:
         assert kw2["dieta_reportada"] is None
 
     def test_pipeline_completo_desde_ajustes(self):
-        # Doc 29-07: "engordo lo normal" con grasa <= 20% cobra el +20% igual que "casi no lo
-        # noto" (antes solo subia "casi no"). Con muy_activo (+10/+10), deporte en volumen
-        # (+0/+20) y normal (+20/+20) se llega al tope 30/40 y luego la regla dura nivela.
+        # Doc 07-08 (suplanta al 29-07): el +20% lo cobra SOLO "casi no lo noto" con
+        # grasa <= 20%. Con muy_activo (+10/+10), deporte en volumen (+0/+20) y casi_no
+        # (+20/+20) se llega al tope 30/40 y luego la regla dura nivela.
         kw = ajustes_to_kwargs({"actividad_diaria": "muy_activo", "deporte_extra": True,
-                                "facilidad_engordar": "normal"})
+                                "facilidad_engordar": "casi_no"})
         res = calcular_macros_v2(80, "hombre", 20, "volumen", **kw)
         assert res["macros"]["entreno"]["hidratos"] == 240
         assert res["macros"]["descanso"]["hidratos"] == 240
         assert any(d["paso"] == "no_engorda" and d["estado"] == "aplicado"
                    for d in res["desglose"])
+
+    def test_normal_ya_no_cobra_el_20(self):
+        # La misma tubería con "normal": desde el doc del 07-08 no sube nada por engorda.
+        kw = ajustes_to_kwargs({"facilidad_engordar": "normal"})
+        res = calcular_macros_v2(80, "hombre", 20, "volumen", **kw)
+        assert not any(d["paso"] == "no_engorda" and d["estado"] == "aplicado"
+                       for d in res["desglose"])
