@@ -10,6 +10,7 @@ import {
     Calendar
 } from 'lucide-react';
 import InformeMensual from '../components/reports/InformeMensual';
+import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 
 const ORANGE = '#FF671F';
 
@@ -128,9 +129,8 @@ const ReportsPage = () => {
     // que puntúe su propio cumplimiento (documento, parte 7.1).
     const [huecos, setHuecos] = useState(null);
     const [huecosResp, setHuecosResp] = useState({});
-    // Las medidas solo van en el mensual, y allí solo la cintura es obligatoria; el resto,
-    // plegado (documento, parte 7.3). Si no se sabe qué toca, no se piden.
-    const [verMasMedidas, setVerMasMedidas] = useState(false);
+    // Las medidas solo van en el mensual, y allí van LAS DIEZ, todas visibles y todas
+    // obligatorias (06-08-2026). Ya no hay nada plegado que desplegar.
 
     // El informe del mes: se pide solo cuando abre uno, porque cruza dietas, check-ins
     // y macros de todo el periodo y no tiene sentido calcularlo para la lista entera.
@@ -156,7 +156,7 @@ const ReportsPage = () => {
 
     const [reportData, setReportData] = useState({
         weight: '',
-        measurements: { chest: '', waist: '', hip: '', arm: '', thigh: '' },
+        measurements: Object.fromEntries(MEDIDAS.map(m => [m.key, ''])),
         sleep_quality: 7,
         energy_level: 7,
         stress_level: 5,
@@ -212,10 +212,17 @@ const ReportsPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!reportData.weight) { toast.error('El peso es obligatorio'); return; }
-        // En el mensual la cintura es obligatoria; el resto de medidas, no (parte 7.3).
-        if (esMensual && !reportData.measurements.waist) {
-            toast.error('La cintura es obligatoria en el reporte mensual');
-            return;
+        // Las diez, siempre. Antes solo se exigía la cintura y el resto iba plegado como
+        // opcional; desde el 06-08-2026 se piden todas ("sirvan o no, se piden siempre"),
+        // porque media serie de medidas no se puede comparar con nada.
+        if (esMensual) {
+            const faltan = MEDIDAS.filter(m => !reportData.measurements[m.key]);
+            if (faltan.length) {
+                toast.error(faltan.length === 1
+                    ? `Te falta una medida: ${faltan[0].label.toLowerCase()}`
+                    : `Te faltan ${faltan.length} medidas, y van todas: empieza por ${faltan[0].label.toLowerCase()}`);
+                return;
+            }
         }
         setSubmitting(true);
         try {
@@ -243,7 +250,7 @@ const ReportsPage = () => {
             setHuecosResp({});
             setReportData({
                 weight: '',
-                measurements: { chest: '', waist: '', hip: '', arm: '', thigh: '' },
+                measurements: Object.fromEntries(MEDIDAS.map(m => [m.key, ''])),
                 sleep_quality: 7,
                 energy_level: 7,
                 stress_level: 5,
@@ -351,6 +358,10 @@ const ReportsPage = () => {
                         no se piden; ahí el reporte es "dos minutos" y sacar la cinta métrica
                         cada dos semanas para un dato que apenas se mueve no compensa.
                         En el mensual, la cintura es obligatoria y el resto va plegado. */}
+                    {/* Las DIEZ, todas visibles y nada plegado. "Sirvan o no, se piden
+                        siempre". Y con el vídeo delante, que es lo que hace que el error
+                        de medir se repita igual cada mes -- que es lo que permite
+                        comparar, más que acertar el número. */}
                     {esMensual && (
                     <div className="bg-card border border-border rounded-2xl p-4" data-testid="medidas">
                         <div className="flex items-center gap-3 mb-3">
@@ -358,39 +369,47 @@ const ReportsPage = () => {
                                 <Ruler className="w-4 h-4 text-foreground/40" />
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-foreground">Cintura (cm)</p>
-                                <p className="text-xs text-foreground/30">Obligatoria</p>
+                                <p className="text-sm font-bold text-foreground">Tus medidas (cm)</p>
+                                <p className="text-xs text-foreground/30">Las diez, como siempre</p>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            {(verMasMedidas ? [
-                                { key: 'waist', label: 'Cintura' },
-                                { key: 'chest', label: 'Pecho' },
-                                { key: 'hip', label: 'Cadera' },
-                                { key: 'arm', label: 'Brazo' },
-                                { key: 'thigh', label: 'Muslo' },
-                            ] : [{ key: 'waist', label: 'Cintura' }]).map(({ key, label }) => (
-                                <div key={key}>
-                                    <label className={labelCls}>{label}</label>
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={reportData.measurements[key]}
-                                        onChange={(e) => set('measurements', { ...reportData.measurements, [key]: e.target.value })}
-                                        placeholder={prev?.measurements?.[key] != null ? String(prev.measurements[key]) : '--'}
-                                        className={inputCls}
-                                    />
-                                    {prev?.measurements?.[key] != null && (
-                                        <p className="text-[10px] text-foreground/40 mt-1">antes: {prev.measurements[key]} cm</p>
-                                    )}
-                                </div>
-                            ))}
+
+                        <div className="rounded-xl overflow-hidden bg-black mb-4" style={{ aspectRatio: '16 / 9' }}>
+                            <iframe src={VIDEO_MEDIDAS} title="Cómo medir los perímetros"
+                                allow="fullscreen; picture-in-picture" data-testid="video-medidas"
+                                className="w-full h-full border-0" />
                         </div>
-                        <button type="button" onClick={() => setVerMasMedidas(v => !v)}
-                            data-testid="ver-mas-medidas"
-                            className="mt-3 text-xs text-foreground/50 hover:text-foreground underline underline-offset-4">
-                            {verMasMedidas ? 'Solo la cintura' : 'Añadir el resto de medidas (opcional)'}
-                        </button>
+
+                        <div className="space-y-2">
+                            {MEDIDAS.map(({ key, label }) => {
+                                const antes = valorAnterior(prev?.measurements, key);
+                                const dif = diferencia(reportData.measurements[key], antes);
+                                return (
+                                    <div key={key} className="grid grid-cols-[1fr_5rem_4.5rem] gap-2 items-center">
+                                        <label className="text-sm text-foreground/80">{label}</label>
+                                        <input
+                                            type="number" step="0.1" inputMode="decimal"
+                                            value={reportData.measurements[key] ?? ''}
+                                            onChange={(e) => set('measurements', { ...reportData.measurements, [key]: e.target.value })}
+                                            placeholder={antes != null ? String(antes) : '--'}
+                                            data-testid={`medida-${key}`}
+                                            className="h-10 px-2 rounded-lg bg-muted text-center text-base font-bold outline-none focus:ring-2 focus:ring-brand"
+                                        />
+                                        {/* El mes pasado y la diferencia, que sale en cuanto escribe */}
+                                        <span className="text-[11px] text-right tabular-nums">
+                                            {dif ? (
+                                                <span className={dif.signo === 0 ? 'text-foreground/40'
+                                                    : dif.signo > 0 ? 'text-blue-500' : 'text-emerald-500'}>
+                                                    {dif.texto}
+                                                </span>
+                                            ) : antes != null ? (
+                                                <span className="text-foreground/30">antes {antes}</span>
+                                            ) : null}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                     )}
 
