@@ -948,6 +948,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
     comidas_in = data.get("comidas") or {}
     out_comidas = {}
     excluidos = []
+    desfases = {}
     for meal_key, meal in comidas_in.items():
         meal = meal if isinstance(meal, dict) else {}
         if meal_key not in targets:
@@ -967,6 +968,22 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
         remaining = _target(meal_key)
         refit_foods = []
         food_docs = []
+
+        # Se REPARTE, no se sirve en cola (Francisco, 08-08-2026).
+        #
+        # Antes esto recorría los alimentos en el orden de la lista y cada uno se
+        # llevaba todo lo que podía del presupuesto que quedaba. Los últimos se
+        # encontraban el presupuesto a cero, recibían cantidad 0 y SE BORRABAN. No se
+        # iban por descuadrar ni por ser peores: se iban por llegar tarde. Se
+        # comprobó poniendo el mismo alimento el primero y el cuarto: el primero
+        # sobrevivía y el cuarto no, fuera cual fuera.
+        #
+        # Ahora se le reserva a cada uno su cantidad mínima antes de repartir nada, y
+        # solo se reparte lo que sobra. Así los seis siguen ahí. Si con los mínimos ya
+        # se pasa del objetivo, el reparto no da más de sí y se queda en los mínimos:
+        # el desfase se cuenta y se dice, pero **no se quita nada**. Lo que el cliente
+        # ha puesto lo quita el cliente.
+        entradas = []
         for it in (meal.get("alimentos") or []):
             aid = it.get("alimento_id")
             if aid in (None, ""):
@@ -976,17 +993,34 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             except (TypeError, ValueError):
                 food = None
             if not food:
+                # Este sí desaparece, y no hay alternativa: ya no está en el catálogo.
+                excluidos.append({"meal": meal_key, "nombre": it.get("nombre"),
+                                  "motivo": "no_esta_en_el_catalogo"})
                 continue
             aplicar_regla_macros_calma(food)
-            cant = ajustar_cantidad_calma(food, remaining)
-            if cant <= 0 or math.isinf(cant):
-                excluidos.append({"meal": meal_key, "nombre": food.get("nombre") or it.get("nombre"),
-                                  "motivo": "no_cabe"})
-                continue
-            contrib = macros_at_calma(food, cant)
+            entradas.append((it, food, cantidad_minima_calma(food)))
+
+        # Lo que consumen los mínimos sale del presupuesto antes de repartir.
+        for _, food, minimo in entradas:
+            aporte = macros_at_calma(food, minimo)
             for k in ("proteinas", "hidratos", "grasas"):
                 if not math.isinf(remaining[k]):
-                    remaining[k] = max(0.0, remaining[k] - contrib[k])
+                    remaining[k] = max(0.0, remaining[k] - aporte[k])
+
+        for it, food, minimo in entradas:
+            aid = it.get("alimento_id")
+            # Lo que quepa por encima del mínimo, con el mismo dimensionado de siempre.
+            extra = ajustar_cantidad_calma(food, remaining)
+            if extra <= 0 or math.isinf(extra):
+                extra = 0.0
+            # `ajustar_cantidad` devuelve la cantidad total que cabría, no un extra:
+            # como el mínimo ya está reservado, se descuenta para no contarlo dos veces.
+            cant = max(minimo, extra)
+            contrib = macros_at_calma(food, cant)
+            aporte_minimo = macros_at_calma(food, minimo)
+            for k in ("proteinas", "hidratos", "grasas"):
+                if not math.isinf(remaining[k]):
+                    remaining[k] = max(0.0, remaining[k] - max(0.0, contrib[k] - aporte_minimo[k]))
             es_unidad = bool(food.get("unidades"))
             racion = float(food.get("racion") or 100)
             refit_foods.append({
@@ -1029,7 +1063,29 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                     "ef": ef, "cat": ef.get("cat", ""),
                     "paso_unidad": peso_unidad if (es_unidad and peso_unidad > 0) else None,
                 })
+            # El afinado puede empeorar, y desde que no se quita nada se nota: con tres
+            # alimentos grasos subía el cacao de 32 a 100 g para tapar la proteína que
+            # faltaba, y de paso metía 10 g de grasa de más. Optimiza la distancia total
+            # y no distingue entre quedarse corto y pasarse. Así que se mide antes y
+            # después y **se queda el mejor de los dos**.
+            def _distancia(cantidades):
+                t = {"P": 0.0, "H": 0.0, "G": 0.0}
+                for cant, of in zip(cantidades, opt_foods):
+                    fac = cant / 100.0
+                    for m in t:
+                        t[m] += (of["ef"].get(m, 0) or 0) * fac
+                # pasarse pesa el doble que quedarse corto: sobrar grasa descuadra el
+                # día entero y faltar se arregla en la comida siguiente
+                return sum((2 if t[m] > obj_fino[m] else 1) * abs(t[m] - obj_fino[m])
+                           for m in ("P", "H", "G"))
+
+            antes = [of["cantidad"] for of in opt_foods]
+            d_antes = _distancia(antes)
             afinar_cantidades(opt_foods, obj_fino)
+            if _distancia([of["cantidad"] for of in opt_foods]) > d_antes:
+                for of, cant in zip(opt_foods, antes):
+                    of["cantidad"] = cant
+
             for rf, of, food in zip(refit_foods, opt_foods, food_docs):
                 # El afinado trabaja fino y deja cantidades como 182,5 o 120,1: al salir se
                 # bajan al múltiplo redondo, y los macros se recalculan con la cantidad final.
@@ -1041,8 +1097,23 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                     "H": round((of["ef"].get("H", 0) or 0) * fac, 1),
                     "G": round((of["ef"].get("G", 0) or 0) * fac, 1),
                 }
+        # Lo que ha quedado sin cuadrar, para poder decirlo en vez de callarlo. Como ya
+        # no se quita nada, hay comidas que no van a cuadrar al gramo -- por ejemplo si
+        # los mínimos de lo que ha puesto el cliente ya se pasan de grasa --, y eso hay
+        # que contárselo: es su decisión quitar algo o quedarse como está.
+        tgt = _target(meal_key)
+        servido = {"P": 0.0, "H": 0.0, "G": 0.0}
+        for rf in refit_foods:
+            me = rf.get("macros_efectivos") or {}
+            for m in servido:
+                servido[m] += float(me.get(m, 0) or 0)
+        desfases[meal_key] = {
+            m: round(servido[m] - tgt[k], 1)
+            for m, k in (("P", "proteinas"), ("H", "hidratos"), ("G", "grasas"))
+        }
         out_comidas[meal_key] = {**meal, "alimentos": refit_foods}
-    return {"comidas": out_comidas, "distribution": dist, "excluidos": excluidos}
+    return {"comidas": out_comidas, "distribution": dist, "excluidos": excluidos,
+            "desfases": desfases}
 
 
 @router.post("/suggest")

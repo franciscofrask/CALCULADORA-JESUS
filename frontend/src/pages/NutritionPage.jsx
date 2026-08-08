@@ -1491,9 +1491,25 @@ const NutritionPage = () => {
             if (!refit) { toast.error('No se pudo cuadrar la comida'); return; }
             setMealsData(prev => ({ ...prev, [mealKey]: refit }));
             setDistribTargetsOverlay(null);   // pasa a mostrar los macros de hoy
+            // Cuadrar ya no quita ingredientes (08-08-2026): reparte y, si no llega a
+            // cuadrar del todo, lo dice. El aviso de antes ("no cabían ni al mínimo")
+            // además no era cierto: sí cabían, lo que pasaba es que los macros se
+            // agotaban antes de llegar a ellos.
             const nEx = res.excluidos?.length || 0;
-            if (nEx) toast.warning(`Comida cuadrada. ${nEx} alimento(s) no cabían ni al mínimo y se quitaron.`);
-            else toast.success('Comida cuadrada a tus macros');
+            const d = res.desfases?.[mealKey];
+            const falla = d && ['P', 'H', 'G'].filter(m => Math.abs(d[m]) > 4);
+            if (nEx) {
+                toast.warning(`Comida cuadrada. ${nEx} alimento(s) ya no están en el catálogo y se quitaron.`);
+            } else if (falla?.length) {
+                const nombre = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+                const texto = falla.map(m => {
+                    const v = d[m];
+                    return `${v > 0 ? 'sobran' : 'faltan'} ${Math.abs(v).toFixed(1)}g de ${nombre[m]}`;
+                }).join(' y ');
+                toast.warning(`Lo más cerca que se puede con estos ingredientes: ${texto}. No se ha quitado ninguno.`);
+            } else {
+                toast.success('Comida cuadrada a tus macros');
+            }
         } catch { toast.error('No se pudo cuadrar la comida'); }
     };
 

@@ -2069,6 +2069,68 @@ el peri ya estaba exento -- y pasan **673**, en línea con el resto de comidas. 
 en la cena sigue haciendo falta verdura de verdad.
 
 
+
+### El botón «Cuadrar» servía en cola y borraba a los últimos
+
+Lo vio Francisco el 08-08: montó una Comida 2 con seis ingredientes, pulsó **Cuadrar** y le
+quedaron tres. «Vaciar no debería eliminar comidas, dime cuál es el criterio actual y qué
+propones».
+
+**El criterio era una cola.** `/refit-diet` recorría los alimentos **en el orden de la
+lista** -- la columna de prioridad que se ve en la pantalla -- y cada uno se llevaba todo
+lo que podía del presupuesto que quedaba. Los últimos se lo encontraban a cero, recibían
+cantidad 0 y se borraban con el motivo `no_cabe`.
+
+Y esto es lo que lo demuestra: **se puso el mismo alimento el primero y el cuarto**.
+
+```
+orden original          -> sobreviven huevos, claras y avena; mueren cacao, leche y plátano
+con el cacao el primero -> sobrevive el cacao... y muere el huevo
+```
+
+Los tres primeros viven y los tres últimos mueren, **sea cual sea el alimento**. No se iban
+por descuadrar ni por ser peores: se iban por llegar tarde.
+
+De paso, el aviso que veía el cliente era falso: decía «no cabían ni al mínimo» y sí cabían
+-- el plátano cabe de sobra --. Lo que pasaba es que cuando les tocaba el turno ya no
+quedaba presupuesto. El mensaje culpaba al alimento de un problema del reparto.
+
+**Ahora se reparte.** A cada ingrediente se le reserva su cantidad mínima *antes* de
+repartir nada, y solo se reparte lo que sobra. Los seis siguen ahí:
+
+```
+ANTES                              AHORA
+ 1 Huevos      126g                 1 Huevos       63g    8.0P  0.0H  6.0G
+ 2 Claras      285g                 2 Claras      320g   35.2P  0.0H  0.0G
+ 3 Avena        85g                 3 Avena        65g    0.0P 39.0H  0.0G
+ 4 Cacao     BORRADO                4 Cacao        10g    2.6P  1.6H  1.6G
+ 5 Leche     BORRADO                5 Leche       400g    0.0P  0.0H  4.0G
+ 6 Plátano   BORRADO                6 Plátano      50g    0.0P 10.0H  0.0G
+ 3 de 6 ingredientes                6 de 6, desfase P -1,7 · H -0,4 · G -0,4
+```
+
+**Y cuando no se puede cuadrar, se dice.** Con tres alimentos grasos y ningún hidrato no
+hay forma de llegar, así que en vez de resolverlo borrando se deja lo más cerca posible y
+el aviso lo cuenta: «Lo más cerca que se puede con estos ingredientes: faltan 46,1 g de
+hidratos. No se ha quitado ninguno». Eso además es útil -- le está diciendo al cliente que
+le falta meter un hidrato.
+
+**Un efecto secundario que apareció al quitar el borrado**: la pasada de afinado a veces
+*empeoraba*. Con tres alimentos grasos subía el cacao de 32 a 100 g para tapar la proteína
+que faltaba, y de paso metía 10 g de grasa de más -- optimiza la distancia total y no
+distingue entre quedarse corto y pasarse. Antes no se veía porque esos alimentos ya no
+llegaban vivos al afinado. Ahora se mide antes y después y **se queda el mejor de los dos**,
+contando doble el pasarse: sobrar grasa descuadra el día entero y faltar se arregla en la
+comida siguiente.
+
+```
+caso duro, antes de la salvaguarda:  P +14,0   H -34,7   G +10,0
+caso duro, después:                  P  -3,9   H -46,1   G  -1,2
+```
+
+Queda fijado en `tests/test_cuadrar_no_borra.py`, con el test que comprueba que **dar la
+vuelta a la lista da los mismos seis** -- que era exactamente lo que fallaba.
+
 ### El margen del sugeridor era un embudo, no un techo
 
 Segundo aviso de Francisco el 08-08, y va al concepto: «el único margen que sirve es
