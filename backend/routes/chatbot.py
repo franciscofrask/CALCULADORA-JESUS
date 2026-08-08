@@ -19,6 +19,20 @@ from pdf_generator import generate_diet_pdf
 
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
 
+# Sello de versión del asistente: al arrancar (y en cada recarga) se imprime la fecha
+# del fichero más reciente del agente. Un vistazo al log dice si el server sirve el
+# código actual; se añadió tras una noche entera persiguiendo "regresiones" que eran
+# un recargador muerto sirviendo código viejo.
+def _sello_agente():
+    import os as _o
+    from datetime import datetime as _dt
+    base = _o.path.dirname(_o.path.dirname(_o.path.abspath(__file__)))
+    ficheros = ["agent_loop.py", "agent_tools.py", "chatbot.py", "food_semantic.py"]
+    reciente = max(_o.path.getmtime(_o.path.join(base, f)) for f in ficheros)
+    print(f"[agente] código del {_dt.fromtimestamp(reciente):%Y-%m-%d %H:%M:%S}")
+
+_sello_agente()
+
 
 def _assert_session_owner(session_id: str, current_user: dict):
     """Verifica que la sesión de chat pertenezca a quien la usa.
@@ -134,6 +148,36 @@ async def chatbot_configure(
         "mensaje": mensaje
     }
 
+# Los mensajes van por el bucle del agente (agent_loop) con sus herramientas. El router
+# de intenciones anterior se borró en F3 (06-08) tras validar el agente con el banco de
+# casos (48/60 del router frente a 59-60/60 del agente); volver atrás es git revert.
+async def _procesar_mensaje(chatbot, texto: str, progreso=None):
+    from agent_loop import AgentLoop
+    loop = await AgentLoop.crear(chatbot, progreso=progreso)
+    return await loop.procesar(texto)
+
+
+def _estado_para_front(chatbot) -> dict:
+    """El estado que el front necesita tras cada mensaje. Lleva la CONFIG del día para
+    que el front la refleje cuando el agente reconfigura por chat ('mejor 3 comidas'):
+    antes eso lo parseaba el propio front con regex (leerCambioDeConfig), que era el
+    mismo hardcodeo en otro idioma."""
+    st = chatbot.state
+    return {
+        "step": st["step"],
+        "comida_actual": st["comida_actual"],
+        "meal_nombre": chatbot.meal_label(chatbot.current_meal_key()),
+        "restante": chatbot.get_remaining_macros(),
+        "config": {
+            "tipo_dia": st.get("tipo_dia"),
+            "num_comidas": st.get("num_comidas"),
+            "momento_entreno": st.get("momento_entreno"),
+            "opcion_peri": st.get("opcion_peri"),
+            "single_meal": st.get("single_meal", False),
+        },
+    }
+
+
 @router.post("/message")
 async def chatbot_message(
     request: ChatMessageRequest,
@@ -146,20 +190,103 @@ async def chatbot_message(
     _assert_session_owner(session_id, current_user)
 
     chatbot = await get_or_create_chatbot(session_id, db)
-    response = await chatbot.process_message(request.message)
+    response = await _procesar_mensaje(chatbot, request.message)
 
     await save_chatbot_session(chatbot)
     return {
         "session_id": session_id,
         "response": response,
-        "state": {
-            "step": chatbot.state["step"],
-            "comida_actual": chatbot.state["comida_actual"],
-            "meal_nombre": chatbot.meal_label(chatbot.current_meal_key()),
-            "restante": chatbot.get_remaining_macros(),
-        },
+        "state": _estado_para_front(chatbot),
         "day_overview": chatbot.get_day_overview(),
     }
+
+
+@router.post("/message-stream")
+async def chatbot_message_stream(
+    request: ChatMessageRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Como /message pero en SSE: emite un evento por herramienta que usa el agente
+    (el indicador de "qué estoy haciendo" aprobado en el plan) y al final la respuesta
+    completa. Con el agente apagado emite solo el evento final, así el front puede
+    llamar siempre aquí sin preguntar por la bandera."""
+    import asyncio
+    import json as _json
+
+    session_id = request.session_id
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id requerido")
+    _assert_session_owner(session_id, current_user)
+    chatbot = await get_or_create_chatbot(session_id, db)
+
+    ETIQUETAS = {
+        "buscar_alimentos": "Buscando en el catálogo...",
+        "componer_menu": "Montando el menú...",
+        "revisar_borrador": "Revisando el menú...",
+        "editar_borrador": "Ajustando el menú...",
+        "aplicar_borrador": "Añadiendo la comida...",
+        "editar_comida": "Actualizando la comida...",
+        "ver_estado": "Consultando cómo vas...",
+        "navegar": "Cambiando de comida...",
+        "guardar_comida": "Guardando la comida...",
+        "explicar": "Consultando el método...",
+        "configurar_dia": "Reconfigurando el día...",
+    }
+    cola: asyncio.Queue = asyncio.Queue()
+
+    async def trabajar():
+        try:
+            resp = await _procesar_mensaje(
+                chatbot, request.message,
+                progreso=lambda h: cola.put_nowait(
+                    {"tipo": "progreso", "texto": ETIQUETAS.get(h, "Trabajando...")}))
+            await save_chatbot_session(chatbot)
+            await cola.put({"tipo": "respuesta", "response": resp,
+                            "state": _estado_para_front(chatbot),
+                            "day_overview": chatbot.get_day_overview()})
+        except Exception as e:
+            await cola.put({"tipo": "error", "detalle": f"{type(e).__name__}"})
+        await cola.put(None)
+
+    async def eventos():
+        tarea = asyncio.create_task(trabajar())
+        while True:
+            item = await cola.get()
+            if item is None:
+                break
+            yield f"data: {_json.dumps(item, ensure_ascii=False, default=str)}\n\n"
+        await tarea
+
+    return StreamingResponse(eventos(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache"})
+
+
+@router.post("/apply-draft")
+async def chatbot_apply_draft(
+    session_id: str,
+    borrador_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Aplica un borrador de menú del agente a la comida actual (el botón "Elegir este
+    menú" de la tarjeta). Pasa por la revisión del backend: si algo choca con una
+    restricción, se devuelve el porqué en vez de aplicar."""
+    _assert_session_owner(session_id, current_user)
+    chatbot = await get_or_create_chatbot(session_id, db)
+    from agent_tools import AgentTools
+    tools = await AgentTools.crear(chatbot)
+    resultado = await tools.aplicar_borrador(borrador_id)
+    await save_chatbot_session(chatbot)
+    if resultado.get("ok"):
+        response = chatbot._meal_response([], [])
+        response["message"] = "Menú aplicado a la comida ✓."
+    else:
+        detalles = [p.get("detalle") for p in resultado.get("bloqueado_por", []) if p.get("detalle")]
+        response = {"action": "no_foods",
+                    "message": ("No lo he aplicado: " + "; ".join(detalles) + ". "
+                                "Dime si lo cambio o lo pongo igualmente.")
+                    if detalles else "No he podido aplicar ese menú.",
+                    "day_overview": chatbot.get_day_overview()}
+    return {"session_id": session_id, "response": response}
 
 
 @router.post("/suggest-foods")

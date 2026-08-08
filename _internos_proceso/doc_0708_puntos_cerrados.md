@@ -731,6 +731,29 @@ de madrugada vería el día anterior.
 
 ---
 
+### Punto 23 - La app dice «afinar» y Jesús dice «ajustar» · CERRADO
+
+Cambiado en toda la app. Los que veía el cliente eran seis:
+
+- "Aquí puedes recalcular o **afinar** tus macros cuando cambie tu peso o tu objetivo" (el
+  recorrido guiado del panel).
+- "Añade otra categoría para **afinar**" (el buscador de alimentos).
+- "**Afina** tus macros", dos veces: el título del bloque en Ajustar macros y el del tramo del
+  cuestionario.
+- "Con tus datos de estas semanas podemos **afinarlos**" (el aviso de que lleva semanas con los
+  mismos macros).
+- Y dos en el quiz de venta: "lo que necesitas es **afinar**, no que te lleven de la mano" y la
+  respuesta "estoy bien ahora, quiero **afinar** más".
+
+Se han cambiado también los comentarios del código, que no los ve nadie pero es por donde la
+palabra se vuelve a colar cuando alguien escribe el texto siguiente mirando el de al lado.
+
+Lo único que conserva la palabra es el nombre interno de la función que cuadra las cantidades de
+un menú (`afinar_cantidades`) y los dos comentarios que la describen. Eso no es un texto: es
+código, no lo lee ningún cliente, y renombrarlo sería riesgo sin beneficio.
+
+---
+
 ---
 
 ## PENDIENTES

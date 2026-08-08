@@ -34,7 +34,7 @@ const STEPS = [
         id: 'macros', route: '/dashboard/macro-calculator',
         element: '[data-testid="macros-content"]',
         title: 'Ajustar macros', side: 'right', align: 'start',
-        description: 'Aquí puedes recalcular o afinar tus macros cuando cambie tu peso o tu objetivo.',
+        description: 'Aquí puedes recalcular o ajustar tus macros cuando cambie tu peso o tu objetivo.',
     },
     {
         id: 'reports', route: '/dashboard/reports', cap: 'reportes',

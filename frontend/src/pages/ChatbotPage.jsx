@@ -5,66 +5,15 @@ import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download, Cli
 import ChatMealSummary from '../components/nutrition/ChatMealSummary';
 import ChatDayOverview from '../components/nutrition/ChatDayOverview';
 import ChatSuggestions from '../components/nutrition/ChatSuggestions';
+import ChatMenus from '../components/nutrition/ChatMenus';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-const sinTildes = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-
-/**
- * Lee un cambio de configuración del día escrito en lenguaje normal.
- *
- * Devuelve solo lo que el mensaje diga de verdad (`{}` si no habla de configuración),
- * para poder mezclarlo con lo que ya había. Los patrones piden la palabra clave entera
- * ("3 comidas", no un "3" suelto) porque este mismo cuadro de texto se usa para pedir
- * comida: "ponme 3 huevos" no puede acabar cambiando el día a 3 comidas.
- */
-export const leerCambioDeConfig = (texto, periActual = 'intra_post') => {
-  const t = sinTildes(texto);
-  const cambio = {};
-
-  // "elimina el intra del día", "fuera el perientreno", "no quiero post". Quitar el intra
-  // NO es vaciar la comida del intra: es sacarlo del día y repartir su presupuesto. El
-  // asistente lo entendía como vaciarla, así que decías "elimínalo" y seguía ahí.
-  const quitarPeri = t.match(/\b(?:elimina\w*|quita\w*|saca\w*|borra\w*|fuera|no quiero|no hago|nada de|sin)\s+(?:el\s+|la\s+|los\s+|las\s+|mi\s+)?(intra\w*|post\w*|peri\w*)\b/);
-  if (quitarPeri) {
-    const que = quitarPeri[1];
-    if (que.startsWith('peri')) cambio.opcion_peri = 'sin_peri';
-    else if (que.startsWith('intra')) cambio.opcion_peri = periActual === 'solo_intra' ? 'sin_peri' : 'solo_post';
-    else cambio.opcion_peri = periActual === 'solo_post' ? 'sin_peri' : 'solo_intra';
-  }
-
-  if (/\b(dia de |hoy )?(es )?(de )?descanso\b/.test(t) || /\bno entreno\b/.test(t)) {
-    cambio.tipo_dia = 'descanso';
-  } else if (/\b(dia de |hoy )(es )?(de )?(entreno|entrenamiento)\b/.test(t)
-             || /\bhoy si entreno\b/.test(t)) {
-    cambio.tipo_dia = 'entrenamiento';
-  }
-
-  if (/\b(bloque unico|comida unica|una sola comida)\b/.test(t)) {
-    cambio.num_comidas = 1;
-    cambio.single_meal = true;
-  } else {
-    const m = t.match(/\b([1345])\s*comidas?\b/);
-    if (m) {
-      cambio.num_comidas = Number(m[1]);
-      cambio.single_meal = cambio.num_comidas === 1;
-    }
-  }
-
-  if (/\bsin peri\b|\bsin perientreno\b|\bnada de peri\b/.test(t)) cambio.opcion_peri = 'sin_peri';
-  else if (/\bsolo post\b/.test(t)) cambio.opcion_peri = 'solo_post';
-  else if (/\bsolo intra\b/.test(t)) cambio.opcion_peri = 'solo_intra';
-  else if (/\bintra\s*(\+|y|e)\s*post\b/.test(t)) cambio.opcion_peri = 'intra_post';
-
-  if (/\ben ayunas\b/.test(t)) cambio.momento_entreno = 0;
-  else {
-    // "entreno tras la comida 2", "entreno despues de la 3"
-    const m = t.match(/entren\w*\s+(?:tras|despues de|luego de)\s+(?:la\s+)?(?:comida\s+)?([0-3])/);
-    if (m) cambio.momento_entreno = Number(m[1]);
-  }
-
-  return cambio;
-};
+// Los cambios de configuración por chat ("mejor 3 comidas", "en ayunas", "sin peri") ya
+// no se parsean aquí con regex: los entiende el asistente-agente en el backend
+// (herramienta configurar_dia) y el estado del día vuelve en `state.config` de cada
+// respuesta. Aquí solo queda el cambio de FECHA (leerCambioDeDia), que es asunto del
+// front: cada día carga su configuración desde Nutrición.
 
 const ETIQUETA_PERI = {
   intra_post: 'intra + post', solo_post: 'solo post',
@@ -116,6 +65,8 @@ export default function ChatbotPage() {
   const [messages, setMessages] = useState(p.messages ?? []);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  // Qué está haciendo el asistente ahora mismo ("Montando el menú..."), del SSE.
+  const [progressText, setProgressText] = useState(null);
   const [step, setStep] = useState(p.step ?? 'init'); // init, config, building_meal, complete
   // Ya no hay fases de configuración (el día sale de Nutrición). Se conserva el estado
   // porque el snapshot de sesiones anteriores lo trae y para no romper la persistencia.
@@ -400,75 +351,113 @@ export default function ChatbotPage() {
     setLoading(false);
   };
 
-  // Enviar mensaje
+  // El día (tipo, nº de comidas, peri...) puede cambiarlo el agente por chat: se
+  // refleja aquí lo que diga el backend, que es quien manda.
+  const syncEstado = (data) => {
+    if (data?.day_overview) setDayOverview(data.day_overview);
+    if (data?.state?.step) setStep(data.state.step);
+    const cfg = data?.state?.config;
+    if (cfg) {
+      if (cfg.tipo_dia) setTipoDia(cfg.tipo_dia);
+      if (cfg.num_comidas) setNumComidas(cfg.num_comidas);
+      if (cfg.opcion_peri) setOpcionPeri(cfg.opcion_peri);
+      if (cfg.momento_entreno !== null && cfg.momento_entreno !== undefined) {
+        setMomentoEntreno(cfg.momento_entreno);
+      }
+      setSingleMeal(!!cfg.single_meal);
+    }
+  };
+
+  // Enviar mensaje. Va por SSE (/message-stream) para poder enseñar qué está haciendo
+  // el asistente mientras trabaja ("Montando el menú..."); si el stream falla, se cae
+  // al POST clásico de /message.
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
-    
+
     const userMessage = input.trim();
     setInput('');
     addMessage(userMessage, true);
 
     // "Mañana", "el 5/8": cambiar de día. Se recarga la configuración de ESE día desde
     // Nutrición (cada día tiene la suya) y se vuelve a montar.
-    const cambio = leerCambioDeConfig(userMessage, opcionPeri);
     const otroDia = leerCambioDeDia(userMessage);
     if (otroDia && otroDia !== targetDate) {
       setTargetDate(otroDia);
-      await arrancarConLaConfigDeNutricion(otroDia, cambio);
-      inputRef.current?.focus();
-      return;
-    }
-
-    // "Hoy descanso", "mejor 3 comidas", "en ayunas": eso no es pedir comida, es cambiar
-    // el día. Se resuelve aquí y no se manda al asistente, que no sabe reconfigurar.
-    if (Object.keys(cambio).length) {
-      const cfg = {
-        tipo_dia: cambio.tipo_dia ?? tipoDia ?? 'entrenamiento',
-        num_comidas: cambio.num_comidas ?? numComidas,
-        single_meal: cambio.single_meal ?? singleMeal,
-        momento_entreno: cambio.momento_entreno ?? momentoEntreno,
-        opcion_peri: cambio.opcion_peri ?? opcionPeri,
-      };
-      if (cfg.tipo_dia === 'descanso') cfg.opcion_peri = 'sin_peri';
-      setTipoDia(cfg.tipo_dia);
-      setNumComidas(cfg.num_comidas);
-      setSingleMeal(cfg.single_meal);
-      setMomentoEntreno(cfg.momento_entreno);
-      setOpcionPeri(cfg.opcion_peri);
-      const habiaComidas = currentFoods.length > 0 || currentMeal > 1;
-      addMessage(`Cambiado: ${resumenConfig(cfg)}.`
-        + (habiaComidas ? ' Ojo: al cambiar el reparto, los objetivos de cada comida cambian. '
-                        + 'Lo que ya tenías montado se queda; solo desaparece lo que ya no '
-                        + 'existe en el día nuevo.' : ''), false);
-      await configureDay(cfg.tipo_dia, cfg.num_comidas, cfg.opcion_peri,
-                         cfg.momento_entreno, cfg.single_meal);
+      await arrancarConLaConfigDeNutricion(otroDia, {});
       inputRef.current?.focus();
       return;
     }
 
     setLoading(true);
+    setProgressText(null);
 
+    const body = JSON.stringify({ message: userMessage, session_id: sessionId });
+    const headers = { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' };
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/message`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          session_id: sessionId
-        })
-      });
-      const data = await res.json();
-      if (data.day_overview) setDayOverview(data.day_overview);
-      if (data.state?.step) setStep(data.state.step);
-      await handleBotResponse(data.response);
+      let respondido = false;
+      try {
+        const res = await fetch(`${API_URL}/api/chatbot/message-stream`, {
+          method: 'POST', headers, body,
+        });
+        if (!res.ok || !res.body) throw new Error('sin stream');
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const trozos = buffer.split('\n\n');
+          buffer = trozos.pop();
+          for (const trozo of trozos) {
+            const linea = trozo.split('\n').find(l => l.startsWith('data: '));
+            if (!linea) continue;
+            const ev = JSON.parse(linea.slice(6));
+            if (ev.tipo === 'progreso') {
+              setProgressText(ev.texto);
+            } else if (ev.tipo === 'respuesta') {
+              syncEstado(ev);
+              await handleBotResponse(ev.response);
+              respondido = true;
+            } else if (ev.tipo === 'error') {
+              addMessage('Error al procesar el mensaje.', false);
+              respondido = true;
+            }
+          }
+        }
+        if (!respondido) throw new Error('stream sin respuesta');
+      } catch (e) {
+        // Respaldo: el POST clásico (mismo backend, sin indicador de progreso)
+        const res = await fetch(`${API_URL}/api/chatbot/message`, { method: 'POST', headers, body });
+        const data = await res.json();
+        syncEstado(data);
+        await handleBotResponse(data.response);
+      }
     } catch (error) {
       addMessage('Error al procesar el mensaje.', false);
     }
+    setProgressText(null);
     setLoading(false);
     inputRef.current?.focus();
+  };
+
+  // "Elegir este menú" en una tarjeta de menús del agente: aplica el borrador a la
+  // comida pasando por la revisión del backend (si algo choca, el chat cuenta el porqué).
+  const aplicarMenu = async (borrador) => {
+    if (loading || !borrador?.id) return;
+    addMessage(`Elijo: ${borrador.nombre || 'ese menú'}`, true);
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/chatbot/apply-draft?session_id=${sessionId}&borrador_id=${encodeURIComponent(borrador.id)}`,
+        { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } });
+      const data = await res.json();
+      syncEstado(data);
+      await handleBotResponse(data.response);
+    } catch (e) {
+      addMessage('Error al aplicar el menú.', false);
+    }
+    setLoading(false);
   };
 
   // Elegir una sugerencia pulsándola. Se manda al backend lo mismo que si el usuario
@@ -520,6 +509,10 @@ export default function ChatbotPage() {
         // viene vacía cuando la tarjeta ya lo dice. El "no encuentro nada" SOLO cuando de
         // verdad no hay nada: se estaba imprimiendo encima de seis sugerencias.
         addMessage(resp.message || (resp.suggestions?.length ? '' : 'No encuentro alimentos que cuadren ahora mismo.'), false, resp);
+        break;
+      case 'menus':
+        // Menús completos del agente: tarjetas <ChatMenus> con el botón de aplicar.
+        addMessage(resp.message || '', false, resp);
         break;
       case 'complete_request':
         await completeMeal();
@@ -776,6 +769,9 @@ export default function ChatbotPage() {
             {!isUser && msg.data?.action === 'suggestions' && (
               <ChatSuggestions data={msg.data} disabled={loading} onElegir={elegirSugerencia} />
             )}
+            {!isUser && msg.data?.action === 'menus' && (
+              <ChatMenus data={msg.data} disabled={loading} onAplicar={aplicarMenu} />
+            )}
           </div>
         </div>
       </div>
@@ -1024,7 +1020,8 @@ export default function ChatbotPage() {
           <div className="flex justify-start mb-4">
             <div className="flex items-center gap-2 bg-card rounded-2xl px-4 py-2">
               <Loader2 className="animate-spin" size={16} />
-              <span className="text-sm text-muted-foreground">Pensando...</span>
+              {/* El SSE va contando qué hace el asistente; sin evento aún, "Pensando..." */}
+              <span className="text-sm text-muted-foreground">{progressText || 'Pensando...'}</span>
             </div>
           </div>
         )}

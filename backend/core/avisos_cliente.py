@@ -60,7 +60,7 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
     fuera: List[Dict[str, Any]] = []
     hoy = ahora.date()
 
-    # "Tus macros son provisionales": a las 2 h de darse de alta, si aun no los ha afinado.
+    # "Tus macros son provisionales": a las 2 h de darse de alta, si aun no los ha ajustado.
     if not perfil.get("ajuste_macros_completado"):
         alta = perfil.get("created_at")
         try:
@@ -181,7 +181,7 @@ def avisos_condicionados(*, ahora: datetime,
             "clave": f"sin_ajustar:{semana_iso}",
             "tipo": "macros",
             "titulo": f"Llevas {semanas_sin_ajustar} semanas con los mismos macros",
-            "cuerpo": "Con tus datos de estas semanas podemos afinarlos.",
+            "cuerpo": "Con tus datos de estas semanas podemos ajustarlos.",
             "link": "/dashboard/reports",
             "calendario": False,
         })

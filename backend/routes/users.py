@@ -474,7 +474,7 @@ async def guardar_progreso_ajuste(data: dict, user = Depends(get_current_user)):
 @router.post("/clients/ajustar-macros")
 async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     """
-    Cuestionario de AJUSTE (paso 2 del doc del 29-07): afina los macros provisionales del alta
+    Cuestionario de AJUSTE (paso 2 del doc del 29-07): ajusta los macros provisionales del alta
     y devuelve los DEFINITIVOS.
 
     Va aparte del alta a proposito: el alta se rellena una vez y se cierra, mientras que esto se

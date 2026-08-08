@@ -229,7 +229,7 @@ const FoodSearchPage = () => {
                         )}
                     </div>
 
-                    {/* Categoría (cascada: añade más para afinar) */}
+                    {/* Categoría (cascada: añade más para ajustar) */}
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Categoría</label>
                     <div className="space-y-2">
                         {[...cats, ''].map((sel, idx) => {
@@ -243,7 +243,7 @@ const FoodSearchPage = () => {
                                 className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
                             >
                                 <option value="">
-                                    {idx === 0 ? 'Todas las categorías' : (sel ? 'Quitar este filtro' : 'Añade otra categoría para afinar')}
+                                    {idx === 0 ? 'Todas las categorías' : (sel ? 'Quitar este filtro' : 'Añade otra categoría para ajustar')}
                                 </option>
                                 {opciones.map((c, i) => (
                                     <React.Fragment key={c.clave}>

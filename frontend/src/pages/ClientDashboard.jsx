@@ -427,7 +427,7 @@ const ClientDashboard = () => {
             </div>
 
             {/* Ajustar macros: el cuestionario del paso 2. Sale mientras tenga los macros
-                provisionales del alta, porque hasta que lo rellene sus numeros no estan afinados.
+                provisionales del alta, porque hasta que lo rellene sus numeros no estan ajustados.
                 En el plan con coach el boton se llama "Rellena tu formulario", que es lo que es:
                 el coach lo revisa con el despues. */}
             {/* Aquí se separan los planes: el mismo hueco dice tres cosas distintas.
@@ -487,7 +487,7 @@ const ClientDashboard = () => {
                 </button>
             )}
 
-            {/* Revisión suelta: solo para quien se autogestiona y ya tiene sus macros afinados.
+            {/* Revisión suelta: solo para quien se autogestiona y ya tiene sus macros ajustados.
                 Es la puerta de entrada a tener coach: prueba lo que se siente y, si sube de plan
                 en 30 días, lo que pagó se le descuenta.
 

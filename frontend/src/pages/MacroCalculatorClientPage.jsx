@@ -161,7 +161,7 @@ const MacroCalculatorClientPage = () => {
     const [loading, setLoading] = useState(false);
     const editorRef = useRef(null);
 
-    // Preguntas 5-8 del quiz ("Afina tus macros"): mueven el motor v2.
+    // Preguntas 5-8 del quiz ("Ajusta tus macros"): mueven el motor v2.
     // Precarga: última versión guardada en el perfil; si no hay, mapea el
     // activity_level del cuestionario antiguo a la escala nueva de 3.
     const [ajustes, setAjustes] = useState(AJUSTES_VACIOS);
@@ -281,9 +281,9 @@ const MacroCalculatorClientPage = () => {
                                 <ToggleGroup options={[{ value: 'volumen', label: 'Volumen' }, { value: 'definicion', label: 'Definición' }]} value={form.objetivo} onChange={v => set('objetivo', v)} />
                             </div>
 
-                            {/* Afina tus macros (preguntas 5-8 del quiz, motor v2) */}
-                            <div className="border-t border-border pt-4 space-y-4" data-testid="afina-tus-macros">
-                                <p className="caption">Afina tus macros</p>
+                            {/* Ajusta tus macros (preguntas 5-8 del quiz, motor v2) */}
+                            <div className="border-t border-border pt-4 space-y-4" data-testid="ajusta-tus-macros">
+                                <p className="caption">Ajusta tus macros</p>
                                 <div>
                                     <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Actividad diaria (fuera del gym)</label>
                                     <ToggleGroup options={[{ value: 'sedentario', label: 'Sedentario' }, { value: 'normal', label: 'Normal' }, { value: 'muy_activo', label: 'Muy activo' }]}

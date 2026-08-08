@@ -9,7 +9,7 @@ El test no clasifica personas: coloca producto. Y lo que coloca el producto es U
 pregunta, la de las seis frases: con cual se identifica. Las demas acompañan.
 
   Estoy en forma pero harto del proceso   -> Nivel 1  (no le falta direccion, le falta libertad)
-  Voy bien, quiero dar un salto           -> Nivel 1  (sabe hacerlo; necesita afinar, no que le lleven)
+  Voy bien, quiero dar un salto           -> Nivel 1  (sabe hacerlo; necesita ajustar, no que le lleven)
   Hago las cosas bien y no veo resultados  -> Nivel 2  (le falta que alguien mire sus numeros)
   Lo consigo y vuelvo atras                -> Nivel 2  (le falta sostenerlo, y eso se sostiene con revision)
   Nunca he estado en forma                 -> Nivel 2  (le falta guia desde el principio)
@@ -72,7 +72,7 @@ PORQUE = {
          "eso hace falta una persona, no otra app.",
     "C": "Si haces las cosas bien y no ves lo que deberías, no es cuestión de esfuerzo: "
          "hay algo en tus números que no cuadra y alguien tiene que mirarlo.",
-    "D": "Sabes hacerlo. Lo que necesitas es afinar, no que te lleven de la mano.",
+    "D": "Sabes hacerlo. Lo que necesitas es ajustar, no que te lleven de la mano.",
     "E": "Empezar de cero solo, con lo que hay por ahí, es la forma más rápida de acabar "
          "dejándolo. Te hace falta guía desde el principio.",
     "F": "Llegar ya has llegado. Lo que falla es sostenerlo, y eso se sostiene con alguien "
@@ -97,7 +97,7 @@ PREGUNTAS: List[Dict[str, Any]] = [
             {"id": "A", "texto": "No, nunca"},
             {"id": "B", "texto": "Llegué a verme bien, pero no supe mantenerlo"},
             {"id": "C", "texto": "Sí, y quiero recuperar aquello"},
-            {"id": "D", "texto": "Estoy bien ahora, quiero afinar más"},
+            {"id": "D", "texto": "Estoy bien ahora, quiero ajustar más"},
         ],
     },
     {

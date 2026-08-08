@@ -46,7 +46,7 @@ import BodyFatSlider, { BF_PERCENTAGES, BF_DEFAULT } from '../components/Selecto
 // el 07-08 el alta es un único recorrido (punto 15 del documento) y estas preguntas son solo
 // su primer tramo. El cálculo va una sola vez, al final, cuando ya están también las
 // respuestas que mueven los hidratos; así lo que se le entrega son sus macros de verdad y no
-// unos provisionales que había que afinar después en otro cuestionario.
+// unos provisionales que había que ajustar después en otro cuestionario.
 // Los textos son los del documento «LOS TEXTOS DE LA APP» de Jesús (6 de agosto, versión
 // definitiva), literales, con su aclaración debajo de cada pregunta. El orden también es el
 // suyo: objetivo, confirmación, experiencia, datos, actividad, deporte, apetito, engordo,
@@ -97,7 +97,7 @@ const PREGUNTAS_ALTA = [
 // ─────────────────────────────────────────────────────────────────────────────
 // AJUSTAR MACROS - el cuestionario del paso 2, detras de un boton.
 //
-// Todo lo que afina el numero: lo que hace fuera del gimnasio, como responde su cuerpo y la
+// Todo lo que ajusta el numero: lo que hace fuera del gimnasio, como responde su cuerpo y la
 // dieta que trae. Al terminar se le entregan los MACROS DEFINITIVOS.
 // Trae una dieta de la que partir: la mide (`true`) o se cuida sin medirla (`parecido`).
 // El "sin control pero no como mal" (`false`) y el "como mal y desorganizado"
@@ -107,7 +107,7 @@ const PREGUNTAS_ALTA = [
 const traeDieta = (a) => a.sigue_dieta === true || a.sigue_dieta === 'parecido';
 
 const STEPS_AJUSTE = [
-    { type: 'statement', title: 'Afina tus macros', desc: 'Unas preguntas para ajustar tus números a tu vida real. Verás los macros moverse a medida que contestas.', cta: 'Vamos' },
+    { type: 'statement', title: 'Ajusta tus macros', desc: 'Unas preguntas para ajustar tus números a tu vida real. Verás los macros moverse a medida que contestas.', cta: 'Vamos' },
     {
         // CUATRO opciones (pantalla 5 del documento de textos), donde antes había tres. Ojo
         // con los macros: el +10 % de hidratos lo cobra SOLO "muy activo", que es lo que dice
@@ -663,16 +663,16 @@ const QuestionnairePage = () => {
 
     // Dos modos, como pide el doc del 29-07:
     //   ALTA   -> cuatro preguntas y macros provisionales. Es lo que ve quien acaba de entrar.
-    //   AJUSTE -> el cuestionario que afina, detras del boton "Ajustar macros". Se llega con
+    //   AJUSTE -> el cuestionario que ajusta, detras del boton "Ajustar macros". Se llega con
     //             ?ajustar=1, o solo con el alta ya hecha (por si vuelve por el enlace).
     const modoAjuste = pidioAjustar
         || (!!profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1);
 
     // Un solo recorrido (punto 15 del doc del 07-08). Quien se da de alta contesta los datos
-    // de la tabla y sigue de largo con lo que afina los hidratos, sin cortes y sin un segundo
+    // de la tabla y sigue de largo con lo que ajusta los hidratos, sin cortes y sin un segundo
     // cuestionario: por eso el alta es el mismo flujo que el ajuste con las cuatro preguntas
     // de partida delante. Quien vuelve más adelante por el botón "Ajustar macros" ya tiene
-    // esos cuatro datos en su ficha, así que entra directo por el tramo de afinado.
+    // esos cuatro datos en su ficha, así que entra directo por el tramo de ajuste.
     const preguntasDeAjuste = [...STEPS_AJUSTE, ...STEPS_ONBOARD,
                                ...(tieneCoach ? STEPS_NIVEL1 : [])];
     const flow = retomandoNivel1
@@ -1050,7 +1050,7 @@ const QuestionnairePage = () => {
 
     const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 
-    // Las respuestas que afinan los macros, en el formato que espera el backend.
+    // Las respuestas que ajustan los macros, en el formato que espera el backend.
     // Recibe las respuestas por parametro para poder calcular con las de ESTE instante: el
     // estado de React aun no se ha actualizado cuando se acaba de pulsar una opcion.
     const ajustesDe = (a) => ({
@@ -1101,12 +1101,12 @@ const QuestionnairePage = () => {
     const conDieta = () => traeDieta(answers);
 
     // CALCULAR. En el alta van los cuatro datos de la tabla y salen macros provisionales; en el
-    // cuestionario de ajuste van las respuestas que afinan y salen los definitivos.
+    // cuestionario de ajuste van las respuestas que ajustan y salen los definitivos.
     const submitNivel0 = async () => {
         setLoading(true);
         try {
             // Los cuatro datos de la tabla van primero, porque son los que crean la ficha y
-            // sin ficha no hay nada que afinar. Pero no se le enseña ningún número todavía:
+            // sin ficha no hay nada que ajustar. Pero no se le enseña ningún número todavía:
             // el resultado que ve es uno solo, el de después, ya con los modificadores.
             if (!profile?.questionnaire_completed) {
                 await api.post('/clients/questionnaire', {
