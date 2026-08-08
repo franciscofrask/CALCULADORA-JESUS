@@ -235,7 +235,11 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     macro_history = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).sort(
         [("effective_date", -1), ("created_at", -1)]
     ).to_list(500)
-    supplement_protocol = await db.supplement_protocols.find_one({"client_id": client_id}, {"_id": 0})
+    # El protocolo va RESUELTO POR FECHA (punto 33): `actual` es el que le toca hoy y
+    # `siguiente` el que ya esta preparado, y viaja el historico entero.
+    from routes.supplements import _respuesta as _protocolo_resuelto
+    _sp = await db.supplement_protocols.find_one({"client_id": client_id}, {"_id": 0})
+    supplement_protocol = _protocolo_resuelto(_sp) if _sp else None
 
     # Datos rescatados de Calma (staging, solo lectura). Se busca por client_id o user_id.
     # Se excluye raw_firestore (verbatim, muy pesado): la ficha usa los campos decodificados.

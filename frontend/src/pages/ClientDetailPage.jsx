@@ -303,7 +303,9 @@ const ClientDetailPage = () => {
     const [generatedRoutine, setGeneratedRoutine] = useState(null);
 
     // Suplementos
-    const [supProtocol, setSupProtocol] = useState({ actual: [], siguiente: [], siguiente_fecha: '', nota: '' });
+    // El protocolo, versionado por fecha (punto 33). `actual` y `siguiente` los resuelve el
+    // backend por fecha; `versiones` es el histórico completo, que antes no existía.
+    const [supProtocol, setSupProtocol] = useState({ actual: [], siguiente: [], actual_fecha: '', siguiente_fecha: '', nota: '', versiones: [] });
     // Pestaña de entrenamiento: maquinaria, lesiones y observaciones (2.5)
     const [entrenoForm, setEntrenoForm] = useState({ equipment: [], injuries: [], training_notes: '' });
     const [nuevaLesion, setNuevaLesion] = useState('');
@@ -352,7 +354,11 @@ const ClientDetailPage = () => {
             const response = await api.get(`/admin/clients/${clientId}`);
             setClient(response.data);
             const sp = response.data.supplement_protocol;
-            if (sp) setSupProtocol({ actual: sp.actual || [], siguiente: sp.siguiente || [], siguiente_fecha: sp.siguiente_fecha || '', nota: sp.nota || '' });
+            if (sp) setSupProtocol({
+                actual: sp.actual || [], siguiente: sp.siguiente || [],
+                actual_fecha: sp.actual_fecha || '', siguiente_fecha: sp.siguiente_fecha || '',
+                nota: sp.nota || '', versiones: sp.versiones || [],
+            });
             // El editor de la pestana Macros arranca siempre con los macros guardados
             // (mismo criterio que macrosActuales: 0 es un valor valido, no un hueco).
             const p = response.data.profile;
@@ -661,12 +667,28 @@ const ClientDetailPage = () => {
         try {
             await api.post(`/admin/supplements/save?client_id=${clientId}`, {
                 actual: supProtocol.actual, siguiente: supProtocol.siguiente,
+                // Desde cuándo aplica cada bloque (punto 33): son dos versiones fechadas.
+                actual_fecha: supProtocol.actual_fecha || null,
                 siguiente_fecha: supProtocol.siguiente_fecha || null, nota: supProtocol.nota || null,
             });
             toast.success('Suplementación guardada');
             fetchClient();
         } catch (e) { toast.error('Error al guardar suplementación'); }
         finally { setSupSaving(false); }
+    };
+
+    // Borrar una versión del histórico del protocolo (punto 33).
+    const supBorrarVersion = async (fecha) => {
+        if (!await confirm({
+            title: `¿Borrar el protocolo del ${_fechaCorta(fecha)}?`,
+            description: 'Se borra ese registro del histórico. El resto de versiones se queda.',
+            confirmLabel: 'Borrar', destructive: true,
+        })) return;
+        try {
+            await api.delete(`/admin/supplements/version/${fecha}?client_id=${clientId}`);
+            toast.success('Versión borrada');
+            fetchClient();
+        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo borrar'); }
     };
 
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-48 bg-[#111] rounded-xl" /></div></div>;
@@ -1412,12 +1434,24 @@ const ClientDetailPage = () => {
                                             className="bg-[#111] border-[#333] text-white text-xs h-8 mt-2" />
                                     </div>
                                 ))}
-                                {bloque === 'siguiente' && (
-                                    <div className="pt-1">
-                                        <Label className="text-white/40 text-xs">A partir del día</Label>
-                                        <Input type="date" value={supProtocol.siguiente_fecha || ''} onChange={e => setSupProtocol(p => ({ ...p, siguiente_fecha: e.target.value }))} className="bg-[#0A0A0A] border-[#333] text-white mt-1 w-full sm:w-48" />
-                                    </div>
-                                )}
+                                {/* Cada bloque es una VERSIÓN con su fecha (punto 33). El de
+                                    arriba es el que toma hoy; el de abajo, uno preparado para
+                                    más adelante. Cambiar una dosis del de arriba corrige esa
+                                    versión y no abre una nueva: abrir una versión nueva es una
+                                    decisión, y para eso está la fecha. */}
+                                <div className="pt-1">
+                                    <Label className="text-white/40 text-xs">
+                                        {bloque === 'actual' ? 'Lo toma desde el día' : 'A partir del día'}
+                                    </Label>
+                                    <Input type="date"
+                                        value={(bloque === 'actual' ? supProtocol.actual_fecha : supProtocol.siguiente_fecha) || ''}
+                                        onChange={e => setSupProtocol(p => ({ ...p, [bloque === 'actual' ? 'actual_fecha' : 'siguiente_fecha']: e.target.value }))}
+                                        data-testid={`sup-fecha-${bloque}`}
+                                        className="bg-[#0A0A0A] border-[#333] text-white mt-1 w-full sm:w-48" />
+                                    {bloque === 'actual' && !supProtocol.actual_fecha && (
+                                        <p className="text-[10px] text-white/30 mt-1">Si lo dejas vacío, empieza hoy.</p>
+                                    )}
+                                </div>
                                 <select onChange={e => { if (e.target.value) { supAdd(bloque, e.target.value); e.target.value = ''; } }} defaultValue=""
                                     className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-3 py-2 mt-1">
                                     <option value="">+ Añadir del catálogo…</option>
@@ -1432,6 +1466,39 @@ const ClientDetailPage = () => {
                             <Textarea value={supProtocol.nota || ''} onChange={e => setSupProtocol(p => ({ ...p, nota: e.target.value }))} placeholder="Nota para el cliente…" className="bg-[#0A0A0A] border-[#333] text-white" rows={2} />
                         </CardContent>
                     </Card>
+
+                    {/* EL HISTÓRICO (punto 33). Antes no quedaba registro de qué tomaba el
+                        cliente en cada momento: cada guardado pisaba al anterior. */}
+                    {supProtocol.versiones?.length > 0 && (
+                        <Card className="bg-[#111] border-[#222]" data-testid="sup-historial">
+                            <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">
+                                Histórico del protocolo ({supProtocol.versiones.length})
+                            </CardTitle></CardHeader>
+                            <CardContent className="space-y-1.5">
+                                {[...supProtocol.versiones].reverse().map(v => {
+                                    const esHoy = v.fecha === supProtocol.actual_fecha;
+                                    const esFuturo = v.fecha > hoyISO();
+                                    return (
+                                        <div key={v.fecha} className={`flex items-start gap-2 p-2 rounded-lg border ${
+                                            esHoy ? 'border-[#FF671F]/40 bg-[#FF671F]/5' : 'border-[#222] bg-[#0A0A0A]'}`}>
+                                            <div className="min-w-[120px]">
+                                                <p className="text-white text-sm font-medium tabular-nums">{_fechaCorta(v.fecha)}</p>
+                                                {esHoy && <span className="text-[9px] uppercase tracking-wide text-[#FF671F]">lo toma ahora</span>}
+                                                {esFuturo && <span className="text-[9px] uppercase tracking-wide text-white/40">preparado</span>}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-white/70 text-xs">{(v.items || []).map(i => i.titulo).join(' · ') || 'Sin suplementos'}</p>
+                                                {v.nota && <p className="text-white/30 text-[11px] mt-0.5 truncate" title={v.nota}>{v.nota}</p>}
+                                                {v.guardado_por && <p className="text-white/25 text-[10px] mt-0.5">lo puso {v.guardado_por}</p>}
+                                            </div>
+                                            <button onClick={() => supBorrarVersion(v.fecha)} title="Borrar esta versión"
+                                                className="text-white/25 hover:text-red-400 flex-shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    );
+                                })}
+                            </CardContent>
+                        </Card>
+                    )}
 
                     <p className="text-white/30 text-xs">El catálogo se gestiona en <button onClick={() => navigate('/admin/supplements-catalog')} className="text-[#FF671F] hover:underline">Catálogo de suplementos</button>.</p>
                     {calma_raw?.suplementacion && <CalmaSuplementos sup={calma_raw.suplementacion} />}

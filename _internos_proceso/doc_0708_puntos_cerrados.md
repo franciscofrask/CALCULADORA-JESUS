@@ -1128,6 +1128,49 @@ color, y se lee de un vistazo la diferencia entre un cliente nuevo (13 días sin
 ámbar, sin reporte todavía en ámbar, peso de hoy en verde) y uno abandonado (78 días en rojo,
 sin reporte en rojo, nunca contactado en rojo).
 
+### Punto 33 - Los protocolos de suplementación, versionados por fecha · CERRADO
+
+**Lo que pasaba.** Había UN protocolo por cliente que se pisaba a sí mismo en cada guardado. No
+quedaba registro de qué tomaba en cada momento, y lo de «siguiente + siguiente_fecha» era un
+apaño para poder dejar uno preparado.
+
+**Lo que hay ahora.** Una lista de versiones `{fecha, items, nota}` que se resuelve por la más
+reciente que no pase de hoy - exactamente igual que los macros. Eso da las tres cosas de golpe:
+se puede editar, queda el histórico, y dejar uno preparado para el futuro es simplemente una
+versión con fecha futura.
+
+Los dos bloques de la pantalla siguen siendo los mismos, pero ahora **cada uno tiene su fecha**:
+«Lo toma desde el día» y «A partir del día». Y **corregir una dosis no abre una versión nueva**:
+se corrige la vigente. Abrir una versión es una decisión, y para eso está la fecha.
+
+Sobre lo de «guarda el protocolo como una lista de verdad, no como `"3|7|12"` en un texto»: eso
+ya estaba bien. Cada suplemento es un objeto con su título, dosis, momento y observaciones,
+editables aunque venga del catálogo.
+
+**Comprobado en la app**, entrando como Francisco y usando la pantalla:
+
+| Qué se hizo | Qué pasó |
+|---|---|
+| Creatina desde el 08/08 y Omega 3 desde el 07/09 | Histórico con 2 versiones: una «LO TOMA AHORA» y otra «PREPARADO» |
+| Qué ve el cliente hoy | Creatina (no el Omega 3, que aún no le toca) |
+| Corregir la dosis a «5 g al despertar» | Se guarda y **siguen siendo 2 versiones** |
+| Borrar la versión del 07/09 | «Versión borrada», el histórico pasa a 1 y la vigente se queda |
+
+Y la resolución por fecha, comprobada día a día: el 01/08 no tomaba nada, del 08/08 al 06/09
+creatina, y del 07/09 en adelante Omega 3.
+
+**Una cosa que me pasó y que vale la pena anotar**: la primera vez di por hecho que la edición
+de la dosis no se guardaba, porque había escrito en el campo desde la consola en vez de con el
+teclado. Con el teclado sí se guarda. Es exactamente el motivo por el que Francisco pidió
+comprobar contra la app real: simular el evento se ve igual en pantalla y miente.
+
+**Los que ya estaban.** `backend/_migrar_protocolos_suplementos.py` traduce los documentos
+viejos: `actual` pasa a una versión con la fecha de su último guardado (es lo más cercano a la
+verdad que hay: no se sabe desde cuándo lo tomaba, pero sí desde cuándo consta) y `siguiente` a
+una con `siguiente_fecha`, que es literalmente lo que significaba. **En dev no hay ningún
+protocolo asignado**, así que el script no ha tenido nada que migrar; hay que pasarlo en
+producción, donde sí puede haberlos.
+
 ---
 
 ---
@@ -1198,7 +1241,7 @@ se borran esas dos también.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
 textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28, 29, 30, 31 y 32) está en GitHub y sin desplegar, esperando la orden.
+25, 27, 28, 29, 30, 31, 32 y 33) está en GitHub y sin desplegar, esperando la orden.
 
 **Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
 
@@ -1208,6 +1251,7 @@ textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y l
   enseñando el peso sin fecha. **Ojo**: en dev esto cambió el peso actual de 50 de 232
   clientes, porque el de la ficha no era el último pesaje de verdad. En producción va a pasar
   lo mismo, y es lo que se busca, pero conviene avisar a Jesús antes de que lo vea.
+- `backend/_migrar_protocolos_suplementos.py --escribir` (punto 33). En dev no hay ninguno, pero en producción puede haber protocolos asignados que hay que pasar al formato con fecha.
 - `backend/_rellenar_cambios_macros.py --escribir` (punto 31). Sin eso, el modelo solo sabrá
   qué palanca se movió en los ajustes de aquí en adelante. Y de paso saca el reparto de
   palancas real, sin el ruido de los datos de prueba de dev.

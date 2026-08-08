@@ -37,8 +37,29 @@ class ProtocolItem(BaseModel):
     observaciones: Optional[str] = None
 
 
+class VersionProtocolo(BaseModel):
+    """El protocolo que el cliente toma DESDE una fecha (punto 33 del 07-08).
+
+    El protocolo se guarda como una lista de versiones con fecha y se resuelve por la mas
+    reciente que no pase de hoy, igual que los macros. Eso da las tres cosas que faltaban:
+    se puede editar, queda el registro de que tomaba en cada momento, y se puede dejar uno
+    preparado para el futuro (una version con fecha de la semana que viene).
+
+    `items` es una LISTA DE VERDAD, no "3|7|12" en un texto: cada suplemento con su dosis,
+    su momento y sus observaciones, editables aunque venga del catalogo.
+    """
+    fecha: str                                     # "YYYY-MM-DD": desde cuando aplica
+    items: List[ProtocolItem] = []
+    nota: Optional[str] = None
+    guardado_por: Optional[str] = None
+    guardado_at: Optional[str] = None
+
+
 class SupplementProtocolSave(BaseModel):
     actual: List[ProtocolItem] = []
+    # Desde cuando aplica el bloque "actual". Si no viene, se respeta la fecha de la version
+    # vigente (editar no inventa una version nueva) y si no habia ninguna, hoy.
+    actual_fecha: Optional[str] = None             # "YYYY-MM-DD"
     siguiente: List[ProtocolItem] = []
     siguiente_fecha: Optional[str] = None          # "YYYY-MM-DD"
     nota: Optional[str] = None
@@ -47,3 +68,5 @@ class SupplementProtocolSave(BaseModel):
 class SupplementProtocolResponse(SupplementProtocolSave):
     client_id: str
     updated_at: Optional[str] = None
+    # El historico completo. `actual` y `siguiente` salen de aqui, resueltos por fecha.
+    versiones: List[VersionProtocolo] = []
