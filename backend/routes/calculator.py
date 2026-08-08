@@ -1455,7 +1455,8 @@ async def menu_catalog(user = Depends(get_current_user)):
     Deduplicado por nombre: los platos principales están guardados dos veces
     (comida y cena) y aquí salen una sola vez, con los dos momentos."""
     docs = await db.menu_templates.find(
-        {}, {"_id": 0, "id": 1, "nombre": 1, "momento": 1, "items": 1, "fuente": 1}
+        {}, {"_id": 0, "id": 1, "nombre": 1, "momento": 1, "items": 1, "fuente": 1,
+             "foto": 1}
     ).to_list(2000)
     vistos = {}
     for d in docs:
@@ -1473,6 +1474,10 @@ async def menu_catalog(user = Depends(get_current_user)):
             "momento": momento,
             "momentos": [momento] if momento else [],
             "fuente": d.get("fuente"),
+            # La foto de la receta, servida por la web de Jesús. Puede no estar: los
+            # menús que salgan de los PDFs y de la cosecha no traen foto, y entonces
+            # la tarjeta va sin ella. No se pone una genérica.
+            "foto": d.get("foto"),
             "alimentos": [it.get("buscar", "") for it in d.get("items", []) if it.get("buscar")],
         }
     menus = sorted(vistos.values(), key=lambda x: x["nombre"].lower())
@@ -1800,11 +1805,20 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     from meal_library import AJUSTE_MAX, _ajustar_menu
     from meal_builder import get_effective_macros_per_100g
     q = {"tipo_comida": tipo_comida}
+    # Los menús de clientes son de relleno y van SIEMPRE con filtro (punto 67 del
+    # 07-08): solo los que llevan verdura, no son una lista de botes y tienen un
+    # número razonable de ingredientes. Lo marca la cosecha (_cosechar_menus.py).
+    q["calidad.pasa"] = True
+    # Y sin repetir: 10.304 de los 23.681 llevan los mismos alimentos que otro y solo
+    # cambian las cantidades... que aquí se reajustan con las palancas de todas
+    # formas. Al cliente le salía tres veces la misma comida con otros gramos.
+    q["repetido_de"] = {"$exists": False}
     for m in ("P", "H", "G"):
         q[f"macros.{m}"] = {"$gte": obj[m] - margen - AJUSTE_MAX[m],
                             "$lte": obj[m] + margen + AJUSTE_MAX[m]}
     candidatos = await db.meal_library.find(
         q, {"_id": 0, "id": 1, "macros": 1, "macros_reales": 1, "veces": 1,
+            "usos": 1, "clientes": 1, "usos_calma": 1,
             "origen": 1, "alimentos": 1, "alimento_ids": 1}
     ).to_list(_LIBRARY_CANDIDATOS_MAX)
 
@@ -1812,10 +1826,25 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         mm = c.get("macros", {})
         return sum(abs(obj[m] - float(mm.get(m, 0) or 0)) for m in ("P", "H", "G"))
 
+    def _gente(c):
+        """Cuánta GENTE DISTINTA lo ha montado aquí. Es el criterio del punto 71 y no
+        es lo mismo que las veces: un menú que han montado 30 personas es bueno; uno
+        que una persona ha repetido 30 veces solo dice que a esa persona le gusta."""
+        return int(c.get("clientes") or 0)
+
+    def _veces(c):
+        """Las veces que se ha montado en esta app. `veces` es el contador viejo que
+        vino del CSV de la calculadora antigua, donde no consta quién montó qué, y
+        por eso va el último: desempata entre menús que aquí no ha tocado nadie."""
+        return int(c.get("usos") or 0), int(c.get("veces") or c.get("usos_calma") or 0)
+
     if orden == "usado":
-        candidatos.sort(key=lambda c: (-int(c.get("veces", 0) or 0), _err(c)))
+        candidatos.sort(key=lambda c: (-_gente(c), -_veces(c)[0], _err(c)))
     else:
-        candidatos.sort(key=lambda c: (_err(c), -int(c.get("veces", 0) or 0)))
+        # Dentro de lo que ya cuadra, el error no lo nota nadie -- y ordenar por él
+        # deja el criterio de la gente sin estrenar, porque casi todos cuadran al
+        # decimal. Se agrupa de dos en dos gramos y manda la gente.
+        candidatos.sort(key=lambda c: (round(_err(c) / 2), -_gente(c), -_veces(c)[0], _err(c)))
     trabajo = candidatos[:_LIBRARY_TRABAJO_MAX]
 
     # Preferencias del usuario (alimentos evitados) + catálogo de los candidatos
@@ -1922,6 +1951,10 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
             "macros_totales": {"P": round(tot["P"], 1), "H": round(tot["H"], 1), "G": round(tot["G"], 1),
                                "kcal": round(tot["P"] * 4 + tot["H"] * 4 + tot["G"] * 9)},
             "veces": int(c.get("veces", 0) or 0),
+            # Cuánta gente distinta lo ha montado en esta app. Es lo que se le enseña
+            # al cliente, porque es lo que de verdad dice si un menú vale: `veces`
+            # cuenta repeticiones, y una persona repitiendo 30 veces no es una señal.
+            "personas": int(c.get("clientes") or 0),
             "origen": c.get("origen", "cliente"),
             "ajustado": ajustado,
             "cuadrada": bool(ajuste and ajuste.get("cuadrada")),
@@ -1954,10 +1987,13 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         menus = de_cliente
 
     # Orden final sobre el resultado REAL (tras palancas), no sobre el menú base.
+    # Manda la gente distinta, igual que en la preselección: si aquí se volviera a
+    # ordenar solo por `veces` y por error, se perdería por el camino todo lo que se
+    # ha hecho arriba.
     if orden == "usado":
-        menus.sort(key=lambda m: (-m["veces"], m["err"]))
+        menus.sort(key=lambda m: (-m["personas"], -m["veces"], m["err"]))
     else:
-        menus.sort(key=lambda m: (m["err"], -m["veces"]))
+        menus.sort(key=lambda m: (round(m["err"] / 2), -m["personas"], -m["veces"], m["err"]))
     total = len(menus)   # menús ofrecibles: cuadran a ±margen y pasan los dos filtros
     menus = menus[:limit]
 

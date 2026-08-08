@@ -38,7 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from core.cosecha_menus import (  # noqa: E402
-    es_peri, firma, pasa_el_filtro, personas_distintas, recontar,
+    es_desayuno, es_peri, firma, pasa_el_filtro, personas_distintas, recontar,
 )
 from meal_builder import get_effective_macros_per_100g  # noqa: E402
 
@@ -136,7 +136,11 @@ async def main():
             continue  # lleva algo que ya no está en el catálogo
         fs = [foods[a] for a in sig]
         tipo = "peri" if es_peri(c) else "comida"
-        vale, motivo = pasa_el_filtro(fs, tipo)
+        # Para el filtro se mira además si es un desayuno, porque ahí la fruta vale
+        # como vegetal. El `tipo` que se guarda sigue siendo comida/peri: es lo que
+        # usa el sugeridor para no ofrecer un batido de almuerzo.
+        vale, motivo = pasa_el_filtro(
+            fs, "desayuno" if (tipo == "comida" and es_desayuno(c)) else tipo)
         motivos[motivo] += 1
 
         viejo = por_firma.get((sig, tipo))
@@ -200,7 +204,13 @@ async def main():
             continue
         fs = [foods[a] for a in sig]
         tipo = d.get("tipo") or "comida"
-        vale, motivo = pasa_el_filtro(fs, tipo)
+        # Lo heredado no tiene historial aquí para saber si es un desayuno, pero el
+        # CSV sí traía en qué comida se montó. «Comida 1» es la primera del día, o
+        # sea el desayuno: misma regla que arriba, por posición.
+        para_filtro = tipo
+        if tipo == "comida" and (d.get("tipo_comida") or "").strip().lower() == "comida 1":
+            para_filtro = "desayuno"
+        vale, motivo = pasa_el_filtro(fs, para_filtro)
         tot = {"P": 0.0, "H": 0.0, "G": 0.0}
         for a in d["alimentos"]:
             ef = get_effective_macros_per_100g(foods[int(a["alimento_id"])])

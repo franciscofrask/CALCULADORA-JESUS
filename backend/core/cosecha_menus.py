@@ -57,6 +57,11 @@ MAX_PROPORCION_SUPLEMENTOS = 0.5
 # exigiría justo lo contrario de lo que se busca.
 CATS_VERDURA = ("13",)
 
+# La 11 es fruta, zumos, potitos y mermeladas. En un desayuno o una merienda, la
+# fruta hace el papel de la verdura: un desayuno de tostada, huevo y kiwi está bien,
+# y pedirle brócoli no. En la comida y la cena no cuela.
+CATS_FRUTA = ("11",)
+
 # Proteína en polvo, hidratos en polvo, intra, aminoácidos, sustitutivos y barritas.
 # No es que estén mal -- el post-entreno vive de ellos -- es que un menú hecho solo
 # de eso no se le enseña a nadie como idea de comida.
@@ -69,6 +74,11 @@ CATS_SUPLEMENTO = ("4", "14", "18", "27", "28", "29", "30", "41")
 # El peri (intra y post) se juzga con otra vara: ahí un batido SÍ es la comida, y
 # pedirle verdura no tiene sentido.
 TIPOS_SIN_FILTRO_DE_VERDURA = ("peri",)
+
+# En el desayuno vale la fruta en lugar de la verdura. Sin esta excepción el filtro
+# se lleva por delante el 98 % de los desayunos -- medido: de 5.626 pasaban 113 --,
+# y no porque sean malos, sino porque casi nadie desayuna brócoli.
+TIPOS_DONDE_LA_FRUTA_CUENTA = ("desayuno",)
 
 
 def _prefijo(cat: str, familia: str) -> bool:
@@ -83,6 +93,10 @@ def _familias(food: dict) -> List[str]:
 
 def es_verdura(food: dict) -> bool:
     return any(_prefijo(c, f) for c in _familias(food) for f in CATS_VERDURA)
+
+
+def es_fruta(food: dict) -> bool:
+    return any(_prefijo(c, f) for c in _familias(food) for f in CATS_FRUTA)
 
 
 def es_suplemento(food: dict) -> bool:
@@ -105,8 +119,12 @@ def pasa_el_filtro(foods: List[dict], tipo: str = "comida") -> Tuple[bool, str]:
     if suplementos / n > MAX_PROPORCION_SUPLEMENTOS:
         return False, "cargado_de_suplementos"
 
-    if tipo not in TIPOS_SIN_FILTRO_DE_VERDURA and not any(es_verdura(f) for f in foods):
-        return False, "sin_verdura"
+    if tipo not in TIPOS_SIN_FILTRO_DE_VERDURA:
+        vale = any(es_verdura(f) for f in foods)
+        if not vale and tipo in TIPOS_DONDE_LA_FRUTA_CUENTA:
+            vale = any(es_fruta(f) for f in foods)
+        if not vale:
+            return False, "sin_verdura"
 
     return True, "ok"
 
@@ -114,6 +132,11 @@ def pasa_el_filtro(foods: List[dict], tipo: str = "comida") -> Tuple[bool, str]:
 # ── La cosecha ──────────────────────────────────────────────────────────────
 
 PERI_KEYS = ("Intra", "Post", "intra", "post")
+
+# La primera comida del día es el desayuno. Va por posición y sin excepciones, que es
+# la misma decisión que se tomó el 06-08 para el resto de la app (ver meal_moment.py):
+# quien entrena en ayunas sigue teniendo un desayuno en su Comida 1.
+PRIMERA_COMIDA = ("C1", "c1")
 
 
 def firma(alimento_ids: Iterable[int]) -> Tuple[int, ...]:
@@ -135,7 +158,8 @@ async def recontar(db, desde: Optional[datetime] = None) -> Dict[tuple, dict]:
         q["fecha"] = {"$gte": desde.strftime("%Y-%m-%d")}
 
     acc: Dict[tuple, dict] = defaultdict(
-        lambda: {"usos": 0, "personas": set(), "peri": 0, "cantidades": defaultdict(list)})
+        lambda: {"usos": 0, "personas": set(), "peri": 0, "c1": 0,
+                 "cantidades": defaultdict(list)})
 
     cursor = db.diets.find(q, {"_id": 0, "user_id": 1, "comidas": 1})
     async for dieta in cursor:
@@ -171,6 +195,8 @@ async def recontar(db, desde: Optional[datetime] = None) -> Dict[tuple, dict]:
                 c["personas"].add(uid)
             if meal_key in PERI_KEYS:
                 c["peri"] += 1
+            if meal_key in PRIMERA_COMIDA:
+                c["c1"] += 1
             for aid, cant in cants.items():
                 c["cantidades"][aid].append(cant)
 
@@ -185,6 +211,12 @@ def es_peri(acumulado: dict) -> bool:
     """Peri si la mayoría de las veces se montó en el intra o el post. Un menú que
     unos ponen de merienda y otros de post no es peri: manda dónde suele ir."""
     return acumulado["peri"] >= acumulado["usos"] * 0.7
+
+
+def es_desayuno(acumulado: dict) -> bool:
+    """Desayuno si la mayoría de las veces se montó en la primera comida. Sirve para
+    no exigirle verdura: ahí la fruta hace ese papel."""
+    return acumulado["c1"] >= acumulado["usos"] * 0.7
 
 
 def semana_pasada(hoy: Optional[datetime] = None) -> datetime:

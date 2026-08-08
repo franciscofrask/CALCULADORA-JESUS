@@ -273,7 +273,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${orden === 'cuadrado' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setOrden('cuadrado')} data-testid="library-orden-cuadrado">Más cuadrado</button>
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${orden === 'usado' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
-                                    onClick={() => setOrden('usado')} data-testid="library-orden-usado">Más usado</button>
+                                    onClick={() => setOrden('usado')} data-testid="library-orden-usado">Lo que más gente monta</button>
                             </div>
                             <div className="inline-flex rounded-lg bg-muted p-0.5 border border-border">
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${!verReales ? 'bg-brand text-white' : 'text-muted-foreground'}`}
@@ -374,8 +374,17 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             ))}
                                         </ul>
                                         <div className="flex items-center justify-between mt-2.5">
+                                            {/* Se dice cuánta GENTE lo ha montado, no cuántas veces:
+                                                que a una persona le guste y lo repita treinta veces no
+                                                dice nada, y que lo monten treinta personas sí. Si aún
+                                                no lo ha montado nadie aquí, no se dice nada -- mejor
+                                                callar que enseñar un cero. */}
                                             <p className="text-[11px] text-muted-foreground">
-                                                {menu.veces > 1 ? <>Usado <span className="font-bold">{menu.veces}</span> veces</> : 'Variante de un menú real'}
+                                                {menu.personas > 1
+                                                    ? <><span className="font-bold">{menu.personas}</span> personas lo han montado</>
+                                                    : menu.personas === 1
+                                                        ? 'Lo ha montado alguien más'
+                                                        : menu.origen === 'variante' ? 'Variante de un menú real' : ''}
                                             </p>
                                             <p className="text-[11px] text-brand-orange font-semibold flex items-center gap-1">
                                                 <Check className="w-3 h-3" /> {menu.ajustado ? 'Añadir ajustado a ti' : 'Añadir tal cual'}
@@ -462,9 +471,18 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 </p>
                                 {recetasFiltradas.map((receta, index) => (
                                     <button key={receta.id}
-                                        className="w-full text-left p-4 bg-card rounded-2xl shadow-md hover:shadow-lg hover:ring-1 hover:ring-brand-orange/40 transition-all disabled:opacity-60"
+                                        className="w-full text-left bg-card rounded-2xl shadow-md hover:shadow-lg hover:ring-1 hover:ring-brand-orange/40 transition-all disabled:opacity-60 overflow-hidden"
                                         onClick={() => aplicarReceta(receta)} disabled={!!aplicandoId}
                                         data-testid={`recetario-menu-${index}`}>
+                                        {/* La foto de la receta. Si no hay, la tarjeta va sin ella y sin
+                                            hueco: nada de imagen genérica ni de plato de relleno. Los menús
+                                            que salgan de los PDFs y de la cosecha no van a tener. */}
+                                        {receta.foto && (
+                                            <img src={receta.foto} alt="" loading="lazy"
+                                                className="w-full h-36 object-cover bg-muted"
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                        )}
+                                        <div className="p-4">
                                         <div className="flex items-start justify-between gap-2 mb-1">
                                             <h3 className="font-bold text-foreground text-sm leading-snug">{receta.nombre}</h3>
                                             <div className="flex items-center gap-1 flex-shrink-0">
@@ -486,6 +504,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                                 <><Check className="w-3 h-3" /> Se cuadra a tus macros al elegirla</>
                                             )}
                                         </p>
+                                        </div>
                                     </button>
                                 ))}
                             </div>

@@ -17,20 +17,27 @@ from meal_builder import get_effective_macros_per_100g
 
 # ¿Se ofrecen los menús sacados de las dietas de los clientes?
 #
-# Decisión del 06-08-2026 (Francisco): NO. La app solo ofrece el recetario de "No te
-# conformes con menos" (db.menu_templates, 99 menús con nombre y receta).
+# SÍ, desde el 08-08-2026 (Francisco). Estuvieron apagados desde el 06-08, y el
+# motivo era bueno: se ofrecían los 266.170 en crudo, sin filtro ninguno, y salían
+# batidos y listas de botes.
 #
-# Los 266.170 menús NO se han borrado: siguen en db.meal_library y hay copia en
-# _internos_proceso/meal_library_backup_0608.jsonl.gz. Lo único que se ha hecho es
-# dejar de mirarlos, para poder volver atrás sin reconstruir nada.
+# Lo que ha cambiado es que ya hay con qué filtrarlos, que es lo que pide el punto 67
+# del documento del 07-08:
 #
-# Afecta a los tres sitios que los usaban: la pestaña "Biblioteca" del sugeridor de
+#   - pasan el filtro de calidad (verdura, sin carga de suplementos, número
+#     razonable de ingredientes): 1.946 comidas de plato y 3.544 peri, de 23.681;
+#   - se ordenan por cuánta GENTE DISTINTA los ha montado, no por usos;
+#   - los repetidos (mismos alimentos, otras cantidades) no se ofrecen.
+#
+# Son de relleno y van detrás del recetario, que es el material terminado de Jesús.
+#
+# Afecta a los tres sitios que los usan: la pestaña "Biblioteca" del sugeridor de
 # Nutrición, el momento mágico del final del cuestionario y el buscador de menús del
 # coach en la ficha del cliente.
 #
-# Para volver atrás: poner esto en True y BIBLIOTECA_DE_CLIENTES en
+# Para apagarlos otra vez: poner esto en False y BIBLIOTECA_DE_CLIENTES en
 # frontend/src/lib/menuFuentes.js también. Las dos.
-BIBLIOTECA_DE_CLIENTES = False
+BIBLIOTECA_DE_CLIENTES = True
 
 # Umbrales de ajuste por macro (gramos de macro, no de alimento)
 AJUSTE_MAX = {"P": 20.0, "H": 30.0, "G": 8.0}

@@ -2019,10 +2019,54 @@ La cifra que da el punto (14 % con verdura, 60 % con proteína en polvo) es del 
 medido sobre lo nuestro sale **8 % con verdura y 42 % con proteína en polvo**. La conclusión
 del documento se sostiene entera: como fuente principal no valen.
 
-> **Aviso importante**: la fuente 3 está **apagada** desde el 06-08 (`BIBLIOTECA_DE_CLIENTES
-> = False`), por decisión de Francisco, y hoy la app solo ofrece el recetario. Todo lo de
-> arriba está hecho y probado **pero sigue sin usarse hasta que se decida encenderlo**. Ahora
-> hay con qué decidirlo: son 1.946 comidas filtradas, no 266.170 sin filtrar.
+**Encendida el 08-08** (Francisco), después de estar apagada desde el 06-08. El motivo de
+apagarla era bueno -- se ofrecían los 266.170 en crudo y salían batidos y listas de botes --
+y lo que ha cambiado es que ya hay con qué filtrarlos. En el sugeridor aparecen ahora dos
+pestañas: **Recetario** (103 recetas con foto, el material terminado de Jesús) y
+**Biblioteca** (lo de los clientes, de relleno y detrás).
+
+
+### Lo que faltaba, y salió al mirarlo en la app
+
+Dije que el bloque estaba cerrado y no lo estaba. Lo vio Francisco al abrir el sugeridor:
+«¿por qué no veo los menús? Solo las recetas, y ni siquiera veo las fotos». Las dos cosas
+eran ciertas y las dos eran mías.
+
+**Las fotos.** El documento las trata al final del bloque («Las 103 del recetario ya vienen
+con foto») y me salté ese trozo entero. Vienen, sí, pero la importación de julio no se las
+trajo: **ninguna de las 159 plantillas tenía foto** y cada receta salía como una lista de
+ingredientes en texto pelado. Ya están las 159, y de la forma barata: la REST de WordPress no
+da los macros ni los ingredientes, **pero la foto sí** -- cada receta trae `featured_media` y
+con ese id se pide la URL. Se guarda la URL, no el fichero: son webp de unos 90 KB servidos
+por su web, y descargarlas serían 9 MB más dentro de Mongo, que es justo el problema que ya
+tenemos con las fotos de los clientes. Si un menú no tiene foto (los de los PDFs y los de la
+cosecha no la van a tener), la tarjeta va sin ella y sin hueco: nada de imagen genérica.
+
+**Y el fallo de fondo: el sugeridor del cliente no pasaba por nada de lo que arreglé.** Todo
+el trabajo del filtro y del recuento por personas lo había puesto en `buscar_en_biblioteca`,
+que es lo que usan el chat y el buscador del coach. Pero la pantalla que ve el cliente tira
+de **otro endpoint**, `/calculator/library-menus`, que consulta `db.meal_library` por su
+cuenta. Y ese:
+
+- no aplicaba el filtro de calidad, así que ofrecía menús sin verdura;
+- no saltaba los repetidos;
+- ordenaba por `veces`, **el contador viejo del CSV** -- ni siquiera por el que escribe la
+  cosecha.
+
+Se veía a simple vista en cuanto uno miraba la pantalla: ponía «Usado 4 veces» y ofrecía
+jamón cocido con pan blanco y refresco de zumo de mandarina. Ya usa los tres criterios, y lo
+que lee el cliente dice ahora **«2 personas lo han montado»** en vez de «Usado 4 veces»,
+porque es lo que de verdad significa algo. El botón de ordenar pasa de «Más usado» a **«Lo
+que más gente monta»**.
+
+La lección, que es la de todo el documento: **medir en la base no basta si no se abre la
+pantalla**. Los números estaban bien y la pantalla seguía mal.
+
+**Y un error de criterio del filtro, que también se vio aquí.** Exigir verdura a un desayuno
+deja fuera el 98 %: de 5.626 primeras comidas pasaban **113**. No porque sean malas, sino
+porque casi nadie desayuna brócoli. Ahora en el desayuno la fruta hace ese papel -- igual que
+el peri ya estaba exento -- y pasan **673**, en línea con el resto de comidas. En la comida y
+en la cena sigue haciendo falta verdura de verdad.
 
 ### Punto 70 - La función de estadísticas · AQUÍ ESTABA EL FALLO QUE NO SE BUSCABA
 
@@ -2349,11 +2393,8 @@ Tres salidas, de menos a más trabajo:
    uno. La portada de cada menú los dice.
 3. **Leerlos a mano o con OCR**: unas 450 comidas. Es el último recurso.
 
-**Si se enciende la biblioteca de menús de clientes** (punto 67). Está apagada desde el 06-08
-por decisión de Francisco. El filtro, la cosecha y el recuento por personas ya están hechos y
-probados, así que encenderla es cambiar `BIBLIOTECA_DE_CLIENTES` a `True` en
-`backend/meal_library.py` y `BIBLIOTECA_DE_CLIENTES` en `frontend/src/lib/menuFuentes.js`.
-**Las dos.** Lo que se ofrecería son 1.946 comidas filtradas, no 266.170 sin filtrar.
+~~**Si se enciende la biblioteca de menús de clientes**~~ **HECHO el 08-08**: encendida, con
+el filtro puesto. En el sugeridor hay ahora dos pestañas, Recetario y Biblioteca.
 
 **Las 8 diferencias de dosis de los suplementos** (punto 75). Salen con
 `_contrastar_suplementos.py`. La de la creatina es la que más importa: la web manda 1 g por
