@@ -355,8 +355,8 @@ Son dos fuentes distintas, y ninguna está mal en sí:
   macros que tiene hoy (`MacroCalculatorClientPage.jsx:107`, vía `GET /macros`).
 
 Si el cliente reporta 118 kg pero nadie ha recalculado sus macros desde que pesaba 94, las dos
-cifras son correctas y contradictorias a la vez. El arreglo de fondo es del **punto 30** (en la
-versión actualizada del documento; en la anterior era el 20) de este
+cifras son correctas y contradictorias a la vez. **RESUELTO por el punto 25**: el ajuste usa ya el peso del reporte, así que las dos
+pantallas dicen lo mismo. El documento remitía al punto 30 de este
 mismo documento, así que aquí solo queda el diagnóstico.
 
 ### Punto 8 - Hay datos de prueba en producción · PREPARADO, PENDIENTE DE DAR LA ORDEN
@@ -777,6 +777,34 @@ harían falta para filtrarlas.
 **Hace falta la referencia concreta**: el enlace de la carpeta, su nombre exacto, o desde qué
 cuenta se compartieron. Con eso es cuestión de minutos: descargarlas, dejarlas en `public/` y
 apuntarlas desde las pantallas del test.
+
+---
+
+## Bloque D - El flujo del entrenador
+
+### Punto 25 - El peso que sale es el último, no el del reporte · CERRADO
+
+**Lo que pasaba.** Al ajustar los macros de un cliente, el formulario se rellenaba con el peso
+de su ficha, que es el último que conste por cualquier vía (un check-in semanal, una edición a
+mano). Pero Jesús ajusta **leyendo un reporte concreto**, así que el número que tiene delante
+tiene que ser el de ese reporte.
+
+**Y esto explica el punto 9**, el de los dos pesos distintos en la misma app: Reportes enseñaba
+el del último reporte y Ajustar macros el de la ficha. No era que uno estuviera mal, es que son
+dos cosas distintas y ninguna decía cuál era.
+
+**Lo que hay ahora.** El formulario se rellena con el peso del reporte que se está ajustando, y
+**dice de qué reporte viene**: "Del reporte del 21/02/2026". Debajo sigue la comparación con el
+peso del ajuste anterior, que es lo primero que mira el coach. Si el cliente todavía no ha
+mandado ningún reporte, se usa el de la ficha como hasta ahora.
+
+**Comprobado con datos reales**: en la base hay un cliente con 80 kg en la ficha y 75,5 kg en su
+último reporte, del 23 de julio. Con esto, el ajuste parte de 75,5 y lo dice. Y probados los
+cuatro casos: con varios reportes coge el más reciente, sin reportes cae a la ficha, y un
+reporte sin peso no cuenta.
+
+**Falta verlo en pantalla.** La ficha del cliente es una página pesada y la extensión del
+navegador se cuelga al abrirla; es la misma revisión de un minuto que el punto 15.
 
 ---
 

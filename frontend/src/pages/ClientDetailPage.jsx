@@ -636,7 +636,24 @@ const ClientDetailPage = () => {
         peri: { protein: _cur(mp, 'protein', 'proteinas'), carbs: _cur(mp, 'carbs', 'hidratos') },
     };
     const bfActual = profile?.body_fat != null ? String(profile.body_fat) : '';
-    const pesoActual = profile?.weight != null ? String(profile.weight) : '';
+
+    // El peso con el que se ajusta es el DEL REPORTE que se está ajustando, no el último que
+    // conste en la ficha (punto 25 del doc del 07-08). Son cosas distintas y por eso salían
+    // dos pesos en la app: en Reportes el del último reporte y aquí el de la ficha, que se
+    // actualiza por otras vías (un check-in semanal, una edición a mano). Jesús ajusta leyendo
+    // un reporte concreto, así que el número que tiene que ver es el de ese reporte.
+    //
+    // Sin useMemo a propósito, igual que el de abajo: aquí ya se ha pasado por los early
+    // returns del componente y un hook a estas alturas rompe el orden entre renders.
+    const reporteDelAjuste = (() => {
+        const conPeso = (reports || []).filter(r => r?.weight != null && r?.created_at);
+        if (!conPeso.length) return null;
+        return conPeso.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+    })();
+    // Si el cliente todavía no ha mandado ningún reporte, se sigue usando el de la ficha.
+    const pesoActual = reporteDelAjuste
+        ? String(reporteDelAjuste.weight)
+        : (profile?.weight != null ? String(profile.weight) : '');
     // ¿Se ha tocado algo de la pestaña de entrenamiento respecto a lo guardado?
     const _mismo = (a, b) => JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort());
     const entrenoTocado = !_mismo(entrenoForm.equipment, profile?.equipment)
@@ -824,14 +841,21 @@ const ClientDetailPage = () => {
                                     <Input type="number" step="0.1" min="25" max="300" value={macrosForm.peso}
                                         onChange={e => setMacrosForm({ ...macrosForm, peso: e.target.value })}
                                         placeholder="-" className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-peso" />
-                                    {/* El peso del ajuste es el de HOY, no el del ajuste anterior (2.2). Y la
-                                        diferencia con el anterior es lo primero que mira el coach. */}
+                                    {/* Viene del reporte que se está ajustando, y se dice de cuál:
+                                        un peso sin fecha al lado no se puede contrastar con nada.
+                                        Debajo, la diferencia con el del ajuste anterior, que es lo
+                                        primero que mira el coach. */}
+                                    {reporteDelAjuste && (
+                                        <p className="text-[10px] mt-1 text-white/40" data-testid="peso-origen">
+                                            Del reporte del <b className="text-white/60">{_fechaCorta(String(reporteDelAjuste.created_at).slice(0, 10))}</b>
+                                        </p>
+                                    )}
                                     {(() => {
                                         const p = parseFloat(macrosForm.peso);
                                         if (isNaN(p) || pesoUltimoAjuste == null) return <p className="text-[10px] text-white/30 mt-1">Queda registrado con la fecha del ajuste.</p>;
                                         const d = Math.round((p - pesoUltimoAjuste) * 10) / 10;
                                         return (
-                                            <p className="text-[10px] mt-1 text-white/40">
+                                            <p className="text-[10px] mt-0.5 text-white/40">
                                                 Últimos macros: {pesoUltimoAjuste} kg ·{' '}
                                                 <b className={d > 0 ? 'text-red-400' : d < 0 ? 'text-emerald-400' : 'text-white/50'}>
                                                     {d > 0 ? `ha ganado ${d}` : d < 0 ? `ha perdido ${Math.abs(d)}` : 'sin cambios'}{d !== 0 ? ' kg' : ''}
