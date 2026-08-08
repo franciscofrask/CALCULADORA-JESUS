@@ -26,6 +26,7 @@ from models.user import (
 from core.cycle import enrich_cycle, compute_cycle
 from core.seguimiento import marcar_ajuste, dias_desde
 from core.series_cliente import anotar_peso, anotar_grasa, actual as actual_de_serie
+from core.cambios_macros import marcar_cambios, palancas
 from models.common import FoodSuggestionUpdate, AdminFoodCreate
 from calculator import invalidate_foods_cache
 
@@ -413,6 +414,10 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
             # misma piedra en el mismo cliente.
             "origen": h.get("origen"),
             "correccion_coach": h.get("correccion_coach"),
+            # QUE PALANCA MOVIO en ese ajuste (punto 31): "descanso.hidratos", no "los ocho
+            # numeros cambiaron de A a B". Es la decision del coach, y hasta ahora el agente
+            # tenia que deducirla comparando dos filas.
+            "palancas": palancas(h.get("cambios")),
             "macros": {"entreno": h.get("training") or {}, "perientreno": h.get("peri") or {},
                        "descanso": h.get("rest") or {}},
         })
@@ -736,6 +741,16 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         "peso": peso_ajuste,
         # La fecha del pesaje (punto 27). Es la que manda para colocar el peso en la curva.
         "peso_fecha": peso_fecha or effective_date,
+        # QUE MACRO SE MOVIO (punto 31): un booleano por macro, comparando con lo que tenia.
+        # No toca ningun calculo; es lo que pinta el rojo del historial y lo que le dice al
+        # modelo que palanca uso el coach, que hasta ahora no se guardaba en ningun sitio.
+        "cambios": marcar_cambios(
+            {"entreno": profile.get("macros_training"),
+             "perientreno": profile.get("macros_periworkout"),
+             "descanso": profile.get("macros_rest")},
+            {"entreno": training, "perientreno": set_data.get("macros_periworkout"),
+             "descanso": rest},
+        ),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 
@@ -810,6 +825,16 @@ async def update_macro_history_entry(client_id: str, entry_id: str, data: Macros
         peri["calories"] = peri["protein"] * 4 + peri["carbs"] * 4
         peri["proteinas"] = peri["protein"]; peri["hidratos"] = peri["carbs"]
         set_data["peri"] = peri
+
+    # Si se corrige una entrada, hay que recalcular que macro cambio (punto 31): si no, el
+    # rojo del historial seguiria senalando los de antes de la correccion.
+    set_data["cambios"] = marcar_cambios(
+        {"entreno": entry.get("previous_training"),
+         "perientreno": entry.get("previous_peri"),
+         "descanso": entry.get("previous_rest")},
+        {"entreno": training, "perientreno": set_data.get("peri", entry.get("peri")),
+         "descanso": rest},
+    )
 
     await db.macro_history.update_one({"id": entry_id}, {"$set": set_data})
     return {**entry, **set_data}
@@ -937,6 +962,13 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
         # `origen`, en el historial no se distingue una decision del coach de un calculo
         # automatico, y el agente los aprendia todos como si fueran criterio suyo.
         "origen": "coach_calculadora",
+        # Que macro se movio (punto 31).
+        "cambios": marcar_cambios(
+            {"entreno": profile.get("macros_training"),
+             "perientreno": profile.get("macros_periworkout"),
+             "descanso": profile.get("macros_rest")},
+            {"entreno": training, "perientreno": peri, "descanso": rest},
+        ),
         "criterio": data.get("criterio"),
         # Explicito, no por el fallback a created_at: asi el coach puede decir desde cuando
         # aplica, igual que en el guardado manual.

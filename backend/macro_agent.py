@@ -224,6 +224,12 @@ def construir_contexto(
                      + (f" | peso {h.get('peso')}" if h.get('peso') is not None else "")
                      + (f" | %graso {h.get('porcentaje_graso')}" if h.get('porcentaje_graso') is not None else "")
                      + (f" | cumplio: {h.get('cumplimiento')}" if h.get('cumplimiento') else ""))
+            # QUE PALANCA movio en ese ajuste (punto 31 del 07-08). Es la decision, no el
+            # resultado: "le bajo los hidratos del dia de descanso" dice mas del patron del
+            # coach que los ocho numeros de antes y los ocho de despues, que hasta ahora
+            # eran lo unico que llegaba aqui y habia que deducir comparandolos.
+            if h.get("palancas"):
+                L.append(f"      movio: {', '.join(h['palancas'])}")
             if h.get("criterio"):
                 L.append(f"      criterio del coach: {h['criterio']}")
             # Que hizo el coach con TU propuesta anterior de ese mes: la mejor correccion

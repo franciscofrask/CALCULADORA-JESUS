@@ -21,6 +21,7 @@ from core.avisos_equipo import avisar_al_equipo
 from core.cycle import enrich_cycle
 from core.seguimiento import marcar_ajuste
 from core.series_cliente import anotar_peso, anotar_grasa
+from core.cambios_macros import marcar_cambios
 
 router = APIRouter(tags=["users"])
 
@@ -241,6 +242,13 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
             # coach, lo calculo el cuestionario. Sin marcarlo, en el historial parecia un
             # ajuste suyo y el agente lo aprendia como tal.
             "origen": "quiz_alta",
+            # Que macro se movio (punto 31). En el alta suele salir None: no hay anterior.
+            "cambios": marcar_cambios(
+                {"entreno": profile.get("macros_training"),
+                 "perientreno": profile.get("macros_periworkout"),
+                 "descanso": profile.get("macros_rest")},
+                {"entreno": training, "perientreno": peri, "descanso": rest},
+            ),
             "changed_by": user.get("name", user.get("email", "cliente")),
             "client_weight": data.weight,
             "peso": data.weight,
@@ -593,6 +601,15 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
             "effective_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "note": "Cuestionario de ajuste de macros",
             "origen": "quiz_ajuste",     # lo recalculo el cuestionario, no el coach
+            # Que macro se movio (punto 31).
+            "cambios": marcar_cambios(
+                {"entreno": profile.get("macros_training"),
+                 "perientreno": profile.get("macros_periworkout"),
+                 "descanso": profile.get("macros_rest")},
+                {"entreno": update["macros_training"],
+                 "perientreno": update.get("macros_periworkout"),
+                 "descanso": update["macros_rest"]},
+            ),
             "changed_by": user.get("name", user.get("email", "cliente")),
             "client_weight": peso,
             "peso": peso,
@@ -962,6 +979,13 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         "effective_date": effective_date,
         "note": data.note,
         "origen": "cliente_calculadora",   # lo movio el propio cliente desde su calculadora
+        # Que macro se movio (punto 31).
+        "cambios": marcar_cambios(
+            {"entreno": profile.get("macros_training"),
+             "perientreno": profile.get("macros_periworkout"),
+             "descanso": profile.get("macros_rest")},
+            {"entreno": training, "perientreno": peri, "descanso": rest},
+        ),
         "changed_by": user.get("name", user.get("email", "cliente")),
         "client_weight": data.peso if data.peso is not None else profile.get("weight"),
         # Calc inputs guardados POR cambio → trazabilidad de cómo se derivaron los macros.

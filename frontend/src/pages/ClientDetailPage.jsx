@@ -1540,17 +1540,26 @@ const _fechaCorta = (f) => f ? f.split('-').reverse().join('/') : '-';
 // EN ROJO LO QUE CAMBIÓ respecto al ajuste anterior, como en Calma: el coach no lee
 // números sueltos, lee la escalera. Con todo del mismo color hay que comparar fila a
 // fila a ojo; en rojo, el cambio salta solo (vídeo del 05-08, minuto 1:47).
+//
+// Desde el punto 31 (07-08) el cambio viene GUARDADO en la entrada (`cambios`), calculado
+// al guardar contra los macros que el cliente tenía en ese momento. Se usa ese cuando está,
+// porque es el que dice la verdad; comparar con la fila de arriba solo acierta si la tabla
+// está entera y en orden. Para las entradas viejas y para la fila sin guardar se sigue
+// comparando, que es lo que había.
 const _CAMPOS = [['protein', 'proteinas'], ['carbs', 'hidratos'], ['fat', 'grasas']];
-const MacroCeldas = ({ m, prev, showG = true, apagado = false }) => (
+const _NOMBRE_CAMPO = ['proteina', 'hidratos', 'grasa'];
+const MacroCeldas = ({ m, prev, showG = true, apagado = false, cambios = null }) => (
     <>
         {(showG ? _CAMPOS : _CAMPOS.slice(0, 2)).map((keys, i) => {
             const v = m ? _mv(m, keys) : null;
             const p = prev ? _mv(prev, keys) : null;
-            const cambio = v != null && p != null && v !== p;
+            const cambio = cambios
+                ? !!cambios[_NOMBRE_CAMPO[i]]
+                : (v != null && p != null && v !== p);
             return (
                 <td key={i} className={`px-2 py-2 text-right tabular-nums font-bold ${
                     apagado ? 'text-white/40' : cambio ? 'text-red-400' : 'text-white/70'}`}
-                    title={cambio ? `antes ${p} g (${v > p ? '+' : ''}${v - p})` : undefined}>
+                    title={cambio && p != null ? `antes ${p} g (${v > p ? '+' : ''}${v - p})` : undefined}>
                     {v ?? '-'}
                 </td>
             );
@@ -1701,9 +1710,9 @@ const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar, borra
                                                 </span>
                                                 {h.body_fat != null && <span className="text-white/40 text-xs"> · {h.body_fat}%</span>}
                                             </td>
-                                            <MacroCeldas m={h.training} prev={ant?.training} apagado={esBorrador} />
-                                            <MacroCeldas m={peri} prev={antPeri} showG={false} apagado={esBorrador} />
-                                            <MacroCeldas m={h.rest} prev={ant?.rest} apagado={esBorrador} />
+                                            <MacroCeldas m={h.training} prev={ant?.training} apagado={esBorrador} cambios={h.cambios?.entreno} />
+                                            <MacroCeldas m={peri} prev={antPeri} showG={false} apagado={esBorrador} cambios={h.cambios?.perientreno} />
+                                            <MacroCeldas m={h.rest} prev={ant?.rest} apagado={esBorrador} cambios={h.cambios?.descanso} />
                                             <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]"><span className="block truncate" title={h.criterio || ''}>{h.criterio || '-'}</span></td>
                                             <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]"><span className="block truncate" title={nota}>{nota || '-'}</span></td>
                                             <td className="px-2 py-2 whitespace-nowrap">

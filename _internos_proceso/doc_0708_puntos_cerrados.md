@@ -1007,6 +1007,66 @@ y va el último para no perderlo. Simula por defecto. En dev: **173 clientes con
 
 **Ojo para producción**: pasar el relleno **una vez**, después de desplegar.
 
+### Punto 31 - Marcar qué macro se cambió en cada ajuste · CERRADO
+
+**La mitad ya estaba, y conviene decirlo.** El historial **ya pintaba en rojo lo que cambió**
+desde el 05-08 (era la petición del vídeo, minuto 1:47). Pero lo calculaba **en pantalla**,
+comparando cada fila con la de abajo, y no se guardaba en ningún sitio. Así que la otra mitad
+del punto - la que de verdad falta - es la que dice Jesús: **el modelo no sabe qué palanca se
+movió en cada ajuste**. En el histórico estaban los ocho números de antes y los ocho de
+después, pero no la decisión.
+
+**Lo que hay ahora.** `backend/core/cambios_macros.py`. Al guardar un ajuste se calcula un
+booleano por macro comparando con lo que el cliente tenía, y queda en la entrada del historial:
+
+```
+{"entreno":     {"proteina": false, "hidratos": true,  "grasa": false},
+ "perientreno": {"proteina": false, "hidratos": false},
+ "descanso":    {"proteina": false, "hidratos": false, "grasa": true}}
+```
+
+Se rellena en los **cinco** sitios donde se guarda un ajuste, y también al corregir una entrada
+antigua - si no, el rojo seguiría señalando lo de antes de la corrección. No toca ningún
+cálculo, como pide el punto.
+
+Dos decisiones de criterio:
+
+- **Estrenar no es cambiar.** Si antes no había perientreno y ahora lo hay, no se marca:
+  marcarlo en rojo en veinte filas seguidas es ruido, no información.
+- **Sin anterior, no hay booleano** (se guarda `null`, no `false`). En el primer ajuste de un
+  cliente no es que no haya cambiado nada: es que no había nada antes, y decir `false` sería
+  mentir al modelo.
+
+**En pantalla**, el historial usa ahora el dato guardado cuando lo hay, y sigue comparando con
+la fila de arriba para las entradas viejas y para la fila sin guardar. Comprobado en el
+navegador: el rojo pinta exactamente lo mismo que antes del cambio, fila por fila.
+
+**Al modelo**, cada ajuste del histórico le llega ahora con una línea nueva: `movió:
+entreno.hidratos, descanso.grasa`. Antes tenía que deducirlo comparando dos filas de números.
+
+**Los que ya estaban.** `backend/_rellenar_cambios_macros.py` los calcula hacia atrás usando
+`previous_training`/`previous_rest`, que ya se guardaban en cada entrada (más fiel que comparar
+con la fila anterior), y cayendo a la entrada anterior para el perientreno y para las
+importadas de Calma. **3.251 de 3.427 ajustes** rellenados; 176 no tienen nada anterior.
+
+**Y de paso sale un dato que no teníamos**: qué palanca mueve Jesús, en todo el histórico.
+
+| Palanca | Veces |
+|---|---|
+| entreno.hidratos | 2.638 |
+| descanso.hidratos | 2.576 |
+| perientreno.hidratos | 1.350 |
+| descanso.grasa | 1.303 |
+| entreno.grasa | 1.020 |
+| descanso.proteina | 931 |
+| entreno.proteina | 797 |
+| perientreno.proteina | 582 |
+
+Los hidratos son la palanca, y la proteína casi no se toca - que es exactamente el método. Sirve
+de comprobación de que el cálculo está bien, y es material para la revisión de las reglas del
+agente que Jesús dejó pendiente. **Ojo: esto es dev**, con el ruido del harness de simulación
+dentro; el número bueno saldrá al pasarlo en producción.
+
 ---
 
 ---
@@ -1077,7 +1137,7 @@ se borran esas dos también.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
 textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28, 29 y 30) está en GitHub y sin desplegar, esperando la orden.
+25, 27, 28, 29, 30 y 31) está en GitHub y sin desplegar, esperando la orden.
 
 **Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
 
@@ -1087,6 +1147,9 @@ textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y l
   enseñando el peso sin fecha. **Ojo**: en dev esto cambió el peso actual de 50 de 232
   clientes, porque el de la ficha no era el último pesaje de verdad. En producción va a pasar
   lo mismo, y es lo que se busca, pero conviene avisar a Jesús antes de que lo vea.
+- `backend/_rellenar_cambios_macros.py --escribir` (punto 31). Sin eso, el modelo solo sabrá
+  qué palanca se movió en los ajustes de aquí en adelante. Y de paso saca el reparto de
+  palancas real, sin el ruido de los datos de prueba de dev.
 
 ---
 
