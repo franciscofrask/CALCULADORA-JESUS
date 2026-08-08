@@ -4,6 +4,16 @@ Registro de los puntos del documento *"PARA FRANCISCO - Todo lo que hay que hace
 agosto de 2026) que se van cerrando. Por cada uno: qué método se pide, cómo funcionaba antes,
 un ejemplo de cada caso y qué queda pendiente si depende de alguien más.
 
+> **Todo lo de aquí está en producción desde el 7 de agosto por la noche** (hasta el commit
+> `8421e3b`). Se desplegó el árbol completo del repositorio, no solo los ficheros tocados: el
+> primer intento falló al construir el frontend porque producción venía de un despliegue viejo
+> y le faltaba un fichero que las pantallas nuevas importan. Ese fallo no llegó a tocar la app
+> (el rollout ni se lanzó y los pods siguieron sirviendo la versión anterior). Queda una copia
+> de lo sobrescrito en `/opt/jg12/_backup_pre_0708/`.
+>
+> Lo que **no** se ha subido es el trabajo en curso del asistente, que sigue sin commitear en
+> la máquina de Francisco: se desplegó desde git, no desde la carpeta de trabajo.
+
 ---
 
 ## Bloque A - El motor de macros
