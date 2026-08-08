@@ -1691,6 +1691,20 @@ que hacen que un informe deje de creerse. Los 105 tests del informe siguen pasan
 cita Jesús los miró allí, y autorizó el 08-08 a leer y arreglar los puntos 58 y 59). Backup del
 día comprobado antes de tocar nada: `jg12-20260808.archive.gz`, 936 MB, de las 4:30.
 
+> **DEV Y PRODUCCIÓN NO COMPARTEN BASE DE DATOS.** Y lo que confunde es que **las dos se llaman
+> igual**:
+>
+> | | Servidor | Base |
+> |---|---|---|
+> | dev | MongoDB **Atlas** (`jgpt.2cqfqlj.mongodb.net`) | `jg12_restored` |
+> | producción | Mongo **local del VPS** (`10.0.0.1:27017`) | `jg12_restored` |
+>
+> Máquinas distintas y datos independientes. Que el catálogo de alimentos coincida en las dos
+> (3.211 en cada una) es porque producción se copió de Atlas al migrar y ese catálogo no ha
+> divergido desde entonces - **no porque compartan nada**. Con los clientes, los reportes o las
+> dietas no pasa: ahí cada una va por su lado, y por eso un arreglo de datos hecho en dev **no
+> llega solo** a producción. El código sí viaja con el despliegue; los datos no.
+
 ### Y la explicación de todo el bloque: **son los tres puntos del 05-08 otra vez**
 
 Al ir a arreglarlo apareció `backend/_arreglar_catalogo_0508.py`, escrito para el documento
@@ -1739,10 +1753,20 @@ Que es exactamente lo que dice el punto que deberían tener («unos 20 g», y el
 con 25»). Barrido el catálogo entero: **cero frutos secos con la proteína a cero**. Se arregló el
 05-08 con el mismo caso.
 
-### Punto 60 - Duplicados · MEDIDO, y son muchos más de cuatro
+### Punto 60 - No son duplicados: es el mismo alimento con marca y sin marca · PENDIENTE DE JESÚS
 
-Este sí sigue ahí. El punto cita cuatro; **en producción son 77 parejas** con nombre equivalente
-y **los mismos macros**, una genérica y otra con marca. Los cuatro que nombra están entre ellas:
+**Aclaración primero, porque la palabra «duplicado» lleva a la conclusión equivocada** (Francisco,
+08-08): no hay un alimento metido dos veces por error. Hay **un alimento genérico y el mismo
+alimento con marca**, y eso **es a propósito**: el genérico existe para el que no compra esa
+marca, y el de marca para el que sí. En el catálogo se distinguen por la URL - el que la tiene es
+el de marca, el que no, el genérico.
+
+O sea que **no hay nada roto que arreglar**. Lo que hay es una decisión de producto: cuando el
+genérico y el de marca tienen **exactamente los mismos macros**, el genérico no aporta nada nuevo
+y el cliente ve dos entradas iguales en el buscador sin saber cuál coger.
+
+El punto cita cuatro casos; **en producción son 77 parejas** con nombre equivalente y los mismos
+macros. Los cuatro que nombra están entre ellas:
 
 | Genérico | Con marca | |
 |---|---|---|
@@ -1753,14 +1777,17 @@ y **los mismos macros**, una genérica y otra con marca. Los cuatro que nombra e
 
 Y 73 más: arroz basmati, queso feta, salsa de soja, tortilla de patata, puré de patata…
 
-**No se ha borrado nada, y es la misma decisión que el 05-08.** Que un alimento esté dos veces,
-uno genérico y otro con marca, **es el diseño del catálogo**: el genérico existe para quien no
-compra esa marca. Y **hay dietas guardadas apuntando a uno de los dos**: el que se borre
-desaparece de días ya montados.
+**No se ha borrado nada, y es la misma decisión que el 05-08**, por dos razones: porque tener
+genérico y marca es el diseño, y porque **hay dietas guardadas apuntando a uno de los dos** - el
+que se borre desaparece de días ya montados.
 
-Lo que sí es un problema es lo que ve el cliente en el buscador: dos entradas iguales sin saber
-cuál coger. **Que Jesús diga qué quiere** - que se quede el genérico, que se quede el de marca, o
-que el buscador los junte en uno - y se hace.
+**Las tres salidas posibles**, para que Jesús elija:
+
+1. **Dejarlo como está.** El buscador enseña los dos y el cliente coge el que quiera.
+2. **Que el buscador los junte**: una sola entrada, con la marca como variante. No se borra nada,
+   no se rompe ninguna dieta, y el cliente deja de ver duplicados. Es la que menos riesgo tiene.
+3. **Quedarse con uno** y borrar el otro. Hay que decidir cuál - y arreglar las dietas que
+   apuntaban al borrado.
 
 ### Lo que queda dicho para la próxima vez
 
@@ -1780,6 +1807,12 @@ Del documento de Jesús están trabajados los puntos **1 al 60**. Quedan por lee
 K: los fallos apuntados que siguen ahí (61-64), los menús autoajustables (65-75) y el asistente
 de IA (76-80). **Todos son de este fin de semana**, y dos de esos bloques (I y K) están marcados
 como imprescindibles para el domingo.
+
+> **Antes de dar nada por hecho: dev y producción NO comparten base de datos.** Dev va contra
+> MongoDB Atlas y producción contra el Mongo local del VPS, y **las dos bases se llaman igual**
+> (`jg12_restored`), que es lo que induce a error. **El código viaja con el despliegue; los datos
+> no.** Un arreglo de datos hecho en dev hay que pasarlo aparte en producción - por eso los
+> scripts de más abajo son parte del despliegue y no un extra.
 
 ---
 
@@ -1835,6 +1868,9 @@ nuevas del filtro, y los **puntos 23, 25 y 27 al 60** (los bloques D al H entero
 el de la ficha no era el último pesaje de verdad. En producción va a pasar lo mismo, y es lo que
 se busca, pero **conviene avisar a Jesús antes de que lo vea**.
 
+~~`_revisar_alimentos_bloque_h.py`~~ (puntos 58-60) **ya se pasó en producción el 08-08**, con
+permiso expreso y con el backup del día comprobado. No hay que volver a pasarlo.
+
 **El número de WhatsApp de soporte** (punto 41). Hace falta para el cliente cuya suscripción
 caduca: la pantalla está montada y el mensaje redactado, pero el número no está en ninguna parte
 del código y no me lo puedo inventar. Mientras tanto sale el aviso sin el botón. Es una
@@ -1863,11 +1899,12 @@ los de 5 cuando están en Semana 4»: ¿el patrón de reportes empieza desplazad
 semanas no le toca nada? Va como desplazamiento y vacío por defecto, porque la otra lectura
 dejaba a Gold **sin ningún reporte hasta la semana 11**. El campo ya está: es cambiar un número.
 
-**Los 77 duplicados genérico + marca** (punto 60). El punto cita cuatro y son 77 parejas con los
-mismos macros. Tener genérico y marca es el diseño del catálogo, y borrar uno afecta a dietas ya
-guardadas, así que no se toca sin que él diga qué quiere: que se quede el genérico, que se quede
-el de marca, o que el buscador los junte. La lista sale con
-`backend/_revisar_alimentos_bloque_h.py`.
+**El mismo alimento con marca y sin marca** (punto 60). **No son duplicados por error**: el
+genérico existe para quien no compra esa marca. Pero cuando los dos tienen los mismos macros, el
+cliente ve dos entradas iguales en el buscador. **En producción son 77 parejas**, no cuatro. Tres
+salidas: dejarlo, que el buscador los junte en una entrada con variantes (la que menos riesgo
+tiene: no borra nada ni rompe dietas), o quedarse con uno y arreglar las dietas que apuntaban al
+otro. La lista sale con `backend/_revisar_alimentos_bloque_h.py`.
 
 **Los 56 mínimos por categoría** (punto 7). El mapa existe y funciona, pero los valores vienen de
 la calculadora antigua y él quiere revisarlos; lo cifra en media hora. La tabla lista para
