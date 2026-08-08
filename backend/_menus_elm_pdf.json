@@ -1,0 +1,1286 @@
+{
+ "_nota": "Los 15 menús de la Biblioteca de Menús de ELM (punto 66 del doc del 07-08-2026). El texto NO se puede extraer con un parser porque las tablas del PDF son IMÁGENES: PyMuPDF encuentra 4 imágenes por página (el logo y las tablas) y solo los títulos como texto. Se descargaron los PDF, se renderizaron a PNG y se transcribieron leyéndolos. Cada Comida N es una comida autónoma con sus macros y sus ingredientes.",
+ "_origen": "https://noteconformesconmenos.com/membresia-elm/biblioteca-de-menus/",
+ "menus": [
+  {
+   "id": "e1",
+   "nombre": "Menú 1 (Entrenamiento)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-1-entrenamiento/",
+   "tipo_dia": "entrenamiento",
+   "horario_entreno": "Después de Comida 3",
+   "macros_dia": {
+    "P": "230,3",
+    "H": "331",
+    "G": "57,8"
+   },
+   "macros_peri": {
+    "P": "49,3",
+    "H": "70"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "68",
+      "H": "68,8",
+      "G": "17,5"
+     },
+     "ingredientes": [
+      "15g/ml Crema de arroz",
+      "50g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "3ud (25 g/ml) Queso proteico Proteína Plus loncha (Carrefour)",
+      "4ud (29 g/ml) Pan de molde blanco familiar (Hacendado)",
+      "2ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "58,3",
+      "H": "65,1",
+      "G": "15,9"
+     },
+     "ingredientes": [
+      "130g/ml Pan de barra",
+      "125g/ml Lomo embuchado (Carrefour)",
+      "1ud (25 g/ml) Queso proteico Proteína Plus loncha (Carrefour)",
+      "1ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café",
+      "1ud (100 g/ml) Gelatina sabor frutos rojos Proteína Plus (Carrefour)"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "46",
+      "H": "100,5",
+      "G": "11,7"
+     },
+     "ingredientes": [
+      "230g/ml Pechuga de pollo",
+      "1ud (125 g/ml) Arroz integral tarrina al minuto Sabroz (Brillante)",
+      "115g/ml Pan de barra",
+      "50g/ml Arándanos congelados (Hacendado)",
+      "18g/ml Nueces"
+     ]
+    },
+    {
+     "comida": "Postentreno",
+     "macros": {
+      "P": "49,3",
+      "H": "70"
+     },
+     "ingredientes": [
+      "50g/ml Crema de arroz sabor cookies and cream (FullGas)",
+      "58g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "400g/ml Leche de almendras sin azúcares añadidos",
+      "1ud (150 g/ml) Plátano grande"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "58",
+      "H": "96,6",
+      "G": "12,7"
+     },
+     "ingredientes": [
+      "200g/ml Carne picada de ternera bajo en grasa",
+      "100g/ml Pasta blanca",
+      "200g/ml Tomate frito 0,0 (Orlando)",
+      "1ud (150 g/ml) Mousse proteica PROfeel chocolate (Valio)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e2",
+   "nombre": "Menú 2 (Entrenamiento)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-2-entrenamiento/",
+   "tipo_dia": "entrenamiento",
+   "horario_entreno": "Después de Comida 3",
+   "macros_dia": {
+    "P": "227,7",
+    "H": "271,4",
+    "G": "59,5"
+   },
+   "macros_peri": {
+    "P": "51",
+    "H": "60"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "67",
+      "H": "55,4",
+      "G": "15"
+     },
+     "ingredientes": [
+      "60g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "200g/ml Leche desnatada sin lactosa",
+      "1ud (120 g/ml) Yogur +Proteínas fresa (Hacendado)",
+      "80g/ml Arándanos",
+      "2ud (29 g/ml) Pan de molde blanco familiar (Hacendado)",
+      "3ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "58",
+      "H": "53",
+      "G": "19"
+     },
+     "ingredientes": [
+      "130g/ml Fiambre de pechuga de pavo de buena calidad (más del 85 %)",
+      "3ud (18 g/ml) Queso Tranchete loncha",
+      "100g/ml Pan de barra",
+      "2ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café",
+      "2ud (100 g/ml) Gelatina +Proteínas sabor frutos silvestres (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "42,8",
+      "H": "84",
+      "G": "13"
+     },
+     "ingredientes": [
+      "300g/ml Queso fresco batido 0 %",
+      "15g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "100g/ml Cereales rellenos de chocolate y avellana (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Postentreno",
+     "macros": {
+      "P": "51",
+      "H": "60"
+     },
+     "ingredientes": [
+      "75g/ml Crema de arroz sabor cookies and cream (FullGas)",
+      "60g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "400g/ml Leche de almendras sin azúcares añadidos"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "60",
+      "H": "79",
+      "G": "12,5"
+     },
+     "ingredientes": [
+      "210g/ml Hamburguesa de ternera baja en grasa",
+      "2ud (18 g/ml) Queso Tranchete light loncha",
+      "2ud (75 g/ml) Pan de hamburguesa Maxi Burger 2 rebanadas (Hacendado)",
+      "250g/ml Tomate",
+      "100g/ml Pepino",
+      "1ud (100 g/ml) Gelatina +Proteínas sabor frutos silvestres (Hacendado)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e3",
+   "nombre": "Menú 3 (Entrenamiento)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-3-entrenamiento/",
+   "tipo_dia": "entrenamiento",
+   "horario_entreno": "Después de Comida 2 o Variable",
+   "macros_dia": {
+    "P": "169,7",
+    "H": "119,5",
+    "G": "48,2"
+   },
+   "macros_peri": {
+    "P": "37,8",
+    "H": "29,7"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "42",
+      "H": "18,5",
+      "G": "13,6"
+     },
+     "ingredientes": [
+      "190g/ml Fiambre de pechuga de pavo de buena calidad (más del 85 %)",
+      "1ud (18 g/ml) Queso Tranchete light loncha",
+      "35g/ml Pan de barra",
+      "50g/ml Tomate rallado natural (Surinver)",
+      "20g/ml Almendras",
+      "200g/ml Leche de almendras sin azúcares añadidos"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "34",
+      "H": "41,3",
+      "G": "10,2"
+     },
+     "ingredientes": [
+      "170g/ml Solomillo de cerdo",
+      "1ud (125 g/ml) Arroz tres delicias al minuto (Brillante)",
+      "300g/ml Brócoli, coliflor y zanahoria congelado (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Intraentreno",
+     "macros": {
+      "P": "8",
+      "H": "8,6"
+     },
+     "ingredientes": [
+      "8g/ml Aminoácidos esenciales",
+      "200g/ml Aquarius",
+      "600g/ml Aquarius zero"
+     ]
+    },
+    {
+     "comida": "Postentreno",
+     "macros": {
+      "P": "29,7",
+      "H": "21,1"
+     },
+     "ingredientes": [
+      "35g/ml Aislado de suero - Whey Isolate",
+      "15g/ml Crema de arroz",
+      "65g/ml Arándanos"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "43,5",
+      "H": "49,8",
+      "G": "8,5"
+     },
+     "ingredientes": [
+      "350g/ml Queso fresco batido 0 %",
+      "10g/ml Aislado de suero - Whey Isolate",
+      "55g/ml Cereales rellenos de leche (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "50,2",
+      "H": "10",
+      "G": "15,9"
+     },
+     "ingredientes": [
+      "200g/ml Pechuga de pollo",
+      "35g/ml Queso Emmental",
+      "200g/ml Tomate",
+      "1ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e4",
+   "nombre": "Menú 4 (Entrenamiento)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-4-entrenamiento/",
+   "tipo_dia": "entrenamiento",
+   "horario_entreno": "Después de Comida 2 o Variable",
+   "macros_dia": {
+    "P": "168,3",
+    "H": "118,9",
+    "G": "49,1"
+   },
+   "macros_peri": {
+    "P": "37,8",
+    "H": "28,6"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "45",
+      "H": "24",
+      "G": "15,9"
+     },
+     "ingredientes": [
+      "50g/ml Jamón serrano corte magro",
+      "1ud (63 g/ml) Huevos enteros L",
+      "30g/ml Aguacate",
+      "50g/ml Pan de molde de centeno",
+      "20g/ml Aislado de suero - Whey Isolate",
+      "100g/ml Leche desnatada"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "32,5",
+      "H": "43,3",
+      "G": "9,9"
+     },
+     "ingredientes": [
+      "100g/ml Fiambre de pechuga de pavo de buena calidad (más del 85 %)",
+      "1ud (63 g/ml) Huevos enteros L",
+      "30g/ml Aguacate",
+      "60g/ml Pan de molde de centeno",
+      "1ud (80 g/ml) Kiwi",
+      "150g/ml Leche desnatada"
+     ]
+    },
+    {
+     "comida": "Intraentreno",
+     "macros": {
+      "P": "8",
+      "H": "8,6"
+     },
+     "ingredientes": [
+      "8g/ml Aminoácidos esenciales",
+      "200g/ml Aquarius",
+      "600g/ml Aquarius zero"
+     ]
+    },
+    {
+     "comida": "Postentreno",
+     "macros": {
+      "P": "29,7",
+      "H": "20"
+     },
+     "ingredientes": [
+      "35g/ml Aislado de suero - Whey Isolate",
+      "25g/ml Crema de arroz",
+      "300g/ml Leche de almendras sin azúcares añadidos"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "42,2",
+      "H": "40,1",
+      "G": "11"
+     },
+     "ingredientes": [
+      "1ud (63 g/ml) Huevos enteros L",
+      "60g/ml Claras de huevo pasteurizadas",
+      "60g/ml Copos de avena",
+      "25g/ml Cacao desgrasado sin azúcares añadidos",
+      "100g/ml Leche de almendras sin azúcares añadidos",
+      "25g/ml Aislado de suero - Whey Isolate"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "48,6",
+      "H": "11,5",
+      "G": "12,3"
+     },
+     "ingredientes": [
+      "175g/ml Dorada",
+      "1ud (10 g/ml) Pan de fibra & sésamo (Hacendado)",
+      "200g/ml Calabacín",
+      "1ud (145 g/ml) Skyr natural (Danone)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e5",
+   "nombre": "Menú 5 (Entrenamiento)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-5-entrenamiento/",
+   "tipo_dia": "entrenamiento",
+   "horario_entreno": "Después de Comida 2 o Variable",
+   "macros_dia": {
+    "P": "166,7",
+    "H": "139,1",
+    "G": "59,6"
+   },
+   "macros_peri": {
+    "P": "37,8",
+    "H": "28,6"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "41,7",
+      "H": "25,8",
+      "G": "15,7"
+     },
+     "ingredientes": [
+      "2ud (63 g/ml) Huevos enteros L",
+      "70g/ml Claras de huevo pasteurizadas",
+      "20g/ml Aislado de suero - Whey Isolate",
+      "120g/ml Plátano por gramos",
+      "1ud (8 g/ml) Chocolate negro al 85 % por onza (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "33",
+      "H": "51,8",
+      "G": "12"
+     },
+     "ingredientes": [
+      "150g/ml Entrecot de ternera (Hacendado)",
+      "1ud (125 g/ml) Arroz basmati tarrina al minuto (Brillante)",
+      "150g/ml Brócoli",
+      "1ud (80 g/ml) Kiwi"
+     ]
+    },
+    {
+     "comida": "Intraentreno",
+     "macros": {
+      "P": "8",
+      "H": "8,6"
+     },
+     "ingredientes": [
+      "8g/ml MAP Amino Esenciales",
+      "200g/ml Aquarius",
+      "600g/ml Aquarius zero"
+     ]
+    },
+    {
+     "comida": "Postentreno",
+     "macros": {
+      "P": "29,7",
+      "H": "20"
+     },
+     "ingredientes": [
+      "35g/ml Aislado de suero - Whey Isolate",
+      "25g/ml Crema de arroz",
+      "300g/ml Leche de almendras sin azúcares añadidos"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "42,8",
+      "H": "49,2",
+      "G": "13,4"
+     },
+     "ingredientes": [
+      "300g/ml Queso fresco batido 0 %",
+      "15g/ml Aislado de suero - Whey Isolate",
+      "40g/ml Cereales rellenos cacao y avellana (Hacendado)",
+      "80g/ml Frambuesas",
+      "10g/ml Nueces"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "49,3",
+      "H": "12,3",
+      "G": "18,5"
+     },
+     "ingredientes": [
+      "200g/ml Salteado gambas, ajetes y espárragos verdes congelado (Hacendado)",
+      "250g/ml Gambas peladas grandes congeladas (Hacendado)",
+      "1ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café",
+      "2ud (10 g/ml) Pan wasa Fibre (Wasa)",
+      "27g/ml Pistachos",
+      "125g/ml Yogur +Proteínas natural (Hacendado)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e6",
+   "nombre": "Menú 6 (Entrenamiento)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-6-entrenamiento/",
+   "tipo_dia": "entrenamiento",
+   "horario_entreno": "Después de Comida 2 o Variable",
+   "macros_dia": {
+    "P": "169,8",
+    "H": "138,5",
+    "G": "58,6"
+   },
+   "macros_peri": {
+    "P": "37,8",
+    "H": "29,6"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "45,8",
+      "H": "28,5",
+      "G": "17,7"
+     },
+     "ingredientes": [
+      "130g/ml Fiambre de pechuga de pavo de buena calidad (más del 85 %)",
+      "1ud (56 g/ml) Atún al natural lata",
+      "1ud (63 g/ml) Huevos enteros L",
+      "75g/ml Pan de molde de centeno",
+      "90g/ml Aguacate"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "32,6",
+      "H": "49",
+      "G": "13"
+     },
+     "ingredientes": [
+      "1ud (56 g/ml) Atún al natural lata",
+      "80g/ml Pasta de lenteja roja (Gallo)",
+      "150g/ml Tomate frito sin azúcares añadidos (Hacendado)",
+      "1ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café",
+      "150g/ml Champiñones",
+      "15g/ml Almendras"
+     ]
+    },
+    {
+     "comida": "Intraentreno",
+     "macros": {
+      "P": "8",
+      "H": "8,6"
+     },
+     "ingredientes": [
+      "8g/ml Aminoácidos esenciales",
+      "200g/ml Aquarius",
+      "600g/ml Aquarius zero"
+     ]
+    },
+    {
+     "comida": "Postentreno",
+     "macros": {
+      "P": "29,7",
+      "H": "21"
+     },
+     "ingredientes": [
+      "35g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "25g/ml Crema de arroz sabor natillas de vainilla (FullGas)",
+      "300g/ml Leche de almendras sin azúcares añadidos"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "43,2",
+      "H": "46,8",
+      "G": "11,9"
+     },
+     "ingredientes": [
+      "1ud (180 g/ml) Pudding proteico PROfeel chocolate (Valio)",
+      "65g/ml Lomo embuchado bajo en grasa",
+      "3ud (8 g/ml) Tortita de arroz",
+      "1ud (180 g/ml) Manzana mediana",
+      "10g/ml Almendras"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "48,3",
+      "H": "14,3",
+      "G": "16"
+     },
+     "ingredientes": [
+      "200g/ml Pez espada",
+      "150g/ml Garbanzos en conserva",
+      "150g/ml Judías verdes en conserva"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e7",
+   "nombre": "Menú 7 (Entrenamiento)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-7-entrenamiento/",
+   "tipo_dia": "entrenamiento",
+   "horario_entreno": "Después de Comida 2 o Variable",
+   "macros_dia": {
+    "P": "191",
+    "H": "140,1",
+    "G": "59,7"
+   },
+   "macros_peri": {
+    "P": "45,2",
+    "H": "31,5"
+   },
+   "_aviso": "El PDF titula esa comida «Intraentreno» pero la tabla de dentro pone «Macros para postentreno», y el contenido (aislado, leche y plátano) es de postentreno. El epígrafe del PDF está mal; aquí se guarda como Postentreno.",
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "45,8",
+      "H": "23,8",
+      "G": "18"
+     },
+     "ingredientes": [
+      "2ud (53 g/ml) Huevos enteros M",
+      "50g/ml Jamón cocido 92 % (Argal)",
+      "100g/ml Queso fresco de Burgos 0 % (Hacendado)",
+      "2ud (10 g/ml) Pan wasa Fibre (Wasa)",
+      "100g/ml Tomate",
+      "50g/ml Aguacate",
+      "1ud (120 g/ml) Yogur +Proteínas fresa (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "38",
+      "H": "49,3",
+      "G": "12"
+     },
+     "ingredientes": [
+      "190g/ml Pechuga de pollo",
+      "1ud (125 g/ml) Arroz integral tarrina al minuto (Brillante)",
+      "100g/ml Tomate frito",
+      "150g/ml Champiñones",
+      "80g/ml Aceitunas"
+     ]
+    },
+    {
+     "comida": "Postentreno",
+     "macros": {
+      "P": "45,2",
+      "H": "31,5"
+     },
+     "ingredientes": [
+      "45g/ml Aislado de suero - Whey Isolate",
+      "230g/ml Leche desnatada",
+      "1ud (100 g/ml) Plátano pequeño"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "47,7",
+      "H": "50,9",
+      "G": "11,9"
+     },
+     "ingredientes": [
+      "90g/ml Lomo embuchado bajo en grasa",
+      "1ud (25 g/ml) Queso Havarti light loncha",
+      "60g/ml Biscotes (Proceli)",
+      "125g/ml Yogur griego ligero"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "59,6",
+      "H": "16,1",
+      "G": "17,8"
+     },
+     "ingredientes": [
+      "150g/ml Setas",
+      "50g/ml Taquitos de jamón serrano (Incarlopsa)",
+      "250g/ml Claras de huevo pasteurizadas",
+      "1ud (53 g/ml) Huevos enteros M",
+      "115g/ml Guisantes",
+      "55g/ml Guacamole"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e8",
+   "nombre": "Menú 8 (Entrenamiento)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-8-entrenamiento/",
+   "tipo_dia": "entrenamiento",
+   "horario_entreno": "Después de Comida 1",
+   "macros_dia": {
+    "P": "182,5",
+    "H": "120,1",
+    "G": "62,8"
+   },
+   "macros_peri": {
+    "P": "44",
+    "H": "29,5"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "46,8",
+      "H": "21,3",
+      "G": "16"
+     },
+     "ingredientes": [
+      "55g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "30g/ml Crema de arroz sabor croissant de chocolate (FullGas)",
+      "20g/ml Nueces",
+      "300g/ml Leche de almendras sin azúcares añadidos"
+     ]
+    },
+    {
+     "comida": "Intraentreno",
+     "macros": {
+      "P": "10",
+      "H": "9,5"
+     },
+     "ingredientes": [
+      "10g/ml MAP Amino Esenciales (FullGas)",
+      "10g/ml Ciclodextrina (FullGas)",
+      "500g/ml Aquarius zero"
+     ]
+    },
+    {
+     "comida": "Postentreno",
+     "macros": {
+      "P": "34",
+      "H": "20"
+     },
+     "ingredientes": [
+      "40g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "25g/ml Crema de arroz sabor cookies and cream (FullGas)"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "33",
+      "H": "44,2",
+      "G": "12"
+     },
+     "ingredientes": [
+      "150g/ml Pollo asado",
+      "1ud (125 g/ml) Arroz basmati tarrina al minuto (Brillante)",
+      "100g/ml Pimientos asados en tiras (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "44,8",
+      "H": "40,6",
+      "G": "8,8"
+     },
+     "ingredientes": [
+      "100g/ml Lomo embuchado (Hacendado)",
+      "1ud (25 g/ml) Queso Havarti light loncha (Hacendado)",
+      "80g/ml Pan de barra"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "58",
+      "H": "14",
+      "G": "26"
+     },
+     "ingredientes": [
+      "200g/ml Salmón",
+      "100g/ml Pescado blanco",
+      "100g/ml Patata natural",
+      "150g/ml Brócoli"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d1",
+   "nombre": "Menú 1 (Descanso)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-1/",
+   "tipo_dia": "descanso",
+   "macros_dia": {
+    "P": "296",
+    "H": "219,4",
+    "G": "69,4"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "75,3",
+      "H": "58,1",
+      "G": "18,4"
+     },
+     "ingredientes": [
+      "2ud (63 g/ml) Huevos enteros L",
+      "20g/ml Queso Cheddar",
+      "50g/ml Fiambre de pechuga de pavo finas lonchas reducido en sal (Hacendado)",
+      "2.5ud (29 g/ml) Pan de molde blanco familiar (Hacendado)",
+      "45g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "250g/ml Leche desnatada sin lactosa (Hacendado)",
+      "100g/ml Arándanos congelados (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "72",
+      "H": "54,1",
+      "G": "12,8"
+     },
+     "ingredientes": [
+      "300g/ml Claras de huevo pasteurizadas",
+      "2ud (52 g/ml) Atún en aceite de oliva lata",
+      "300g/ml Patatas en conserva",
+      "150g/ml Judías verdes en conserva",
+      "1ud (29 g/ml) Pan de molde blanco familiar (Hacendado)",
+      "1ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café",
+      "1ud (125 g/ml) Natillas +Proteínas vainilla (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "74",
+      "H": "54,5",
+      "G": "20,4"
+     },
+     "ingredientes": [
+      "100g/ml Pan de barra",
+      "200g/ml Lomo embuchado (Carrefour)",
+      "5ud (15 g/ml) Quesitos light (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "74,7",
+      "H": "52,7",
+      "G": "17,7"
+     },
+     "ingredientes": [
+      "120g/ml Carpaccio de vacuno (Mercadona)",
+      "30g/ml Queso Parmesano",
+      "100g/ml Pan de barra",
+      "2ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café",
+      "4ud (100 g/ml) Gelatina +Proteínas sabor frutos silvestres (Hacendado)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d2",
+   "nombre": "Menú 2 (Descanso)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-2/",
+   "tipo_dia": "descanso",
+   "macros_dia": {
+    "P": "296,5",
+    "H": "129,4",
+    "G": "52,7"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "76,8",
+      "H": "36,9",
+      "G": "13"
+     },
+     "ingredientes": [
+      "150g/ml Leche desnatada sin lactosa",
+      "85g/ml Aislado de suero - Whey Isolate (FullGas)",
+      "35g/ml Corn flakes (Kellog's)",
+      "20g/ml Nueces"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "74,8",
+      "H": "30,1",
+      "G": "11,8"
+     },
+     "ingredientes": [
+      "60g/ml Pan de barra",
+      "150g/ml Lomo embuchado (Hacendado)",
+      "1ud (25 g/ml) Queso havarti light loncha (Milbona)",
+      "1ud (100 g/ml) Gelatina +Proteínas sabor frutos silvestres (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "73,3",
+      "H": "30",
+      "G": "15,3"
+     },
+     "ingredientes": [
+      "60g/ml Pan de barra",
+      "156g/ml Atún en aceite de girasol (Calvo)",
+      "2ud (53 g/ml) Huevos enteros M",
+      "45g/ml Aislado de suero - Whey Isolate (FullGas)"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "71,7",
+      "H": "32,4",
+      "G": "12,6"
+     },
+     "ingredientes": [
+      "240g/ml Carne picada de ternera muy magra (Fitness Burger)",
+      "1ud (75 g/ml) Pan de hamburguesa Maxi Burger 2 rebanadas (Hacendado)",
+      "30g/ml Queso en dados para ensalada (Hacendado)",
+      "2ud (100 g/ml) Gelatina sabor frutos rojos Proteína Plus (Carrefour)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d3",
+   "nombre": "Menú 3 (Descanso)",
+   "fuente": "https://noteconformesconmenos.com/documentos/ricardo-menu-3-descanso/",
+   "tipo_dia": "descanso",
+   "macros_dia": {
+    "P": "297,2",
+    "H": "100,5",
+    "G": "47,9"
+   },
+   "_aviso": "La Comida 4 anuncia «Receta ELM: Ensalada templada de garbanzos, judías, pavo y jamón serrano» y remite al final del dossier, pero la tabla de ingredientes que va debajo es la MISMA que la Comida 4 del menú 2 de descanso (carne picada, pan de hamburguesa, queso en dados y gelatina). O falta la tabla de la ensalada o sobra esta. Preguntar a Jesús.",
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "75,5",
+      "H": "24",
+      "G": "10,1"
+     },
+     "ingredientes": [
+      "1ud (63 g/ml) Huevos enteros L",
+      "250g/ml Claras de huevo pasteurizadas",
+      "200g/ml Fiambre de pechuga de pavo de buena calidad (más del 85 %)",
+      "2ud (29 g/ml) Pan de molde integral",
+      "50g/ml Tomate rallado natural (Surinver)",
+      "30g/ml Guacamole"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "74,4",
+      "H": "24,8",
+      "G": "13"
+     },
+     "ingredientes": [
+      "100g/ml Solomillo de salmón",
+      "340g/ml Sepia",
+      "225g/ml Patatas en conserva",
+      "150g/ml Espárragos verdes"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "72,6",
+      "H": "28",
+      "G": "11,3"
+     },
+     "ingredientes": [
+      "1ud (200 g/ml) Pudding proteico chocolate (Milbona)",
+      "4ud (6 g/ml) Galleta María dorada 0 % azúcares añadidos por unidad (Hacendado)",
+      "350g/ml Leche de almendras sin azúcares añadidos",
+      "60g/ml Aislado de suero - Whey Isolate"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "71,7",
+      "H": "32,4",
+      "G": "12,6"
+     },
+     "receta_elm": "Ensalada templada de garbanzos, judías, pavo y jamón serrano",
+     "_aviso": "los ingredientes de abajo NO son los de esa receta: ver el aviso del menú",
+     "ingredientes": [
+      "240g/ml Carne picada de ternera muy magra (Fitness Burger)",
+      "1ud (75 g/ml) Pan de hamburguesa Maxi Burger 2 rebanadas (Hacendado)",
+      "30g/ml Queso en dados para ensalada (Hacendado)",
+      "2ud (100 g/ml) Gelatina sabor frutos rojos Proteína Plus (Carrefour)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d4",
+   "nombre": "Menú 4 (Descanso)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-4/",
+   "tipo_dia": "descanso",
+   "macros_dia": {
+    "P": "189,5",
+    "H": "99,1",
+    "G": "59,8"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "46,8",
+      "H": "21,5",
+      "G": "11,7"
+     },
+     "ingredientes": [
+      "1ud (145 g/ml) Skyr natural (Danone)",
+      "100g/ml Fiambre de pechuga de pavo de buena calidad (más del 85 %)",
+      "60g/ml Salmón ahumado",
+      "30g/ml Aguacate",
+      "1ud (31 g/ml) Pan de molde estilo rústico 0 % azúcares añadidos (Panrico)"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "50,4",
+      "H": "28,5",
+      "G": "16,8"
+     },
+     "ingredientes": [
+      "280g/ml Lacón",
+      "150g/ml Patata natural",
+      "150g/ml Tomate",
+      "100g/ml Pepino"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "46,1",
+      "H": "23",
+      "G": "17"
+     },
+     "ingredientes": [
+      "1ud (55 g/ml) Donut bombón (Donuts)",
+      "50g/ml Aislado de suero - Whey Isolate"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "46,3",
+      "H": "26,1",
+      "G": "14,3"
+     },
+     "ingredientes": [
+      "250g/ml Merluza congelada",
+      "150g/ml Pimientos asados en tiras (Hacendado)",
+      "3ud (8 g/ml) Tortita de arroz",
+      "1ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café",
+      "100g/ml Berenjena"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d5",
+   "nombre": "Menú 5 (Descanso)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-5/",
+   "tipo_dia": "descanso",
+   "macros_dia": {
+    "P": "189,8",
+    "H": "139,7",
+    "G": "59,2"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "50",
+      "H": "35,5",
+      "G": "15"
+     },
+     "ingredientes": [
+      "200g/ml Jamón cocido de buena calidad (más del 85 %)",
+      "3ud (18 g/ml) Queso Tranchete loncha",
+      "65g/ml Pan de barra",
+      "50g/ml Tomate rallado natural (Surinver)"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "48,4",
+      "H": "34,3",
+      "G": "14"
+     },
+     "ingredientes": [
+      "2ud (53 g/ml) Huevos enteros M",
+      "240g/ml Claras de huevo pasteurizadas",
+      "1ud (25 g/ml) Queso Havarti light loncha",
+      "55g/ml Pimiento rojo",
+      "200g/ml Pimiento verde",
+      "200g/ml Tomate",
+      "1ud (18 g/ml) Pan wasa Vitalité Kaura (Wasa)"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "47",
+      "H": "34,8",
+      "G": "16,3"
+     },
+     "ingredientes": [
+      "20g/ml Aislado de suero - Whey Isolate",
+      "300g/ml Yogur +Proteínas natural (Hacendado)",
+      "50g/ml Arándanos",
+      "1ud (140 g/ml) Piña en su jugo - 4 rodajas (Hacendado)",
+      "25g/ml Nueces"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "44,4",
+      "H": "35,1",
+      "G": "13,9"
+     },
+     "ingredientes": [
+      "240g/ml Merluza congelada",
+      "200g/ml Patata natural",
+      "150g/ml Brócoli",
+      "1ud (11 g/ml) Pan tipo wasa",
+      "1ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d6",
+   "nombre": "Menú 6 (Descanso)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-6-descanso/",
+   "tipo_dia": "descanso",
+   "macros_dia": {
+    "P": "189,5",
+    "H": "139,2",
+    "G": "59,1"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "45",
+      "H": "34,5",
+      "G": "16,3"
+     },
+     "ingredientes": [
+      "50g/ml Aislado de suero - Whey Isolate",
+      "250g/ml Leche de almendras sin azúcares añadidos",
+      "2ud (29 g/ml) Pan de molde",
+      "60g/ml Crema de queso para untar suave (Hacendado)",
+      "60g/ml Mermelada fresa sin azúcares añadidos (Hacendado)"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "48,8",
+      "H": "34,2",
+      "G": "11,5"
+     },
+     "ingredientes": [
+      "1ud (53 g/ml) Huevos enteros M",
+      "250g/ml Garbanzos en conserva",
+      "140g/ml Langostino cocido",
+      "100g/ml Pimientos asados en tiras (Hacendado)",
+      "100g/ml Tomate",
+      "50g/ml Aguacate",
+      "100g/ml Lechuga"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "47,3",
+      "H": "36,6",
+      "G": "16,3"
+     },
+     "ingredientes": [
+      "300g/ml Leche desnatada",
+      "45g/ml Aislado de suero - Whey Isolate",
+      "30g/ml Cereales Chocodays (Hacendado)",
+      "25g/ml Nueces"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "48,5",
+      "H": "34",
+      "G": "15"
+     },
+     "ingredientes": [
+      "240g/ml Pinchos sin varilla (Hacendado)",
+      "200g/ml Patata natural",
+      "150g/ml Calabacín",
+      "150g/ml Yogur griego natural"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d7",
+   "nombre": "Menú 7 (Descanso)",
+   "fuente": "https://noteconformesconmenos.com/documentos/menu-7-descanso/",
+   "tipo_dia": "descanso",
+   "macros_dia": {
+    "P": "221",
+    "H": "131,5",
+    "G": "59,8"
+   },
+   "comidas": [
+    {
+     "comida": "Comida 1",
+     "macros": {
+      "P": "52,9",
+      "H": "32,9",
+      "G": "17,7"
+     },
+     "ingredientes": [
+      "110g/ml Jamón serrano corte magro",
+      "2ud (18 g/ml) Queso Tranchete light loncha",
+      "30g/ml Pan de barra",
+      "50g/ml Tomate rallado natural (Surinver)",
+      "125g/ml Yogur griego bajo en grasa",
+      "70g/ml Frambuesas"
+     ]
+    },
+    {
+     "comida": "Comida 2",
+     "macros": {
+      "P": "55",
+      "H": "31,5",
+      "G": "13,8"
+     },
+     "ingredientes": [
+      "275g/ml Filete de ternera (corte magro)",
+      "150g/ml Boniato o batata",
+      "150g/ml Calabacín"
+     ]
+    },
+    {
+     "comida": "Comida 3",
+     "macros": {
+      "P": "58,4",
+      "H": "34,8",
+      "G": "11,3"
+     },
+     "ingredientes": [
+      "1ud (27 g/ml) Tortitas de arroz con legumbres pack de 4 (Hacendado)",
+      "200g/ml Jamón cocido de buena calidad (más del 85 %)",
+      "2ud (65 g/ml) Ciruela amarilla",
+      "1ud (145 g/ml) Skyr natural (Danone)",
+      "10g/ml Almendras"
+     ]
+    },
+    {
+     "comida": "Comida 4",
+     "macros": {
+      "P": "54,7",
+      "H": "32,3",
+      "G": "17"
+     },
+     "ingredientes": [
+      "200g/ml Salteado gambas, ajetes y espárragos verdes congelado (Hacendado)",
+      "150g/ml Langostinos crudos congelados (Pescanova)",
+      "2ud (63 g/ml) Huevos enteros L",
+      "60g/ml Claras de huevo pasteurizadas",
+      "170g/ml Arroz con verduras congelado (Hacendado)",
+      "1ud (5 g/ml) Aceite de oliva virgen extra una cucharadita de café"
+     ]
+    }
+   ]
+  }
+ ]
+}

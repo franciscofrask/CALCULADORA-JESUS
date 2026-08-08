@@ -386,11 +386,13 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                                 no lo ha montado nadie aquí, no se dice nada -- mejor
                                                 callar que enseñar un cero. */}
                                             <p className="text-[11px] text-muted-foreground">
-                                                {menu.personas > 1
-                                                    ? <><span className="font-bold">{menu.personas}</span> personas lo han montado</>
-                                                    : menu.personas === 1
-                                                        ? 'Lo ha montado alguien más'
-                                                        : menu.origen === 'variante' ? 'Variante de un menú real' : ''}
+                                                {menu.de_jesus
+                                                    ? <>De los menús de Jesús · <span className="font-bold">{menu.menu_elm?.nombre}</span></>
+                                                    : menu.personas > 1
+                                                        ? <><span className="font-bold">{menu.personas}</span> personas lo han montado</>
+                                                        : menu.personas === 1
+                                                            ? 'Lo ha montado alguien más'
+                                                            : menu.origen === 'variante' ? 'Variante de un menú real' : ''}
                                             </p>
                                             <p className="text-[11px] text-brand-orange font-semibold flex items-center gap-1">
                                                 <Check className="w-3 h-3" /> {menu.ajustado ? 'Añadir ajustado a ti' : 'Añadir tal cual'}

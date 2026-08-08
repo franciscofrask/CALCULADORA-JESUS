@@ -2208,34 +2208,67 @@ tendrás activo todo el tiempo que dure tu suscripción», y esa suscripción es
 membresía ELM: nuestros clientes de 12EN12 no tienen por qué serlo. Enseñar un 20 % de
 descuento a quien no le corresponde no es una decisión que pueda tomar yo. Ver pendientes.
 
-### Punto 66 - Los PDFs de menús · NO SE PUEDE HACER COMO DICE EL DOCUMENTO
+### Punto 66 - Los PDFs de menús · HECHO: los 15, 73 comidas
 
-Aquí hay que contradecir al documento, y con una prueba.
-
-Lo que sí es cierto: los 15 menús de la plataforma están donde dice (8 de entrenamiento y 7
-de descanso), la estructura es regularísima y **se confirma el punto 6**: los macros salen sin
-redondear. Leído hoy del menú 1: **Proteínas 230,3 · Hidratos 331 · Grasas 57,8**, y el
-perientreno 49,3 y 70. Al importarlos hay que redondear, efectivamente.
-
-Lo que no es cierto es que «partirlo sea mecánico». **El texto de las tablas no se puede
-sacar del PDF.** Medido sobre el menú 1, página 1:
+Aquí hay que contradecir al documento en una cosa, y con una prueba: **las tablas del PDF
+son imágenes**. No es que el texto esté raro, es que **no hay texto**. PyMuPDF encuentra 4
+imágenes por página -- el logo y las tres tablas -- y como texto solo saca los títulos:
 
 ```
 operaciones de pintar texto : 150
-cadenas legibles            :   7
+cadenas legibles            :   7   («DIETA PROGRAMADA...», «Comida 1», «Comida 2»...)
 ```
 
-Y las 7 son los títulos: «DIETA PROGRAMADA PARA DÍA DE ENTRENAMIENTO», «HORARIO DE ENTRENO»,
-«Comida 1», «Comida 2»... **Ni un ingrediente, ni un macro.** Las tablas se ven
-perfectamente en pantalla, pero los caracteres no se pueden mapear, así que un parser saca la
-cáscara y tira el contenido. Es mecánico de leer con los ojos; no de extraer.
+Ni un ingrediente, ni un macro. Así que «partirlo es mecánico» no se sostiene: un parser
+saca la cáscara y tira el contenido. Se ven perfectamente en pantalla, eso sí.
 
-Además, de los 127 PDFs solo tenemos acceso a los **15 de la plataforma**: los **112 del
-Drive** no están ni en el repo ni en la web.
+**La solución la dio Francisco**: descargarlos y trabajarlos en local en vez de ir leyendo
+la web pantalla a pantalla. Y así fue mucho mejor:
 
-Las salidas están en pendientes. La que menos trabajo tiene, con diferencia, es la tercera:
-esos menús salieron de la calculadora, así que **las comidas ya existen como datos** en algún
-sitio y no hay por qué reconstruirlas desde un PDF.
+1. Los 15 PDF están en `/wp-content/uploads/2026/01/` y son **públicos** (HTTP 200 sin
+   sesión), aunque la página que los enseña no lo sea. La URL de cada uno sale del visor.
+2. Se renderizan a PNG a 170 dpi: **una página = dos comidas**, y se leen sin esfuerzo.
+3. Se transcriben a `_menus_elm_pdf.json` y se importan con `_importar_menus_elm.py`.
+
+**Resultado: los 15 menús, 73 comidas** (8 de entrenamiento con 45 comidas y 7 de descanso
+con 28). Y el importe salió redondo:
+
+```
+comidas listas para entrar : 73 de 73
+ingredientes que no casan  : 0
+macros del PDF vs los del motor, con más de 8 g de diferencia: 0 de 73
+```
+
+Esa última línea es la que más tranquiliza: **valida a la vez la transcripción y nuestro
+motor de macros**, porque los números de Jesús y los que calcula la app coinciden en las 73.
+
+Cada «Comida N» entra como una comida independiente, que es justo lo que pide el punto. Y
+van **por delante** de las de los clientes en el sugeridor: son comidas suyas, publicadas,
+y las otras son de relleno. En la tarjeta se dice de dónde sale: «De los menús de Jesús ·
+Menú 1 (Entrenamiento)».
+
+**Un fallo que apareció al meterlas, y que no se veía de ninguna otra forma**: al principio
+no salía ni una, ni con el objetivo clavado. La preselección corta a 4.000 candidatos y
+Mongo los devuelve en orden natural, así que las 73 -- insertadas las últimas de 23.900 --
+no entraban nunca en el corte. Ahora se piden aparte. Es el mismo tipo de fallo que el del
+punto 71: el criterio estaba bien escrito y el dato no llegaba a él.
+
+**Dos erratas en los PDF de Jesús**, para que las mire:
+
+- **Menú 7 (Entrenamiento)**: el epígrafe pone «Intraentreno» y la tabla de dentro,
+  «Macros para postentreno». El contenido (aislado, leche y plátano) es de post.
+- **Menú 3 (Descanso)**: la Comida 4 anuncia «Receta ELM: Ensalada templada de garbanzos,
+  judías, pavo y jamón serrano» y remite al final del dossier, pero la tabla que va debajo
+  es **la misma Comida 4 del menú 2 de descanso** (carne picada, pan de hamburguesa, queso
+  en dados y gelatina). O falta la tabla de la ensalada o sobra esta.
+
+Se confirma también el punto 6: los macros salen **sin redondear** (Proteínas 230,3 ·
+Hidratos 331 · Grasas 57,8). Al importarlos se guardan tal cual en `macros_pdf` para poder
+comparar, y lo que cuenta son los que calcula el motor.
+
+Lo que sigue faltando son **los 112 PDF del Drive**, que no están ni en el repo ni en la
+web. Con ellos saldrían las ~450 comidas que dice el documento; con los 15 de la
+plataforma, 73.
 
 ---
 
@@ -2433,20 +2466,18 @@ con esa decisión se callaron los tres avisos que le hablaban de ella
 
 ### Lo que deja abierto el bloque J
 
-**Los 112 PDFs del Drive** (punto 66). Solo tenemos los 15 de la plataforma. Los otros 112
-no están ni en el repo ni en la web, así que hacen falta -- o hace falta descartarlos.
+**Los 112 PDFs del Drive** (punto 66). Los 15 de la plataforma ya están dentro (73 comidas).
+Los otros 112 no están ni en el repo ni en la web, así que hacen falta -- o hace falta
+descartarlos. Con ellos se llegaría a las ~450 comidas que dice el documento.
 
-**Cómo sacar las comidas de los PDFs** (punto 66). El texto de las tablas no se puede
-extraer: 150 operaciones de pintar texto y 7 cadenas legibles, y ninguna es un ingrediente.
-Tres salidas, de menos a más trabajo:
+~~**Cómo sacar las comidas de los PDFs**~~ **RESUELTO**: descargar el PDF, renderizarlo a
+PNG y transcribirlo. Los 15 de la plataforma ya están (73 comidas, 0 ingredientes sin casar).
+El mismo procedimiento sirve para los 112 del Drive en cuanto los tengamos.
 
-1. **Buscar los menús como datos.** Salieron de la calculadora, así que esas comidas
-   existieron como combinaciones antes de ser PDF. Si Jesús o Calma conservan de dónde se
-   generaron, no hay nada que extraer. **Es la vía buena y hay que preguntarla antes de
-   hacer las otras dos.**
-2. **Regenerarlos** desde la calculadora de ahora, si se sabe con qué macros se hizo cada
-   uno. La portada de cada menú los dice.
-3. **Leerlos a mano o con OCR**: unas 450 comidas. Es el último recurso.
+**Dos erratas en los PDF de Jesús** (punto 66), que él tiene que decidir: el menú 7 de
+entrenamiento titula «Intraentreno» una tabla que dice «postentreno» por dentro, y el menú 3
+de descanso anuncia una receta de ensalada y debajo pone los ingredientes de una
+hamburguesa (los mismos del menú 2).
 
 ~~**Si se enciende la biblioteca de menús de clientes**~~ **HECHO el 08-08**: encendida, con
 el filtro puesto. En el sugeridor hay ahora dos pestañas, Recetario y Biblioteca.

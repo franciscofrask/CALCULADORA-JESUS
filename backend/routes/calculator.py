@@ -1829,11 +1829,20 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     for m in ("P", "H", "G"):
         q[f"macros.{m}"] = {"$gte": obj[m] - _LIBRARY_MARGEN_MAX - AJUSTE_MAX[m],
                             "$lte": obj[m] + _LIBRARY_MARGEN_MAX + AJUSTE_MAX[m]}
-    candidatos = await db.meal_library.find(
-        q, {"_id": 0, "id": 1, "macros": 1, "macros_reales": 1, "veces": 1,
-            "usos": 1, "clientes": 1, "usos_calma": 1,
-            "origen": 1, "alimentos": 1, "alimento_ids": 1}
-    ).to_list(_LIBRARY_CANDIDATOS_MAX)
+    campos = {"_id": 0, "id": 1, "macros": 1, "macros_reales": 1, "veces": 1,
+              "usos": 1, "clientes": 1, "usos_calma": 1, "fuente": 1, "menu": 1,
+              "origen": 1, "alimentos": 1, "alimento_ids": 1}
+    candidatos = await db.meal_library.find(q, campos).to_list(_LIBRARY_CANDIDATOS_MAX)
+
+    # Las comidas de los menús de Jesús se piden APARTE, y no es un capricho: la
+    # consulta de arriba corta a 4.000 y Mongo los devuelve en orden natural, así que
+    # las 73 de ELM -- que se insertaron las últimas de 23.900 -- no entraban nunca en
+    # el corte. Se veía como si no existieran: ni con el objetivo clavado salía una.
+    q_jesus = dict(q)
+    q_jesus["fuente"] = "elm_menus"
+    de_jesus = await db.meal_library.find(q_jesus, campos).to_list(500)
+    ya = {c["id"] for c in candidatos}
+    candidatos += [c for c in de_jesus if c["id"] not in ya]
 
     def _err(c):
         mm = c.get("macros", {})
@@ -1849,6 +1858,11 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         mm = c.get("macros", {})
         return max(abs(obj[m] - float(mm.get(m, 0) or 0)) for m in ("P", "H", "G"))
 
+    def _de_jesus(c):
+        """Las comidas de los menús de ELM van por delante de las de los clientes.
+        Son material suyo, cocinado y publicado; las otras son de relleno."""
+        return c.get("fuente") == "elm_menus"
+
     def _gente(c):
         """Cuánta GENTE DISTINTA lo ha montado aquí. Es el criterio del punto 71 y no
         es lo mismo que las veces: un menú que han montado 30 personas es bueno; uno
@@ -1862,12 +1876,13 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         return int(c.get("usos") or 0), int(c.get("veces") or c.get("usos_calma") or 0)
 
     if orden == "usado":
-        candidatos.sort(key=lambda c: (-_gente(c), -_veces(c)[0], _desfase(c)))
+        candidatos.sort(key=lambda c: (not _de_jesus(c), -_gente(c), -_veces(c)[0], _desfase(c)))
     else:
         # Dentro de lo que ya cuadra, el desfase no lo nota nadie -- y ordenar por él
         # al detalle deja el criterio de la gente sin estrenar, porque casi todos
         # cuadran al decimal. Se agrupa por gramo entero y manda la gente.
-        candidatos.sort(key=lambda c: (round(_desfase(c)), -_gente(c), -_veces(c)[0], _err(c)))
+        candidatos.sort(key=lambda c: (round(_desfase(c)), not _de_jesus(c), -_gente(c),
+                                       -_veces(c)[0], _err(c)))
     trabajo = candidatos[:_LIBRARY_TRABAJO_MAX]
 
     # Preferencias del usuario (alimentos evitados) + catálogo de los candidatos
@@ -1984,6 +1999,10 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
             # cuenta repeticiones, y una persona repitiendo 30 veces no es una señal.
             "personas": int(c.get("clientes") or 0),
             "origen": c.get("origen", "cliente"),
+            # De dónde sale: "elm_menus" son las comidas de los menús de Jesús y
+            # "clientes" lo que monta la gente. Al cliente se le dice cuál es cuál.
+            "de_jesus": c.get("fuente") == "elm_menus",
+            "menu_elm": c.get("menu"),
             "ajustado": ajustado,
             "cuadrada": bool(ajuste and ajuste.get("cuadrada")),
             "clavado": err <= 0.5,
@@ -2022,12 +2041,16 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         # Aquí manda la gente porque es lo que se ha pedido, así que ampliar el margen
         # sí puede reordenar: si entra un menú que ha montado más gente, se pone
         # delante. Es lo esperable en este modo, no en el de por defecto.
-        menus.sort(key=lambda m: (-m["personas"], -m["veces"], m["desfase"]))
+        menus.sort(key=lambda m: (not m["de_jesus"], -m["personas"], -m["veces"], m["desfase"]))
     else:
         # Por desfase (el peor macro) y no por la suma: así, ampliar el margen solo
         # añade menús al final y no mueve ni uno de los de arriba. Comprobado de ±1 a
         # ±15 en Comida 1 y Comida 2: ningún menú desaparece al ampliar.
-        menus.sort(key=lambda m: (round(m["desfase"]), -m["personas"], -m["veces"], m["err"]))
+        #
+        # Y dentro de lo que cuadra igual de bien, primero lo de Jesús: son comidas
+        # suyas, publicadas en sus menús, y las de los clientes son de relleno.
+        menus.sort(key=lambda m: (round(m["desfase"]), not m["de_jesus"], -m["personas"],
+                                  -m["veces"], m["err"]))
     total = len(menus)   # menús ofrecibles: cuadran a ±margen y pasan los dos filtros
     menus = menus[:limit]
 
