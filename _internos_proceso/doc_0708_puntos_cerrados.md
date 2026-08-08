@@ -2474,6 +2474,36 @@ tocar el criterio, se entera con el catálogo entero y no con cinco ejemplos.
      Y enseña las opciones de arroz y de pollo, que esas sí las tiene.
 ```
 
+
+### Y la red de varias palabras: barrida también, y esta no tenía el fallo
+
+Quedaba por medir la otra red, la que actúa cuando la petición trae dos o más palabras
+(la «cobertura» de `search_foods`). La sospecha era razonable, porque hace exactamente lo
+que hubo que corregir en los regex: `w in nombre`, subcadena en cualquier posición.
+
+**Medido sobre las 3.211 fichas, no lo tiene:**
+
+```
+las 2.997 fichas de 2+ palabras se reconocen a sí mismas por su nombre    2.997 / 2.997
+de 15 peticiones inventadas de 2-3 palabras, encuentran algo                  2 / 15
+   ...y las MISMAS dos con el criterio por palabra: no lo arregla cambiarlo
+en 12 peticiones reales, cambiar a criterio por palabra cambia algo            1 / 12
+   ...y para peor: "leche desnatada" dejaría fuera las semidesnatadas
+```
+
+Las dos que encuentran algo son «solomillo de sal» -> *Solomillo de salmón* y «queso de
+tomillo» -> *Focaccia queso, romero y tomillo*, que llevan de verdad las palabras pedidas.
+Nadie va a pedir eso.
+
+El motivo de que aquí no haga falta: exigir que estén **todas** las palabras (o todas menos
+una si son 3+) ya es un filtro fuerte por sí solo. Que dos palabras coincidan por
+casualidad como subcadena es rarísimo; que lo haga una sola, no -- y por eso allí sí hacía
+falta y aquí no.
+
+**Así que no se ha cambiado nada.** Se deja el barrido como test
+(`test_cobertura_varias_palabras.py`) para que la medida quede fijada y quien toque la
+cobertura lo vea contra el catálogo entero.
+
 ### Y de paso, el cuelgue otra vez
 
 Probando esto el chat se quedó bloqueado **en el arranque**, no en el envío: el tope al
