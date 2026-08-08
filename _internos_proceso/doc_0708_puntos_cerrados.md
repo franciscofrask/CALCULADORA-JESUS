@@ -808,6 +808,45 @@ navegador se cuelga al abrirla; es la misma revisión de un minuto que el punto 
 
 ---
 
+### Punto 26 - «La fecha por defecto es el lunes y tiene que ser mañana» · NO REPRODUCIDO
+
+Este punto llegó con el apartado «Qué hacer» vacío, así que lo primero era encontrar dónde sale
+ese lunes. **No sale en ningún sitio.** Lo comprobado, con pruebas y no de memoria:
+
+**1 · La fecha del ajuste de macros ya es mañana, y también en producción.** Es el único campo de
+fecha del flujo del entrenador y ya trae mañana por defecto desde el 05-08 (punto 2.3 del
+documento anterior). Abierta la ficha de un cliente real con Playwright, hoy viernes 7:
+
+```
+[Macros] macro-effective-date = 2026-08-08 (sabado)
+```
+
+Y en el paquete que sirve producción ahora mismo (`main.2d305a8a.js`) está la misma cuenta,
+`L3(1)` (= hoy + 1 día) y el atajo «Poner mañana». Así que lo que Jesús tiene delante en la web
+tampoco es un lunes.
+
+**2 · Recorridas las diez pestañas de la ficha** (Resumen, Macros, Membresía, Cuestionario,
+Entreno, Nutrición, Menús, Suplementos, Seguimiento, Más) volcando todos los campos de fecha y
+todo el texto con pinta de fecha. Los únicos campos de fecha son el del ajuste (mañana), los dos
+filtros del historial (vacíos) y el del siguiente protocolo de suplementos (vacío).
+
+**3 · Buscado el lunes en todo el código.** En el frontend la palabra «lunes» sólo aparece como
+nombre de día en la rutina; en el paquete de producción, igual. En el backend, el único sitio que
+calcula un lunes es `core/calendario_arranque.py` - «todos los clientes arrancan en lunes, pague
+el día que pague», con la regla de las 48 horas y el anclaje del cobro de Stripe a los 84 días.
+**Ese módulo no lo llama nadie**: está escrito y sin conectar.
+
+**Lo que queda.** Hay dos lecturas del punto y las dos necesitan una palabra de Jesús:
+
+- Si se refiere a **la fecha del ajuste**, ya está hecho: es mañana, en dev y en producción.
+- Si se refiere a **cuándo arranca un cliente nuevo** - o sea, tirar la regla del lunes y que
+  empiece al día siguiente de darse de alta -, es un cambio de método, no un cambio de campo, y
+  toca el anclaje de la facturación. No se toca sin que lo confirme, y como el módulo está
+  desconectado ahora mismo no cambia nada en la app: un cliente que se dé de alta el domingo
+  empieza el lunes porque empieza al día siguiente, no porque haya una regla que lo mande.
+
+---
+
 ---
 
 ## PENDIENTES
@@ -836,6 +875,12 @@ que no son de Jesús. **Hay que pedirle a Jesús cuáles son las suyas.** La otr
 está: ese documento trae los textos buenos de las 12 pantallas, pero en ningún sitio señala cuál
 está roto en la app. Con los textos delante se puede ir pantalla por pantalla a buscarlo, pero
 ya no es "de un minuto" como decía el punto. **Que Jesús diga cuál es.**
+
+**Dónde está el lunes** (punto 26). El punto llegó sin el «Qué hacer» y el lunes no aparece por
+ningún lado: la fecha del ajuste ya es mañana en dev y en producción, y en el código la única
+regla del lunes (`calendario_arranque.py`) está desconectada. **Que Jesús diga en qué pantalla lo
+vio**, o si lo que quiere es que un cliente nuevo arranque al día siguiente en vez de esperar al
+lunes - que es un cambio de método y toca la facturación.
 
 **Los fondos de pantalla del test** (punto 24). Jesús dice que ya los pasó por Drive y que no
 hay que buscar fotos nuevas. **No aparecen**: no están en el disco y en Drive se ha buscado por
