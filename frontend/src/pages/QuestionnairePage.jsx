@@ -590,8 +590,6 @@ const QuestionnairePage = () => {
     // Los macros de antes de la ultima respuesta, para poder mostrar cuanto se ha movido cada uno.
     const previosRef = useRef(null);
     // Punto de partida: fotos subidas y la ficha que se le entrega a cambio.
-    const [fotosPartida, setFotosPartida] = useState(0);
-    const [subiendoFotos, setSubiendoFotos] = useState(false);
     const [ficha, setFicha] = useState(null);
     // P10: lo que hemos entendido de su dieta, pendiente de que lo confirme.
     const [lecturaDieta, setLecturaDieta] = useState(null);
@@ -862,43 +860,18 @@ const QuestionnairePage = () => {
     };
 
 
-    // ── Punto de partida: fotos y medidas del dia 1 ──────────────────────────
-    // Las fotos van por el endpoint de siempre (multipart), que ya sabe validarlas y guardarlas
-    // en disco; aqui solo se eligen y se suben.
-    const elegirFotosPartida = () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.multiple = true;
-        input.onchange = async (ev) => {
-            const files = [...(ev.target.files || [])];
-            if (!files.length) return;
-            setSubiendoFotos(true);
-            let subidas = 0;
-            for (const file of files) {
-                try {
-                    const fd = new FormData();
-                    fd.append('file', file);
-                    const r = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/reports/photos`, {
-                        method: 'POST',
-                        headers: { Authorization: `Bearer ${token}` },
-                        body: fd,
-                    });
-                    if (r.ok) subidas += 1;
-                    else {
-                        const e = await r.json().catch(() => ({}));
-                        toast.error(e.detail || `No se ha podido subir ${file.name}`);
-                    }
-                } catch (e) {
-                    toast.error(`No se ha podido subir ${file.name}`);
-                }
-            }
-            setFotosPartida(n => n + subidas);
-            setSubiendoFotos(false);
-            if (subidas) toast.success(`${subidas} foto${subidas > 1 ? 's' : ''} guardada${subidas > 1 ? 's' : ''}`);
-        };
-        input.click();
-    };
+    // ── Punto de partida: las medidas del dia 1 ──────────────────────────────
+    //
+    // Aquí también se le pedían las fotos, y se han quitado (punto 19 del doc del 07-08). El
+    // motivo: acaba de darse de alta, todavía no sabe qué es un reporte ni para qué sirven
+    // esas tres poses, y pedírselas ahí es pedirle que se desnude delante del móvil sin
+    // haberle explicado nada. Las fotos van con el reporte, que es donde tienen sentido: se
+    // le enseñan las del mes pasado al lado para que se coloque igual, y ahí sí entiende que
+    // son para comparar.
+    //
+    // Lo que se pierde, y conviene saberlo: la foto "inicial" pasa a ser la de su primer
+    // reporte y no la del día 1. Las medidas sí se siguen pidiendo aquí, con el vídeo de
+    // Jesús explicando cómo se toman los perímetros, porque de esas no hay pudor que valga.
 
     const guardarPuntoDePartida = async () => {
         // Las MISMAS diez que en el reporte. Había tres listas distintas en la app -- aquí
@@ -1639,41 +1612,19 @@ const QuestionnairePage = () => {
             </div>
         );
     } else if (step.type === 'partida') {
-        // Fotos y medidas del dia 1. Se piden aqui porque es el momento de mas ganas, y porque
-        // sin una foto de hoy dentro de un mes no hay con que comparar.
+        // Las medidas del día 1. Las fotos ya NO se piden aquí: van con el reporte (punto 19
+        // del doc del 07-08), que es donde el cliente entiende para qué son.
         body = (
             <div>
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
                     Ya tienes tus macros
                 </h2>
                 <p className="text-foreground/60 mb-6 text-sm md:text-base">
-                    Hazte las fotos de hoy para poder comparar dentro de un mes. Es lo único que no
-                    se puede recuperar después.
+                    Apunta tus medidas de hoy para poder comparar más adelante. Las fotos te las
+                    pediremos en tu primer reporte, con las poses explicadas.
                 </p>
 
                 <div className="space-y-4 mb-6">
-                    <div>
-                        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-1.5">
-                            Tus fotos de hoy
-                        </label>
-                        <button type="button" onClick={elegirFotosPartida} disabled={subiendoFotos}
-                            className="w-full rounded-xl border-2 border-dashed border-[#333] py-7 text-center hover:border-brand transition-colors disabled:opacity-50">
-                            {subiendoFotos ? (
-                                <span className="inline-flex items-center gap-2 text-foreground/60 text-sm">
-                                    <Loader2 className="w-4 h-4 animate-spin" /> Subiendo...
-                                </span>
-                            ) : fotosPartida > 0 ? (
-                                <span className="inline-flex items-center gap-2 text-foreground/80 text-sm">
-                                    <Check className="w-4 h-4 text-emerald-500" /> {fotosPartida} foto{fotosPartida > 1 ? 's' : ''} subida{fotosPartida > 1 ? 's' : ''}. Toca para añadir más
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-2 text-foreground/50 text-sm">
-                                    <ImagePlus className="w-5 h-5" /> Subir fotos (frente, lateral y espalda)
-                                </span>
-                            )}
-                        </button>
-                    </div>
-
                     {/* Las MISMAS diez que en el reporte, para que la del día 1 se pueda
                         comparar con la del mes que viene. Antes aquí se pedían cuatro
                         (cintura, abdomen, cadera y la altura), en el check-in cinco y en el

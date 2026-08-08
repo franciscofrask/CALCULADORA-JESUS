@@ -522,6 +522,33 @@ en el servidor. Arreglado: el decorador vuelve a la función que crea el check-i
 punta a punta (se envía, se guarda con lo que ha comido, y se lee tanto en el historial del
 cliente como en la ficha del entrenador).
 
+### Punto 19 - Las fotos se suben desde el sitio equivocado · CERRADO
+
+**Casi todo estaba hecho, pero sin llegar a producción.** El 6 de agosto ya se había movido la
+subida de fotos a un único sitio, el reporte, con sus tres poses (frente, espaldas y perfil),
+las indicaciones escritas y la foto del mes pasado al lado de cada hueco para que se coloque
+igual. La pantalla de check-ins, donde antes se subían, se quedó solo para verlas. Y el vídeo
+de Jesús explicando cómo se toman los perímetros también estaba, y es exactamente el del
+enlace del punto.
+
+Lo que pasa es que **nada de eso estaba en producción**: venía de un despliegue anterior a ese
+día. De hecho, el fichero donde vive el enlace del vídeo es justo el que faltaba en el servidor
+y el que hizo fallar el primer intento de despliegue de esta noche. Con el despliegue ya hecho,
+todo eso está vivo.
+
+**Lo que sí faltaba, y es lo que dice el punto.** El alta seguía pidiendo las tres fotos justo
+después de dar los macros, con el argumento de que era "el momento de más ganas". Ese es el
+punto del flujo donde el cliente aún no entiende para qué son: acaba de darse de alta, no sabe
+qué es un reporte, y se le pide que se haga tres fotos del cuerpo sin haberle explicado nada.
+Se han quitado de ahí.
+
+Las **medidas sí se siguen pidiendo** en ese paso, con el vídeo de Jesús al lado, porque el
+punto no las menciona y ahí no hay pudor que valga.
+
+**Lo que se pierde, y conviene tenerlo claro:** la foto "inicial" pasa a ser la del primer
+reporte del cliente y no la del día uno. Es la consecuencia de moverlas, y se asume porque una
+foto que el cliente no entiende para qué es, muchas veces no se hace.
+
 ---
 
 ## Pendientes que no dependen de nosotros
