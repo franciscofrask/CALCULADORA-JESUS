@@ -1598,16 +1598,16 @@ ya solo pide el peso y las diez medidas.
 ### Punto 54 - Las dos cosas que no pueden pasar · CERRADO
 
 - **Comparar solo contra el mes pasado**: no pasa. La inicial esta siempre, por diseño.
-- **Generar el informe sin fotos**: pasaba, y en silencio. En la ficha del coach la comparativa
-  hacia `return null` - **desaparecia entera**, y el coach abria Seguimiento sin saber si es que
-  no hay fotos o si la pantalla esta rota. Y en el informe del cliente, el apartado de fotos
-  sencillamente no salia: el informe se generaba entero y en ningun sitio se decia que faltaba
-  justo lo que hace que sirva de algo. **Lo que no se echa en falta no se sube.**
+- **Generar el informe sin fotos**: en el informe del cliente **ya estaba resuelto** y me
+  equivoque al darlo por roto. El backend no genera el informe sin fotos - devuelve
+  `generado: false` con motivo `sin_fotos` - y el cliente ve «Tu informe esta a una foto» con un
+  boton para subirlas. Llegue a anadir un hueco para ese caso; era codigo muerto, no se alcanza
+  nunca, y lo he quitado.
 
-  Ahora las dos pantallas lo dicen. La del coach: «Todavia no hay fotos suyas. Sin fotos no hay
-  comparacion, y sin comparacion esta pantalla no dice gran cosa». La del cliente, un hueco donde
-  irian: «Es lo que de verdad ensena lo que ha cambiado: la bascula se mueve poco y las fotos no
-  enganan».
+  Donde **si** pasaba es en la **ficha del coach**: la comparativa hacia `return null` y
+  **desaparecia entera**, asi que el coach abria Seguimiento sin saber si es que no hay fotos o
+  si la pantalla esta rota. Ahora lo dice: «Todavia no hay fotos suyas. Sin fotos no hay
+  comparacion, y sin comparacion esta pantalla no dice gran cosa».
 
 ### Punto 52 - Lo que va debajo de cada foto · CERRADO, y con dos arreglos
 
@@ -1626,16 +1626,72 @@ segun se tienen, y la inicial se queda a la izquierda, que es la regla de Jesus.
 
 ---
 
+---
+
+## Bloque G - Las tres preguntas que faltaban en el reporte
+
+**Las tres estaban ya**, hechas el 05-08 (punto 5 de aquel documento), con los textos de Jesus y
+sus opciones exactas. Lo que hacia falta era comprobar que **sirven para lo que dice cada punto**,
+y ahi aparecio el que no.
+
+### Punto 55 - «Proximo objetivo» · YA ESTABA, con un texto a medias
+
+La pregunta esta, con Definicion / Volumen / Mantenimiento, y **dispara el cambio de fase**: al
+guardar el reporte cambia `goal` en el perfil y fecha `fase_desde`, que es lo que luego usa la
+comparativa de fotos para la etiqueta de inicio de fase. Sin ella un Nivel 1 no cambiaria de fase
+nunca, que es exactamente lo que avisa el punto.
+
+El texto de ayuda estaba recortado: «De cara a las proximas 4 semanas, que puede ser lo mismo o
+puedes cambiar». Faltaban **«que hasta ahora»** y el **«(piénsalo bien)»**, que no es relleno: es
+lo que hace que no se conteste en automatico, y esta es la pregunta que mueve la fase. Puesto
+literal.
+
+### Punto 56 - «¿Como de viable seria un nuevo ajuste?» · YA ESTABA, y llega a donde tiene que llegar
+
+Las tres opciones son las suyas, y la respuesta **alimenta el margen que mira el asistente**
+(`_margen_del_cliente`): si el cliente dice que necesita comer mas, el agente lo ve. Antes ese
+margen solo salia del cuestionario inicial, que se responde una vez y envejece; ahora se
+pregunta cada reporte.
+
+### Punto 57 - «¿En que grado has cumplido con el entrenamiento?» · ESTABA A MEDIAS
+
+La pregunta estaba y se guardaba, pero **la barra del informe seguia sin usarla**. Seguia
+contando registros de entreno que **no existen**: la app guarda el plan de rutina, no las
+sesiones hechas, y el check-in diario dejo de preguntarlo en julio.
+
+El resultado era peor que no tener barra:
+
+```
+antes:  {'dias': 0, 'previstos': 16, 'pct': 0, 'color': 'rojo'}
+```
+
+A un cliente que hubiera entrenado los dieciseis dias se le ensenaba **0%, en rojo**.
+
+Ahora la barra sale de lo que el contesta:
+
+| Contesta | Barra |
+|---|---|
+| Todos los entrenos | 100% verde |
+| Casi todos | 80% verde |
+| La mitad | 50% ambar |
+| Pocos | 25% rojo |
+| Ninguno | 0% rojo |
+
+**Y se dice de donde sale**: debajo pone «segun lo que nos contaste» en vez de «N de 16». «Lo
+dices tu» no es lo mismo que «esta contado», y dar por medido lo que no lo esta es de las cosas
+que hacen que un informe deje de creerse. Los 105 tests del informe siguen pasando.
+
+---
+
 ## PENDIENTES
 
 Todo lo que queda abierto, ordenado por quién tiene que mover ficha. **Actualizado el 8 de agosto**,
-con los bloques A al F cerrados.
+con los bloques A al G cerrados.
 
-Del documento de Jesús están trabajados los puntos **1 al 54**. Quedan por leer los bloques G al
-K: las tres preguntas del reporte (55-57), los arreglos de la base de alimentos (58-60), los
-fallos apuntados que siguen ahí (61-64), los menús autoajustables (65-75) y el asistente de IA
-(76-80). **Todos son de este fin de semana**, y dos de esos bloques (I y K) están marcados como
-imprescindibles para el domingo.
+Del documento de Jesús están trabajados los puntos **1 al 57**. Quedan por leer los bloques H al
+K: los arreglos de la base de alimentos (58-60), los fallos apuntados que siguen ahí (61-64), los
+menús autoajustables (65-75) y el asistente de IA (76-80). **Todos son de este fin de semana**, y
+dos de esos bloques (I y K) están marcados como imprescindibles para el domingo.
 
 ---
 
@@ -1676,7 +1732,7 @@ contra la calculadora de verdad**.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo hasta
 el commit `8421e3b`; lo posterior está en GitHub y sin desplegar, esperando la orden: el punto
 19, el test de entrada del documento de textos, las cuatro respuestas de la dieta, las dos reglas
-nuevas del filtro, y los **puntos 23, 25 y 27 al 54** (los bloques D, E y F enteros).
+nuevas del filtro, y los **puntos 23, 25 y 27 al 57** (los bloques D, E, F y G enteros).
 
 **Y con ese despliegue, pasar cuatro scripts**, cada uno **una sola vez** y después de subir:
 

@@ -88,7 +88,10 @@ const PREGUNTAS_REPORTE = [
     {
         campo: 'proximo_objetivo',
         titulo: 'Próximo objetivo',
-        ayuda: 'De cara a las próximas 4 semanas, que puede ser lo mismo o puedes cambiar.',
+        // El texto entero del documento del 07-08 (punto 55). Faltaban "que hasta ahora" y
+        // el "(piénsalo bien)", que no es relleno: es lo que hace que no se conteste en
+        // automático, y esta es la pregunta que dispara el cambio de fase.
+        ayuda: 'De cara a las próximas 4 semanas, que puede ser lo mismo que hasta ahora o puedes cambiar (piénsalo bien).',
         opciones: [
             { value: 'definicion', label: 'Definición' },
             { value: 'volumen', label: 'Volumen' },

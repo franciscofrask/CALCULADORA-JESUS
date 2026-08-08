@@ -124,18 +124,46 @@ def evaluar_peso(peso_ahora: Optional[float], peso_antes: Optional[float],
     }
 
 
+# Lo que contesta en el reporte -> porcentaje para la barra de entrenos (punto 57 del doc
+# del 07-08). La app NO registra las sesiones hechas: guarda el plan de rutina, no lo que
+# entreno de verdad, y el check-in diario dejo de preguntarlo en julio. Desde entonces la
+# barra de entrenos del informe estaba sin fuente.
+#
+# "O se quita la barra, o se pregunta. Jesus prefiere preguntarla, que ya la tiene escrita
+# en su formulario." Asi que la barra sale de lo que el dice, y se marca como tal: es un
+# dato AUTODECLARADO y no una cuenta, y mezclarlo con lo registrado sin decirlo seria dar
+# por medido algo que no lo esta.
+CUMPLIMIENTO_ENTRENO_PCT = {
+    "todos": 100,
+    "casi_todos": 80,
+    "la_mitad": 50,
+    "pocos": 25,
+    "ninguno": 0,
+}
+
+
 def evaluar_cumplimiento(dias_periodo: int, dias_dieta: int, dias_entreno: int,
-                         entrenos_previstos: Optional[int] = None) -> Dict[str, Any]:
+                         entrenos_previstos: Optional[int] = None,
+                         cumplimiento_entreno: Optional[str] = None) -> Dict[str, Any]:
     """Cumplimiento en verde y rojo, sacado de lo REGISTRADO.
 
     El documento saca el cumplimiento de los datos, no de preguntarle que se puntue:
     "el cumplimiento se obtiene asi, no preguntandole que se puntue".
+
+    La EXCEPCION es el entrenamiento, porque no hay registro que valga: la app guarda el
+    plan de rutina, no las sesiones hechas. Ahi manda lo que contesto en el reporte
+    (`cumplimiento_entreno`), y la barra dice de donde sale.
     """
     dias_periodo = max(1, int(dias_periodo or 0))
     pct_dieta = min(100, round(dias_dieta / dias_periodo * 100))
 
     previstos = entrenos_previstos if entrenos_previstos else None
     pct_entreno = min(100, round(dias_entreno / previstos * 100)) if previstos else None
+    # Lo que el dice manda sobre la cuenta de registros: los registros de entreno no
+    # existen, asi que un 0% "calculado" solo significa que nadie apunto nada.
+    declarado = CUMPLIMIENTO_ENTRENO_PCT.get(cumplimiento_entreno)
+    if declarado is not None:
+        pct_entreno = declarado
 
     def color(pct: Optional[int]) -> str:
         if pct is None:
@@ -146,7 +174,12 @@ def evaluar_cumplimiento(dias_periodo: int, dias_dieta: int, dias_entreno: int,
         "dias_periodo": dias_periodo,
         "dieta": {"dias": dias_dieta, "pct": pct_dieta, "color": color(pct_dieta)},
         "entreno": {"dias": dias_entreno, "previstos": previstos,
-                    "pct": pct_entreno, "color": color(pct_entreno)},
+                    "pct": pct_entreno, "color": color(pct_entreno),
+                    # De donde sale el numero, para que la barra lo pueda decir: "lo dices
+                    # tu" no es lo mismo que "esta contado", y darlo por medido cuando no
+                    # lo esta es de las cosas que hacen que un informe deje de creerse.
+                    "declarado": declarado is not None,
+                    "respuesta": cumplimiento_entreno},
         # Lo que hay que preguntarle antes de rellenar: los dias sin registrar no son
         # necesariamente dias incumplidos (parte 6, "la confirmacion de huecos").
         "huecos_dieta": max(0, dias_periodo - dias_dieta),
@@ -352,6 +385,9 @@ def montar_informe(*, perfil: Dict[str, Any], reporte: Dict[str, Any],
     cumplimiento = evaluar_cumplimiento(
         dias_periodo=dias_periodo, dias_dieta=dias_dieta, dias_entreno=dias_entreno,
         entrenos_previstos=(perfil.get("training_days") or 0) * max(1, round(dias_periodo / 7)),
+        # Lo que contesto en ESTE reporte (punto 57): es la unica fuente que hay para el
+        # entrenamiento, porque las sesiones hechas no se registran en ningun sitio.
+        cumplimiento_entreno=reporte.get("cumplimiento_entreno"),
     )
     macros = comparar_macros(perfil.get("macros_training") or {}, macros_comidos or {})
 

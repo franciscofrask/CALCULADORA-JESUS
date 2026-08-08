@@ -153,7 +153,9 @@ const ComparativaFotos = ({ comparativa, todas }) => {
     );
 };
 
-const Barra = ({ etiqueta, dato, sufijo }) => (
+// `ocultarDias`: cuando el dato lo declara él y no está contado, poner "0 según lo que nos
+// contaste" sería mentir dos veces - ni son cero ni están contados (punto 57).
+const Barra = ({ etiqueta, dato, sufijo, ocultarDias = false }) => (
     <div>
         <div className="flex items-baseline justify-between mb-1">
             <span className="text-xs text-muted-foreground">{etiqueta}</span>
@@ -164,7 +166,7 @@ const Barra = ({ etiqueta, dato, sufijo }) => (
         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div className={`h-full rounded-full ${FONDO[dato.color]}`} style={{ width: `${dato.pct || 0}%` }} />
         </div>
-        <p className="text-[11px] text-muted-foreground mt-1">{dato.dias} {sufijo}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{ocultarDias ? sufijo : `${dato.dias} ${sufijo}`}</p>
     </div>
 );
 
@@ -239,31 +241,27 @@ export const InformeMensual = ({ informe, onPedirFotos }) => {
                 </Apartado>
             )}
 
-            {/* SIN FOTOS NO HAY COMPARACIÓN, Y HAY QUE DECIRLO (punto 54 del doc del 07-08).
-                Antes, si el cliente no había subido ninguna, el apartado de fotos
-                sencillamente no salía: el informe se generaba entero y en ningún sitio se
-                decía que faltaba justo lo que hace que esto sirva de algo. Y lo que no se
-                echa en falta no se sube. */}
-            {!fotos.comparativa?.length && todasLasFotos.length === 0 && (
-                <Apartado titulo="Tú, mes a mes">
-                    <div className="rounded-xl border border-dashed border-border p-4 text-center" data-testid="informe-sin-fotos">
-                        <Camera className="w-6 h-6 text-muted-foreground/40 mx-auto mb-2" />
-                        <p className="text-sm text-foreground font-medium">Aquí irían tus fotos</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Es lo que de verdad enseña lo que ha cambiado: la báscula se mueve poco
-                            y las fotos no engañan. Súbelas con tu próximo reporte y a partir de
-                            ahí se comparan solas.
-                        </p>
-                    </div>
-                </Apartado>
-            )}
+            {/* Punto 54 del doc del 07-08 ("que se genere el informe sin fotos"): aquí no
+                hace falta nada. El informe NO se genera sin fotos - el backend devuelve
+                `generado: false` con motivo `sin_fotos` y arriba se sale con "Tu informe está
+                a una foto" y un botón para subirlas. Donde sí faltaba era en la ficha del
+                coach, que se quedaba en blanco sin decir nada. */}
 
             <Apartado titulo="Lo que has cumplido">
                 <div className="grid grid-cols-2 gap-4">
                     <Barra etiqueta="Dieta registrada" dato={cumplimiento.dieta}
                         sufijo={`de ${cumplimiento.dias_periodo} días`} />
+                    {/* La barra de entrenos sale de lo que él contesta en el reporte, no de
+                        un registro (punto 57 del doc del 07-08): la app guarda el plan de
+                        rutina, no las sesiones hechas, y el check-in diario dejó de
+                        preguntarlo en julio. Se dice de dónde sale: "lo dices tú" no es lo
+                        mismo que "está contado", y dar por medido lo que no lo está es de
+                        las cosas que hacen que un informe deje de creerse. */}
                     <Barra etiqueta="Entrenamientos" dato={cumplimiento.entreno}
-                        sufijo={cumplimiento.entreno.previstos ? `de ${cumplimiento.entreno.previstos}` : 'registrados'} />
+                        sufijo={cumplimiento.entreno.declarado
+                            ? 'según lo que nos contaste'
+                            : (cumplimiento.entreno.previstos ? `de ${cumplimiento.entreno.previstos}` : 'registrados')}
+                        ocultarDias={cumplimiento.entreno.declarado} />
                 </div>
                 {cumplimiento.huecos_dieta > 0 && (
                     <p className="text-[11px] text-muted-foreground mt-3">
