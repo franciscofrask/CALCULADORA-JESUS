@@ -58,6 +58,15 @@ const _fechaLarga = (iso) => iso
     ? new Date(iso + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
     : '';
 
+// El reporte del que sale el peso del ajuste: el ultimo que traiga peso (punto 25). Aqui
+// arriba y no dentro del componente porque hace falta en dos sitios: al cargar la ficha,
+// para rellenar el editor, y al pintar, para decir de que reporte viene.
+const _reporteDelPeso = (reports) => {
+    const conPeso = (reports || []).filter(r => r?.weight != null && r?.created_at);
+    if (!conPeso.length) return null;
+    return conPeso.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+};
+
 // ===== Buscador de menús para el coach (biblioteca real de clientes + recetario) =====
 const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
     const [macros, setMacros] = useState({ P: '', H: '', G: '' });
@@ -248,14 +257,20 @@ const ClientDetailPage = () => {
         // Modelo predictivo (paso 1): criterio interno del coach y % graso del momento.
         criterio: '',
         porcentaje_graso: '',
-        // El peso con el que se hace el ajuste: el de HOY, no el del ajuste anterior (2.2).
+        // El peso con el que se hace el ajuste: el del reporte que se esta leyendo (punto 25).
         peso: '',
+        // Y la fecha en que se peso, que NO es la del ajuste (punto 27): se archiva ahi.
+        peso_fecha: '',
         // Manana, no hoy (2.3): el ajuste se pone para que empiece al dia siguiente.
         effective_date: hoyISO(1),
     };
     const [macrosForm, setMacrosForm] = useState(MACROS_FORM_VACIO);
     const [entryForm, setEntryForm] = useState(MACROS_FORM_VACIO);
     const [savingMacros, setSavingMacros] = useState(false);
+    // Lo ultimo que se guardo de verdad, para dejarlo escrito en pantalla (punto 28). El aviso
+    // flotante se va solo a los tres segundos: si el coach mira despues, no sabe si guardo, y
+    // entonces guarda otra vez (y el ajuste duplicado se le queda como el ultimo).
+    const [ultimoGuardado, setUltimoGuardado] = useState(null);
     const [savingEntry, setSavingEntry] = useState(false);
     // Sugerencia de la IA que dio pie al ajuste que hay ahora en el editor (si la hubo).
     const [sugerenciaId, setSugerenciaId] = useState(null);
@@ -321,6 +336,10 @@ const ClientDetailPage = () => {
             // (mismo criterio que macrosActuales: 0 es un valor valido, no un hueco).
             const p = response.data.profile;
             const _v = (m, k1, k2) => { const v = m?.[k1] ?? m?.[k2]; return v == null ? '' : String(v); };
+            // El peso del editor sale del reporte que se esta ajustando, con SU fecha (puntos
+            // 25 y 27). Si el cliente no ha mandado ninguno todavia, se cae al de la ficha, y
+            // entonces no hay fecha de pesaje que valga: se archiva con la del ajuste.
+            const repPeso = _reporteDelPeso(response.data.reports);
             setMacrosForm({
                 training: { protein: _v(p?.macros_training, 'protein', 'proteinas'), carbs: _v(p?.macros_training, 'carbs', 'hidratos'), fat: _v(p?.macros_training, 'fat', 'grasas') },
                 rest: { protein: _v(p?.macros_rest, 'protein', 'proteinas'), carbs: _v(p?.macros_rest, 'carbs', 'hidratos'), fat: _v(p?.macros_rest, 'fat', 'grasas') },
@@ -328,7 +347,8 @@ const ClientDetailPage = () => {
                 note: '',
                 criterio: '',
                 porcentaje_graso: p?.body_fat != null ? String(p.body_fat) : '',
-                peso: p?.weight != null ? String(p.weight) : '',
+                peso: repPeso ? String(repPeso.weight) : (p?.weight != null ? String(p.weight) : ''),
+                peso_fecha: repPeso ? String(repPeso.created_at).slice(0, 10) : '',
                 effective_date: hoyISO(1),
             });
             setEntrenoForm({
@@ -462,6 +482,9 @@ const ClientDetailPage = () => {
         criterio: (f.criterio || '').trim() || null,
         porcentaje_graso: f.porcentaje_graso === '' || f.porcentaje_graso == null ? null : parseFloat(f.porcentaje_graso),
         peso: f.peso === '' || f.peso == null ? null : parseFloat(f.peso),
+        // La fecha del pesaje viaja aparte de la del ajuste (punto 27): el peso se archiva en
+        // el dia en que se peso el cliente, no en el dia en que el coach mueve los macros.
+        peso_fecha: f.peso_fecha || null,
         effective_date: f.effective_date,
     });
     const macrosFormIncompleto = (f) => ['training', 'rest'].some(
@@ -481,7 +504,7 @@ const ClientDetailPage = () => {
                 + `Intra ${f.peri.protein || 0}/${f.peri.carbs || 0} · `
                 + `Descanso ${f.rest.protein}/${f.rest.carbs}/${f.rest.fat}`
                 + `\nVigente desde el ${_fechaLarga(f.effective_date)}`
-                + (f.peso ? ` · peso ${f.peso} kg` : '')
+                + (f.peso ? ` · peso ${f.peso} kg${f.peso_fecha ? ` del ${_fechaCorta(f.peso_fecha)}` : ''}` : '')
                 + '\nEl cliente recibe el feedback como novedad.',
             confirmLabel: 'Guardar macros',
         })) return;
@@ -489,6 +512,13 @@ const ClientDetailPage = () => {
         try {
             await api.put(`/admin/clients/${clientId}/macros`, { ...macrosFormToBody(macrosForm), sugerencia_id: sugerenciaId });
             toast.success('Macros actualizados');
+            // Y ademas queda escrito, con la hora (punto 28).
+            setUltimoGuardado({
+                hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+                desde: f.effective_date,
+                peso: f.peso || null,
+                pesoFecha: f.peso_fecha || null,
+            });
             setSugerencia(null);
             setSugerenciaId(null);
             fetchClient();
@@ -645,15 +675,13 @@ const ClientDetailPage = () => {
     //
     // Sin useMemo a propósito, igual que el de abajo: aquí ya se ha pasado por los early
     // returns del componente y un hook a estas alturas rompe el orden entre renders.
-    const reporteDelAjuste = (() => {
-        const conPeso = (reports || []).filter(r => r?.weight != null && r?.created_at);
-        if (!conPeso.length) return null;
-        return conPeso.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
-    })();
+    const reporteDelAjuste = _reporteDelPeso(reports);
     // Si el cliente todavía no ha mandado ningún reporte, se sigue usando el de la ficha.
     const pesoActual = reporteDelAjuste
         ? String(reporteDelAjuste.weight)
         : (profile?.weight != null ? String(profile.weight) : '');
+    // La fecha del pesaje que se guardará con ese peso (punto 27). Vacía si no hay reporte.
+    const pesoFechaActual = reporteDelAjuste ? String(reporteDelAjuste.created_at).slice(0, 10) : '';
     // ¿Se ha tocado algo de la pestaña de entrenamiento respecto a lo guardado?
     const _mismo = (a, b) => JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort());
     const entrenoTocado = !_mismo(entrenoForm.equipment, profile?.equipment)
@@ -674,7 +702,7 @@ const ClientDetailPage = () => {
     const setMacroCampo = (bloque, campo, valor) => setMacrosForm(prev => ({ ...prev, [bloque]: { ...prev[bloque], [campo]: valor } }));
     const descartarCambiosMacros = () => (setSugerenciaId(null), setMacrosForm({
         ...macrosActuales, note: '', criterio: '', porcentaje_graso: bfActual, peso: pesoActual,
-        effective_date: hoyISO(1),
+        peso_fecha: pesoFechaActual, effective_date: hoyISO(1),
     }));
 
     const TAB_CONFIG = [
@@ -852,7 +880,11 @@ const ClientDetailPage = () => {
                                     )}
                                     {(() => {
                                         const p = parseFloat(macrosForm.peso);
-                                        if (isNaN(p) || pesoUltimoAjuste == null) return <p className="text-[10px] text-white/30 mt-1">Queda registrado con la fecha del ajuste.</p>;
+                                        // Punto 27: se archiva con la fecha en que se peso, no con la del ajuste.
+                                        const dondeQueda = macrosForm.peso_fecha
+                                            ? `Queda registrado el ${_fechaCorta(macrosForm.peso_fecha)}, el día del pesaje.`
+                                            : 'Sin reporte: queda registrado con la fecha del ajuste.';
+                                        if (isNaN(p) || pesoUltimoAjuste == null) return <p className="text-[10px] text-white/30 mt-1">{dondeQueda}</p>;
                                         const d = Math.round((p - pesoUltimoAjuste) * 10) / 10;
                                         return (
                                             <p className="text-[10px] mt-0.5 text-white/40">
@@ -885,6 +917,19 @@ const ClientDetailPage = () => {
                                 </div>
                             </div>
                         </div>
+                        {/* Punto 28: que se vea que ha guardado. El aviso flotante se va solo; esto
+                            se queda mientras el coach siga en la ficha, y dice QUE quedo guardado. */}
+                        {ultimoGuardado && !macrosTocados && (
+                            <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 flex items-start gap-2" data-testid="macros-guardado">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                <p className="text-xs text-emerald-300/90">
+                                    <b>Guardado a las {ultimoGuardado.hora}.</b>{' '}
+                                    Vigente desde el {_fechaLarga(ultimoGuardado.desde)}
+                                    {ultimoGuardado.peso ? ` · peso ${ultimoGuardado.peso} kg${ultimoGuardado.pesoFecha ? ` del ${_fechaCorta(ultimoGuardado.pesoFecha)}` : ''}` : ''}.
+                                    {' '}El cliente ya lo tiene.
+                                </p>
+                            </div>
+                        )}
                         <div className="flex items-center justify-end gap-2 mt-4">
                             {macrosTocados && <Button size="sm" variant="ghost" className="text-white/50 hover:text-white text-xs" onClick={descartarCambiosMacros}>Descartar cambios</Button>}
                             <Button onClick={handleSaveMacros} disabled={savingMacros || !macrosTocados} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white disabled:opacity-40" data-testid="save-macros-btn">{savingMacros ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" />Guardar macros</>}</Button>

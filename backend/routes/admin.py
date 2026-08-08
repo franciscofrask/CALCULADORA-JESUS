@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, Response
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
 import asyncio
+import re
 import uuid
 import os
 
@@ -333,10 +334,15 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         w = _sanea_peso(p.get("valor"))
         if w and p.get("fecha"):
             pesos[p["fecha"]] = w
-    async for h in db.macro_history.find({"client_id": client_id}, {"_id": 0, "effective_date": 1, "peso": 1, "client_weight": 1}):
+    # El peso de un ajuste va en la curva por la FECHA DEL PESAJE, no por la del ajuste
+    # (punto 27 del 07-08): el coach ajusta hoy leyendo un reporte de hace una semana. Los
+    # ajustes antiguos no traen `peso_fecha` y se quedan donde estaban.
+    async for h in db.macro_history.find({"client_id": client_id},
+                                         {"_id": 0, "effective_date": 1, "peso_fecha": 1, "peso": 1, "client_weight": 1}):
         w = _sanea_peso(h.get("peso") if h.get("peso") is not None else h.get("client_weight"))
-        if w and h.get("effective_date"):
-            pesos[h["effective_date"]] = w
+        fecha_peso = h.get("peso_fecha") or h.get("effective_date")
+        if w and fecha_peso:
+            pesos[fecha_peso] = w
     async for r in db.reports.find({"client_id": client_id}, {"_id": 0, "created_at": 1, "weight": 1}):
         w = _sanea_peso(r.get("weight")); f = (r.get("created_at") or "")[:10]
         if w and f:
@@ -384,9 +390,14 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         fecha = h.get("effective_date") or (h.get("created_at") or "")[:10]
         if not fecha:
             continue
+        # El peso del ajuste es el que se guardo CON EL AJUSTE, y su fecha va aparte (punto
+        # 27): el ajuste es de hoy y el pesaje puede ser de la semana pasada. Antes se
+        # buscaba en la curva por la fecha del ajuste, que es justo lo que desplazaba el dato.
+        peso_del_ajuste = _sanea_peso(h.get("peso") if h.get("peso") is not None else h.get("client_weight"))
         historial.append({
             "fecha": fecha,
-            "peso": pesos.get(fecha) or _sanea_peso(h.get("client_weight")),
+            "peso": peso_del_ajuste or pesos.get(fecha),
+            "peso_fecha": h.get("peso_fecha") or fecha,
             "porcentaje_graso": h.get("body_fat"),
             "criterio": h.get("criterio"),
             "evaluacion": h.get("evaluacion"),
@@ -664,13 +675,21 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     if data.porcentaje_graso is not None:
         set_data["body_fat"] = data.porcentaje_graso
 
-    # El PESO con el que se hace el ajuste (peticion de Jesus 05-08, punto 2.2). Es el del
-    # reporte de esta semana, que puede no ser el que tiene el perfil, y va con la fecha del
-    # ajuste: "88 kilos con fecha de manana para tener el registro de ese peso, aunque el
-    # pesaje sea de hace una semana". Si lo informa, manda y actualiza el perfil.
+    # El PESO con el que se hace el ajuste. Es el del reporte que el coach esta leyendo, que
+    # puede no ser el que tiene el perfil (punto 25 del 07-08). Si lo informa, manda y
+    # actualiza el perfil.
     peso_ajuste = data.peso if data.peso is not None else profile.get("weight")
     if data.peso is not None:
         set_data["weight"] = data.peso
+
+    # Y se archiva CON LA FECHA DEL PESAJE, no con la del ajuste (punto 27 del 07-08). El
+    # 05-08 se pidio lo contrario ("88 kilos con fecha de manana"), pero manda el documento
+    # nuevo: el coach ajusta hoy leyendo un reporte de la semana pasada, y si ese peso se
+    # guarda con la fecha del ajuste el historico queda desplazado. Y el historico es lo que
+    # alimenta el modelo. Sin fecha de pesaje se queda la del ajuste, como hasta ahora.
+    peso_fecha = (data.peso_fecha or "").strip() or None
+    if peso_fecha and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", peso_fecha):
+        raise HTTPException(status_code=400, detail="La fecha del peso tiene que ser AAAA-MM-DD")
 
     if data.peri is not None:
         peri = data.peri.model_dump()
@@ -708,6 +727,8 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
         "changed_by": user.get("name", user.get("email", "admin")),
         "client_weight": peso_ajuste,
         "peso": peso_ajuste,
+        # La fecha del pesaje (punto 27). Es la que manda para colocar el peso en la curva.
+        "peso_fecha": peso_fecha or effective_date,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 

@@ -788,6 +788,11 @@ class MacrosUpdate(BaseModel):
     effective_date: Optional[str] = None
     # Calc inputs stored per change for traceability (history of how the macros were derived).
     peso: Optional[float] = Field(default=None, ge=25, le=300)
+    # LA FECHA DEL PESO, que NO es la del ajuste (punto 27 del 07-08). El coach ajusta hoy
+    # leyendo un reporte de hace una semana: si ese peso se archiva con la fecha del ajuste,
+    # la curva de peso queda corrida y el modelo aprende de un historico falso. Aqui viaja la
+    # fecha del pesaje (la del reporte). Si no viene, se usa la del ajuste, como antes.
+    peso_fecha: Optional[str] = None
     porcentaje_graso: Optional[float] = Field(default=None, ge=3, le=60)
     sexo: Optional[str] = None
     objetivo: Optional[str] = None

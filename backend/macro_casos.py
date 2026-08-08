@@ -157,7 +157,10 @@ async def _cartera() -> List[Dict]:
             if h.get("body_fat") is None and h.get("client_weight") is not None:
                 w = _sanea_peso(h.get("client_weight"))
                 if w:
-                    pesos.setdefault(fecha[:10], w)
+                    # Por la fecha del PESAJE, no por la del ajuste (punto 27 del 07-08): el
+                    # coach ajusta hoy leyendo un reporte de la semana pasada, y esta serie
+                    # de pesos es de la que sale el ritmo de cambio de cada cliente.
+                    pesos.setdefault(str(h.get("peso_fecha") or fecha)[:10], w)
         ajustes = [a for a in ajustes if _completos(a["macros"])]
         ajustes.sort(key=lambda a: a["fecha"])
 

@@ -845,6 +845,67 @@ el día que pague», con la regla de las 48 horas y el anclaje del cobro de Stri
   desconectado ahora mismo no cambia nada en la app: un cliente que se dé de alta el domingo
   empieza el lunes porque empieza al día siguiente, no porque haya una regla que lo mande.
 
+### Punto 27 - El peso se guardaba con la fecha del ajuste · CERRADO
+
+**Lo que pasaba.** El coach ajusta hoy leyendo un reporte de hace una semana. El peso de ese
+reporte se archivaba con la **fecha del ajuste**, así que un pesaje del 23 de mayo quedaba
+apuntado el 8 de agosto. La curva de peso salía corrida, y esa curva es de donde salen el ritmo
+de cambio del cliente y el banco de casos: el modelo aprendía de un histórico falso.
+
+**Ojo, esto lo pidió Jesús al revés el 05-08** («88 kilos con fecha de mañana para tener el
+registro de ese peso, aunque el pesaje sea de hace una semana», punto 2.2). Manda el documento
+nuevo, y el motivo que da es mejor: el histórico es el producto.
+
+**Lo que hay ahora.** La fecha del pesaje viaja aparte de la del ajuste. El editor coge el peso
+del reporte **y su fecha**, y las manda las dos; el ajuste sigue teniendo su propia
+`effective_date`. En el historial de macros queda un campo nuevo, `peso_fecha`, y los dos sitios
+que dibujan la curva de peso (el contexto que se le pasa al agente y el banco de casos) colocan
+el peso por esa fecha, no por la del ajuste. Los ajustes viejos no la traen y se quedan donde
+estaban, así que nada se mueve hacia atrás.
+
+Debajo del peso, la app dice dónde va a quedar: **«Queda registrado el 23/05/2026, el día del
+pesaje»** - antes decía justo lo contrario, «queda registrado con la fecha del ajuste». Y si el
+cliente aún no ha mandado ningún reporte, lo dice también: «Sin reporte: queda registrado con la
+fecha del ajuste».
+
+**De paso, se terminó el punto 25.** El aviso «Del reporte del 23/05/2026» ya estaba, pero **la
+caja del peso seguía trayendo el de la ficha**: el rótulo decía una cosa y el número era otra.
+Ahora el número es el del reporte.
+
+**Comprobado**, con el cliente de pruebas y devolviendo la ficha a su sitio al terminar:
+
+| Qué se manda | Qué queda guardado |
+|---|---|
+| peso 77,7 con pesaje 2026-05-23, ajuste 2026-08-09 | `effective_date` 2026-08-09, `peso_fecha` **2026-05-23** |
+| peso 78,8 sin fecha de pesaje | `effective_date` 2026-08-09, `peso_fecha` 2026-08-09 (como antes) |
+| pesaje «20 de mayo» | 400, «La fecha del peso tiene que ser AAAA-MM-DD» |
+
+Y en pantalla, guardando de verdad desde el editor: peso 85,4 · ajuste 2026-08-08 · pesaje
+2026-05-23.
+
+---
+
+### Punto 28 - No hay confirmación al guardar · CERRADO
+
+**Lo que había.** La confirmación **antes** de guardar ya estaba desde el 05-08 (punto 2.4) y está
+en producción: se comprobó en el paquete que sirve la web ahora mismo, que trae el diálogo
+«¿Guardar estos macros?» con el resumen de los ocho números. Al guardar salía además un aviso
+flotante, «Macros actualizados».
+
+**Por qué seguía sin valer.** El aviso flotante se va solo a los tres segundos. Si el coach mira
+la pantalla medio minuto después, no tiene forma de saber si guardó - que es literalmente lo que
+dice el punto: «si no sabe si ha guardado, va a guardar dos veces o ninguna».
+
+**Lo que hay ahora.** Al guardar queda escrito en el editor, y se queda mientras siga en la
+ficha:
+
+> ✓ **Guardado a las 23:38.** Vigente desde el sábado, 8 de agosto · peso 85,4 kg del 23/05/2026.
+> El cliente ya lo tiene.
+
+Dice la hora (para distinguir un guardado de hace un minuto de uno de hace media hora), desde
+cuándo aplica, con qué peso y de qué día es ese peso. Y desaparece en cuanto vuelve a tocar algo,
+porque entonces lo que hay en pantalla ya no es lo guardado.
+
 ---
 
 ---
