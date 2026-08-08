@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from datetime import datetime, timezone
 from typing import Optional
 import os
+import secrets
 import uuid
 import bcrypt
 from pymongo.errors import DuplicateKeyError
@@ -552,16 +553,31 @@ async def get_lead_metrics(
 @router.post("/webhook/ghl")
 async def ghl_webhook(request: Request):
     """
-    Webhook para recibir leads de GoHighLevel.
-    GHL envía un POST con datos del formulario.
-    Sin auth de usuario (webhook externo), pero si GHL_WEBHOOK_SECRET está configurado
-    se exige que la URL incluya ?secret=<valor> (configurable en la acción webhook de GHL).
+    Webhook para recibir leads de GoHighLevel. GHL envia un POST con los datos del
+    formulario. No lleva auth de usuario -- lo llama un sistema externo --, asi que la
+    unica puerta es el secreto: la URL tiene que traer ?secret=<valor> o la cabecera
+    x-webhook-secret (las dos se configuran en la accion webhook de GHL).
+
+    SIN SECRETO CONFIGURADO, ESTE ENDPOINT NO ATIENDE (punto 64 del doc del 07-08). Antes
+    era `if expected_secret:`, o sea que si la variable no estaba puesta el webhook se
+    quedaba ABIERTO en silencio: cualquiera con la URL podia meter leads en el CRM, y no
+    habia forma de notarlo -- desde fuera se ve igual que funcionando bien.
+
+    Fallar cerrado es la unica opcion defendible: un webhook que no atiende se detecta en
+    minutos porque dejan de entrar leads; uno abierto puede estar meses sin que nadie lo
+    vea. En produccion el secreto ESTA puesto (comprobado el 08-08, y el endpoint devuelve
+    401 sin el).
     """
     expected_secret = os.environ.get("GHL_WEBHOOK_SECRET", "").strip()
-    if expected_secret:
-        provided = request.query_params.get("secret", "") or request.headers.get("x-webhook-secret", "")
-        if provided != expected_secret:
-            raise HTTPException(status_code=401, detail="Webhook secret inválido")
+    if not expected_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="El webhook de GHL no está configurado (falta GHL_WEBHOOK_SECRET).")
+    provided = request.query_params.get("secret", "") or request.headers.get("x-webhook-secret", "")
+    # Comparacion en tiempo constante: con `!=` se puede adivinar el secreto caracter a
+    # caracter midiendo lo que tarda en responder.
+    if not secrets.compare_digest(provided, expected_secret):
+        raise HTTPException(status_code=401, detail="Webhook secret inválido")
 
     try:
         body = await request.json()

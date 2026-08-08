@@ -1798,15 +1798,103 @@ no está allí. Los datos son los mismos; el código no.
 
 ---
 
+---
+
+## Bloque I - Fallos apuntados que siguen ahí
+
+Cuatro puntos. **Tres ya estaban resueltos** - y comprobado que lo están **en producción**, que
+es donde Jesús mira. **Uno era real y estaba abierto de par en par.**
+
+### Punto 64 - El webhook de GoHighLevel · COMPROBADO EN PRODUCCIÓN Y ADEMÁS BLINDADO
+
+El punto pide confirmar que el secreto está puesto. **Lo está**, y no me quedé en mirar la
+variable: ataqué el endpoint de producción desde fuera.
+
+```
+sin secreto        -> HTTP 401
+con secreto malo   -> HTTP 401
+```
+
+Cerrado. Pero **el diseño seguía siendo peligroso** y eso sí se ha arreglado: era
+`if expected_secret:`, o sea que **si la variable no está puesta, el webhook se queda abierto en
+silencio**. Cualquiera con la URL puede meter leads en el CRM, y desde fuera se ve exactamente
+igual que funcionando bien.
+
+Ahora **falla cerrado**: sin secreto configurado devuelve 503 y no atiende. Es la única opción
+defendible - un webhook que no atiende se detecta en minutos porque dejan de entrar leads; uno
+abierto puede estar meses sin que nadie lo vea. De paso, la comparación del secreto pasa a ser en
+tiempo constante (`secrets.compare_digest`): con `!=` se puede adivinar carácter a carácter
+midiendo lo que tarda en responder.
+
+**Lo que esto obliga**: la variable tiene que estar puesta en **todos** los entornos, no solo en
+producción. En producción ya lo estaba; en dev no, y los tests de leads lo cantaron al momento -
+daban por bueno que el webhook fuera abierto (`test_webhook_ghl_no_auth_required`). **Ese test era
+el agujero escrito en forma de test**: ponía por escrito como conducta correcta justo lo que había
+que arreglar. Ahora comprueba lo contrario - que sin secreto y con secreto malo el webhook rechaza
+- y hay otro que comprueba que con el bueno sigue entrando. **232 tests de leads, macros, webhook
+y perfil en verde.**
+
+### Punto 61 - La vista de check-ins del coach · YA ESTABA, TAMBIÉN EN PRODUCCIÓN
+
+Se arregló el 05-08 (`Los check-ins del coach dejan de decir "No entrenó" a quien nadie
+preguntó`) y se remató el 07-08. Cada dato se pinta **solo si existe**.
+
+Y como el punto dice «sigue leyendo campos que ya no existen», no me fié del código local: fui al
+**bundle que sirve producción ahora mismo** (`main.2d305a8a.js`) y ahí está el guard:
+
+```js
+null!=e.trained&&(e.trained?" · Entrenó":" · No entrenó")
+```
+
+O sea que en producción **ya no puede salir «No entrenó» sobre alguien a quien no se le
+preguntó**.
+
+### Punto 63 - Importes fijos al convertir un lead · YA ESTABA
+
+El precio sale de `merged_catalog(overrides)`, o sea del catálogo **con los ajustes que el admin
+haya hecho desde el panel**. Y si el plan no trae precio se deja **vacío**, no un número
+inventado. El comentario del código ya recoge por qué: «mejor vacío y visible que un número
+inventado, que es lo que acababa en la ficha y en los informes».
+
+### Punto 62 - Un camino de guardar macros no dejaba rastro · ERA REAL, ARREGLADO
+
+El que faltaba: **`PUT /clients/profile`**. El cliente cambia su peso o su objetivo desde su
+perfil, los macros **se recalculan solos**… y no se escribía **nada** en el historial.
+
+Dos consecuencias, y la segunda es la grave:
+
+1. El perfil decía unos macros y el historial otros, y el resolver por fecha seguía dando los
+   viejos a las dietas nuevas.
+2. **Ese historial es lo que va a entrenar al modelo. Un ajuste sin rastro es un dato perdido
+   para siempre.**
+
+Ahora deja entrada, con `origen: cliente_perfil` para que el agente no lo confunda con una
+decisión del coach - esto lo movió el propio cliente -, con su peso, su fecha de vigencia y los
+booleanos de qué macro se movió (punto 31).
+
+**Comprobado** llamando al endpoint de verdad con el cliente demo y deshaciendo después:
+
+```
+ANTES:   peso 80.0 | 99 entradas en el historial
+DESPUES: 100 entradas  ->  DEJA RASTRO
+  {'origen': 'cliente_perfil', 'note': 'Recalculados al editar su perfil',
+   'peso': 81.5, 'effective_date': '2026-08-08', 'changed_by': 'Cliente Demo'}
+```
+
+Con esto son **seis** los caminos que escriben macros y **los seis dejan rastro**: el editor del
+coach, su calculadora, el alta, el cuestionario de ajuste, la calculadora del cliente y ahora su
+perfil.
+
+---
+
 ## PENDIENTES
 
 Todo lo que queda abierto, ordenado por quién tiene que mover ficha. **Actualizado el 8 de agosto**,
-con los bloques A al H cerrados.
+con los bloques A al I cerrados.
 
-Del documento de Jesús están trabajados los puntos **1 al 60**. Quedan por leer los bloques I al
-K: los fallos apuntados que siguen ahí (61-64), los menús autoajustables (65-75) y el asistente
-de IA (76-80). **Todos son de este fin de semana**, y dos de esos bloques (I y K) están marcados
-como imprescindibles para el domingo.
+Del documento de Jesús están trabajados los puntos **1 al 64**. Quedan por leer los bloques J y
+K: los menús autoajustables (65-75) y el asistente de IA (76-80). **Los dos son de este fin de
+semana**, y el K está marcado como imprescindible para el domingo.
 
 > **Antes de dar nada por hecho: dev y producción NO comparten base de datos.** Dev va contra
 > MongoDB Atlas y producción contra el Mongo local del VPS, y **las dos bases se llaman igual**
@@ -1853,7 +1941,7 @@ contra la calculadora de verdad**.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo hasta
 el commit `8421e3b`; lo posterior está en GitHub y sin desplegar, esperando la orden: el punto
 19, el test de entrada del documento de textos, las cuatro respuestas de la dieta, las dos reglas
-nuevas del filtro, y los **puntos 23, 25 y 27 al 60** (los bloques D al H enteros).
+nuevas del filtro, y los **puntos 23, 25 y 27 al 64** (los bloques D al I enteros).
 
 **Y con ese despliegue, pasar cuatro scripts**, cada uno **una sola vez** y después de subir:
 

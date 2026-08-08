@@ -9,6 +9,11 @@ import requests
 import os
 import uuid
 
+# El webhook de GHL YA NO ES ABIERTO (punto 64 del doc del 07-08): sin secreto no
+# atiende. Los tests mandan el mismo que tenga el entorno, igual que hace GHL.
+SECRETO_GHL = os.environ.get("GHL_WEBHOOK_SECRET", "dev-ghl-webhook-secret")
+URL_WEBHOOK_SUFIJO = f"?secret={SECRETO_GHL}"
+
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000').rstrip('/')
 
 # Test credentials
@@ -52,9 +57,28 @@ class TestLeadsAuthProtection:
         assert response.status_code in [401, 403], f"Expected 401/403, got {response.status_code}"
         print("✅ POST /api/leads requires auth")
     
-    def test_webhook_ghl_no_auth_required(self):
-        """POST /api/leads/webhook/ghl does NOT require auth"""
-        response = requests.post(f"{BASE_URL}/api/leads/webhook/ghl", json={
+    def test_webhook_ghl_sin_secreto_no_atiende(self):
+        """Sin secreto, el webhook RECHAZA (punto 64 del 07-08).
+
+        Antes este test daba por bueno que el endpoint fuera abierto. Lo era: si la
+        variable no estaba puesta, cualquiera con la URL podia meter leads en el CRM.
+        Ahora falla cerrado, y esto lo vigila.
+        """
+        sin_secreto = requests.post(f"{BASE_URL}/api/leads/webhook/ghl", json={
+            "full_name": "TEST_Webhook_SinSecreto",
+            "email": "test_webhook_sin_secreto@test.com",
+        })
+        assert sin_secreto.status_code in (401, 503),             f"El webhook atendio SIN secreto: {sin_secreto.status_code}"
+        malo = requests.post(f"{BASE_URL}/api/leads/webhook/ghl?secret=loquesea", json={
+            "full_name": "TEST_Webhook_SecretoMalo",
+            "email": "test_webhook_secreto_malo@test.com",
+        })
+        assert malo.status_code in (401, 503),             f"El webhook atendio con un secreto INVALIDO: {malo.status_code}"
+        print("OK el webhook de GHL rechaza sin secreto y con secreto malo")
+
+    def test_webhook_ghl_con_secreto_entra(self):
+        """Con el secreto bueno, el webhook sigue funcionando."""
+        response = requests.post(f"{BASE_URL}/api/leads/webhook/ghl{URL_WEBHOOK_SUFIJO}", json={
             "full_name": "TEST_Webhook_NoAuth",
             "email": "test_webhook_noauth@test.com"
         })
@@ -226,8 +250,10 @@ class TestLeadsConvert:
         lead_id = create_resp.json()["id"]
         
         # Convert to client
+        # "gold" es legacy: desde el punto 40 del 07-08 un alta nueva solo puede entrar
+        # con un plan que se venda hoy.
         response = requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={
-            "plan": "gold"
+            "plan": "nivel1"
         }, headers=admin_headers)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
@@ -235,7 +261,7 @@ class TestLeadsConvert:
         assert "user_id" in data
         assert "profile_id" in data
         assert data["email"] == email
-        assert data["plan"] == "gold"
+        assert data["plan"] == "nivel1"
         print(f"✅ POST /api/leads/{lead_id}/convert creates user ({data['user_id']}) and profile ({data['profile_id']})")
         
         # Verify lead status changed to convertido
@@ -272,10 +298,10 @@ class TestLeadsConvert:
         lead_id = create_resp.json()["id"]
         
         # First conversion
-        requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={"plan": "bronze"}, headers=admin_headers)
+        requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={"plan": "nivel1"}, headers=admin_headers)
         
         # Try second conversion
-        response = requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={"plan": "gold"}, headers=admin_headers)
+        response = requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={"plan": "nivel2"}, headers=admin_headers)
         assert response.status_code == 400, f"Expected 400, got {response.status_code}"
         assert "convertido" in response.json().get("detail", "").lower()
         print("✅ Convert rejects already converted lead")
@@ -293,7 +319,7 @@ class TestLeadsWebhook:
             "email": f"ghl_webhook_{unique_id}@test.com",
             "phone": "+34611111111"
         }
-        response = requests.post(f"{BASE_URL}/api/leads/webhook/ghl", json=payload)
+        response = requests.post(f"{BASE_URL}/api/leads/webhook/ghl{URL_WEBHOOK_SUFIJO}", json=payload)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         
         data = response.json()
@@ -305,7 +331,7 @@ class TestLeadsWebhook:
     def test_webhook_ghl_sets_source_ghl(self, admin_headers):
         """Webhook lead has source='ghl'"""
         unique_id = str(uuid.uuid4())[:8]
-        webhook_resp = requests.post(f"{BASE_URL}/api/leads/webhook/ghl", json={
+        webhook_resp = requests.post(f"{BASE_URL}/api/leads/webhook/ghl{URL_WEBHOOK_SUFIJO}", json={
             "full_name": f"TEST_GHL_Source_{unique_id}",
             "email": f"ghl_source_{unique_id}@test.com"
         })
@@ -319,7 +345,7 @@ class TestLeadsWebhook:
     def test_webhook_ghl_sets_status_nuevo(self, admin_headers):
         """Webhook lead has status='nuevo'"""
         unique_id = str(uuid.uuid4())[:8]
-        webhook_resp = requests.post(f"{BASE_URL}/api/leads/webhook/ghl", json={
+        webhook_resp = requests.post(f"{BASE_URL}/api/leads/webhook/ghl{URL_WEBHOOK_SUFIJO}", json={
             "full_name": f"TEST_GHL_Status_{unique_id}"
         })
         lead_id = webhook_resp.json()["lead_id"]

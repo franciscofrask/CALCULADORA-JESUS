@@ -143,6 +143,50 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
     if grasa_nueva is not None:
         await anotar_grasa(profile["id"], grasa_nueva, origen="lo puso el cliente")
 
+    # ESTE CAMINO NO DEJABA RASTRO (punto 62 del doc del 07-08). El cliente cambia su peso
+    # o su objetivo desde su perfil, los macros se recalculan solos aqui arriba... y no se
+    # escribia NADA en el historial. Consecuencias:
+    #
+    #   - el perfil decia unos macros y el historial otros, y el resolver por fecha
+    #     (_resolve_macros_for_date) segia dando los viejos a las dietas nuevas;
+    #   - y sobre todo: ese historial con el criterio es lo que va a entrenar al modelo.
+    #     Un ajuste sin rastro es un dato perdido para siempre.
+    #
+    # Se marca `origen` para que el agente no lo confunda con una decision del coach: esto
+    # lo movio el propio cliente editando su ficha.
+    if "macros_training" in update_data:
+        ahora = datetime.now(timezone.utc)
+        macro_log = {
+            "id": str(uuid.uuid4()),
+            "client_id": profile["id"],
+            "user_id": user["id"],
+            "previous_training": profile.get("macros_training"),
+            "previous_rest": profile.get("macros_rest"),
+            "new_training": update_data["macros_training"],
+            "new_rest": update_data.get("macros_rest"),
+            "training": update_data["macros_training"],
+            "rest": update_data.get("macros_rest"),
+            "peri": update_data.get("macros_periworkout"),
+            "effective_date": ahora.strftime("%Y-%m-%d"),
+            "note": "Recalculados al editar su perfil",
+            "origen": "cliente_perfil",
+            "changed_by": user.get("name", user.get("email", "cliente")),
+            "peso": peso_nuevo if peso_nuevo is not None else profile.get("weight"),
+            "client_weight": peso_nuevo if peso_nuevo is not None else profile.get("weight"),
+            "body_fat": grasa_nueva if grasa_nueva is not None else profile.get("body_fat"),
+            "cambios": marcar_cambios(
+                {"entreno": profile.get("macros_training"),
+                 "perientreno": profile.get("macros_periworkout"),
+                 "descanso": profile.get("macros_rest")},
+                {"entreno": update_data.get("macros_training"),
+                 "perientreno": update_data.get("macros_periworkout"),
+                 "descanso": update_data.get("macros_rest")},
+            ),
+            "created_at": ahora.isoformat(),
+        }
+        await db.macro_history.insert_one(macro_log)
+        await marcar_ajuste(profile["id"], macro_log["created_at"])
+
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
 
