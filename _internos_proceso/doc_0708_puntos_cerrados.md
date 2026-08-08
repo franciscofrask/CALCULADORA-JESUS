@@ -1,8 +1,36 @@
 # Documento del 7 de agosto - puntos cerrados
 
-Registro de los puntos del documento *"PARA FRANCISCO - Todo lo que hay que hacer"* (7 de
-agosto de 2026) que se van cerrando. Por cada uno: qué método se pide, cómo funcionaba antes,
-un ejemplo de cada caso y qué queda pendiente si depende de alguien más.
+Registro de los puntos del documento *"Todo lo que hay que hacer"* (7 de agosto de 2026) que se
+van cerrando. Por cada uno: qué método se pide, cómo funcionaba antes, un ejemplo de cada caso
+y qué queda pendiente si depende de alguien más.
+
+> ## ⚠ El documento se actualizó y se RENUMERÓ
+>
+> La versión nueva reordena los bloques (ahora van de la A a la N, con los puntos 1 al 97) y
+> mete puntos nuevos en medio, así que **la numeración de este registro es la vieja**. La
+> equivalencia:
+>
+> | Aquí | Documento nuevo | | Aquí | Documento nuevo |
+> |---|---|---|---|---|
+> | 1 | 1 | | 11 | 13 |
+> | 2 | 4 | | 12 | 14 |
+> | 3 | 5 | | 13 | 15 |
+> | 4 | 6 | | 14 | 16 |
+> | 5 | 7 | | 15 | 17 |
+> | 6 | 8 | | 16 | 18 |
+> | 7 | 9 (remite al 30, antes al 20) | | 17 | 19 |
+> | 8 | 10 | | 18 | 20 |
+> | 9 | 11 | | 19 | bloque F (48-54) |
+> | 10 | 12 | | | |
+>
+> **Lo que trae de nuevo la actualización, y ya está comprobado** (ver el bloque A de abajo):
+> una tabla de prueba con 20 filas de valores exactos, dos puntos nuevos (el 2, tres comidas, y
+> el 3, los cuatro modos de perientreno) y dos reglas nuevas en el del filtro del tercio.
+>
+> También avisa de algo importante: el código antiguo que Jesús leyó es la versión 1.1.0 y la
+> que está en producción es la 1.9.0, ocho versiones más nueva. Cuando el documento diga que
+> algo es un fallo del código antiguo, hay que comprobarlo contra la calculadora de verdad
+> antes de darlo por bueno.
 
 > **Todo lo de aquí está en producción desde el 7 de agosto por la noche** (hasta el commit
 > `8421e3b`). Se desplegó el árbol completo del repositorio, no solo los ficheros tocados: el
@@ -88,6 +116,35 @@ está, por indicación expresa de Jesús.
 que es el único fichero de ejecución que cambia, para no arrastrar el trabajo en curso del
 asistente. Comprobado dentro del pod: en modo "sin peri" da 22,5 · 22,5 · 10 · 10 y en
 "intra + post" sigue dando 15 · 15 · 10 · 10, y la web y la API responden.
+
+---
+
+### Contraste con la actualización del documento (07-08, versión nueva) · TODO CUADRA
+
+La versión actualizada trae una **tabla de prueba con 20 filas de valores exactos** para
+verificar la implementación ("si tu implementación da estos números, está bien"). Se pasaron
+las 20 y **salen las 20**, incluidas las siete filas de "en ayunas" que esa versión confirma
+que la calculadora en producción sí aplica. Quedan como test, que es el mejor juez posible:
+son sus números, no deducciones nuestras.
+
+También aclara el tramo de 30 a 50 g: los 10 g se los lleva la comida del momento del entreno,
+y Jesús confirma que esa lógica es la correcta. Nuestro reparto ya lo hacía así, y su propia
+tabla lo corrobora (40 g en ayunas dan 30 · 0 · 0 · 10).
+
+**Punto 2 nuevo · con 3 comidas no se aplica ningún escenario.** Ya era así: cada comida se
+lleva un tercio de cada macro aunque sea día de entreno, y el perientreno se aplica igual.
+Comprobado con cuatro cantidades de hidratos y los cuatro momentos de entreno.
+
+**Punto 3 nuevo · los cuatro modos de perientreno.** Los cuatro cuadran con su tabla: intra +
+post (20 %/30 % y 80 %/70 %), solo post (100 %), solo intra (25 %/35 % y el resto repartido) y
+sin peri (todo repartido). Y ni el intra ni el post llevan grasa nunca, como dice el documento.
+
+Todo eso queda fijado en `backend/tests/test_reparto_calma_paridad.py`.
+
+Un detalle menor que salió de la tabla: el día de descanso reparte los hidratos a cuartos con
+un redondeo de 0,1 g por comida, así que con cantidades que no se dividen entre cuatro (65 ÷ 4
+= 16,25) se pierden 0,2 g del día. No se toca por eso: lo que se le enseña al cliente va
+redondeado a múltiplos de 5, así que ni se ve.
 
 ---
 

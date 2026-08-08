@@ -216,6 +216,63 @@ class TestElTercioVaAntesDeCalibrar:
         assert abs(mucho - 21 * 2.0) < 0.05
 
 
+class TestLoQueNoPasaElFiltroSigueGastandoCupo:
+    """Regla del documento del 07-08 (versión actualizada), en negrita y con aviso:
+
+        "El alimento SIGUE SUMANDO AL ACUMULADO del día aunque no pase el filtro. Un pan que
+        aporta cero de proteína sí gasta cupo y empuja a los siguientes hacia el 50 % o el
+        100 %."
+    """
+
+    # P10 con H40: 10 no supera 40/3 = 13,3, así que su proteína no cuenta nunca.
+    PAN_QUE_NO_PASA = _f("Pan que no pasa el filtro", "8.1", 10, 40, 2)
+
+    def test_su_proteina_no_cuenta(self):
+        macros, _ = calibrar_dia([("C1", [(self.PAN_QUE_NO_PASA, 60)])])
+        assert macros["C1"][0]["P"] == 0
+
+    def test_pero_gasta_cupo_y_empuja_al_siguiente(self):
+        """60 g de ese pan + 100 g de cereal: el cereal llega con 160 g acumulados y cobra el
+        100 %. Sin el pan delante se habría quedado en el 50 %."""
+        macros, pcts = calibrar_dia([("C1", [(self.PAN_QUE_NO_PASA, 60)]),
+                                     ("C2", [(CEREAL, 100)])])
+        assert pcts["C1"]["acum_cp"] == 60
+        assert pcts["C2"]["acum_cp"] == 160
+        assert pcts["C2"]["pct_cp"] == 1.0
+        assert macros["C2"][0]["P"] == 25.0
+
+        solo, p = calibrar_dia([("C2", [(CEREAL, 100)])])
+        assert p["C2"]["pct_cp"] == 0.5, "sin el pan delante se queda a medias"
+        assert solo["C2"][0]["P"] == 12.5
+
+
+class TestEnDobleCategoriaGanaLaMasPermisiva:
+    """Otra regla nueva del 07-08: si el alimento es de un bloque calibrado pero ADEMÁS es
+    proteína en polvo (4) o vegetal (28), su proteína cuenta entera. No es la proteína
+    incidental de un cereal: es la que le han puesto a propósito."""
+
+    PAN_CON_PROTEINA_VEGETAL = _f("Pan sin gluten con chía", "8.6 | 28", 12, 40, 5)
+    CEREAL_CON_PROTEINA_POLVO = _f("Cereal con proteína", "7.1 | 4", 20, 50, 2)
+    CREMA_CON_PROTEINA = _f("Crema de frutos secos con proteína", "17.2.1 | 28", 30, 10, 45)
+
+    @pytest.mark.parametrize("alimento", [PAN_CON_PROTEINA_VEGETAL,
+                                          CEREAL_CON_PROTEINA_POLVO,
+                                          CREMA_CON_PROTEINA])
+    def test_cuenta_entera_aunque_el_acumulado_este_a_cero(self, alimento):
+        macros, _ = calibrar_dia([("C1", [(alimento, 30)])])
+        assert macros["C1"][0]["P"] == pytest.approx(alimento["proteinas"] * 0.3, abs=0.05)
+
+    def test_el_mismo_pan_sin_la_segunda_categoria_si_calibra(self):
+        pan_normal = _f("Pan sin gluten", "8.6", 12, 40, 5)
+        macros, _ = calibrar_dia([("C1", [(pan_normal, 30)])])
+        assert macros["C1"][0]["P"] == 0, "12 no supera 40/3, y encima el acumulado está a cero"
+
+    def test_sigue_sumando_al_acumulado(self):
+        """Saltarse la calibración no le quita el cupo que gasta."""
+        _, pcts = calibrar_dia([("C1", [(self.PAN_CON_PROTEINA_VEGETAL, 80)])])
+        assert pcts["C1"]["acum_cp"] == 80
+
+
 if __name__ == "__main__":
     import pytest as _p
     raise SystemExit(_p.main([__file__, "-q"]))

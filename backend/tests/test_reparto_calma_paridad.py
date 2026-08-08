@@ -208,5 +208,124 @@ class TestUnMomentoRaroNoTumbaElDia:
         assert [r["comidas"][f"C{i}"]["H"] for i in (1, 2, 3, 4)] == [10, 22.5, 22.5, 10]
 
 
+# ── La tabla de prueba del propio documento (versión del 07-08 actualizada) ──
+#
+# Jesús la incluyó para que se pueda verificar la implementación: "si tu implementación da
+# estos números, está bien". Son sus valores, no deducciones nuestras, así que es el mejor
+# juez que hay. Incluye las filas de "en ayunas", que esa versión del documento confirma que
+# la calculadora en producción SÍ aplica (lo que él leyó era una versión vieja del código).
+
+TABLA_DEL_DOCUMENTO = [
+    (25, 1, [0, 25, 0, 0]),
+    (25, 2, [0, 0, 25, 0]),
+    (40, 1, [10, 30, 0, 0]),
+    (40, 3, [0, 0, 10, 30]),
+    (60, 1, [20, 20, 10, 10]),
+    (60, 2, [10, 20, 20, 10]),
+    (65, 1, [22.5, 22.5, 10, 10]),
+    (90, 1, [35, 35, 10, 10]),
+    (120, 1, [43.2, 43.2, 21.6, 12]),
+    (120, 3, [12, 21.6, 43.2, 43.2]),
+    (200, 1, [60, 60, 40, 40]),
+    (200, 2, [40, 60, 60, 40]),
+]
+
+TABLA_EN_AYUNAS = [
+    (25, [25, 0, 0, 0]),
+    (40, [30, 0, 0, 10]),
+    (60, [20, 10, 10, 20]),
+    (65, [22.5, 10, 10, 22.5]),
+    (90, [35, 10, 10, 35]),
+    (120, [43.2, 21.6, 12, 43.2]),
+    (200, [60, 40, 40, 60]),
+]
+
+
+class TestLaTablaDePruebaDelDocumento:
+
+    @pytest.mark.parametrize("h,momento,esperado", TABLA_DEL_DOCUMENTO)
+    def test_fila(self, h, momento, esperado):
+        c = nuestro(120, h, 50, momento)["comidas"]
+        assert [c[f"C{i}"]["H"] for i in (1, 2, 3, 4)] == pytest.approx(esperado, abs=0.05)
+
+    @pytest.mark.parametrize("h,esperado", TABLA_EN_AYUNAS)
+    def test_fila_en_ayunas(self, h, esperado):
+        """Con el entreno en ayunas las comidas cargadas son la 1 y la 4, que es lo que
+        describen los clientes en las dudas frecuentes de la plataforma."""
+        c = nuestro(120, h, 50, 0)["comidas"]
+        assert [c[f"C{i}"]["H"] for i in (1, 2, 3, 4)] == pytest.approx(esperado, abs=0.05)
+
+    @pytest.mark.parametrize("h", [40, 65, 120, 200])
+    def test_el_dia_de_descanso_reparte_a_cuartos(self, h):
+        """A partes iguales, con una tolerancia de un décimo de gramo: el reparto redondea
+        cada comida a 0,1 g, así que con hidratos que no se dividen entre cuatro (65 ÷ 4 =
+        16,25) se pierden hasta 0,2 g del día. No se toca por eso: lo que se le enseña al
+        cliente va redondeado a múltiplos de 5 (punto 6), así que ni se ve."""
+        r = distribuir_macros(120, h, 50, 0, 0, 120, h, 50, "descanso", 4, 1, "intra_post")
+        assert [r["comidas"][f"C{i}"]["H"] for i in (1, 2, 3, 4)] == pytest.approx([h / 4] * 4, abs=0.1)
+
+
+class TestConTresComidasNoHayEscenario:
+    """Punto 2 del documento: los tramos son solo para 4 comidas. Con 3, cada comida se lleva
+    un tercio de cada macro aunque sea día de entreno. El perientreno sí se aplica igual."""
+
+    @pytest.mark.parametrize("h", [25, 65, 120, 200])
+    @pytest.mark.parametrize("momento", [0, 1, 2, 3])
+    def test_un_tercio_de_cada_macro(self, h, momento):
+        r = distribuir_macros(180, h, 60, 40, 30, 180, h, 60,
+                              "entrenamiento", 3, momento, "intra_post")
+        c = r["comidas"]
+        assert len(c) == 3
+        for macro, total in (("P", 180), ("H", h), ("G", 60)):
+            valores = [c[f"C{i}"][macro] for i in (1, 2, 3)]
+            assert valores == pytest.approx([total / 3] * 3, abs=0.2), macro
+
+    def test_el_perientreno_se_sigue_aplicando(self):
+        r = distribuir_macros(180, 120, 60, 40, 30, 180, 120, 60,
+                              "entrenamiento", 3, 1, "intra_post")
+        assert r["periworkout"]["Intra"] == {"P": 8.0, "H": 9.0, "G": 0.0}
+        assert r["periworkout"]["Post"] == {"P": 32.0, "H": 21.0, "G": 0.0}
+
+
+class TestLosCuatroModosDePerientreno:
+    """Punto 3 del documento, con su tabla."""
+
+    BASE = dict(p_entreno=180, h_entreno=200, g_entreno=60, p_peri=40, h_peri=30,
+                p_descanso=180, h_descanso=200, g_descanso=60,
+                tipo_dia="entrenamiento", num_comidas=4, momento_entreno=1)
+
+    def _r(self, modo):
+        return distribuir_macros(opcion_peri=modo, **self.BASE)
+
+    def test_intra_mas_post(self):
+        p = self._r("intra_post")["periworkout"]
+        assert (p["Intra"]["P"], p["Intra"]["H"]) == (8.0, 9.0)      # 20 % y 30 %
+        assert (p["Post"]["P"], p["Post"]["H"]) == (32.0, 21.0)      # 80 % y 70 %
+
+    def test_solo_post(self):
+        p = self._r("solo_post")["periworkout"]
+        assert "Intra" not in p
+        assert (p["Post"]["P"], p["Post"]["H"]) == (40, 30)          # 100 % y 100 %
+
+    def test_solo_intra(self):
+        r = self._r("solo_intra")
+        assert "Post" not in r["periworkout"]
+        assert (r["periworkout"]["Intra"]["P"], r["periworkout"]["Intra"]["H"]) == (10.0, 10.5)
+        # El resto (75 % y 65 %) se reparte entre las comidas.
+        assert sum(c["P"] for c in r["comidas"].values()) == pytest.approx(180 + 30, abs=0.5)
+        assert sum(c["H"] for c in r["comidas"].values()) == pytest.approx(200 + 19.5, abs=0.5)
+
+    def test_sin_peri(self):
+        r = self._r("sin_peri")
+        assert r["periworkout"] == {}
+        assert sum(c["P"] for c in r["comidas"].values()) == pytest.approx(220, abs=0.5)
+        assert sum(c["H"] for c in r["comidas"].values()) == pytest.approx(230, abs=0.5)
+
+    @pytest.mark.parametrize("modo", ["intra_post", "solo_post", "solo_intra"])
+    def test_ni_el_intra_ni_el_post_llevan_grasa(self, modo):
+        for comida in self._r(modo)["periworkout"].values():
+            assert comida["G"] == 0.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

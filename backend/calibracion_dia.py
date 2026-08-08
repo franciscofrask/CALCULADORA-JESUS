@@ -35,9 +35,25 @@ CATS_CEREAL_PAN = ["7", "8"]
 CATS_EXCEPCION_PROTEICA = ["7.1.3", "8.8"]  # P siempre al 100 %, sin calibración
 CATS_FRUTOS_SECOS = ["17.2.1", "17.2.3", "17.2.4", "17.2.6"]
 
+# Categorías donde la proteína cuenta siempre al 100 %, por estar formulada para eso.
+# En doble categoría gana la más permisiva (doc del 07-08): un alimento que sea cereal o pan
+# y ADEMÁS proteína en polvo o vegetal se salta la calibración entera, porque su proteína no
+# es la incidental de un cereal, es la que le han puesto a propósito.
+CATS_SIEMPRE_AL_100 = ["4", "28"]
+
+
+def cuenta_siempre_al_100(food: dict) -> bool:
+    """El alimento tiene proteína añadida a propósito, así que no se calibra."""
+    return food_in_any(food, CATS_EXCEPCION_PROTEICA) or food_in_any(food, CATS_SIEMPRE_AL_100)
+
 
 def clasificar_bloque(food: dict) -> Optional[str]:
-    """'cereal_pan' | 'fruto_seco' | None (no participa en la calibración)."""
+    """'cereal_pan' | 'fruto_seco' | None (no participa en la calibración).
+
+    Ojo: el que cuenta siempre al 100 % SÍ se clasifica en su bloque, porque tiene que seguir
+    sumando al acumulado del día. Lo que se salta es la calibración de su proteína, y eso se
+    resuelve luego, en `macros_item_calibrados`.
+    """
     if food_in_any(food, CATS_FRUTOS_SECOS):
         return "fruto_seco"
     if food_in_any(food, CATS_CEREAL_PAN):
@@ -99,10 +115,16 @@ def macros_item_calibrados(food: dict, cantidad_g: float,
     p100, h100, g100 = _por_100_de_etiqueta(food)
     factor = cantidad_g / 100.0
 
+    # Proteína puesta a propósito: ni filtro del tercio ni tramo. Vale para los cereales y
+    # panes proteicos de siempre y, desde el doc del 07-08, para cualquier alimento de un
+    # bloque calibrado que sea ADEMÁS proteína en polvo o vegetal: en doble categoría gana la
+    # más permisiva. Sigue sumando al acumulado del día, eso no cambia.
+    if cuenta_siempre_al_100(food):
+        return {"P": round(p100 * factor, 2), "H": round(m["hidratos"], 2),
+                "G": round(m["grasas"], 2)}
+
     if bloque == "cereal_pan":
-        if food_in_any(food, CATS_EXCEPCION_PROTEICA):
-            p_ef = p100 * factor  # proteicos: siempre al 100 %
-        elif h100 > 0 and p100 > h100 / 3.0:
+        if h100 > 0 and p100 > h100 / 3.0:
             p_ef = p100 * factor * pct_cp
         else:
             p_ef = 0.0  # no pasa el ratio: su proteína no cuenta nunca
