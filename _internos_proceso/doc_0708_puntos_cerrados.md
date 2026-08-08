@@ -459,6 +459,31 @@ cuadradas (por ejemplo, objetivo 47,5 P · 51 H · 12 G y el menú lleva 48 · 5
 Vive en `POST /api/calculator/montar-dia`, que sirve para montar cualquier día, no solo el
 primero.
 
+### Punto 17 - «¿Sigues una dieta ahora?» solo tiene dos respuestas · BLOQUEADO (falta el documento de textos)
+
+**Lo que se comprobó, y no cuadra con el enunciado.** Esa pregunta **ya tiene tres respuestas**,
+no dos, y las tiene en los dos entornos (aquí y en producción):
+
+1. "Sí, y sé exactamente lo que como."
+2. "Como siempre parecido, pero no lo tengo medido."
+3. "No, como lo que surge."
+
+La tercera se añadió el **6 de agosto**, un día antes del documento, en el commit `daf052a`
+("La dieta tiene tres respuestas, y la mejor pregunta se le hace a todos"). Así que o el
+revisor miró una versión anterior a ese día, o lo que falta son opciones **además** de estas
+tres. El punto dice "faltan opciones" en plural y remite al documento de textos, así que lo
+segundo es lo más probable.
+
+Se revisaron también las demás preguntas del cuestionario por si el enunciado se refería a
+otra: de las 24 con opciones, solo tres tienen dos, y ninguna es sobre dieta (el sexo, el
+objetivo volumen/definición y el "¿practicas otro deporte?", que son sí/no de por sí).
+
+**Qué hace falta para cerrarlo.** El documento «LOS TEXTOS DE LA APP», que es donde el propio
+punto dice que están las opciones. Sin él no se pueden inventar: el texto exacto de cada
+respuesta es lo que decide qué se guarda y qué se hace luego con ese dato (la respuesta
+"parecido", por ejemplo, hace que se le pida su dieta para partir de ella). En cuanto llegue,
+esto es de un rato.
+
 ---
 
 ## Pendientes que no dependen de nosotros
@@ -477,8 +502,15 @@ contra el bundle.
 anterior y se aplicó literal (solo "casi no lo noto"; umbral 20 % sin distinción de sexo).
 Detalle y consecuencias en el propio punto 11.
 
-**Falta el documento «LOS TEXTOS DE LA APP»** (punto 14 y los textos del bloque C). Sin él no
-se puede localizar el texto roto, que el documento da por identificado allí.
+**Falta el documento «LOS TEXTOS DE LA APP»**, y ya bloquea dos puntos:
+
+- **Punto 14**, el texto roto: el documento lo da por identificado allí, y no sabemos cuál es.
+  Francisco pidió el 07-08 dejarlo de lado hasta que aparezca.
+- **Punto 17**, las respuestas de «¿Sigues una dieta ahora?»: hoy son tres y el documento pide
+  más, pero el texto exacto de cada una está en el de textos y no se puede inventar, porque de
+  esa respuesta depende lo que la app hace después con el dato.
+
+Nadie sabe cuál es ese documento ni dónde está. **Hay que pedírselo a Jesús.**
 
 **Los 56 mínimos por categoría están sin repasar** (punto 5). El mapa existe y funciona, pero
 los valores vienen de la calculadora antigua y Jesús quiere revisarlos; él mismo lo cifra en
