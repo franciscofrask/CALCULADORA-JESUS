@@ -528,7 +528,10 @@ const ClientDetailPage = () => {
         const f = macrosForm;
         if (!await confirm({
             title: '¿Guardar estos macros?',
-            description: `Entreno ${f.training.protein}/${f.training.carbs}/${f.training.fat} · `
+            // La excepción del cliente, la primera línea (punto 39): este es uno de los
+            // momentos en que hay que acordarse de ella, y el coach está mirando aquí.
+            description: (client?.profile?.excepcion ? `⚠ ${client.profile.excepcion}\n\n` : '')
+                + `Entreno ${f.training.protein}/${f.training.carbs}/${f.training.fat} · `
                 + `Intra ${f.peri.protein || 0}/${f.peri.carbs || 0} · `
                 + `Descanso ${f.rest.protein}/${f.rest.carbs}/${f.rest.fat}`
                 + `\nVigente desde el ${_fechaLarga(f.effective_date)}`
@@ -659,7 +662,8 @@ const ClientDetailPage = () => {
         const n = (supProtocol.actual || []).length, s = (supProtocol.siguiente || []).length;
         if (!await confirm({
             title: '¿Guardar la suplementación?',
-            description: `${n} suplemento${n === 1 ? '' : 's'} ahora`
+            description: (client?.profile?.excepcion ? `⚠ ${client.profile.excepcion}\n\n` : '')
+                + `${n} suplemento${n === 1 ? '' : 's'} ahora`
                 + (s ? ` y ${s} para el siguiente protocolo${supProtocol.siguiente_fecha ? ` (desde el ${_fechaLarga(supProtocol.siguiente_fecha)})` : ''}` : '')
                 + '. El cliente lo ve en su apartado de suplementación.',
             confirmLabel: 'Guardar',
@@ -676,6 +680,18 @@ const ClientDetailPage = () => {
             fetchClient();
         } catch (e) { toast.error('Error al guardar suplementación'); }
         finally { setSupSaving(false); }
+    };
+
+    // La excepción del cliente (punto 39). Texto libre y vacío = quitarla.
+    const [guardandoExcepcion, setGuardandoExcepcion] = useState(false);
+    const guardarExcepcion = async (texto) => {
+        setGuardandoExcepcion(true);
+        try {
+            await api.put(`/admin/clients/${clientId}`, { excepcion: texto });
+            toast.success(texto.trim() ? 'Excepción guardada' : 'Excepción quitada');
+            fetchClient();
+        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo guardar la excepción'); }
+        finally { setGuardandoExcepcion(false); }
     };
 
     // Borrar una versión del histórico del protocolo (punto 33).
@@ -775,6 +791,16 @@ const ClientDetailPage = () => {
                     <p className="text-white/40 text-sm truncate">{user?.email}</p>
                 </div>
             </div>
+
+            {/* LA EXCEPCIÓN (punto 39). Va aquí arriba, antes de las pestañas y sin poder
+                plegarse: si hay que abrir algo para verla, ya está tan escondida como en la
+                hoja de la que viene. Esto le costó dinero a Jesús: se le cobró una renovación
+                a una clienta a la que le había perdonado un mes, porque la excepción solo
+                estaba en su cabeza. */}
+            <ExcepcionDelCliente
+                excepcion={profile?.excepcion}
+                guardando={guardandoExcepcion}
+                onGuardar={guardarExcepcion} />
 
             {/* 8 Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1251,6 +1277,16 @@ const ClientDetailPage = () => {
                             <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
                             <InfoItem icon={Calendar} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES') : '-'} />
                         </div>
+                        {/* Punto 39: aquí es donde se mira antes de cobrar, y aquí es donde la
+                            excepción tiene que estar delante. El caso que costó dinero fue
+                            exactamente este: cobrarle la renovación a quien tenía un mes
+                            perdonado. */}
+                        {profile?.excepcion && (
+                            <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#FF671F]/40 bg-[#FF671F]/10 p-3" data-testid="excepcion-en-cobro">
+                                <AlertCircle className="w-4 h-4 text-[#FF671F] shrink-0 mt-0.5" />
+                                <p className="text-sm text-white"><b className="text-[#FF671F]">Antes de cobrarle:</b> {profile.excepcion}</p>
+                            </div>
+                        )}
                     </CardContent></Card>
                     <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Historial de pagos</CardTitle></CardHeader>
                         <CardContent>{payments?.length > 0 ? (
@@ -1727,6 +1763,67 @@ const EvolucionMedidas = ({ reports }) => {
                 cintura no son lo mismo, y eso lo pone el coach, no el color.
             </p>
         </CardContent></Card>
+    );
+};
+
+// LA EXCEPCIÓN DEL CLIENTE (punto 39 del doc del 07-08).
+//
+// Hay 17 clientes con una excepción apuntada a mano en una hoja, y no se parecen entre sí:
+// uno cuya membresía paga su marido, uno que paga en efectivo, uno al que no se le genera
+// rutina, uno que no paga nada y aun así se le hace, uno con ciclo de 4 semanas en vez de
+// 12, otro al que se le manda el reporte por WhatsApp. Por eso es texto libre y no un juego
+// de casillas: modelarlas sería inventarse las categorías antes de conocerlas, y la de la
+// número 18 no entraría en ninguna.
+//
+// Cuando hay excepción se ve SIEMPRE, en naranja y arriba del todo. Cuando no la hay, un
+// enlace pequeño que no molesta: la mayoría de los clientes no tienen ninguna.
+const ExcepcionDelCliente = ({ excepcion, guardando, onGuardar }) => {
+    const [editando, setEditando] = useState(false);
+    const [texto, setTexto] = useState(excepcion || '');
+    useEffect(() => { setTexto(excepcion || ''); }, [excepcion]);
+
+    if (!excepcion && !editando) {
+        return (
+            <button onClick={() => setEditando(true)} data-testid="anadir-excepcion"
+                className="text-xs text-white/30 hover:text-[#FF671F] flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" /> Añadir una excepción
+            </button>
+        );
+    }
+
+    return (
+        <div className="rounded-xl border border-[#FF671F]/50 bg-[#FF671F]/10 p-4" data-testid="excepcion-cliente">
+            <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-[#FF671F] shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-[#FF671F] uppercase tracking-wider mb-1">Excepción de este cliente</p>
+                    {editando ? (
+                        <>
+                            <Textarea value={texto} onChange={e => setTexto(e.target.value)} autoFocus
+                                placeholder="Ej: la membresía se la paga su marido · paga en efectivo · no se le genera rutina · ciclo de 4 semanas · el reporte se lo manda por WhatsApp"
+                                data-testid="excepcion-texto"
+                                className="bg-[#0A0A0A] border-[#333] text-white text-sm" rows={2} />
+                            <div className="flex items-center gap-2 mt-2">
+                                <Button size="sm" onClick={() => { onGuardar(texto); setEditando(false); }} disabled={guardando}
+                                    className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs" data-testid="guardar-excepcion">
+                                    {guardando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Save className="w-3.5 h-3.5 mr-1" />Guardar</>}
+                                </Button>
+                                <button onClick={() => { setTexto(excepcion || ''); setEditando(false); }}
+                                    className="text-xs text-white/40 hover:text-white">Cancelar</button>
+                                {excepcion && <span className="text-[10px] text-white/30 ml-auto">Vacío = quitar la excepción</span>}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex items-start justify-between gap-3">
+                            <p className="text-white text-sm whitespace-pre-wrap">{excepcion}</p>
+                            <button onClick={() => setEditando(true)} className="text-white/40 hover:text-white shrink-0" title="Editar la excepción">
+                                <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
     );
 };
 

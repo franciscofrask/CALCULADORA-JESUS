@@ -261,6 +261,30 @@ PLAN_CATALOG = {
                             "reportes": ["semanal", "mensual"], "suplementacion": True, "harbiz": False},
         "stripe_price_env": "", "billing_cycle_weeks": 26,
     },
+    "calma12": {
+        # CALMA 12 sale en el catálogo del equipo (bloque E del doc del 07-08) con dos
+        # clientes activos, y NO estaba aquí. En la base hay perfiles con el plan escrito
+        # "CalMa" tal cual, que hasta ahora no casaba con ninguna entrada del catálogo: sin
+        # entrada, `plan_grants_feature` no encuentra habilitaciones y el cliente se queda
+        # sin nada (ni reportes, ni suplementación, ni cadencia), y en las listas sale como
+        # plan desconocido. Es el caso exacto que avisa el punto 38: la app tiene que saber
+        # representarlos, no convertirlos.
+        #
+        # Las habilitaciones son las de un plan con coach detrás, que es lo que era. El
+        # precio va vacío a propósito: el catálogo del equipo tampoco lo trae, y el que
+        # manda es el del contrato de cada cliente (punto 36).
+        "name": "CALMA 12", "estado": "legacy", "asignable": True,
+        "ciclo": {"tipo": "trimestral", "semanas": 12},
+        "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
+        "precios": [],
+        "responsable": "CEO",
+        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
+                           "reportes": ["mensual"], "suplementacion": True, "harbiz": False,
+                           "acompanamiento": "con_entrenador", "frecuencia_contacto": "mensual"},
+        "stripe_price_env": "", "billing_cycle_weeks": 12,
+        # Los perfiles migrados lo traen escrito asi, sin normalizar.
+        "alias": ["CalMa", "calma", "calma_12", "calma 12"],
+    },
     # ---------------- COMPLEMENTOS (no asignables como membresía) ----------------
     "rutina_mes": {
         "name": "Rutina del Mes", "estado": "complemento", "asignable": False,
@@ -328,6 +352,24 @@ PLAN_TYPES = {
     }
     for code, p in PLAN_CATALOG.items()
 }
+
+
+# Como esta escrito el plan en los perfiles migrados -> el codigo del catalogo. Los datos
+# vienen de sitios distintos y no siempre normalizados ("CalMa" tal cual, con esas mayusculas),
+# y un plan que no casa con el catalogo deja al cliente SIN habilitaciones: ni reportes, ni
+# suplementacion, ni cadencia. Es lo que avisa el punto 38 del 07-08 -- la app tiene que saber
+# representar los planes viejos, no convertirlos.
+ALIAS_DE_PLAN: Dict[str, str] = {
+    alias.lower().strip(): code
+    for code, p in PLAN_CATALOG.items()
+    for alias in (p.get("alias") or [])
+}
+
+
+def codigo_de_plan(plan: Optional[str]) -> str:
+    """El codigo del catalogo para el plan de un perfil, resolviendo alias y mayusculas."""
+    v = (plan or "").lower().strip()
+    return ALIAS_DE_PLAN.get(v, v)
 
 
 ACOMPANAMIENTO_OPCIONES = ("solo_app", "con_entrenador", "con_entrenador_y_llamadas")
@@ -526,6 +568,9 @@ class ClientProfile(BaseModel):
     macros_multiplicadores: Optional[Dict[str, float]] = None
     # Coach-set (Calma quiereRepartoDeComidas=false): the whole day's macros go to ONE comida.
     single_meal_mode: Optional[bool] = None
+    # Lo que este cliente tiene de particular y no cabe en ningun campo (punto 39 del
+    # 07-08). Sale en su ficha y salta al cobrar o al generarle algo.
+    excepcion: Optional[str] = None
     # OJO con estos dos (punto 30 del 07-08): `weight` y `body_fat` son el ULTIMO valor de
     # sus series, calculado, no un dato que se guarde aparte. Los escribe solo
     # core/series_cliente.py; nadie mas debe ponerlos en un $set, o vuelven los dos pesos
@@ -630,6 +675,15 @@ class ClientProfileUpdate(BaseModel):
     # entrenamiento lo llevo aparte").
     training_notes: Optional[str] = None
     training_days: Optional[int] = None
+    # LA EXCEPCION de este cliente (punto 39 del doc del 07-08). Texto libre a proposito:
+    # hay 17 clientes con una excepcion apuntada a mano en una hoja y no se parecen entre
+    # si -- uno cuya membresia paga su marido, uno que paga en efectivo, uno al que no se
+    # le genera rutina, uno que no paga nada y aun asi se le hace, uno con ciclo de 4
+    # semanas, otro al que se le manda el reporte por WhatsApp. Modelarlas con casillas
+    # seria inventarse las categorias antes de conocerlas, y la de la numero 18 no
+    # entraria. Cadena vacia = quitar la excepcion (por eso este campo se trata aparte en
+    # el PUT, que descarta los None pero no los vacios).
+    excepcion: Optional[str] = None
 
     @field_validator("macros_training", "macros_rest", "macros_periworkout")
     @classmethod

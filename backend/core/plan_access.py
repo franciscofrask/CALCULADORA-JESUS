@@ -78,8 +78,14 @@ def has_active_access(profile: Optional[Dict[str, Any]]) -> bool:
 
 
 def plan_features(plan_code: Optional[str]) -> list:
-    """Lista de features que habilita el plan (['rutina','suplementacion',...])."""
-    return PLAN_TYPES.get((plan_code or "").lower().strip(), {}).get("features", [])
+    """Lista de features que habilita el plan (['rutina','suplementacion',...]).
+
+    Pasa por `codigo_de_plan` para resolver los alias: hay perfiles migrados con el plan
+    escrito sin normalizar ("CalMa"), y sin esto no casaban con ninguna entrada del
+    catalogo y el cliente se quedaba sin ninguna habilitacion.
+    """
+    from models.user import codigo_de_plan
+    return PLAN_TYPES.get(codigo_de_plan(plan_code), {}).get("features", [])
 
 
 def plan_grants_feature(plan_code: Optional[str], feature: Optional[str]) -> bool:

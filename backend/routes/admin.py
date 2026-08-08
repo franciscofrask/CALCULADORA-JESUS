@@ -164,7 +164,11 @@ async def get_all_clients(
     LIST_FIELDS = {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "week": 1,
                    "cycle_start": 1, "status": 1, "trainer_id": 1, "created_at": 1,
                    "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
-                   "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1}
+                   "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
+                   # La excepcion viaja en el listado (punto 39): si solo estuviera dentro
+                   # de la ficha, para verla habria que entrar en las 232, que es lo mismo
+                   # que tenerla en una hoja aparte.
+                   "excepcion": 1}
     profiles = await db.client_profiles.find(query, LIST_FIELDS).to_list(1000)
 
     uids = [p["user_id"] for p in profiles]
@@ -641,6 +645,12 @@ async def update_client_admin(client_id: str, data: ClientProfileUpdate, user = 
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     # El coach se cambia solo por PUT /clients/{id}/trainer (ahí viven las reglas de permisos)
     update_data.pop("trainer_id", None)
+    # La excepcion (punto 39) es el unico campo donde la cadena VACIA significa algo:
+    # "quitala". Con el filtro de arriba, mandar "" la deja tal cual estaba y el coach se
+    # queda creyendo que la ha borrado -- justo el tipo de malentendido que este campo
+    # existe para evitar.
+    if data.excepcion is not None:
+        update_data["excepcion"] = data.excepcion.strip()
     if update_data:
         await db.client_profiles.update_one({"id": client_id}, {"$set": update_data})
 

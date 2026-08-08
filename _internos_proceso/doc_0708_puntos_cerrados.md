@@ -1256,6 +1256,113 @@ cadera en verde con -1,6 mientras el resto sube.
 
 ---
 
+## Bloque E - Los planes
+
+Doce puntos. **Cuatro ya estaban hechos** de documentos anteriores, uno se ha hecho ahora, y
+siete son trabajo por delante. Lo primero fue medir contra la base de datos en vez de suponer.
+
+### Punto 36 - El precio vive en el cliente · YA ESTABA
+
+`client_profiles.price` existe y **es distinto dentro del mismo plan**. En dev, los clientes con
+plan `gold` tienen precios de 0, 149 y 450 €. La tabla de planes trae un `precio` de referencia y
+un `precio_nota` con el rango («450-847€/trimestre según antigüedad»), y de ahí se copia al dar
+de alta - que es exactamente la plantilla que describe el punto. No está modelado como
+*plan → precio*, así que los 43 clientes que avisa el punto no se rompen.
+
+### Punto 37 - Dos Gold y dos Silver · YA ESTABA
+
+Son códigos distintos en el catálogo: `reto12en12_gold` (1.500 €/trim) y `gold` (legacy, 450 €),
+`reto12en12_silver` y `silver`. En la base los clientes están repartidos entre los cuatro, así
+que la etiqueta que viaja en los datos no es «Gold» sino el código, y sí se puede saber cuál es.
+
+### Punto 42 - Cada coach gestiona los suyos · YA ESTABA
+
+Hecho el 06-08, y literalmente como lo pide el punto: el admin lo ve todo, el coach ve y edita
+**los suyos y los que no tienen coach**, hay pestaña «Sin coach» de donde cualquiera puede
+coger, y para cubrir a un compañero **se reasigna**. El mensaje del 403 lo dice así: «Este
+cliente lo lleva otro entrenador. Si tienes que cubrirle, que te lo reasignen».
+
+### Punto 43 - Los legacy, cerrados a altas nuevas · YA ESTABA
+
+`planes_contratables()` solo devuelve los planes en estado `activo`, así que un legacy no se
+puede contratar ni desde el checkout ni ofrecer en una renovación. Lo que sí puede el admin es
+asignárselo a un cliente que ya lo tiene, y **eso tiene que seguir siendo así**: con 43 clientes
+legacy, si un plan se pone mal no habría forma de arreglarlo.
+
+### Punto 39 - Un campo de excepción por cliente · HECHO AHORA
+
+Es el único de los cuatro imprescindibles que no existía, y el que ya costó dinero.
+
+**Texto libre a propósito.** Las 17 excepciones no se parecen entre sí - uno cuya membresía paga
+su marido, uno que paga en efectivo, uno al que no se le genera rutina, uno que no paga nada y
+aun así se le hace, uno con ciclo de 4 semanas, otro al que se le manda el reporte por WhatsApp.
+Modelarlas con casillas sería inventarse las categorías antes de conocerlas, y la de la número 18
+no entraría en ninguna.
+
+**Dónde salta**, que es la mitad que evita el problema:
+
+1. **Arriba en la ficha**, antes de las pestañas y sin poder plegarse. Si hay que abrir algo para
+   verla, está tan escondida como en la hoja de la que viene.
+2. **En Membresía, debajo del precio y del próximo cobro**: «⚠ Antes de cobrarle: …». Es
+   exactamente el sitio del caso que costó dinero.
+3. **En el diálogo de guardar macros y de guardar suplementación**, en la primera línea.
+4. **En la lista de clientes**, un triángulo naranja junto al nombre con la excepción en el
+   tooltip. Si solo estuviera dentro de la ficha, para saber quién tiene una habría que entrar en
+   las 232 - o sea, lo mismo que tenerlas en una hoja.
+
+Y la cadena vacía significa «quitar la excepción», que necesitó su propia línea en el backend: el
+PUT descarta los campos nulos, y sin eso el coach borraba el texto, le decía guardado y la
+excepción seguía ahí.
+
+**Comprobado en la app**: escrita una excepción en un cliente, sale arriba en naranja, sale en
+Membresía debajo del próximo cobro y sale como triángulo en el listado (y los demás clientes no
+lo tienen). Borrada al terminar.
+
+### Punto 38 - Los planes antiguos entran tal cual · HECHO A MEDIAS
+
+No hay ninguna conversión automática: cada cliente conserva su plan. Pero al comprobarlo contra
+la base salió un **plan huérfano**: hay perfiles con el plan escrito `"CalMa"` tal cual, con esas
+mayúsculas, y **CALMA 12 no estaba en el catálogo**. Un plan que no casa con ninguna entrada deja
+al cliente **sin ninguna habilitación**: ni reportes, ni suplementación, ni cadencia de revisión.
+Es literalmente lo que avisa el punto - la app tiene que saber representarlos.
+
+Arreglado: CALMA 12 entra en el catálogo con las habilitaciones de un plan con coach detrás, y se
+añade una tabla de alias (`codigo_de_plan`) para que la forma en que está escrito en los datos
+migrados resuelva al código bueno. Comprobado: antes `CalMa` no daba ninguna feature; ahora da
+macros, chat, rutina, reportes, mensual, suplementación y cardio, con revisión a 28 días.
+
+### Lo que queda del bloque E, y por qué
+
+- **Punto 40 (13 planes sin `if`)**: el patrón ya existe y es el que pide el punto - las
+  `habilitaciones` del plan y `plan_grants_feature`, que preguntan por permiso y no por nombre.
+  Falta **auditar que no queden `if plan == 'gold'`** sueltos por el código.
+- **Punto 41 (qué ve el que no renueva)**: hay que mirarlo y montar el texto con el enlace de
+  WhatsApp y la alternativa de Mantenimiento.
+- **Punto 44 (calendario por plan)**: los días están **en el código** (`REPORT_RULES`: quincenal
+  miércoles, mensual viernes) y coinciden con lo que dice el punto, pero tienen que ser una
+  propiedad del plan. Y falta el ciclo de Premium (S1 y S2 semanal, S3 mensual, S4 semanal) y que
+  la duración del ciclo sea un campo del contrato, con planes de 4 y de 5 semanas.
+- **Punto 45 (reporte en nombre del cliente, con fotos)**: no existe.
+- **Punto 46 (que se note la diferencia entre niveles)**: falta la vía de cobro con tarjeta
+  después de la llamada del Nivel 3, que el propio punto dice que hoy no existe.
+- **Punto 47 (ajustes cada 2 semanas, validados)**: falta el texto de espera («en menos de 48
+  horas», 24 en Nivel 2) y que el % graso se pida cada 12 semanas y no cada 2.
+
+### Una discrepancia que no toco sin que Jesús diga
+
+El catálogo del equipo (27-05) marca como **Activos** a ELM, Reto 12en12 Gold y Silver, Reto 60,
+Calculadora JP y Mantenimiento. En nuestro código están como **legacy** desde el 31-07, cuando se
+decidió que «los tres niveles son lo único que se puede contratar».
+
+Puede que las dos cosas sean ciertas y que «Activo» en esa tabla signifique **vivo, con gente
+pagando** y no **a la venta**. La tabla es un inventario: incluye «Rutina del Mes · Suelto · 0
+clientes». Pero si lo cambio, esos seis planes **aparecen en el checkout** junto a los tres
+niveles, y eso contradice de frente al documento del 31-07. **No es una decisión mía**: que Jesús
+diga si ELM y Reto 12en12 se pueden volver a contratar hoy, o si solo hay que seguir
+manteniéndolos.
+
+---
+
 ---
 
 ## PENDIENTES
@@ -1314,6 +1421,10 @@ antiguo" hay que comprobarlo contra la calculadora de verdad**.
 
 ### 2 · Lo que espera una orden de Francisco
 
+**¿ELM y Reto 12en12 se pueden volver a contratar?** (bloque E). El catálogo del equipo los da
+como Activos y nuestro código como legacy desde el 31-07. Cambiarlo los pone en el checkout. Que
+lo diga Jesús: si «Activo» en su tabla es «a la venta» o «vivo, con gente pagando».
+
 **Borrar las 18 cuentas de prueba de producción** (punto 10). Está todo preparado y probado en
 simulación contra producción: `backend/_limpiar_datos_prueba.py`, que no borra nada salvo que se
 le pase `--ejecutar`. `francisco@test.com` y la cuenta demo quedan fuera. **Dos de las 18 tienen
@@ -1324,7 +1435,7 @@ se borran esas dos también.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
 textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28, 29, 30, 31, 32, 33, 34 y 35) está en GitHub y sin desplegar, esperando la orden.
+25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 38 y 39) está en GitHub y sin desplegar, esperando la orden.
 
 **Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
 

@@ -857,7 +857,17 @@ const AdminClientsList = () => {
                                     >
                                         <TableCell>
                                             <div>
-                                                <p className="font-medium text-white">{client.user?.name}</p>
+                                                <p className="font-medium text-white flex items-center gap-1.5">
+                                                    {client.user?.name}
+                                                    {/* Punto 39: el que tiene excepción se marca aquí. Si
+                                                        solo estuviera dentro de su ficha, para saber quién
+                                                        tiene una habría que entrar en las 232 - o sea, lo
+                                                        mismo que tenerlas en una hoja aparte. */}
+                                                    {client.excepcion && (
+                                                        <span title={client.excepcion} data-testid={`excepcion-${client.id}`}
+                                                            className="text-[#FF671F] cursor-help"><AlertTriangle className="w-3.5 h-3.5" /></span>
+                                                    )}
+                                                </p>
                                                 <p className="text-sm text-white/50">{client.user?.email}</p>
                                             </div>
                                         </TableCell>
