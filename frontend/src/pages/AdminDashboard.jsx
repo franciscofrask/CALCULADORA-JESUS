@@ -92,6 +92,30 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
 // quién lleva más tiempo sin que le muevan los macros. Arriba, el que más.
 const CUANTOS_TE_TOCAN = 6;
 
+// EL SEMÁFORO (punto 32 del 07-08). Cinco estados, por celda y no por fila: así se
+// distingue quién va regular de quién va mal, y en qué. Los estados los decide el backend
+// contra el plazo del plan de cada cliente; aquí solo se pintan.
+//
+// `info` no es un estado peor ni mejor: es "esta casilla no cuenta para este cliente" (su
+// plan no lleva chat, o no hay dato). Por eso va en gris apagado y no en un color de aviso.
+const SEMAFORO = {
+    ok:           'text-emerald-400',
+    regular:      'text-amber-400',
+    regular_malo: 'text-orange-400 font-bold',
+    malo:         'text-red-400 font-bold',
+    info:         'text-white/25',
+};
+
+const CeldaSemaforo = ({ celda, testId }) => {
+    if (!celda) return <span className="text-white/25 text-sm">-</span>;
+    return (
+        <span className={`text-sm tabular-nums ${SEMAFORO[celda.estado] || 'text-white/60'}`}
+            title={celda.detalle || undefined} data-testid={testId} data-estado={celda.estado}>
+            {celda.texto ?? '-'}
+        </span>
+    );
+};
+
 // Días desde una fecha AAAA-MM-DD. null si nunca ha pasado (no es lo mismo que cero).
 const diasDesde = (iso) => {
     if (!iso) return null;
@@ -388,7 +412,19 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="kpi-row">
                 <KpiCard value={stats?.total_clients || 0} label="Clientes totales" icon={Users} color="#FF671F" testId="kpi-total" />
                 <KpiCard value={stats?.active_clients || 0} label="Activos" icon={UserCheck} color="#22C55E" testId="kpi-active" />
-                <KpiCard value={stats?.at_risk_clients || 0} label="En riesgo" icon={AlertTriangle} color="#EAB308" testId="kpi-risk" />
+                {/* Antes ponía "En riesgo" y saltaba para tres de cada cuatro activos, así
+                    que no era una alerta: era el color de fondo de la pantalla. Y sobre
+                    todo no decía EN QUÉ. Ahora el número son los que tienen algo en rojo, y
+                    debajo va desglosado por celda, que es lo accionable (punto 32). */}
+                <KpiCard value={stats?.at_risk_clients || 0} label="Con algo en rojo" icon={AlertTriangle} color="#EAB308" testId="kpi-risk"
+                    pie={stats?.semaforo && (
+                        <span className="flex flex-wrap items-center gap-x-2 text-[10px] tabular-nums text-white/50 mt-0.5" data-testid="kpi-semaforo">
+                            <span>reporte <b className="text-red-400">{stats.semaforo.reporte?.malo || 0}</b></span>
+                            <span>peso <b className="text-red-400">{stats.semaforo.peso?.malo || 0}</b></span>
+                            <span>contacto <b className="text-red-400">{stats.semaforo.contacto?.malo || 0}</b></span>
+                            <span>ajuste <b className="text-red-400">{stats.semaforo.ajuste?.malo || 0}</b></span>
+                        </span>
+                    )} />
                 <KpiCard value={stats?.inactive_clients || 0} label="Bajas" icon={UserMinus} color="#EF4444" testId="kpi-bajas" />
                 <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />
             </div>
@@ -629,13 +665,14 @@ const AdminDashboard = () => {
 };
 
 // KPI Card Component
-const KpiCard = ({ value, label, icon: Icon, color, testId }) => (
+const KpiCard = ({ value, label, icon: Icon, color, testId, pie = null }) => (
     <Card className="bg-[#111111] border-[#222]" data-testid={testId}>
         <CardContent className="p-4">
             <div className="flex items-start justify-between">
                 <div>
                     <p className="text-3xl font-bold mt-1" style={{ fontFamily: 'Barlow Condensed', color }}>{value}</p>
                     <p className="text-[10px] text-white/40 uppercase tracking-wider mt-1">{label}</p>
+                    {pie}
                 </div>
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
                     <Icon className="w-4 h-4" style={{ color }} />
@@ -803,6 +840,8 @@ const AdminClientsList = () => {
                                         </button>
                                     </TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Últ. reporte</TableHead>
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Contacto</TableHead>
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden lg:table-cell">Peso</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Estado</TableHead>
                                     <TableHead className="text-right text-white/50 uppercase tracking-wider text-xs">Acciones</TableHead>
                                 </TableRow>
@@ -848,23 +887,20 @@ const AdminClientsList = () => {
                                                 <span className="text-sm text-white/30">Sin asignar</span>
                                             )}
                                         </TableCell>
-                                        {/* Cuánto lleva sin que le muevan los macros, y desde
-                                            el mes en naranja. El que no tiene ninguno dice
-                                            "nunca", que no es lo mismo que llevar mucho. */}
+                                        {/* Las cuatro celdas del semáforo (punto 32). El color y
+                                            el texto vienen calculados del backend, medidos contra
+                                            el plazo del plan de cada cliente: aquí solo se pintan. */}
                                         <TableCell className="hidden lg:table-cell" data-testid={`sin-tocar-${client.id || client.user_id}`}>
-                                            {!client.id ? <span className="text-white/30 text-sm">-</span> : (() => {
-                                                const d = diasSinTocar(client);
-                                                if (d === null) return <span className="text-sm font-bold text-[#FF671F]">nunca</span>;
-                                                return <span className={`text-sm tabular-nums ${d >= 30 ? 'text-[#FF671F] font-bold' : 'text-white/60'}`}>{d} d</span>;
-                                            })()}
+                                            <CeldaSemaforo celda={client.semaforo?.ajuste} />
                                         </TableCell>
                                         <TableCell className="hidden xl:table-cell">
-                                            {(() => {
-                                                const d = diasDesde(client.ultimo_reporte);
-                                                return d === null
-                                                    ? <span className="text-white/30 text-sm">-</span>
-                                                    : <span className="text-sm text-white/40 tabular-nums">{d} d</span>;
-                                            })()}
+                                            <CeldaSemaforo celda={client.semaforo?.reporte} />
+                                        </TableCell>
+                                        <TableCell className="hidden xl:table-cell">
+                                            <CeldaSemaforo celda={client.semaforo?.contacto} />
+                                        </TableCell>
+                                        <TableCell className="hidden lg:table-cell">
+                                            <CeldaSemaforo celda={client.semaforo?.peso} />
                                         </TableCell>
                                         <TableCell>
                                             {client.status === 'registro_incompleto' ? (

@@ -1067,6 +1067,67 @@ de comprobación de que el cálculo está bien, y es material para la revisión 
 agente que Jesús dejó pendiente. **Ojo: esto es dev**, con el ruido del harness de simulación
 dentro; el número bueno saldrá al pasarlo en producción.
 
+### Punto 32 - El semáforo, por celda y con cinco niveles · CERRADO
+
+**Lo que pasaba.** «EN RIESGO» era binario: activo, semana ≥ 3 y sin reporte en 14 días.
+Saltaba para el 76% de los activos, o sea que no era una alerta: era el color de fondo de la
+pantalla. Y no decía **en qué**.
+
+**Lo que hay ahora.** `backend/core/semaforo.py`: cinco estados - `ok`, `regular`,
+`regular_malo`, `malo`, `info` - aplicados **por celda**. El backend devuelve por cada celda
+un objeto `{valor, estado, texto, detalle}` y la tabla solo pinta. Un objeto y no
+`"valor|color"` en una cadena, como avisa el punto: en cuanto haya que ordenar por la columna
+o filtrar por estado, la cadena hay que romperla otra vez, y quien la rompe se equivoca.
+
+Cinco celdas por cliente: **reporte**, **ajuste**, **contacto**, **peso** y **pago**.
+
+**Los plazos salen del plan, no son generales.** Cada celda se mide contra la cadencia de su
+plan (7, 14 o 28 días), no contra un 14 fijo para todos. Es el criterio que ya estaba escrito
+para la columna de contacto y vale igual para todo: «al de 1.500 con llamada semanal, quince
+días es un escándalo; al de 897 con reporte quincenal, no tanto». Los escalones son 1x el
+plazo (ok), 1,5x (regular), 2x (regular-malo) y más (malo). **Esos multiplicadores son una
+propuesta mía**: hacían falta unos números para poder enseñarlo, están juntos y con nombre al
+principio del módulo, y los tiene que repasar Jesús.
+
+**`info` no es un estado peor ni mejor**: es «esta casilla no cuenta para este cliente». Al de
+autogestión no se le acompaña por chat, así que pintarle el contacto en rojo todos los días
+sería ruido. Va en gris apagado, no en un color de aviso.
+
+**Dos cosas que me salieron mal por el camino y conviene que consten**, porque las dos daban
+el resultado que el punto quiere evitar:
+
+1. **«Nunca» no puede ser malo por sí solo.** La primera versión pintaba en rojo a todo el que
+   no hubiera mandado nunca un reporte, y saltaba para el 97%. Al cliente que entró el lunes
+   todavía no le toca mandar el primero. Ahora, cuando algo no ha pasado nunca, el reloj se
+   cuenta **desde que empezó** y el estado sale de ahí igual que en los demás; lo único que
+   cambia es el texto, que dice «nunca» en vez de los días.
+2. **Un resumen por fila reproduce la alerta binaria.** Con cinco celdas, «tiene alguna en
+   regular-malo o peor» vuelve a ser cierto para casi todos. Por eso el panel ya no da una
+   cifra sola: da **el desglose por celda**, que es lo accionable.
+
+**Y un fallo de verdad, encontrado por no fiarme del número**: el panel decía 222 con algo en
+rojo, pero la suma por celda daba como mucho 203. No cuadraba. Era que la consulta del panel no
+traía el campo `status`, y `has_active_access` lo lee, así que **daba «pago pendiente» a los 228
+clientes**. Corregido.
+
+**Cómo queda, con los datos de dev (228 activos):**
+
+| Celda | ok | regular | regular-malo | malo | info |
+|---|---:|---:|---:|---:|---:|
+| reporte | 64 | 51 | 32 | 78 | 3 |
+| ajuste | 84 | 116 | 8 | 20 | 0 |
+| contacto | 53 | 135 | 2 | 33 | 5 |
+| peso | 85 | 43 | 28 | 72 | 0 |
+| pago | 228 | 0 | 0 | 0 | 0 |
+
+**Con alguna celda en rojo: 93 de 228, el 41%** - contra el 76% de la etiqueta vieja. Y ahora
+además se sabe de qué: el panel pone «reporte 78 · peso 72 · contacto 33 · ajuste 20».
+
+**En pantalla**, comprobado en el navegador: en la lista de clientes cada celda va con su
+color, y se lee de un vistazo la diferencia entre un cliente nuevo (13 días sin ajuste en
+ámbar, sin reporte todavía en ámbar, peso de hoy en verde) y uno abandonado (78 días en rojo,
+sin reporte en rojo, nunca contactado en rojo).
+
 ---
 
 ---
@@ -1137,7 +1198,7 @@ se borran esas dos también.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
 textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28, 29, 30 y 31) está en GitHub y sin desplegar, esperando la orden.
+25, 27, 28, 29, 30, 31 y 32) está en GitHub y sin desplegar, esperando la orden.
 
 **Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
 

@@ -27,6 +27,7 @@ from core.cycle import enrich_cycle, compute_cycle
 from core.seguimiento import marcar_ajuste, dias_desde
 from core.series_cliente import anotar_peso, anotar_grasa, actual as actual_de_serie
 from core.cambios_macros import marcar_cambios, palancas
+from core import semaforo
 from models.common import FoodSuggestionUpdate, AdminFoodCreate
 from calculator import invalidate_foods_cache
 
@@ -67,6 +68,63 @@ async def resolve_macro_revision(revision_id: str, user = Depends(get_admin_user
 
 # ==================== CLIENTS ====================
 
+def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
+                          ahora: datetime) -> Dict[str, Any]:
+    """El semaforo de un cliente, celda a celda (punto 32 del 07-08).
+
+    Cinco estados y POR CELDA, no por fila: asi se distingue quien va regular de quien va
+    mal, y en que. Cada plazo se mide contra la cadencia de SU plan, no contra un numero
+    general. La tabla recibe {valor, estado, texto, detalle} y solo pinta.
+    """
+    from core.plan_access import has_active_access, plan_grants_feature, dias_hasta_la_revision
+
+    plan = profile.get("plan")
+    plazo = dias_hasta_la_revision(plan)          # 7, 14 o 28 segun su plan
+
+    # Cuando algo NO HA PASADO NUNCA, el reloj corre desde que empezo: al que entro el lunes
+    # todavia no le toca mandar su primer reporte, y pintarlo en rojo es el fallo que
+    # denuncia el punto. Es el mismo criterio que ya usaba la columna de contacto.
+    desde_que_empezo = dias_desde(
+        (profile.get("cycle_start") or profile.get("created_at") or "")[:10], ahora)
+
+    def _celda(fecha, texto_nunca="nunca"):
+        if fecha:
+            return semaforo.por_plazo(dias_desde(str(fecha)[:10], ahora), plazo)
+        return semaforo.por_plazo(desde_que_empezo, plazo, nunca=True, texto_nunca=texto_nunca)
+
+    # Reporte y ajuste: las dos fechas del punto 29, ya guardadas en el cliente.
+    reporte = _celda(profile.get("ultimo_reporte"), "ninguno")
+    ajuste = _celda(profile.get("ultimo_ajuste"))
+
+    # Contacto: solo los planes con chat. Al de autogestion no se le acompana por ahi, asi
+    # que pintarselo en rojo todos los dias seria ruido y no una alerta.
+    contacto = (_celda(hablado.get(profile.get("user_id")))
+                if plan_grants_feature(plan, "chat")
+                else semaforo.no_aplica("su plan no lleva chat"))
+
+    # Peso: cuanto lleva sin pesarse. Sale de la serie (punto 30), asi que trae su fecha.
+    ultimo_peso = actual_de_serie(profile.get("pesos"))
+    if ultimo_peso:
+        peso = semaforo.por_plazo(dias_desde(ultimo_peso["fecha"], ahora), plazo)
+        peso["valor"] = ultimo_peso["valor"]
+        peso["texto"] = f"{ultimo_peso['valor']} kg"
+        peso["detalle"] = f"del {ultimo_peso['fecha']}"
+    else:
+        peso = semaforo.por_plazo(desde_que_empezo, plazo, nunca=True, texto_nunca="sin peso")
+
+    # Pago: binario de verdad, este si. O esta al corriente o no lo esta.
+    al_corriente = has_active_access(profile)
+    pago = semaforo.celda(al_corriente, semaforo.OK if al_corriente else semaforo.MALO,
+                          "al día" if al_corriente else "pendiente")
+
+    celdas = {"reporte": reporte, "ajuste": ajuste, "contacto": contacto,
+              "peso": peso, "pago": pago}
+    # `peor` va SOLO para poder ordenar la tabla por quien esta peor. No se usa como
+    # etiqueta ni se cuenta: con cuatro celdas, "alguna en rojo" vuelve a ser cierto para
+    # casi todos, que es exactamente la alerta binaria que el punto manda quitar.
+    return {**celdas, "peor": semaforo.peor(*[c["estado"] for c in celdas.values()])}
+
+
 @router.get("/clients", response_model=List[Dict[str, Any]])
 async def get_all_clients(
     plan: Optional[str] = None,
@@ -105,7 +163,8 @@ async def get_all_clients(
     # poder ordenar la lista sin recorrer el historico de doscientos y pico clientes.
     LIST_FIELDS = {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "week": 1,
                    "cycle_start": 1, "status": 1, "trainer_id": 1, "created_at": 1,
-                   "ultimo_ajuste": 1, "ultimo_reporte": 1}
+                   "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
+                   "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1}
     profiles = await db.client_profiles.find(query, LIST_FIELDS).to_list(1000)
 
     uids = [p["user_id"] for p in profiles]
@@ -115,11 +174,23 @@ async def get_all_clients(
     ).to_list(len(uids) or 1)
     umap = {u["id"]: u for u in users}
 
+    # El semaforo (punto 32) necesita saber cuando se le hablo por ultima vez. Una consulta
+    # para todos, no una por cliente.
+    ahora = datetime.now(timezone.utc)
+    staff = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
+    hablado: Dict[str, str] = {}
+    async for m in db.messages.find({"sender_id": {"$in": list(staff)}},
+                                    {"_id": 0, "receiver_id": 1, "created_at": 1}):
+        uid, ca = m.get("receiver_id"), m.get("created_at")
+        if uid and ca and (uid not in hablado or ca > hablado[uid]):
+            hablado[uid] = ca
+
     result = []
     for profile in profiles:
         user_data = umap.get(profile["user_id"])
         if user_data:
-            result.append({**enrich_cycle(profile), "user": user_data})
+            result.append({**enrich_cycle(profile), "user": user_data,
+                           "semaforo": _semaforo_del_cliente(profile, hablado, ahora)})
 
     # Registros incompletos: solo el admin sin filtros (no tienen plan/estado/coach que filtrar)
     if include_incomplete and not es_trainer and not (plan or status or trainer_id):
@@ -1142,18 +1213,43 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     active = await db.client_profiles.count_documents({"status": "activo"})
     inactive = await db.client_profiles.count_documents({"status": {"$in": ["inactivo", "baja", "cancelado"]}})
 
-    # At-risk: active but week >= 3 (calculada) and no report in last 14 days.
-    # UNA consulta distinct sobre reports en vez de una por cliente (N+1).
-    fourteen_ago = (now - timedelta(days=14)).isoformat()
+    # HAY QUE MIRARLOS (punto 32 del 07-08). Antes esto era "en riesgo": activo, semana >= 3
+    # y sin reporte en 14 dias. Saltaba para el 76% de los activos, o sea que no era una
+    # alerta: era el color de fondo de la pantalla. Y no distinguia a quien va regular de
+    # quien va mal ni en que.
+    #
+    # Ahora se cuenta con el mismo semaforo de la lista, que mide cada celda contra el plazo
+    # DE SU PLAN y no contra un 14 fijo, y solo cuenta el que tiene alguna celda en
+    # regular-malo o peor. Los `info` (lo que su plan no incluye) no cuentan.
     active_profiles = await db.client_profiles.find(
         {"status": "activo"},
-        {"_id": 0, "id": 1, "plan": 1, "created_at": 1, "cycle_start": 1},
+        # OJO con `status`: `has_active_access` lo lee, y sin el en la proyeccion daba
+        # "pago pendiente" a todo el mundo y el semaforo salia rojo entero.
+        {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "created_at": 1, "cycle_start": 1,
+         "status": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
+         "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1},
     ).to_list(2000)
-    ids = [p["id"] for p in active_profiles if compute_cycle(p)["week"] >= 3]
-    with_recent = set(await db.reports.distinct(
-        "client_id", {"client_id": {"$in": ids}, "created_at": {"$gte": fourteen_ago}}
-    )) if ids else set()
-    at_risk = len([i for i in ids if i not in with_recent])
+    staff_ids = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
+    hablado_a: Dict[str, str] = {}
+    async for m in db.messages.find({"sender_id": {"$in": list(staff_ids)}},
+                                    {"_id": 0, "receiver_id": 1, "created_at": 1}):
+        uid, ca = m.get("receiver_id"), m.get("created_at")
+        if uid and ca and (uid not in hablado_a or ca > hablado_a[uid]):
+            hablado_a[uid] = ca
+
+    # POR CELDA, no por fila. Con cuatro celdas, "tiene alguna en rojo" es cierto para casi
+    # todo el mundo y volveriamos a la alerta que nadie mira. Lo que sirve es saber CUANTOS
+    # y EN QUE: "78 sin mandar reporte a tiempo, 72 sin pesarse, 33 sin que nadie les hable".
+    CELDAS = ("reporte", "ajuste", "contacto", "peso", "pago")
+    reparto = {c: {semaforo.OK: 0, semaforo.REGULAR: 0, semaforo.REGULAR_MALO: 0,
+                   semaforo.MALO: 0, semaforo.INFO: 0} for c in CELDAS}
+    at_risk = 0
+    for p in active_profiles:
+        s = _semaforo_del_cliente(p, hablado_a, now)
+        for c in CELDAS:
+            reparto[c][s[c]["estado"]] += 1
+        if s["peor"] == semaforo.MALO:
+            at_risk += 1
 
     # Bajas del mes
     bajas_mes = await db.client_profiles.count_documents({
@@ -1182,6 +1278,9 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         "total_clients": total,
         "active_clients": active,
         "at_risk_clients": at_risk,
+        # El reparto POR CELDA: cuantos van bien, regular y mal en cada cosa. Es lo que
+        # deja decir "78 sin reporte a tiempo" en vez de una cifra que no distingue nada.
+        "semaforo": reparto,
         "bajas_mes": bajas_mes,
         "inactive_clients": inactive,
         "plans": plans,
