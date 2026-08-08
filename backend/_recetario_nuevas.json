@@ -1,0 +1,63 @@
+[
+ {
+  "url": "https://noteconformesconmenos.com/recetas/bol-de-queso-batido-con-arandanos-muesli-y-chocolate/",
+  "titulo": "Bol de queso batido con arándanos, muesli y chocolate",
+  "momentos": ["desayuno"],
+  "P": "33,5",
+  "H": "21,3",
+  "G": "15,4",
+  "ings": [
+   "300g de queso fresco batido 0 % (Hacendado)",
+   "10g de aislado de suero – Whey Isolate (FullGas)",
+   "15g de muesli quinoa, chía y chocolate negro (Hacendado)",
+   "15g de nueces",
+   "1ud (8 g/ml) de chocolate negro al 85 % por onza (Hacendado)"
+  ]
+ },
+ {
+  "url": "https://noteconformesconmenos.com/recetas/bowl-de-ternera-y-verduras-con-arroz/",
+  "titulo": "Bowl de ternera y verduras con arroz",
+  "momentos": ["comida", "cena"],
+  "P": "47,0",
+  "H": "47,1",
+  "G": "16,8",
+  "ings": [
+   "235g de carne picada de ternera (baja en grasa)",
+   "1ud (125 g/ml) de arroz basmati tarrina al minuto (Brillante)",
+   "100g de calabacín",
+   "80g de zanahoria en rodajas congelada (Hacendado)",
+   "50g de puerro",
+   "1 cucharadita de aceite de oliva virgen extra (5g)"
+  ]
+ },
+ {
+  "url": "https://noteconformesconmenos.com/recetas/salteado-mediterraneo-de-pollo-arroz-y-calabacin/",
+  "titulo": "Salteado mediterráneo de pollo, arroz y calabacín",
+  "momentos": ["comida", "cena"],
+  "P": "46,0",
+  "H": "28,4",
+  "G": "12,0",
+  "ings": [
+   "150g de pechuga de pollo",
+   "2 huevos enteros (talla L)",
+   "40g de arroz integral",
+   "100g de tomate rallado natural (Surinver)",
+   "150g de calabacín"
+  ]
+ },
+ {
+  "url": "https://noteconformesconmenos.com/recetas/tostadas-proteicas-de-pollo-y-pavo/",
+  "titulo": "Tostadas proteicas de pollo y pavo",
+  "momentos": ["desayuno"],
+  "P": "44,0",
+  "H": "17,0",
+  "G": "13,3",
+  "ings": [
+   "140g de pechuga de pollo",
+   "80g de fiambre de pechuga de pavo de buena calidad (más del 85%)",
+   "100g de tomate",
+   "2 rebanadas de pan de fibra & sésamo (Hacendado)",
+   "25g de almendras"
+  ]
+ }
+]

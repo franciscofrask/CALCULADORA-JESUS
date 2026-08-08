@@ -108,6 +108,15 @@ async def buscar_en_biblioteca(
     q = {"tipo": tipo}
     if alimento_ids:
         q["alimento_ids"] = {"$all": [int(a) for a in alimento_ids]}
+
+    # Los menús de los clientes son de relleno y van SIEMPRE con filtro (punto 67):
+    # solo los que llevan verdura, no son una lista de botes y tienen un número
+    # razonable de ingredientes. Lo marca la cosecha (_cosechar_menus.py).
+    q["calidad.pasa"] = True
+    # Y sin repetir: 10.304 de los 23.681 llevan los mismos alimentos que otro y solo
+    # cambian las cantidades, que aquí se reescalan igualmente. Al cliente le salía
+    # tres veces la misma comida con otros gramos.
+    q["repetido_de"] = {"$exists": False}
     # Preselección por macros: sin ajuste posible más allá de AJUSTE_MAX + margen,
     # todo lo que esté más lejos no puede cuadrar (ahorra evaluar 1000 menús).
     q["macros.P"] = {"$gte": objetivo["P"] - AJUSTE_MAX["P"] - MARGEN_APROX,
@@ -173,13 +182,32 @@ async def buscar_en_biblioteca(
             "macros_objetivo": objetivo,
             "cuadrada": ajuste["cuadrada"],
             "fuente": "clientes",
-            "popularidad": {"usos": c.get("usos", 0), "clientes": c.get("clientes", 0)},
+            "popularidad": {"usos": c.get("usos", 0), "clientes": c.get("clientes", 0),
+                            "usos_calma": c.get("usos_calma", 0)},
             "_err": err,
         })
 
-    # Cuadradas primero; luego menor error; luego más popular (clientes, usos)
-    resultados.sort(key=lambda r: (not r["cuadrada"], r["_err"],
-                                   -r["popularidad"]["clientes"], -r["popularidad"]["usos"]))
+    # Cuadradas primero y, dentro de ellas, la que más GENTE DISTINTA ha montado.
+    # Ese es el criterio del punto 71, y no es lo mismo que la más usada: un menú que
+    # han montado 30 personas es bueno; uno que una persona ha repetido 30 veces solo
+    # dice que a esa persona le gusta.
+    #
+    # El error de macros NO va por delante de la gente cuando el menú ya cuadra. Si
+    # los tres macros están dentro del margen válido, que uno se quede a 0,3 g y otro
+    # a 0,9 no lo nota nadie -- pero ordenar por eso deja el criterio de la gente sin
+    # estrenar, porque casi todos cuadran al decimal. Entre las que no cuadran sí
+    # importa, y ahí se agrupa de dos en dos gramos para que tampoco mande el ruido.
+    #
+    # `usos_calma` va el último y a propósito: es lo que se sabía de la calculadora
+    # antigua, donde no consta quién montó cada cosa. Sirve para desempatar entre
+    # menús que aquí no ha tocado nadie, no para competir con la gente de verdad.
+    def _orden(r):
+        p = r["popularidad"]
+        escalon = 0 if r["cuadrada"] else round(r["_err"] / 2)
+        return (not r["cuadrada"], escalon,
+                -p["clientes"], -p["usos"], -p["usos_calma"], r["_err"])
+
+    resultados.sort(key=_orden)
     for r in resultados:
         r.pop("_err", None)
     return resultados[:limit]

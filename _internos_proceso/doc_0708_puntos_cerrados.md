@@ -1887,10 +1887,263 @@ perfil.
 
 ---
 
+---
+
+## Bloque J - Los menús autoajustables
+
+Once puntos. Aquí el documento acierta en el diseño y se queda corto en el estado: **buena
+parte ya estaba montada**, y donde no lo estaba el motivo no era el que se suponía.
+
+Antes de nada, una corrección de método que vale para todo el bloque: los nombres que cita
+el documento (`getBannedCategories`, `calculateMinimumQuantity`, `getDietsInfo`,
+`getCuadredDiets`, `MACROS_VALID_MARGIN`) y las rutas tipo
+`src/services/Aliment.service.ts:308-344` **no existen en ningún sitio**. Salen de leer el
+bundle **minificado** de Calma y ponerle nombre a lo que hace cada función. Así que no se
+puede buscar por nombre: hay que buscar **por comportamiento** en el bundle y comparar con
+lo nuestro. Al hacerlo así apareció un fallo que buscando por nombre se me habría escapado
+(punto 70).
+
+### Punto 65 - El recetario · ESTABA AL 96 %, Y AHORA AL 100 %
+
+Las 103 recetas estaban importadas desde el 10-07... menos **cuatro**, publicadas después.
+Ya están las 103. Y como esto se va a repetir cada vez que Jesús publique, queda un script
+que lo compara y avisa: `_sincronizar_recetario.py`.
+
+Se confirma el aviso del punto, y conviene entender bien qué pasa. La REST de WordPress
+**sí** da la lista, y por eso se usa para comparar. Lo que no da es el contenido. Una receta
+de la API trae exactamente estos campos:
+
+```
+['author', 'date', 'dificultad', 'featured_media', 'id', 'link', 'slug',
+ 'status', 'template', 'tipo-de-comida', 'title', 'type']
+```
+
+Ni `meta`, ni `acf`, ni `content`: los macros y los ingredientes son campos de JetEngine sin
+marcar como visibles en REST. Y las páginas están detrás de la membresía -- pedirlas sin
+sesión devuelve **302 y cero bytes**. Mientras eso siga así, el contenido de las recetas
+nuevas se pega a mano en `_recetario_nuevas.json`. **Marcar esos campos como visibles en
+REST es un rato de trabajo en WordPress y quita el paso manual para siempre**: merece la
+pena pedirlo.
+
+Sobre el momento del día: es verdad que **solo 4 de las 103** tienen puesta la taxonomía en
+WordPress (comprobado hoy, sigue igual). Pero eso no bloquea nada, porque **el momento de
+las nuestras no sale de ahí**: se decidió al importar y las 159 plantillas lo tienen. Las
+cuatro nuevas se clasificaron con el mismo criterio que las 99, que se lee solo mirando lo
+que ya había:
+
+| En el recetario | Momento | Cuántas |
+|---|---|---|
+| «Tostadas...» | desayuno | 9 de 9 |
+| «Bol proteico...» | desayuno | 4 de 4 |
+| Arroz salteado con proteína y verdura | comida + cena | todas |
+
+Y de paso se entiende por qué hay **159 plantillas para 103 recetas**: 56 platos principales
+están guardados dos veces, uno para comida y otro para cena. No es un duplicado, es a
+propósito.
+
+### Punto 71 - La cosecha semanal · LA REGLA ESTABA ESCRITA Y EL DATO NO EXISTÍA
+
+Este es el punto importante del bloque, y el hallazgo es de los que no se ven desde fuera.
+
+El sugeridor **ya ordenaba por personas distintas**. Estaba en el código, con su criterio y
+todo: `-clientes` primero y `-usos` después. Pero **el campo `clientes` estaba a 0 en los
+23.681 menús**. Los 23.681 no se minaron de las dietas: se importaron de un CSV de la
+calculadora antigua que traía `veces` (usos) pero no quién los montó. O sea que el criterio
+bueno estaba escrito, no desempataba nunca, y **siempre acababa mandando el número de usos**,
+que es exactamente el sesgo del que avisa el punto.
+
+Ahora hay una cosecha de verdad (`_cosechar_menus.py` + `core/cosecha_menus.py`) que recuenta
+sobre las 38.160 dietas. Y el recuento da la razón al documento de forma aplastante:
+
+```
+combinaciones distintas que ha montado la gente : 70.115
+   montadas por 2 personas o más                :  1.725   (2,5 %)
+```
+
+**El 97,5 % de lo que se monta lo ha montado una sola persona.** Contar por usos es contar
+casi solo manías individuales.
+
+Tres decisiones que hubo que tomar por el camino:
+
+1. **La cosecha no es incremental.** Si cada semana se sumaran las personas de esa semana a
+   las de antes, quien repite un menú cada lunes contaría como una persona nueva cada vez -
+   otra vez el mismo sesgo. Cada pasada recuenta entero. Son segundos.
+2. **0 personas no es lo mismo que «no lo sé».** Lo heredado de Calma pasa a `usos_calma`, y
+   `usos`/`clientes` quedan a 0 hasta que alguien lo monte aquí. Así lo heredado sirve para
+   desempatar entre menús que nadie ha tocado, pero no compite con la gente de verdad.
+3. **Un menú nuevo solo entra si es bueno y lo han montado 2 personas.** Guardar las 70.115
+   no es tener un banco de menús, es tener el historial de todo el mundo -- y no cabe: el
+   Atlas de dev es de 512 MB.
+
+Y aparecieron **10.304 repetidos**: de los 23.681 documentos solo hay **13.377 menús
+distintos**. El resto llevan los mismos alimentos y solo cambian las cantidades... que el
+sugeridor reescala igualmente. Al cliente le salía tres veces la misma comida con otros
+gramos. No se ha borrado ninguno (hay dietas apuntando a ellos): se marcan con `repetido_de`
+y el picker los salta.
+
+Un detalle del orden que parecía menor y no lo era. El sugeridor ordenaba por error de
+macros **antes** que por personas, y como casi todos los menús cuadran al decimal, el error
+discriminaba por décimas de gramo y el criterio de la gente **no llegaba a estrenarse**.
+Ahora, cuando un menú ya cuadra -- es decir, cuando los tres macros están dentro del margen
+válido --, el error deja de ordenar y manda la gente. Se nota en el resultado: donde antes
+salía primero un menú que no había montado nadie, ahora salen los de 3 y 2 personas.
+
+### Punto 67 - El filtro de calidad · NO EXISTÍA. Ahora sí, y se puede medir
+
+La fuente 3 no tenía filtro ninguno. Ahora tiene los tres cortes que pide el punto -- que
+lleve verdura, que no vaya cargado de suplementos y que tenga un número razonable de
+ingredientes -- y cada menú guarda **por qué** se cae, que es lo que permite afinarlo:
+
+```
+sin_verdura              57.855
+ok                       16.071
+dia_entero_volcado        3.303
+cargado_de_suplementos      588
+muy_pocos_alimentos         426
+```
+
+**Ojo a un error que estuve a punto de cometer**: di por hecho que la verdura era la
+categoría 14. La 14 son **«Hidratos en polvo»**; la verdura es la **13**. Un filtro con la 14
+habría exigido justo lo contrario de lo que se busca. La 46 tampoco es suplemento: son
+cremas y tortas de arroz, que son comida.
+
+Con el filtro puesto, de las 18.222 comidas de plato quedan **1.946**, y son presentables:
+
+```
+x162  hamburguesa de pechuga 192g + pan de barra 80g + garbanzos 210g + champiñones 100g
+x158  jamón serrano 120g + pan de barra 76g + tomate 50g + anacardos 6g
+x 65  pechuga de pollo 225g + parrillada de verduras 100g + AOVE 15g
+```
+
+La cifra que da el punto (14 % con verdura, 60 % con proteína en polvo) es del orden bueno;
+medido sobre lo nuestro sale **8 % con verdura y 42 % con proteína en polvo**. La conclusión
+del documento se sostiene entera: como fuente principal no valen.
+
+> **Aviso importante**: la fuente 3 está **apagada** desde el 06-08 (`BIBLIOTECA_DE_CLIENTES
+> = False`), por decisión de Francisco, y hoy la app solo ofrece el recetario. Todo lo de
+> arriba está hecho y probado **pero sigue sin usarse hasta que se decida encenderlo**. Ahora
+> hay con qué decidirlo: son 1.946 comidas filtradas, no 266.170 sin filtrar.
+
+### Punto 70 - La función de estadísticas · AQUÍ ESTABA EL FALLO QUE NO SE BUSCABA
+
+El aviso del punto es correcto, y buscarlo por su nombre (`getDietsInfo`) no habría servido
+de nada: no existe. Lo que sí se puede hacer es buscar el comportamiento en el bundle, y ahí
+se ve que **los `split("|")` de Calma están todos bien** -- se usan para las categorías, para
+las alergias y para los items de las ofertas, que sí van separados por barra. El parser de
+comidas es otro y separa como debe: por guion primero, y por barra dentro de cada trozo.
+
+Lo importante era otra cosa: **¿comete la app ese error?** El generador del CSV de 266.170
+menús no está en el repo, así que en vez de auditar el código se auditó **el resultado**, que
+es más difícil de engañar: recalcular los macros de los 23.681 menús con el catálogo y ver si
+cuadran con los declarados.
+
+```
+cuadran (<= 3 g de diferencia total) : 21.753
+descuadran                           :  1.928
+con algún alimento que ya no existe  :      0
+```
+
+O sea que el parseo está bien, y el 8 % que falla **falla siempre en la proteína y siempre
+por exceso**. La causa no era un separador: era **la regla de macros**. El pan de centeno
+declara 5,1 g de proteína, pero por su categoría (8.7) solo cuenta el hidrato; las nueces
+solo cuentan la grasa. El CSV trae la proteína cruda y el motor aplica la regla, y de ahí
+salen desviaciones de hasta 25 g.
+
+Y eso sí importaba, porque ese campo es el que usa la **preselección** del sugeridor: se
+descartaban menús que cuadraban y entraban otros que luego se caían. Ya están recalculados
+con el motor de ahora, en la misma pasada de la cosecha.
+
+### Puntos 68, 69, 72 y 74 - Comprobados contra el bundle, no contra el nombre
+
+Los cuatro estaban, y esta vez la comprobación se hizo mirando el código real de Calma:
+
+- **68 (exclusiones)**: existe la misma partición en dos que describe el punto -
+  `avoided_categories` para las que son categoría de verdad y `avoided_keywords` para lo que
+  el cliente escribió a mano. En el bundle se ve el origen: `preferencias` y `alergias` son
+  dos listas separadas por barra.
+- **69 (media unidad)**: clavado, y con la misma lista - hamburguesa, bagel, brazo y bizcocho
+  de My Fitness Meals, categoría 11.1 y arroz al minuto van de 0,5 en 0,5; el resto de lo que
+  va por unidades, mínimo una entera.
+- **72 (el margen)**: `margenValido: 4` en la config de Calma, y 4 en la nuestra. Con un
+  matiz que el punto no recoge: en Calma ese margen **también se le suma a la grasa del
+  peri**, y sirve además para distinguir «cuadrado» (al 100 %) de «válido» (dentro del
+  margen).
+- **74 (el formato)**: el parser es correcto y ya se usaba.
+
+De paso apareció una diferencia deliberada en el **intraentreno**: Calma solo permite
+`["41","18.1.1","18.1.3","18.1.2"]` y nosotros permitimos `["41","18"]` entero, o sea **9
+alimentos más** - dextrosa, palatinosa, amilopectina, ciclodextrina e Isostar. Es justamente
+lo que se toma durante el entreno, así que el ensanche está bien. Lo que está mal es un test
+que dice `len(CATS_INTRA) == 4` cuando son 2: el test miente sobre la intención.
+
+### Punto 75 - Los suplementos · YA ESTABAN, Y CON MÁS DETALLE QUE LA WEB
+
+El punto dice «no hay que escribir ni un protocolo: hay que traerlos». **Ya se trajeron**, el
+19-05: `db.supplements` tiene **106 entradas**, y son más detalladas que la web. Lo que allí
+va en prosa («Semanas 2 y 3: 1 y 1, Semanas 4 y 5: 2 y 1...»), aquí ya está troceado en pasos
+aplicables: «Cafeína 100 mg mes 1», «mes 2», «finalización (10 días)».
+
+Se sacaron igualmente los 28 de la web de hoy, para contrastar (la página da 302 sin sesión y
+enseña 10 de golpe, así que hay que recorrer las 12 categorías del filtro). Resultado:
+
+```
+en la web y no en la app      : 0
+están, pero no dicen lo mismo : 8
+```
+
+**Ninguno falta. El problema es que llevan sin mirarse desde mayo** y la web ha cambiado. Y
+alguna diferencia no es de forma:
+
+| | La web hoy | La app |
+|---|---|---|
+| Creatina | 1 g por cada 10 kg de peso | 10 g (hombre) / 5 g (mujer) |
+| Monacolina K | 10 mg | 2 cápsulas en el desayuno y 1 en la cena |
+| Silimarina | 150 mg por toma | «Cardo mariano», 1 cápsula |
+
+Lo de la silimarina es el mismo suplemento con otro nombre (es su extracto). Lo de la
+creatina no: a alguien de 70 kg la web le manda 7 g y la app le dice 10. **Eso lo decide
+Jesús, no nosotros**, y queda listado con `_contrastar_suplementos.py`.
+
+**El código GALLEGOVIP no está en la app**, y no lo he puesto. El texto de la web dice «lo
+tendrás activo todo el tiempo que dure tu suscripción», y esa suscripción es la de la
+membresía ELM: nuestros clientes de 12EN12 no tienen por qué serlo. Enseñar un 20 % de
+descuento a quien no le corresponde no es una decisión que pueda tomar yo. Ver pendientes.
+
+### Punto 66 - Los PDFs de menús · NO SE PUEDE HACER COMO DICE EL DOCUMENTO
+
+Aquí hay que contradecir al documento, y con una prueba.
+
+Lo que sí es cierto: los 15 menús de la plataforma están donde dice (8 de entrenamiento y 7
+de descanso), la estructura es regularísima y **se confirma el punto 6**: los macros salen sin
+redondear. Leído hoy del menú 1: **Proteínas 230,3 · Hidratos 331 · Grasas 57,8**, y el
+perientreno 49,3 y 70. Al importarlos hay que redondear, efectivamente.
+
+Lo que no es cierto es que «partirlo sea mecánico». **El texto de las tablas no se puede
+sacar del PDF.** Medido sobre el menú 1, página 1:
+
+```
+operaciones de pintar texto : 150
+cadenas legibles            :   7
+```
+
+Y las 7 son los títulos: «DIETA PROGRAMADA PARA DÍA DE ENTRENAMIENTO», «HORARIO DE ENTRENO»,
+«Comida 1», «Comida 2»... **Ni un ingrediente, ni un macro.** Las tablas se ven
+perfectamente en pantalla, pero los caracteres no se pueden mapear, así que un parser saca la
+cáscara y tira el contenido. Es mecánico de leer con los ojos; no de extraer.
+
+Además, de los 127 PDFs solo tenemos acceso a los **15 de la plataforma**: los **112 del
+Drive** no están ni en el repo ni en la web.
+
+Las salidas están en pendientes. La que menos trabajo tiene, con diferencia, es la tercera:
+esos menús salieron de la calculadora, así que **las comidas ya existen como datos** en algún
+sitio y no hay por qué reconstruirlas desde un PDF.
+
+---
+
 ## PENDIENTES
 
 Todo lo que queda abierto, ordenado por quién tiene que mover ficha. **Actualizado el 8 de agosto**,
-con los bloques A al I cerrados.
+con los bloques A al J cerrados.
 
 Del documento de Jesús están trabajados los puntos **1 al 64**. Quedan por leer los bloques J y
 K: los menús autoajustables (65-75) y el asistente de IA (76-80). **Los dos son de este fin de
@@ -2076,3 +2329,50 @@ con esa decisión se callaron los tres avisos que le hablaban de ella
 (`RUTINA_VISIBLE_PARA_EL_CLIENTE`).
 
 ~~**¿Se le vuelve a enseñar la Rutina al cliente?**~~ Decidido el 08-08: no, todavía no.
+
+---
+
+### Lo que deja abierto el bloque J
+
+**Los 112 PDFs del Drive** (punto 66). Solo tenemos los 15 de la plataforma. Los otros 112
+no están ni en el repo ni en la web, así que hacen falta -- o hace falta descartarlos.
+
+**Cómo sacar las comidas de los PDFs** (punto 66). El texto de las tablas no se puede
+extraer: 150 operaciones de pintar texto y 7 cadenas legibles, y ninguna es un ingrediente.
+Tres salidas, de menos a más trabajo:
+
+1. **Buscar los menús como datos.** Salieron de la calculadora, así que esas comidas
+   existieron como combinaciones antes de ser PDF. Si Jesús o Calma conservan de dónde se
+   generaron, no hay nada que extraer. **Es la vía buena y hay que preguntarla antes de
+   hacer las otras dos.**
+2. **Regenerarlos** desde la calculadora de ahora, si se sabe con qué macros se hizo cada
+   uno. La portada de cada menú los dice.
+3. **Leerlos a mano o con OCR**: unas 450 comidas. Es el último recurso.
+
+**Si se enciende la biblioteca de menús de clientes** (punto 67). Está apagada desde el 06-08
+por decisión de Francisco. El filtro, la cosecha y el recuento por personas ya están hechos y
+probados, así que encenderla es cambiar `BIBLIOTECA_DE_CLIENTES` a `True` en
+`backend/meal_library.py` y `BIBLIOTECA_DE_CLIENTES` en `frontend/src/lib/menuFuentes.js`.
+**Las dos.** Lo que se ofrecería son 1.946 comidas filtradas, no 266.170 sin filtrar.
+
+**Las 8 diferencias de dosis de los suplementos** (punto 75). Salen con
+`_contrastar_suplementos.py`. La de la creatina es la que más importa: la web manda 1 g por
+cada 10 kg de peso y la app dice 10 g a los hombres y 5 a las mujeres. **Decide Jesús.**
+
+**El código GALLEGOVIP** (punto 75). Da un 20 % en FullGas «mientras dure tu suscripción», y
+esa suscripción es la de la membresía ELM. **¿Lo tienen también los clientes de 12EN12?** Si
+sí, se pone en la pantalla de Suplementación en cinco minutos. Si no, no se pone. No se
+puede enseñar un descuento a quien no le corresponde, así que hace falta la respuesta antes
+de tocar nada.
+
+**Marcar los campos de JetEngine como visibles en REST** (punto 65). Mientras no se haga, el
+contenido de cada receta nueva hay que pegarlo a mano en `_recetario_nuevas.json`. Es un rato
+de trabajo en WordPress y lo automatiza para siempre.
+
+**Que el equipo etiquete las 103 recetas** con su «tipo de comida» en WordPress (punto 65).
+Hoy hay 4 etiquetadas. No bloquea nada -- el momento de nuestras 159 plantillas lo pusimos al
+importar --, pero mientras no esté, cada receta nueva hay que clasificarla a mano.
+
+**Pasar la cosecha en producción** (punto 71). `_cosechar_menus.py` se ha pasado en dev, no en
+producción, y ahí las bases son distintas. Conviene dejarlo puesto una vez por semana, que es
+para lo que está pensado.
