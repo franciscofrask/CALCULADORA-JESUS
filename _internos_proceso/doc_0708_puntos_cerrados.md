@@ -709,55 +709,127 @@ todos los demás modificadores**.
 
 ---
 
-## Pendientes que no dependen de nosotros
+## PENDIENTES
 
-*(Se irán anotando aquí según aparezcan: decisiones de Jesús, datos que faltan o terceros.)*
+Todo lo que queda abierto, ordenado por quién tiene que mover ficha. Actualizado el 7 de agosto
+por la noche.
 
-**No tenemos el repositorio fuente de la calculadora antigua** (`jgl-calma-web-next`). En
-`_calma_ref/` solo está el bundle compilado, que sirve para contrastar comportamiento pero no
-para leer el código como lo describe el documento (nombres de fichero, números de línea y las
-funciones a medio desminificar). Si Jesús quiere que revisemos algo concreto de ese código, hace
-falta acceso al repositorio. Hasta ahora no ha hecho falta: el reparto se pudo portar y validar
-contra el bundle.
+---
 
-~~**Quién cobra el +20 % de "cómo engorda"** y **el umbral de grasa en mujeres** (punto 11).~~
-**RESUELTAS el 07-08**: Francisco confirmó que el texto del documento suplanta a todo lo
-anterior y se aplicó literal (solo "casi no lo noto"; umbral 20 % sin distinción de sexo).
-Detalle y consecuencias en el propio punto 11.
+### 1 · Lo que hace falta que nos pasen para poder seguir
 
-**El documento «LOS TEXTOS DE LA APP» YA LLEGÓ** (07-08 de noche). Con él se cerró el punto 17. Lo que sigue abierto de textos:
+**Faltan 56 puntos del documento por leer: los bloques D al K.** De la versión actualizada solo
+hemos visto hasta el punto 20. Sin ver quedan el flujo del entrenador (25-35), los planes
+(36-47), la comparativa de fotos del reporte (48-54), las tres preguntas del reporte (55-57),
+los arreglos de la base de alimentos (58-60), los fallos apuntados que siguen ahí (61-64), los
+menús autoajustables (65-75) y el asistente de IA (76-80). **Todos son de este fin de semana**,
+y tres de esos bloques (I y K) están marcados como imprescindibles para el domingo.
 
-- **Punto 14**, el texto roto: el documento **no lo señala**. Trae los textos buenos de las 12
-  pantallas, pero en ningún sitio dice cuál está roto en la app. Francisco pidió dejarlo de
-  lado. Con los textos delante se puede ir pantalla por pantalla y encontrarlo, pero eso ya no
-  es "de un minuto" como decía el punto.
-- **Punto 18**, las preguntas del check-in diario: el documento de textos **no las trae**. Solo
-  cubre el test de entrada, los cuatro mensajes del informe y dos notas; del check-in no dice
-  nada. Así que sigue sin poder cerrarse: **hay que preguntarle a Jesús cuáles son las suyas**.
-  La otra mitad del punto (que apunte lo que ha comido) ya está hecha.
-- **Lo que el documento pide y falta**, que está detallado más arriba: la cuarta opción de
-  actividad diaria, las dos preguntas de seguimiento del deporte, la pantalla del apetito y la
-  experiencia entrenando en el test de entrada. **Decide Francisco** el orden en que se hacen.
+**Las preguntas del check-in diario** (punto 20 del documento nuevo). El documento de textos no
+las trae: solo cubre el test de entrada, los cuatro mensajes del informe y dos notas. Hoy la app
+pregunta energía y "ansiedad y hambre", que vienen del documento del 31-07 y que el punto dice
+que no son de Jesús. **Hay que pedirle a Jesús cuáles son las suyas.** La otra mitad del punto
+(que el cliente apunte lo que ha comido) ya está hecha.
 
-**Los 56 mínimos por categoría están sin repasar** (punto 5). El mapa existe y funciona, pero
-los valores vienen de la calculadora antigua y Jesús quiere revisarlos; él mismo lo cifra en
-media hora. La tabla lista para repasar está en
-`_internos_proceso/minimos_por_categoria_para_jesus.md`. **Decide Jesús.**
+**El texto roto** (punto 16). El documento dice que está identificado en el de textos, y no lo
+está: ese documento trae los textos buenos de las 12 pantallas, pero en ningún sitio señala cuál
+está roto en la app. Con los textos delante se puede ir pantalla por pantalla a buscarlo, pero
+ya no es "de un minuto" como decía el punto. **Que Jesús diga cuál es.**
 
-**Los dos criterios del tercio no coinciden, y conviven.** La calculadora antigua tiene su
+**Los fondos de pantalla del test.** El documento de textos dice: "que reaproveche los del quiz
+actual de ELM para las pantallas del test de la app. Ya están hechos y son los buenos". Hay que
+localizarlos: no sabemos dónde están.
+
+**El repositorio fuente de la calculadora antigua** (`jgl-calma-web-next`). Solo tenemos el
+bundle compilado en `_calma_ref/`, que sirve para contrastar comportamiento pero no para leer el
+código como lo describe el documento (rutas de fichero y números de línea). Hasta ahora no ha
+hecho falta. Y ojo con esto: el documento avisa de que el código que Jesús leyó es la versión
+1.1.0 y producción va por la 1.9.0, así que **antes de dar por bueno un "fallo del código
+antiguo" hay que comprobarlo contra la calculadora de verdad**.
+
+---
+
+### 2 · Lo que espera una orden de Francisco
+
+**Borrar las 18 cuentas de prueba de producción** (punto 10). Está todo preparado y probado en
+simulación contra producción: `backend/_limpiar_datos_prueba.py`, que no borra nada salvo que se
+le pase `--ejecutar`. `francisco@test.com` y la cuenta demo quedan fuera. **Dos de las 18 tienen
+datos dentro** y por eso no se han tocado: `jose@test.com` (7 dietas, 1 reporte, 3 check-ins, 1
+foto y 12 cambios de macros) y `prueba@mail.com` (1 reporte y 3 check-ins). Hay que decidir si
+se borran esas dos también.
+
+**Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
+hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
+textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro) está en GitHub y
+sin desplegar, esperando la orden.
+
+---
+
+### 3 · Lo que tiene que decidir Jesús
+
+**Los 56 mínimos por categoría** (punto 7). El mapa existe y funciona, pero los valores vienen
+de la calculadora antigua y él quiere revisarlos; lo cifra en media hora. La tabla lista para
+repasar, con el nombre de cada categoría y una columna en blanco, está en
+`_internos_proceso/minimos_por_categoria_para_jesus.md`.
+
+**Los dos criterios del tercio conviven, y no coinciden.** La calculadora antigua tiene su
 propia forma de decidir si la proteína de un cereal o de un fruto seco cuenta, y no es la del
 tercio: sobre el catálogo entero discrepan en 69 alimentos. Hoy la app usa el criterio de Jesús
-(el tercio) para lo que el cliente ve y guarda en su día, y el heredado en el buscador mientras
-monta la comida y en las herramientas de menús. Funciona, pero significa que el mismo alimento
-puede enseñar dos cifras de proteína distintas según dónde se mire. **Decide Jesús** si el
-criterio del tercio debe sustituir al heredado también en esos sitios.
+para lo que el cliente ve y guarda en su día, y el heredado en el buscador mientras monta la
+comida y en las herramientas de menús. Funciona, pero el mismo alimento puede enseñar dos cifras
+de proteína distintas según dónde se mire.
+
+**Los alimentos con macros mal puestos** (punto 11). No hay que sacar del buscador los que tienen
+los tres macros a cero, porque son la lechuga, el pepino, el konjac y los refrescos zero, y el
+método los usa a propósito. Lo que sí descuadra un menú en silencio son los que tienen los macros
+**mal**: una tortita de maíz de 7 g con 125 g de grasa (1149 kcal), un turrón de coco con 79 g de
+proteína, varios panes con la ración puesta a 1 g. La lista la saca `backend/_auditar_catalogo.py`
+ordenada por gravedad y con el enlace a la ficha del producto. **Los valores buenos hay que
+mirarlos en la etiqueta: no se pueden inventar.**
+
+**La proyección de composición corporal** que tiene la calculadora antigua y nosotros no: estima
+semana a semana, por tramos de cuatro, cuánta masa grasa y cuánta masa magra cambia según el
+punto de partida, y con eso valida si un objetivo de peso es alcanzable en un plazo. Nosotros
+solo calculamos la composición de hoy. Nadie la ha pedido; encaja en los bloques de después del
+lunes.
+
+---
+
+### 4 · Lo nuestro, pendiente de terminar
+
+**Verificar con los ojos que el resultado del alta se ve entero** (punto 15). Está apretado y el
+contenedor ya permite desplazarse, pero para comprobarlo de verdad hay que completar un alta
+entera, y eso significa o alterar una cuenta real o crear una nueva. Es una revisión de un minuto
+en cuanto haya un alta de prueba a mano.
+
+**Cuadrar el texto de "Ponme un día tipo. El de ayer, por ejemplo."** El documento de textos lo
+pide en la pantalla de la dieta; en la app hay un bloque que recoge lo mismo pero con otro texto
+y otro formato.
+
+**Verificar la regla del 20 % de la dieta reportada.** El documento de textos dice que lo de "con
+lo que comes ahora, ¿mantienes, ganas o pierdes?" **modula hasta un 20 % y se aplica al final,
+después de todos los demás modificadores**. Hay que comprobar que el motor lo hace así.
+
+**Los avisos de rutina llevan a una pantalla que está oculta.** Dos de los avisos que la app
+manda apuntan a Rutinas, que está desactivada para todos los planes a propósito, así que el
+cliente pulsa y acaba de vuelta en su panel. No echa a nadie al login, pero es un aviso que no
+lleva a donde promete. Mientras Rutinas siga oculta, esos dos no deberían generarse.
 
 **Un test falla desde antes de tocar nada** (`test_search_foods_by_category`): al buscar por la
 categoría de carnes aparece un "Caldo de cocido" que no es de esa categoría. Es un problema de
-cómo está clasificado ese alimento en el catálogo, no del buscador.
+cómo está clasificado ese alimento, no del buscador.
 
-**La proyección de composición corporal del código antiguo no está en nuestra app.** Calma
-tiene un modelo que estima, semana a semana y por tramos de cuatro semanas, cuánta masa grasa y
-cuánta masa libre de grasa cambia según el punto de partida, y con él valida si un objetivo de
-peso es alcanzable en un plazo. Nosotros solo calculamos la composición actual. **Decide Jesús**
-si eso debe existir en la app nueva; encajaría en el bloque H, que es de después del lunes.
+**El día de descanso pierde hasta 0,2 g de hidratos** por el redondeo a 0,1 g de cada comida
+(65 ÷ 4 = 16,25). No se ve, porque lo que se le enseña al cliente va redondeado a múltiplos de 5,
+pero está ahí.
+
+---
+
+### 5 · Ya resueltos (se dejan por trazabilidad)
+
+~~**Quién cobra el +20 % de "cómo engorda"** y **el umbral de grasa en mujeres**.~~ Resueltos el
+07-08: Francisco confirmó que el texto del documento suplanta a todo lo anterior y se aplicó
+literal (solo "casi no lo noto"; umbral 20 % sin distinción de sexo).
+
+~~**Falta el documento «LOS TEXTOS DE LA APP»**.~~ Llegó el 07-08 por la noche. Con él se cerró
+el punto 19 (las cuatro respuestas de la dieta) y se hizo el test de entrada entero.
