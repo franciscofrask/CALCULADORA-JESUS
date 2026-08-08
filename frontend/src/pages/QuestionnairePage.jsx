@@ -578,6 +578,9 @@ const QuestionnairePage = () => {
     // El Nivel 0 se completó EN ESTA SESIÓN: seguimos en el flujo aunque el
     // perfil ya diga questionnaire_completed (para ver resultados y el Nivel 1).
     const [nivel0Enviado, setNivel0Enviado] = useState(false);
+    // El día de hoy montado y guardado en cuanto salen sus macros: termina el alta y ya tiene
+    // comida puesta, en vez de unos números y una pantalla vacía por delante.
+    const [diaMontado, setDiaMontado] = useState(null);
     // Momento mágico: primeros menús del banco personal (null = cargando).
     const [menusMagia, setMenusMagia] = useState(null);
     // Macros recalculados a cada respuesta, para verlos moverse. No se aplican: son un avance.
@@ -1084,6 +1087,12 @@ const QuestionnairePage = () => {
             }
             const res = await api.post('/clients/ajustar-macros', ajustesDelCuestionario());
             setResultado(res.data?.resultado || null);
+            // Con los macros ya calculados, se le deja el día de hoy montado. Va en segundo
+            // plano y sin bloquear: si falla, se queda como estaba (con su día por montar) y
+            // no se le estropea el final del alta por esto.
+            api.post('/calculator/montar-dia', { guardar: true })
+                .then(r => setDiaMontado(r.data || null))
+                .catch(() => {});
             setEntrega(res.data?.entrega || null);
             setNivel0Enviado(true);
             await refreshProfile();
@@ -1367,6 +1376,32 @@ const QuestionnairePage = () => {
                             solicitar tu revisión de partida
                         </button>.
                     </p>
+                )}
+
+                {/* Y el día de hoy, ya montado. Termina el alta con comida puesta y no con
+                    una pantalla en blanco, que es donde se cae la gente: montar la primera
+                    dieta desde cero sin conocer la app no lo hace casi nadie. Lo que acepte o
+                    cambie de aquí es además lo que nos va diciendo qué le gusta, sin tener
+                    que preguntárselo. */}
+                {diaMontado?.montadas?.length > 0 && (
+                    <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4" data-testid="primer-dia-montado">
+                        <p className="text-sm font-semibold text-foreground mb-1">
+                            Y tu día de hoy ya está montado
+                        </p>
+                        <p className="text-xs text-foreground/50 mb-3">
+                            Cuadrado a estos macros. Cámbialo a tu gusto: así aprendemos qué te gusta.
+                        </p>
+                        <ul className="space-y-1">
+                            {diaMontado.montadas.map(m => (
+                                <li key={m.comida} className="flex gap-2 text-sm">
+                                    <span className="text-foreground/40 font-semibold w-14 flex-shrink-0">
+                                        {m.comida.replace('C', 'Comida ')}
+                                    </span>
+                                    <span className="text-foreground/80 truncate">{m.menu}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 )}
 
                 {/* Un solo botón: el recorrido continúa donde estaba. Antes, al venir del

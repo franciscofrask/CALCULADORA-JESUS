@@ -426,6 +426,39 @@ y sin manera de llegar a ello.
 eso significa o alterar los datos de una cuenta real o crear una nueva; no he hecho ninguna de
 las dos. Es una revisión de un minuto en cuanto haya un alta de prueba a mano.
 
+### Punto 16 - Al terminar, el primer día viene montado · CERRADO
+
+**Lo que había.** El cliente terminaba el alta, veía unos números y se quedaba ahí. Su primer
+día estaba vacío y tenía que montarlo desde cero sin conocer la app, que es justo donde se cae
+la gente.
+
+**Lo que hay ahora.** En cuanto salen sus macros, la app le monta y le guarda el día de hoy:
+cada comida con un menú del recetario cuadrado a los macros de esa comida. En la pantalla del
+resultado, debajo de los números, ve qué le ha tocado ("Comida 1 · Uno clásico de toda la
+vida"), y al entrar en Nutrición se lo encuentra puesto.
+
+Detalles que importan: **ningún menú se repite en el mismo día** (dos comidas iguales el primer
+día son la peor carta de presentación, y el generador tendía a elegir el mismo para dos comidas
+seguidas), respeta lo que el cliente ha dicho que no quiere comer, y las cantidades salen
+redondas porque pasan por el redondeo del punto 4. El intra y el post se dejan vacíos a
+propósito: son bebidas y geles muy de cada uno, y llenárselos a ciegas el primer día es más
+ruido que ayuda.
+
+Se monta en segundo plano y sin bloquear: si fallara, el cliente termina el alta igual, solo
+que con el día por montar.
+
+**El segundo motivo también funciona, y está comprobado.** Cada dieta guardada alimenta la
+frecuencia de alimentos, que es de donde salen luego las sugerencias. Al montar y guardar un
+día de prueba, "Huevos enteros L" pasó de 6 a 8 usos y "Pechuga de pollo" apareció con 3. O
+sea: aceptando o cambiando estas comidas el cliente nos va diciendo lo que le gusta sin que
+haya que preguntárselo, que es lo que alimenta el bloque F.
+
+**Medido**: montar un día de cuatro comidas tarda unos 2,5 segundos, y las cuatro salen
+cuadradas (por ejemplo, objetivo 47,5 P · 51 H · 12 G y el menú lleva 48 · 51 · 11).
+
+Vive en `POST /api/calculator/montar-dia`, que sirve para montar cualquier día, no solo el
+primero.
+
 ---
 
 ## Pendientes que no dependen de nosotros

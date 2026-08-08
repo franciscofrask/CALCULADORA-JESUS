@@ -1563,6 +1563,135 @@ async def menu_apply(data: dict, user = Depends(get_current_user)):
     }
 
 
+async def _items_a_alimentos(items: List[dict]) -> List[dict]:
+    """Los items de un menú, en la forma con la que viaja un alimento dentro de una dieta.
+
+    El generador de menús devuelve lo justo (id, nombre, cantidad y unos macros escalados por
+    100 g). Aquí se completan con lo que el alimento es de verdad -- si va por unidades, su
+    ración, su categoría, su enlace -- y los macros se recalculan a la cantidad final con el
+    mismo motor que usa añadir un alimento a mano, para que la comida sume lo mismo venga de
+    donde venga.
+    """
+    ids = [int(it["alimento_id"]) for it in items if it.get("alimento_id") is not None]
+    catalogo = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": ids}}, {"_id": 0}):
+            catalogo[int(f["id"])] = f
+
+    salida = []
+    for it in items:
+        cantidad_g = float(it.get("cantidad_g") or 0)
+        food = catalogo.get(int(it["alimento_id"])) if it.get("alimento_id") is not None else None
+        if food:
+            efectivos, brutos, cuenta = _efectivos_calma(food, cantidad_g)
+        else:
+            efectivos = {m: float((it.get("macros_efectivos") or {}).get(m, 0) or 0)
+                         for m in ("P", "H", "G")}
+            brutos, cuenta = dict(efectivos), {"P": True, "H": True, "G": True}
+        salida.append({
+            "alimento_id": it.get("alimento_id"),
+            "nombre": it.get("nombre"),
+            "cantidad_g": cantidad_g,
+            "macros_efectivos": efectivos,
+            "macros_brutos": brutos,
+            "que_cuenta": cuenta,
+            "rol": it.get("rol"),
+            "categorias": (food or {}).get("categorias", ""),
+            "racion": (food or {}).get("racion"),
+            "unidades": bool(food and food.get("unidades")),
+            "url": (food or {}).get("url"),
+        })
+    return salida
+
+
+@router.post("/montar-dia")
+async def montar_dia(data: dict, user = Depends(get_current_user)):
+    """Llena un día entero de comidas, cuadradas a los macros de cada una.
+
+    Es lo que ve el cliente nada más terminar el alta: antes se quedaba mirando unos números
+    y una pantalla en blanco, y montar la primera dieta desde cero, sin conocer la app, es
+    justo donde se cae la gente. Ahora se le da el día hecho para que lo acepte o lo cambie.
+
+    Y lo que cambie vale doble: cada dieta guardada alimenta la frecuencia de alimentos, que
+    es de donde salen luego las sugerencias. O sea que aceptando o tocando estas comidas nos
+    está diciendo lo que le gusta sin que haya que preguntárselo.
+
+    Body: la config del día (tipo_dia, num_comidas, momento_entreno, opcion_peri) + `fecha`
+    y `guardar` opcional. Con `guardar: true` deja la dieta puesta en esa fecha.
+    """
+    from meal_templates import generar_opciones_menu
+
+    fecha = (data.get("fecha") or datetime.now(timezone.utc).date().isoformat()).strip()
+    dist = await distribute_macros({
+        "fecha": fecha,
+        "tipo_dia": data.get("tipo_dia", "entrenamiento"),
+        "num_comidas": data.get("num_comidas", 4),
+        "momento_entreno": data.get("momento_entreno", 1),
+        "opcion_peri": data.get("opcion_peri", "intra_post"),
+        "single_meal": data.get("single_meal"),
+    }, user)
+
+    objetivos = dict(dist.get("comidas") or {})
+    peri = dist.get("periworkout") or {}
+
+    comidas: Dict[str, Any] = {}
+    usados: set = set()   # un menú no se repite en el mismo día: comer dos veces lo mismo
+                          # el primer día es la peor carta de presentación posible
+    montadas, vacias = [], []
+
+    for meal_key, obj in objetivos.items():
+        objetivo = {"P": float(obj.get("P") or 0), "H": float(obj.get("H") or 0),
+                    "G": float(obj.get("G") or 0)}
+        if sum(objetivo.values()) <= 0:
+            continue
+        try:
+            opciones = await generar_opciones_menu(db, "comida", objetivo)
+        except Exception:
+            opciones = []
+        # Primero las que cuadran, y de esas la que no se haya usado ya hoy.
+        candidatas = [o for o in opciones if o.get("cuadrada")] + [o for o in opciones if not o.get("cuadrada")]
+        elegida = next((o for o in candidatas if (o.get("nombre") or "") not in usados), None)
+        if not elegida:
+            vacias.append(meal_key)
+            comidas[meal_key] = {"alimentos": []}
+            continue
+        usados.add(elegida.get("nombre") or "")
+        comidas[meal_key] = {
+            "alimentos": await _items_a_alimentos(elegida.get("items") or []),
+            "menu_nombre": elegida.get("nombre"),
+        }
+        montadas.append({"comida": meal_key, "menu": elegida.get("nombre"),
+                         "cuadrada": bool(elegida.get("cuadrada"))})
+
+    # El peri no se monta: son bebidas y geles muy de cada uno, y llenárselo a ciegas el
+    # primer día es más ruido que ayuda. Se deja con su objetivo, listo para que lo complete.
+    for meal_key in peri:
+        comidas.setdefault(meal_key, {"alimentos": []})
+
+    if data.get("guardar"):
+        await db.diets.update_one(
+            {"user_id": user["id"], "fecha": fecha},
+            {"$set": {
+                "user_id": user["id"], "fecha": fecha, "comidas": comidas,
+                "tipo_dia": data.get("tipo_dia", "entrenamiento"),
+                "num_comidas": data.get("num_comidas", 4),
+                "momento_entreno": data.get("momento_entreno", 1),
+                "opcion_peri": data.get("opcion_peri", "intra_post"),
+                "montada_automaticamente": True,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True)
+
+    return {
+        "fecha": fecha,
+        "comidas": comidas,
+        "objetivos": objetivos,
+        "montadas": montadas,
+        "sin_menu": vacias,
+        "guardada": bool(data.get("guardar")),
+    }
+
+
 @router.post("/library-search")
 async def library_search(data: dict, user = Depends(get_current_user)):
     """Busca menús REALES (biblioteca minada de clientes, db.meal_library) que
