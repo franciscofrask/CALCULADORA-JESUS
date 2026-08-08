@@ -2154,6 +2154,54 @@ Queda fijado en `tests/test_cuadrar_no_borra.py`, con el test que comprueba que 
 vuelta a la lista da los mismos seis** -- que era exactamente lo que fallaba.
 
 
+
+### Pides lechuga y te pone calabaza
+
+Francisco, 08-08: pidió al asistente «pollo lechuga huevos y jugo» y le salieron tres
+opciones de **huevos con manzana**. Ni pollo, ni lechuga. Y lo peor: el propio asistente
+lo decía en su respuesta -- «ni llevan pollo ni lechuga, además» -- y las enseñaba igual.
+
+La Lechuga existe, id 363. Reproducido y mirada la traza de herramientas, no era un
+fallo sino **tres, encadenados**, y los tres tenían la misma forma: un filtro puesto para
+que el asistente no proponga tonterías por iniciativa propia, que se cargaba también lo
+que el cliente había pedido a propósito, **y sin decirlo**.
+
+**1. El macro descartaba lo pedido.** El agente busca `texto="lechuga", para_macro="H"`
+-- pide una verdura como si fuera una fuente de hidratos --, y había una línea que tiraba
+todo lo que no aportara ese macro. La lechuga aporta 0 hidratos, así que fuera; y la
+búsqueda semántica devolvía a sus vecinos, que sí aportan: **calabaza y puerro**. Ahora
+`para_macro` **ordena** cuando hay texto, y solo **descarta** cuando no lo hay: sin texto
+la petición ES el macro («dame una proteína para completar») y ahí sí tiene sentido.
+
+**2. La coherencia con el momento la remataba.** Lechuga en la Comida 1 puntúa 0,07 de
+coherencia y el mínimo es 0,25: atípica para un desayuno, fuera. Medido también para
+pepino (0,10) y calabacín (0,10). Y el aviso de «descartados por atípicos» solo aparece
+cuando no queda **ningún** resultado -- y vecinos había siempre --, así que se iba en
+silencio. Ahora lo que casa con el nombre pedido no se veta por el momento.
+
+**3. Y `componer_menu` perdía los obligatorios sin contarlo.** Recibía `incluir_ids`,
+los pasaba a nombres y dejaba que `build_meal` decidiera qué cabía; lo que no cabía
+desaparecía. Por eso salían «huevos + manzana» de una petición de cuatro alimentos. Ahora
+una opción a la que le falte algo pedido **no se ofrece**, y el motivo sube al agente.
+
+```
+antes:  buscar "lechuga" -> ensaladilla rusa, cebolla frita, puerro, calabaza
+        menús -> 3 opciones de huevos + manzana
+
+ahora:  buscar "lechuga" -> Lechuga (363) la primera
+        menús -> 2 opciones, las dos con lechuga, pollo y huevos
+```
+
+**Nada de esto se ha arreglado con una lista de palabras**, que es lo que pidió Francisco
+expresamente. La regla es general: *lo que el cliente nombra, manda sobre los filtros de
+iniciativa propia*. Por eso el test va con lechuga, pepino y calabacín, y falla con
+cualquiera de los tres si alguien vuelve a meter un filtro por en medio -- valdría igual
+para el apio, el café, las especias o el agua, que es donde esto se repetiría.
+
+Queda un cabo que **no** es de filtros: «jugo» lo interpreta como naranja o mango en vez
+de un zumo. Eso es criterio del modelo, no algo que se esté borrando, y meterle sinónimos
+sería justo el hardcodeo que hay que evitar.
+
 ### Y el «Cuadrar» del intra y el post no hacía nada
 
 Salió mirando lo anterior y Francisco pidió que se mirara. El botón estaba ahí, se

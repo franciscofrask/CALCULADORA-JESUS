@@ -153,11 +153,16 @@ class AgentTools:
             abiertos = list((self.bot.state.get("borradores") or {}).values())
             if abiertos:
                 texto = (abiertos[-1].get("filtros", {}).get("estilo") or "").strip()
+        # Los que casan con el nombre de lo pedido. Se guardan aparte porque tienen otro
+        # trato: no es lo mismo que el cliente diga «lechuga» -- y exista una Lechuga --
+        # que pedir «algo verde» y que el sistema proponga lo que le parezca.
+        pedidos_por_nombre: set = set()
         if texto:
             corregido = self.corrector.corregir(texto)
             # Léxico primero: si pidió un alimento por su nombre ("pechuga de pollo"),
             # eso gana a cualquier vecindad semántica.
             lex = await self.bot.search_foods(corregido, limit=10, _remap=False)
+            pedidos_por_nombre = {int(a["id"]) for a in lex if int(a["id"]) in universo}
             orden.extend(int(a["id"]) for a in lex if int(a["id"]) in universo)
             if self.semantica:
                 sem = await self.semantica.buscar(corregido, limite=80,
@@ -195,7 +200,16 @@ class AgentTools:
                 continue
             if self._es_evitado(food):
                 continue
+            # La coherencia con el momento no descarta lo que se ha pedido POR SU NOMBRE.
+            #
+            # Está para no proponer callos de desayuno por iniciativa propia, no para
+            # llevarle la contraria al cliente. Pedir «lechuga» en la Comida 1 devolvía
+            # ensaladilla, cebolla frita, puerro y calabaza -- la Lechuga existe (id 363)
+            # y el veto la tiraba -- y encima en silencio, porque el aviso de «vetados
+            # por atípicos» solo sale cuando no queda NINGÚN resultado, y vecinos había.
+            # El cliente acababa con calabaza sin que nadie le explicara nada.
             if coherente_con_momento and self.perfil and momento != PERI \
+                    and aid not in pedidos_por_nombre \
                     and self.perfil.coherencia(food, momento) < COHERENCIA_MINIMA:
                 vetados_momento += 1
                 continue
@@ -206,7 +220,20 @@ class AgentTools:
                                      "por_que_no": self.bot._razon_no_cabe(food, restante)})
                 continue
             cantidad_g, macros = sized
-            if para_macro in ("P", "H", "G") and macros.get(para_macro, 0) <= 0:
+            # `para_macro` ORDENA, pero solo descarta cuando no hay texto.
+            #
+            # Con texto hay una petición concreta del cliente, y esa manda. Si pide
+            # lechuga y el agente busca `texto="lechuga", para_macro="H"`, la lechuga
+            # no aporta hidratos y esta línea la tiraba: la búsqueda devolvía sus
+            # vecinos semánticos -- calabaza, puerro -- y el cliente acababa con
+            # calabaza sin que nadie le dijera nada. Pasa con todo lo que aporta poco o
+            # nada: lechuga, pepino, apio, café, especias, agua.
+            #
+            # Sin texto sí filtra: ahí la petición ES el macro («dame una proteína para
+            # completar»), y ofrecer algo que no aporta nada no tendría sentido.
+            if texto:
+                pass
+            elif para_macro in ("P", "H", "G") and macros.get(para_macro, 0) <= 0:
                 continue
             items.append(self._item_de(food, cantidad_g, macros))
             if len(items) >= limite:
@@ -425,6 +452,20 @@ class AgentTools:
                 items.append(self._item_de(food, float(f.get("cantidad", 0) or 0),
                                            f.get("macros", {})))
             if not items:
+                continue
+            # Lo que el cliente ha pedido POR SU NOMBRE tiene que estar en el plato.
+            #
+            # `incluir_ids` se llamaba «obligatorios» y no lo eran: se convertían a
+            # nombres y era `build_meal` quien decidía qué entraba según lo que cabía,
+            # sin devolver nunca qué se había quedado fuera. Pidiendo pollo, lechuga,
+            # huevos y zumo salían tres opciones de «huevos + manzana», y el cliente no
+            # tenía forma de saber por qué. Si falta algo pedido, el intento no vale y
+            # se reintenta; lo que no se puede es enseñarlo como si estuviera.
+            faltan_pedidos = [self.foods[i].get("nombre") for i in incluir_ids
+                              if i not in ids_vistos]
+            if faltan_pedidos:
+                descartes_bucle = ("un intento se quedó sin lo que pediste: "
+                                   + ", ".join(faltan_pedidos))
                 continue
             firma = tuple(sorted(i["id"] for i in items))
             if any(tuple(sorted(x["id"] for x in o["items"])) == firma for o in opciones):
