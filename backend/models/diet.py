@@ -38,6 +38,9 @@ class ChatConfigRequest(BaseModel):
     momento_entreno: int = 1
     opcion_peri: str = "intra_post"
     single_meal: bool = False
+    # Qué fecha se está montando: el asistente la necesita para resolver "mañana" o "el
+    # jueves" contra el día que el cliente tiene abierto, no contra hoy.
+    fecha: Optional[str] = None
 
 class ChatMessageRequest(BaseModel):
     session_id: Optional[str] = None

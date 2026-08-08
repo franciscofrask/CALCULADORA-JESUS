@@ -863,4 +863,38 @@ class AgentTools:
             single_meal=bool(single_meal if single_meal is not None
                              else st.get("single_meal", False)),
         )
-        return {"ok": True, "dia": self.ver_estado("dia")}
+        out = {"ok": True, "dia": self.ver_estado("dia")}
+        # Las comidas que el cambio se lleva por delante (intra y post al pasar a descanso)
+        # no se borran: su contenido se traspasa. El agente TIENE que saberlo o se lo
+        # inventa -- que es justo lo que pasó el 08-08: "lo del post lo tienes metido en
+        # la Comida 2" cuando en realidad se había esfumado.
+        reubicado = st.get("reubicado_al_reconfigurar") or []
+        if reubicado:
+            out["reubicado"] = reubicado
+            out["avisa_al_usuario"] = (
+                "Dile de dónde a dónde ha ido lo que tenía montado en las comidas que ya "
+                "no existen, y que revise esas comidas porque los macros han cambiado.")
+        return out
+
+    # ========================================================= 9. cambiar_de_dia
+    def cambiar_de_dia(self, fecha: str = None) -> dict:
+        """Montar OTRA fecha. Quién decide que el cliente quiere cambiar de día es el
+        agente, no un regex: hasta el 08-08 lo miraba el front con
+        `/^(hoy|manana|pasado manana)\\b/` y "hoy es día de descanso" se leía como "vete al
+        día de hoy", cambiaba de fecha y tiraba lo de descanso. El agente entiende que ahí
+        hay dos peticiones y atiende las dos.
+
+        Aquí solo se APUNTA la fecha; recargar la configuración de ese día desde Nutrición
+        y volver a arrancar es cosa del front, que es quien la tiene."""
+        import re
+        from datetime import date
+        if not fecha or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", (fecha or "").strip()):
+            return {"ok": False, "error": "la fecha tiene que venir como YYYY-MM-DD"}
+        try:
+            date.fromisoformat(fecha)
+        except ValueError:
+            return {"ok": False, "error": f"'{fecha}' no es una fecha real"}
+        self.bot.state["fecha_pedida"] = fecha
+        return {"ok": True, "fecha": fecha,
+                "nota": ("La app va a abrir ese día con SU configuración guardada. Confírmaselo "
+                         "al cliente en una línea. Lo montado hasta ahora se quedó en su fecha.")}

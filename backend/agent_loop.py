@@ -131,6 +131,15 @@ _ESQUEMAS = [
          "momento_entreno": {"type": "integer"},
          "opcion_peri": {"type": "string", "enum": ["intra_post", "solo_post", "solo_intra", "sin_peri"]},
          "single_meal": {"type": "boolean"}}}},
+    {"name": "cambiar_de_dia",
+     "description": ("Montar la dieta de OTRA fecha ('mañana', 'el jueves', '12/8'). Solo "
+                     "cuando el cliente quiera trabajar otro día, no cuando la fecha salga "
+                     "de pasada ('esto lo dejo para mañana'). Si en el mismo mensaje "
+                     "también cambia el tipo de día o las comidas, llama ADEMÁS a "
+                     "configurar_dia: son dos cosas distintas y hay que atender las dos."),
+     "parameters": {"type": "object", "properties": {
+         "fecha": {"type": "string", "description": "YYYY-MM-DD ya resuelta a fecha real"}},
+         "required": ["fecha"]}},
 ]
 TOOLS_OPENAI = [{"type": "function", "function": e} for e in _ESQUEMAS]
 
@@ -189,7 +198,16 @@ class AgentLoop:
     def _contexto(self) -> str:
         estado = self.tools.ver_estado("dia")
         actual = estado["actual"]
+        # Las fechas, para que "mañana" o "el jueves" lleguen a cambiar_de_dia ya resueltos.
+        # Hasta el 08-08 esto lo decidía un regex del front, que con "hoy es día de
+        # descanso" cambiaba de día y se dejaba por el camino lo de descanso.
+        from datetime import date, timedelta
+        hoy = date.today()
+        dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+        montando = self.bot.state.get("fecha_objetivo") or hoy.isoformat()
         lineas = [
+            f"Hoy es {dias[hoy.weekday()]} {hoy.isoformat()}; mañana {(hoy + timedelta(days=1)).isoformat()}. "
+            f"Estás montando la dieta del {montando}.",
             f"Día de {estado.get('tipo_dia') or 'entrenamiento'}. "
             f"Comida actual: {actual['comida']}.",
             f"Objetivo de esta comida: P={actual['objetivo'].get('P')} "
@@ -260,6 +278,8 @@ class AgentLoop:
                 return await t.explicar(**args)
             if nombre == "configurar_dia":
                 return t.configurar_dia(**args)
+            if nombre == "cambiar_de_dia":
+                return t.cambiar_de_dia(**args)
             return {"error": f"herramienta desconocida '{nombre}'"}
         except TypeError as e:
             # Argumento inválido: el error enseña, el modelo se corrige en el siguiente paso.
@@ -356,6 +376,7 @@ class AgentLoop:
 
         # Lo que enseñará la app: la última lista/borradores/mutación que produjo el bucle.
         sugerencias, borradores_vistos, hubo_mutacion = [], [], False
+        comida_guardada = False
         texto_final = None
 
         for _ in range(MAX_LLAMADAS):
@@ -440,6 +461,17 @@ class AgentLoop:
                 if nombre in ("editar_comida", "aplicar_borrador", "guardar_comida",
                               "navegar", "configurar_dia") and resultado.get("ok"):
                     hubo_mutacion = True
+                # Guardar por chat tiene que volcar al plan, igual que el botón.
+                #
+                # Había dos caminos para guardar y solo uno volcaba: el botón «Guardar y
+                # siguiente» llama a completeMeal() y ese sí sincroniza con la pestaña de
+                # Nutrición; decir «guarda la comida» por chat ejecuta esta herramienta,
+                # la sesión avanza a la comida siguiente... y nadie volcaba. El cliente
+                # leía «Listo, he guardado el desayuno» y su plan seguía vacío.
+                # Comprobado en vivo el 08-08 con una fecha limpia: 0 alimentos antes y 0
+                # después. Con esta bandera el front sincroniza también por esta vía.
+                if nombre == "guardar_comida" and resultado.get("ok"):
+                    comida_guardada = True
                 mensajes.append({"role": "tool", "tool_call_id": tc.id,
                                  "content": json.dumps(resultado, ensure_ascii=False)[:4000]})
         else:
@@ -470,6 +502,9 @@ class AgentLoop:
         # ------------------------------------------------------ a formato de la app
         out = {"message": texto_final, "day_overview": self.bot.get_day_overview(),
                "traza": self.traza}
+        # Que el front sepa que hay que volcar al plan (ver el porqué más arriba).
+        if comida_guardada:
+            out["comida_guardada"] = True
         if borradores_vistos:
             out["action"] = "menus"
             out["borradores"] = borradores_vistos

@@ -104,6 +104,7 @@ class NutritionChatbot:
             opcion_peri: "intra_post", "solo_post", "solo_intra", "sin_peri"
             single_meal: bloque único (toda la dieta del día en 1 comida)
         """
+        orden_antiguo = list(self.state.get("meal_order") or [])
         self.state["tipo_dia"] = tipo_dia
         self.state["num_comidas"] = 1 if single_meal else num_comidas
         self.state["momento_entreno"] = momento_entreno
@@ -136,19 +137,68 @@ class NutritionChatbot:
 
         # Reconfigurar a mitad de camino cambia los objetivos, pero lo que ya haya montado
         # se RESPETA: quien lleva media Comida 1 hecha no merece perderla por decir "quita
-        # el intra". Solo se cae lo que ya no existe en el día nuevo (el propio intra, o la
-        # Comida 4 al bajar a 3), que si no se colaría en la dieta guardada sin estar en el
-        # recorrido. Los objetivos nuevos se ven al momento en cada comida.
+        # el intra". Los objetivos nuevos se ven al momento en cada comida.
+        #
+        # Las comidas que ya no existen en el día nuevo (el intra y el post al pasar a
+        # descanso, la Comida 4 al bajar a 3) no pueden quedarse donde estaban: se colarían
+        # en la dieta guardada sin estar en el recorrido. Hasta el 08-08-2026 se BORRABAN,
+        # y en silencio: Francisco montó el post, pasó a descanso y desapareció sin que
+        # nadie se lo dijera -- y el asistente, que tampoco se había enterado, le contestó
+        # que "lo del post lo tienes metido en la Comida 2". Ahora se traspasan de verdad a
+        # la comida principal más cercana (la de antes en el orden viejo, y si no la de
+        # después) y el traspaso se cuenta, para que ni se pierda el trabajo ni haya que
+        # adivinarlo. Descuadra la comida destino, claro: por eso se avisa y se puede
+        # cuadrar a mano, que es mejor que perderlo.
         vivas = set(self.state["meal_order"])
-        self.state["comidas_completadas"] = {
-            k: v for k, v in (self.state.get("comidas_completadas") or {}).items() if k in vivas
-        }
+        completadas = self.state.get("comidas_completadas") or {}
+        caidas = [k for k in orden_antiguo if k not in vivas]
+        caidas += [k for k in completadas if k not in vivas and k not in caidas]
+
+        self.state["comidas_completadas"] = {k: v for k, v in completadas.items() if k in vivas}
         self.state["saved_meals"] = [k for k in (self.state.get("saved_meals") or []) if k in vivas]
+
+        reubicado = []
+        for k in caidas:
+            alimentos = (completadas.get(k) or {}).get("alimentos") or []
+            if not alimentos:
+                continue
+            destino = self._comida_mas_cercana_viva(k, orden_antiguo, self.state["meal_order"])
+            if not destino:
+                continue
+            for f in alimentos:
+                alimento = f.get("alimento")
+                cantidad_g = f.get("cantidad_g", f.get("cantidad", 0)) or 0
+                if not alimento or cantidad_g <= 0:
+                    continue
+                self._append_food(destino, alimento, cantidad_g, self._macros_at(alimento, cantidad_g))
+                reubicado.append({
+                    "desde": k, "desde_nombre": self.meal_label(k),
+                    "hacia": destino, "hacia_nombre": self.meal_label(destino),
+                    "nombre": f.get("nombre", ""), "cantidad_g": cantidad_g,
+                })
+        self.state["reubicado_al_reconfigurar"] = reubicado
+
         if not self.state["comidas_completadas"]:
             self.state["acumulado_cereales_panes"] = 0
             self.state["acumulado_frutos_secos"] = 0
 
         return self.state["distribucion"]
+
+    @staticmethod
+    def _comida_mas_cercana_viva(key: str, orden_antiguo: list, orden_nuevo: list) -> str:
+        """A qué comida se traspasa lo que había en una que ya no existe: la anterior del
+        orden viejo que siga viva (el intra cae en la comida de antes de entrenar), y si
+        no hay ninguna detrás, la primera que venga después."""
+        vivas = set(orden_nuevo)
+        if key in orden_antiguo:
+            i = orden_antiguo.index(key)
+            for k in reversed(orden_antiguo[:i]):
+                if k in vivas:
+                    return k
+            for k in orden_antiguo[i + 1:]:
+                if k in vivas:
+                    return k
+        return orden_nuevo[0] if orden_nuevo else ""
 
     def _build_meal_order(self) -> list:
         """Orden de comidas a montar, replicando getMealOrder del front:

@@ -109,7 +109,10 @@ async def chatbot_configure(
     """Configura el día (tipo, comidas, momento entreno)."""
     _assert_session_owner(session_id, current_user)
     chatbot = await get_or_create_chatbot(session_id, db)
-    
+
+    if config.fecha:
+        chatbot.state["fecha_objetivo"] = config.fecha
+
     distribucion = chatbot.configure_day(
         tipo_dia=config.tipo_dia,
         num_comidas=config.num_comidas,
@@ -134,6 +137,12 @@ async def chatbot_configure(
                 f"• Proteína: {objetivo['P']} g\n"
                 f"• Hidratos: {objetivo['H']} g\n"
                 f"• Grasa: {objetivo['G']} g")
+    # Si el cambio se ha llevado por delante alguna comida (el intra y el post al pasar a
+    # descanso, la Comida 4 al bajar a 3), lo que había ahí se ha traspasado a otra: hay
+    # que DECIRLO. Antes se borraba en silencio y el cliente perdía el trabajo sin enterarse.
+    reubicado = chatbot.state.get("reubicado_al_reconfigurar") or []
+    if reubicado:
+        mensaje += "\n\n" + _texto_reubicado(reubicado)
     mensaje += "\n\n¿Qué quieres tomar?"
 
     await save_chatbot_session(chatbot)
@@ -145,8 +154,25 @@ async def chatbot_configure(
         "meal_nombre": label,
         "objetivo": objetivo,
         "day_overview": chatbot.get_day_overview(),
+        "reubicado": reubicado,
+        # Lo que ya hay montado en la comida a la que se llega: el front vaciaba su lista
+        # al reconfigurar y, con el traspaso, el cliente vería el aviso pero no el
+        # alimento en pantalla hasta recargar.
+        "alimentos": (chatbot.state["comidas_completadas"].get(key) or {}).get("alimentos", []),
         "mensaje": mensaje
     }
+
+
+def _texto_reubicado(reubicado: list) -> str:
+    """Aviso de a dónde ha ido a parar lo de las comidas que ya no existen."""
+    por_destino = {}
+    for r in reubicado:
+        por_destino.setdefault((r["desde_nombre"], r["hacia_nombre"]), []).append(
+            f"{r['nombre']} ({int(round(r['cantidad_g']))} g)")
+    partes = [f"lo que tenías en {desde} ({', '.join(items)}) ha pasado a {hacia}"
+              for (desde, hacia), items in por_destino.items()]
+    return ("⚠️ Con este cambio " + "; ".join(partes) +
+            ". No se ha borrado nada, pero revisa esas comidas porque los macros habrán cambiado.")
 
 # Los mensajes van por el bucle del agente (agent_loop) con sus herramientas. El router
 # de intenciones anterior se borró en F3 (06-08) tras validar el agente con el banco de
@@ -163,11 +189,17 @@ def _estado_para_front(chatbot) -> dict:
     antes eso lo parseaba el propio front con regex (leerCambioDeConfig), que era el
     mismo hardcodeo en otro idioma."""
     st = chatbot.state
+    # La fecha va por el mismo camino y por el mismo motivo: quién decide que el cliente
+    # quiere montar otro día es el agente, no el regex del front, que con "hoy es día de
+    # descanso" cambiaba de día y se dejaba lo de descanso. Se consume de una vez: si se
+    # quedara puesta, el front reabriría ese día en cada mensaje siguiente.
+    fecha_pedida = st.pop("fecha_pedida", None)
     return {
         "step": st["step"],
         "comida_actual": st["comida_actual"],
         "meal_nombre": chatbot.meal_label(chatbot.current_meal_key()),
         "restante": chatbot.get_remaining_macros(),
+        "fecha_pedida": fecha_pedida,
         "config": {
             "tipo_dia": st.get("tipo_dia"),
             "num_comidas": st.get("num_comidas"),

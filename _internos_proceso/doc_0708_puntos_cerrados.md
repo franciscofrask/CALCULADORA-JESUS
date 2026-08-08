@@ -2202,6 +2202,103 @@ Queda un cabo que **no** es de filtros: «jugo» lo interpreta como naranja o ma
 de un zumo. Eso es criterio del modelo, no algo que se esté borrando, y meterle sinónimos
 sería justo el hardcodeo que hay que evitar.
 
+
+## Lo que le hacía perder el trabajo al cliente
+
+Francisco eligió esto como lo primero de la lista de fallos del asistente: *«lo que pierde
+trabajo del cliente»*. Eran tres cosas distintas con el mismo final -- el cliente monta
+algo, la app se lo traga y encima no se lo dice --. Salió una cuarta por el camino.
+Las cuatro comprobadas en el navegador de verdad, no contra la API.
+
+### 1. «Guardar» no guardaba
+
+Escribir **«guarda la comida»** en el chat contestaba *«Listo, he guardado el desayuno»*...
+y la pestaña de Nutrición seguía vacía.
+
+Había **dos caminos para guardar y solo uno volcaba**: el botón «Guardar y siguiente»
+llama a `completeMeal()`, que termina en `syncToDiet()`; decir «guarda la comida» ejecuta
+la herramienta del agente, la sesión avanza a la comida siguiente y no sincronizaba nadie.
+La propia herramienta lo tenía escrito en su descripción -- «el volcado del día a la dieta
+sigue siendo la acción aparte de siempre» --, o sea que era conocido y estaba asumido.
+
+Medido en vivo sobre una fecha limpia: **0 alimentos antes, 0 después**. Ahora la
+herramienta levanta una bandera, el front vuelca por esa vía igual que por el botón, y el
+chat lo confirma («Guardado en tu pestaña de nutrición, miércoles 12 de agosto»).
+
+De paso, `syncToDiet` tenía **dos salidas silenciosas**: si no había fecha de destino, o
+si el volcado fallaba, no hacía nada y no decía nada. Ahora la fecha cae en la última
+mirada en Nutrición (o en hoy) y los fallos se cuentan.
+
+### 2. Pasar el día a descanso borraba el peri, y el asistente se lo inventaba
+
+Francisco tenía el post montado, pasó el día a descanso y **desapareció**. Al preguntar
+dónde estaba, el asistente le contestó que *«lo del post lo tienes metido en la Comida 2»*.
+No era verdad. Y no era que mintiera: es que tampoco él se había enterado.
+
+Estaba hecho medio a propósito. Al reconfigurar, las comidas que ya no existen en el día
+nuevo (el intra y el post en descanso, la Comida 4 al bajar a 3) se caían del recorrido,
+que hasta ahí es correcto -- si no, se colarían en la dieta guardada sin estar en el
+recorrido --. Lo que no es correcto es **confundir caerse del recorrido con borrarse**.
+
+Ahora lo que hubiera montado se **traspasa a la comida principal más cercana** (la de antes
+en el orden viejo, y si no la de después) y el traspaso se cuenta: al cliente, en el chat,
+y al agente, en el resultado de la herramienta, para que no vuelva a improvisar. Sí,
+descuadra la comida destino -- por eso se avisa y se puede cuadrar a mano, que es mejor que
+perderlo --.
+
+```
+antes:  intra con 40 g de dextrosa  ->  "hoy descanso"  ->  no queda nada, nadie dice nada
+
+ahora:  intra con 40 g de dextrosa  ->  "hoy descanso"  ->  Comida 1: Dextrosa 40 g
+        "la dextrosa que tenías en el intra-entreno ha pasado a la Comida 1 (desayuno),
+         revisemos esa comida porque ahora sus macros han cambiado"
+```
+
+Es la misma decisión que Francisco tomó para el botón Cuadrar: **repartir y no borrar nunca**.
+
+### 3. El cuelgue dejaba el chat inservible
+
+Tres minutos en «Actualizando la comida...» con el campo de escribir bloqueado y sin más
+salida que recargar la página y perder el hilo. Reproducido en vivo mientras se probaba
+lo anterior.
+
+Ni el stream ni el POST de respaldo tenían **tope de ninguna clase**. Si el backend se cae
+o se reinicia con la petición en vuelo, `reader.read()` se queda esperando para siempre,
+`setLoading(false)` no llega nunca y el respaldo tampoco entra -- el respaldo salta cuando
+el stream *falla*, y un stream que no termina nunca no falla --.
+
+El tope **no es a la respuesta entera**: una petición que encadena varias herramientas
+puede tardar de sobra y es legítima. Es al **silencio**: cada trozo que llega rearma la
+cuenta, y solo salta si deja de llegar nada (45 s en el stream, 120 s en el respaldo).
+Además el desbloqueo va en un `finally`, para que ningún camino lo deje colgado, y cuando
+se corta se dice qué pasó y que lo montado sigue en su sitio.
+
+### 4. «Hoy es día de descanso» hacía otra cosa
+
+Salió probando lo anterior y Francisco lo cazó al vuelo: *«esto suena a un fallo»*. Lo era.
+
+El front miraba cada mensaje ANTES de mandarlo, con `/^(hoy|manana|pasado manana)\b/`.
+Como la frase empezaba por «hoy», la leía como *«vete al día de hoy»*: cambiaba de fecha,
+**tiraba lo de descanso** y ni siquiera llegaba a mandar el mensaje al asistente. Dos
+peticiones en una frase y se quedaba con la que no era. El mismo regex se tragaba «esto lo
+dejo para mañana, ponme atún», que no pide cambiar de día en absoluto.
+
+Es el hardcodeo de siempre: adivinar la intención con una lista de palabras teniendo un
+modelo delante que entiende la frase. Ya se había quitado para la configuración del día
+(F3, 06-08) y este se quedó. Ahora hay una herramienta `cambiar_de_dia`, el asistente
+decide, y el front solo obedece lo que venga en `state.fecha_pedida` -- aplicando encima
+la configuración que venga en la misma respuesta, que si no la pisaría al recargar el día.
+
+```
+"hoy es dia de descanso"                antes: cambia al dia de hoy, sigue en entrenamiento
+                                        ahora: dia de descanso  (y el intra se traspasa)
+"vamos a montar el de mañana"           antes: cambia de dia     ahora: cambia de dia
+"esto lo dejo para mañana, ponme atun"  antes: CAMBIA DE DIA     ahora: pone el atun
+"quiero pollo con arroz"                antes: normal            ahora: normal
+```
+
+Los cuatro casos van en el test, contra el asistente de verdad.
+
 ### Y el «Cuadrar» del intra y el post no hacía nada
 
 Salió mirando lo anterior y Francisco pidió que se mirara. El botón estaba ahí, se

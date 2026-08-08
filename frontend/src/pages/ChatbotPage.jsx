@@ -9,11 +9,16 @@ import ChatMenus from '../components/nutrition/ChatMenus';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Los cambios de configuración por chat ("mejor 3 comidas", "en ayunas", "sin peri") ya
-// no se parsean aquí con regex: los entiende el asistente-agente en el backend
-// (herramienta configurar_dia) y el estado del día vuelve en `state.config` de cada
-// respuesta. Aquí solo queda el cambio de FECHA (leerCambioDeDia), que es asunto del
-// front: cada día carga su configuración desde Nutrición.
+// Ni la configuración del día ("mejor 3 comidas", "en ayunas", "sin peri") ni la FECHA
+// ("mañana", "el jueves") se parsean aquí con regex: las entiende el asistente-agente en
+// el backend (configurar_dia y cambiar_de_dia) y vuelven en `state.config` /
+// `state.fecha_pedida` de cada respuesta. El front solo obedece y recarga de Nutrición la
+// configuración del día al que se va.
+//
+// El regex de la fecha se quitó el 08-08: pedía la palabra al principio de la frase, así
+// que "hoy es día de descanso" -- dos peticiones en una -- se leía como "vete al día de
+// hoy", cambiaba de fecha, se dejaba lo de descanso y ni siquiera llegaba a mandar el
+// mensaje al backend.
 
 const ETIQUETA_PERI = {
   intra_post: 'intra + post', solo_post: 'solo post',
@@ -167,32 +172,8 @@ export default function ChatbotPage() {
 
   const stripAccents = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-  // Convierte texto/botón en YYYY-MM-DD; null si no se entiende.
-  /**
-   * ¿El mensaje pide montar OTRO día? Devuelve la fecha o null.
-   *
-   * Pide la palabra suelta a propósito: "mañana" cambia el día, pero "dejo esto para
-   * mañana" no debería, y "quiero pollo" desde luego que no. Con "hoy" pasa lo mismo,
-   * así que solo cuenta si el mensaje va de eso y de poco más.
-   */
-  const leerCambioDeDia = (texto) => {
-    const t = stripAccents(texto.trim().toLowerCase());
-    if (/^(hoy|manana|pasado manana)\b/.test(t) || /\bpara (hoy|manana|pasado manana)\b/.test(t)
-        || /\b(el )?dia (de )?(hoy|manana)\b/.test(t)) {
-      if (t.includes('pasado manana')) {
-        const d = new Date(todayLocal() + 'T12:00:00');
-        d.setDate(d.getDate() + 2);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      }
-      return parseTargetDate(t.includes('manana') ? 'manana' : 'hoy');
-    }
-    const iso = t.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-    if (iso) return iso[1];
-    const dm = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\b/);
-    if (dm) return parseTargetDate(dm[0]);
-    return null;
-  };
-
+  // Convierte texto/botón en YYYY-MM-DD; null si no se entiende. Lo usa el selector de
+  // día de Nutrición al entrar; los cambios de día POR CHAT los decide el agente.
   const parseTargetDate = (raw) => {
     if (!raw) return null;
     const t = stripAccents(raw.toString().trim().toLowerCase());
@@ -296,7 +277,7 @@ export default function ChatbotPage() {
       + `${resumenConfig(cfg)}. Si quieres otro día o cambiar algo, dímelo cuando quieras: `
       + '"mañana", "hoy descanso", "3 comidas", "en ayunas" o "sin peri".', false);
     configureDay(cfg.tipo_dia, cfg.num_comidas, cfg.opcion_peri, cfg.momento_entreno,
-                 cfg.single_meal, sid);
+                 cfg.single_meal, sid, iso);
   };
 
   const periLabel = (op) => ({
@@ -314,7 +295,8 @@ export default function ChatbotPage() {
   }[m] || `Momento ${m}`);
 
   // Configurar el día (llama al backend con tipo, nº de comidas, peri, momento y bloque único)
-  const configureDay = async (tipo, comidas, opPeri, momento = 1, single = false, sid = null) => {
+  const configureDay = async (tipo, comidas, opPeri, momento = 1, single = false, sid = null,
+                             fecha = null) => {
     setLoading(true);
     try {
       // `sid` explicito para el arranque: ahi el sessionId recien creado todavia no
@@ -330,7 +312,9 @@ export default function ChatbotPage() {
           num_comidas: comidas,
           momento_entreno: momento,
           opcion_peri: opPeri || (tipo === 'entrenamiento' ? 'intra_post' : 'sin_peri'),
-          single_meal: single
+          single_meal: single,
+          // Qué fecha se monta: el asistente resuelve "mañana" contra el día abierto.
+          fecha: fecha || targetDate || null
         })
       });
       const data = await res.json();
@@ -341,7 +325,10 @@ export default function ChatbotPage() {
         setMealNombre(data.meal_nombre || 'Comida 1');
         setMacrosRestantes(data.objetivo || data.distribucion.comidas.C1);
         if (data.day_overview) setDayOverview(data.day_overview);
-        setCurrentFoods([]);
+        // Lo que ya hubiera montado en esa comida, no una lista vacía: al cambiar de
+        // configuración, lo que estaba en una comida que desaparece (el intra al pasar a
+        // descanso) se traspasa a la más cercana, y el cliente tiene que verlo.
+        setCurrentFoods(data.alimentos || []);
         setStep('building_meal');
         addMessage(data.mensaje, false);
       }
@@ -356,7 +343,31 @@ export default function ChatbotPage() {
   const syncEstado = (data) => {
     if (data?.day_overview) setDayOverview(data.day_overview);
     if (data?.state?.step) setStep(data.state.step);
+
+    // Montar OTRO día lo decide el agente, no el front.
+    //
+    // Antes lo miraba aquí un regex (leerCambioDeDia): si el mensaje EMPEZABA por "hoy"
+    // o "mañana", cambiaba de día y no llegaba a mandarse nada al backend. Con "hoy es
+    // día de descanso" -- dos peticiones en una frase -- se quedaba con la que no era:
+    // saltaba al día de hoy y tiraba lo de descanso. Ahora el agente entiende que hay
+    // dos cosas, llama a cambiar_de_dia y a configurar_dia, y aquí solo se obedece. La
+    // config que venga en la misma respuesta se aplica ENCIMA de la del día nuevo, que
+    // si no la pisaría al recargarla de Nutrición.
     const cfg = data?.state?.config;
+    const otroDia = data?.state?.fecha_pedida;
+    if (otroDia && otroDia !== targetDate) {
+      const encima = {};
+      if (cfg?.tipo_dia) encima.tipo_dia = cfg.tipo_dia;
+      if (cfg?.num_comidas) encima.num_comidas = cfg.num_comidas;
+      if (cfg?.opcion_peri) encima.opcion_peri = cfg.opcion_peri;
+      if (cfg?.momento_entreno !== null && cfg?.momento_entreno !== undefined) {
+        encima.momento_entreno = cfg.momento_entreno;
+      }
+      setTargetDate(otroDia);
+      arrancarConLaConfigDeNutricion(otroDia, encima);
+      return;
+    }
+
     if (cfg) {
       if (cfg.tipo_dia) setTipoDia(cfg.tipo_dia);
       if (cfg.num_comidas) setNumComidas(cfg.num_comidas);
@@ -365,6 +376,18 @@ export default function ChatbotPage() {
         setMomentoEntreno(cfg.momento_entreno);
       }
       setSingleMeal(!!cfg.single_meal);
+    }
+    // Si el cliente ha guardado una comida HABLANDO ("guarda la comida"), hay que
+    // volcarla al plan igual que hace el botón «Guardar y siguiente».
+    //
+    // Había dos caminos para guardar y solo uno volcaba: el botón llama a
+    // completeMeal(), que termina en syncToDiet(); por chat se ejecutaba la
+    // herramienta del agente, la sesión avanzaba a la comida siguiente y nadie
+    // sincronizaba. El cliente leía «Listo, he guardado el desayuno» y su plan seguía
+    // vacío. Comprobado en vivo el 08-08 con una fecha limpia: 0 alimentos antes y 0
+    // después de guardar.
+    if (data?.comida_guardada || data?.response?.comida_guardada) {
+      syncToDiet();
     }
   };
 
@@ -378,67 +401,95 @@ export default function ChatbotPage() {
     setInput('');
     addMessage(userMessage, true);
 
-    // "Mañana", "el 5/8": cambiar de día. Se recarga la configuración de ESE día desde
-    // Nutrición (cada día tiene la suya) y se vuelve a montar.
-    const otroDia = leerCambioDeDia(userMessage);
-    if (otroDia && otroDia !== targetDate) {
-      setTargetDate(otroDia);
-      await arrancarConLaConfigDeNutricion(otroDia, {});
-      inputRef.current?.focus();
-      return;
-    }
-
     setLoading(true);
     setProgressText(null);
 
     const body = JSON.stringify({ message: userMessage, session_id: sessionId });
     const headers = { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' };
+    // Ni el stream ni el POST tienen final garantizado: si el backend se cae o se
+    // reinicia a mitad, reader.read() se queda esperando para siempre, setLoading(false)
+    // no llega nunca y el chat se queda en «Actualizando la comida...» con el input
+    // bloqueado. Le pasó a Francisco el 08-08: tres minutos colgado sin salida salvo
+    // recargar la página y perder el hilo.
+    //
+    // El tope NO es a la respuesta entera -- una petición que encadena varias
+    // herramientas puede tardar de sobra y es legítima -- sino al SILENCIO: cada trozo
+    // que llega (progreso o respuesta) rearma la cuenta. Solo salta si deja de llegar nada.
+    const SILENCIO_MAX = 45000;
+    const RESPALDO_MAX = 120000;
+    let cortado = false;
     try {
       let respondido = false;
       try {
-        const res = await fetch(`${API_URL}/api/chatbot/message-stream`, {
-          method: 'POST', headers, body,
-        });
-        if (!res.ok || !res.body) throw new Error('sin stream');
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const trozos = buffer.split('\n\n');
-          buffer = trozos.pop();
-          for (const trozo of trozos) {
-            const linea = trozo.split('\n').find(l => l.startsWith('data: '));
-            if (!linea) continue;
-            const ev = JSON.parse(linea.slice(6));
-            if (ev.tipo === 'progreso') {
-              setProgressText(ev.texto);
-            } else if (ev.tipo === 'respuesta') {
-              syncEstado(ev);
-              await handleBotResponse(ev.response);
-              respondido = true;
-            } else if (ev.tipo === 'error') {
-              addMessage('Error al procesar el mensaje.', false);
-              respondido = true;
+        const ctrl = new AbortController();
+        let campana = setTimeout(() => { cortado = true; ctrl.abort(); }, SILENCIO_MAX);
+        const rearmar = () => {
+          clearTimeout(campana);
+          campana = setTimeout(() => { cortado = true; ctrl.abort(); }, SILENCIO_MAX);
+        };
+        try {
+          const res = await fetch(`${API_URL}/api/chatbot/message-stream`, {
+            method: 'POST', headers, body, signal: ctrl.signal,
+          });
+          if (!res.ok || !res.body) throw new Error('sin stream');
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            rearmar();
+            buffer += decoder.decode(value, { stream: true });
+            const trozos = buffer.split('\n\n');
+            buffer = trozos.pop();
+            for (const trozo of trozos) {
+              const linea = trozo.split('\n').find(l => l.startsWith('data: '));
+              if (!linea) continue;
+              const ev = JSON.parse(linea.slice(6));
+              if (ev.tipo === 'progreso') {
+                setProgressText(ev.texto);
+              } else if (ev.tipo === 'respuesta') {
+                syncEstado(ev);
+                await handleBotResponse(ev.response);
+                respondido = true;
+              } else if (ev.tipo === 'error') {
+                addMessage('Error al procesar el mensaje.', false);
+                respondido = true;
+              }
             }
           }
+        } finally {
+          clearTimeout(campana);
         }
         if (!respondido) throw new Error('stream sin respuesta');
       } catch (e) {
-        // Respaldo: el POST clásico (mismo backend, sin indicador de progreso)
-        const res = await fetch(`${API_URL}/api/chatbot/message`, { method: 'POST', headers, body });
-        const data = await res.json();
-        syncEstado(data);
-        await handleBotResponse(data.response);
+        // Respaldo: el POST clásico (mismo backend, sin indicador de progreso). Con su
+        // propio tope, que aquí no hay trozos que rearmen nada.
+        const ctrl = new AbortController();
+        const campana = setTimeout(() => { cortado = true; ctrl.abort(); }, RESPALDO_MAX);
+        try {
+          const res = await fetch(`${API_URL}/api/chatbot/message`, {
+            method: 'POST', headers, body, signal: ctrl.signal,
+          });
+          const data = await res.json();
+          syncEstado(data);
+          await handleBotResponse(data.response);
+        } finally {
+          clearTimeout(campana);
+        }
       }
     } catch (error) {
-      addMessage('Error al procesar el mensaje.', false);
+      // Decir qué ha pasado y, sobre todo, que se puede seguir: el chat queda usable y
+      // lo montado hasta aquí sigue en su sitio.
+      addMessage(cortado
+        ? 'Se me ha cortado la conexión y he dejado la petición a medias. Lo que llevabas '
+          + 'montado sigue guardado: repite lo último que me pediste.'
+        : 'Error al procesar el mensaje. Vuelve a intentarlo.', false);
+    } finally {
+      setProgressText(null);
+      setLoading(false);
+      inputRef.current?.focus();
     }
-    setProgressText(null);
-    setLoading(false);
-    inputRef.current?.focus();
   };
 
   // "Elegir este menú" en una tarjeta de menús del agente: aplica el borrador a la
@@ -651,17 +702,22 @@ export default function ChatbotPage() {
   // Vuelca el progreso actual en la pestaña de nutrición del día destino.
   // Decide UNA sola vez si sobrescribir un día que ya tuviera dieta.
   const syncToDiet = async () => {
-    if (!sessionId || !targetDate) return;
+    if (!sessionId) return;
+    // Sin día destino se volcaba en silencio a ninguna parte. Si por lo que sea no está
+    // fijado, se usa el día que se esté mirando en Nutrición, o hoy: guardar en el día
+    // equivocado sería peor, pero no guardar nada y decir que sí es lo que estaba
+    // pasando.
+    const dia = targetDate || localStorage.getItem('nutrition_last_date') || todayLocal();
     try {
       if (!autoSyncRef.current.decided) {
-        const ex = await fetch(`${API_URL}/api/diets/${targetDate}`, {
+        const ex = await fetch(`${API_URL}/api/diets/${dia}`, {
           headers: { 'Authorization': `Bearer ${getToken()}` }
         }).then(r => r.json());
         const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
         autoSyncRef.current.decided = true;
         if (hasFood) {
           const ok = await confirm({
-            title: `Ya tienes una dieta el ${formatDateLabel(targetDate)}`,
+            title: `Ya tienes una dieta el ${formatDateLabel(dia)}`,
             description: '¿Quieres que la vaya actualizando con lo que montemos aquí?',
             confirmLabel: 'Sí, actualizarla', cancelLabel: 'No, dejarla',
           });
@@ -676,16 +732,21 @@ export default function ChatbotPage() {
       if (!autoSyncRef.current.enabled) return;
 
       const res = await fetch(
-        `${API_URL}/api/chatbot/save-to-diet?session_id=${sessionId}&fecha=${targetDate}&overwrite=true`,
+        `${API_URL}/api/chatbot/save-to-diet?session_id=${sessionId}&fecha=${dia}&overwrite=true`,
         { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } }
       );
       const data = await res.json();
       if (res.ok && !data.needs_confirmation) {
-        localStorage.setItem('nutrition_last_date', targetDate);
-        addMessage(`✅ Guardado en tu pestaña de nutrición (${formatDateLabel(targetDate)}).`, false);
+        localStorage.setItem('nutrition_last_date', dia);
+        addMessage(`✅ Guardado en tu pestaña de nutrición (${formatDateLabel(dia)}).`, false);
+      } else {
+        // Antes esto se callaba: el cliente leía «comida guardada» y no lo estaba.
+        addMessage('⚠️ No he podido guardarlo en tu pestaña de nutrición. Lo tienes montado aquí; vuelve a intentarlo o vuélcalo con el botón.', false);
       }
     } catch (e) {
-      // Silencioso: no bloquea el flujo del chat si la sincronización falla
+      // Fallar en silencio era el problema: el cliente creía que su comida estaba
+      // guardada y no estaba en ninguna parte.
+      addMessage('⚠️ No he podido guardarlo en tu pestaña de nutrición. Lo tienes montado aquí; vuelve a intentarlo o vuélcalo con el botón.', false);
     }
   };
 
