@@ -411,9 +411,13 @@ class NutritionChatbot:
         
         # Paso 1: Para términos específicos (queso fresco batido, crema de cacahuete), regex primero
         words = search_norm.split()
+        # Cada palabra tiene que EMPEZAR una palabra del nombre, no aparecer en mitad de
+        # otra: "queso.*fresco.*batido" encontraba también lo que llevara esas letras
+        # dentro. Ver _regex_termino.
+        patron_de = lambda ws: ".*".join(self._regex_termino(w) for w in ws if w)
         if len(words) >= 2:
-            regex_pattern = ".*".join(words)  # "queso.*fresco.*batido" para "queso fresco batido"
-            
+            regex_pattern = patron_de(words)
+
             try:
                 regex_results = await self.db.foods.find(
                     {"nombre": {"$regex": regex_pattern, "$options": "i"}},
@@ -441,8 +445,8 @@ class NutritionChatbot:
         
         # Paso 3: Si aún no hay suficientes, regex más simple
         if len(candidates) < 10:
-            regex_pattern = ".*".join(words)
-            
+            regex_pattern = patron_de(words)
+
             try:
                 regex_results = await self.db.foods.find(
                     {"nombre": {"$regex": regex_pattern, "$options": "i"}},
@@ -491,7 +495,7 @@ class NutritionChatbot:
                 if len(word) >= 3:
                     try:
                         word_results = await self.db.foods.find(
-                            {"nombre": {"$regex": word, "$options": "i"}},
+                            {"nombre": {"$regex": self._regex_termino(word), "$options": "i"}},
                             {"_id": 0}
                         ).limit(30).to_list(30)
                         candidates.extend(word_results)
@@ -522,7 +526,7 @@ class NutritionChatbot:
             elif nombre_norm.startswith(search_norm):
                 score += 150
             # Alta prioridad: TODAS las palabras de búsqueda están en el nombre
-            elif all(w in nombre_norm for w in query_words):
+            elif all(self._es_palabra_del_nombre(w, nombre_norm) for w in query_words):
                 score += 120
             # Bonificar si tiene "batido" cuando buscamos "batido"
             elif "batido" in search_norm and "batido" in nombre_norm:
@@ -533,8 +537,11 @@ class NutritionChatbot:
             # Media prioridad: palabra principal al inicio
             elif any(nombre_simple.startswith(w) for w in query_words):
                 score += 80
-            # Baja prioridad: coincidencia parcial
-            elif any(w in nombre_norm for w in query_words):
+            # Baja prioridad: coincidencia parcial. Tiene que empezar una palabra del
+            # nombre: "en mitad de otra palabra" no es una coincidencia, es una casualidad
+            # de letras, y era la línea por la que se colaban el chocolate al pedir col o
+            # el aceite al pedir té.
+            elif any(self._es_palabra_del_nombre(w, nombre_norm) for w in query_words):
                 score += 40
             # Misma palabra en otro género o número ("tostadas" -> "Pan tostado"). Va la
             # última y suma poco: es una coincidencia real, pero nunca debe adelantar a
@@ -615,7 +622,57 @@ class NutritionChatbot:
                 resultados = [dict(f) for f in resultados]
                 for f in resultados:
                     f["_match_parcial"] = query.strip()
+        elif _remap and not mapeado and len(sig_words) == 1 and resultados:
+            # Con UNA sola palabra no había red: la cobertura de arriba pide dos o más, y
+            # por ese hueco se colaba lo de la SAL. Como la sal no está en el catálogo de
+            # Jesús, quien la pedía se llevaba «Frutos secos cocktail tostado sin sal»
+            # metido en la comida, sin preguntar y sin avisar; con «té» pasaba lo mismo.
+            #
+            # Lo que decide no es que la palabra aparezca -- en «sin sal» aparece -- sino
+            # DÓNDE: si solo sale detrás de un «sin», «con», «bajo en» o «sabor a», es un
+            # matiz del alimento, no el alimento. Ver _nucleo_nombre.
+            termino = sig_words[0]
+            con_nucleo = [food for _, food in unique_scored
+                          if self._en_nucleo(termino, food.get("nombre", ""))]
+            if con_nucleo:
+                resultados = con_nucleo[:limit]
+            else:
+                resultados = [dict(f) for f in resultados]
+                for f in resultados:
+                    f["_match_parcial"] = query.strip()
         return resultados
+
+    # Cuántas palabras del principio del nombre dicen DE QUÉ es el alimento. Lo que va
+    # más atrás son matices: cómo está hecho, qué lleva, qué no lleva.
+    #
+    #   Pollo asado                             -> pollo, la 1.ª
+    #   Pechuga de pollo                        -> pollo, la 3.ª
+    #   Frutos secos cocktail tostado sin sal   -> sal, la 6.ª  => no va de sal
+    #   Cacahuete tostado 0 % sal añadida       -> sal, la 5.ª  => no va de sal
+    #   Lomo embuchado 25 % menos de sal        -> sal, la 7.ª  => no va de sal
+    #
+    # La posición sola no basta: hay que distinguir «Pechuga DE pollo», que es pollo, de
+    # «Pipas CON sal», que son pipas. Lo que va detrás de estos cuatro nexos es lo que el
+    # alimento lleva o deja de llevar, no lo que es. Es gramática, no una lista de
+    # alimentos: sirve igual para la sal, el azúcar, el limón o lo que se pida mañana.
+    _PALABRAS_DEL_NUCLEO = 3
+    _NEXOS_DE_MATIZ = (" con ", " sin ", " sabor ", " bajo en ")
+
+    @classmethod
+    def _en_nucleo(cls, termino: str, nombre: str) -> bool:
+        """¿Lo pedido es de lo que va el alimento, o un matiz del final del nombre?"""
+        n = cls._norm_text((nombre or "").split("(")[0])
+        for nexo in cls._NEXOS_DE_MATIZ:
+            i = n.find(nexo)
+            if i != -1:
+                n = n[:i]
+        cabeza = " ".join(n.split()[:cls._PALABRAS_DEL_NUCLEO])
+        if not cabeza:
+            return False
+        if cls._es_palabra_del_nombre(termino, cabeza):
+            return True
+        raiz = cls._regex_raiz(termino)
+        return bool(raiz) and bool(re.search(raiz, cabeza))
     
     def calculate_food_amount(self, alimento: dict, macros_restantes: dict) -> dict:
         """
@@ -1326,13 +1383,50 @@ class NutritionChatbot:
             p = p[:-1]
         return p if len(p) >= 4 else ""
 
+    # Cada letra que en el catálogo puede aparecer acentuada, con sus variantes. El regex
+    # de Mongo NO normaliza acentos: `\bcafe\b` no encuentra "Café", y por eso el `\b` que
+    # ya había en _regex_raiz nunca llegaba a filtrar nada.
+    _ACENTOS = {"a": "aá", "e": "eé", "i": "ií", "o": "oó", "u": "uúü", "n": "nñ", "c": "cç"}
+    # Frontera por la IZQUIERDA. No vale `\b`: en "chocolate" la "col" empieza en mitad de
+    # palabra y `\b` no lo ve. Lo que se exige es que delante no haya letra ni número.
+    _INICIO_PALABRA = r"(?<![0-9a-zA-ZáéíóúüñçÁÉÍÓÚÜÑÇ])"
+
+    @classmethod
+    def _regex_termino(cls, palabra: str) -> str:
+        """Patrón que casa la palabra al PRINCIPIO de una palabra del nombre, con o sin
+        acentos.
+
+        Hasta el 08-08-2026 se buscaba la subcadena en cualquier posición, y eso traía:
+        «col» -> Barrita proteica doble CHOCOLATE, «te» -> ACEITE de oliva, «ajo» -> atún
+        BAJO en sal, «pan» -> pollo emPANado, «ron» -> macaRRONes. Medido sobre las 3.211
+        fichas: de los 1.048 candidatos de «te», 962 eran ruido; de los 353 de «col», 278.
+        Y como cada consulta a Mongo se corta en 50 en orden natural, el ruido no solo
+        ensuciaba la lista: podía dejar fuera lo que se buscaba.
+
+        No se exige final de palabra a propósito: «tostad» tiene que llegar a «tostadas» y
+        «pan» a «panes». Quien empieza exactamente por lo pedido ya puntúa más arriba."""
+        p = cls._norm_text(palabra or "").strip()
+        if not p:
+            return ""
+        cuerpo = "".join(f"[{cls._ACENTOS[c]}]" if c in cls._ACENTOS else re.escape(c) for c in p)
+        return cls._INICIO_PALABRA + cuerpo
+
+    @classmethod
+    def _es_palabra_del_nombre(cls, termino: str, nombre_norm: str) -> bool:
+        """¿`termino` empieza alguna palabra de `nombre_norm`? La versión en Python del
+        mismo criterio, para puntuar sin volver a la base."""
+        pat = cls._regex_termino(termino)
+        return bool(pat) and bool(re.search(pat, nombre_norm))
+
     @classmethod
     def _regex_raiz(cls, palabra: str) -> str:
         """Patron que casa la palabra en cualquier genero y numero. "" si no aplica."""
         raiz = cls._raiz(cls._norm_text(palabra))
+        if not raiz:
+            return ""
         # La "s" suelta hace falta cuando la raíz conserva su vocal ("pavo" -> "pavos");
         # sin ella el plural de las palabras cortas se quedaba fuera.
-        return rf"\b{raiz}(s|a|o|as|os|es)?\b" if raiz else ""
+        return cls._regex_termino(raiz) + r"(s|a|o|as|os|es)?\b"
 
     @staticmethod
     def _clave_fonetica(s: str) -> str:

@@ -20,6 +20,28 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 // hoy", cambiaba de fecha, se dejaba lo de descanso y ni siquiera llegaba a mandar el
 // mensaje al backend.
 
+// Ninguna petición del chat puede quedarse esperando para siempre.
+//
+// El 08-08 el chat se quedó tres minutos en «Actualizando la comida...» con el campo
+// bloqueado y sin más salida que recargar; y recargando volvía a pasar, porque el que se
+// colgaba entonces era el ARRANQUE. Cuando el backend acepta la conexión y luego no
+// responde (se cae, se reinicia, la red se corta), un fetch sin `signal` no termina
+// nunca: el `finally` que desbloquea la pantalla no llega, y da igual dónde esté escrito.
+//
+// 120 s es de sobra para lo más lento que hace el asistente, y sigue siendo mucho menos
+// que «para siempre». El streaming tiene su propio tope, y ese es al silencio.
+const TOPE_MS = 120000;
+
+const fetchConTope = async (url, opciones = {}, ms = TOPE_MS) => {
+  const ctrl = new AbortController();
+  const campana = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opciones, signal: ctrl.signal });
+  } finally {
+    clearTimeout(campana);
+  }
+};
+
 const ETIQUETA_PERI = {
   intra_post: 'intra + post', solo_post: 'solo post',
   solo_intra: 'solo intra', sin_peri: 'sin peri',
@@ -115,7 +137,7 @@ export default function ChatbotPage() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`${API_URL}/api/chatbot/session-exists?session_id=${sid}`, {
+        const r = await fetchConTope(`${API_URL}/api/chatbot/session-exists?session_id=${sid}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         const d = await r.json();
@@ -204,7 +226,7 @@ export default function ChatbotPage() {
   const startChat = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/start`, {
+      const res = await fetchConTope(`${API_URL}/api/chatbot/start`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getToken()}`,
@@ -243,11 +265,11 @@ export default function ChatbotPage() {
     let dieta = null;
     let prefs = null;
     try {
-      const r = await fetch(`${API_URL}/api/diets/${iso}`, { headers: cabecera });
+      const r = await fetchConTope(`${API_URL}/api/diets/${iso}`, { headers: cabecera });
       if (r.ok) dieta = await r.json();
     } catch { /* sin dieta: se sigue con las preferencias */ }
     try {
-      const r = await fetch(`${API_URL}/api/user/diet-config`, { headers: cabecera });
+      const r = await fetchConTope(`${API_URL}/api/user/diet-config`, { headers: cabecera });
       if (r.ok) prefs = await r.json();
     } catch { /* sin preferencias: se usan los valores por defecto */ }
     setLoading(false);
@@ -301,7 +323,7 @@ export default function ChatbotPage() {
     try {
       // `sid` explicito para el arranque: ahi el sessionId recien creado todavia no
       // esta en el estado de React y la peticion se iba con session_id=null.
-      const res = await fetch(`${API_URL}/api/chatbot/configure?session_id=${sid || sessionId}`, {
+      const res = await fetchConTope(`${API_URL}/api/chatbot/configure?session_id=${sid || sessionId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getToken()}`,
@@ -468,7 +490,7 @@ export default function ChatbotPage() {
         const ctrl = new AbortController();
         const campana = setTimeout(() => { cortado = true; ctrl.abort(); }, RESPALDO_MAX);
         try {
-          const res = await fetch(`${API_URL}/api/chatbot/message`, {
+          const res = await fetchConTope(`${API_URL}/api/chatbot/message`, {
             method: 'POST', headers, body, signal: ctrl.signal,
           });
           const data = await res.json();
@@ -518,7 +540,7 @@ export default function ChatbotPage() {
     addMessage((sug?.nombre || `la ${numero}`).trim(), true);
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/message`, {
+      const res = await fetchConTope(`${API_URL}/api/chatbot/message`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: `la ${numero}`, session_id: sessionId }),
@@ -620,7 +642,7 @@ export default function ChatbotPage() {
     const quitado = currentFoods[index];
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/remove-food?session_id=${sessionId}&index=${index}`, {
+      const res = await fetchConTope(`${API_URL}/api/chatbot/remove-food?session_id=${sessionId}&index=${index}`, {
         method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
       });
       const data = await res.json();
@@ -642,7 +664,7 @@ export default function ChatbotPage() {
     if (loading) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/suggest-foods?session_id=${sessionId}`, {
+      const res = await fetchConTope(`${API_URL}/api/chatbot/suggest-foods?session_id=${sessionId}`, {
         method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
       });
       const data = await res.json();
@@ -660,7 +682,7 @@ export default function ChatbotPage() {
   const completeMeal = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/complete-meal?session_id=${sessionId}`, {
+      const res = await fetchConTope(`${API_URL}/api/chatbot/complete-meal?session_id=${sessionId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getToken()}`,
@@ -710,7 +732,7 @@ export default function ChatbotPage() {
     const dia = targetDate || localStorage.getItem('nutrition_last_date') || todayLocal();
     try {
       if (!autoSyncRef.current.decided) {
-        const ex = await fetch(`${API_URL}/api/diets/${dia}`, {
+        const ex = await fetchConTope(`${API_URL}/api/diets/${dia}`, {
           headers: { 'Authorization': `Bearer ${getToken()}` }
         }).then(r => r.json());
         const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
@@ -773,7 +795,7 @@ export default function ChatbotPage() {
   const resetChat = async () => {
     if (sessionId) {
       try {
-        await fetch(`${API_URL}/api/chatbot/reset?session_id=${sessionId}`, {
+        await fetchConTope(`${API_URL}/api/chatbot/reset?session_id=${sessionId}`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${getToken()}` }
         });
@@ -846,7 +868,7 @@ export default function ChatbotPage() {
     
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chatbot/export-pdf?session_id=${sessionId}`, {
+      const res = await fetchConTope(`${API_URL}/api/chatbot/export-pdf?session_id=${sessionId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${getToken()}`
@@ -882,7 +904,7 @@ export default function ChatbotPage() {
 
       // 1. Si no forzamos, comprobar si ese día ya tiene alimentos
       if (!force) {
-        const exRes = await fetch(`${API_URL}/api/diets/${targetDate}`, {
+        const exRes = await fetchConTope(`${API_URL}/api/diets/${targetDate}`, {
           headers: { 'Authorization': `Bearer ${getToken()}` }
         });
         const ex = await exRes.json();

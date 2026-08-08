@@ -245,6 +245,18 @@ class AgentTools:
                                          self.bot.state.get("single_meal", False),
                                          self.bot.meal_label(self.bot.current_meal_key())),
                "falta": {m: restante[m] for m in ("P", "H", "G")}}
+        # Devolver lo más parecido callándose que no es lo pedido es lo que hacía que a
+        # quien pedía SAL le salieran pistachos («tostados con sal») y a quien pedía TÉ le
+        # saliera ternera: ni la sal ni el té solos están en el catálogo de Jesús. Cuando
+        # NINGÚN resultado empieza por lo que pidió el cliente, se dice, y el asistente
+        # tiene que contarlo en vez de colar el sucedáneo como si tal cosa.
+        if texto and items:
+            pedido = self.bot._norm_text(texto)
+            if not any(self.bot._norm_text(i.get("nombre", "")).startswith(pedido)
+                       for i in items):
+                out["ojo"] = (f"en el catálogo no hay ningún alimento que se llame "
+                              f"'{texto}': esto es lo más parecido que aparece. Dilo antes "
+                              f"de ofrecerlo, y no lo presentes como si fuera lo que pidió.")
         if not items:
             # El error enseña: qué se probó y por qué no salió nada.
             notas = []

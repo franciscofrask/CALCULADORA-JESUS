@@ -2299,6 +2299,79 @@ la configuración que venga en la misma respuesta, que si no la pisaría al reca
 
 Los cuatro casos van en el test, contra el asistente de verdad.
 
+
+## La búsqueda emparejaba por trozos de palabra
+
+Francisco: *«la búsqueda empareja por trozos: café -> aceite, sal -> frutos secos»*.
+Reproducido y resultó ser **dos fallos distintos** que daban el mismo aspecto.
+
+### El primero: buscar la subcadena en cualquier posición
+
+Los regex contra `nombre` no exigían que la coincidencia empezara una palabra. Así que:
+
+```
+col  ->  Barrita proteica doble CHOCOLATE     (cho-COL-ate)
+te   ->  ACEITE de oliva virgen extra         (acei-TE)
+ajo  ->  Atún al natural BAJO en sal          (b-AJO)
+pan  ->  Filete de pechuga de pollo emPANado
+ron  ->  MacaRRONes integrales
+```
+
+Medido sobre las 3.211 fichas: de los **1.048 candidatos de «te», 962 eran ruido**; de los
+353 de «col», 278; de los 134 de «ron», 127. Y esto no era solo estética: cada consulta a
+Mongo se corta en 50 **en orden natural**, así que el ruido podía dejar fuera lo que se
+buscaba antes de llegar a puntuar nada.
+
+Había un `\b` puesto en `_regex_raiz` que no servía para nada, por dos motivos a la vez:
+`\b` no ve ninguna frontera en mitad de «chocolate», y **el regex de Mongo no normaliza
+acentos**, así que `\bcafe\b` jamás encontraba «Café». Ahora el patrón exige que delante
+no haya letra ni número, y tolera los acentos del catálogo. No se exige final de palabra a
+propósito: «tostad» tiene que seguir llegando a «tostadas».
+
+```
+antes:  col -> Barrita proteica fulfil white chocolate, Aislado de proteína...
+ahora:  col -> Coliflor, Coles de bruselas, Colines
+```
+
+### El segundo: colar un parecido sin decirlo (el caso de la sal)
+
+La sal **no está en el catálogo de Jesús**. Tampoco el té solo, ni el ron. Y aun así, quien
+pedía sal se llevaba «Frutos secos cocktail tostado sin sal» **metido en la comida**, sin
+preguntar y sin avisar.
+
+El aviso existía -- `_match_parcial` -- pero solo se tendía cuando la consulta tenía **dos
+palabras o más**. Por ese hueco se colaba todo lo de una palabra, que es justamente como se
+piden los condimentos.
+
+Lo difícil aquí no era detectar que la palabra aparece: en «sin sal» aparece. Era saber
+**si el alimento va de eso**. Dos señales, y hacen falta las dos:
+
+- **Dónde aparece.** El catálogo nombra el alimento al principio: «Pollo asado» (1.ª),
+  «Pechuga de pollo» (3.ª). En «Cacahuete tostado 0 % sal añadida» la sal es la 5.ª, y en
+  «Lomo embuchado 25 % menos de sal» la 7.ª.
+- **Detrás de qué.** La posición sola no distingue «Pechuga DE pollo», que va de pollo, de
+  «Pipas CON sal», que va de pipas. Lo que sigue a *con*, *sin*, *sabor* o *bajo en* es lo
+  que el alimento lleva, no lo que es.
+
+Son cuatro nexos del castellano, **no una lista de alimentos**: valen igual para el azúcar,
+el limón, la pimienta o lo que se pida mañana. Comprobado con 15 alimentos que sí existen
+(arroz, pan, col, miel, huevos, atún, yogur, plátano, nueces, leche, café, avena, pavo,
+pollo, tostadas): ninguno se marca por error.
+
+```
+antes:  "ponme un poco de sal"  ->  mete Frutos secos cocktail 22 g y no dice nada
+ahora:  "ponme un poco de sal"  ->  comida vacía, y explica:
+        "la sal como tal no la contamos en la dieta, por eso al buscarla ha salido un
+         fruto seco raro y lo he quitado ya"
+```
+
+### Y de paso, el cuelgue otra vez
+
+Probando esto el chat se quedó bloqueado **en el arranque**, no en el envío: el tope al
+silencio que se había puesto el 08-08 solo cubría el mensaje, y cualquiera de las otras
+catorce llamadas podía dejar la pantalla muerta igual. Ahora todas van con tope (120 s).
+El streaming conserva el suyo, que es al silencio y no a la duración.
+
 ### Y el «Cuadrar» del intra y el post no hacía nada
 
 Salió mirando lo anterior y Francisco pidió que se mirara. El botón estaba ahí, se
