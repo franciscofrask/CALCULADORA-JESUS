@@ -2109,11 +2109,33 @@ ANTES                              AHORA
  3 de 6 ingredientes                6 de 6, desfase P -1,7 · H -0,4 · G -0,4
 ```
 
-**Y cuando no se puede cuadrar, se dice.** Con tres alimentos grasos y ningún hidrato no
-hay forma de llegar, así que en vez de resolverlo borrando se deja lo más cerca posible y
-el aviso lo cuenta: «Lo más cerca que se puede con estos ingredientes: faltan 46,1 g de
-hidratos. No se ha quitado ninguno». Eso además es útil -- le está diciendo al cliente que
-le falta meter un hidrato.
+**Y cuando no se puede cuadrar, se dice, y se dice por dónde empezar.** Preguntó Francisco
+si entonces no va a borrar nunca nada, y que en ese caso debe salir un aviso. Las dos cosas
+están:
+
+Cuadrar **ya no quita nada por macros**. Solo desaparece un alimento en dos casos, y
+ninguno es una decisión sobre macros: que la línea no diga a qué alimento se refiere, o que
+ese alimento ya no esté en el catálogo. Los dos avisan -- antes el primero se iba en
+silencio.
+
+Y el aviso no se queda en el número, señala el culpable:
+
+```
+4 aceites (cada uno pone 10 g de grasa ya en su mínimo)
+  «faltan 47,5g de proteína y faltan 51,0g de hidratos y sobran 21,9g de grasa.
+   Para cuadrarlo tendrías que quitar o bajar Aceite de coco, que pone 10,0g de grasa.
+   No se ha quitado ninguno.»
+
+3 alimentos grasos y ningún hidrato
+  «faltan 46,1g de hidratos. Para cuadrarlo te falta añadir algo con hidratos.
+   No se ha quitado ninguno.»
+```
+
+Con un criterio que costó una pasada afinar: **manda lo que se pasa, aunque otro macro se
+quede más corto**. En el caso de los aceites faltan 47 g de proteína y 51 de hidratos, y
+aun así el problema es la grasa: pasarse es lo único que solo se arregla quitando, y lo que
+falta el cliente ya lo está viendo en las barras. El primer intento ordenaba por el desfase
+más grande y decía «te falta añadir hidratos» con 22 g de grasa de más encima de la mesa.
 
 **Un efecto secundario que apareció al quitar el borrado**: la pasada de afinado a veces
 *empeoraba*. Con tres alimentos grasos subía el cacao de 32 a 100 g para tapar la proteína

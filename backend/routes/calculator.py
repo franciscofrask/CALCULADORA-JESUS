@@ -986,14 +986,19 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
         entradas = []
         for it in (meal.get("alimentos") or []):
             aid = it.get("alimento_id")
+            # Los dos únicos casos en los que un alimento desaparece al cuadrar, y
+            # ninguno es una decisión sobre macros: o la línea no dice a qué alimento
+            # se refiere, o ese alimento ya no está en el catálogo. En los dos se
+            # avisa -- nada se va en silencio.
             if aid in (None, ""):
+                excluidos.append({"meal": meal_key, "nombre": it.get("nombre"),
+                                  "motivo": "sin_alimento_id"})
                 continue
             try:
                 food = await db.foods.find_one({"id": int(aid)}, {"_id": 0})
             except (TypeError, ValueError):
                 food = None
             if not food:
-                # Este sí desaparece, y no hay alternativa: ya no está en el catálogo.
                 excluidos.append({"meal": meal_key, "nombre": it.get("nombre"),
                                   "motivo": "no_esta_en_el_catalogo"})
                 continue
@@ -1107,10 +1112,39 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             me = rf.get("macros_efectivos") or {}
             for m in servido:
                 servido[m] += float(me.get(m, 0) or 0)
-        desfases[meal_key] = {
+        desfase = {
             m: round(servido[m] - tgt[k], 1)
             for m, k in (("P", "proteinas"), ("H", "hidratos"), ("G", "grasas"))
         }
+        # Y si no ha cuadrado, se dice QUÉ habría que tocar. No basta con «sobran 6 g
+        # de grasa»: el cliente quiere saber por cuál empezar. Si sobra un macro, el
+        # culpable es el que más lo aporta -- ese es el que habría que quitar o bajar,
+        # y lo decide él. Si falta, no hay nada que quitar: hay que añadir.
+        # Manda lo que SE PASA, aunque otro macro se quede más corto: pasarse es lo que
+        # solo se arregla quitando, y faltar se arregla añadiendo -- y eso el cliente ya
+        # lo está viendo en las barras. Con cuatro aceites salía «te falta añadir
+        # hidratos» cuando lo que pasaba es que sobraban 21,9 g de grasa.
+        sugerencia = None
+        sobra = {m: v for m, v in desfase.items() if v > 4}
+        falta = {m: v for m, v in desfase.items() if v < -4}
+        if sobra:
+            peor = max(sobra, key=lambda m: sobra[m])
+            culpable = max(
+                refit_foods,
+                key=lambda rf: float((rf.get("macros_efectivos") or {}).get(peor, 0) or 0),
+                default=None)
+            if culpable:
+                sugerencia = {
+                    "que_hacer": "quitar_o_bajar", "macro": peor,
+                    "sobra": desfase[peor],
+                    "alimento": culpable.get("nombre"),
+                    "alimento_id": culpable.get("alimento_id"),
+                    "aporta": float((culpable.get("macros_efectivos") or {}).get(peor, 0) or 0),
+                }
+        elif falta:
+            peor = min(falta, key=lambda m: falta[m])
+            sugerencia = {"que_hacer": "anadir", "macro": peor, "falta": -desfase[peor]}
+        desfases[meal_key] = {**desfase, "sugerencia": sugerencia}
         out_comidas[meal_key] = {**meal, "alimentos": refit_foods}
     return {"comidas": out_comidas, "distribution": dist, "excluidos": excluidos,
             "desfases": desfases}

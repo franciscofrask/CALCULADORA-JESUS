@@ -1498,15 +1498,25 @@ const NutritionPage = () => {
             const nEx = res.excluidos?.length || 0;
             const d = res.desfases?.[mealKey];
             const falla = d && ['P', 'H', 'G'].filter(m => Math.abs(d[m]) > 4);
+            const nombre = { P: 'proteína', H: 'hidratos', G: 'grasa' };
             if (nEx) {
                 toast.warning(`Comida cuadrada. ${nEx} alimento(s) ya no están en el catálogo y se quitaron.`);
             } else if (falla?.length) {
-                const nombre = { P: 'proteína', H: 'hidratos', G: 'grasa' };
                 const texto = falla.map(m => {
                     const v = d[m];
                     return `${v > 0 ? 'sobran' : 'faltan'} ${Math.abs(v).toFixed(1)}g de ${nombre[m]}`;
                 }).join(' y ');
-                toast.warning(`Lo más cerca que se puede con estos ingredientes: ${texto}. No se ha quitado ninguno.`);
+                // Y se dice por dónde empezar, que es lo que hace útil el aviso. Quitar
+                // lo decide el cliente: la app no toca lo que él ha puesto.
+                const s = d.sugerencia;
+                const comoArreglarlo = s?.que_hacer === 'quitar_o_bajar'
+                    ? ` Para cuadrarlo tendrías que quitar o bajar ${s.alimento}, que pone ${s.aporta.toFixed(1)}g de ${nombre[s.macro]}.`
+                    : s?.que_hacer === 'anadir'
+                        ? ` Para cuadrarlo te falta añadir algo con ${nombre[s.macro]}.`
+                        : '';
+                toast.warning(
+                    `No se puede cuadrar sin quitar nada: ${texto}.${comoArreglarlo} No se ha quitado ninguno.`,
+                    { duration: 9000 });
             } else {
                 toast.success('Comida cuadrada a tus macros');
             }

@@ -73,6 +73,36 @@ def test_cada_ingrediente_se_lleva_algo(headers):
     assert not a_cero, f"se han quedado a cero: {a_cero}"
 
 
+def test_si_sobra_un_macro_dice_que_quitar(headers):
+    """No basta con «sobran 22 g de grasa»: hay que decir por cuál empezar.
+
+    Cuatro aceites: cada uno pone 10 g de grasa ya en su cantidad mínima, así que no
+    hay forma de cuadrar sin quitar alguno. El aviso tiene que señalar el que más
+    aporta -- y quitarlo lo decide el cliente, no la app.
+    """
+    ACEITE_COCO, AOVE, ACEITE_AGUACATE, MACADAMIAS = 801, 3, 1, 2393
+    alimentos, excluidos, desfase = _cuadrar(
+        headers, [ACEITE_COCO, AOVE, ACEITE_AGUACATE, MACADAMIAS])
+    assert len(alimentos) == 4 and not excluidos, "ha quitado alimentos por su cuenta"
+    assert desfase["G"] > 4, "el caso ya no se pasa de grasa; hay que rehacerlo"
+    s = desfase.get("sugerencia")
+    assert s, "no dice qué habría que tocar"
+    # Manda lo que se pasa, aunque falten más gramos de otro macro (aquí faltan 47 de
+    # proteína y 51 de hidratos, y aun así el problema es la grasa que sobra).
+    assert s["que_hacer"] == "quitar_o_bajar", f"sugiere {s['que_hacer']} en vez de quitar"
+    assert s["macro"] == "G", f"señala {s['macro']} en vez de la grasa que sobra"
+    assert s["alimento"], "no dice cuál quitar"
+    assert s["aporta"] >= 9, "no señala al que más grasa aporta"
+
+
+def test_si_falta_un_macro_dice_que_anadir(headers):
+    """Cuando no sobra nada, no hay nada que quitar: hay que añadir."""
+    _, _, desfase = _cuadrar(headers, [HUEVOS, CACAO, CLARAS])
+    s = desfase.get("sugerencia")
+    assert s and s["que_hacer"] == "anadir"
+    assert s["macro"] == "H", "no son los hidratos lo que falta"
+
+
 def test_cuando_no_cuadra_se_dice_y_no_se_borra(headers):
     """Tres alimentos grasos y ningún hidrato: no puede cuadrar. Lo que NO puede hacer
     es resolverlo quitando cosas, ni pasarse de largo para tapar el hueco."""
