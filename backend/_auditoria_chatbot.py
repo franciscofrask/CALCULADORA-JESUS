@@ -266,6 +266,11 @@ async def sec_extraccion_llm(db):
 
 
 async def sec_router_llm(db):
+    # F3 (06-08-2026): el router de intenciones (understand) se borró; la conversación
+    # la lleva agent_loop y su banco es _banco_casos_chatbot.py. Esta sección queda
+    # capada para que el resto de la auditoría (capas del motor) siga sirviendo.
+    print("\n[6] ROUTER: borrado en F3; usa _banco_casos_chatbot.py (--agente).")
+    return
     print("\n" + "=" * 70)
     print("6. ROUTER DE INTENCIÓN LLM")
     print("=" * 70)

@@ -1,0 +1,977 @@
+{
+ "fecha": "2026-08-06 23:23",
+ "total": 60,
+ "ok": 58,
+ "resultados": [
+  {
+   "id": "A1",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 25.6,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"meal_updated\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=menus (esperada una de ['suggestions', 'meal_updated', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_hay\": true}",
+     "ok": true,
+     "detalle": "2 sugerencias"
+    },
+    {
+     "check": "{\"sugerencias_todas_genericas\": true}",
+     "ok": true,
+     "detalle": "todas genéricas"
+    }
+   ]
+  },
+  {
+   "id": "A2",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 21.6,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    },
+    {
+     "check": "{\"no_menciona\": [\"callos\", \"pechuga de pollo (39\"]}",
+     "ok": true,
+     "detalle": "limpio"
+    }
+   ]
+  },
+  {
+   "id": "A3",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 7.9,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada una de ['suggestions', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_todas_genericas\": true}",
+     "ok": true,
+     "detalle": "todas genéricas"
+    }
+   ]
+  },
+  {
+   "id": "A4",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 11.7,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"meal_updated\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=menus (esperada una de ['suggestions', 'meal_updated', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_hay\": true}",
+     "ok": true,
+     "detalle": "1 sugerencias"
+    }
+   ]
+  },
+  {
+   "id": "A5",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 8.0,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada una de ['suggestions', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_marca\": \"hacendado\"}",
+     "ok": true,
+     "detalle": "todas de la marca"
+    }
+   ]
+  },
+  {
+   "id": "A6",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 4.4,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada una de ['suggestions', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_hay\": true}",
+     "ok": true,
+     "detalle": "10 sugerencias"
+    }
+   ]
+  },
+  {
+   "id": "A7",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 24.7,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada una de ['suggestions', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_hay\": true}",
+     "ok": true,
+     "detalle": "4 sugerencias"
+    }
+   ]
+  },
+  {
+   "id": "A8",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 11.0,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"meal_updated\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=menus (esperada una de ['suggestions', 'meal_updated', 'menus'])"
+    }
+   ]
+  },
+  {
+   "id": "A9",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 4.6,
+   "checks": [
+    {
+     "check": "{\"accion\": \"suggestions\"}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada suggestions)"
+    },
+    {
+     "check": "{\"sugerencias_coherentes_momento\": true}",
+     "ok": true,
+     "detalle": "coherentes con cena"
+    }
+   ]
+  },
+  {
+   "id": "A10",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 9.5,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"meal_updated\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada una de ['suggestions', 'meal_updated', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_coherentes_momento\": true}",
+     "ok": true,
+     "detalle": "coherentes con desayuno"
+    }
+   ]
+  },
+  {
+   "id": "A11",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 10.4,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"meal_updated\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada una de ['suggestions', 'meal_updated', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_hay\": true}",
+     "ok": true,
+     "detalle": "8 sugerencias"
+    }
+   ]
+  },
+  {
+   "id": "A12",
+   "familia": "estilo",
+   "ok": true,
+   "segundos": 11.4,
+   "checks": [
+    {
+     "check": "{\"menciona\": [\"pan\", \"tostad\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "B1",
+   "familia": "composicion",
+   "ok": true,
+   "segundos": 10.9,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    },
+    {
+     "check": "{\"menciona\": [\"pollo\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    },
+    {
+     "check": "{\"menciona\": [\"arroz\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "B2",
+   "familia": "composicion",
+   "ok": true,
+   "segundos": 8.3,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    }
+   ]
+  },
+  {
+   "id": "B3",
+   "familia": "composicion",
+   "ok": true,
+   "segundos": 9.9,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    },
+    {
+     "check": "{\"sugerencias_coherentes_momento\": true}",
+     "ok": true,
+     "detalle": "coherentes con cena"
+    }
+   ]
+  },
+  {
+   "id": "B4",
+   "familia": "composicion",
+   "ok": true,
+   "segundos": 10.7,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    }
+   ]
+  },
+  {
+   "id": "B5",
+   "familia": "composicion",
+   "ok": true,
+   "segundos": 18.4,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    },
+    {
+     "check": "{\"menciona\": [\"avena\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "B6",
+   "familia": "composicion",
+   "ok": true,
+   "segundos": 7.1,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    }
+   ]
+  },
+  {
+   "id": "B7",
+   "familia": "composicion",
+   "ok": true,
+   "segundos": 26.0,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    },
+    {
+     "check": "{\"sugerencias_sin\": [\"pollo\", \"ternera\", \"atun\", \"merluza\", \"huevo\", \"jamon\"]}",
+     "ok": true,
+     "detalle": "respeta el veto"
+    }
+   ]
+  },
+  {
+   "id": "B8",
+   "familia": "composicion",
+   "ok": true,
+   "segundos": 15.3,
+   "checks": [
+    {
+     "check": "{\"propone_comida_montada\": true}",
+     "ok": true,
+     "detalle": "comida montada"
+    },
+    {
+     "check": "{\"menciona\": [\"merluza\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "C1",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 5.4,
+   "checks": [
+    {
+     "check": "{\"accion\": \"meal_updated\"}",
+     "ok": true,
+     "detalle": "action=meal_updated (esperada meal_updated)"
+    },
+    {
+     "check": "{\"comida_contiene\": \"huevo\"}",
+     "ok": true,
+     "detalle": "contiene"
+    },
+    {
+     "check": "{\"comida_contiene\": \"arroz\"}",
+     "ok": true,
+     "detalle": "contiene"
+    },
+    {
+     "check": "{\"cantidad_de\": [\"arroz\", 80]}",
+     "ok": true,
+     "detalle": "Arroz blanco: 80g (esperado 80)"
+    }
+   ]
+  },
+  {
+   "id": "C2",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 4.3,
+   "checks": [
+    {
+     "check": "{\"accion\": \"meal_updated\"}",
+     "ok": true,
+     "detalle": "action=meal_updated (esperada meal_updated)"
+    },
+    {
+     "check": "{\"cantidad_de\": [\"pechuga\", 150]}",
+     "ok": true,
+     "detalle": "Pechuga de pollo: 150g (esperado 150)"
+    }
+   ]
+  },
+  {
+   "id": "C3",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 4.0,
+   "checks": [
+    {
+     "check": "{\"cantidad_de\": [\"huevo\", 3]}",
+     "ok": true,
+     "detalle": "Huevos enteros M: 3 ud (esperado 3)"
+    }
+   ]
+  },
+  {
+   "id": "C4",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 7.1,
+   "checks": [
+    {
+     "check": "{\"cantidad_de\": [\"huevo\", 2]}",
+     "ok": true,
+     "detalle": "Huevos enteros L: 2 ud (esperado 2)"
+    }
+   ]
+  },
+  {
+   "id": "C5",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 3.3,
+   "checks": [
+    {
+     "check": "{\"cantidad_de\": [\"almendra\", 20]}",
+     "ok": true,
+     "detalle": "Almendras: 20g (esperado 20)"
+    }
+   ]
+  },
+  {
+   "id": "C6",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 3.9,
+   "checks": [
+    {
+     "check": "{\"cantidad_de\": [\"arroz\", 120]}",
+     "ok": true,
+     "detalle": "Arroz blanco: 120g (esperado 120)"
+    }
+   ]
+  },
+  {
+   "id": "C7",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 3.9,
+   "checks": [
+    {
+     "check": "{\"cantidad_de\": [\"zumo\", 100]}",
+     "ok": true,
+     "detalle": "Zumo de naranja natural recién exprimido (El mercado de Aldi): 100g (esperado 100)"
+    }
+   ]
+  },
+  {
+   "id": "C8",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 4.6,
+   "checks": [
+    {
+     "check": "{\"comida_no_contiene\": \"arroz\"}",
+     "ok": true,
+     "detalle": "fuera"
+    },
+    {
+     "check": "{\"comida_contiene\": \"patata\"}",
+     "ok": true,
+     "detalle": "contiene"
+    }
+   ]
+  },
+  {
+   "id": "C9",
+   "familia": "cantidades",
+   "ok": true,
+   "segundos": 3.8,
+   "checks": [
+    {
+     "check": "{\"comida_no_contiene\": \"arroz\"}",
+     "ok": true,
+     "detalle": "fuera"
+    },
+    {
+     "check": "{\"comida_contiene\": \"pollo\"}",
+     "ok": true,
+     "detalle": "contiene"
+    }
+   ]
+  },
+  {
+   "id": "C10",
+   "familia": "cantidades",
+   "ok": false,
+   "segundos": 5.3,
+   "checks": [
+    {
+     "check": "{\"comida_contiene\": \"arroz\"}",
+     "ok": true,
+     "detalle": "contiene"
+    },
+    {
+     "check": "{\"cantidad_de\": [\"arroz blanco\", 80]}",
+     "ok": false,
+     "detalle": "'arroz blanco' no está en la comida"
+    }
+   ]
+  },
+  {
+   "id": "D1",
+   "familia": "quitar",
+   "ok": true,
+   "segundos": 2.7,
+   "checks": [
+    {
+     "check": "{\"comida_no_contiene\": \"arroz\"}",
+     "ok": true,
+     "detalle": "fuera"
+    }
+   ]
+  },
+  {
+   "id": "D2",
+   "familia": "quitar",
+   "ok": true,
+   "segundos": 3.3,
+   "checks": [
+    {
+     "check": "{\"comida_no_contiene\": \"arroz\"}",
+     "ok": true,
+     "detalle": "fuera"
+    },
+    {
+     "check": "{\"comida_contiene\": \"pollo\"}",
+     "ok": true,
+     "detalle": "contiene"
+    }
+   ]
+  },
+  {
+   "id": "D3",
+   "familia": "quitar",
+   "ok": true,
+   "segundos": 2.7,
+   "checks": [
+    {
+     "check": "{\"comida_no_contiene\": \"arroz\"}",
+     "ok": true,
+     "detalle": "fuera"
+    }
+   ]
+  },
+  {
+   "id": "D4",
+   "familia": "quitar",
+   "ok": true,
+   "segundos": 2.7,
+   "checks": [
+    {
+     "check": "{\"comida_no_contiene\": \"aceituna\"}",
+     "ok": true,
+     "detalle": "fuera"
+    }
+   ]
+  },
+  {
+   "id": "E1",
+   "familia": "estado",
+   "ok": true,
+   "segundos": 3.2,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"status\", \"message\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['status', 'message'])"
+    },
+    {
+     "check": "{\"menciona\": [\"falta\", \"quedan\", \"te queda\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "E2",
+   "familia": "estado",
+   "ok": true,
+   "segundos": 3.8,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"status\", \"summary\", \"message\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['status', 'summary', 'message'])"
+    }
+   ]
+  },
+  {
+   "id": "E3",
+   "familia": "estado",
+   "ok": true,
+   "segundos": 3.2,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"meal_updated\", \"message\"]}",
+     "ok": true,
+     "detalle": "action=meal_updated (esperada una de ['meal_updated', 'message'])"
+    },
+    {
+     "check": "{\"menciona\": [\"comida 2\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "E4",
+   "familia": "estado",
+   "ok": true,
+   "segundos": 3.3,
+   "checks": [
+    {
+     "check": "{\"menciona\": [\"arroz\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "E5",
+   "familia": "estado",
+   "ok": true,
+   "segundos": 2.5,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"no_foods\", \"message\", \"status\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['no_foods', 'message', 'status'])"
+    },
+    {
+     "check": "{\"menciona\": [\"comida\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "E6",
+   "familia": "estado",
+   "ok": true,
+   "segundos": 4.1,
+   "checks": [
+    {
+     "check": "{\"guardada_o_delegada\": true}",
+     "ok": true,
+     "detalle": "action=meal_updated, guardadas=['C1']"
+    }
+   ]
+  },
+  {
+   "id": "E7",
+   "familia": "estado",
+   "ok": true,
+   "segundos": 2.9,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"no_foods\", \"message\", \"status\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['no_foods', 'message', 'status'])"
+    }
+   ]
+  },
+  {
+   "id": "F1",
+   "familia": "preguntas",
+   "ok": true,
+   "segundos": 3.9,
+   "checks": [
+    {
+     "check": "{\"accion\": \"message\"}",
+     "ok": true,
+     "detalle": "action=message (esperada message)"
+    },
+    {
+     "check": "{\"menciona\": [\"arroz\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "F2",
+   "familia": "preguntas",
+   "ok": true,
+   "segundos": 4.5,
+   "checks": [
+    {
+     "check": "{\"accion\": \"message\"}",
+     "ok": true,
+     "detalle": "action=message (esperada message)"
+    },
+    {
+     "check": "{\"menciona\": [\"kcal\", \"calor\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "F3",
+   "familia": "preguntas",
+   "ok": true,
+   "segundos": 4.0,
+   "checks": [
+    {
+     "check": "{\"accion\": \"message\"}",
+     "ok": true,
+     "detalle": "action=message (esperada message)"
+    }
+   ]
+  },
+  {
+   "id": "F4",
+   "familia": "preguntas",
+   "ok": true,
+   "segundos": 2.9,
+   "checks": [
+    {
+     "check": "{\"accion\": \"message\"}",
+     "ok": true,
+     "detalle": "action=message (esperada message)"
+    },
+    {
+     "check": "{\"menciona\": [\"comida\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "F5",
+   "familia": "preguntas",
+   "ok": true,
+   "segundos": 3.5,
+   "checks": [
+    {
+     "check": "{\"accion\": \"message\"}",
+     "ok": true,
+     "detalle": "action=message (esperada message)"
+    },
+    {
+     "check": "{\"menciona\": [\"entren\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "G1",
+   "familia": "restricciones",
+   "ok": true,
+   "segundos": 6.6,
+   "checks": [
+    {
+     "check": "{\"accion\": \"suggestions\"}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada suggestions)"
+    },
+    {
+     "check": "{\"sugerencias_sin\": [\"gamba\", \"langostino\", \"mejillon\", \"marisco\", \"sepia\", \"pulpo\", \"calamar\"]}",
+     "ok": true,
+     "detalle": "respeta el veto"
+    }
+   ]
+  },
+  {
+   "id": "G2",
+   "familia": "restricciones",
+   "ok": false,
+   "segundos": 15.3,
+   "checks": [
+    {
+     "check": "{\"accion\": \"suggestions\"}",
+     "ok": false,
+     "detalle": "action=menus (esperada suggestions)"
+    },
+    {
+     "check": "{\"sugerencias_sin\": [\"yogur\", \"queso\", \"leche \", \"kefir\"]}",
+     "ok": true,
+     "detalle": "respeta el veto"
+    }
+   ]
+  },
+  {
+   "id": "G3",
+   "familia": "restricciones",
+   "ok": true,
+   "segundos": 7.1,
+   "checks": [
+    {
+     "check": "{\"accion\": \"suggestions\"}",
+     "ok": true,
+     "detalle": "action=suggestions (esperada suggestions)"
+    },
+    {
+     "check": "{\"sugerencias_sin\": [\"pan \", \"trigo\", \"cuscus\", \"cous\"]}",
+     "ok": true,
+     "detalle": "respeta el veto"
+    }
+   ]
+  },
+  {
+   "id": "G4",
+   "familia": "restricciones",
+   "ok": true,
+   "segundos": 9.2,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"suggestions\", \"meal_updated\", \"message\", \"menus\"]}",
+     "ok": true,
+     "detalle": "action=menus (esperada una de ['suggestions', 'meal_updated', 'message', 'menus'])"
+    },
+    {
+     "check": "{\"sugerencias_sin\": [\"leche entera\", \"yogur griego natural\"]}",
+     "ok": true,
+     "detalle": "respeta el veto"
+    }
+   ]
+  },
+  {
+   "id": "H1",
+   "familia": "ambiguos",
+   "ok": true,
+   "segundos": 4.8,
+   "checks": [
+    {
+     "check": "{\"no_lista_vacia\": true}",
+     "ok": true,
+     "detalle": "ofrece opciones"
+    }
+   ]
+  },
+  {
+   "id": "H2",
+   "familia": "ambiguos",
+   "ok": true,
+   "segundos": 5.6,
+   "checks": [
+    {
+     "check": "{\"menciona\": [\"huevo\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "H3",
+   "familia": "ambiguos",
+   "ok": true,
+   "segundos": 6.7,
+   "checks": [
+    {
+     "check": "{\"menciona\": [\"queso\", \"batido 0\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "H4",
+   "familia": "ambiguos",
+   "ok": true,
+   "segundos": 6.2,
+   "checks": [
+    {
+     "check": "{\"menciona\": [\"pollo\"]}",
+     "ok": true,
+     "detalle": "menciona"
+    }
+   ]
+  },
+  {
+   "id": "H5",
+   "familia": "ambiguos",
+   "ok": true,
+   "segundos": 3.1,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"no_foods\", \"message\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['no_foods', 'message'])"
+    }
+   ]
+  },
+  {
+   "id": "H6",
+   "familia": "fuera_de_tema",
+   "ok": true,
+   "segundos": 2.5,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"message\", \"no_foods\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['message', 'no_foods'])"
+    },
+    {
+     "check": "{\"no_menciona\": [\"argentina\"]}",
+     "ok": true,
+     "detalle": "limpio"
+    }
+   ]
+  },
+  {
+   "id": "H7",
+   "familia": "cortesia",
+   "ok": true,
+   "segundos": 2.1,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"no_foods\", \"message\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['no_foods', 'message'])"
+    },
+    {
+     "check": "{\"respuesta_corta\": 220}",
+     "ok": true,
+     "detalle": "151 caracteres"
+    }
+   ]
+  },
+  {
+   "id": "H8",
+   "familia": "cortesia",
+   "ok": true,
+   "segundos": 1.4,
+   "checks": [
+    {
+     "check": "{\"respuesta_corta\": 220}",
+     "ok": true,
+     "detalle": "49 caracteres"
+    }
+   ]
+  },
+  {
+   "id": "H9",
+   "familia": "fuera_de_tema",
+   "ok": true,
+   "segundos": 6.1,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"message\", \"no_foods\", \"suggestions\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['message', 'no_foods', 'suggestions'])"
+    }
+   ]
+  },
+  {
+   "id": "H10",
+   "familia": "ambiguos",
+   "ok": true,
+   "segundos": 2.2,
+   "checks": [
+    {
+     "check": "{\"accion_en\": [\"message\", \"no_foods\"]}",
+     "ok": true,
+     "detalle": "action=message (esperada una de ['message', 'no_foods'])"
+    }
+   ]
+  }
+ ]
+}
