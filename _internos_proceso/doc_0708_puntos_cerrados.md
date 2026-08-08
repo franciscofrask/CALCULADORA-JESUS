@@ -1489,15 +1489,56 @@ empieza en la semana 1, que es lo que la app hacía hasta hoy y nadie cambia de 
 
 **Que Jesús aclare qué significa «entrar en el ciclo»**; el campo ya está y es cambiar un número.
 
+### Punto 46 - Que se note la diferencia entre niveles · CASI CERRADO
+
+Al mirarlo punto por punto salió que la mitad estaba y la otra mitad tenía **dos fallos de
+verdad**, no cosas por hacer.
+
+**Lo que ya estaba:** las horas de espera (24 en Nivel 2, 48 en el resto, hecho con el punto
+47), el Nivel 3 sin botón de compra directa, el formulario de nombre+teléfono con aviso al
+equipo… y la vía de cobro con tarjeta después de la llamada, que el punto da por inexistente y
+**existe desde el 03-08**: en el panel, la llamada pendiente tiene un botón que genera el enlace
+de pago del Nivel 3 y lo copia para mandarlo por WhatsApp.
+
+**Fallo 1: la página de venta prometía algo que el plan no daba.** El punto dice que el Nivel 3
+lleva **reporte semanal**, y la tabla de `/planes` ponía «Seguimiento: Semanal»… pero en el
+catálogo el Nivel 3 tenía `["quincenal", "mensual"]`, o sea **exactamente lo mismo que el Nivel
+2**. Quien pagara 1.500 € habría recibido la cadencia del de 897 €.
+
+Corregido a `["semanal", "mensual"]`. Y ahora que el calendario sale del plan (punto 44) esto
+tiene efecto de verdad - los tres niveles por fin se distinguen en lo que reciben:
+
+```
+Nivel 1   S1:-    S2:-    S3:mens S4:-    S5:-    S6:-    S7:mens S8:-
+Nivel 2   S1:-    S2:quin S3:mens S4:quin S5:-    S6:quin S7:mens S8:quin
+Nivel 3   S1:sema S2:sema S3:mens S4:sema S5:sema S6:sema S7:mens S8:sema
+```
+
+Comprobado en `/planes`: la fila de Reportes dice **mensual · quincenal + mensual · semanal +
+mensual**. La tabla y el plan por fin dicen lo mismo.
+
+**Fallo 2: «Agendar una llamada» llevaba al chat.** El botón del Nivel 3 hacía
+`navigate('/dashboard/messages')`: el que quería el plan de 1.500 € acababa en el chat, **no
+dejaba su teléfono y al equipo no le llegaba ningún aviso**. El flujo bueno ya existía -- nombre,
+teléfono y franja horaria, cayendo en «Piden llamada» del panel -- pero **solo desde el test de
+nivel**, no desde la página de planes, que es justo donde va el que ya se ha decidido.
+
+Ahora abre el mismo formulario: **«El Nivel 3 se contrata hablando»**, con nombre, teléfono y
+«¿cuándo te viene bien?». Cae donde las del test, así que sale en el panel y lleva su botón de
+generar el enlace de pago. Comprobado en la app.
+
+**Lo que queda, y es montar producto nuevo:** que el Nivel 1 pueda **comprar la rutina del mes
+suelta** (55 €) y **contratar una llamada**, y que el Nivel 3 pueda contratar **llamadas con Jesús
+a un precio más alto**. `rutina_mes` está en el catálogo como complemento pero **no aparece en
+ninguna ruta del backend ni en ninguna pantalla**: no hay forma de comprarlo. Y de las llamadas
+sueltas no hay nada. Las tres cosas son producto y cobro nuevos en Stripe, no un arreglo.
+
+---
+
 ### Lo que queda del bloque E, y por qué
 
-- **Punto 46 (que se note la diferencia entre niveles)**: las horas de espera ya salen del plan
-  (arriba, punto 47) y el Nivel 3 ya se contrata por llamada. Y ojo con esto: el punto dice que
-  «falta montar la vía de cobro con tarjeta después de esa llamada, que hoy no existe», pero
-  **sí existe** desde el 03-08: en el panel, la llamada pendiente tiene un botón que genera el
-  enlace de pago del Nivel 3 y lo copia para mandarlo por WhatsApp. Lo que queda es que el
-  cliente perciba el resto de diferencias: comprar la rutina del mes suelta y contratar una
-  llamada (Nivel 1), y el reporte semanal del Nivel 3.
+- **Del punto 46 solo quedan los productos sueltos**: comprar la rutina del mes (55 €) y
+  contratar llamadas. Es producto y cobro nuevos en Stripe, no un arreglo.
 
 ### Una discrepancia que no toco sin que Jesús diga
 

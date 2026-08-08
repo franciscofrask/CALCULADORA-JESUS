@@ -112,8 +112,13 @@ PLAN_CATALOG = {
         "precio": 1500.0, "precio_nota": "1.500€ por ciclo de 12 semanas · se contrata por llamada",
         "precios": [{"label": "Ciclo", "importe": 1500.0, "periodo": "12 semanas"}],
         "responsable": "CEO",
+        # REPORTE SEMANAL (punto 46 del doc del 07-08: "Nivel 3 lleva reporte semanal").
+        # Estaba con quincenal+mensual, igual que el Nivel 2, mientras la pagina de planes
+        # le prometia "Seguimiento: Semanal" -- o sea que la pagina de venta ofrecia algo
+        # que el plan no daba. Con el calendario del punto 44, esto ya tiene efecto de
+        # verdad: su patron pasa a ser semanal todas las semanas y mensual la tercera.
         "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                           "reportes": ["quincenal", "mensual"], "suplementacion": True,
+                           "reportes": ["semanal", "mensual"], "suplementacion": True,
                            "harbiz": False, "acompanamiento": "con_entrenador_y_llamadas",
                            "frecuencia_contacto": "semanal"},
         "stripe_price_env": "STRIPE_PRICE_NIVEL3", "billing_cycle_weeks": 12,

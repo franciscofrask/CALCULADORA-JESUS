@@ -60,19 +60,28 @@ class TestLosTresNiveles:
         assert plan_habilitaciones("nivel2")["rutina"] == "personalizada"
         assert plan_habilitaciones("nivel3")["rutina"] == "personalizada"
 
-    def test_el_1_reporta_al_mes_y_los_otros_cada_quince_dias(self):
+    def test_cada_nivel_reporta_a_su_ritmo(self):
+        """Mensual el 1, quincenal el 2 y SEMANAL el 3 (punto 46 del doc del 07-08).
+
+        El 3 tenia quincenal, o sea exactamente lo mismo que el 2, mientras la pagina de
+        planes le prometia "Seguimiento: Semanal": quien pagara 1.500 EUR habria recibido la
+        cadencia del de 897.
+        """
         assert plan_habilitaciones("nivel1")["reportes"] == ["mensual"]
-        for code in ("nivel2", "nivel3"):
-            assert "quincenal" in plan_habilitaciones(code)["reportes"]
+        assert "quincenal" in plan_habilitaciones("nivel2")["reportes"]
+        assert "semanal" in plan_habilitaciones("nivel3")["reportes"]
+        assert "quincenal" not in plan_habilitaciones("nivel3")["reportes"]
 
     def test_lo_que_separa_al_2_del_3(self):
-        """Es lo unico que los distingue ademas del precio, y por eso se añadieron
-        los dos campos de acompañamiento."""
+        """Ademas del precio: el acompañamiento, la frecuencia y la cadencia del reporte."""
         dos, tres = plan_habilitaciones("nivel2"), plan_habilitaciones("nivel3")
         assert dos["acompanamiento"] == "con_entrenador"
         assert tres["acompanamiento"] == "con_entrenador_y_llamadas"
         assert dos["frecuencia_contacto"] == "quincenal"
         assert tres["frecuencia_contacto"] == "semanal"
+        # Y lo que el cliente RECIBE, que es lo que se nota: uno cada quince dias y el otro
+        # cada semana. Sin esto los dos planes daban lo mismo salvo el nombre.
+        assert dos["reportes"] != tres["reportes"]
 
     def test_el_1_se_autogestiona(self):
         assert plan_habilitaciones("nivel1")["acompanamiento"] == "solo_app"

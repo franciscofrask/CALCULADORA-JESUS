@@ -71,8 +71,89 @@ const Texto = ({ children }) => (
     <span className="text-[13px] text-foreground">{children || <No />}</span>
 );
 
+// Las mismas franjas que el test de nivel: "te llamo yo, dime cuándo te viene bien".
+const FRANJAS = ['Cuando podáis', 'Por la mañana (9-14)', 'Por la tarde (14-18)', 'A última hora (18-21)'];
+
+// PEDIR LA LLAMADA DEL NIVEL 3 (punto 46). Nombre, teléfono y cuándo le viene bien, que es
+// lo mínimo para que el aviso del panel llegue con algo con lo que atenderlo. Cae en el
+// mismo sitio que las del test de nivel, así que sale en «Piden llamada» del panel y lleva
+// su botón de generar el enlace de pago.
+const PedirLlamada = ({ api, profile, onCerrar }) => {
+    const [datos, setDatos] = useState({
+        nombre: profile?.user?.name || '', telefono: '', franja: FRANJAS[0],
+    });
+    const [enviando, setEnviando] = useState(false);
+    const [hecho, setHecho] = useState(false);
+
+    const enviar = async () => {
+        if (!datos.nombre.trim()) { toast.error('Necesitamos tu nombre para llamarte'); return; }
+        if (datos.telefono.replace(/\D/g, '').length < 9) { toast.error('Necesitamos un teléfono válido'); return; }
+        setEnviando(true);
+        try {
+            await api.post('/quiz-venta/guardar', {
+                email: profile?.user?.email || '',
+                nombre: datos.nombre, telefono: datos.telefono, franja: datos.franja,
+                recomendado: 'nivel3', quiere_llamada: true,
+            });
+            setHecho(true);
+        } catch (e) { toast.error(e.response?.data?.detail || 'No hemos podido guardarlo'); }
+        finally { setEnviando(false); }
+    };
+
+    if (hecho) {
+        return (
+            <div className="surface p-6 text-center" data-testid="llamada-pedida">
+                <Phone className="w-8 h-8 text-brand mx-auto mb-3" />
+                <p className="font-bold text-foreground mb-1">Te llamamos</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                    Lo tenemos apuntado con tu teléfono y la franja que has dicho.
+                </p>
+                <button onClick={onCerrar} className="text-brand text-sm hover:underline">Volver a los planes</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="surface p-6 max-w-md mx-auto" data-testid="pedir-llamada">
+            <p className="font-bold text-foreground mb-1">El Nivel 3 se contrata hablando</p>
+            <p className="text-sm text-muted-foreground mb-4">
+                Déjanos tu teléfono y cuándo te viene bien, y te llamamos.
+            </p>
+            <div className="space-y-3">
+                <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Nombre</label>
+                    <input value={datos.nombre} onChange={e => setDatos(d => ({ ...d, nombre: e.target.value }))}
+                        data-testid="llamada-nombre" className="input-light w-full" />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Teléfono</label>
+                    <input value={datos.telefono} onChange={e => setDatos(d => ({ ...d, telefono: e.target.value }))}
+                        inputMode="tel" placeholder="600 000 000"
+                        data-testid="llamada-telefono" className="input-light w-full" />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">¿Cuándo te viene bien?</label>
+                    <select value={datos.franja} onChange={e => setDatos(d => ({ ...d, franja: e.target.value }))}
+                        data-testid="llamada-franja" className="input-light w-full">
+                        {FRANJAS.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                </div>
+            </div>
+            <div className="flex items-center gap-3 mt-5">
+                <button onClick={enviar} disabled={enviando} data-testid="llamada-enviar"
+                    className="btn-brand flex-1 flex items-center justify-center gap-2 disabled:opacity-60">
+                    {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
+                    Que me llamen
+                </button>
+                <button onClick={onCerrar} className="text-muted-foreground text-sm hover:text-foreground">Cancelar</button>
+            </div>
+        </div>
+    );
+};
+
 const PlanesPage = () => {
     const { api, profile, refreshProfile } = useAuth();
+    const [pidiendoLlamada, setPidiendoLlamada] = useState(false);
     const navigate = useNavigate();
     const [planes, setPlanes] = useState(null);
     const [comprando, setComprando] = useState(null);
@@ -217,8 +298,12 @@ const PlanesPage = () => {
             );
         }
         if (plan.porLlamada) {
+            // PEDIR NOMBRE Y TELÉFONO, NO MANDAR AL CHAT (punto 46 del doc del 07-08). Este
+            // botón llevaba a /dashboard/messages: el que quería el Nivel 3 acababa en el
+            // chat, no dejaba su teléfono y al equipo no le llegaba ningún aviso. El flujo
+            // bueno ya existía, pero solo desde el test de nivel; aquí no estaba.
             return (
-                <button onClick={() => navigate('/dashboard/messages')}
+                <button onClick={() => setPidiendoLlamada(true)}
                     data-testid={`agendar-${plan.code}`}
                     className="w-full h-11 rounded-xl border border-brand text-brand font-bold text-sm flex items-center justify-center gap-2 hover:bg-brand hover:text-white transition-colors">
                     <Phone className="w-4 h-4" /> Agendar una llamada
@@ -235,6 +320,20 @@ const PlanesPage = () => {
             </button>
         );
     };
+
+    // El formulario de la llamada del Nivel 3 se lleva la pantalla entera: es una decisión,
+    // no un paso más de la comparativa (punto 46).
+    if (pidiendoLlamada) {
+        return (
+            <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-6xl mx-auto pb-24">
+                <button onClick={() => setPidiendoLlamada(false)}
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
+                    <ArrowLeft className="w-4 h-4" /> Volver a los planes
+                </button>
+                <PedirLlamada api={api} profile={profile} onCerrar={() => setPidiendoLlamada(false)} />
+            </div>
+        );
+    }
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-6xl mx-auto pb-24" data-testid="planes-page">
