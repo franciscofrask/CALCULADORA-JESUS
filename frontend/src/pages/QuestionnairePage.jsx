@@ -80,6 +80,13 @@ const PREGUNTAS_ALTA = [
 //
 // Todo lo que afina el numero: lo que hace fuera del gimnasio, como responde su cuerpo y la
 // dieta que trae. Al terminar se le entregan los MACROS DEFINITIVOS.
+// Trae una dieta de la que partir: la mide (`true`) o se cuida sin medirla (`parecido`).
+// El "sin control pero no como mal" (`false`) y el "como mal y desorganizado"
+// (`desorganizado`) no traen nada que copiar, asi que a esos dos no se les pregunta por su
+// dieta. Se define aqui, en un solo sitio, porque de esto colgaban seis condiciones sueltas
+// y al anadir la cuarta respuesta del documento de textos habia que acertar en las seis.
+const traeDieta = (a) => a.sigue_dieta === true || a.sigue_dieta === 'parecido';
+
 const STEPS_AJUSTE = [
     { type: 'statement', title: 'Afina tus macros', desc: 'Unas preguntas para ajustar tus números a tu vida real. Verás los macros moverse a medida que contestas.', cta: 'Vamos' },
     {
@@ -147,21 +154,28 @@ const STEPS_AJUSTE = [
         unit: 'cm', required: true,
     },
     {
-        // Tres respuestas, no dos. Faltaba la de en medio, que es la más común: come
-        // siempre parecido pero no lo tiene medido. Con dos opciones esa persona marcaba
-        // "no controlo" y se perdía su dieta real, que es el mejor dato que hay.
-        type: 'choice', key: 'sigue_dieta', title: '¿Sigues una dieta ahora mismo?',
+        // CUATRO respuestas, las del documento de textos de Jesús (06-08, pantalla 12).
+        // Antes eran tres, y antes de eso dos. La diferencia que importa: las dos primeras
+        // traen una dieta de la que partir y las dos últimas no, pero "sin control pero no
+        // como mal" y "como mal y desorganizado" no son lo mismo y hasta ahora caían las dos
+        // en el mismo saco.
+        //
+        // Los valores se conservan (`true` / `parecido` / `false`) para no romper lo que ya
+        // está guardado de los clientes que contestaron antes; el cuarto es `desorganizado`,
+        // que es nuevo y se comporta como el "sin control" a efectos de macros.
+        type: 'choice', key: 'sigue_dieta', title: '¿Sigues algún tipo de dieta en este momento?',
         desc: 'Si controlas más o menos tus cantidades, podremos partir de lo que ya comes.',
         options: [
-            { value: true, label: 'Sí, y sé exactamente lo que como.' },
-            { value: 'parecido', label: 'Como siempre parecido, pero no lo tengo medido.' },
-            { value: false, label: 'No, como lo que surge.' },
+            { value: true, label: 'Estricta, mido todo lo que como.' },
+            { value: 'parecido', label: 'Pesar no, pero me cuido bastante.' },
+            { value: false, label: 'Sin control, pero no como mal.' },
+            { value: 'desorganizado', label: 'Como mal y desorganizado.' },
         ],
     },
     {
         // P7: se guarda. Un mes comiendo asi no dice lo mismo que seis.
         type: 'choice', key: 'tiempo_dieta', title: '¿Cuánto tiempo llevas con esa dieta, o con una parecida?',
-        cond: a => a.sigue_dieta !== false && a.sigue_dieta != null,
+        cond: traeDieta,
         options: [
             { value: 'menos_1m', label: 'Menos de un mes' },
             { value: '1_3m', label: 'Entre 1 y 3 meses' },
@@ -178,7 +192,7 @@ const STEPS_AJUSTE = [
         // que "como bastante", que es una opinión. Antes solo se le preguntaba al que
         // seguía una dieta medida, que es justo el que menos falta le hace.
         type: 'choice', key: 'como_va',
-        title: a => (a.sigue_dieta === false
+        title: a => (!traeDieta(a)
             ? 'Con lo que comes ahora, ¿mantienes el peso, ganas o pierdes?'
             : '¿Cómo te está funcionando?'),
         desc: 'Sé sincero: de esto depende que partamos de lo que comes o de lo que te toca comer.',
@@ -200,7 +214,7 @@ const STEPS_AJUSTE = [
         type: 'choice', key: 'hambre_saturacion',
         title: a => (a.goal === 'volumen' ? '¿Estás saturado de comer?' : '¿Pasas hambre o ansiedad comiendo así?'),
         desc: 'No cambia tus macros de hoy: nos dice con cuánta mano irán los ajustes de cada mes.',
-        cond: a => a.sigue_dieta !== false && a.sigue_dieta != null,
+        cond: traeDieta,
         options: a => (a.goal === 'volumen' ? [
             { value: 'no_puedo_mas', label: 'No estoy saturado, pero tampoco me veo capaz de comer más.' },
             { value: 'puedo_mas', label: 'Puedo comer más sin problema.' },
@@ -219,7 +233,7 @@ const STEPS_AJUSTE = [
         desc: a => (a.sigue_dieta === 'parecido'
             ? 'Aunque no comas siempre lo mismo, ponme un día tipo. El de ayer, por ejemplo.'
             : 'Con esto partimos de tu dieta real en vez de empezar de cero.'),
-        cond: a => a.sigue_dieta !== false && a.sigue_dieta != null,
+        cond: traeDieta,
     },
     { type: 'final0', title: 'Y ya estaría.', desc: 'Si quieres revisar alguna respuesta, ve hacia atrás. Al calcular verás tus macros personalizados.' },
     { type: 'result', title: 'Tus macros' },
@@ -1003,12 +1017,12 @@ const QuestionnairePage = () => {
         facilidad_engordar: a.facilidad_engordar ?? null,
         cuesta_definir: a.cuesta_definir ?? null,
         sigue_dieta: a.sigue_dieta ?? null,
-        tiempo_dieta: a.sigue_dieta ? (a.tiempo_dieta ?? null) : null,
-        como_va: a.sigue_dieta ? (a.como_va ?? null) : null,
-        hambre_saturacion: a.sigue_dieta ? (a.hambre_saturacion ?? null) : null,
-        dieta_texto: a.sigue_dieta ? (a.dieta_texto || null) : null,
-        dieta_hc_entreno: a.sigue_dieta ? num(a.dieta_hc_entreno) : null,
-        dieta_grasa_entreno: a.sigue_dieta ? num(a.dieta_grasa_entreno) : null,
+        tiempo_dieta: traeDieta(a) ? (a.tiempo_dieta ?? null) : null,
+        como_va: traeDieta(a) ? (a.como_va ?? null) : null,
+        hambre_saturacion: traeDieta(a) ? (a.hambre_saturacion ?? null) : null,
+        dieta_texto: traeDieta(a) ? (a.dieta_texto || null) : null,
+        dieta_hc_entreno: traeDieta(a) ? num(a.dieta_hc_entreno) : null,
+        dieta_grasa_entreno: traeDieta(a) ? num(a.dieta_grasa_entreno) : null,
         dieta_confirmada: a.dieta_confirmada === true,
     });
 
@@ -1037,7 +1051,7 @@ const QuestionnairePage = () => {
 
     // Trae dieta: la mide (true) o come parecido sin medirla ('parecido'). Solo el
     // "no, como lo que surge" (false) se queda fuera.
-    const conDieta = () => answers.sigue_dieta !== false && answers.sigue_dieta != null;
+    const conDieta = () => traeDieta(answers);
 
     // CALCULAR. En el alta van los cuatro datos de la tabla y salen macros provisionales; en el
     // cuestionario de ajuste van las respuestas que afinan y salen los definitivos.
@@ -1293,14 +1307,22 @@ const QuestionnairePage = () => {
                     dentro las respuestas que mueven los hidratos. Así que el mensaje solo
                     depende de si hay un entrenador detrás que los vaya a repasar. */}
                 <h2 className="font-heading font-bold text-2xl md:text-3xl text-foreground mb-2 leading-tight">
-                    {entrega?.con_entrenador ? 'Tus macros de partida' : 'Estos son tus macros'}
+                    {/* Al del plan con entrenador hay que decirle con estas palabras que lo
+                        que tiene NO es lo definitivo: le queda el cuestionario largo por
+                        rellenar y su coach se lo revisa. El texto es el del documento de
+                        Jesús del 06-08, literal.
+
+                        Se había quitado al unificar el alta (punto 15), y era pasarse: lo que
+                        dejó de tener sentido es llamar "provisionales" a unos macros que ya
+                        llevan dentro los modificadores, no el aviso al que espera revisión. */}
+                    {entrega?.con_entrenador ? 'Estos no son tus macros definitivos' : 'Estos son tus macros'}
                 </h2>
                 <p className="text-foreground/60 mb-4 text-sm">
                     {/* Sin entrenador asignado no se dice "tu entrenador": casi ningún cliente
                         tiene uno puesto y prometer una persona que no existe se nota. Quien lo
                         revisa entonces es el equipo, que es la verdad. */}
                     {entrega?.con_entrenador
-                        ? `${entrega.coach || 'El equipo'} los va a revisar contigo${entrega.proxima_revision ? ` el ${entrega.proxima_revision}` : ''} y los ajustará a tu caso.`
+                        ? 'Son los que vas a usar hasta que revisemos tu cuestionario. Rellénalo lo antes posible y en menos de 48 horas recibirás los tuyos personalizados.'
                         /* Texto cerrado por Jesús el 06-08-2026 (momento 1 de la revisión
                            suelta): lo que sostiene el número es el perfil parecido, y así se
                            le cuenta. */

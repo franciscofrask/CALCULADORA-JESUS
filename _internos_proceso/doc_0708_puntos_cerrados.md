@@ -551,6 +551,60 @@ foto que el cliente no entiende para qué es, muchas veces no se hace.
 
 ---
 
+## El documento de textos, ya en nuestras manos (07-08 de noche)
+
+Llegó `18 · LOS TEXTOS DE LA APP.docx` (6 de agosto, "versión definitiva", confirmado por
+Jesús). Trae las 12 pantallas del test de entrada con su texto exacto y la aclaración de Jesús
+debajo de cada pregunta, los cuatro mensajes del informe, y dos notas. Desbloquea el punto 17 y
+destapa bastante más de lo que se pedía.
+
+### Punto 17 - Las respuestas de la dieta · CERRADO
+
+Son **cuatro**, no tres, y ahora se sabe cuáles:
+
+1. Estricta, mido todo lo que como.
+2. Pesar no, pero me cuido bastante.
+3. Sin control, pero no como mal.
+4. Como mal y desorganizado.
+
+Las dos primeras traen una dieta de la que partir; las dos últimas no. Y eso importa, porque
+"sin control pero no como mal" y "como mal y desorganizado" no son lo mismo y hasta ahora caían
+las dos en el mismo saco.
+
+Los valores guardados se conservan para no romper lo que ya contestaron los clientes de antes.
+De esa respuesta colgaban **seis condiciones sueltas** repartidas por el cuestionario, y añadir
+una cuarta opción obligaba a acertar en las seis: ahora hay una sola función que decide si
+alguien trae dieta, y las seis la usan. En el servidor se hizo lo mismo, porque allí la
+comprobación era `if sigue_dieta`, y en Python cualquier texto cuenta como verdadero: la
+respuesta nueva habría colado como si trajera una dieta medida.
+
+### Una regresión mía que el documento destapó
+
+Al unificar el alta (punto 15) quité el mensaje de "estos no son tus macros definitivos". Era
+pasarse: lo que dejó de tener sentido es llamar provisionales a unos macros que ya llevan
+dentro los modificadores, pero **al cliente de plan con entrenador hay que seguir diciéndoselo**,
+porque le queda el cuestionario largo y su coach se lo revisa. El documento trae ese texto
+literal y está repuesto tal cual.
+
+### Lo que el documento pide y todavía NO está
+
+Esto es nuevo: no sale de los puntos numerados, sale de comparar el documento con la app.
+
+| Pantalla del documento | En la app hoy |
+|---|---|
+| 3 · Experiencia entrenando (4 opciones: parto de cero / menos de 1 año / más de 1 año / años en serio) | Existe con **5 opciones distintas**, y está en el cuestionario largo, no en el test de entrada |
+| 5 · Actividad diaria (**4 opciones**: muy sedentario / ligeramente activo / moderadamente activo / muy activo) | **3 opciones** (sedentario / normal / muy activo). Tocarlo mueve macros: hay que decidir cuál de las cuatro cobra el +10 % |
+| 6 · Otro deporte: **dos preguntas de seguimiento** ("¿cuál, cuántos días y a qué intensidad?" y "¿podrías hacerlo en días que no vayas al gimnasio?") | Solo el sí/no |
+| 7 · El apetito: "¿Eres de buen comer?" (mucho / lo normal / poco) | **No existe** |
+| 9 · ¿Te cuesta definir? (mucho / lo normal / **nada**) | Existe, pero la tercera opción dice "poco" |
+| 12 · "Ponme un día tipo. El de ayer, por ejemplo." | Existe algo parecido dentro del bloque de dieta; hay que cuadrar el texto |
+
+Y una regla del motor que el documento deja escrita y hay que verificar: lo de "con lo que comes
+ahora, ¿mantienes, ganas o pierdes?" **modula hasta un 20 % y se aplica al final, después de
+todos los demás modificadores**.
+
+---
+
 ## Pendientes que no dependen de nosotros
 
 *(Se irán anotando aquí según aparezcan: decisiones de Jesús, datos que faltan o terceros.)*
@@ -567,18 +621,19 @@ contra el bundle.
 anterior y se aplicó literal (solo "casi no lo noto"; umbral 20 % sin distinción de sexo).
 Detalle y consecuencias en el propio punto 11.
 
-**Falta el documento «LOS TEXTOS DE LA APP»**, y ya bloquea dos puntos:
+**El documento «LOS TEXTOS DE LA APP» YA LLEGÓ** (07-08 de noche). Con él se cerró el punto 17. Lo que sigue abierto de textos:
 
-- **Punto 14**, el texto roto: el documento lo da por identificado allí, y no sabemos cuál es.
-  Francisco pidió el 07-08 dejarlo de lado hasta que aparezca.
-- **Punto 17**, las respuestas de «¿Sigues una dieta ahora?»: hoy son tres y el documento pide
-  más, pero el texto exacto de cada una está en el de textos y no se puede inventar, porque de
-  esa respuesta depende lo que la app hace después con el dato.
-- **Punto 18**, las preguntas del check-in diario: hoy pregunta energía y "ansiedad y hambre",
-  del documento del 31-07, y hay que cambiarlas por las suyas. La otra mitad del punto (que
-  apunte lo que ha comido) ya está hecha.
-
-Nadie sabe cuál es ese documento ni dónde está. **Hay que pedírselo a Jesús.**
+- **Punto 14**, el texto roto: el documento **no lo señala**. Trae los textos buenos de las 12
+  pantallas, pero en ningún sitio dice cuál está roto en la app. Francisco pidió dejarlo de
+  lado. Con los textos delante se puede ir pantalla por pantalla y encontrarlo, pero eso ya no
+  es "de un minuto" como decía el punto.
+- **Punto 18**, las preguntas del check-in diario: el documento de textos **no las trae**. Solo
+  cubre el test de entrada, los cuatro mensajes del informe y dos notas; del check-in no dice
+  nada. Así que sigue sin poder cerrarse: **hay que preguntarle a Jesús cuáles son las suyas**.
+  La otra mitad del punto (que apunte lo que ha comido) ya está hecha.
+- **Lo que el documento pide y falta**, que está detallado más arriba: la cuarta opción de
+  actividad diaria, las dos preguntas de seguimiento del deporte, la pantalla del apetito y la
+  experiencia entrenando en el test de entrada. **Decide Francisco** el orden en que se hacen.
 
 **Los 56 mínimos por categoría están sin repasar** (punto 5). El mapa existe y funciona, pero
 los valores vienen de la calculadora antigua y Jesús quiere revisarlos; él mismo lo cifra en

@@ -499,7 +499,14 @@ def ajustes_to_kwargs(ajustes: Optional[Dict]) -> Dict:
     # encima de todo lo demas, asi que no puede entrar sin confirmar"). Los registros antiguos
     # no tienen el campo; para no cambiarles el calculo, la ausencia se trata como confirmada.
     confirmada = a.get("dieta_confirmada")
-    if a.get("sigue_dieta") and a.get("dieta_hc_entreno") is not None and confirmada is not False:
+    # Trae una dieta de la que partir solo quien la mide (`True`) o se cuida sin medirla
+    # (`parecido`). Las otras dos respuestas del documento de textos -- "sin control pero no
+    # como mal" (`False`) y "como mal y desorganizado" -- no traen nada que copiar. Se
+    # comprueba por valor y no con un `if a.get("sigue_dieta")` a secas, porque en Python
+    # cualquier texto cuenta como verdadero y "desorganizado" habria colado como si trajera
+    # una dieta medida.
+    trae_dieta = a.get("sigue_dieta") is True or a.get("sigue_dieta") == "parecido"
+    if trae_dieta and a.get("dieta_hc_entreno") is not None and confirmada is not False:
         dieta = {
             "hc_entreno": a.get("dieta_hc_entreno"),
             "grasa_entreno": a.get("dieta_grasa_entreno"),
