@@ -19,6 +19,7 @@ from core.plan_access import tiene_entrenador_detras, dias_hasta_la_revision
 from core.quiz_store import guardar_quiz_respuestas, registrar_revision
 from core.avisos_equipo import avisar_al_equipo
 from core.cycle import enrich_cycle
+from core.seguimiento import marcar_ajuste
 
 router = APIRouter(tags=["users"])
 
@@ -239,6 +240,8 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
                       "ajustes": ajustes} if resultado else None,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+        # "¿Quien me toca esta semana?" (punto 29): la fecha se queda en el cliente.
+        await marcar_ajuste(client_id)
 
     # GUARDAR SIEMPRE las respuestas desde el dia uno (calibracion futura), y
     # avisar al coach si la dieta reportada no cuadra con lo recomendado.
@@ -578,6 +581,7 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
                       "ajustes": ajustes},
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+        await marcar_ajuste(client_id)   # punto 29
 
     await guardar_quiz_respuestas(
         user_id=user["id"], client_id=client_id, origen="ajuste_macros",
@@ -956,6 +960,7 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
             "desglose": (resultado_v2 or {}).get("desglose") or data.desglose,
         }
     await db.macro_history.insert_one(macro_log)
+    await marcar_ajuste(client_id, macro_log.get("created_at"))   # punto 29
 
     revision_registrada = False
     if ajustes is not None:

@@ -87,6 +87,55 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
     );
 };
 
+// "Esta semana te tocan estos seis" (punto 29 del doc del 07-08). Es la pregunta que Jesús
+// se hace todos los lunes y que hasta ahora resolvía mirando una hoja de cálculo aparte:
+// quién lleva más tiempo sin que le muevan los macros. Arriba, el que más.
+const CUANTOS_TE_TOCAN = 6;
+
+// Días desde una fecha AAAA-MM-DD. null si nunca ha pasado (no es lo mismo que cero).
+const diasDesde = (iso) => {
+    if (!iso) return null;
+    const d = new Date(String(iso).slice(0, 10) + 'T00:00:00');
+    if (isNaN(d)) return null;
+    return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+};
+const diasSinTocar = (c) => diasDesde(c?.ultimo_ajuste);
+
+const EstaSemanaTeTocan = ({ items, navigate }) => {
+    if (!items || items.length === 0) return null;
+    const seis = items.slice(0, CUANTOS_TE_TOCAN);
+    const _dias = (c) => c.nunca_ajustado ? 'nunca' : `${c.dias_sin_ajuste} d`;
+    return (
+        <Card className="bg-[#111111] border-[#FF671F]/25" data-testid="te-tocan">
+            <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-1 gap-3 flex-wrap">
+                    <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Esta semana te tocan estos {seis.length}</p>
+                    <button onClick={() => navigate('/admin/clients?orden=sin_tocar')}
+                        className="text-[11px] text-[#FF671F] hover:underline" data-testid="te-tocan-todos">
+                        Ver los {items.length} ordenados
+                    </button>
+                </div>
+                <p className="text-[10px] text-white/30 mb-3">Los que llevan más sin que les muevan los macros</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {seis.map(c => (
+                        <button key={c.client_id} onClick={() => navigate(`/admin/clients/${c.client_id}`)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#222] hover:border-[#FF671F]/40 text-left">
+                            <span className="flex-1 min-w-0 truncate text-sm text-white/80">{c.name}</span>
+                            {/* Los días desde el último ajuste, y desde el mes en naranja: no
+                                es un umbral del servidor, es lo que salta a la vista. */}
+                            <span className={`text-[11px] font-bold tabular-nums ${c.nunca_ajustado || (c.dias_sin_ajuste || 0) >= 30 ? 'text-[#FF671F]' : 'text-white/40'}`}>
+                                {_dias(c)}
+                            </span>
+                            {!c.al_corriente && <span title="Pago pendiente" className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
+                            <ChevronRight className="w-3.5 h-3.5 text-white/20 flex-shrink-0" />
+                        </button>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
 // Alerta: quien ha elegido el Nivel 3 en el test y espera que le llamen. Solo aparece
 // cuando hay alguna: un aviso que está siempre deja de ser un aviso. Va arriba del todo
 // porque es lo único del panel donde hay alguien esperando al otro lado del teléfono.
@@ -343,6 +392,10 @@ const AdminDashboard = () => {
                 <KpiCard value={stats?.inactive_clients || 0} label="Bajas" icon={UserMinus} color="#EF4444" testId="kpi-bajas" />
                 <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />
             </div>
+
+            {/* "Esta semana te tocan estos seis" (punto 29). Va antes del resto del panel:
+                es lo primero que se pregunta un lunes. */}
+            <EstaSemanaTeTocan items={todo?.te_tocan} navigate={navigate} />
 
             {/* Por hacer esta semana (tarea 19) */}
             <TodoSemana todo={todo} soloAlCorriente={soloAlCorriente} setSoloAlCorriente={setSoloAlCorriente}
@@ -606,6 +659,11 @@ const AdminClientsList = () => {
     // arranca viéndolo todo; el coach, en los suyos.
     const esAdmin = user?.role === 'admin';
     const [cartera, setCartera] = useState(esAdmin ? 'todos' : 'mios');
+    // Orden de la tabla (punto 29): por defecto como venía, y "sin tocar" pone arriba a los
+    // que llevan más tiempo sin que les muevan los macros. Desde la home se llega ya
+    // ordenado así (/admin/clients?orden=sin_tocar).
+    const [orden, setOrden] = useState(
+        new URLSearchParams(window.location.search).get('orden') === 'sin_tocar' ? 'sin_tocar' : 'ninguno');
 
     useEffect(() => {
         fetchClients();
@@ -654,6 +712,16 @@ const AdminClientsList = () => {
         c.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.user?.email?.toLowerCase().includes(searchQuery.toLowerCase())
     ));
+    // Días desde el último ajuste. El que no tiene ninguno va arriba del todo: es
+    // justamente el que se pierde cuando esto se lleva en una hoja aparte.
+    if (orden === 'sin_tocar') {
+        filteredClients.sort((a, b) => {
+            const da = diasSinTocar(a), dbb = diasSinTocar(b);
+            if (da === null) return dbb === null ? 0 : -1;
+            if (dbb === null) return 1;
+            return dbb - da;
+        });
+    }
 
     const cuantos = (cual) => clients.filter(c =>
         cual === 'sin_coach' ? !c.trainer_id : cual === 'mios' ? c.trainer_id === user?.id : true).length;
@@ -724,6 +792,17 @@ const AdminClientsList = () => {
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Precio</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Semana</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden sm:table-cell">Coach</TableHead>
+                                    {/* Punto 29: la columna que contesta "¿quién me toca esta
+                                        semana?". Se pincha para ordenar por ella. */}
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden lg:table-cell">
+                                        <button onClick={() => setOrden(orden === 'sin_tocar' ? 'ninguno' : 'sin_tocar')}
+                                            data-testid="orden-sin-tocar"
+                                            className={`uppercase tracking-wider text-xs hover:text-white ${orden === 'sin_tocar' ? 'text-[#FF671F]' : ''}`}
+                                            title="Días desde el último ajuste de macros">
+                                            Sin tocar {orden === 'sin_tocar' ? '↓' : ''}
+                                        </button>
+                                    </TableHead>
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Últ. reporte</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Estado</TableHead>
                                     <TableHead className="text-right text-white/50 uppercase tracking-wider text-xs">Acciones</TableHead>
                                 </TableRow>
@@ -768,6 +847,24 @@ const AdminClientsList = () => {
                                             ) : (
                                                 <span className="text-sm text-white/30">Sin asignar</span>
                                             )}
+                                        </TableCell>
+                                        {/* Cuánto lleva sin que le muevan los macros, y desde
+                                            el mes en naranja. El que no tiene ninguno dice
+                                            "nunca", que no es lo mismo que llevar mucho. */}
+                                        <TableCell className="hidden lg:table-cell" data-testid={`sin-tocar-${client.id || client.user_id}`}>
+                                            {!client.id ? <span className="text-white/30 text-sm">-</span> : (() => {
+                                                const d = diasSinTocar(client);
+                                                if (d === null) return <span className="text-sm font-bold text-[#FF671F]">nunca</span>;
+                                                return <span className={`text-sm tabular-nums ${d >= 30 ? 'text-[#FF671F] font-bold' : 'text-white/60'}`}>{d} d</span>;
+                                            })()}
+                                        </TableCell>
+                                        <TableCell className="hidden xl:table-cell">
+                                            {(() => {
+                                                const d = diasDesde(client.ultimo_reporte);
+                                                return d === null
+                                                    ? <span className="text-white/30 text-sm">-</span>
+                                                    : <span className="text-sm text-white/40 tabular-nums">{d} d</span>;
+                                            })()}
                                         </TableCell>
                                         <TableCell>
                                             {client.status === 'registro_incompleto' ? (

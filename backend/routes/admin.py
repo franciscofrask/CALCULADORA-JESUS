@@ -24,6 +24,7 @@ from models.user import (
     ClientProfile, ClientProfileUpdate, MacrosUpdate, MacroEvaluacion, TrainerAssign, PLAN_CATALOG,
 )
 from core.cycle import enrich_cycle, compute_cycle
+from core.seguimiento import marcar_ajuste, dias_desde
 from models.common import FoodSuggestionUpdate, AdminFoodCreate
 from calculator import invalidate_foods_cache
 
@@ -97,8 +98,12 @@ async def get_all_clients(
 
     # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
     # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).
+    # `ultimo_ajuste` y `ultimo_reporte` viajan aqui (punto 29): son las dos fechas que
+    # contestan "¿quien me toca esta semana?" y estan guardadas EN el cliente justo para
+    # poder ordenar la lista sin recorrer el historico de doscientos y pico clientes.
     LIST_FIELDS = {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "week": 1,
-                   "cycle_start": 1, "status": 1, "trainer_id": 1, "created_at": 1}
+                   "cycle_start": 1, "status": 1, "trainer_id": 1, "created_at": 1,
+                   "ultimo_ajuste": 1, "ultimo_reporte": 1}
     profiles = await db.client_profiles.find(query, LIST_FIELDS).to_list(1000)
 
     uids = [p["user_id"] for p in profiles]
@@ -752,6 +757,8 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
             }})
 
     await db.macro_history.insert_one(macro_log)
+    # "¿Quien me toca esta semana?" (punto 29): la fecha se queda tambien en el cliente.
+    await marcar_ajuste(client_id, macro_log["created_at"])
 
     # El banco de casos (clientes gemelos) se refresca solo con cada ajuste nuevo.
     _refrescar_casos()
@@ -929,6 +936,7 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.macro_history.insert_one(macro_log)
+    await marcar_ajuste(client_id, macro_log["created_at"])   # punto 29
 
     # GUARDAR SIEMPRE las respuestas/calculo (calibracion futura)
     await guardar_quiz_respuestas(
@@ -1193,7 +1201,7 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         {"status": {"$in": ["activo", "pago_pendiente"]}},
         {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "status": 1, "macros_training": 1,
          "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
-         "cycle_start": 1, "created_at": 1},
+         "cycle_start": 1, "created_at": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1},
     ).to_list(3000)
 
     uids = [p["user_id"] for p in profiles if p.get("user_id")]
@@ -1228,6 +1236,7 @@ async def get_todo_semana(user = Depends(get_admin_user)):
             ultimo_contacto[uid] = ca
 
     sin_macros, sin_rutina, reporte_pendiente, sin_contacto = [], [], [], []
+    te_tocan = []
     for p in profiles:
         u = umap.get(p.get("user_id"), {})
         base = {
@@ -1269,6 +1278,21 @@ async def get_todo_semana(user = Depends(get_admin_user)):
                     dias = None
             sin_contacto.append({**base, "dias": dias, "nunca": visto is None})
 
+        # "¿A quien le toca esta semana?" (punto 29). Solo los planes que llevan ajuste del
+        # coach: al de autogestion no le "toca" nadie. Se ordena por lo que lleva sin que le
+        # muevan los macros, y el que nunca los ha tenido movidos va arriba del todo -- que
+        # es justo el que se pierde cuando esto se lleva en una hoja aparte.
+        if hab.get("calculadora") == "personalizado":
+            desde_ajuste = dias_desde(p.get("ultimo_ajuste"), now)
+            te_tocan.append({
+                **base,
+                "ultimo_ajuste": p.get("ultimo_ajuste"),
+                "ultimo_reporte": p.get("ultimo_reporte"),
+                "dias_sin_ajuste": desde_ajuste,
+                "dias_sin_reporte": dias_desde(p.get("ultimo_reporte"), now),
+                "nunca_ajustado": not p.get("ultimo_ajuste"),
+            })
+
         # Reporte de esta semana pendiente (no enviado dentro de la semana de ciclo).
         state = compute_client_report_state(p, catalog, now)
         if state["due"]:
@@ -1286,6 +1310,9 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         # De más abandonado a menos: el que lleva más tiempo sin que nadie le hable va
         # arriba, que es donde hay que mirar primero.
         "sin_contacto": sorted(sin_contacto, key=lambda x: -(x["dias"] or 0)),
+        # De más abandonado a menos, y el que nunca se ha tocado por delante de todos.
+        "te_tocan": sorted(te_tocan, key=lambda x: (0 if x["nunca_ajustado"] else 1,
+                                                    -(x["dias_sin_ajuste"] or 0))),
         "generated_at": now.isoformat(),
     }
 

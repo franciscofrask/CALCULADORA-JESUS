@@ -88,7 +88,10 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     # cambio de fase, y sin esto un Nivel 1 no cambiaria de fase nunca (no tiene coach que se
     # la cambie). `fase_desde` guarda CUANDO empezo, que es lo que necesita el informe para
     # la foto de "inicio de fase".
-    set_perfil = {"weight": data.weight}
+    # `ultimo_reporte` va aqui a proposito duplicado (punto 29 del 07-08, ver
+    # core/seguimiento.py): es lo que deja ordenar la lista de clientes por "quien lleva
+    # mas sin que le toquen" sin recorrer los reportes de todos para pintar una tabla.
+    set_perfil = {"weight": data.weight, "ultimo_reporte": report["created_at"][:10]}
     if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
         if profile.get("goal") != data.proximo_objetivo:
             set_perfil["goal"] = data.proximo_objetivo

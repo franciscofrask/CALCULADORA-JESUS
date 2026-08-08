@@ -906,6 +906,49 @@ Dice la hora (para distinguir un guardado de hace un minuto de uno de hace media
 cuándo aplica, con qué peso y de qué día es ese peso. Y desaparece en cuanto vuelve a tocar algo,
 porque entonces lo que hay en pantalla ya no es lo guardado.
 
+### Punto 29 - La columna que contesta «¿quién me toca esta semana?» · CERRADO
+
+**Lo que pasaba.** La respuesta estaba en la base, pero repartida en dos colecciones
+(`macro_history` y `reports`) y sin ninguna referencia en el cliente. Con 232 clientes, sacar
+esa columna significaba recorrer el histórico entero de todos cada vez que se pinta la tabla,
+así que la columna no existía y Jesús lo llevaba en una hoja aparte.
+
+**Lo que hay ahora.** Las dos fechas se guardan **también en el cliente**, duplicadas a
+propósito, y se refrescan al guardar (`backend/core/seguimiento.py`):
+
+- `ultimo_ajuste` - cuándo se le movieron los macros por última vez. Se marca en los **cinco**
+  sitios donde se guarda un ajuste: los dos del coach (editor de la ficha y su calculadora) y
+  los tres del cliente (alta, cuestionario de ajuste y su propia calculadora).
+- `ultimo_reporte` - cuándo mandó el último reporte. Se marca al crearlo.
+
+Nunca van hacia atrás: si se corrige una entrada vieja del historial, la fecha no retrocede.
+Lo que vale es la última vez que pasó algo, no la última vez que alguien editó algo.
+
+**Dónde se ve.**
+
+1. **La home del coach**, bloque nuevo arriba del todo: **«Esta semana te tocan estos 6»**, con
+   los días desde el último ajuste y en naranja a partir del mes. El que nunca ha tenido un
+   ajuste pone «nunca» y va por delante de todos - es justo el que se pierde cuando esto se
+   lleva en una hoja. Al lado, «Ver los 226 ordenados», que abre la lista ya ordenada.
+2. **La lista de clientes**, dos columnas nuevas: **Sin tocar** (se pincha para ordenar, y la
+   flecha marca que está ordenando por ahí) y **Últ. reporte**.
+
+El listado solo cuenta a los que tienen plan con ajuste del coach: al de autogestión no le
+«toca» nadie, y meterlo sería ruido todas las semanas.
+
+**Los que ya estaban.** `backend/_rellenar_fechas_seguimiento.py` rellena las dos fechas de los
+clientes que ya existen, mirando el historial de la app **y el de Calma**: un cliente migrado al
+que Jesús ajustó en junio en Calma no lleva sin tocar desde el principio de los tiempos, y si
+saliera así taparía a los que de verdad están abandonados. Simula por defecto; escribe con
+`--escribir`. En dev: **177 de 232 clientes con fecha, 55 sin ningún ajuste ni reporte**.
+
+**Comprobado**: el listado devuelve las dos fechas, `te_tocan` sale ordenado de más abandonado a
+menos, la home pinta los seis, la lista se ordena al llegar con `?orden=sin_tocar`, y al guardar
+un ajuste la fecha del cliente pasa a hoy. La ficha del cliente de pruebas, devuelta a su sitio.
+
+**Ojo para producción**: hay que pasar el script de relleno **una vez**, después de desplegar.
+Sin eso, los 232 saldrían como «nunca».
+
 ---
 
 ---
@@ -969,8 +1012,12 @@ se borran esas dos también.
 
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
-textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro) está en GitHub y
-sin desplegar, esperando la orden.
+textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
+25, 27, 28 y 29) está en GitHub y sin desplegar, esperando la orden.
+
+**Y con ese despliegue, pasar el relleno de fechas** (punto 29):
+`backend/_rellenar_fechas_seguimiento.py --escribir`, **una sola vez**, después de subir. Sin
+eso, la columna «Sin tocar» sale «nunca» para todos los clientes que ya existen.
 
 ---
 
