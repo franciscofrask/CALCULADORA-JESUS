@@ -651,28 +651,37 @@ class NutritionChatbot:
     #   Cacahuete tostado 0 % sal añadida       -> sal, la 5.ª  => no va de sal
     #   Lomo embuchado 25 % menos de sal        -> sal, la 7.ª  => no va de sal
     #
-    # La posición sola no basta: hay que distinguir «Pechuga DE pollo», que es pollo, de
-    # «Pipas CON sal», que son pipas. Lo que va detrás de estos cuatro nexos es lo que el
-    # alimento lleva o deja de llevar, no lo que es. Es gramática, no una lista de
-    # alimentos: sirve igual para la sal, el azúcar, el limón o lo que se pida mañana.
-    _PALABRAS_DEL_NUCLEO = 3
+    # Lo que va detrás de estos nexos es lo que el alimento LLEVA, no lo que es: «Pipas
+    # con sal» son pipas. Se corta ahí antes de mirar nada más.
     _NEXOS_DE_MATIZ = (" con ", " sin ", " sabor ", " bajo en ")
+    # Y el alimento se nombra en la primera palabra, o detrás de un «de»: «Pechuga DE
+    # pollo» va de pollo, «Harina DE avena» va de avena. Sin ese «de» lo que sigue es un
+    # acompañamiento del nombre, no el alimento: «Chorizo pimienta» es chorizo, «Salchichón
+    # pimienta» es salchichón. Es gramática, no una lista de alimentos: vale igual para la
+    # sal, el azúcar, el limón o lo que se pida mañana.
+    _NEXOS_DE_NUCLEO = ("de", "del")
+    # Y ese «de» tiene que ir al principio del nombre, que es donde compone: en «Lomo
+    # embuchado 25 % menos DE sal» o «Patatas fritas al punto DE sal» ya no compone nada.
+    _PALABRAS_DEL_NUCLEO = 4
 
     @classmethod
     def _en_nucleo(cls, termino: str, nombre: str) -> bool:
-        """¿Lo pedido es de lo que va el alimento, o un matiz del final del nombre?"""
+        """¿Lo pedido es de lo que va el alimento, o solo algo que lleva?"""
         n = cls._norm_text((nombre or "").split("(")[0])
         for nexo in cls._NEXOS_DE_MATIZ:
             i = n.find(nexo)
             if i != -1:
                 n = n[:i]
-        cabeza = " ".join(n.split()[:cls._PALABRAS_DEL_NUCLEO])
-        if not cabeza:
-            return False
-        if cls._es_palabra_del_nombre(termino, cabeza):
-            return True
+        palabras = n.replace(",", " ").replace("-", " ").split()[:cls._PALABRAS_DEL_NUCLEO]
         raiz = cls._regex_raiz(termino)
-        return bool(raiz) and bool(re.search(raiz, cabeza))
+        for i, palabra in enumerate(palabras):
+            if i and palabras[i - 1] not in cls._NEXOS_DE_NUCLEO:
+                continue
+            if cls._es_palabra_del_nombre(termino, palabra):
+                return True
+            if raiz and re.search(raiz, palabra):
+                return True
+        return False
     
     def calculate_food_amount(self, alimento: dict, macros_restantes: dict) -> dict:
         """
@@ -1373,13 +1382,23 @@ class NutritionChatbot:
         Se queda corta a proposito: quitar plural y la vocal final cubre la mayoria del
         castellano sin inventar parentescos. Devuelve "" si la raiz queda tan corta que
         emparejaria cualquier cosa ("pavo" -> "pav" no vale).
+
+        El GENERO solo se quita en los participios (-ado/-ada, -ido/-ida). Ahi la -o y la
+        -a son la misma palabra en masculino y femenino: tostado y tostada son el mismo
+        pan. En un sustantivo NO lo son, y quitarlas fundia alimentos distintos:
+
+            pimienta -> pimient <- pimiento     (Francisco, 08-08: pedia pimienta y le
+            hueva    -> huev    <- huevo         salian pimientos rojos)
+            grana    -> gran    <- grano
+
+        Quitar el plural sigue valiendo para todo, que ahi no hay ambiguedad ninguna.
         """
         p = (palabra or "").strip()
         if p.endswith("es") and len(p) > 4:
             p = p[:-2]
         elif p.endswith("s") and len(p) > 3:
             p = p[:-1]
-        if p and p[-1] in "ao" and len(p) > 4:
+        if len(p) > 4 and p[-3:] in ("ado", "ada", "ido", "ida"):
             p = p[:-1]
         return p if len(p) >= 4 else ""
 

@@ -157,8 +157,12 @@ class AgentTools:
         # trato: no es lo mismo que el cliente diga «lechuga» -- y exista una Lechuga --
         # que pedir «algo verde» y que el sistema proponga lo que le parezca.
         pedidos_por_nombre: set = set()
+        texto_buscado = texto
         if texto:
             corregido = self.corrector.corregir(texto)
+            # Lo que de verdad se ha buscado, ya sin erratas ("wevos" -> "huevos"): es con
+            # esto con lo que hay que comparar los resultados más abajo, no con lo tecleado.
+            texto_buscado = corregido
             # Léxico primero: si pidió un alimento por su nombre ("pechuga de pollo"),
             # eso gana a cualquier vecindad semántica.
             lex = await self.bot.search_foods(corregido, limit=10, _remap=False)
@@ -245,18 +249,32 @@ class AgentTools:
                                          self.bot.state.get("single_meal", False),
                                          self.bot.meal_label(self.bot.current_meal_key())),
                "falta": {m: restante[m] for m in ("P", "H", "G")}}
-        # Devolver lo más parecido callándose que no es lo pedido es lo que hacía que a
-        # quien pedía SAL le salieran pistachos («tostados con sal») y a quien pedía TÉ le
-        # saliera ternera: ni la sal ni el té solos están en el catálogo de Jesús. Cuando
-        # NINGÚN resultado empieza por lo que pidió el cliente, se dice, y el asistente
-        # tiene que contarlo en vez de colar el sucedáneo como si tal cosa.
-        if texto and items:
-            pedido = self.bot._norm_text(texto)
-            if not any(self.bot._norm_text(i.get("nombre", "")).startswith(pedido)
-                       for i in items):
-                out["ojo"] = (f"en el catálogo no hay ningún alimento que se llame "
-                              f"'{texto}': esto es lo más parecido que aparece. Dilo antes "
-                              f"de ofrecerlo, y no lo presentes como si fuera lo que pidió.")
+        # Si NINGÚN resultado va de lo que ha pedido el cliente, no se devuelven items.
+        #
+        # Ni la sal, ni la pimienta, ni el té solo están en el catálogo de Jesús. Devolver
+        # «lo más parecido» hacía que a quien pedía sal le salieran pistachos y a quien
+        # pedía pimienta, fiambre de pavo -- y no en una lista para elegir, sino METIDO en
+        # la comida. Se probó primero a avisar por texto ("no lo añadas, que lo decida
+        # él"); el asistente lo metía igual y lo contaba después, que es exactamente lo que
+        # no puede pasar: el aviso se lee y se olvida, el alimento se queda en la dieta.
+        #
+        # Así que no es un aviso, es que no hay nada que añadir. Los nombres viajan en el
+        # texto para que pueda enseñárselos y ofrecerle elegir; ninguno trae id.
+        #
+        # Solo cuando lo pedido es UNA palabra, que es donde estaba el hueco: con varias ya
+        # actúa la cobertura de search_foods, y aquí daría falsos positivos ("pechuga de
+        # pollo" no es una palabra de ningún nombre).
+        sig = [w for w in self.bot._norm_text(texto_buscado or "").split() if len(w) > 1]
+        if len(sig) == 1 and items:
+            if not any(self.bot._en_nucleo(sig[0], i.get("nombre", "")) for i in items):
+                out["items"] = []
+                out["sin_resultados_porque"] = [
+                    f"NO hay ningún alimento que sea '{texto}' en el catálogo. Lo más "
+                    f"parecido que aparece, y solo lleva ese nombre dentro, es: "
+                    + "; ".join(i.get("nombre", "") for i in items[:4])
+                    + f". Dile que no tienes '{texto}', enséñale esos y que elija él si "
+                      f"quiere alguno."]
+                return out
         if not items:
             # El error enseña: qué se probó y por qué no salió nada.
             notas = []

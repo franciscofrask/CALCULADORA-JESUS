@@ -2365,6 +2365,70 @@ ahora:  "ponme un poco de sal"  ->  comida vacía, y explica:
          fruto seco raro y lo he quitado ya"
 ```
 
+
+### El tercero: el género fundía dos alimentos (la pimienta)
+
+Salió al terminar lo anterior: pedir **pimienta** devolvía **pimientos rojos**. No era
+emparejar por trozos, era la reducción a raíz, que es un mecanismo distinto y con sus
+propios aciertos.
+
+`_raiz` quitaba la vocal final de cualquier palabra para unir géneros y números, que es lo
+que hace falta con «tostadas» y «Pan tostado». Pero aplicado a un sustantivo funde
+alimentos que no tienen nada que ver:
+
+```
+pimienta -> pimient <- pimiento
+hueva    -> huev    <- huevo
+grana    -> gran    <- grano
+```
+
+La regla nueva es gramatical: **el género solo se quita en los participios** (-ado/-ada,
+-ido/-ida). Ahí la -o y la -a son la misma palabra -- tostado y tostada son el mismo pan --
+y en un sustantivo no lo son. El plural se sigue quitando siempre, que ahí no hay
+ambigüedad. Efecto colateral bueno: «almendras» ya no queda en «almendr», que alcanzaba
+también al almendro.
+
+### Y avisar no bastaba: había que no darle nada que meter
+
+Con la raíz arreglada, pedir pimienta dejó de devolver pimientos... y empezó a devolver
+**«Chorizo pimienta»**, que es el mismo problema de la sal. Hizo falta afinar qué cuenta
+como «el alimento va de eso», y son dos señales, las dos gramaticales:
+
+- Lo que va tras **con**, **sin**, **sabor** o **bajo en** es lo que el alimento LLEVA:
+  «Pipas con sal» son pipas.
+- El alimento es la **primera palabra**, o la que sigue a un **«de» del principio**:
+  «Pechuga DE pollo» va de pollo y «Harina DE avena» va de avena; «Chorizo pimienta», sin
+  ese «de», va de chorizo. Y el «de» tiene que ir al principio, porque en «Lomo embuchado
+  25 % menos DE sal» ya no compone nada.
+
+Probado contra el catálogo entero con **45 alimentos que sí existen** (arroz, pan, col,
+miel, huevos, huevas, atún, yogur, plátano, nueces, leche, café, avena, pavo, pollo,
+tostadas, almendras, lentejas, salmón, merluza, ternera, gambas, tomate, cebolla, lechuga,
+espinacas, brócoli, kiwi, fresas, sandía...): **ninguno se marca por error**. Y de seis
+condimentos que no están, cinco se detectan (sal, pimienta, ron, orégano, curry); la canela
+no, porque existe un «Sirope de canela» que legítimamente es de canela.
+
+Con eso el asistente ya lo decía... y lo metía igual: *«Te he puesto fiambre de pechuga de
+pavo con pimienta»*. Se probó a endurecer el aviso («no lo añadas, que lo decida él») y
+siguió metiéndolo. **Un aviso se lee y se olvida; el alimento se queda en la dieta.** Así
+que ahora no es un aviso: cuando ningún resultado va de lo pedido, la herramienta **no
+devuelve ningún id**. Los nombres viajan en el texto para que pueda enseñárselos y ofrecer
+elegir, pero no hay nada que añadir.
+
+```
+antes:  "ponme pimienta en el desayuno"
+        -> Fiambre de pechuga de pavo pimienta, 125 g, metido en la Comida 1
+
+ahora:  "ponme pimienta en el desayuno"
+        -> "No tengo pimienta en la base de datos como alimento del método, así que no
+            puedo añadirla al desayuno."   (comida vacía)
+```
+
+El filtro solo actúa cuando lo pedido es **una palabra**, que es donde estaba el hueco: con
+varias ya actuaba la cobertura de `search_foods`, y aplicarlo ahí daba falsos positivos
+(«pechuga de pollo» no es una palabra de ningún nombre). Y compara contra el texto ya
+corregido de erratas, para que «wevos» siga llegando a los huevos.
+
 ### Y de paso, el cuelgue otra vez
 
 Probando esto el chat se quedó bloqueado **en el arranque**, no en el envío: el tope al

@@ -32,7 +32,26 @@ class TestLaRaiz:
             assert len(C._raiz(p)) == 0 or len(C._raiz(p)) >= 4, p
 
     def test_una_palabra_larga_conserva_sentido(self):
-        assert C._raiz("almendras") == "almendr"
+        """Se le quita el plural y nada más. Hasta el 08-08-2026 quedaba en "almendr" y
+        de ahí alcanzaba también al almendro, que es el árbol."""
+        assert C._raiz("almendras") == "almendra"
+
+    @pytest.mark.parametrize("femenino,masculino", [
+        ("pimienta", "pimiento"),   # Francisco, 08-08: pedía pimienta y le salían
+        ("hueva", "huevo"),         # pimientos rojos
+        ("grana", "grano"),
+    ])
+    def test_el_genero_de_un_sustantivo_no_es_la_misma_palabra(self, femenino, masculino):
+        """La -o y la -a de un sustantivo distinguen alimentos distintos; quitarlas los
+        fundía en la misma raíz. En los participios sí es flexión y se sigue quitando."""
+        assert C._raiz(femenino) != C._raiz(masculino), (
+            f"«{femenino}» y «{masculino}» caen en la misma raíz")
+
+    @pytest.mark.parametrize("a,b", [
+        ("tostada", "tostado"), ("cocidas", "cocido"), ("asada", "asados"),
+    ])
+    def test_el_genero_de_un_participio_si(self, a, b):
+        assert C._raiz(a) == C._raiz(b), f"«{a}» y «{b}» son la misma palabra"
 
     def test_no_revienta_con_basura(self):
         for v in ("", "   ", None):

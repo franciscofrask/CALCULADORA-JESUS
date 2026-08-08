@@ -67,6 +67,20 @@ def test_no_empareja_en_mitad_de_otra_palabra(termino, intruso):
     assert not colados, f"pedí «{termino}» y me cuela {colados}"
 
 
+# ------------------------------------- ni funde alimentos por el género del sustantivo
+@pytest.mark.parametrize("pedido,intruso", [
+    ("pimienta", "pimiento"),   # Francisco, 08-08: pedía pimienta y salían pimientos rojos
+    ("huevas", "huevos enteros"),
+])
+def test_el_genero_no_funde_dos_alimentos(pedido, intruso):
+    """La reducción a raíz quitaba la vocal final de cualquier palabra, así que
+    «pimienta» y «pimiento» caían en «pimient». En un participio la -o y la -a son la
+    misma palabra (tostado/tostada); en un sustantivo son alimentos distintos."""
+    nombres = [n.lower() for n in _buscar(pedido)]
+    colados = [n for n in nombres if n.startswith(intruso)]
+    assert not colados, f"pedí «{pedido}» y me cuela {colados}"
+
+
 # --------------------------------------------------------- y sigue encontrando
 @pytest.mark.parametrize("termino,esperado", [
     ("cafe", "café"),        # sin tilde tiene que llegar al catálogo con tilde
@@ -107,41 +121,65 @@ def _parcial(termino):
     return asyncio.run(_correr())
 
 
-@pytest.mark.parametrize("termino", ["sal", "ron"])
+@pytest.mark.parametrize("termino", ["sal", "ron", "pimienta", "oregano", "curry"])
 def test_marca_parcial_lo_que_no_tiene(termino):
-    """La sal y el ron no están en el catálogo de Jesús. Hasta el 08-08 quien pedía sal se
+    """Los condimentos no están en el catálogo de Jesús. Hasta el 08-08 quien pedía sal se
     llevaba «Frutos secos cocktail tostado sin sal» METIDO en la comida, sin preguntar y
     sin avisar: la red de `_match_parcial` solo se tendía con dos palabras o más, y por ahí
-    se colaba todo lo de una."""
+    se colaba todo lo de una. Quien pedía pimienta se llevaba «Chorizo pimienta».
+
+    Distinguirlos pide dos señales gramaticales, no una lista de alimentos:
+      - lo que va tras «con», «sin», «sabor» o «bajo en» es lo que lleva  -> Pipas CON sal
+      - el alimento es la 1.ª palabra o la que sigue a un «de» del principio:
+        «Pechuga DE pollo» va de pollo; «Chorizo pimienta», sin ese «de», va de chorizo;
+        y en «Lomo embuchado 25 % menos DE sal» ese «de» ya no compone nada.
+    """
     assert _parcial(termino), f"«{termino}» no está en el catálogo y no lo dice"
 
 
-@pytest.mark.parametrize("termino", ["arroz", "pan", "col", "miel", "huevos", "atun",
-                                     "yogur", "platano", "nueces", "leche", "cafe",
-                                     "avena", "pavo",
-                                     # «Pechuga DE pollo» va de pollo; «Pipas CON sal» no
-                                     # va de sal. Por eso el nexo cuenta y la posición sola
-                                     # no basta.
-                                     "pollo"])
+@pytest.mark.parametrize("termino", [
+    "arroz", "pan", "col", "miel", "huevos", "huevas", "atun", "yogur", "platano",
+    "nueces", "leche", "cafe", "avena", "pavo", "tostadas", "almendras", "manzana",
+    "naranjas", "aceite", "queso", "pimiento", "azucar", "limon", "vinagre", "dextrosa",
+    "proteina", "lentejas", "garbanzos", "pasta", "patata", "salmon", "merluza",
+    "ternera", "cerdo", "gambas", "tomate", "cebolla", "lechuga", "espinacas", "brocoli",
+    "kiwi", "fresas", "sandia",
+    # «Pechuga DE pollo» va de pollo, y por eso el «de» tiene que contar.
+    "pollo",
+])
 def test_lo_que_existe_no_se_marca(termino):
     assert not _parcial(termino), f"«{termino}» sí está en el catálogo y lo da por dudoso"
 
 
-def test_avisa_si_no_existe_lo_pedido():
-    """La sal y el té solos no están en el catálogo de Jesús. Devolver «pistachos
-    tostados con sal» sin decir nada es lo que hacía que pareciera que sí."""
+def _buscar_con_la_herramienta(texto):
     async def _correr():
         from motor.motor_asyncio import AsyncIOMotorClient
         from chatbot import NutritionChatbot
         from agent_tools import AgentTools
         db = AsyncIOMotorClient(os.environ["MONGO_URL"])[os.environ.get("DB_NAME", "jg12_restored")]
-        bot = NutritionChatbot("test_busqueda_ojo", db)
+        bot = NutritionChatbot("test_busqueda_tool", db)
         bot.set_user_macros(MACROS)
         bot.configure_day("entrenamiento", 4, momento_entreno=1, opcion_peri="intra_post")
         tools = await AgentTools.crear(bot)
-        return (await tools.buscar_alimentos(texto="sal", limite=6),
-                await tools.buscar_alimentos(texto="arroz", limite=6))
-    sal, arroz = asyncio.run(_correr())
-    if sal["items"]:
-        assert sal.get("ojo"), "devuelve sucedáneos de la sal y no dice que no la tiene"
-    assert not arroz.get("ojo"), "el arroz SÍ existe: no hay nada que avisar"
+        return await tools.buscar_alimentos(texto=texto, limite=6)
+    return asyncio.run(_correr())
+
+
+@pytest.mark.parametrize("termino", ["sal", "pimienta"])
+def test_no_da_nada_que_anadir_de_lo_que_no_tiene(termino):
+    """No basta con AVISAR: hay que no darle nada que meter.
+
+    Se probó primero a devolver los parecidos con una nota («no lo añadas, que lo decida
+    el cliente»). El asistente los metía igual y lo contaba después -- «te he puesto
+    fiambre de pechuga de pavo con pimienta» --, que es justo lo que no puede pasar: el
+    aviso se lee y se olvida, el alimento se queda en la dieta. Los nombres siguen
+    viajando en el texto para poder enseñárselos; ninguno trae id."""
+    r = _buscar_con_la_herramienta(termino)
+    assert not r["items"], f"«{termino}» no existe y aún así devuelve algo añadible"
+    assert r.get("sin_resultados_porque"), "no devuelve nada y tampoco explica por qué"
+
+
+@pytest.mark.parametrize("termino", ["arroz", "pollo", "avena", "huevos"])
+def test_lo_que_si_existe_se_puede_anadir(termino):
+    r = _buscar_con_la_herramienta(termino)
+    assert r["items"], f"«{termino}» existe y no devuelve nada: {r.get('sin_resultados_porque')}"
