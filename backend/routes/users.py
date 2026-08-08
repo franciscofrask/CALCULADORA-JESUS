@@ -51,8 +51,12 @@ async def get_client_profile(user = Depends(get_current_user)):
     # Si tiene acceso y, si no, por que (punto 41): el front necesita distinguir al que
     # nunca contrato del que se le acabo, porque no se les puede decir lo mismo.
     from core.plan_access import estado_de_acceso
+    from core.series_cliente import grasa_vigente
     datos = enrich_cycle(profile)
     datos["acceso"] = estado_de_acceso(profile)
+    # Su % graso vigente y si toca volver a pedirlo (punto 47). Lo decide el servidor para
+    # que las pantallas no tengan cada una su version de "cuanto hace de esto".
+    datos["grasa"] = grasa_vigente(profile)
     return ClientProfile(**datos)
 
 @router.patch("/clients/onboarding", response_model=ClientProfile)
@@ -317,12 +321,27 @@ async def calcular_mi_cuerpo(data: dict, user = Depends(get_current_user)):
     peso = _num(data.get("peso"), 30, 300)
     altura = _num(data.get("altura"), 120, 230)
     bf = _num(data.get("porcentaje_graso"), 3, 60)
-    if peso is None or bf is None:
-        raise HTTPException(status_code=400, detail="Necesitamos tu peso y tu % de grasa")
 
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    # EL % GRASO NO SE PIDE EN CADA AJUSTE (punto 47 del doc del 07-08): "se pide cada 12
+    # semanas, no cada 2". Si tiene uno de hace menos, se reutiliza. Los ajustes son
+    # quincenales, asi que antes se lo pediamos seis veces por ciclo -- y un dato que se
+    # estima a ojo mirando fotos no cambia cada quince dias: preguntarlo tan seguido solo
+    # consigue que lo repita sin mirarlo o que se lo invente.
+    from core.series_cliente import grasa_vigente
+    if bf is None:
+        vigente = grasa_vigente(profile)
+        if not vigente["hay_que_pedirlo"] and vigente["valor"] is not None:
+            bf = float(vigente["valor"])
+    if peso is None:
+        raise HTTPException(status_code=400, detail="Necesitamos tu peso")
+    if bf is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Necesitamos tu % de grasa: hace más de 12 semanas de la última vez.")
 
     sexo = (data.get("sexo") or profile.get("sex") or "hombre").lower()
     sexo = "mujer" if sexo.startswith("muj") or sexo in ("f", "femenino") else "hombre"

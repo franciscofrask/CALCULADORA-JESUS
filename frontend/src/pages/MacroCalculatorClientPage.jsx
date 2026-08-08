@@ -159,6 +159,10 @@ const MacroCalculatorClientPage = () => {
     const [form, setForm] = useState({ peso: '', porcentaje_graso: '', sexo: 'hombre', objetivo: 'volumen' });
     const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(false);
+    // Su % graso vigente: lo decide el servidor (punto 47), incluido si ya toca pedirlo.
+    const grasa = profile?.grasa || {};
+    const grasaVale = grasa.valor != null && !grasa.hay_que_pedirlo;
+    const [cambiarGrasa, setCambiarGrasa] = useState(false);
     const editorRef = useRef(null);
 
     // Preguntas 5-8 del quiz ("Ajusta tus macros"): mueven el motor v2.
@@ -200,7 +204,8 @@ const MacroCalculatorClientPage = () => {
 
     const handleCalculate = async () => {
         const peso = parseFloat(form.peso);
-        const bf = parseFloat(form.porcentaje_graso);
+        // Si el suyo sigue valiendo y no ha querido cambiarlo, se usa ese (punto 47).
+        const bf = (grasaVale && !cambiarGrasa) ? parseFloat(grasa.valor) : parseFloat(form.porcentaje_graso);
         if (!peso || peso < 30 || peso > 200) { toast.error('Peso inválido (30-200 kg)'); return; }
         if (isNaN(bf) || bf < 5 || bf > 60) { toast.error('% graso inválido (5-60%)'); return; }
         setLoading(true);
@@ -267,9 +272,32 @@ const MacroCalculatorClientPage = () => {
                                     <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Peso (kg)</label>
                                     <input type="number" min="30" max="200" step="0.5" value={form.peso} onChange={e => set('peso', e.target.value)} placeholder="80" className="input-light font-data" />
                                 </div>
+                                {/* EL % GRASO SE PIDE CADA 12 SEMANAS, NO CADA 2 (punto 47 del
+                                    doc del 07-08). Los ajustes son quincenales, así que antes
+                                    se lo pedíamos seis veces por ciclo. Un dato que se estima
+                                    a ojo mirando fotos no cambia cada quince días: preguntarlo
+                                    tan seguido solo consigue que lo repita sin mirarlo o que
+                                    se lo invente. Si el suyo tiene menos de 12 semanas se
+                                    reutiliza y solo se le enseña, con la opción de cambiarlo. */}
                                 <div>
                                     <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">% Graso</label>
-                                    <input type="number" min="5" max="60" step="0.5" value={form.porcentaje_graso} onChange={e => set('porcentaje_graso', e.target.value)} placeholder="20" className="input-light font-data" />
+                                    {grasaVale && !cambiarGrasa ? (
+                                        <div className="input-light font-data flex items-center justify-between gap-2" data-testid="grasa-reutilizada">
+                                            <span>{grasa.valor}%</span>
+                                            <button type="button" onClick={() => setCambiarGrasa(true)}
+                                                className="text-xs text-brand hover:underline font-sans normal-case tracking-normal">
+                                                cambiar
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <input type="number" min="5" max="60" step="0.5" value={form.porcentaje_graso} onChange={e => set('porcentaje_graso', e.target.value)} placeholder="20" className="input-light font-data" />
+                                    )}
+                                    {grasaVale && !cambiarGrasa && (
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            {grasa.semanas === 0 ? 'De esta semana' : `De hace ${grasa.semanas} ${grasa.semanas === 1 ? 'semana' : 'semanas'}`}.
+                                            {' '}Se vuelve a pedir a las 12.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                             <div>
@@ -327,7 +355,7 @@ const MacroCalculatorClientPage = () => {
                                 )}
                             </div>
 
-                            <button onClick={handleCalculate} disabled={loading || !form.peso || !form.porcentaje_graso}
+                            <button onClick={handleCalculate} disabled={loading || !form.peso || !(form.porcentaje_graso || (grasaVale && !cambiarGrasa))}
                                 className="btn-outline-brand w-full flex items-center justify-center gap-2 uppercase tracking-wider disabled:opacity-40">
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
                                 {loading ? 'Calculando...' : 'Calcular'}

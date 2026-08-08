@@ -1596,6 +1596,8 @@ const ClientDetailPage = () => {
                         porcentajesGrasos={[...(calma_raw?.porcentajes_grasos || []), ...(profile?.porcentajes_grasos || [])]} />
                     <EvolutionTimeline api={api} clientId={clientId} reportes={calma_raw?.formularios_mensuales} calmaFotos={calma_raw?.fotos_descargadas} reports={reports} macroHistory={macro_history} />
                     <CoachCheckins clientId={clientId} />
+                    {/* Meter el reporte de un cliente que lo mandó por WhatsApp (punto 45) */}
+                    <ReportePorElCliente api={api} clientId={clientId} onHecho={fetchClient} />
                     <ReportsFeedbackList initialReports={reports} />
                 </TabsContent>
             </Tabs>
@@ -1824,6 +1826,152 @@ const ExcepcionDelCliente = ({ excepcion, guardando, onGuardar }) => {
                 </div>
             </div>
         </div>
+    );
+};
+
+// METER EL REPORTE DE UN CLIENTE QUE LO MANDÓ POR OTRA VÍA (punto 45 del doc del 07-08).
+//
+// Los Premium no rellenan el formulario: mandan el reporte y las fotos por WhatsApp y alguien
+// del equipo se lo pasa a la app. Hasta ahora eso solo se podía hacer entrando con la cuenta
+// del cliente - "subiendo las fotos con el correo del cliente para que se enlacen a su ficha",
+// dice el punto -, y lo que no se metía se perdía: ni curva de peso, ni comparativa, ni modelo.
+//
+// Va plegado porque no es lo normal: se abre cuando toca.
+const ReportePorElCliente = ({ api, clientId, onHecho }) => {
+    const [abierto, setAbierto] = useState(false);
+    const [guardando, setGuardando] = useState(false);
+    const [subiendo, setSubiendo] = useState(false);
+    const [datos, setDatos] = useState({ weight: '', notes: '', proximo_objetivo: '', measurements: {} });
+    const [fotos, setFotos] = useState([]);
+
+    const guardar = async () => {
+        const peso = parseFloat(datos.weight);
+        if (isNaN(peso) || peso < 25 || peso > 300) { toast.error('Pon su peso (25-300 kg)'); return; }
+        setGuardando(true);
+        try {
+            const medidas = Object.fromEntries(
+                Object.entries(datos.measurements).filter(([, v]) => v !== '' && v != null)
+                    .map(([k, v]) => [k, parseFloat(v)]));
+            await api.post(`/admin/clients/${clientId}/reporte`, {
+                weight: peso,
+                measurements: Object.keys(medidas).length ? medidas : null,
+                notes: datos.notes || null,
+                proximo_objetivo: datos.proximo_objetivo || null,
+            });
+            toast.success('Reporte guardado', { description: 'Queda anotado que lo metiste tú.' });
+            setDatos({ weight: '', notes: '', proximo_objetivo: '', measurements: {} });
+            setFotos([]);
+            setAbierto(false);
+            onHecho?.();
+        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo guardar el reporte'); }
+        finally { setGuardando(false); }
+    };
+
+    const subirFoto = async (archivo, pose) => {
+        if (!archivo) return;
+        setSubiendo(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', archivo);
+            const r = await api.post(
+                `/admin/clients/${clientId}/reports/photos?pose=${encodeURIComponent(pose || '')}`,
+                fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            setFotos(f => [...f, { ...r.data, pose }]);
+            toast.success(`Foto subida${pose ? ` (${pose})` : ''}`);
+        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo subir la foto'); }
+        finally { setSubiendo(false); }
+    };
+
+    if (!abierto) {
+        return (
+            <button onClick={() => setAbierto(true)} data-testid="abrir-reporte-por-el"
+                className="text-xs text-white/40 hover:text-[#FF671F] flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> Meter un reporte por él (llegó por WhatsApp)
+            </button>
+        );
+    }
+
+    return (
+        <Card className="bg-[#111] border-[#FF671F]/30" data-testid="reporte-por-el-cliente">
+            <CardContent className="p-5 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Reporte en su nombre</p>
+                    <button onClick={() => setAbierto(false)} className="text-white/30 hover:text-white"><X className="w-4 h-4" /></button>
+                </div>
+                <p className="text-[11px] text-white/30">
+                    Para el que manda el reporte por WhatsApp. Se guarda como suyo y queda anotado que lo metiste tú.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <Label className="text-white/60 text-xs">Peso (kg)</Label>
+                        <Input type="number" step="0.1" min="25" max="300" value={datos.weight}
+                            onChange={e => setDatos(d => ({ ...d, weight: e.target.value }))}
+                            data-testid="reporte-peso" className="bg-[#0A0A0A] border-[#333] text-white mt-1" />
+                    </div>
+                    <div>
+                        <Label className="text-white/60 text-xs">Objetivo que marca</Label>
+                        <select value={datos.proximo_objetivo}
+                            onChange={e => setDatos(d => ({ ...d, proximo_objetivo: e.target.value }))}
+                            className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
+                            <option value="">Sin cambio</option>
+                            <option value="definicion">Definición</option>
+                            <option value="volumen">Volumen</option>
+                            <option value="mantenimiento">Mantenimiento</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Las diez medidas, opcionales: en WhatsApp no siempre llegan todas. */}
+                <details className="rounded-lg border border-[#222] bg-[#0A0A0A] p-3">
+                    <summary className="text-xs text-white/50 cursor-pointer">Medidas (opcionales)</summary>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
+                        {MEDIDAS.map(({ key, label }) => (
+                            <div key={key}>
+                                <Label className="text-white/40 text-[10px]">{label}</Label>
+                                <Input type="number" step="0.1" value={datos.measurements[key] ?? ''}
+                                    onChange={e => setDatos(d => ({ ...d, measurements: { ...d.measurements, [key]: e.target.value } }))}
+                                    className="bg-[#111] border-[#333] text-white text-xs h-8 mt-0.5" />
+                            </div>
+                        ))}
+                    </div>
+                </details>
+
+                {/* Las fotos, con su pose: sin pose son tres fotos sueltas, con ella son la
+                    misma foto de tres meses distintos y entran en la comparativa. */}
+                <div className="rounded-lg border border-[#222] bg-[#0A0A0A] p-3">
+                    <p className="text-xs text-white/50 mb-2">Fotos {subiendo && <Loader2 className="w-3 h-3 animate-spin inline ml-1" />}</p>
+                    <div className="flex flex-wrap gap-2">
+                        {['frente', 'espalda', 'perfil'].map(pose => (
+                            <label key={pose} className="px-3 py-1.5 rounded-lg bg-[#111] border border-[#333] text-xs text-white/70 cursor-pointer hover:border-[#FF671F]/50">
+                                <Camera className="w-3.5 h-3.5 inline mr-1" />{pose}
+                                <input type="file" accept="image/*" className="hidden" data-testid={`foto-${pose}`}
+                                    onChange={e => { subirFoto(e.target.files?.[0], pose); e.target.value = ''; }} />
+                            </label>
+                        ))}
+                    </div>
+                    {fotos.length > 0 && (
+                        <p className="text-[11px] text-emerald-400 mt-2">
+                            {fotos.length} {fotos.length === 1 ? 'foto subida' : 'fotos subidas'}: {fotos.map(f => f.pose).join(', ')}
+                        </p>
+                    )}
+                </div>
+
+                <div>
+                    <Label className="text-white/60 text-xs">Lo que ha contado</Label>
+                    <Textarea value={datos.notes} onChange={e => setDatos(d => ({ ...d, notes: e.target.value }))}
+                        placeholder="Pega aquí lo que te ha escrito por WhatsApp…" rows={3}
+                        data-testid="reporte-notas" className="bg-[#0A0A0A] border-[#333] text-white mt-1" />
+                </div>
+
+                <div className="flex justify-end">
+                    <Button onClick={guardar} disabled={guardando} data-testid="guardar-reporte-por-el"
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white">
+                        {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" />Guardar el reporte</>}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
     );
 };
 

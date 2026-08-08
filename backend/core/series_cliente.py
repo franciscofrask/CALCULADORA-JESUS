@@ -103,3 +103,37 @@ async def anotar_grasa(client_id: Optional[str], valor: Any, fecha: Optional[str
                        origen: Optional[str] = None) -> Optional[float]:
     """Un % graso estimado. Jesus solo lo pone cuando hay foto, asi que van pocos y sueltos."""
     return await _anotar(GRASA, client_id, valor, fecha, origen)
+
+
+# Cada cuanto se le vuelve a pedir el % graso al cliente (punto 47 del doc del 07-08): "El %
+# de grasa se pide cada 12 semanas, no cada 2". Los ajustes son quincenales, y hasta ahora la
+# calculadora le exigia el % graso en cada uno: seis veces por ciclo. Un dato que se estima a
+# ojo mirando fotos no cambia cada quince dias, y preguntarlo tan seguido solo consigue dos
+# cosas -- que lo repita igual sin mirarlo, o que se lo invente.
+SEMANAS_ENTRE_ESTIMACIONES_DE_GRASA = 12
+
+
+def grasa_vigente(profile: Dict[str, Any], ahora: Optional[datetime] = None) -> Dict[str, Any]:
+    """El % graso que vale ahora mismo y si toca volver a pedirlo.
+
+    {valor, fecha, semanas, hay_que_pedirlo}. `hay_que_pedirlo` es True si no hay ninguno o
+    si el ultimo tiene ya 12 semanas.
+    """
+    ultimo = actual(profile.get(GRASA[0]))
+    if not ultimo:
+        # Sin serie, el campo suelto del perfil todavia sirve de algo, pero sin fecha no se
+        # puede saber si esta viejo: se pide.
+        valor = profile.get(GRASA[1])
+        return {"valor": valor, "fecha": None, "semanas": None, "hay_que_pedirlo": True}
+    ahora = ahora or datetime.now(timezone.utc)
+    try:
+        d = datetime.strptime(str(ultimo["fecha"])[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        semanas = max(0, (ahora - d).days) // 7
+    except (ValueError, TypeError):
+        semanas = None
+    return {
+        "valor": ultimo["valor"],
+        "fecha": ultimo["fecha"],
+        "semanas": semanas,
+        "hay_que_pedirlo": semanas is None or semanas >= SEMANAS_ENTRE_ESTIMACIONES_DE_GRASA,
+    }

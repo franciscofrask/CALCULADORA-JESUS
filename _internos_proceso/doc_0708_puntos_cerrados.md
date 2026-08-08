@@ -1377,7 +1377,7 @@ estado y la suscripción pero no si hay plan. Corregido.
 inventar. Hasta que Francisco lo diga, el bloque sale sin el botón en vez de con un enlace que no
 lleva a nadie. Es una constante, `WHATSAPP_SOPORTE`.
 
-### Punto 45 - Meter un reporte en nombre del cliente · HECHO EL BACKEND
+### Punto 45 - Meter un reporte en nombre del cliente · CERRADO
 
 Los Premium mandan el reporte y las fotos por WhatsApp y alguien del equipo se lo pasa a la app.
 Hasta ahora eso solo se podía hacer **entrando con la cuenta del cliente**, que es literalmente
@@ -1394,9 +1394,24 @@ Dos rutas nuevas:
   las mismas validaciones que las del cliente (se sacaron a una función común para que no puedan
   divergir). Queda anotado quién las subió.
 
-**Falta la pantalla**: el formulario en la ficha para usarlo sin llamar a la API a mano.
+**Y la pantalla**, en Seguimiento: un enlace discreto - **«Meter un reporte por él (llegó por
+WhatsApp)»** - que abre el formulario. Peso, el objetivo que marca, las diez medidas plegadas
+(en WhatsApp no siempre llegan todas), las fotos con su pose y un hueco para pegar lo que ha
+escrito. Va plegado porque no es lo normal: se abre cuando toca.
 
-### Punto 47 - El texto de espera · HECHO A MEDIAS
+**Comprobado en la app**, metiendo un reporte de verdad y borrándolo después. Y lo importante es
+que se encadena con todo lo demás:
+
+| Qué pasó | |
+|---|---|
+| El reporte | guardado con `metido_por: Francisco` y `origen: lo metio el equipo` |
+| El peso | entra en su serie con origen «reporte (lo metió el equipo)» (punto 30) |
+| El peso de la ficha | pasa a 84,2 - el último de la serie |
+| `ultimo_reporte` | actualizado, así que cuenta para el semáforo (32) y para «quién me toca» (29) |
+
+O sea que un reporte que llega por WhatsApp ya no se queda fuera de nada.
+
+### Punto 47 - Los ajustes cada 2 semanas, validados · CERRADO
 
 Al mandar el reporte, el cliente veía «Reporte enviado correctamente», que no le dice nada: ni si
 tiene que hacer algo, ni cuándo tendrá sus macros. Ahora ve **«Estamos revisando tus respuestas.
@@ -1407,7 +1422,19 @@ niveles (punto 46).
 Que espere y que se lo ponga una persona es parte del producto, así que el texto no promete nada
 automático.
 
-**Falta** la otra mitad: que el % graso se pida cada 12 semanas y no cada 2.
+**Y el % graso, cada 12 semanas y no cada 2.** La calculadora del cliente le exigía el % graso
+en **cada** ajuste, y los ajustes son quincenales: **seis veces por ciclo**. Un dato que se
+estima a ojo mirando fotos no cambia cada quince días, y preguntarlo tan seguido solo consigue
+dos cosas - que lo repita igual sin mirarlo, o que se lo invente.
+
+Ahora el servidor dice cuál es su % graso vigente y si ya toca pedirlo, y la pantalla lo enseña
+en vez de pedirlo:
+
+> **% GRASO**  8%  ·  *cambiar*
+> De esta semana. Se vuelve a pedir a las 12.
+
+Con el botón de cambiarlo si de verdad quiere, y a las 12 semanas se le vuelve a pedir. Sale de
+la serie del punto 30, que es la que sabe de cuándo es cada dato.
 
 ### Punto 44 - El calendario y la duración, como propiedad del plan · CERRADO
 
@@ -1464,7 +1491,6 @@ empieza en la semana 1, que es lo que la app hacía hasta hoy y nadie cambia de 
 
 ### Lo que queda del bloque E, y por qué
 
-- **Punto 45**: hecho el backend, falta la pantalla en la ficha.
 - **Punto 46 (que se note la diferencia entre niveles)**: las horas de espera ya salen del plan
   (arriba, punto 47) y el Nivel 3 ya se contrata por llamada. Y ojo con esto: el punto dice que
   «falta montar la vía de cobro con tarjeta después de esa llamada, que hoy no existe», pero
@@ -1472,8 +1498,6 @@ empieza en la semana 1, que es lo que la app hacía hasta hoy y nadie cambia de 
   enlace de pago del Nivel 3 y lo copia para mandarlo por WhatsApp. Lo que queda es que el
   cliente perciba el resto de diferencias: comprar la rutina del mes suelta y contratar una
   llamada (Nivel 1), y el reporte semanal del Nivel 3.
-- **Punto 47**: hecho el texto de espera; falta que el % graso se pida cada 12 semanas y no cada
-  2.
 
 ### Una discrepancia que no toco sin que Jesús diga
 

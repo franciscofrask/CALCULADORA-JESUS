@@ -574,6 +574,9 @@ class ClientProfile(BaseModel):
     # Si tiene acceso y por que no, cuando no (punto 41). Lo calcula el servidor:
     # {"activo": bool, "motivo": "sin_plan"|"sin_pagar"|"caducado"|None}.
     acceso: Optional[Dict[str, Any]] = None
+    # Su % graso vigente y si toca volver a pedirlo (punto 47): {valor, fecha, semanas,
+    # hay_que_pedirlo}. Se pide cada 12 semanas, no en cada ajuste.
+    grasa: Optional[Dict[str, Any]] = None
     # EL CONTRATO DE ESTE CLIENTE (punto 44 del 07-08). La duracion del ciclo NO es un
     # supuesto: hay planes de 4 semanas y de 5, y clientes con un ciclo distinto al de su
     # plan (es una de las 17 excepciones del punto 39, y aqui tiene donde vivir). Vacios =
