@@ -666,7 +666,16 @@ class NutritionChatbot:
 
     @classmethod
     def _en_nucleo(cls, termino: str, nombre: str) -> bool:
-        """¿Lo pedido es de lo que va el alimento, o solo algo que lleva?"""
+        """¿Lo pedido es de lo que va el alimento, o solo algo que lleva?
+
+        Aquí la palabra tiene que coincidir ENTERA (o en otro género o número), no valer
+        de prefijo como en la búsqueda. Buscar admite el prefijo a propósito -- «tostad»
+        tiene que llegar a «tostadas» --, pero para decidir si un alimento ES lo que han
+        pedido eso es demasiado laxo: barriendo las 3.211 fichas salió que «sal» se colaba
+        por «Lomo de SALmón» y «SALchichas», y así nunca habría avisado de que la sal no
+        está.
+        """
+        pedido = cls._norm_text(termino or "")
         n = cls._norm_text((nombre or "").split("(")[0])
         for nexo in cls._NEXOS_DE_MATIZ:
             i = n.find(nexo)
@@ -677,7 +686,7 @@ class NutritionChatbot:
         for i, palabra in enumerate(palabras):
             if i and palabras[i - 1] not in cls._NEXOS_DE_NUCLEO:
                 continue
-            if cls._es_palabra_del_nombre(termino, palabra):
+            if palabra == pedido:
                 return True
             if raiz and re.search(raiz, palabra):
                 return True

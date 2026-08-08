@@ -2429,6 +2429,51 @@ varias ya actuaba la cobertura de `search_foods`, y aplicarlo ahí daba falsos p
 («pechuga de pollo» no es una palabra de ningún nombre). Y compara contra el texto ya
 corregido de erratas, para que «wevos» siga llegando a los huevos.
 
+
+### «¿Funciona con cualquier alimento que no exista?»
+
+Lo preguntó Francisco al cerrar lo anterior, y era la pregunta correcta: el criterio se
+había probado con 45 casos y el catálogo tiene **3.211 fichas**. Así que se barrió entero,
+midiendo los dos riesgos opuestos:
+
+- **Rechazar de más**: pedir algo que SÍ está y que se diga que no. Es el peligroso, porque
+  rompe el uso normal.
+- **Colar de menos**: pedir algo que NO está y que se meta un parecido. Es el que motivó
+  todo esto.
+
+El barrido destapó **un fallo que los tests de casos concretos no veían**: `_en_nucleo`
+emparejaba por PREFIJO, heredado de la búsqueda, y así **«sal» se colaba por «Lomo de
+SALmón» y por «SALchichas»**. En la prueba de pantalla no se notó porque esos dos no
+llegaban a salir en los resultados, pero era cuestión de tiempo. Buscar admite el prefijo
+a propósito -- «tostad» tiene que llegar a «tostadas» --; decidir si un alimento ES lo
+pedido, no: ahí hace falta la palabra entera o la misma en otro género o número.
+
+Con eso corregido:
+
+```
+nombres del catálogo reconocidos por su propia palabra   707 / 711
+alimentos de una palabra que NO están, detectados         20 /  21
+```
+
+Los cuatro nombres que no se reconocen son «T-**Bone** de ternera», «**My** Fitness
+Carrot», «**Oh** my waffle» y el «Té **con** agua mineral», donde la primera palabra no es
+ningún alimento que nadie vaya a pedir. El único que se cuela es la **canela**, y con
+razón: existe un «Sirope de canela», que legítimamente es de canela.
+
+Las palabras que el filtro NO reconoce en los genéricos son las que tienen que quedar
+fuera: «virgen», «extra», «sopera», «moreno», «entera», «mediana», «blanco», «picada».
+Nadie pide eso; son cómo está hecho el alimento, no el alimento.
+
+El barrido queda como test (`test_catalogo_reconocido.py`), así que si alguien vuelve a
+tocar el criterio, se entera con el catálogo entero y no con cinco ejemplos.
+
+```
+"ponme oregano y despues arroz con pollo"
+  -> "No tengo orégano en el catálogo; lo más parecido que te puedo poner como «verde»
+      serían puerro, espinacas o tomate si te apetece algo así."
+     Y enseña las opciones de arroz y de pollo, que esas sí las tiene.
+```
+
 ### Y de paso, el cuelgue otra vez
 
 Probando esto el chat se quedó bloqueado **en el arranque**, no en el envío: el tope al
