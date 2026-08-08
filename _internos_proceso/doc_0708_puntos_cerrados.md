@@ -1171,6 +1171,65 @@ una con `siguiente_fecha`, que es literalmente lo que significaba. **En dev no h
 protocolo asignado**, así que el script no ha tenido nada que migrar; hay que pasarlo en
 producción, donde sí puede haberlos.
 
+### Punto 34 - El entrenamiento en su propia pestaña · A MEDIAS, Y LO QUE FALTA ES UNA DECISIÓN
+
+**En el flujo del entrenador ya está separado.** La ficha del cliente tiene diez pestañas y
+**Entreno** es una de ellas, aparte de **Nutrición**: ahí están la maquinaria, las lesiones, las
+observaciones de entrenamiento y la generación de la rutina. Se separó el 05-08 con el punto
+2.5, y el comentario del código lo dice con las palabras de Jesús: «el entrenamiento lo llevo
+aparte de la nutrición». Y en el menú del coach hay una sección **Rutinas** propia.
+
+**En la app del cliente no hay pestaña de entrenamiento, y no es un descuido.** Comprobado en el
+navegador: el menú del cliente es Novedades · Inicio · Nutrición · Alimentos · Ajustar macros ·
+Suplementos · Asistente IA · Reportes · Check-ins. **No hay Rutina porque está oculta a
+propósito** desde el 19-07-2026, «hasta completar la funcionalidad» (`planAccess.js`, línea 19).
+Oculta el menú, la tarjeta «Entreno de hoy», el paso del tour y la ruta directa.
+
+Así que lo único de entrenamiento que le queda al cliente delante es el selector
+**Entreno / Descanso** de la pantalla de Nutrición - que es exactamente lo que Jesús está
+viendo cuando dice que está mezclado.
+
+**Y ese selector tiene que quedarse donde está.** No es desorden: los macros del día dependen de
+si entrena o no, y el reparto de las comidas también. Sacarlo de Nutrición rompería el método.
+
+**Lo que falta es una decisión, y no es mía**: volver a enseñar Rutina al cliente. Está a una
+línea (el propio comentario dice qué restaurar), pero no es «mover una pestaña»: es reactivar
+una funcionalidad que se escondió por estar incompleta, tres días antes de que entren los
+primeros clientes de verdad. **Que lo diga Francisco.**
+
+---
+
+### Punto 35 - Las medidas comparadas · CERRADO
+
+**Lo que pasaba.** Las diez medidas solo se veían sueltas: el último dato debajo de su foto en
+la comparativa, y al rellenar el reporte la diferencia con el mes pasado. Nunca se veían las
+diez a lo largo del tiempo, que es lo único que dice si algo se mueve - y es justo la razón por
+la que se piden todas siempre.
+
+**Lo que hay ahora.** En Seguimiento, debajo de la evolución del peso, la tabla **Evolución de
+las medidas**: una fila por medida, una columna por toma, la diferencia con la toma anterior al
+lado de cada número, y una columna **Total** con el cambio desde la primera.
+
+Tabla y no gráfico a propósito: son diez series a la vez y en un gráfico de diez líneas no se
+lee ninguna.
+
+Tres decisiones de criterio:
+
+- **En azul lo que sube, en verde lo que baja, y sin juzgar.** Subir de brazo y subir de cintura
+  no son lo mismo, y eso lo pone el coach, no el color. Es el mismo código que ya usaba el
+  reporte del cliente.
+- **La medida que no ha dado nunca no ocupa una fila.** Con diez medidas y clientes que vienen
+  de dar cinco, media tabla en blanco no es información.
+- **Se enseñan las 8 últimas tomas y se dice cuántas quedan fuera.** Cortar en silencio haría
+  pensar que eso es todo lo que hay.
+
+Respeta los nombres viejos de Calma para la cintura y la cadera, que es lo único que se puede
+traducir sin inventar (ya estaba decidido así en `lib/medidas.js`).
+
+**Comprobado en la app** con tres tomas de prueba en el cliente de pruebas, borradas después: la
+tabla sale con las diez medidas, las diferencias parciales (+0,3) y el total (+0,6), y cintura y
+cadera en verde con -1,6 mientras el resto sube.
+
 ---
 
 ---
@@ -1231,6 +1290,11 @@ antiguo" hay que comprobarlo contra la calculadora de verdad**.
 
 ### 2 · Lo que espera una orden de Francisco
 
+**¿Se le vuelve a enseñar la Rutina al cliente?** (punto 34). Está oculta desde el 19-07 «hasta
+completar la funcionalidad», y por eso el cliente no tiene pestaña de entrenamiento. Reactivarla
+es una línea, pero es volver a abrir algo que se cerró por estar incompleto, tres días antes de
+que entren los primeros clientes. En el flujo del entrenador el entrenamiento ya está separado.
+
 **Borrar las 18 cuentas de prueba de producción** (punto 10). Está todo preparado y probado en
 simulación contra producción: `backend/_limpiar_datos_prueba.py`, que no borra nada salvo que se
 le pase `--ejecutar`. `francisco@test.com` y la cuenta demo quedan fuera. **Dos de las 18 tienen
@@ -1241,7 +1305,7 @@ se borran esas dos también.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
 textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28, 29, 30, 31, 32 y 33) está en GitHub y sin desplegar, esperando la orden.
+25, 27, 28, 29, 30, 31, 32, 33 y 35) está en GitHub y sin desplegar, esperando la orden.
 
 **Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
 
