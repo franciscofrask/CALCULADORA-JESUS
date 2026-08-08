@@ -113,7 +113,10 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                         macros_objetivo: target ? { P: target.P, H: target.H, G: target.G } : {},
                         margen,
                         orden,
-                        limit: 40,
+                        // Suficiente para que el slider del margen se note: con 40 se
+                        // llegaba al tope enseguida y ampliar el margen no cambiaba
+                        // nada de lo que se veía.
+                        limit: 120,
                         ...(dayConfig || {}),
                     }),
                 });
@@ -340,8 +343,11 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                             </div>
                         ) : (
                             <div className="p-4 space-y-3">
+                                {/* Si no caben todos, se dice cuántos se están enseñando. Decir
+                                    «hay 173» y pintar 120 sin más deja al cliente contando. */}
                                 <p className="text-xs text-muted-foreground">
                                     Hay <span className="font-bold text-foreground">{total}</span> menús que cuadran (±{margen} g)
+                                    {menus.length < total ? `, y aquí tienes los ${menus.length} que mejor te encajan` : ''}
                                     {textFilter.trim() ? ` · ${filtrados.length} con "${textFilter.trim()}"` : ''}. Las cantidades vienen ajustadas a tu objetivo.
                                 </p>
                                 {filtrados.map((menu, index) => (

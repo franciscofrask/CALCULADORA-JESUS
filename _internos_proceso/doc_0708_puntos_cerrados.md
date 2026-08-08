@@ -2068,6 +2068,61 @@ porque casi nadie desayuna brócoli. Ahora en el desayuno la fruta hace ese pape
 el peri ya estaba exento -- y pasan **673**, en línea con el resto de comidas. En la comida y
 en la cena sigue haciendo falta verdura de verdad.
 
+
+### El margen del sugeridor era un embudo, no un techo
+
+Segundo aviso de Francisco el 08-08, y va al concepto: «el único margen que sirve es
+±5 g, y eso es porque el concepto está mal. Si el margen es ±10 quiere decir que el menú
+puede ir de margen 0, o sea que cuadras hasta un desfase de 10. Si en 5 me muestra menús, no
+tiene sentido que no me muestre más si el margen es superior».
+
+Tiene razón, y estaba roto de tres formas distintas que se tapaban entre sí:
+
+**1. La búsqueda se estrechaba con el margen.** El margen no filtraba al final: entraba en
+la propia consulta a la base. Así que cambiarlo no ampliaba el conjunto, lo **cambiaba
+entero**. Medido antes de tocar nada:
+
+```
+margen 4  ->  61 cuadran, 60 mostrados
+margen 5  ->  66 cuadran, 60 mostrados   +1 nuevo, -1 PERDIDO
+margen 6  ->  72 cuadran, 60 mostrados   +2 nuevos, -2 PERDIDOS
+```
+
+Ampliar el margen hacía **desaparecer** menús que ya estaban. Ahora la búsqueda va siempre
+con el margen máximo y el margen solo filtra al final: por construcción, ampliarlo solo
+puede añadir.
+
+**2. Se ordenaba por la suma de los tres desfases, y el margen mide el peor de los tres.**
+Son cosas distintas y por eso se colaban adelantamientos: un menú de (4,4,4) suma 12 y entra
+a ±5; otro de (6,0,0) suma 6 y solo entra a ±6, pero al ampliar se ponía por delante y
+echaba a alguien de la lista. Ahora se ordena por el peor macro, que es exactamente lo que
+el margen mide, y un menú que aparece al ampliar **siempre va detrás** de los que ya
+estaban.
+
+**3. La lista estaba topada en 40 y el slider no hacía nada visible.** Con ±4 ya se llegaba
+al tope, así que subir el margen a ±15 enseñaba los mismos 40 menús. Ese era el motivo real
+de «el único margen que sirve es ±5»: los demás no cambiaban nada de lo que se veía. El tope
+sube a 120, que en la práctica no recorta.
+
+Comprobado en la app de verdad, moviendo el slider con el teclado:
+
+```
+±5 g   ->  94 menús
+±10 g  -> 120 menús   0 perdidos, y el primero es el mismo
+```
+
+Y en la pantalla se dice lo que hay, en vez de callarlo: «Hay 173 menús que cuadran (±10 g),
+y aquí tienes los 120 que mejor te encajan».
+
+Queda un test (`tests/test_margen_monotono.py`) que fija las tres cosas, porque son fáciles
+de romper sin darse cuenta -- basta con volver a meter el margen en la consulta. Y se
+comprobó que el test **no es decorativo**: puesto contra el código de antes, falla con «al
+pasar de ±3 a ±5 han DESAPARECIDO 1 menús que ya salían».
+
+Con una excepción a propósito: en el orden «Lo que más gente monta» sí puede reordenarse al
+ampliar, porque ahí lo que manda es la gente y es lo que se ha pedido. En el orden por
+defecto, no.
+
 ### Punto 70 - La función de estadísticas · AQUÍ ESTABA EL FALLO QUE NO SE BUSCABA
 
 El aviso del punto es correcto, y buscarlo por su nombre (`getDietsInfo`) no habría servido

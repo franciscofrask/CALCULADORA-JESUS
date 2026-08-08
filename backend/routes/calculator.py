@@ -1798,7 +1798,11 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         margen = _LIBRARY_MARGEN_DEFAULT
     margen = max(1.0, min(_LIBRARY_MARGEN_MAX, margen))
     orden = "usado" if (data.get("orden") or "").strip().lower() == "usado" else "cuadrado"
-    limit = max(1, min(int(data.get("limit") or 30), 60))
+    # El tope estaba en 60 y el front pedía 40, así que de ±4 en adelante siempre se
+    # veían los mismos 40 por muy alto que se pusiera el margen: el slider no hacía
+    # nada visible. Con 150 la lista no se recorta en la práctica (el caso medido
+    # llega a 96 con ±15) y ampliar el margen se nota.
+    limit = max(1, min(int(data.get("limit") or 30), 150))
 
     # Preselección ampliada por el rango de las palancas: un menú a más de ±margen
     # puede acabar dentro tras ajustar su driver (P ±20, H ±30, G ±8).
@@ -1813,9 +1817,18 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     # cambian las cantidades... que aquí se reajustan con las palancas de todas
     # formas. Al cliente le salía tres veces la misma comida con otros gramos.
     q["repetido_de"] = {"$exists": False}
+    # La preselección NO depende del margen elegido: se busca siempre con el margen
+    # máximo y el margen solo filtra al final.
+    #
+    # El margen es un TECHO, no un objetivo: pedir ±10 quiere decir «acepto hasta 10
+    # de desfase», así que todo lo que cuadra a ±5 también vale a ±10. Si la búsqueda
+    # se estrechara con el margen, ampliarlo cambiaría el conjunto entero en vez de
+    # agrandarlo, y pasaba justo eso: al subir de ±4 a ±5 aparecía un menú y
+    # DESAPARECÍA otro que ya estaba. Con la preselección fija, ampliar el margen solo
+    # puede añadir.
     for m in ("P", "H", "G"):
-        q[f"macros.{m}"] = {"$gte": obj[m] - margen - AJUSTE_MAX[m],
-                            "$lte": obj[m] + margen + AJUSTE_MAX[m]}
+        q[f"macros.{m}"] = {"$gte": obj[m] - _LIBRARY_MARGEN_MAX - AJUSTE_MAX[m],
+                            "$lte": obj[m] + _LIBRARY_MARGEN_MAX + AJUSTE_MAX[m]}
     candidatos = await db.meal_library.find(
         q, {"_id": 0, "id": 1, "macros": 1, "macros_reales": 1, "veces": 1,
             "usos": 1, "clientes": 1, "usos_calma": 1,
@@ -1825,6 +1838,16 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     def _err(c):
         mm = c.get("macros", {})
         return sum(abs(obj[m] - float(mm.get(m, 0) or 0)) for m in ("P", "H", "G"))
+
+    def _desfase(c):
+        """El PEOR macro, que es lo que mide el margen. Ordenar por esto y no por la
+        suma es lo que hace que ampliar el margen no descoloque nada: un menú que
+        entra a ±5 tiene su peor macro en 5 o menos, y todo lo que aparezca al subir a
+        ±10 lo tiene por encima de 5, así que va detrás. Con la suma no se cumple --
+        un menú de (4,4,4) suma 12 y entra a ±5, y otro de (6,0,0) suma 6 y solo entra
+        a ±6, pero se colaría por delante y echaría a alguien de la lista."""
+        mm = c.get("macros", {})
+        return max(abs(obj[m] - float(mm.get(m, 0) or 0)) for m in ("P", "H", "G"))
 
     def _gente(c):
         """Cuánta GENTE DISTINTA lo ha montado aquí. Es el criterio del punto 71 y no
@@ -1839,12 +1862,12 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         return int(c.get("usos") or 0), int(c.get("veces") or c.get("usos_calma") or 0)
 
     if orden == "usado":
-        candidatos.sort(key=lambda c: (-_gente(c), -_veces(c)[0], _err(c)))
+        candidatos.sort(key=lambda c: (-_gente(c), -_veces(c)[0], _desfase(c)))
     else:
-        # Dentro de lo que ya cuadra, el error no lo nota nadie -- y ordenar por él
-        # deja el criterio de la gente sin estrenar, porque casi todos cuadran al
-        # decimal. Se agrupa de dos en dos gramos y manda la gente.
-        candidatos.sort(key=lambda c: (round(_err(c) / 2), -_gente(c), -_veces(c)[0], _err(c)))
+        # Dentro de lo que ya cuadra, el desfase no lo nota nadie -- y ordenar por él
+        # al detalle deja el criterio de la gente sin estrenar, porque casi todos
+        # cuadran al decimal. Se agrupa por gramo entero y manda la gente.
+        candidatos.sort(key=lambda c: (round(_desfase(c)), -_gente(c), -_veces(c)[0], _err(c)))
     trabajo = candidatos[:_LIBRARY_TRABAJO_MAX]
 
     # Preferencias del usuario (alimentos evitados) + catálogo de los candidatos
@@ -1936,8 +1959,13 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
             })
 
         err = sum(abs(obj[m] - metodo_final[m]) for m in ("P", "H", "G"))
+        # El peor macro: es lo que mide el margen y con lo que se ordena, para que
+        # ampliar el margen solo pueda añadir menús al final y nunca mover los de
+        # arriba. Ver _desfase() más arriba.
+        desfase = max(abs(obj[m] - metodo_final[m]) for m in ("P", "H", "G"))
         menus.append({
             "biblioteca_id": c["id"],
+            "desfase": round(desfase, 1),
             "items": items,
             # ¿Es una comida de verdad o un desayuno/merienda que cuadra por macros?
             "es_plato": any(cat_in_list(get_categoria_principal(f), _CATS_DE_PLATO) for f in food_list),
@@ -1991,9 +2019,15 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     # ordenar solo por `veces` y por error, se perdería por el camino todo lo que se
     # ha hecho arriba.
     if orden == "usado":
-        menus.sort(key=lambda m: (-m["personas"], -m["veces"], m["err"]))
+        # Aquí manda la gente porque es lo que se ha pedido, así que ampliar el margen
+        # sí puede reordenar: si entra un menú que ha montado más gente, se pone
+        # delante. Es lo esperable en este modo, no en el de por defecto.
+        menus.sort(key=lambda m: (-m["personas"], -m["veces"], m["desfase"]))
     else:
-        menus.sort(key=lambda m: (round(m["err"] / 2), -m["personas"], -m["veces"], m["err"]))
+        # Por desfase (el peor macro) y no por la suma: así, ampliar el margen solo
+        # añade menús al final y no mueve ni uno de los de arriba. Comprobado de ±1 a
+        # ±15 en Comida 1 y Comida 2: ningún menú desaparece al ampliar.
+        menus.sort(key=lambda m: (round(m["desfase"]), -m["personas"], -m["veces"], m["err"]))
     total = len(menus)   # menús ofrecibles: cuadran a ±margen y pasan los dos filtros
     menus = menus[:limit]
 
