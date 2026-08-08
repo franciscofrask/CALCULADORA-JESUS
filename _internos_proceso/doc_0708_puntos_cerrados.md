@@ -1559,10 +1559,10 @@ manteniéndolos.
 
 ## PENDIENTES
 
-Todo lo que queda abierto, ordenado por quién tiene que mover ficha. **Actualizado el 8 de agosto
-por la mañana**, después de cerrar los bloques D y E.
+Todo lo que queda abierto, ordenado por quién tiene que mover ficha. **Actualizado el 8 de agosto**,
+con los bloques A al E cerrados.
 
-Del documento de Jesús hemos trabajado los puntos **1 al 47**. Quedan por leer los bloques F al
+Del documento de Jesús están trabajados los puntos **1 al 47**. Quedan por leer los bloques F al
 K: la comparativa de fotos del reporte (48-54), las tres preguntas del reporte (55-57), los
 arreglos de la base de alimentos (58-60), los fallos apuntados que siguen ahí (61-64), los menús
 autoajustables (65-75) y el asistente de IA (76-80). **Todos son de este fin de semana**, y dos
@@ -1607,7 +1607,7 @@ contra la calculadora de verdad**.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo hasta
 el commit `8421e3b`; lo posterior está en GitHub y sin desplegar, esperando la orden: el punto
 19, el test de entrada del documento de textos, las cuatro respuestas de la dieta, las dos reglas
-nuevas del filtro, y los **puntos 23, 25, 27 al 35 y el bloque E entero (36-47 menos el 46)**.
+nuevas del filtro, y los **puntos 23, 25, 27 al 47** (o sea los bloques D y E enteros).
 
 **Y con ese despliegue, pasar cuatro scripts**, cada uno **una sola vez** y después de subir:
 
@@ -1678,12 +1678,12 @@ calculamos la composición de hoy. Nadie la ha pedido; encaja después del lunes
 
 ### 4 · Lo nuestro, pendiente de terminar
 
-**El punto 46, lo único que queda del bloque E**: que el cliente perciba la diferencia entre
-niveles. Las horas de espera ya se notan (24 en Nivel 2, 48 en el resto) y el Nivel 3 ya se
-contrata por llamada. Falta lo demás: comprar la rutina del mes suelta y contratar una llamada
-(Nivel 1), y el reporte semanal del Nivel 3. **Ojo**: el punto dice que falta la vía de cobro con
-tarjeta después de la llamada y **sí existe** desde el 03-08 - en el panel, la llamada pendiente
-tiene un botón que genera el enlace de pago y lo copia para mandarlo por WhatsApp.
+**Los productos sueltos del punto 46**, lo único que queda del bloque E: que el Nivel 1 pueda
+**comprar la rutina del mes** (55 €) y **contratar una llamada**, y el Nivel 3 **llamadas con
+Jesús a un precio más alto**. `rutina_mes` está en el catálogo como complemento pero **no aparece
+en ninguna ruta del backend ni en ninguna pantalla**: hoy no hay forma de comprarlo. Y de las
+llamadas sueltas no hay nada. Las tres cosas son **producto y cobro nuevos en Stripe**, no un
+arreglo, así que no entran en el fin de semana salvo que Jesús diga lo contrario.
 
 **La ficha de un cliente con mucho histórico se queda colgada** (visto el 08-08). Abriendo la de
 un cliente migrado de Calma con fotos, la página deja de responder y hay que abrir otra pestaña.
