@@ -938,11 +938,20 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
     descartar = bool(data.get("descartar_sin_objetivo", False))
 
     def _target(mk):
-        t = targets.get(mk) or {}
+        # El intra y el post tienen su objetivo en `periworkout`, no en `comidas`.
+        # Hasta el 08-08-2026 esto solo miraba `comidas`, así que el botón «Cuadrar»
+        # del peri no hacía absolutamente nada: le entraban 500 g de avena y devolvía
+        # 500 g. El botón estaba, se pulsaba, y no pasaba nada.
+        t = targets.get(mk) or peri_targets.get(mk) or {}
+        es_peri = mk not in targets and mk in peri_targets
         return {
             "proteinas": float(t.get("P", t.get("proteinas", 0)) or 0),
             "hidratos": float(t.get("H", t.get("hidratos", 0)) or 0),
-            "grasas": float(t.get("G", t.get("grasas", 0)) or 0),
+            # En el peri la grasa va libre. En Calma el objetivo del peri directamente
+            # no tiene clave de grasas -- no es que sea 0, es que no se cuadra -- y
+            # nuestro reparto la escribe como 0. Tomárselo al pie de la letra haría que
+            # cualquier cosa con una pizca de grasa saliera como «te sobra grasa».
+            "grasas": float("inf") if es_peri else float(t.get("G", t.get("grasas", 0)) or 0),
         }
 
     comidas_in = data.get("comidas") or {}
@@ -951,8 +960,9 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
     desfases = {}
     for meal_key, meal in comidas_in.items():
         meal = meal if isinstance(meal, dict) else {}
-        if meal_key not in targets:
-            if descartar and meal_key not in peri_targets:
+        # El peri sí se cuadra: tiene objetivo, solo que en `periworkout`.
+        if meal_key not in targets and meal_key not in peri_targets:
+            if descartar:
                 # Adaptar al tipo de día: esta comida no existe en el día destino
                 # (p.ej. Intra/Post en descanso). Se vacía (si quedaran alimentos
                 # ocultos, el autosave los persistiría y reaparecerían sin ajustar
@@ -1112,8 +1122,10 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             me = rf.get("macros_efectivos") or {}
             for m in servido:
                 servido[m] += float(me.get(m, 0) or 0)
+        # La grasa del peri va libre (target infinito): ahí no hay desfase que contar,
+        # y decir «sobra grasa» en un post-entreno sería mentir.
         desfase = {
-            m: round(servido[m] - tgt[k], 1)
+            m: (0.0 if math.isinf(tgt[k]) else round(servido[m] - tgt[k], 1))
             for m, k in (("P", "proteinas"), ("H", "hidratos"), ("G", "grasas"))
         }
         # Y si no ha cuadrado, se dice QUÉ habría que tocar. No basta con «sobran 6 g

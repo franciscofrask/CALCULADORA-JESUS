@@ -73,6 +73,67 @@ def test_cada_ingrediente_se_lleva_algo(headers):
     assert not a_cero, f"se han quedado a cero: {a_cero}"
 
 
+def test_cuadrar_tambien_funciona_en_el_peri(headers):
+    """El botón estaba en el intra y el post y no hacía nada.
+
+    Su objetivo vive en `periworkout` y no en `comidas`, y el endpoint solo miraba
+    `comidas`: le entraban 500 g de avena y devolvía 500 g. El botón se pulsaba y no
+    pasaba nada de nada.
+    """
+    for meal in ("Post", "Intra"):
+        alimentos = [{"alimento_id": AVENA, "cantidad_g": 500},
+                     {"alimento_id": CLARAS, "cantidad_g": 600}]
+        r = requests.post(f"{BASE_URL}/api/calculator/refit-diet",
+                          json={**DIA, "comidas": {meal: {"alimentos": alimentos}}},
+                          headers=headers, timeout=180)
+        assert r.status_code == 200
+        d = r.json()
+        obj = (d.get("distribution") or {}).get("periworkout", {}).get(meal)
+        assert obj, f"{meal} no tiene objetivo en periworkout"
+        servidos = d["comidas"][meal]["alimentos"]
+        assert len(servidos) == 2, f"{meal}: ha quitado alimentos"
+        cantidades = {a["alimento_id"]: a["cantidad_g"] for a in servidos}
+        assert cantidades[AVENA] < 500 and cantidades[CLARAS] < 600, (
+            f"{meal}: las cantidades salen igual que entraron, no ha cuadrado nada")
+        tot = {m: sum(float((a.get("macros_efectivos") or {}).get(m, 0) or 0) for a in servidos)
+               for m in ("P", "H")}
+        for m in ("P", "H"):
+            assert abs(tot[m] - float(obj[m])) <= 6, (
+                f"{meal}: {m} se queda en {tot[m]:.1f} con objetivo {obj[m]}")
+
+
+def test_en_el_peri_la_grasa_va_libre(headers):
+    """En Calma el objetivo del peri no tiene clave de grasas: no es que sea 0, es que
+    no se cuadra. Meter nueces en el post no puede saltar como «te sobra grasa»."""
+    NUECES = 425
+    alimentos = [{"alimento_id": NUECES, "cantidad_g": 60},
+                 {"alimento_id": CLARAS, "cantidad_g": 300},
+                 {"alimento_id": AVENA, "cantidad_g": 100}]
+    r = requests.post(f"{BASE_URL}/api/calculator/refit-diet",
+                      json={**DIA, "comidas": {"Post": {"alimentos": alimentos}}},
+                      headers=headers, timeout=180)
+    d = r.json()
+    servidos = d["comidas"]["Post"]["alimentos"]
+    grasa = sum(float((a.get("macros_efectivos") or {}).get("G", 0) or 0) for a in servidos)
+    assert grasa > 0, "el caso ya no lleva grasa; hay que rehacerlo"
+    assert d["desfases"]["Post"]["G"] == 0, "cuenta desfase de grasa en el peri"
+
+
+def test_adaptar_una_favorita_a_descanso_sigue_vaciando_el_peri(headers):
+    """El arreglo del peri toca la misma condición que usa «adaptar al tipo de día».
+    En un día de descanso no hay entreno, así que Intra y Post sí se vacían."""
+    r = requests.post(f"{BASE_URL}/api/calculator/refit-diet",
+                      json={**DIA, "tipo_dia": "descanso", "descartar_sin_objetivo": True,
+                            "comidas": {"Post": {"alimentos": [{"alimento_id": CLARAS, "cantidad_g": 300}]},
+                                        "C1": {"alimentos": [{"alimento_id": CLARAS, "cantidad_g": 200}]}}},
+                      headers=headers, timeout=180)
+    d = r.json()
+    assert d["comidas"]["Post"]["alimentos"] == [], "el Post no se ha vaciado en descanso"
+    assert len(d["comidas"]["C1"]["alimentos"]) == 1, "ha vaciado una comida que sí existe"
+    motivos = {e.get("motivo") for e in d.get("excluidos", [])}
+    assert "sin_objetivo_en_dia" in motivos
+
+
 def test_si_sobra_un_macro_dice_que_quitar(headers):
     """No basta con «sobran 22 g de grasa»: hay que decir por cuál empezar.
 

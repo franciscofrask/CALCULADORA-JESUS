@@ -2153,6 +2153,32 @@ caso duro, después:                  P  -3,9   H -46,1   G  -1,2
 Queda fijado en `tests/test_cuadrar_no_borra.py`, con el test que comprueba que **dar la
 vuelta a la lista da los mismos seis** -- que era exactamente lo que fallaba.
 
+
+### Y el «Cuadrar» del intra y el post no hacía nada
+
+Salió mirando lo anterior y Francisco pidió que se mirara. El botón estaba ahí, se
+pulsaba, y **no pasaba absolutamente nada**: entraban 500 g de avena y salían 500 g.
+
+El motivo: el objetivo del peri no vive en `distribution.comidas` sino en
+`distribution.periworkout`, y el endpoint solo miraba el primero. Como no encontraba
+objetivo, entraba en la rama de «esta comida no tiene hueco en el día» y devolvía la
+comida tal cual. El objetivo existía todo el rato, en la puerta de al lado.
+
+```
+antes:  Post  500 g de avena + 600 g de claras  ->  500 g y 600 g   (no toca nada)
+ahora:  Post  500 g de avena + 600 g de claras  ->   55 g y 300 g   (33P/33H sobre 36P/35H)
+```
+
+**Con un cuidado: en el peri la grasa va libre.** En Calma el objetivo del peri
+directamente no tiene clave de grasas -- no es que valga 0, es que no se cuadra --, y
+nuestro reparto la escribe como 0. Tomárselo al pie de la letra habría hecho que meter
+unas nueces en el post saltara como «te sobra grasa», que es falso. Así que en el peri se
+cuadran proteína e hidratos y la grasa no cuenta ni genera aviso.
+
+El arreglo toca la misma condición que usa «adaptar una favorita al tipo de día», que es
+donde estaba el riesgo: en un día de descanso no hay entreno, así que Intra y Post sí se
+siguen vaciando. Queda comprobado en `test_cuadrar_no_borra.py`, junto con lo demás.
+
 ### El margen del sugeridor era un embudo, no un techo
 
 Segundo aviso de Francisco el 08-08, y va al concepto: «el único margen que sirve es
