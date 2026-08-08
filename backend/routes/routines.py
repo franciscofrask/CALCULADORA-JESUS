@@ -10,7 +10,7 @@ import json
 
 from core.database import db
 from core.security import get_current_user, get_admin_user, assert_client_access
-from core.plan_access import require_access
+from core.plan_access import require_access, RUTINA_VISIBLE_PARA_EL_CLIENTE
 from routes.notifications import notify
 from models.common import RoutineResponse, RoutineCreate
 from models.user import PLAN_TYPES
@@ -186,7 +186,12 @@ async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(g
     }
     await db.routines.insert_one(routine_doc)
 
-    await notify(profile["user_id"], "rutina", "Tu coach te ha preparado una rutina nueva", "/dashboard/routine")
+    # La rutina se guarda igual -- el entrenador la sigue creando y asignando -- pero al
+    # cliente no se le avisa mientras no pueda verla (plan_access.RUTINA_VISIBLE_PARA_EL_CLIENTE,
+    # decision confirmada el 08-08-2026). Avisarle de algo que no puede abrir le ensena a
+    # ignorar los avisos, y son los mismos por los que se entera de sus macros.
+    if RUTINA_VISIBLE_PARA_EL_CLIENTE:
+        await notify(profile["user_id"], "rutina", "Tu coach te ha preparado una rutina nueva", "/dashboard/routine")
 
     return RoutineResponse(**routine_doc)
 

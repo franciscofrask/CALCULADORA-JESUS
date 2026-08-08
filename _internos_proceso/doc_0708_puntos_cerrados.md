@@ -1192,10 +1192,34 @@ viendo cuando dice que está mezclado.
 **Y ese selector tiene que quedarse donde está.** No es desorden: los macros del día dependen de
 si entrena o no, y el reparto de las comidas también. Sacarlo de Nutrición rompería el método.
 
-**Lo que falta es una decisión, y no es mía**: volver a enseñar Rutina al cliente. Está a una
-línea (el propio comentario dice qué restaurar), pero no es «mover una pestaña»: es reactivar
-una funcionalidad que se escondió por estar incompleta, tres días antes de que entren los
-primeros clientes de verdad. **Que lo diga Francisco.**
+**Decidido por Francisco el 08-08**: «no la reactives aún, puedes dejarla del lado del
+entrenador pero no del cliente». Así que se queda como está - y eso obliga a rematar algo que
+faltaba.
+
+**Lo que había suelto: al cliente se le seguía hablando de la rutina.** Tres sitios le mandaban
+avisos sobre una pantalla que no puede abrir:
+
+- «Mañana empiezas · **Tu rutina ya está cargada**», con enlace a `/dashboard/routine`
+- «**Tu rutina acaba el 12 de agosto** · Renuévala y sigue sin parar»
+- «**Tu coach te ha preparado una rutina nueva**», cada vez que el entrenador le asignaba una
+
+Los tres llevaban a una ruta que le devuelve al panel. Un aviso que no lleva a ningún sitio le
+enseña al cliente a ignorar los avisos - y son los mismos por los que se entera de sus macros.
+
+**Lo que hay ahora.** Una constante en el backend, `RUTINA_VISIBLE_PARA_EL_CLIENTE` en
+`core/plan_access.py`, gemela de `CAP.RUTINA` del front: se encienden las dos juntas el día que
+se reactive. Con ella apagada, el aviso de la rutina nueva no se manda, el de «tu rutina acaba»
+tampoco, y el de «Mañana empiezas» se queda pero **sin prometerle lo que no va a ver** y
+apuntando a su panel.
+
+**El entrenador no pierde nada.** Comprobado en el navegador: su sección **Rutinas** sigue
+entera (232 clientes, buscador, filtro «solo sin rutina», columnas de rutina, días de entreno y
+generada), la pestaña **Entreno** de la ficha sigue generando y guardando rutinas, y la columna
+«Sin rutina» del panel semanal sigue contando. Lo único que se apaga es lo que el cliente ve y
+lo que se le dice.
+
+Y comprobado también que `/dashboard/routine` escrito a mano **devuelve al cliente a su panel**,
+no al login - que es el fallo que se arregló en el punto 10 y que aquí no se repite.
 
 ---
 
@@ -1290,11 +1314,6 @@ antiguo" hay que comprobarlo contra la calculadora de verdad**.
 
 ### 2 · Lo que espera una orden de Francisco
 
-**¿Se le vuelve a enseñar la Rutina al cliente?** (punto 34). Está oculta desde el 19-07 «hasta
-completar la funcionalidad», y por eso el cliente no tiene pestaña de entrenamiento. Reactivarla
-es una línea, pero es volver a abrir algo que se cerró por estar incompleto, tres días antes de
-que entren los primeros clientes. En el flujo del entrenador el entrenamiento ya está separado.
-
 **Borrar las 18 cuentas de prueba de producción** (punto 10). Está todo preparado y probado en
 simulación contra producción: `backend/_limpiar_datos_prueba.py`, que no borra nada salvo que se
 le pase `--ejecutar`. `francisco@test.com` y la cuenta demo quedan fuera. **Dos de las 18 tienen
@@ -1305,7 +1324,7 @@ se borran esas dos también.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
 textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28, 29, 30, 31, 32, 33 y 35) está en GitHub y sin desplegar, esperando la orden.
+25, 27, 28, 29, 30, 31, 32, 33, 34 y 35) está en GitHub y sin desplegar, esperando la orden.
 
 **Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
 

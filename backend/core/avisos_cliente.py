@@ -26,6 +26,8 @@ Tres reglas que no son de estilo:
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from core.plan_access import RUTINA_VISIBLE_PARA_EL_CLIENTE
+
 # El tope de las condicionadas. Las de calendario no cuentan para esto.
 DIAS_ENTRE_CONDICIONADAS = 7
 
@@ -85,7 +87,10 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                     "calendario": True,
                 })
 
-    # "Mañana empiezas": el domingo de antes de arrancar.
+    # "Mañana empiezas": el domingo de antes de arrancar. Mientras la Rutina esté oculta
+    # para el cliente (ver plan_access.RUTINA_VISIBLE_PARA_EL_CLIENTE) no se le puede
+    # decir "tu rutina ya está cargada" ni mandarle a una pantalla que no puede abrir: el
+    # aviso se queda, pero apuntando a su panel y sin prometerle lo que no va a ver.
     if arranque:
         dias_para_arrancar = (arranque.date() - hoy).days
         if dias_para_arrancar == 1:
@@ -93,8 +98,8 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                 "clave": f"arranque:{arranque.date()}",
                 "tipo": "programa",
                 "titulo": "Mañana empiezas",
-                "cuerpo": "Tu rutina ya está cargada.",
-                "link": "/dashboard/routine",
+                "cuerpo": "Tu rutina ya está cargada." if RUTINA_VISIBLE_PARA_EL_CLIENTE else None,
+                "link": "/dashboard/routine" if RUTINA_VISIBLE_PARA_EL_CLIENTE else "/dashboard",
                 "calendario": True,
             })
 
@@ -120,8 +125,10 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                 "calendario": True,
             })
 
-    # "Tu rutina acaba el X": tres dias antes, no el dia que caduca.
-    if rutina_caduca:
+    # "Tu rutina acaba el X": tres dias antes, no el dia que caduca. Con la Rutina oculta
+    # este aviso no se manda: entero va de algo que el cliente no puede ver, y decirle
+    # "renuevala" cuando no tiene donde es peor que no decirle nada.
+    if rutina_caduca and RUTINA_VISIBLE_PARA_EL_CLIENTE:
         faltan = (rutina_caduca.date() - hoy).days
         if faltan == 3:
             fuera.append({

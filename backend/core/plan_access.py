@@ -33,6 +33,22 @@ from models.user import PLAN_TYPES
 # los 3 intentos). Por defecto, solo pagos al día.
 ACTIVE_SUBSCRIPTION_STATES = {"active", "trialing"}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# LA RUTINA, OCULTA PARA EL CLIENTE.
+#
+# Se escondio el 19-07-2026 "hasta completar la funcionalidad", y el 08-08-2026, al
+# revisar el punto 34 del documento del 07-08, Francisco lo confirma: se queda del lado
+# del entrenador y NO se le vuelve a ensenar al cliente todavia.
+#
+# El panel del entrenador no se toca: sigue creando, generando y asignando rutinas. Lo
+# que se apaga es lo que el cliente VE y lo que se le DICE. Sin esto le llegaban avisos
+# de una pantalla que no puede abrir ("tu rutina ya esta cargada", "tu coach te ha
+# preparado una rutina nueva"), con un enlace que le devuelve al panel. Un aviso que no
+# lleva a ningun sitio ensena al cliente a ignorar los avisos.
+#
+# Su gemelo en el front es CAP.RUTINA en lib/planAccess.js: los dos se encienden juntos.
+RUTINA_VISIBLE_PARA_EL_CLIENTE = False
+
 # Estados del perfil que bloquean el acceso pase lo que pase (baja, cancelación, impago).
 BLOCKED_PROFILE_STATES = {
     "baja", "baja_automatica", "cancelado", "inactivo",
