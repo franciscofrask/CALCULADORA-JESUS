@@ -1557,16 +1557,85 @@ manteniéndolos.
 
 ---
 
+---
+
+## Bloque F - La comparativa de fotos del reporte
+
+Siete puntos. **La mitad ya estaba** del documento del 05-08 (punto 3.2), y al comprobar la otra
+mitad salieron **tres fallos** que no estaban en el documento.
+
+### Puntos 48, 49 y 50 - Las etiquetas, la rotacion y no repetir · YA ESTABAN
+
+Las cuatro etiquetas (`inicial`, `inicio_fase`, `mes_anterior`, `actual`), la regla de que la
+inicial no se mueve de la izquierda y la de fusionar cuando dos etiquetas apuntan a la misma
+foto: todo eso se hizo el 05-08 y vive en `lib/comparativaFotos.js`, compartido con el informe
+del cliente (`core/informe_mensual.py`). El numero de fotos sale solo y cuadra con la tabla del
+punto 49: mes 1 -> 1, mes 2 -> 2, mes 3 en adelante -> 3, y 4 solo tras un cambio de fase.
+
+Comprobado en la app con un cliente de una sola sesion: la foto sale con **«DE DONDE VENGO ·
+COMO ESTOY HOY»**, las dos etiquetas en la misma foto, una sola vez. Que es el mes 1 de la tabla.
+
+### Punto 51 - Los dos botones · YA ESTABA
+
+«Ampliar comparativa» agranda y saca el resto de poses (por defecto solo de frente) y «Mostrar
+todas» despliega el historico entero. Los dos estan y hacen cosas distintas.
+
+### Punto 53 - El % graso NO se pide todos los meses · CERRADO
+
+El punto dice «hoy la app lo pide cada mes», y era verdad: el **check-in mensual** tenia un campo
+«% Grasa» que le salia al cliente cada cuatro semanas.
+
+Quitado. Es un dato que estima Jesus mirando las fotos, y solo en tres momentos - al principio,
+al empezar una fase y al acabarla -, y para eso ya esta el campo que hay **debajo de cada foto de
+la comparativa**, que es donde el coach lo esta mirando. Pedirselo al cliente cada mes lo
+convierte en ruido: nadie nota su cambio en cuatro semanas, asi que repite el mismo numero o pone
+uno al azar, y ese ruido entra luego en el eje respondedor del perfil.
+
+El backend lo sigue aceptando por si llega de una version vieja: si alguien se molesto en
+ponerlo, no se tira. Comprobado en la app: el check-in mensual pasa a ser **«Peso y medidas»** y
+ya solo pide el peso y las diez medidas.
+
+### Punto 54 - Las dos cosas que no pueden pasar · CERRADO
+
+- **Comparar solo contra el mes pasado**: no pasa. La inicial esta siempre, por diseño.
+- **Generar el informe sin fotos**: pasaba, y en silencio. En la ficha del coach la comparativa
+  hacia `return null` - **desaparecia entera**, y el coach abria Seguimiento sin saber si es que
+  no hay fotos o si la pantalla esta rota. Y en el informe del cliente, el apartado de fotos
+  sencillamente no salia: el informe se generaba entero y en ningun sitio se decia que faltaba
+  justo lo que hace que sirva de algo. **Lo que no se echa en falta no se sube.**
+
+  Ahora las dos pantallas lo dicen. La del coach: «Todavia no hay fotos suyas. Sin fotos no hay
+  comparacion, y sin comparacion esta pantalla no dice gran cosa». La del cliente, un hueco donde
+  irian: «Es lo que de verdad ensena lo que ha cambiado: la bascula se mueve poco y las fotos no
+  enganan».
+
+### Punto 52 - Lo que va debajo de cada foto · CERRADO, y con dos arreglos
+
+Fecha, peso y % graso ya estaban. Las medidas **no**: salian **las tres primeras del objeto**, o
+sea las que cayeran, y con su nombre interno (`brazo_d 38 cm`). Ahora salen **cintura y cadera**,
+que son las que se miran al lado de una foto, con su nombre de verdad, y las demas en el tooltip:
+debajo de una foto de un cuarto de ancho no caben diez filas, y la comparacion completa ya la da
+la tabla de evolucion de medidas del punto 35, justo encima.
+
+**Y un fallo de la propia pantalla, encontrado al mirarla**: la rejilla se repartia entre las
+fotos que hubiera, asi que **con una sola foto la comparativa ocupaba la pantalla entera** y
+habia que hacer scroll para pasar de ella - en la pantalla que, dice el bloque, «tiene que darlo
+todo de un vistazo». Y una sola foto es el mes 1: **todo cliente que entre el lunes**. Ahora la
+rejilla es siempre de cuatro columnas: cada foto ocupa lo mismo, van creciendo hacia la derecha
+segun se tienen, y la inicial se queda a la izquierda, que es la regla de Jesus.
+
+---
+
 ## PENDIENTES
 
 Todo lo que queda abierto, ordenado por quién tiene que mover ficha. **Actualizado el 8 de agosto**,
-con los bloques A al E cerrados.
+con los bloques A al F cerrados.
 
-Del documento de Jesús están trabajados los puntos **1 al 47**. Quedan por leer los bloques F al
-K: la comparativa de fotos del reporte (48-54), las tres preguntas del reporte (55-57), los
-arreglos de la base de alimentos (58-60), los fallos apuntados que siguen ahí (61-64), los menús
-autoajustables (65-75) y el asistente de IA (76-80). **Todos son de este fin de semana**, y dos
-de esos bloques (I y K) están marcados como imprescindibles para el domingo.
+Del documento de Jesús están trabajados los puntos **1 al 54**. Quedan por leer los bloques G al
+K: las tres preguntas del reporte (55-57), los arreglos de la base de alimentos (58-60), los
+fallos apuntados que siguen ahí (61-64), los menús autoajustables (65-75) y el asistente de IA
+(76-80). **Todos son de este fin de semana**, y dos de esos bloques (I y K) están marcados como
+imprescindibles para el domingo.
 
 ---
 
@@ -1607,7 +1676,7 @@ contra la calculadora de verdad**.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo hasta
 el commit `8421e3b`; lo posterior está en GitHub y sin desplegar, esperando la orden: el punto
 19, el test de entrada del documento de textos, las cuatro respuestas de la dieta, las dos reglas
-nuevas del filtro, y los **puntos 23, 25, 27 al 47** (o sea los bloques D y E enteros).
+nuevas del filtro, y los **puntos 23, 25 y 27 al 54** (los bloques D, E y F enteros).
 
 **Y con ese despliegue, pasar cuatro scripts**, cada uno **una sola vez** y después de subir:
 

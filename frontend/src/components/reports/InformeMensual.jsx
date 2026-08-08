@@ -239,6 +239,25 @@ export const InformeMensual = ({ informe, onPedirFotos }) => {
                 </Apartado>
             )}
 
+            {/* SIN FOTOS NO HAY COMPARACIÓN, Y HAY QUE DECIRLO (punto 54 del doc del 07-08).
+                Antes, si el cliente no había subido ninguna, el apartado de fotos
+                sencillamente no salía: el informe se generaba entero y en ningún sitio se
+                decía que faltaba justo lo que hace que esto sirva de algo. Y lo que no se
+                echa en falta no se sube. */}
+            {!fotos.comparativa?.length && todasLasFotos.length === 0 && (
+                <Apartado titulo="Tú, mes a mes">
+                    <div className="rounded-xl border border-dashed border-border p-4 text-center" data-testid="informe-sin-fotos">
+                        <Camera className="w-6 h-6 text-muted-foreground/40 mx-auto mb-2" />
+                        <p className="text-sm text-foreground font-medium">Aquí irían tus fotos</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Es lo que de verdad enseña lo que ha cambiado: la báscula se mueve poco
+                            y las fotos no engañan. Súbelas con tu próximo reporte y a partir de
+                            ahí se comparan solas.
+                        </p>
+                    </div>
+                </Apartado>
+            )}
+
             <Apartado titulo="Lo que has cumplido">
                 <div className="grid grid-cols-2 gap-4">
                     <Barra etiqueta="Dieta registrada" dato={cumplimiento.dieta}

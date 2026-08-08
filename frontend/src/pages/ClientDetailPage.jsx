@@ -2734,6 +2734,29 @@ const BodyFatFoto = ({ api, clientId, fecha, valor, onGuardado }) => {
     );
 };
 
+// Las medidas que van debajo de una foto de la comparativa (punto 52). Cintura y cadera a la
+// vista - son las que se miran al lado de una foto - y las demás en el tooltip.
+const DESTACADAS = ['cintura', 'cadera'];
+const MedidasDeLaFoto = ({ medidas }) => {
+    const conNombre = MEDIDAS
+        .map(({ key, label }) => ({ key, label, valor: valorAnterior(medidas, key) }))
+        .filter(m => m.valor != null);
+    if (!conNombre.length) return null;
+    const arriba = conNombre.filter(m => DESTACADAS.includes(m.key));
+    const resto = conNombre.filter(m => !DESTACADAS.includes(m.key));
+    const alPasar = resto.map(m => `${m.label}: ${m.valor} cm`).join('\n');
+    return (
+        <p className="text-[11px] text-white/40 leading-tight" title={alPasar || undefined}>
+            {(arriba.length ? arriba : conNombre.slice(0, 2)).map(m => (
+                <span key={m.key} className="block">{m.label} <b className="text-white/60">{m.valor}</b> cm</span>
+            ))}
+            {resto.length > 0 && arriba.length > 0 && (
+                <span className="block text-white/25 cursor-help">y {resto.length} medidas más</span>
+            )}
+        </p>
+    );
+};
+
 const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, faseDesde, fase, porcentajesGrasos }) => {
     const [appFotos, setAppFotos] = useState([]);
     const [ampliada, setAmpliada] = useState(false);
@@ -2798,7 +2821,28 @@ const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, fa
     }, [calmaFotos, appFotos, pesos, medidasPorFecha]);
 
     const comparativa = useMemo(() => construirComparativa(sesiones, faseDesde), [sesiones, faseDesde]);
-    if (!comparativa.length) return null;
+
+    // SIN FOTOS NO HAY COMPARACIÓN, Y HAY QUE DECIRLO (punto 54 del doc del 07-08). Antes
+    // esto hacía `return null`: la comparativa desaparecía entera y el coach abría
+    // Seguimiento sin saber si es que no hay fotos o si la pantalla está rota. Y esta es la
+    // pantalla que mira para cambiarle los macros a alguien.
+    if (!comparativa.length) {
+        return (
+            <Card className="bg-[#111] border-[#222]" data-testid="comparativa-sin-fotos">
+                <CardContent className="p-5 flex items-start gap-3">
+                    <Camera className="w-5 h-5 text-white/25 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm text-white/70 font-medium">Todavía no hay fotos suyas</p>
+                        <p className="text-xs text-white/35 mt-0.5">
+                            Sin fotos no hay comparación, y sin comparación esta pantalla no dice
+                            gran cosa. Al cliente ya le salta el aviso para que las suba; si las
+                            manda por WhatsApp, se pueden subir por él desde aquí abajo.
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
 
     const pintaFoto = (f) => f.source === 'calma'
         ? <CalmaFoto api={api} clientId={clientId} foto={{ file: f.file }} />
@@ -2823,7 +2867,15 @@ const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, fa
                         )))}
                     </div>
                 ) : (
-                    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${comparativa.length}, minmax(0, 1fr))` }}>
+                    /* SIEMPRE CUATRO COLUMNAS, aunque haya menos fotos. Antes la rejilla se
+                       repartía entre las que hubiera, así que con una sola -- el mes 1, o
+                       sea todo cliente nuevo -- la foto salía a pantalla completa y había
+                       que hacer scroll para pasar de ella, en la pantalla que justamente
+                       tiene que darlo todo de un vistazo (bloque F).
+                       Con cuatro columnas fijas cada foto ocupa siempre lo mismo, van
+                       creciendo hacia la derecha según se van teniendo, y la inicial se
+                       queda a la izquierda - que es la regla de Jesús. */
+                    <div className="grid gap-3 grid-cols-4">
                         {comparativa.map(c => (
                             <div key={c.fecha} className="space-y-1">
                                 <div className={ampliada ? 'grid grid-cols-2 gap-1' : ''}>
@@ -2837,10 +2889,16 @@ const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, fa
                                 <p className="text-[11px] text-white/40 leading-tight">
                                     {_fechaCorta(c.fecha)}
                                     {c.peso != null && <span className="block text-white font-bold">{c.peso} kg</span>}
-                                    {c.medidas && Object.entries(c.medidas).slice(0, 3).map(([k, v]) => (
-                                        <span key={k} className="block">{k} {v} cm</span>
-                                    ))}
                                 </p>
+                                {/* LAS MEDIDAS DE ESE MOMENTO (punto 52 del doc del 07-08).
+                                    Antes salían las TRES PRIMERAS del objeto - o sea las que
+                                    cayeran, con su nombre interno (`brazo_d 38 cm`). Ahora
+                                    salen cintura y cadera, que son las que se miran junto a
+                                    una foto, con su nombre de verdad, y el resto está en el
+                                    tooltip: debajo de una foto de 1/4 de ancho no caben diez
+                                    filas, y la comparación completa ya la da la tabla de
+                                    evolución de medidas (punto 35), aquí arriba. */}
+                                {c.medidas && <MedidasDeLaFoto medidas={c.medidas} />}
                                 {/* El % graso se estima MIRANDO LA FOTO y solo cuando toca (3.3),
                                     así que se anota aquí, no en un campo suelto. Cada anotación
                                     engorda la serie por fecha, que es de donde sale el eje

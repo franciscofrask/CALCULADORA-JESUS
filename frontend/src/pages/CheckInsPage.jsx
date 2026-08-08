@@ -396,10 +396,18 @@ const CheckInsPage = () => {
                 </Collapsible>
 
                 <Collapsible open={openForm === 'monthly'} onToggle={() => setOpenForm(openForm === 'monthly' ? null : 'monthly')}
-                    icon={TrendingUp} title="Check-in mensual" subtitle="Medidas + composición">
+                    icon={TrendingUp} title="Check-in mensual" subtitle="Peso y medidas">
+                    {/* EL % GRASO NO SE PIDE TODOS LOS MESES (punto 53 del doc del 07-08).
+                        Aquí había un campo «% Grasa» que le salía al cliente cada mes. Es un
+                        dato que estima Jesús mirando las fotos, y solo en tres momentos: al
+                        principio, al empezar una fase y al acabarla. Pedírselo al cliente
+                        cada cuatro semanas lo convierte en ruido - nadie nota su cambio en un
+                        mes, así que repite el mismo número o pone uno al azar -, y ese ruido
+                        entra luego en el eje respondedor del perfil.
+                        Se anota desde la comparativa de fotos de su ficha, que es donde el
+                        coach lo está mirando. */}
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Peso (kg)"><input type="number" step="0.1" value={monthly.weight} onChange={e => setMonthly({ ...monthly, weight: e.target.value })} className={inputCls} /></Field>
-                        <Field label="% Grasa"><input type="number" step="0.1" value={monthly.body_fat_pct} onChange={e => setMonthly({ ...monthly, body_fat_pct: e.target.value })} className={inputCls} /></Field>
                     </div>
                     {/* Las MISMAS diez que en el reporte y en el punto de partida. Había
                         tres listas distintas en la app y ninguna era la suya, así que la

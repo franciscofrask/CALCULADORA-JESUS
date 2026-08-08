@@ -178,9 +178,14 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     if data.weight is not None:
         await anotar_peso(profile["id"], data.weight, checkin["created_at"][:10],
                           origen=f"check-in {data.type}")
-    # Y el % graso del check-in mensual, que hasta ahora se quedaba dentro del check-in sin
-    # llegar a ninguna serie. Es justo el dato que falta: de 162 clientes solo 62 lo tienen
-    # en dos momentos, y sin dos momentos no hay eje respondedor que medir.
+    # El % graso del check-in mensual, si viene. La pantalla YA NO LO PIDE (punto 53 del
+    # doc del 07-08: "hoy la app lo pide cada mes" y no debe): es un dato que estima Jesus
+    # mirando las fotos, y solo al principio, al empezar una fase y al acabarla. Pedirselo
+    # al cliente cada cuatro semanas lo convierte en ruido -- repite el mismo numero o pone
+    # uno al azar -- y ese ruido entra luego en el eje respondedor.
+    #
+    # Se sigue aceptando por si llega de una version vieja de la app o de un check-in ya
+    # guardado: si alguien se molesto en ponerlo, no se tira.
     if data.body_fat_pct is not None:
         await anotar_grasa(profile["id"], data.body_fat_pct, checkin["created_at"][:10],
                            origen=f"check-in {data.type}")
