@@ -171,7 +171,7 @@ const CheckInsPage = () => {
     const [submitting, setSubmitting] = useState(false);
     const [openForm, setOpenForm] = useState(null);
 
-    const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null });
+    const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null, comido_hoy: '' });
     const [weekly, setWeekly] = useState({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
     const [monthly, setMonthly] = useState({ weight: '', body_fat_pct: '', goals_progress: '', challenges: '', notes: '',
         ...Object.fromEntries(MEDIDAS.map(m => [m.key, ''])) });
@@ -218,9 +218,12 @@ const CheckInsPage = () => {
         }
         setSubmitting(true);
         try {
-            await api.post('/checkins', { type: 'daily', ...daily });
+            await api.post('/checkins', {
+                type: 'daily', ...daily,
+                comido_hoy: (daily.comido_hoy || '').trim() || null,
+            });
             toast.success('Check-in diario enviado');
-            setDaily({ energy: null, hunger_anxiety: null });
+            setDaily({ energy: null, hunger_anxiety: null, comido_hoy: '' });
             fetchAll();
         } catch { toast.error('Error al enviar check-in'); }
         finally { setSubmitting(false); }
@@ -348,6 +351,23 @@ const CheckInsPage = () => {
                             </div>
                             <p className="text-[11px] text-foreground/40 mt-1.5">1 = nada · 5 = mucha</p>
                         </div>
+                        {/* Lo que ha comido de verdad, con sus palabras. No es su dieta: esa ya
+                            está en la app. Es el picoteo, la cerveza y el trozo de tarta que no
+                            aparecen en ningún sitio, y que son justo lo que explica por qué
+                            alguien coge peso sin saber por qué. */}
+                        <div>
+                            <span className="text-sm text-foreground/70 mb-2 block">¿Qué has comido hoy?</span>
+                            <textarea
+                                rows={3}
+                                value={daily.comido_hoy}
+                                onChange={e => setDaily({ ...daily, comido_hoy: e.target.value })}
+                                data-testid="daily-comido"
+                                placeholder="Cuéntalo a tu manera, sin pesar nada. Incluye lo que picaste entre horas."
+                                className={inputCls + ' resize-none'} />
+                            <p className="text-[11px] text-foreground/40 mt-1.5">
+                                Opcional, pero es lo que más ayuda a entender cómo te va.
+                            </p>
+                        </div>
                         <button onClick={submitDaily} disabled={submitting}
                             className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
                             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar check-in
@@ -420,14 +440,21 @@ const CheckInsPage = () => {
                                     </span>
                                 </div>
                                 {c.type === 'daily' ? (
-                                    <p className="text-sm text-foreground/70">
-                                        {/* Los check-ins viejos traen ánimo y entreno; los nuevos, no. */}
-                                        {c.mood != null && `Ánimo ${c.mood}/5 · `}
-                                        {c.energy != null && `Energía ${c.energy}/5`}
-                                        {c.hunger_anxiety != null && ` · Hambre ${c.hunger_anxiety}/5`}
-                                        {c.trained != null && (c.trained ? ' · Entrenó' : ' · No entrenó')}
-                                        {c.nutrition_followed != null && (c.nutrition_followed ? ' · Dieta ✓' : ' · Dieta ✗')}
-                                    </p>
+                                    <>
+                                        <p className="text-sm text-foreground/70">
+                                            {/* Los check-ins viejos traen ánimo y entreno; los nuevos, no. */}
+                                            {c.mood != null && `Ánimo ${c.mood}/5 · `}
+                                            {c.energy != null && `Energía ${c.energy}/5`}
+                                            {c.hunger_anxiety != null && ` · Hambre ${c.hunger_anxiety}/5`}
+                                            {c.trained != null && (c.trained ? ' · Entrenó' : ' · No entrenó')}
+                                            {c.nutrition_followed != null && (c.nutrition_followed ? ' · Dieta ✓' : ' · Dieta ✗')}
+                                        </p>
+                                        {c.comido_hoy && (
+                                            <p className="text-sm text-foreground/60 mt-2 whitespace-pre-line border-l-2 border-border pl-3">
+                                                {c.comido_hoy}
+                                            </p>
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-foreground/70">
                                         {c.weight != null && <span><Scale className="w-3 h-3 inline mr-1" />{c.weight} kg</span>}

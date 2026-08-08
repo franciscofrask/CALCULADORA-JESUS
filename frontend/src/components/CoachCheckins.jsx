@@ -257,23 +257,33 @@ const CoachCheckins = ({ clientId }) => {
                             ].filter(Boolean);
                             const sinDatos = !escalas.length && c.trained == null && c.nutrition_followed == null;
                             return (
-                                <li key={c.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-xs">
-                                    <span className="text-white/50 whitespace-nowrap">{fmt(c.created_at)}</span>
-                                    <span className="text-white/70 text-right">
-                                        {escalas.join(' · ')}
-                                        {c.trained != null && (
-                                            <span className={c.trained ? 'text-emerald-300' : 'text-red-300'}>
-                                                {escalas.length ? ' · ' : ''}{c.trained ? 'Entrenó' : 'No entrenó'}
-                                            </span>
-                                        )}
-                                        {c.nutrition_followed != null && (
-                                            <span className={c.nutrition_followed ? 'text-emerald-300' : 'text-red-300'}>
-                                                {(escalas.length || c.trained != null) ? ' · ' : ''}
-                                                {c.nutrition_followed ? 'Dieta registrada' : 'Sin dieta registrada'}
-                                            </span>
-                                        )}
-                                        {sinDatos && <span className="text-white/30 italic">sin respuestas</span>}
-                                    </span>
+                                <li key={c.id} className="px-5 py-2.5 text-xs">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-white/50 whitespace-nowrap">{fmt(c.created_at)}</span>
+                                        <span className="text-white/70 text-right">
+                                            {escalas.join(' · ')}
+                                            {c.trained != null && (
+                                                <span className={c.trained ? 'text-emerald-300' : 'text-red-300'}>
+                                                    {escalas.length ? ' · ' : ''}{c.trained ? 'Entrenó' : 'No entrenó'}
+                                                </span>
+                                            )}
+                                            {c.nutrition_followed != null && (
+                                                <span className={c.nutrition_followed ? 'text-emerald-300' : 'text-red-300'}>
+                                                    {(escalas.length || c.trained != null) ? ' · ' : ''}
+                                                    {c.nutrition_followed ? 'Dieta registrada' : 'Sin dieta registrada'}
+                                                </span>
+                                            )}
+                                            {sinDatos && !c.comido_hoy && <span className="text-white/30 italic">sin respuestas</span>}
+                                        </span>
+                                    </div>
+                                    {/* Lo que dice que ha comido, con sus palabras. Es donde aparece
+                                        el picoteo que no está en ninguna dieta, y suele ser la
+                                        explicación de por qué alguien coge peso sin entender nada. */}
+                                    {c.comido_hoy && (
+                                        <p className="text-white/60 mt-1.5 whitespace-pre-line border-l-2 border-[#333] pl-3 leading-relaxed">
+                                            {c.comido_hoy}
+                                        </p>
+                                    )}
                                 </li>
                             );
                         })}

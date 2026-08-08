@@ -112,7 +112,6 @@ def _compute_health_score(checkins: List[dict], profile: dict) -> dict:
 
 # ==================== CHECK-INS ====================
 
-@router.post("/checkins", response_model=CheckInResponse)
 async def _dieta_y_entreno_del_dia(profile: dict, fecha: str) -> Dict[str, Any]:
     """Lo que ese día ya consta en la base, para no preguntárselo.
 
@@ -139,6 +138,12 @@ async def _dieta_y_entreno_del_dia(profile: dict, fecha: str) -> Dict[str, Any]:
     return out
 
 
+# El decorador estaba pegado a la funcion de arriba, que es una ayudante interna. Con eso, la
+# ruta POST /checkins registraba a `_dieta_y_entreno_del_dia`, cuyos parametros (`profile` y
+# `fecha`) FastAPI tomaba por parametros de la URL: cualquier cliente que enviaba un check-in
+# recibia un 422 pidiendole una `fecha` que nadie le habia preguntado. O sea, mandar un
+# check-in -- diario, semanal o mensual -- no funcionaba para nadie.
+@router.post("/checkins", response_model=CheckInResponse)
 async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     if data.type not in VALID_CHECKIN_TYPES:
         raise HTTPException(status_code=400, detail=f"Tipo invalido. Usa uno de: {VALID_CHECKIN_TYPES}")

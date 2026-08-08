@@ -89,6 +89,12 @@ class CheckInCreate(BaseModel):
     # los dos últimos los deduce el servidor, y se conservan aquí por los check-ins viejos.
     energy: Optional[int] = None            # 1-5 (o 1-10 en weekly)
     hunger_anxiety: Optional[int] = None    # 1-5 · ansiedad y hambre (saturación en volumen)
+    # Lo que ha comido hoy, con sus palabras (punto 18 del doc del 07-08). No es la dieta
+    # planificada -- esa ya está en la app y el servidor la rellena solo -- sino lo que se ha
+    # comido de verdad. Sirve para dos cosas, y las dos las dice Jesús: al cliente le hace
+    # tomar conciencia de lo que se lleva a la boca, y a él le explica por qué alguien coge
+    # peso sin saber por qué (el picoteo que nadie apunta en la dieta).
+    comido_hoy: Optional[str] = None
     mood: Optional[int] = None
     trained: Optional[bool] = None
     nutrition_followed: Optional[bool] = None
@@ -114,6 +120,8 @@ class CheckInResponse(BaseModel):
     type: str
     mood: Optional[int] = None
     energy: Optional[int] = None
+    hunger_anxiety: Optional[int] = None
+    comido_hoy: Optional[str] = None
     trained: Optional[bool] = None
     nutrition_followed: Optional[bool] = None
     weight: Optional[float] = None

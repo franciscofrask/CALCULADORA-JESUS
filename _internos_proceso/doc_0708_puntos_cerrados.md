@@ -484,6 +484,34 @@ respuesta es lo que decide qué se guarda y qué se hace luego con ese dato (la 
 "parecido", por ejemplo, hace que se le pida su dieta para partir de ella). En cuanto llegue,
 esto es de un rato.
 
+### Punto 18 - El check-in diario · MEDIO CERRADO (y con un fallo grave encontrado)
+
+Este punto pedía dos cosas y solo una dependía del documento de textos.
+
+**Sustituir las preguntas por las de Jesús: bloqueado.** Hoy el check-in diario pregunta dos
+cosas, energía y "ansiedad y hambre", que vienen del documento del 31-07. Cambiarlas requiere
+saber cuáles son las suyas, y están en el documento de textos que aún no tenemos.
+
+**Que el cliente apunte lo que ha comido: hecho.** Es un campo de texto libre en el check-in
+diario, opcional, con la pregunta "¿Qué has comido hoy?" y un aviso de que no hace falta pesar
+nada y de que incluya lo que picó entre horas. No es su dieta -- esa ya está en la app y el
+servidor la da por registrada él solo --: es lo que se ha comido de verdad. Se guarda con el
+check-in, el cliente lo ve en su historial y **el entrenador lo ve en la ficha del cliente**,
+debajo de la línea de ese día, que es donde tiene sentido: ahí aparece el picoteo que no está
+en ninguna dieta, que es justo lo que explica por qué alguien coge peso sin saber por qué.
+
+**Y mirando esto apareció un fallo que se llevaba por delante los check-ins enteros.** El
+decorador de la ruta `POST /checkins` estaba pegado a una función auxiliar de más arriba en vez
+de a la que crea el check-in. Con eso, FastAPI registraba como ruta la función auxiliar, cuyos
+parámetros (`profile` y `fecha`) tomaba por parámetros de la URL: **cualquier cliente que
+enviaba un check-in recibía un error pidiéndole una "fecha" que nadie le había preguntado**.
+Ni el diario, ni el semanal, ni el mensual. No funcionaba para nadie.
+
+Estaba así en el repositorio de antes de tocar nada, **y también en producción**, comprobado
+en el servidor. Arreglado: el decorador vuelve a la función que crea el check-in, y probado de
+punta a punta (se envía, se guarda con lo que ha comido, y se lee tanto en el historial del
+cliente como en la ficha del entrenador).
+
 ---
 
 ## Pendientes que no dependen de nosotros
@@ -509,6 +537,9 @@ Detalle y consecuencias en el propio punto 11.
 - **Punto 17**, las respuestas de «¿Sigues una dieta ahora?»: hoy son tres y el documento pide
   más, pero el texto exacto de cada una está en el de textos y no se puede inventar, porque de
   esa respuesta depende lo que la app hace después con el dato.
+- **Punto 18**, las preguntas del check-in diario: hoy pregunta energía y "ansiedad y hambre",
+  del documento del 31-07, y hay que cambiarlas por las suyas. La otra mitad del punto (que
+  apunte lo que ha comido) ya está hecha.
 
 Nadie sabe cuál es ese documento ni dónde está. **Hay que pedírselo a Jesús.**
 
