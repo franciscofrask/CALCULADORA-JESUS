@@ -47,32 +47,51 @@ import BodyFatSlider, { BF_PERCENTAGES, BF_DEFAULT } from '../components/Selecto
 // su primer tramo. El cálculo va una sola vez, al final, cuando ya están también las
 // respuestas que mueven los hidratos; así lo que se le entrega son sus macros de verdad y no
 // unos provisionales que había que afinar después en otro cuestionario.
+// Los textos son los del documento «LOS TEXTOS DE LA APP» de Jesús (6 de agosto, versión
+// definitiva), literales, con su aclaración debajo de cada pregunta. El orden también es el
+// suyo: objetivo, confirmación, experiencia, datos, actividad, deporte, apetito, engordo,
+// definir, biotipo, grasa y dieta.
 const PREGUNTAS_ALTA = [
     { type: 'statement', title: 'Empecemos', desc: 'Unas preguntas y tienes tus macros.' },
     {
-        type: 'choice', key: 'sex', title: '¿Cuál es tu sexo?',
+        type: 'choice', key: 'goal', title: '¿Cuál es tu objetivo?',
+        desc: 'Una de dos: o ganar masa muscular o perder grasa. Las dos cosas a la vez, NO. Piensa, prioriza y elige, por ese orden.',
+        options: [
+            { value: 'volumen', label: 'Ganar Masa Muscular (VOLUMEN)' },
+            { value: 'definicion', label: 'Perder Grasa (DEFINICIÓN)' },
+        ],
+    },
+    {
+        type: 'choice', key: '_confirm', title: '¿Estás seguro?',
+        desc: 'Mira bien, que luego no quiero que me digas que tú en realidad lo que querías era definir y perder grasa.',
+        // opciones dinámicas según goal (se generan en render)
+        confirm: true,
+    },
+    {
+        // Pantalla 3 del documento. Estaba en el cuestionario largo, que solo ven los planes
+        // con entrenador, y con cinco opciones por años. Jesús la quiere en el test de
+        // entrada y con estas cuatro: lo que le interesa no es el desarrollo muscular, es si
+        // sabe entrenar.
+        type: 'choice', key: 'training_experience', title: '¿Qué experiencia tienes entrenando fuerza en el gimnasio?',
+        desc: 'Me da igual el grado de desarrollo muscular que tengas en este momento, me interesa saber si sabes entrenar y cuánta experiencia tienes.',
+        options: [
+            { value: 'cero', label: 'Parto de cero' },
+            { value: 'principiante', label: 'Menos de 1 año (principiante)' },
+            { value: 'intermedio', label: 'Más de 1 año (intermedio)' },
+            { value: 'avanzado', label: 'Años, en serio (avanzado)' },
+        ],
+    },
+    {
+        type: 'choice', key: 'sex', title: 'Hombre o mujer.',
         desc: 'Lo usamos para calcular tus macros con la tabla correcta.',
         options: [
             { value: 'hombre', label: 'Hombre' },
             { value: 'mujer', label: 'Mujer' },
         ],
     },
-    {
-        type: 'choice', key: 'goal', title: 'Lo más importante de todo: ¿Cuál es tu objetivo?',
-        desc: 'Una de dos: ganar masa muscular o perder grasa. Las dos a la vez, NO. Piensa, prioriza y elige.',
-        options: [
-            { value: 'volumen', label: 'Quiero ganar Masa Muscular (VOLUMEN)' },
-            { value: 'definicion', label: 'Quiero perder Grasa (DEFINICIÓN)' },
-        ],
-    },
-    {
-        type: 'choice', key: '_confirm', title: '¿Estás seguro?',
-        desc: 'Mira bien, que luego no quiero que me digas que en realidad querías lo otro.',
-        // opciones dinámicas según goal (se generan en render)
-        confirm: true,
-    },
-    { type: 'number', key: 'weight', title: '¿Cuánto pesas?', desc: 'Pésate siempre igual: en ayunas, sin ropa y después de ir al baño.', unit: 'kg', required: true },
-    { type: 'bf', key: 'body_fat', title: '¿Cuál dirías que es tu porcentaje de grasa actual?', desc: 'Elige el valor más cercano a tu % de grasa estimado.' },
+    { type: 'number', key: 'weight', title: 'Peso.', desc: 'En ayunas, sin ropa y después de ir al baño.', unit: 'kg', required: true },
+    { type: 'bf', key: 'body_fat', title: '¿Cuál dirías que es tu porcentaje de grasa actual?',
+      desc: 'Pasa las fotos y quédate con la que más se parezca a cómo te ves ahora: relajado, sin meter tripa y con la misma luz. Mírate de frente y de perfil, no solo de frente. Si dudas entre dos, elige la de más grasa.' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,16 +109,22 @@ const traeDieta = (a) => a.sigue_dieta === true || a.sigue_dieta === 'parecido';
 const STEPS_AJUSTE = [
     { type: 'statement', title: 'Afina tus macros', desc: 'Unas preguntas para ajustar tus números a tu vida real. Verás los macros moverse a medida que contestas.', cta: 'Vamos' },
     {
-        type: 'choice', key: 'actividad_diaria', title: '¿Cómo es tu actividad diaria, fuera del gimnasio?',
-        desc: 'Ir al gimnasio 1h 4-5 veces/semana no te hace activo. Piensa en cuánto te mueves en tu día a día.',
+        // CUATRO opciones (pantalla 5 del documento de textos), donde antes había tres. Ojo
+        // con los macros: el +10 % de hidratos lo cobra SOLO "muy activo", que es lo que dice
+        // el documento del 07-08. Las otras tres no suben nada, ni siquiera la de en medio.
+        // Los valores viejos (`sedentario` / `normal`) se conservan para los clientes que ya
+        // contestaron: `sedentario` es ahora "muy sedentario" y `normal` "ligeramente activo".
+        type: 'choice', key: 'actividad_diaria', title: '¿Cómo describirías tu nivel de actividad diaria?',
+        desc: 'Ir al gimnasio 1 hora 4-5 veces a la semana no te convierte en una persona activa, OJO. Piensa en lo mucho o lo poco que te mueves en tu día a día.',
         options: [
-            { value: 'sedentario', label: 'Sedentario: paso casi todo el día sentado, apenas me muevo.' },
-            { value: 'normal', label: 'Normal: me muevo a diario, pero sin esfuerzos físicos importantes.' },
+            { value: 'sedentario', label: 'Muy sedentario: paso casi todo el día sentado, apenas me muevo.' },
+            { value: 'normal', label: 'Ligeramente activo: me muevo algo, pero sin esfuerzos físicos.' },
+            { value: 'moderado', label: 'Moderadamente activo: estoy de pie o en movimiento buena parte del día.' },
             { value: 'muy_activo', label: 'Muy activo: mi día a día es muy demandante físicamente, no paro.' },
         ],
     },
     {
-        type: 'choice', key: 'deporte_extra', title: '¿Practicas otro deporte además de las pesas?',
+        type: 'choice', key: 'deporte_extra', title: '¿Practicas otro deporte con intensidad?',
         desc: 'Fútbol, running, ciclismo, artes marciales... cualquier deporte con regularidad.',
         options: [
             { value: true, label: 'Sí' },
@@ -107,22 +132,48 @@ const STEPS_AJUSTE = [
         ],
     },
     {
-        type: 'choice', key: 'facilidad_engordar', title: 'Cuando te pasas comiendo, ¿engordas?',
-        desc: 'Piensa en vacaciones, Navidades o épocas en las que comiste de más.',
+        // Las dos preguntas de seguimiento de la pantalla 6. Solo para el que ha dicho que sí.
+        // No mueven macros: sirven para que el entrenador sepa qué hace y cuándo.
+        type: 'text', key: 'deporte_cual', title: '¿Cuál, cuántos días y a qué intensidad?',
+        cond: a => a.deporte_extra === true,
+        placeholder: 'Por ejemplo: pádel, dos días entre semana, a buen ritmo',
+        textarea: true,
+    },
+    {
+        type: 'choice', key: 'deporte_en_descanso',
+        title: '¿Habría posibilidad de que lo hicieras en días en que no vayas al gimnasio?',
+        cond: a => a.deporte_extra === true,
         options: [
-            { value: 'enseguida', label: 'Enseguida: en cuanto me descuido, subo de peso.' },
-            { value: 'normal', label: 'Normal: si me paso una temporada, se nota.' },
-            { value: 'casi_no', label: 'Casi no: puedo comer de más y apenas engordo.' },
+            { value: true, label: 'Sí' },
+            { value: false, label: 'No' },
+            { value: 'ya', label: 'Ya lo hago así' },
         ],
     },
     {
-        // P5 del doc: se guarda, no mueve los macros.
-        type: 'choice', key: 'cuesta_definir', title: '¿Te cuesta definir?',
-        desc: 'Nos ayuda a situarte entre los clientes que ya han pasado por aquí.',
+        // Pantalla 7, nueva. No mueve macros: alimenta el perfil.
+        type: 'choice', key: 'apetito', title: '¿Eres de buen comer?',
         options: [
-            { value: 'mucho', label: 'Mucho: siempre me ha costado quitarme la grasa.' },
-            { value: 'normal', label: 'Lo normal: con esfuerzo, lo consigo.' },
-            { value: 'poco', label: 'Poco: defino con facilidad.' },
+            { value: 'mucho', label: 'Mucho' },
+            { value: 'normal', label: 'Lo normal' },
+            { value: 'poco', label: 'Poco' },
+        ],
+    },
+    {
+        type: 'choice', key: 'facilidad_engordar', title: 'Cuando te pasas comiendo, ¿engordas?',
+        desc: 'Piensa en vacaciones, Navidades o épocas en las que comiste de más.',
+        options: [
+            { value: 'enseguida', label: 'Enseguida' },
+            { value: 'normal', label: 'Lo normal' },
+            { value: 'casi_no', label: 'Casi no' },
+        ],
+    },
+    {
+        // No mueve macros: alimenta el biotipo declarado.
+        type: 'choice', key: 'cuesta_definir', title: '¿Te cuesta definir?',
+        options: [
+            { value: 'mucho', label: 'Mucho' },
+            { value: 'normal', label: 'Lo normal' },
+            { value: 'poco', label: 'Nada' },
         ],
     },
     {
@@ -263,19 +314,10 @@ const STEPS_ONBOARD = [
 const STEPS_NIVEL1 = [
     { type: 'statement', title: 'Ahora, tu perfil completo', desc: 'Unas preguntas más para el equipo: le sirven para tu estrategia, tu rutina y tus menús. Estas ya no cambian tus macros.', cta: 'Seguir' },
     { type: 'date', key: 'birthdate', title: 'Fecha de nacimiento', desc: 'La verdadera, no me engañes.', required: true },
-    {
-        // P13 del doc: los tramos son los suyos (menos de 1, 1-3, 3-10, mas de 10, y el que
-        // entreno antes pero lleva parado, que no es lo mismo que empezar de cero).
-        type: 'choice', key: 'training_experience', title: '¿Cuántos años llevas entrenando con pesas de forma regular?',
-        desc: 'Me da igual tu desarrollo muscular actual: me interesa la experiencia que tienes entrenando.',
-        options: [
-            { value: 'menos_1', label: 'Menos de 1 año' },
-            { value: '1_3', label: 'Entre 1 y 3 años' },
-            { value: '3_10', label: 'Entre 3 y 10 años' },
-            { value: 'mas_10', label: 'Más de 10 años' },
-            { value: 'parado', label: 'He entrenado antes, pero llevo tiempo parado' },
-        ],
-    },
+    // La experiencia entrenando SE FUE DE AQUÍ al test de entrada (pantalla 3 del documento
+    // de textos de Jesús), y con sus cuatro opciones, no con los cinco tramos por años que
+    // había. Aquí solo la veían los planes con entrenador; ahora la contestan los tres, que
+    // es lo que él quiere: le interesa saber si sabe entrenar, no cuántos años lleva.
     {
         // P14. La respuesta se guarda; la regla de como afecta a los macros la dara Jesus.
         type: 'choice', key: 'trt', title: '¿Sigues algún tratamiento hormonal tipo TRT?',
@@ -1029,8 +1071,13 @@ const QuestionnairePage = () => {
     const ajustesDelCuestionario = () => ({
         actividad_diaria: answers.actividad_diaria ?? null,
         deporte_extra: answers.deporte_extra ?? null,
+        // Las dos del deporte solo tienen sentido si ha dicho que sí practica alguno.
+        deporte_cual: answers.deporte_extra === true ? (answers.deporte_cual || null) : null,
+        deporte_en_descanso: answers.deporte_extra === true ? (answers.deporte_en_descanso ?? null) : null,
         facilidad_engordar: answers.facilidad_engordar ?? null,
+        apetito: answers.apetito ?? null,
         cuesta_definir: answers.cuesta_definir ?? null,
+        training_experience: answers.training_experience ?? null,
         sigue_dieta: answers.sigue_dieta ?? null,
         // Lo que solo tiene sentido si trae dieta. `parecido` cuenta como que la trae.
         tiempo_dieta: conDieta() ? (answers.tiempo_dieta ?? null) : null,

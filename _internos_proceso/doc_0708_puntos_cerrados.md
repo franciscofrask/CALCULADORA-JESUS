@@ -586,12 +586,47 @@ dentro los modificadores, pero **al cliente de plan con entrenador hay que segui
 porque le queda el cuestionario largo y su coach se lo revisa. El documento trae ese texto
 literal y está repuesto tal cual.
 
+### El test de entrada, como lo pide el documento · HECHO
+
+Aplicado tal cual, porque lo que dice el documento es lo que vale. Textos literales suyos, con
+la aclaración de Jesús debajo de cada pregunta, y en su orden.
+
+- **Actividad diaria: cuatro opciones** donde había tres (muy sedentario, ligeramente activo,
+  moderadamente activo, muy activo). Ojo con esto porque toca macros: el +10 % de hidratos lo
+  cobra **solo "muy activo"**, que es lo que dice el documento del 07-08; los otros tres no
+  suben nada, ni siquiera el nuevo "moderadamente activo". Comprobado con los cuatro valores.
+- **Las dos preguntas de seguimiento del deporte**: cuál practica, cuántos días y a qué
+  intensidad, y si podría hacerlo en días que no va al gimnasio (sí / no / ya lo hago así).
+  Solo salen a quien ha dicho que sí. No mueven macros.
+- **La pantalla del apetito** ("¿Eres de buen comer?"), que no existía. No mueve macros.
+- **La experiencia entrenando se muda al test de entrada**, con las cuatro opciones suyas
+  (parto de cero / menos de 1 año / más de 1 año / años en serio). Estaba en el cuestionario
+  largo, que solo ven los planes con entrenador, y con cinco tramos por años. Se ha quitado de
+  allí para no preguntar lo mismo dos veces con opciones distintas.
+- **Los textos exactos** del objetivo, la confirmación, el peso, el sexo y el porcentaje de
+  grasa, y la tercera opción de "¿te cuesta definir?", que ahora dice "Nada" y no "Poco".
+
+Los valores que ya estaban guardados se conservan (`sedentario` pasa a significar "muy
+sedentario" y `normal` "ligeramente activo"), así que a nadie se le mueven los macros por esto.
+
 ### Lo que el documento pide y todavía NO está
 
-Esto es nuevo: no sale de los puntos numerados, sale de comparar el documento con la app.
+Solo queda una cosa suelta del test: el documento dice que en la pantalla de la dieta se le
+pida **"Ponme un día tipo. El de ayer, por ejemplo."**. En la app hay un bloque de dieta que
+recoge eso mismo, pero con otro texto y otro formato; hay que cuadrarlo.
 
-| Pantalla del documento | En la app hoy |
-|---|---|
+Y dos notas del final del documento, que no son del test:
+
+- **Los fondos de pantalla**: reaprovechar los del quiz actual de ELM para las pantallas del
+  test de la app. "Ya están hechos y son los buenos". Hay que localizarlos.
+- **El biotipo de mujer** no se pone: el test de mujer salta esa pantalla, porque los siete
+  apodos están escritos para hombre. En la app ya funciona así.
+
+Y una regla del motor que el documento deja escrita y hay que verificar: lo de "con lo que comes
+ahora, ¿mantienes, ganas o pierdes?" **modula hasta un 20 % y se aplica al final, después de
+todos los demás modificadores**.
+
+---|---|
 | 3 · Experiencia entrenando (4 opciones: parto de cero / menos de 1 año / más de 1 año / años en serio) | Existe con **5 opciones distintas**, y está en el cuestionario largo, no en el test de entrada |
 | 5 · Actividad diaria (**4 opciones**: muy sedentario / ligeramente activo / moderadamente activo / muy activo) | **3 opciones** (sedentario / normal / muy activo). Tocarlo mueve macros: hay que decidir cuál de las cuatro cobra el +10 % |
 | 6 · Otro deporte: **dos preguntas de seguimiento** ("¿cuál, cuántos días y a qué intensidad?" y "¿podrías hacerlo en días que no vayas al gimnasio?") | Solo el sí/no |

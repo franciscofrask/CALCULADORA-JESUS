@@ -642,10 +642,22 @@ class OnboardingUpdate(BaseModel):
 # Preguntas 5-8 del Nivel 0 ("Afina tus macros"): las que mueven el motor v2.
 # Se guardan SIEMPRE (quiz_respuestas + perfil), se apliquen o no.
 class AjustesMacros(BaseModel):
-    actividad_diaria: Optional[str] = None      # P1: sedentario | normal | muy_activo
-    deporte_extra: Optional[bool] = None        # P2
-    facilidad_engordar: Optional[str] = None    # P3: enseguida | normal | casi_no
-    cuesta_definir: Optional[str] = None        # P5: se guarda, no modifica
+    # sedentario (muy sedentario) | normal (ligeramente activo) | moderado | muy_activo.
+    # CUATRO desde el documento de textos del 06-08; los dos primeros valores se conservan
+    # tal cual para no romper lo que ya contestaron los clientes de antes. Solo `muy_activo`
+    # sube hidratos: los otros tres no tocan nada (doc del 07-08).
+    actividad_diaria: Optional[str] = None
+    deporte_extra: Optional[bool] = None
+    # Las dos preguntas de seguimiento del deporte (pantalla 6 del doc de textos). No mueven
+    # macros: le dicen al entrenador que hace, cuando y si puede cuadrarlo con el descanso.
+    deporte_cual: Optional[str] = None
+    deporte_en_descanso: Optional[Union[bool, str]] = None   # True | False | "ya"
+    facilidad_engordar: Optional[str] = None    # enseguida | normal | casi_no
+    apetito: Optional[str] = None               # mucho | normal | poco (pantalla 7, no mueve macros)
+    cuesta_definir: Optional[str] = None        # mucho | normal | poco (se guarda, no modifica)
+    # Se pregunta en el test de entrada desde el doc de textos (pantalla 3): antes vivia en
+    # el cuestionario largo, que solo ven los planes con entrenador.
+    training_experience: Optional[str] = None   # cero | principiante | intermedio | avanzado
     # P6. Tres respuestas, no dos: True (la sigue y la mide), False (come lo que surge) y
     # "parecido" (come siempre parecido pero no lo tiene medido), que es el caso más común
     # y el que faltaba. El "parecido" cuenta como que trae dieta -- se le pide un día tipo
