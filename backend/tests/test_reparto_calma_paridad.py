@@ -265,6 +265,40 @@ class TestLaTablaDePruebaDelDocumento:
         assert [r["comidas"][f"C{i}"]["H"] for i in (1, 2, 3, 4)] == pytest.approx([h / 4] * 4, abs=0.1)
 
 
+class TestLasTablasSonLasDelDocumento:
+    """Las cuatro tablas, copiadas del documento del 07-08, contra las nuestras.
+
+    Ya estaban verificadas contra el bundle de la calculadora antigua; esto las contrasta
+    además con lo que Jesús tiene escrito, que es la otra fuente y la que manda.
+    """
+
+    PROTEINA = {0: [25, 25, 20, 30], 1: [25, 25, 20, 30], 2: [25, 20, 25, 30], 3: [30, 25, 20, 25]}
+    GRASA = {0: [20, 25, 25, 30], 1: [20, 20, 30, 30], 2: [30, 20, 20, 30], 3: [30, 30, 20, 20]}
+    TABLA_A = {0: [36, 18, 10, 36], 1: [36, 36, 18, 10], 2: [18, 36, 36, 10], 3: [10, 18, 36, 36]}
+    TABLA_B = {0: [30, 20, 20, 30], 1: [30, 30, 20, 20], 2: [20, 30, 30, 20], 3: [20, 20, 30, 30]}
+
+    @staticmethod
+    def _fila(tabla, momento, idx):
+        import macro_distribution as md
+        return [getattr(md, tabla)[momento][f"C{i}"][idx] for i in (1, 2, 3, 4)]
+
+    @pytest.mark.parametrize("momento", [0, 1, 2, 3])
+    def test_proteina(self, momento):
+        assert self._fila("DIST_E1", momento, 0) == self.PROTEINA[momento]
+
+    @pytest.mark.parametrize("momento", [0, 1, 2, 3])
+    def test_grasa(self, momento):
+        assert self._fila("DIST_E1", momento, 2) == self.GRASA[momento]
+
+    @pytest.mark.parametrize("momento", [0, 1, 2, 3])
+    def test_tabla_a_de_100_a_150(self, momento):
+        assert self._fila("DIST_E2", momento, 1) == self.TABLA_A[momento]
+
+    @pytest.mark.parametrize("momento", [0, 1, 2, 3])
+    def test_tabla_b_mas_de_150(self, momento):
+        assert self._fila("DIST_E1", momento, 1) == self.TABLA_B[momento]
+
+
 class TestConTresComidasNoHayEscenario:
     """Punto 2 del documento: los tramos son solo para 4 comidas. Con 3, cada comida se lleva
     un tercio de cada macro aunque sea día de entreno. El perientreno sí se aplica igual."""

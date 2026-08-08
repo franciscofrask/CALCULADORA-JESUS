@@ -131,6 +131,17 @@ También aclara el tramo de 30 a 50 g: los 10 g se los lleva la comida del momen
 y Jesús confirma que esa lógica es la correcta. Nuestro reparto ya lo hacía así, y su propia
 tabla lo corrobora (40 g en ayunas dan 30 · 0 · 0 · 10).
 
+**Las cuatro tablas del documento coinciden con las nuestras**, las 16 filas: proteína, grasa,
+la del tramo de 100 a 150 g y la de más de 150. Ya estaban verificadas contra el bundle de la
+calculadora antigua; ahora también contra lo que Jesús tiene escrito, que es la otra fuente.
+
+**Los números de cobertura del filtro no cuadran del todo, y se sabe por qué.** El documento
+dice que de 377 cereales y panes solo entran 18, y que en frutos secos entran 46 de 63. Hoy
+salen 398 cereales y panes con 16 que entran, y 64 frutos secos con 48. La diferencia es que
+**el catálogo ha crecido** desde que él contó: 21 cereales y panes más y un fruto seco más. Las
+proporciones se mantienen y su conclusión también: esto es, en la práctica, una regla de frutos
+secos (entra el 75 % de ellos y solo el 4 % de los cereales y panes).
+
 **Punto 2 nuevo · con 3 comidas no se aplica ningún escenario.** Ya era así: cada comida se
 lleva un tercio de cada macro aunque sea día de entreno, y el perientreno se aplica igual.
 Comprobado con cuatro cantidades de hidratos y los cuatro momentos de entreno.
@@ -344,7 +355,8 @@ Son dos fuentes distintas, y ninguna está mal en sí:
   macros que tiene hoy (`MacroCalculatorClientPage.jsx:107`, vía `GET /macros`).
 
 Si el cliente reporta 118 kg pero nadie ha recalculado sus macros desde que pesaba 94, las dos
-cifras son correctas y contradictorias a la vez. El arreglo de fondo es del punto 20 de este
+cifras son correctas y contradictorias a la vez. El arreglo de fondo es del **punto 30** (en la
+versión actualizada del documento; en la anterior era el 20) de este
 mismo documento, así que aquí solo queda el diagnóstico.
 
 ### Punto 8 - Hay datos de prueba en producción · PREPARADO, PENDIENTE DE DAR LA ORDEN
