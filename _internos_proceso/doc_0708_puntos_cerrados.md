@@ -20,7 +20,7 @@ y qué queda pendiente si depende de alguien más.
 > | 6 | 8 | | 16 | 18 |
 > | 7 | 9 (remite al 30, antes al 20) | | 17 | 19 |
 > | 8 | 10 | | 18 | 20 |
-> | 9 | 11 | | 19 | bloque F (48-54) |
+> | 9 | 11 | | 19 | 21 |
 > | 10 | 12 | | | |
 >
 > **Lo que trae de nuevo la actualización, y ya está comprobado** (ver el bloque A de abajo):
@@ -706,6 +706,30 @@ todos los demás modificadores**.
 Y una regla del motor que el documento deja escrita y hay que verificar: lo de "con lo que comes
 ahora, ¿mantienes, ganas o pierdes?" **modula hasta un 20 % y se aplica al final, después de
 todos los demás modificadores**.
+
+### Punto 22 (numeración nueva) - Nutrición abre en una fecha futura · CERRADO
+
+**La causa.** La pantalla guardaba la última fecha que hubieras mirado y la restauraba al
+entrar, sin comprobar cuál era. Así que quien echaba un vistazo al día de mañana y se salía, al
+volver se encontraba la app abierta en mañana. Y era peor de lo que dice el punto: quien miraba
+un día y entraba al siguiente aterrizaba en la fecha de ayer, y una fecha guardada hacía una
+semana se restauraba igual.
+
+**Lo que hay ahora.** Al abrir, hoy. Se conserva lo único útil de aquello: si recargas la
+página en el mismo día en el que estabas trabajando, vuelves al día que tenías abierto en vez de
+perderlo. Para eso se guarda también cuándo se guardó, y la fecha solo se restaura si es de hoy
+y no es futura.
+
+Comprobado en la app con una fecha futura metida a mano (20 de agosto): al entrar, la pantalla
+abre en "Hoy". Y los seis casos posibles se comportan como deben: mirar mañana y refrescar
+lleva a hoy, mirar una fecha vieja hace días lleva a hoy, entrar al día siguiente lleva a hoy, y
+solo recargar el mismo día conserva el día que tenías abierto.
+
+De paso, el cálculo de "qué día es hoy" estaba repetido en tres sitios de la pantalla y ahora
+vive en uno. Se hace en hora local y no en UTC a propósito: con la hora universal, quien entra
+de madrugada vería el día anterior.
+
+---
 
 ---
 

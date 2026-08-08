@@ -111,6 +111,13 @@ const POST_CARB_CATEGORIES = [
     { id: 'bebida', label: 'Bebida', emoji: '🥤', prefixes: ['24'] },
 ];
 
+// La fecha de hoy en el formato con el que viajan las dietas (AAAA-MM-DD), en hora local y
+// no en UTC: con `toISOString()` el que entra de madrugada veria el dia anterior.
+const hoyISO = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+};
+
 const NutritionPage = () => {
     const { token } = useAuth();
     const navigate = useNavigate();
@@ -154,10 +161,7 @@ const NutritionPage = () => {
     }, []);
 
     // Date & Config state
-    const [currentDate, setCurrentDate] = useState(() => {
-        const n = new Date();
-        return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-    });
+    const [currentDate, setCurrentDate] = useState(hoyISO);
     const [tipoDia, setTipoDia] = useState('entrenamiento');
     const [numComidas, setNumComidas] = useState(4);
     const [momentoEntreno, setMomentoEntreno] = useState(1);
@@ -532,18 +536,30 @@ const NutritionPage = () => {
         return () => clearInterval(t);
     }, [guardadoEstado, currentDate, autoSaveDiet]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // On mount: restore the last viewed date (so a reload returns to the day you were on, not
-    // today), else the local date. Persisted below on every date change.
+    // Al abrir, HOY. Antes se restauraba sin más la última fecha que se hubiera mirado, así
+    // que quien echaba un vistazo al día de mañana y se salía, al volver se encontraba la
+    // pantalla abierta en mañana; y quien entraba al día siguiente aterrizaba en la fecha de
+    // ayer. La app tiene que abrir en el día de hoy (punto 22 del doc del 07-08).
+    //
+    // Lo único que se conserva es lo útil de aquello: si recargas la página en el mismo día
+    // en el que estabas trabajando, vuelves al día que tenías abierto en vez de perderlo. Por
+    // eso se guarda también CUÁNDO se guardó, y la fecha solo se restaura si se guardó hoy y
+    // no es futura.
     useEffect(() => {
         const stored = localStorage.getItem('nutrition_last_date');
-        if (stored) { setCurrentDate(stored); return; }
-        const n = new Date();
-        setCurrentDate(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`);
+        const guardadoEn = localStorage.getItem('nutrition_last_date_guardado');
+        if (stored && guardadoEn === hoyISO() && stored <= hoyISO()) {
+            setCurrentDate(stored);
+            return;
+        }
+        setCurrentDate(hoyISO());
     }, []);
 
-    // Persist the viewed date so a refresh returns to it.
+    // Se guarda la fecha vista y el día en que se vio, para lo de arriba.
     useEffect(() => {
-        if (currentDate) localStorage.setItem('nutrition_last_date', currentDate);
+        if (!currentDate) return;
+        localStorage.setItem('nutrition_last_date', currentDate);
+        localStorage.setItem('nutrition_last_date_guardado', hoyISO());
     }, [currentDate]);
 
     // Initial load
@@ -749,9 +765,7 @@ const NutritionPage = () => {
     };
 
     const formatDate = (dateStr) => {
-        const n = new Date();
-        const todayStr = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-        if (dateStr === todayStr) return 'Hoy';
+        if (dateStr === hoyISO()) return 'Hoy';
         const [y, m, d] = dateStr.split('-').map(Number);
         const local = new Date(y, m - 1, d);
         return local.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
