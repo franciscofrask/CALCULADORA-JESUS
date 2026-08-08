@@ -1409,14 +1409,61 @@ automático.
 
 **Falta** la otra mitad: que el % graso se pida cada 12 semanas y no cada 2.
 
+### Punto 44 - El calendario y la duración, como propiedad del plan · CERRADO
+
+**Lo que había.** La cadencia estaba escrita en el código: un mapa con el día de cada tipo y una
+función con tres `if` («quincenal si la semana es par, mensual si semana % 4 == 3, semanal
+siempre»). Los números eran los buenos - coinciden con lo que dice el punto, incluso las semanas
+- pero meter un plan con otro ritmo era tocar código, y **el ciclo de Premium no se podía
+expresar de ninguna manera**.
+
+**La idea que lo resuelve todo**: cada plan declara un **patrón de semanas que se repite**. Es
+como lo describe Jesús para Premium - «S1 check-in semanal, S2 check-in semanal, S3 reporte
+mensual, S4 check-in semanal; en planes más largos se sigue repitiendo esa lógica» - y resulta
+que con eso se modelan los demás también:
+
+| Plan | Patrón |
+|---|---|
+| Gold | `["", "quincenal", "mensual", "quincenal"]` |
+| Silver | `["", "", "mensual", ""]` |
+| ELM y Reto 60 días | `[]` |
+| Premium | `["semanal", "semanal", "mensual", "semanal"]` |
+
+Los patrones **no hay que escribirlos**: se deducen de los reportes que ya declara cada plan, así
+que los 17 siguen igual sin tocarlos, y el que quiera otro ritmo pone el suyo. El día de envío
+también sale del plan y se puede cambiar sin tocar código.
+
+**Comprobado que no cambia nada para nadie**: comparado el patrón nuevo con la regla vieja, plan
+a plan y semana a semana durante 24 semanas → **cero diferencias**. Y los **188 tests** de
+planes, cadencia y renovación siguen pasando.
+
+Cómo queda, semana a semana:
+
+```
+GOLD     S1:-    S2:quin S3:mens S4:quin S5:-    S6:quin S7:mens S8:quin ...
+SILVER   S1:-    S2:-    S3:mens S4:-    S5:-    S6:-    S7:mens S8:-    ...
+ELM      S1:-    S2:-    S3:-    S4:-    S5:-
+PREMIUM  S1:sema S2:sema S3:mens S4:sema S5:sema S6:sema S7:mens S8:sema ...
+```
+
+**La duración, del contrato.** Tres campos nuevos en el cliente, vacíos por defecto: su
+`ciclo_semanas` (hay planes de 4 semanas y de 5, y clientes con un ciclo distinto al de su plan -
+es una de las 17 excepciones del punto 39, y ahora tiene dónde vivir), su `semana_de_entrada` y
+su `calendario_reportes` propio si no sigue el de su plan. Todos pisan al plan, que es lo que
+manda el punto 36: la tabla de planes es la plantilla, el contrato es lo que vale.
+
+**Y aquí me equivoqué, y conviene que conste.** «Los de 4 semanas entran cuando están en Semana 3
+y los de 5 cuando están en Semana 4» admite dos lecturas: que el patrón empiece desplazado, o que
+las primeras semanas no le toque nada. Implementé la segunda y al probarla **Gold se quedaba sin
+ningún reporte hasta la semana 11** - veintidós clientes en silencio dos meses y medio. Eso no
+puede ser lo que pide un documento cuyo propio ejemplo es «quincenal el miércoles de la semana
+2». Así que va como **desplazamiento** y **vacío por defecto**: con el campo vacío el patrón
+empieza en la semana 1, que es lo que la app hacía hasta hoy y nadie cambia de comportamiento.
+
+**Que Jesús aclare qué significa «entrar en el ciclo»**; el campo ya está y es cambiar un número.
+
 ### Lo que queda del bloque E, y por qué
 
-- **Punto 44 (calendario y duración por plan)**: es el que queda entero, y el más gordo. Los
-  días están **en el código** (`REPORT_RULES`: quincenal miércoles, mensual viernes) y
-  **coinciden con lo que dice el punto**, incluso las semanas (quincenal en la 2, mensual en la
-  3), pero tienen que ser una propiedad del plan. Falta además el ciclo de Premium (S1 y S2
-  semanal, S3 mensual, S4 semanal) y que la duración sea un campo del contrato, con planes de 4
-  y de 5 semanas y entrada en el ciclo distinta.
 - **Punto 45**: hecho el backend, falta la pantalla en la ficha.
 - **Punto 46 (que se note la diferencia entre niveles)**: las horas de espera ya salen del plan
   (arriba, punto 47) y el Nivel 3 ya se contrata por llamada. Y ojo con esto: el punto dice que
@@ -1505,6 +1552,12 @@ antiguo" hay que comprobarlo contra la calculadora de verdad**.
 caduca: la pantalla está montada y el mensaje redactado, pero el número no está en ninguna parte
 del código y no me lo puedo inventar. Mientras tanto sale el aviso sin el botón. Es una
 constante, `WHATSAPP_SOPORTE` en `ClientDashboard.jsx`.
+
+**¿Qué es «entrar en el ciclo»?** (punto 44). «Los de 4 semanas entran cuando están en Semana 3 y
+los de 5 cuando están en Semana 4»: ¿el patrón de reportes empieza desplazado, o las primeras
+semanas no le toca nada? Va implementado como desplazamiento y vacío por defecto, porque la otra
+lectura dejaba a Gold sin ningún reporte hasta la semana 11. El campo ya está: es cambiar un
+número.
 
 **¿ELM y Reto 12en12 se pueden volver a contratar?** (bloque E). El catálogo del equipo los da
 como Activos y nuestro código como legacy desde el 31-07. Cambiarlo los pone en el checkout. Que

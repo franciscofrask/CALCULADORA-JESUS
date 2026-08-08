@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
+from core.calendario_reportes import (
+    calendario_del_cliente, dia_de_envio, reporte_de_la_semana, toca_en_la_semana)
 from core.cycle import compute_cycle, _parse_dt
 from core.database import db
 from core.security import get_admin_user, get_current_user
@@ -31,7 +33,21 @@ from routes.plans import _overrides_by_code
 router = APIRouter(prefix="/admin/report-cadence", tags=["admin-report-cadence"])
 client_router = APIRouter(prefix="/reports", tags=["reports"])
 
-# Día de envío dentro de la semana del ciclo (weekday(): lunes=0 ... domingo=6).
+# EL CALENDARIO YA NO VIVE AQUI (punto 44 del doc del 07-08). Antes esto era un mapa fijo
+# con el dia de cada tipo y una funcion con tres `if` ("quincenal si la semana es par,
+# mensual si semana % 4 == 3, semanal siempre"). Los numeros eran los buenos, pero meter un
+# plan con otro ritmo era tocar codigo, y el ciclo de Premium no se podia expresar.
+#
+# Ahora cada plan declara un patron de semanas que se repite, y el contrato de cada cliente
+# lo puede pisar: core/calendario_reportes.py. Lo que queda aqui es el nombre visible de
+# cada tipo, que si es de la interfaz.
+LABEL = {"quincenal": "Reporte quincenal", "mensual": "Reporte mensual",
+         "semanal": "Reporte semanal"}
+DIA_LABEL = {0: "lunes", 1: "martes", 2: "miércoles", 3: "jueves", 4: "viernes",
+             5: "sábado", 6: "domingo"}
+
+# Se mantiene el nombre `REPORT_RULES` con los valores por defecto porque hay codigo y
+# tests que lo consultan para saber que tipos existen; el CUANDO ya no sale de aqui.
 REPORT_RULES = {
     "quincenal": {"due_weekday": 2, "label": "Reporte quincenal", "due_label": "miércoles"},
     "mensual": {"due_weekday": 4, "label": "Reporte mensual", "due_label": "viernes"},
@@ -39,15 +55,11 @@ REPORT_RULES = {
 }
 
 
-def _tipo_due_this_week(tipo: str, week: int) -> bool:
-    """¿Toca este tipo de reporte en la semana `week` (1-based) del ciclo?"""
-    if tipo == "quincenal":
-        return week % 2 == 0
-    if tipo == "mensual":
-        return week % 4 == 3
-    if tipo == "semanal":
-        return True
-    return False
+def _cal(profile: Dict[str, Any], catalog: Dict[str, Any]) -> Dict[str, Any]:
+    """El calendario de este cliente: el de su plan, pisado por lo que diga su contrato."""
+    from models.user import codigo_de_plan
+    plan = (catalog or {}).get(codigo_de_plan(profile.get("plan"))) or {}
+    return calendario_del_cliente(profile, plan)
 
 
 def _week_window_start(profile: Dict[str, Any], now: datetime) -> datetime:
@@ -95,12 +107,16 @@ async def get_report_cadence(user=Depends(get_admin_user)):
         cycle = compute_cycle(p, now)
         window_start = _week_window_start(p, now)
         u = users_by_id.get(p.get("user_id"), {})
-        for tipo in reportes:
-            rule = REPORT_RULES.get(tipo)
-            if not rule or not _tipo_due_this_week(tipo, cycle["week"]):
-                continue
-            due = _due_date_in_window(window_start, rule["due_weekday"])
+        # Que le toca a ESTE cliente esta semana, segun el calendario de su plan y de su
+        # contrato (punto 44). Antes se recorrian los tipos del plan aplicando una regla
+        # fija; ahora el patron ya dice cual toca, si es que toca alguno.
+        cal = _cal(p, catalog)
+        tipo = reporte_de_la_semana(cal, cycle["week"])
+        for tipo in ([tipo] if tipo else []):
+            due = _due_date_in_window(window_start, dia_de_envio(cal, tipo))
             due_iso = due.date().isoformat()
+            rule = {"label": LABEL.get(tipo, tipo),
+                    "due_label": DIA_LABEL.get(dia_de_envio(cal, tipo), "domingo")}
             keys.append((p["id"], tipo, due_iso))
             items.append({
                 "client_id": p["id"],
@@ -191,23 +207,27 @@ def _principal_label(tipos: List[str]) -> str:
     """Etiqueta del reporte más relevante que toca (mensual > quincenal > semanal)."""
     for t in ("mensual", "quincenal", "semanal"):
         if t in tipos:
-            return REPORT_RULES[t]["label"]
+            return LABEL[t]
     return "reporte"
 
 
 def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any], now: datetime) -> Dict[str, Any]:
     """Estado del reporte del cliente esta semana de ciclo: qué tipos tocan y la
     ventana de envío (abierta/cerrada). Compartido por /reports/due y POST /reports."""
-    plan = catalog.get((profile.get("plan") or "").lower().strip())
-    reportes = ((plan or {}).get("habilitaciones") or {}).get("reportes") or []
     cycle = compute_cycle(profile, now)
     window_start = _week_window_start(profile, now)
-    tipos = [t for t in reportes if REPORT_RULES.get(t) and _tipo_due_this_week(t, cycle["week"])]
+    # El calendario de su plan y de su contrato (punto 44), no una regla fija.
+    cal = _cal(profile, catalog)
+    tipo = reporte_de_la_semana(cal, cycle["week"])
+    tipos = [tipo] if tipo else []
     win_open, win_close = _submission_window(window_start)
     return {
         "cycle": cycle,
         "window_start": window_start,
         "tipos": tipos,
+        # Cuanto dura su ciclo y desde que semana entra: del contrato, no un supuesto.
+        "ciclo_semanas": cal.get("duracion_semanas"),
+        "semana_de_entrada": cal.get("semana_de_entrada"),
         "due": bool(tipos),
         "window_open": win_open,
         "window_close": win_close,

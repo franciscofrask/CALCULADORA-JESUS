@@ -574,6 +574,17 @@ class ClientProfile(BaseModel):
     # Si tiene acceso y por que no, cuando no (punto 41). Lo calcula el servidor:
     # {"activo": bool, "motivo": "sin_plan"|"sin_pagar"|"caducado"|None}.
     acceso: Optional[Dict[str, Any]] = None
+    # EL CONTRATO DE ESTE CLIENTE (punto 44 del 07-08). La duracion del ciclo NO es un
+    # supuesto: hay planes de 4 semanas y de 5, y clientes con un ciclo distinto al de su
+    # plan (es una de las 17 excepciones del punto 39, y aqui tiene donde vivir). Vacios =
+    # se usa lo del plan.
+    ciclo_semanas: Optional[int] = None
+    # Desde que semana del ciclo empieza a tocarle reporte. Por defecto la penultima (los
+    # de 4 semanas entran en la 3, los de 5 en la 4): se manda antes de terminar para poder
+    # ajustar de cara al siguiente ciclo.
+    semana_de_entrada: Optional[int] = None
+    # Su calendario propio, si no sigue el de su plan: {"patron": [...], "dias": {...}}.
+    calendario_reportes: Optional[Dict[str, Any]] = None
     # OJO con estos dos (punto 30 del 07-08): `weight` y `body_fat` son el ULTIMO valor de
     # sus series, calculado, no un dato que se guarde aparte. Los escribe solo
     # core/series_cliente.py; nadie mas debe ponerlos en un $set, o vuelven los dos pesos
@@ -687,6 +698,11 @@ class ClientProfileUpdate(BaseModel):
     # entraria. Cadena vacia = quitar la excepcion (por eso este campo se trata aparte en
     # el PUT, que descarta los None pero no los vacios).
     excepcion: Optional[str] = None
+    # El contrato de este cliente (punto 44): duración del ciclo, desde qué semana le toca
+    # reporte y, si hace falta, su propio calendario. Vacíos = lo que diga su plan.
+    ciclo_semanas: Optional[int] = None
+    semana_de_entrada: Optional[int] = None
+    calendario_reportes: Optional[Dict[str, Any]] = None
 
     @field_validator("macros_training", "macros_rest", "macros_periworkout")
     @classmethod
