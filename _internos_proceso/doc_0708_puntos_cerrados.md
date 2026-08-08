@@ -1518,30 +1518,28 @@ manteniéndolos.
 
 ## PENDIENTES
 
-Todo lo que queda abierto, ordenado por quién tiene que mover ficha. Actualizado el 7 de agosto
-por la noche.
+Todo lo que queda abierto, ordenado por quién tiene que mover ficha. **Actualizado el 8 de agosto
+por la mañana**, después de cerrar los bloques D y E.
+
+Del documento de Jesús hemos trabajado los puntos **1 al 47**. Quedan por leer los bloques F al
+K: la comparativa de fotos del reporte (48-54), las tres preguntas del reporte (55-57), los
+arreglos de la base de alimentos (58-60), los fallos apuntados que siguen ahí (61-64), los menús
+autoajustables (65-75) y el asistente de IA (76-80). **Todos son de este fin de semana**, y dos
+de esos bloques (I y K) están marcados como imprescindibles para el domingo.
 
 ---
 
 ### 1 · Lo que hace falta que nos pasen para poder seguir
 
-**Faltan 56 puntos del documento por leer: los bloques D al K.** De la versión actualizada solo
-hemos visto hasta el punto 20. Sin ver quedan el flujo del entrenador (25-35), los planes
-(36-47), la comparativa de fotos del reporte (48-54), las tres preguntas del reporte (55-57),
-los arreglos de la base de alimentos (58-60), los fallos apuntados que siguen ahí (61-64), los
-menús autoajustables (65-75) y el asistente de IA (76-80). **Todos son de este fin de semana**,
-y tres de esos bloques (I y K) están marcados como imprescindibles para el domingo.
-
-**Las preguntas del check-in diario** (punto 20 del documento nuevo). El documento de textos no
-las trae: solo cubre el test de entrada, los cuatro mensajes del informe y dos notas. Hoy la app
-pregunta energía y "ansiedad y hambre", que vienen del documento del 31-07 y que el punto dice
-que no son de Jesús. **Hay que pedirle a Jesús cuáles son las suyas.** La otra mitad del punto
-(que el cliente apunte lo que ha comido) ya está hecha.
+**Las preguntas del check-in diario** (punto 20). El documento de textos no las trae: solo cubre
+el test de entrada, los cuatro mensajes del informe y dos notas. Hoy la app pregunta energía y
+«ansiedad y hambre», que vienen del documento del 31-07 y que el punto dice que no son de Jesús.
+**Hay que pedirle cuáles son las suyas.** La otra mitad del punto (que el cliente apunte lo que
+ha comido) ya está hecha.
 
 **El texto roto** (punto 16). El documento dice que está identificado en el de textos, y no lo
 está: ese documento trae los textos buenos de las 12 pantallas, pero en ningún sitio señala cuál
-está roto en la app. Con los textos delante se puede ir pantalla por pantalla a buscarlo, pero
-ya no es "de un minuto" como decía el punto. **Que Jesús diga cuál es.**
+está roto en la app. **Que Jesús diga cuál es.**
 
 **Dónde está el lunes** (punto 26). El punto llegó sin el «Qué hacer» y el lunes no aparece por
 ningún lado: la fecha del ajuste ya es mañana en dev y en producción, y en el código la única
@@ -1549,123 +1547,127 @@ regla del lunes (`calendario_arranque.py`) está desconectada. **Que Jesús diga
 vio**, o si lo que quiere es que un cliente nuevo arranque al día siguiente en vez de esperar al
 lunes - que es un cambio de método y toca la facturación.
 
-**La ficha de un cliente con mucho histórico se queda colgada** (visto el 08-08 comprobando el
-punto 30). Abriendo la de un cliente migrado de Calma con fotos, la página deja de responder:
-ni se puede capturar ni leer, y hay que abrir otra pestaña. Con clientes normales va bien. No
-bloquea nada del fin de semana, pero es de los que Jesús va a abrir el lunes, así que hay que
-mirarlo: pinta a que se cargan todas las fotos del historial de golpe.
-
-**Los fondos de pantalla del test** (punto 24). Jesús dice que ya los pasó por Drive y que no
-hay que buscar fotos nuevas. **No aparecen**: no están en el disco y en Drive se ha buscado por
-cinco vías sin resultado (detalle en el punto 24). Hace falta el enlace de la carpeta, su nombre
-exacto o desde qué cuenta se compartieron. El hueco en el código ya existe
-(`public/portada-test.jpg`), así que en cuanto aparezcan es cuestión de minutos.
+**Los fondos de pantalla del test** (punto 24). Jesús dice que ya los pasó por Drive. **No
+aparecen**: no están en el disco y en Drive se buscó por cinco vías sin resultado. Hace falta el
+enlace de la carpeta, su nombre exacto o desde qué cuenta se compartieron. El hueco en el código
+ya existe (`public/portada-test.jpg`): en cuanto aparezcan es cuestión de minutos.
 
 **El repositorio fuente de la calculadora antigua** (`jgl-calma-web-next`). Solo tenemos el
 bundle compilado en `_calma_ref/`, que sirve para contrastar comportamiento pero no para leer el
-código como lo describe el documento (rutas de fichero y números de línea). Hasta ahora no ha
-hecho falta. Y ojo con esto: el documento avisa de que el código que Jesús leyó es la versión
-1.1.0 y producción va por la 1.9.0, así que **antes de dar por bueno un "fallo del código
-antiguo" hay que comprobarlo contra la calculadora de verdad**.
+código como lo describe el documento (rutas y números de línea). Hasta ahora no ha hecho falta. Y
+ojo: el documento avisa de que el código que Jesús leyó es la versión 1.1.0 y producción va por
+la 1.9.0, así que **antes de dar por bueno un «fallo del código antiguo» hay que comprobarlo
+contra la calculadora de verdad**.
 
 ---
 
 ### 2 · Lo que espera una orden de Francisco
+
+**Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo hasta
+el commit `8421e3b`; lo posterior está en GitHub y sin desplegar, esperando la orden: el punto
+19, el test de entrada del documento de textos, las cuatro respuestas de la dieta, las dos reglas
+nuevas del filtro, y los **puntos 23, 25, 27 al 35 y el bloque E entero (36-47 menos el 46)**.
+
+**Y con ese despliegue, pasar cuatro scripts**, cada uno **una sola vez** y después de subir:
+
+| Script | Punto | Si no se pasa |
+|---|---|---|
+| `_rellenar_fechas_seguimiento.py --escribir` | 29 | La columna «Sin tocar» sale «nunca» para todos |
+| `_rellenar_series_peso_grasa.py --escribir` | 30 | La ficha sigue enseñando el peso sin fecha |
+| `_rellenar_cambios_macros.py --escribir` | 31 | El modelo solo sabrá qué palanca se movió de aquí en adelante |
+| `_migrar_protocolos_suplementos.py --escribir` | 33 | Los protocolos ya asignados no pasan al formato con fecha |
+
+**Ojo con el de las series (30)**: en dev cambió el peso actual de **50 de 232 clientes**, porque
+el de la ficha no era el último pesaje de verdad. En producción va a pasar lo mismo, y es lo que
+se busca, pero **conviene avisar a Jesús antes de que lo vea**.
 
 **El número de WhatsApp de soporte** (punto 41). Hace falta para el cliente cuya suscripción
 caduca: la pantalla está montada y el mensaje redactado, pero el número no está en ninguna parte
 del código y no me lo puedo inventar. Mientras tanto sale el aviso sin el botón. Es una
 constante, `WHATSAPP_SOPORTE` en `ClientDashboard.jsx`.
 
-**¿Qué es «entrar en el ciclo»?** (punto 44). «Los de 4 semanas entran cuando están en Semana 3 y
-los de 5 cuando están en Semana 4»: ¿el patrón de reportes empieza desplazado, o las primeras
-semanas no le toca nada? Va implementado como desplazamiento y vacío por defecto, porque la otra
-lectura dejaba a Gold sin ningún reporte hasta la semana 11. El campo ya está: es cambiar un
-número.
-
-**¿ELM y Reto 12en12 se pueden volver a contratar?** (bloque E). El catálogo del equipo los da
-como Activos y nuestro código como legacy desde el 31-07. Cambiarlo los pone en el checkout. Que
-lo diga Jesús: si «Activo» en su tabla es «a la venta» o «vivo, con gente pagando».
-
-**Borrar las 18 cuentas de prueba de producción** (punto 10). Está todo preparado y probado en
+**Borrar las 18 cuentas de prueba de producción** (punto 10). Todo preparado y probado en
 simulación contra producción: `backend/_limpiar_datos_prueba.py`, que no borra nada salvo que se
 le pase `--ejecutar`. `francisco@test.com` y la cuenta demo quedan fuera. **Dos de las 18 tienen
 datos dentro** y por eso no se han tocado: `jose@test.com` (7 dietas, 1 reporte, 3 check-ins, 1
-foto y 12 cambios de macros) y `prueba@mail.com` (1 reporte y 3 check-ins). Hay que decidir si
-se borran esas dos también.
-
-**Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
-hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
-textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28, 29, 30, 31, 32, 33, 34, 35 y el bloque E) está en GitHub y sin desplegar, esperando la orden.
-
-**Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
-
-- `backend/_rellenar_fechas_seguimiento.py --escribir` (punto 29). Sin eso, la columna «Sin
-  tocar» sale «nunca» para todos los clientes que ya existen.
-- `backend/_rellenar_series_peso_grasa.py --escribir` (punto 30). Sin eso, la ficha sigue
-  enseñando el peso sin fecha. **Ojo**: en dev esto cambió el peso actual de 50 de 232
-  clientes, porque el de la ficha no era el último pesaje de verdad. En producción va a pasar
-  lo mismo, y es lo que se busca, pero conviene avisar a Jesús antes de que lo vea.
-- `backend/_migrar_protocolos_suplementos.py --escribir` (punto 33). En dev no hay ninguno, pero en producción puede haber protocolos asignados que hay que pasar al formato con fecha.
-- `backend/_rellenar_cambios_macros.py --escribir` (punto 31). Sin eso, el modelo solo sabrá
-  qué palanca se movió en los ajustes de aquí en adelante. Y de paso saca el reparto de
-  palancas real, sin el ruido de los datos de prueba de dev.
+foto y 12 cambios de macros) y `prueba@mail.com` (1 reporte y 3 check-ins). Hay que decidir si se
+borran esas dos también.
 
 ---
 
 ### 3 · Lo que tiene que decidir Jesús
 
-**Los 56 mínimos por categoría** (punto 7). El mapa existe y funciona, pero los valores vienen
-de la calculadora antigua y él quiere revisarlos; lo cifra en media hora. La tabla lista para
-repasar, con el nombre de cada categoría y una columna en blanco, está en
-`_internos_proceso/minimos_por_categoria_para_jesus.md`.
+**¿ELM y Reto 12en12 se pueden volver a contratar?** (bloque E). Su catálogo los da como
+**Activos** junto a Reto 60, Calculadora JP y Mantenimiento; nuestro código los tiene como
+**legacy** desde el 31-07, cuando se decidió que los tres niveles son lo único contratable. Puede
+que las dos cosas sean ciertas y que «Activo» en su tabla signifique *vivo, con gente pagando* y
+no *a la venta* - la tabla incluye «Rutina del Mes · Suelto · 0 clientes», o sea que es un
+inventario. Pero si lo cambio, **esos seis planes aparecen en el checkout**. No es decisión mía.
 
-**Los dos criterios del tercio conviven, y no coinciden.** La calculadora antigua tiene su
-propia forma de decidir si la proteína de un cereal o de un fruto seco cuenta, y no es la del
-tercio: sobre el catálogo entero discrepan en 69 alimentos. Hoy la app usa el criterio de Jesús
-para lo que el cliente ve y guarda en su día, y el heredado en el buscador mientras monta la
-comida y en las herramientas de menús. Funciona, pero el mismo alimento puede enseñar dos cifras
-de proteína distintas según dónde se mire.
+**¿Qué es «entrar en el ciclo»?** (punto 44). «Los de 4 semanas entran cuando están en Semana 3 y
+los de 5 cuando están en Semana 4»: ¿el patrón de reportes empieza desplazado, o las primeras
+semanas no le toca nada? Va como desplazamiento y vacío por defecto, porque la otra lectura
+dejaba a Gold **sin ningún reporte hasta la semana 11**. El campo ya está: es cambiar un número.
+
+**Los 56 mínimos por categoría** (punto 7). El mapa existe y funciona, pero los valores vienen de
+la calculadora antigua y él quiere revisarlos; lo cifra en media hora. La tabla lista para
+repasar está en `_internos_proceso/minimos_por_categoria_para_jesus.md`.
+
+**Los dos criterios del tercio conviven, y no coinciden.** La calculadora antigua tiene su propia
+forma de decidir si la proteína de un cereal o de un fruto seco cuenta, y no es la del tercio:
+sobre el catálogo entero discrepan en 69 alimentos. Hoy la app usa el criterio de Jesús para lo
+que el cliente ve y guarda en su día, y el heredado en el buscador mientras monta la comida y en
+las herramientas de menús. Funciona, pero el mismo alimento puede enseñar dos cifras de proteína
+distintas según dónde se mire.
 
 **Los alimentos con macros mal puestos** (punto 11). No hay que sacar del buscador los que tienen
-los tres macros a cero, porque son la lechuga, el pepino, el konjac y los refrescos zero, y el
-método los usa a propósito. Lo que sí descuadra un menú en silencio son los que tienen los macros
+los tres macros a cero - son la lechuga, el pepino, el konjac y los refrescos zero, y el método
+los usa a propósito. Lo que sí descuadra un menú en silencio son los que tienen los macros
 **mal**: una tortita de maíz de 7 g con 125 g de grasa (1149 kcal), un turrón de coco con 79 g de
 proteína, varios panes con la ración puesta a 1 g. La lista la saca `backend/_auditar_catalogo.py`
 ordenada por gravedad y con el enlace a la ficha del producto. **Los valores buenos hay que
 mirarlos en la etiqueta: no se pueden inventar.**
 
 **La proyección de composición corporal** que tiene la calculadora antigua y nosotros no: estima
-semana a semana, por tramos de cuatro, cuánta masa grasa y cuánta masa magra cambia según el
-punto de partida, y con eso valida si un objetivo de peso es alcanzable en un plazo. Nosotros
-solo calculamos la composición de hoy. Nadie la ha pedido; encaja en los bloques de después del
-lunes.
+semana a semana, por tramos de cuatro, cuánta masa grasa y cuánta magra cambia según el punto de
+partida, y con eso valida si un objetivo de peso es alcanzable en un plazo. Nosotros solo
+calculamos la composición de hoy. Nadie la ha pedido; encaja después del lunes.
 
 ---
 
 ### 4 · Lo nuestro, pendiente de terminar
 
+**El punto 46, lo único que queda del bloque E**: que el cliente perciba la diferencia entre
+niveles. Las horas de espera ya se notan (24 en Nivel 2, 48 en el resto) y el Nivel 3 ya se
+contrata por llamada. Falta lo demás: comprar la rutina del mes suelta y contratar una llamada
+(Nivel 1), y el reporte semanal del Nivel 3. **Ojo**: el punto dice que falta la vía de cobro con
+tarjeta después de la llamada y **sí existe** desde el 03-08 - en el panel, la llamada pendiente
+tiene un botón que genera el enlace de pago y lo copia para mandarlo por WhatsApp.
+
+**La ficha de un cliente con mucho histórico se queda colgada** (visto el 08-08). Abriendo la de
+un cliente migrado de Calma con fotos, la página deja de responder y hay que abrir otra pestaña.
+Con clientes normales va bien. No bloquea el fin de semana, pero **es de las que Jesús va a abrir
+el lunes**: pinta a que se cargan todas las fotos del historial de golpe.
+
+**Normalizar el plan `"CalMa"` en la base.** Hay perfiles con el plan escrito así, sin
+normalizar. Ya no rompe nada - la tabla de alias lo resuelve al vuelo (punto 38) - pero el dato
+sigue sucio y conviene pasarlo a `calma12` cuando toque tocar producción.
+
 **Verificar con los ojos que el resultado del alta se ve entero** (punto 15). Está apretado y el
 contenedor ya permite desplazarse, pero para comprobarlo de verdad hay que completar un alta
-entera, y eso significa o alterar una cuenta real o crear una nueva. Es una revisión de un minuto
-en cuanto haya un alta de prueba a mano.
+entera, y eso significa alterar una cuenta real o crear una nueva. Revisión de un minuto en
+cuanto haya un alta de prueba a mano.
 
-**Cuadrar el texto de "Ponme un día tipo. El de ayer, por ejemplo."** El documento de textos lo
-pide en la pantalla de la dieta; en la app hay un bloque que recoge lo mismo pero con otro texto
-y otro formato.
+**Cuadrar el texto de «Ponme un día tipo. El de ayer, por ejemplo.»** El documento de textos lo
+pide en la pantalla de la dieta; en la app hay un bloque que recoge lo mismo con otro texto y
+otro formato.
 
-**Verificar la regla del 20 % de la dieta reportada.** El documento de textos dice que lo de "con
-lo que comes ahora, ¿mantienes, ganas o pierdes?" **modula hasta un 20 % y se aplica al final,
+**Verificar la regla del 20 % de la dieta reportada.** El documento de textos dice que lo de «con
+lo que comes ahora, ¿mantienes, ganas o pierdes?» **modula hasta un 20 % y se aplica al final,
 después de todos los demás modificadores**. Hay que comprobar que el motor lo hace así.
 
-**Los avisos de rutina llevan a una pantalla que está oculta.** Dos de los avisos que la app
-manda apuntan a Rutinas, que está desactivada para todos los planes a propósito, así que el
-cliente pulsa y acaba de vuelta en su panel. No echa a nadie al login, pero es un aviso que no
-lleva a donde promete. Mientras Rutinas siga oculta, esos dos no deberían generarse.
-
 **Un test falla desde antes de tocar nada** (`test_search_foods_by_category`): al buscar por la
-categoría de carnes aparece un "Caldo de cocido" que no es de esa categoría. Es un problema de
+categoría de carnes aparece un «Caldo de cocido» que no es de esa categoría. Es un problema de
 cómo está clasificado ese alimento, no del buscador.
 
 **El día de descanso pierde hasta 0,2 g de hidratos** por el redondeo a 0,1 g de cada comida
@@ -1676,9 +1678,16 @@ pero está ahí.
 
 ### 5 · Ya resueltos (se dejan por trazabilidad)
 
-~~**Quién cobra el +20 % de "cómo engorda"** y **el umbral de grasa en mujeres**.~~ Resueltos el
+~~**Quién cobra el +20 % de «cómo engorda»** y **el umbral de grasa en mujeres**.~~ Resueltos el
 07-08: Francisco confirmó que el texto del documento suplanta a todo lo anterior y se aplicó
-literal (solo "casi no lo noto"; umbral 20 % sin distinción de sexo).
+literal (solo «casi no lo noto»; umbral 20 % sin distinción de sexo).
 
 ~~**Falta el documento «LOS TEXTOS DE LA APP»**.~~ Llegó el 07-08 por la noche. Con él se cerró
 el punto 19 (las cuatro respuestas de la dieta) y se hizo el test de entrada entero.
+
+~~**Los avisos de rutina llevan a una pantalla oculta.**~~ Resuelto el 08-08 con el punto 34:
+Francisco decidió que la Rutina se queda del lado del entrenador y no se le enseña al cliente, y
+con esa decisión se callaron los tres avisos que le hablaban de ella
+(`RUTINA_VISIBLE_PARA_EL_CLIENTE`).
+
+~~**¿Se le vuelve a enseñar la Rutina al cliente?**~~ Decidido el 08-08: no, todavía no.
