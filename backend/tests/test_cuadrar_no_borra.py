@@ -73,12 +73,18 @@ def test_cada_ingrediente_se_lleva_algo(headers):
     assert not a_cero, f"se han quedado a cero: {a_cero}"
 
 
-def test_cuadrar_tambien_funciona_en_el_peri(headers):
-    """El botón estaba en el intra y el post y no hacía nada.
+def test_el_peri_se_cuadra_aunque_ya_no_tenga_boton(headers):
+    """El intra y el post SÍ se cuadran, aunque en la pantalla ya no haya botón.
 
-    Su objetivo vive en `periworkout` y no en `comidas`, y el endpoint solo miraba
-    `comidas`: le entraban 500 g de avena y devolvía 500 g. El botón se pulsaba y no
-    pasaba nada de nada.
+    El botón estaba y no hacía nada -- el objetivo del peri vive en `periworkout` y no
+    en `comidas`, y el endpoint solo miraba el primero, así que entraban 500 g de avena
+    y salían 500 g. Se arregló, y después Francisco pidió quitar el botón del peri
+    (08-08-2026), porque ahí se monta con «Construir» y con el sugeridor.
+
+    Pero el arreglo del motor se queda, y por eso este test sigue aquí: `refit-diet` es
+    lo que ajusta una dieta favorita al aplicarla y al pasarla de entreno a descanso.
+    Sin él, el peri de esas favoritas se copiaba tal cual, sin ajustar a los macros del
+    día. Quitar el botón fue una decisión de pantalla; esto es otra cosa.
     """
     for meal in ("Post", "Intra"):
         alimentos = [{"alimento_id": AVENA, "cantidad_g": 500},

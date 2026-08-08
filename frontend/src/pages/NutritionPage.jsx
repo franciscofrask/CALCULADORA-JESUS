@@ -1748,7 +1748,16 @@ const NutritionPage = () => {
             isLocked={isMealLocked(mealKey)}
             canVolcar={mealKey === volcarTargetMeal}
             onVolcar={handleVolcarToMeal}
-            onCuadrar={cuadrarComida}
+            // En el intra y el post no hay botón «Cuadrar» (Francisco, 08-08-2026):
+            // el peri se monta con «Construir» y con el sugeridor, y ahí el botón no
+            // pinta nada. Sin `onCuadrar`, MealCard no lo dibuja.
+            //
+            // El backend SÍ sabe cuadrar el peri, y eso se queda: `refit-diet` es lo
+            // que ajusta una dieta favorita al aplicarla y al pasarla de entreno a
+            // descanso, y hasta el 08-08 el peri de esas favoritas se copiaba tal cual,
+            // sin ajustar a los macros del día. Quitar el botón es una decisión de
+            // pantalla; que el peri se ajuste al aplicar una favorita no lo es.
+            onCuadrar={['Intra', 'Post'].includes(mealKey) ? undefined : cuadrarComida}
             mealMode={mealsData[mealKey]?.modo === 'manual' ? 'manual' : 'auto'}
         />
     );

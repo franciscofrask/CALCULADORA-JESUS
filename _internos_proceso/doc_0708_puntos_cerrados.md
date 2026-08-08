@@ -2179,6 +2179,17 @@ El arreglo toca la misma condición que usa «adaptar una favorita al tipo de d�
 donde estaba el riesgo: en un día de descanso no hay entreno, así que Intra y Post sí se
 siguen vaciando. Queda comprobado en `test_cuadrar_no_borra.py`, junto con lo demás.
 
+**Y después de arreglarlo, Francisco pidió quitar el botón del peri**, que es lo que se ha
+hecho: en el intra y el post ya no aparece «Cuadrar» -- ahí se monta con «Construir» y con
+el sugeridor, y el botón no pintaba nada. Comprobado en la pantalla: el post con alimentos
+tiene «Añadir ingrediente» y «Vaciar», y la Comida 2 mantiene su «Cuadrar».
+
+**El arreglo del motor se queda, y no es una contradicción**: `refit-diet` es también lo
+que ajusta una dieta favorita al aplicarla y al pasarla de entreno a descanso, y hasta el
+08-08 el peri de esas favoritas se copiaba tal cual, sin ajustar a los macros del día.
+Quitar el botón fue una decisión de pantalla; que el peri se ajuste al aplicar una favorita
+es otra cosa.
+
 ### El margen del sugeridor era un embudo, no un techo
 
 Segundo aviso de Francisco el 08-08, y va al concepto: «el único margen que sirve es
