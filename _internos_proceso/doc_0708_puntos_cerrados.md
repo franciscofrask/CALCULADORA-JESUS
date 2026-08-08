@@ -1683,15 +1683,81 @@ que hacen que un informe deje de creerse. Los 105 tests del informe siguen pasan
 
 ---
 
+---
+
+## Bloque H - Arreglos en la base de alimentos
+
+Los tres puntos son de **datos**, no de código, así que lo primero fue medirlos contra el
+catálogo: 3.211 alimentos. Y sale una cosa importante: **dos de los tres casos concretos que
+cita el documento ya están bien en dev**.
+
+**Ojo con esto: el catálogo de dev y el de producción no tienen por qué ser el mismo.** Por eso
+no se ha tocado nada a mano: está hecho como script, `backend/_revisar_alimentos_bloque_h.py`,
+que mira los tres puntos y corrige lo que se puede corregir sin inventarse ningún valor. Hay que
+pasarlo también en producción.
+
+### Punto 58 - Faltan categorías de proteico · CERRADO
+
+La categoría **7.1.3 (cereales proteicos)** es la que hace que la proteína cuente **al 100 % sin
+pasar por la calibración progresiva**. Un cereal con 30 g de proteína sin esa etiqueta se
+calibra como si fuera un muesli normal, y el mismo producto acaba contando distinto según quién
+lo metiera en el catálogo.
+
+**Los dos muesli de Prozis que cita el punto ya la tienen**, y comprobado ejecutando la regla con
+los documentos reales: los cuatro muesli proteicos del catálogo **saltan la calibración**, tanto
+el de 31 g como el de 23. Las granolas proteicas (Prozis, Hacendado), también. Y **harina de
+avena con whey no hay ninguna**: las que hay son harina de avena normal o con sabor, de 10 a 16 g.
+
+Barriendo el catálogo entero en busca de todos los que estuvieran en esa situación - cereal de
+la familia 7 con 18 g o más de proteína y sin 7.1.3 - sale **uno**: **Crunchy Choco Rings (Wow
+cereals), con 36,6 g**, en «cereales comerciales». Corregido, y comprobado que ahora salta la
+calibración.
+
+### Punto 59 - Los pistachos genéricos a 0 de proteína · YA ESTABA
+
+En dev **no están a cero**: los Pistachos genéricos tienen **21,6 g**, que es lo que dice el punto
+que deberían tener («unos 20»), y los de Hacendado 25, también como dice. Barrido el catálogo
+entero: **cero frutos secos con la proteína a cero**.
+
+El script los busca igualmente y, si aparece alguno en producción, lo lista **sin corregirlo**,
+diciendo cuánta proteína tiene el mismo producto con marca como pista. El valor bueno está en la
+etiqueta y no se inventa.
+
+### Punto 60 - Duplicados · MEDIDO, y son muchos más de cuatro
+
+El punto cita cuatro. **Son 77 parejas.** Los cuatro que nombra están entre ellas y son exactos -
+mismo nombre, mismos macros, uno genérico y otro con marca:
+
+| Genérico | Con marca | |
+|---|---|---|
+| Almendras | Almendras crudas (Hacendado) | P=23 |
+| Anacardos | Anacardos crudos (Hacendado) | P=22 |
+| Pipa de calabaza natural pelada | ... (Hacendado) | P=35 |
+| Frutos secos cocktail tostado sin sal | ... (Hacendado) | P=23 |
+
+Pero hay 73 más: arroz basmati, queso feta, salsa de soja, tortilla de patata, puré de patata…
+
+**Y aquí no se borra nada, a propósito.** Que un alimento esté dos veces, uno genérico y otro con
+marca, **es el diseño del catálogo**: el genérico existe para quien no compra esa marca. Borrar
+uno no es un arreglo evidente, y además **hay dietas guardadas apuntando a uno de los dos**: el
+que se borre desaparece de los días ya montados.
+
+Lo que sí es un problema de verdad es lo que ve el cliente en el buscador: dos entradas que
+parecen iguales y no sabe cuál coger. **Que Jesús diga qué quiere** - que se quede el genérico,
+que se quede el de marca, o que el buscador los junte en uno solo - y se hace. El script deja la
+lista de las 77 para poder decidirlo mirando.
+
+---
+
 ## PENDIENTES
 
 Todo lo que queda abierto, ordenado por quién tiene que mover ficha. **Actualizado el 8 de agosto**,
-con los bloques A al G cerrados.
+con los bloques A al H cerrados.
 
-Del documento de Jesús están trabajados los puntos **1 al 57**. Quedan por leer los bloques H al
-K: los arreglos de la base de alimentos (58-60), los fallos apuntados que siguen ahí (61-64), los
-menús autoajustables (65-75) y el asistente de IA (76-80). **Todos son de este fin de semana**, y
-dos de esos bloques (I y K) están marcados como imprescindibles para el domingo.
+Del documento de Jesús están trabajados los puntos **1 al 60**. Quedan por leer los bloques I al
+K: los fallos apuntados que siguen ahí (61-64), los menús autoajustables (65-75) y el asistente
+de IA (76-80). **Todos son de este fin de semana**, y dos de esos bloques (I y K) están marcados
+como imprescindibles para el domingo.
 
 ---
 
@@ -1732,7 +1798,7 @@ contra la calculadora de verdad**.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo hasta
 el commit `8421e3b`; lo posterior está en GitHub y sin desplegar, esperando la orden: el punto
 19, el test de entrada del documento de textos, las cuatro respuestas de la dieta, las dos reglas
-nuevas del filtro, y los **puntos 23, 25 y 27 al 57** (los bloques D, E, F y G enteros).
+nuevas del filtro, y los **puntos 23, 25 y 27 al 60** (los bloques D al H enteros).
 
 **Y con ese despliegue, pasar cuatro scripts**, cada uno **una sola vez** y después de subir:
 
@@ -1742,6 +1808,7 @@ nuevas del filtro, y los **puntos 23, 25 y 27 al 57** (los bloques D, E, F y G e
 | `_rellenar_series_peso_grasa.py --escribir` | 30 | La ficha sigue enseñando el peso sin fecha |
 | `_rellenar_cambios_macros.py --escribir` | 31 | El modelo solo sabrá qué palanca se movió de aquí en adelante |
 | `_migrar_protocolos_suplementos.py --escribir` | 33 | Los protocolos ya asignados no pasan al formato con fecha |
+| `_revisar_alimentos_bloque_h.py --escribir` | 58 | Un cereal proteico sin su categoría se calibra mal. **El catálogo de producción puede tener más casos que dev** |
 
 **Ojo con el de las series (30)**: en dev cambió el peso actual de **50 de 232 clientes**, porque
 el de la ficha no era el último pesaje de verdad. En producción va a pasar lo mismo, y es lo que
@@ -1774,6 +1841,12 @@ inventario. Pero si lo cambio, **esos seis planes aparecen en el checkout**. No 
 los de 5 cuando están en Semana 4»: ¿el patrón de reportes empieza desplazado, o las primeras
 semanas no le toca nada? Va como desplazamiento y vacío por defecto, porque la otra lectura
 dejaba a Gold **sin ningún reporte hasta la semana 11**. El campo ya está: es cambiar un número.
+
+**Los 77 duplicados genérico + marca** (punto 60). El punto cita cuatro y son 77 parejas con los
+mismos macros. Tener genérico y marca es el diseño del catálogo, y borrar uno afecta a dietas ya
+guardadas, así que no se toca sin que él diga qué quiere: que se quede el genérico, que se quede
+el de marca, o que el buscador los junte. La lista sale con
+`backend/_revisar_alimentos_bloque_h.py`.
 
 **Los 56 mínimos por categoría** (punto 7). El mapa existe y funciona, pero los valores vienen de
 la calculadora antigua y él quiere revisarlos; lo cifra en media hora. La tabla lista para
