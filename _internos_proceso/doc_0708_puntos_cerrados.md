@@ -1687,65 +1687,87 @@ que hacen que un informe deje de creerse. Los 105 tests del informe siguen pasan
 
 ## Bloque H - Arreglos en la base de alimentos
 
-Los tres puntos son de **datos**, no de código, así que lo primero fue medirlos contra el
-catálogo: 3.211 alimentos. Y sale una cosa importante: **dos de los tres casos concretos que
-cita el documento ya están bien en dev**.
+**Comprobado y aplicado directamente contra PRODUCCIÓN** (Francisco confirmó que los casos que
+cita Jesús los miró allí, y autorizó el 08-08 a leer y arreglar los puntos 58 y 59). Backup del
+día comprobado antes de tocar nada: `jg12-20260808.archive.gz`, 936 MB, de las 4:30.
 
-**Ojo con esto: el catálogo de dev y el de producción no tienen por qué ser el mismo.** Por eso
-no se ha tocado nada a mano: está hecho como script, `backend/_revisar_alimentos_bloque_h.py`,
-que mira los tres puntos y corrige lo que se puede corregir sin inventarse ningún valor. Hay que
-pasarlo también en producción.
+### Y la explicación de todo el bloque: **son los tres puntos del 05-08 otra vez**
 
-### Punto 58 - Faltan categorías de proteico · CERRADO
+Al ir a arreglarlo apareció `backend/_arreglar_catalogo_0508.py`, escrito para el documento
+anterior, y dice **literalmente lo mismo**:
 
-La categoría **7.1.3 (cereales proteicos)** es la que hace que la proteína cuente **al 100 % sin
-pasar por la calibración progresiva**. Un cereal con 30 g de proteína sin esa etiqueta se
-calibra como si fuera un muesli normal, y el mismo producto acaba contando distinto según quién
-lo metiera en el catálogo.
+> 1. Cereales y panes PROTEICOS sin su categoría (7.1.3 / 8.8): el mismo producto calibraba o no
+>    según como estuviera dado de alta.
+> 2. Genéricos a 0 de proteína… **el caso que trajo él: los pistachos genéricos, a 0 teniendo ~20**.
+> 3. Duplicados marca/genérico: se listan para decidir, NO se borra nada aquí.
 
-**Los dos muesli de Prozis que cita el punto ya la tienen**, y comprobado ejecutando la regla con
-los documentos reales: los cuatro muesli proteicos del catálogo **saltan la calibración**, tanto
-el de 31 g como el de 23. Las granolas proteicas (Prozis, Hacendado), también. Y **harina de
-avena con whey no hay ninguna**: las que hay son harina de avena normal o con sabor, de 10 a 16 g.
+Los tres puntos del bloque H son los mismos tres, **ya arreglados y desplegados el 05-08**. Por
+eso en producción están bien.
 
-Barriendo el catálogo entero en busca de todos los que estuvieran en esa situación - cereal de
-la familia 7 con 18 g o más de proteína y sin 7.1.3 - sale **uno**: **Crunchy Choco Rings (Wow
-cereals), con 36,6 g**, en «cereales comerciales». Corregido, y comprobado que ahora salta la
-calibración.
+### Punto 58 - Faltan categorías de proteico · CERRADO EN PRODUCCIÓN
 
-### Punto 59 - Los pistachos genéricos a 0 de proteína · YA ESTABA
+La 7.1.3 (cereales proteicos) hace que la proteína cuente **al 100 % sin pasar por la calibración
+progresiva**. Sin ella, un cereal de 30 g de proteína se calibra como un muesli normal.
 
-En dev **no están a cero**: los Pistachos genéricos tienen **21,6 g**, que es lo que dice el punto
-que deberían tener («unos 20»), y los de Hacendado 25, también como dice. Barrido el catálogo
-entero: **cero frutos secos con la proteína a cero**.
+**En producción, los cuatro muesli proteicos ya saltaban la calibración** - comprobado ejecutando
+la regla real contra los documentos reales, incluido el de 23 g que cita el punto:
 
-El script los busca igualmente y, si aparece alguno en producción, lo lista **sin corregirlo**,
-diciendo cuánta proteína tiene el mismo producto con marca como pista. El valor bueno está en la
-etiqueta y no se inventa.
+```
+SALTA la calibracion   P=32.0   YA | 7.1.3     Muesli proteico High Protein Crunchy Chocolate
+SALTA la calibracion   P=23     7.1.3 | YA     Muesli proteico cacahuete-chocolate blanco (Prozis)
+SALTA la calibracion   P=31     7.1.3 | YA     Muesli proteico chocolate (Prozis)
+SALTA la calibracion   P=25.6   7.1.3 | YA     Muesli proteico trozos de chocolate y galleta
+```
+
+Pero barriendo el catálogo entero con un criterio más ancho que el del 05-08 - **cualquier**
+cereal de la familia 7 con 18 g o más de proteína y sin 7.1.3 - apareció uno que se había
+escapado: **Crunchy Choco Rings (Wow cereals), con 36,6 g**, en «cereales comerciales».
+
+**Corregido en producción** y verificado: el barrido vuelve a pasar y ahora dice `0`.
+
+### Punto 59 - Los pistachos genéricos a 0 de proteína · YA ESTABA EN PRODUCCIÓN
+
+No están a cero. En producción, ahora mismo:
+
+| | Proteína |
+|---|---|
+| Pistachos (genérico) | **21,6** |
+| Pistachos tostados con sal (Hacendado) | 25 |
+| Pistachos tostados sin sal (Hacendado) | 21,6 |
+
+Que es exactamente lo que dice el punto que deberían tener («unos 20 g», y el de Hacendado «bien,
+con 25»). Barrido el catálogo entero: **cero frutos secos con la proteína a cero**. Se arregló el
+05-08 con el mismo caso.
 
 ### Punto 60 - Duplicados · MEDIDO, y son muchos más de cuatro
 
-El punto cita cuatro. **Son 77 parejas.** Los cuatro que nombra están entre ellas y son exactos -
-mismo nombre, mismos macros, uno genérico y otro con marca:
+Este sí sigue ahí. El punto cita cuatro; **en producción son 77 parejas** con nombre equivalente
+y **los mismos macros**, una genérica y otra con marca. Los cuatro que nombra están entre ellas:
 
 | Genérico | Con marca | |
 |---|---|---|
 | Almendras | Almendras crudas (Hacendado) | P=23 |
 | Anacardos | Anacardos crudos (Hacendado) | P=22 |
-| Pipa de calabaza natural pelada | ... (Hacendado) | P=35 |
-| Frutos secos cocktail tostado sin sal | ... (Hacendado) | P=23 |
+| Pipa de calabaza natural pelada | … (Hacendado) | P=35 |
+| Frutos secos cocktail tostado sin sal | … (Hacendado) | P=23 |
 
-Pero hay 73 más: arroz basmati, queso feta, salsa de soja, tortilla de patata, puré de patata…
+Y 73 más: arroz basmati, queso feta, salsa de soja, tortilla de patata, puré de patata…
 
-**Y aquí no se borra nada, a propósito.** Que un alimento esté dos veces, uno genérico y otro con
-marca, **es el diseño del catálogo**: el genérico existe para quien no compra esa marca. Borrar
-uno no es un arreglo evidente, y además **hay dietas guardadas apuntando a uno de los dos**: el
-que se borre desaparece de los días ya montados.
+**No se ha borrado nada, y es la misma decisión que el 05-08.** Que un alimento esté dos veces,
+uno genérico y otro con marca, **es el diseño del catálogo**: el genérico existe para quien no
+compra esa marca. Y **hay dietas guardadas apuntando a uno de los dos**: el que se borre
+desaparece de días ya montados.
 
-Lo que sí es un problema de verdad es lo que ve el cliente en el buscador: dos entradas que
-parecen iguales y no sabe cuál coger. **Que Jesús diga qué quiere** - que se quede el genérico,
-que se quede el de marca, o que el buscador los junte en uno solo - y se hace. El script deja la
-lista de las 77 para poder decidirlo mirando.
+Lo que sí es un problema es lo que ve el cliente en el buscador: dos entradas iguales sin saber
+cuál coger. **Que Jesús diga qué quiere** - que se quede el genérico, que se quede el de marca, o
+que el buscador los junte en uno - y se hace.
+
+### Lo que queda dicho para la próxima vez
+
+El script `backend/_revisar_alimentos_bloque_h.py` deja los tres barridos hechos y se puede pasar
+cuando se quiera; el de dev también quedó corregido. Y una cosa aprendida: **el código de
+producción va por detrás del de dev** - `cuenta_siempre_al_100`, que se añadió el 07-08, todavía
+no está allí. Los datos son los mismos; el código no.
 
 ---
 
@@ -1808,7 +1830,6 @@ nuevas del filtro, y los **puntos 23, 25 y 27 al 60** (los bloques D al H entero
 | `_rellenar_series_peso_grasa.py --escribir` | 30 | La ficha sigue enseñando el peso sin fecha |
 | `_rellenar_cambios_macros.py --escribir` | 31 | El modelo solo sabrá qué palanca se movió de aquí en adelante |
 | `_migrar_protocolos_suplementos.py --escribir` | 33 | Los protocolos ya asignados no pasan al formato con fecha |
-| `_revisar_alimentos_bloque_h.py --escribir` | 58 | Un cereal proteico sin su categoría se calibra mal. **El catálogo de producción puede tener más casos que dev** |
 
 **Ojo con el de las series (30)**: en dev cambió el peso actual de **50 de 232 clientes**, porque
 el de la ficha no era el último pesaje de verdad. En producción va a pasar lo mismo, y es lo que
