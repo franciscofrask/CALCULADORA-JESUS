@@ -754,6 +754,32 @@ código, no lo lee ningún cliente, y renombrarlo sería riesgo sin beneficio.
 
 ---
 
+### Punto 24 - Aprovechar los fondos del quiz actual · BLOQUEADO (no aparecen)
+
+**Dónde irían, que eso sí está claro.** La portada del test de venta ya espera una imagen: el
+código apunta a `public/portada-test.jpg` y, mientras el fichero no exista, se ve solo el
+degradado. Es decir, el hueco está hecho y basta con dejar la imagen ahí. Las pantallas del
+cuestionario no tienen fondo hoy, solo los degradados de marca.
+
+**Lo que ya hay en la app** y no hay que volver a buscar: las siete fotos de los biotipos
+(`public/biotipos/`) y las del porcentaje de grasa (`public/bodyfat/`).
+
+**Lo que falta: las imágenes.** No están en el disco (Francisco lo confirma) y no las he
+encontrado en Drive, buscando por cinco vías: por título ("fondo", "quiz", "test",
+"cuestionario", "portada"), por tipo de imagen, entre lo compartido con Francisco, entre lo
+reciente, y dentro de la carpeta de material gráfico de la cuenta de Jesús
+(`admin@jesusgallegopt.com`), que resultó tener los mockups de la app antigua, no esto.
+
+Lo que devuelve el buscador de Drive está dominado por las miles de fotos de progreso de
+clientes que entran por los formularios, y su buscador no admite las consultas combinadas que
+harían falta para filtrarlas.
+
+**Hace falta la referencia concreta**: el enlace de la carpeta, su nombre exacto, o desde qué
+cuenta se compartieron. Con eso es cuestión de minutos: descargarlas, dejarlas en `public/` y
+apuntarlas desde las pantallas del test.
+
+---
+
 ---
 
 ## PENDIENTES
@@ -783,9 +809,11 @@ está: ese documento trae los textos buenos de las 12 pantallas, pero en ningún
 está roto en la app. Con los textos delante se puede ir pantalla por pantalla a buscarlo, pero
 ya no es "de un minuto" como decía el punto. **Que Jesús diga cuál es.**
 
-**Los fondos de pantalla del test.** El documento de textos dice: "que reaproveche los del quiz
-actual de ELM para las pantallas del test de la app. Ya están hechos y son los buenos". Hay que
-localizarlos: no sabemos dónde están.
+**Los fondos de pantalla del test** (punto 24). Jesús dice que ya los pasó por Drive y que no
+hay que buscar fotos nuevas. **No aparecen**: no están en el disco y en Drive se ha buscado por
+cinco vías sin resultado (detalle en el punto 24). Hace falta el enlace de la carpeta, su nombre
+exacto o desde qué cuenta se compartieron. El hueco en el código ya existe
+(`public/portada-test.jpg`), así que en cuanto aparezcan es cuestión de minutos.
 
 **El repositorio fuente de la calculadora antigua** (`jgl-calma-web-next`). Solo tenemos el
 bundle compilado en `_calma_ref/`, que sirve para contrastar comportamiento pero no para leer el
