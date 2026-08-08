@@ -34,6 +34,7 @@ from calma_suggest import (
 from target_calculator import calcular_targets, targets_to_profile_macros, run_tests as target_run_tests
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
 from core.quiz_store import guardar_quiz_respuestas
+from core.series_cliente import anotar_peso, anotar_grasa
 from macro_distribution import distribuir_macros as dist_macros, leer_macro, leer_peri
 from redondeo_salida import redondear_cantidad
 
@@ -2110,11 +2111,10 @@ async def calculate_and_apply_targets(data: dict, user = Depends(get_current_use
 
     profile_macros = targets_to_profile_macros(targets)
 
-    # Actualizar perfil del cliente
+    # Actualizar perfil del cliente. El peso y el % graso no van aqui: van a sus series
+    # justo despues (punto 30), y el "actual" del perfil sale del ultimo de la serie.
     update_data = {
-        "weight": float(peso),
         "sex": sexo,
-        "body_fat": float(bf),
         "goal": objetivo,
         "macros_training": profile_macros["macros_training"],
         "macros_rest": profile_macros["macros_rest"],
@@ -2131,6 +2131,10 @@ async def calculate_and_apply_targets(data: dict, user = Depends(get_current_use
         {"$set": update_data, "$setOnInsert": {"id": str(uuid.uuid4())}},
         upsert=True
     )
+
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+    await anotar_peso((perfil or {}).get("id"), peso, origen="calculadora")
+    await anotar_grasa((perfil or {}).get("id"), bf, origen="calculadora")
 
     return {
         "applied": True,

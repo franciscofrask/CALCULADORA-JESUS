@@ -20,6 +20,7 @@ from core.quiz_store import guardar_quiz_respuestas, registrar_revision
 from core.avisos_equipo import avisar_al_equipo
 from core.cycle import enrich_cycle
 from core.seguimiento import marcar_ajuste
+from core.series_cliente import anotar_peso, anotar_grasa
 
 router = APIRouter(tags=["users"])
 
@@ -119,9 +120,19 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
             except (ValueError, KeyError):
                 pass  # Si los datos no son válidos, no recalcular
 
+    # Peso y % graso NO se escriben sueltos: van a sus series con la fecha de hoy y el
+    # "actual" sale de la serie (punto 30). Si no, el cliente editando su perfil dejaba un
+    # peso sin fecha que discrepaba del de su ultimo reporte.
+    peso_nuevo = update_data.pop("weight", None)
+    grasa_nueva = update_data.pop("body_fat", None)
+
     if update_data:
         await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update_data})
-    
+    if peso_nuevo is not None:
+        await anotar_peso(profile["id"], peso_nuevo, origen="lo puso el cliente")
+    if grasa_nueva is not None:
+        await anotar_grasa(profile["id"], grasa_nueva, origen="lo puso el cliente")
+
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
 
@@ -154,12 +165,13 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     if sexo not in ("hombre", "mujer"):
         sexo = "hombre"
     ajustes = data.ajustes.model_dump() if data.ajustes else None
+    # Sin `weight` ni `body_fat`: los pone `anotar_peso`/`anotar_grasa` al final, a partir
+    # de sus series (punto 30). El cálculo de macros de aquí abajo usa `data.weight`
+    # directamente, así que no depende de esto.
     update = {
         "questionnaire_completed": True,
         "goal": data.goal,
-        "weight": data.weight,
         "height": data.height,
-        "body_fat": data.body_fat,
         "sex": sexo,
         "birthdate": data.birthdate,
         "age": _age_from_birthdate(data.birthdate),
@@ -243,6 +255,11 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         # "¿Quien me toca esta semana?" (punto 29): la fecha se queda en el cliente.
         await marcar_ajuste(client_id)
 
+    # El primer punto de las dos series: el peso y el % graso del alta (punto 30). Se anotan
+    # despues del $set para que el "actual" salga de la serie y no del campo suelto.
+    await anotar_peso(client_id, data.weight, origen="cuestionario del alta")
+    await anotar_grasa(client_id, data.body_fat, origen="cuestionario del alta")
+
     # GUARDAR SIEMPRE las respuestas desde el dia uno (calibracion futura), y
     # avisar al coach si la dieta reportada no cuadra con lo recomendado.
     await guardar_quiz_respuestas(
@@ -299,7 +316,8 @@ async def calcular_mi_cuerpo(data: dict, user = Depends(get_current_user)):
     objetivo = (data.get("objetivo") or profile.get("goal") or "definicion").lower()
     fase = "volumen" if "vol" in objetivo else "definicion"
 
-    cambios = {"weight": peso, "body_fat": bf, "sex": sexo, "goal": fase}
+    # Peso y % graso van a sus series al final (punto 30), no aqui sueltos.
+    cambios = {"sex": sexo, "goal": fase}
     if altura:
         cambios["height"] = altura
 
@@ -553,6 +571,10 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     if not profile.get("id"):
         update["id"] = client_id
     await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
+    # Peso y % graso, a sus series (punto 30). Van despues del $set porque hasta aqui el
+    # perfil podia no tener `id`, que es por donde entra el modulo de series.
+    await anotar_peso(client_id, peso, origen="cuestionario de ajuste")
+    await anotar_grasa(client_id, bf, origen="cuestionario de ajuste")
 
     # Igual que el alta: se versiona en macro_history para que el resolver por fecha coja estos
     # macros y no los del alta.
@@ -885,12 +907,9 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         peri["hidratos"] = peri["carbs"]
         update["macros_periworkout"] = peri
 
-    # Calc inputs → también al perfil (peso/%graso/sexo/objetivo) para que la calculadora
-    # precargue los últimos valores y haya trazabilidad del estado actual.
-    if data.peso is not None:
-        update["weight"] = data.peso
-    if data.porcentaje_graso is not None:
-        update["body_fat"] = data.porcentaje_graso
+    # Calc inputs → también al perfil (sexo/objetivo) para que la calculadora precargue los
+    # últimos valores. El peso y el % graso van a sus series al final (punto 30): así el
+    # "actual" es siempre el último de la serie y no un campo suelto que puede discrepar.
     if data.sexo:
         update["sex"] = data.sexo
     if data.objetivo:
@@ -961,6 +980,13 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         }
     await db.macro_history.insert_one(macro_log)
     await marcar_ajuste(client_id, macro_log.get("created_at"))   # punto 29
+    # Peso y % graso, a sus series con la fecha de vigencia del ajuste (punto 30).
+    if data.peso is not None:
+        await anotar_peso(client_id, data.peso, macro_log.get("effective_date"),
+                          origen="calculadora del cliente")
+    if data.porcentaje_graso is not None:
+        await anotar_grasa(client_id, data.porcentaje_graso, macro_log.get("effective_date"),
+                           origen="calculadora del cliente")
 
     revision_registrada = False
     if ajustes is not None:

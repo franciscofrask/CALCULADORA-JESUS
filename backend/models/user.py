@@ -526,12 +526,19 @@ class ClientProfile(BaseModel):
     macros_multiplicadores: Optional[Dict[str, float]] = None
     # Coach-set (Calma quiereRepartoDeComidas=false): the whole day's macros go to ONE comida.
     single_meal_mode: Optional[bool] = None
+    # OJO con estos dos (punto 30 del 07-08): `weight` y `body_fat` son el ULTIMO valor de
+    # sus series, calculado, no un dato que se guarde aparte. Los escribe solo
+    # core/series_cliente.py; nadie mas debe ponerlos en un $set, o vuelven los dos pesos
+    # distintos del punto 9. Las series llevan la fecha, que es lo que hay que ensenar al
+    # lado del numero ("94 kg · hace 3 dias").
     weight: Optional[float] = None
+    pesos: Optional[List[Dict[str, Any]]] = None                 # [{fecha, valor, origen}]
     height: Optional[float] = None
     age: Optional[int] = None
     sex: Optional[str] = None
     goal: Optional[str] = None
     body_fat: Optional[float] = None
+    porcentajes_grasos: Optional[List[Dict[str, Any]]] = None    # [{fecha, valor, origen}]
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None
     # Observaciones del coach sobre el ENTRENAMIENTO: van con la maquinaria y las lesiones

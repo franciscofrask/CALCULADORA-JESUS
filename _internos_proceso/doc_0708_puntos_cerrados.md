@@ -949,6 +949,64 @@ un ajuste la fecha del cliente pasa a hoy. La ficha del cliente de pruebas, devu
 **Ojo para producción**: hay que pasar el script de relleno **una vez**, después de desplegar.
 Sin eso, los 232 saldrían como «nunca».
 
+### Punto 30 - Peso y % graso como series con fecha · CERRADO
+
+**Lo que pasaba.** El peso «actual» vivía en `client_profiles.weight`, un campo suelto y sin
+fecha, y el histórico vivía por otro lado: en los reportes, en el historial de macros y en lo
+que vino de Calma. Dos sitios, dos números, y ninguno decía de cuándo era. Eso es el punto 9.
+
+**Cuánto de grave era, medido.** Al construir las series salió el número: **en 50 de 232
+clientes el peso de la ficha NO era el último pesaje de verdad**. Tres casos mirados uno a uno:
+
+| Cliente | La ficha decía | El último pesaje real |
+|---|---|---|
+| `812e64f8` | 90,3 kg (de un ajuste de octubre de 2025) | 95,0 kg, de su reporte de marzo de 2026 |
+| `8fb54f9a` | 86,0 kg (el penúltimo ajuste) | 103,0 kg, del ajuste del 20/07 |
+| `fe9745c6` | 86,8 kg (un ajuste del 26/06) | 85,8 kg, del pesaje del 23/07 |
+
+En los tres el histórico tenía razón y la ficha estaba vieja. No era un empate entre dos
+fuentes: era un campo que se quedaba atrás.
+
+**Lo que hay ahora.** `backend/core/series_cliente.py`. El peso es una serie
+`{fecha, valor, origen}` y **el peso actual es el último de la serie**. Lo mismo el % graso,
+que ya funcionaba así desde el 05-08 pero solo lo alimentaba el coach desde las fotos.
+
+Todo lo que antes escribía un peso pasa ahora por ahí, y **con la fecha del hecho**, no la del
+día en que se apunta: el reporte con la fecha del reporte, el check-in con la del check-in, el
+ajuste del coach con la del pesaje (punto 27), el alta y las dos calculadoras con la suya. Son
+**ocho** sitios. Cada punto lleva de dónde salió, porque no todos valen igual.
+
+Reglas: un valor por día (si se anota dos veces el mismo día manda el último, que es una
+corrección, no dos pesajes) y fuera de rango no entra (un peso de 700 kg no es un dato, es un
+error de tecleo, y en una serie arrastra el modelo entero).
+
+**Una diferencia con la letra del punto, a propósito.** El punto dice que el peso actual no se
+almacene aparte «nunca». `weight` y `body_fat` siguen existiendo como campos porque los leen
+decenas de sitios (el motor de macros, el agente, el chatbot, los informes), y quitarlos el fin
+de semana antes de abrir es cambiar medio backend por gusto. Pero **ya no son un dato
+independiente**: son un espejo que escribe *solo* `series_cliente.py` a partir del último de la
+serie, así que no pueden discrepar de ella. El efecto es el que pide el punto - un solo peso en
+toda la app - sin la cirugía. Está avisado en el modelo, encima de los dos campos.
+
+**En pantalla**, la ficha del cliente ya lo enseña como pide el punto:
+
+> **PESO** 103 kg · hace 19 días  **% GRASO** 30% · hoy
+
+Y a menos de un mes dice «hace N días», «ayer» o «hoy»; a partir del mes, la fecha.
+
+**Lo que esto desbloquea.** El punto dice que de 162 clientes solo 62 tienen el % graso en dos
+momentos. Con las series construidas son **69**, y ahora además crece solo: el % graso del
+check-in mensual, que hasta hoy se quedaba dentro del check-in sin llegar a ninguna serie, ya
+entra. Sin dos momentos no hay eje respondedor que medir, así que esto era el tapón.
+
+**Los que ya estaban.** `backend/_rellenar_series_peso_grasa.py` construye las series de los
+clientes existentes juntando Calma, el historial de macros, los check-ins y los reportes. El
+campo suelto de hoy, que no tiene fecha, solo se usa cuando el cliente no tiene ningún otro
+punto (3 casos) y se apunta con la fecha del relleno: es el único dato que no se puede colocar,
+y va el último para no perderlo. Simula por defecto. En dev: **173 clientes con serie**.
+
+**Ojo para producción**: pasar el relleno **una vez**, después de desplegar.
+
 ---
 
 ---
@@ -986,6 +1044,12 @@ regla del lunes (`calendario_arranque.py`) está desconectada. **Que Jesús diga
 vio**, o si lo que quiere es que un cliente nuevo arranque al día siguiente en vez de esperar al
 lunes - que es un cambio de método y toca la facturación.
 
+**La ficha de un cliente con mucho histórico se queda colgada** (visto el 08-08 comprobando el
+punto 30). Abriendo la de un cliente migrado de Calma con fotos, la página deja de responder:
+ni se puede capturar ni leer, y hay que abrir otra pestaña. Con clientes normales va bien. No
+bloquea nada del fin de semana, pero es de los que Jesús va a abrir el lunes, así que hay que
+mirarlo: pinta a que se cargan todas las fotos del historial de golpe.
+
 **Los fondos de pantalla del test** (punto 24). Jesús dice que ya los pasó por Drive y que no
 hay que buscar fotos nuevas. **No aparecen**: no están en el disco y en Drive se ha buscado por
 cinco vías sin resultado (detalle en el punto 24). Hace falta el enlace de la carpeta, su nombre
@@ -1013,11 +1077,16 @@ se borran esas dos también.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
 textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28 y 29) está en GitHub y sin desplegar, esperando la orden.
+25, 27, 28, 29 y 30) está en GitHub y sin desplegar, esperando la orden.
 
-**Y con ese despliegue, pasar el relleno de fechas** (punto 29):
-`backend/_rellenar_fechas_seguimiento.py --escribir`, **una sola vez**, después de subir. Sin
-eso, la columna «Sin tocar» sale «nunca» para todos los clientes que ya existen.
+**Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
+
+- `backend/_rellenar_fechas_seguimiento.py --escribir` (punto 29). Sin eso, la columna «Sin
+  tocar» sale «nunca» para todos los clientes que ya existen.
+- `backend/_rellenar_series_peso_grasa.py --escribir` (punto 30). Sin eso, la ficha sigue
+  enseñando el peso sin fecha. **Ojo**: en dev esto cambió el peso actual de 50 de 232
+  clientes, porque el de la ficha no era el último pesaje de verdad. En producción va a pasar
+  lo mismo, y es lo que se busca, pero conviene avisar a Jesús antes de que lo vea.
 
 ---
 

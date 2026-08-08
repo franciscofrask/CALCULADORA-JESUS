@@ -9,6 +9,7 @@ import uuid
 from core.database import db
 from core.security import get_current_user, get_admin_user
 from core.plan_access import plan_grants_feature
+from core.series_cliente import anotar_peso
 from models.common import ReportCreate, ReportResponse
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -91,7 +92,10 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     # `ultimo_reporte` va aqui a proposito duplicado (punto 29 del 07-08, ver
     # core/seguimiento.py): es lo que deja ordenar la lista de clientes por "quien lleva
     # mas sin que le toquen" sin recorrer los reportes de todos para pintar una tabla.
-    set_perfil = {"weight": data.weight, "ultimo_reporte": report["created_at"][:10]}
+    set_perfil = {"ultimo_reporte": report["created_at"][:10]}
+    # El peso NO se escribe aqui: va a la serie con la fecha del reporte, y el "actual"
+    # sale de la serie (punto 30). Es lo que arregla los dos pesos distintos del punto 9.
+    await anotar_peso(profile["id"], data.weight, report["created_at"][:10], origen="reporte")
     if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
         if profile.get("goal") != data.proximo_objetivo:
             set_perfil["goal"] = data.proximo_objetivo

@@ -61,6 +61,27 @@ const _fechaLarga = (iso) => iso
 // El reporte del que sale el peso del ajuste: el ultimo que traiga peso (punto 25). Aqui
 // arriba y no dentro del componente porque hace falta en dos sitios: al cargar la ficha,
 // para rellenar el editor, y al pintar, para decir de que reporte viene.
+// El último punto de una serie {fecha, valor} (punto 30): el peso y el % graso actuales
+// SON el último de su serie, y se enseñan con su fecha. Un número sin fecha no se puede
+// contrastar con nada, y era la mitad del lío de los dos pesos.
+const _ultimoDeLaSerie = (serie) => {
+    const puntos = (serie || []).filter(x => x?.valor != null && x?.fecha);
+    if (!puntos.length) return null;
+    return puntos.reduce((a, b) => String(b.fecha) > String(a.fecha) ? b : a);
+};
+
+// "hace 3 días", "ayer", "hoy". Con la fecha exacta al lado cuando ya no es reciente.
+const _haceCuanto = (iso) => {
+    if (!iso) return '';
+    const d = new Date(String(iso).slice(0, 10) + 'T00:00:00');
+    if (isNaN(d)) return '';
+    const dias = Math.floor((new Date().setHours(0, 0, 0, 0) - d.getTime()) / 86400000);
+    if (dias <= 0) return 'hoy';
+    if (dias === 1) return 'ayer';
+    if (dias < 30) return `hace ${dias} días`;
+    return `del ${_fechaCorta(String(iso).slice(0, 10))}`;
+};
+
 const _reporteDelPeso = (reports) => {
     const conPeso = (reports || []).filter(r => r?.weight != null && r?.created_at);
     if (!conPeso.length) return null;
@@ -789,7 +810,19 @@ const ClientDetailPage = () => {
                             <InfoItem icon={Target} label="Rutina" value={activeRoutine ? `${activeRoutine.days?.filter(d => !d.is_rest).length || 0} días` : 'Sin rutina'} />
                             <InfoItem icon={CreditCard} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'} />
                             <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
-                            <InfoItem icon={Scale} label="Peso" value={profile?.weight ? `${profile.weight} kg` : '-'} />
+                            {/* Punto 30: el peso, con su fecha. "94 kg · hace 3 días". El
+                                número es el último de la serie; si el cliente es antiguo y
+                                no tiene serie todavía, se cae al campo de la ficha. */}
+                            <InfoItem icon={Scale} label="Peso" value={(() => {
+                                const p = _ultimoDeLaSerie(profile?.pesos);
+                                if (p) return <>{p.valor} kg <span className="text-white/40 font-normal">· {_haceCuanto(p.fecha)}</span></>;
+                                return profile?.weight ? `${profile.weight} kg` : '-';
+                            })()} />
+                            <InfoItem icon={Scale} label="% graso" value={(() => {
+                                const g = _ultimoDeLaSerie(profile?.porcentajes_grasos);
+                                if (g) return <>{g.valor}% <span className="text-white/40 font-normal">· {_haceCuanto(g.fecha)}</span></>;
+                                return profile?.body_fat != null ? `${profile.body_fat}%` : '-';
+                            })()} />
                             <InfoItem icon={Target} label="Objetivo" value={objetivoLabel(profile?.goal)} />
                         </div>
                     </CardContent></Card>

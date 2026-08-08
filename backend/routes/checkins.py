@@ -19,6 +19,7 @@ from bson import Binary
 from core.database import db
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import plan_grants_feature
+from core.series_cliente import anotar_peso, anotar_grasa
 from models.common import CheckInCreate, CheckInResponse
 
 router = APIRouter(tags=["checkins"])
@@ -171,12 +172,18 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
 
     await db.checkins.insert_one(checkin)
 
-    # Sync de peso al perfil si lo aporta (weekly/monthly).
+    # El peso que aporta el check-in va a la SERIE con la fecha del check-in (punto 30), y
+    # el peso "actual" del perfil sale de la serie. Antes se escribia suelto en el perfil,
+    # y era una de las dos vias por las que la app acababa ensenando dos pesos distintos.
     if data.weight is not None:
-        await db.client_profiles.update_one(
-            {"id": profile["id"]},
-            {"$set": {"weight": data.weight}},
-        )
+        await anotar_peso(profile["id"], data.weight, checkin["created_at"][:10],
+                          origen=f"check-in {data.type}")
+    # Y el % graso del check-in mensual, que hasta ahora se quedaba dentro del check-in sin
+    # llegar a ninguna serie. Es justo el dato que falta: de 162 clientes solo 62 lo tienen
+    # en dos momentos, y sin dos momentos no hay eje respondedor que medir.
+    if data.body_fat_pct is not None:
+        await anotar_grasa(profile["id"], data.body_fat_pct, checkin["created_at"][:10],
+                           origen=f"check-in {data.type}")
 
     return CheckInResponse(**checkin)
 

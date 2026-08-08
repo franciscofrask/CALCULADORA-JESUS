@@ -25,6 +25,7 @@ from models.user import (
 )
 from core.cycle import enrich_cycle, compute_cycle
 from core.seguimiento import marcar_ajuste, dias_desde
+from core.series_cliente import anotar_peso, anotar_grasa, actual as actual_de_serie
 from models.common import FoodSuggestionUpdate, AdminFoodCreate
 from calculator import invalidate_foods_cache
 
@@ -628,25 +629,30 @@ async def anotar_body_fat(client_id: str, data: dict, user = Depends(get_admin_u
     if not fecha:
         raise HTTPException(status_code=400, detail="Falta la fecha")
     valor = data.get("valor")
-    serie = [x for x in (profile.get("porcentajes_grasos") or []) if str(x.get("fecha"))[:10] != fecha]
-    if valor not in (None, ""):
-        try:
-            v = round(float(valor), 1)
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=400, detail="El % graso tiene que ser un número")
-        if not (3 <= v <= 60):
-            raise HTTPException(status_code=400, detail="Un % graso fuera de 3-60 no es un dato, es un error")
-        serie.append({"fecha": fecha, "valor": v, "anotado_por": user.get("name", user.get("email", "coach"))})
-    serie.sort(key=lambda x: str(x.get("fecha")))
 
-    cambios = {"porcentajes_grasos": serie}
-    # El del perfil es el mas reciente de la serie: es el que se ensena y el que entra en
-    # el siguiente calculo de macros.
-    if serie:
-        cambios["body_fat"] = serie[-1]["valor"]
-    await db.client_profiles.update_one({"id": client_id}, {"$set": cambios})
+    # Borrar el valor de un dia (el coach se arrepiente de una estimacion) no pasa por el
+    # modulo de series: lo suyo es anotar, no quitar.
+    if valor in (None, ""):
+        serie = [x for x in (profile.get("porcentajes_grasos") or []) if str(x.get("fecha"))[:10] != fecha]
+        ahora = actual_de_serie(serie)
+        await db.client_profiles.update_one({"id": client_id}, {"$set": {
+            "porcentajes_grasos": serie, "body_fat": ahora["valor"] if ahora else None}})
+        _refrescar_casos()
+        return {"porcentajes_grasos": serie, "body_fat": ahora["valor"] if ahora else None}
+
+    try:
+        v = round(float(valor), 1)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="El % graso tiene que ser un número")
+    if not (3 <= v <= 60):
+        raise HTTPException(status_code=400, detail="Un % graso fuera de 3-60 no es un dato, es un error")
+
+    # Por la misma via que el resto (punto 30): la serie manda y `body_fat` es su ultimo.
+    await anotar_grasa(client_id, v, fecha, origen=f"foto · {user.get('name', user.get('email', 'coach'))}")
+    perfil = await db.client_profiles.find_one(
+        {"id": client_id}, {"_id": 0, "porcentajes_grasos": 1, "body_fat": 1})
     _refrescar_casos()   # el eje respondedor depende de esta serie
-    return {"porcentajes_grasos": serie, "body_fat": cambios.get("body_fat")}
+    return {"porcentajes_grasos": perfil.get("porcentajes_grasos") or [], "body_fat": perfil.get("body_fat")}
 
 
 @router.put("/clients/{client_id}/macros")
@@ -677,15 +683,11 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     # Modelo predictivo (paso 1): el % graso del momento del ajuste. Si el coach lo
     # informa, ademas actualiza el perfil (es el dato mas reciente que hay).
     body_fat = data.porcentaje_graso if data.porcentaje_graso is not None else profile.get("body_fat")
-    if data.porcentaje_graso is not None:
-        set_data["body_fat"] = data.porcentaje_graso
 
     # El PESO con el que se hace el ajuste. Es el del reporte que el coach esta leyendo, que
     # puede no ser el que tiene el perfil (punto 25 del 07-08). Si lo informa, manda y
     # actualiza el perfil.
     peso_ajuste = data.peso if data.peso is not None else profile.get("weight")
-    if data.peso is not None:
-        set_data["weight"] = data.peso
 
     # Y se archiva CON LA FECHA DEL PESAJE, no con la del ajuste (punto 27 del 07-08). El
     # 05-08 se pidio lo contrario ("88 kilos con fecha de manana"), pero manda el documento
@@ -759,6 +761,13 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     await db.macro_history.insert_one(macro_log)
     # "¿Quien me toca esta semana?" (punto 29): la fecha se queda tambien en el cliente.
     await marcar_ajuste(client_id, macro_log["created_at"])
+    # Peso y % graso van a sus SERIES, con la fecha del pesaje (puntos 27 y 30). Ni uno ni
+    # otro se escriben sueltos en el perfil: el "actual" sale siempre del ultimo de la serie.
+    if data.peso is not None:
+        await anotar_peso(client_id, data.peso, peso_fecha or effective_date, origen="ajuste del coach")
+    if data.porcentaje_graso is not None:
+        await anotar_grasa(client_id, data.porcentaje_graso, peso_fecha or effective_date,
+                           origen="ajuste del coach")
 
     # El banco de casos (clientes gemelos) se refresca solo con cada ajuste nuevo.
     _refrescar_casos()
@@ -891,10 +900,11 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
         m["hidratos"] = m["carbs"]
         m["grasas"] = m["fat"]
 
+    # Ni `weight` ni `body_fat` van aqui: los pone `anotar_peso`/`anotar_grasa` a partir de
+    # sus series, mas abajo (punto 30). Escribirlos sueltos es lo que hacia que la app
+    # pudiera ensenar dos pesos distintos.
     set_data = {
-        "weight": float(peso),
         "sex": sexo,
-        "body_fat": float(bf),
         "goal": objetivo,
         "macros_training": training,
         "macros_rest": rest,
@@ -937,6 +947,9 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
     }
     await db.macro_history.insert_one(macro_log)
     await marcar_ajuste(client_id, macro_log["created_at"])   # punto 29
+    # Peso y % graso, a sus series con la fecha del ajuste (punto 30).
+    await anotar_peso(client_id, peso, macro_log["effective_date"], origen="calculadora del coach")
+    await anotar_grasa(client_id, bf, macro_log["effective_date"], origen="calculadora del coach")
 
     # GUARDAR SIEMPRE las respuestas/calculo (calibracion futura)
     await guardar_quiz_respuestas(
