@@ -7,12 +7,14 @@ from typing import List, Optional
 import uuid
 
 from core.database import db
-from core.security import get_current_user, get_admin_user
+from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import plan_grants_feature
 from core.series_cliente import anotar_peso
 from models.common import ReportCreate, ReportResponse
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+# Rutas del equipo sobre el reporte de un cliente (punto 45): meterlo en su nombre.
+admin_router = APIRouter(prefix="/admin", tags=["admin-reports"])
 
 @router.post("", response_model=ReportResponse)
 async def create_report(data: ReportCreate, user = Depends(get_current_user)):
@@ -103,6 +105,61 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     await db.client_profiles.update_one({"id": profile["id"]}, {"$set": set_perfil})
 
     return ReportResponse(**report)
+
+@admin_router.post("/clients/{client_id}/reporte", response_model=ReportResponse)
+async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
+                                       user=Depends(get_admin_user)):
+    """El equipo mete un reporte EN NOMBRE de un cliente (punto 45 del doc del 07-08).
+
+    Los Premium no rellenan el formulario: mandan el reporte y las fotos por WhatsApp y
+    alguien del equipo se lo pasa a la app. Hasta ahora eso no se podia hacer, asi que o se
+    entraba con su cuenta o el reporte se quedaba fuera -- y lo que se queda fuera no
+    alimenta ni la curva de peso ni el modelo.
+
+    A diferencia del reporte del cliente, aqui NO se comprueba la ventana de envio ni que
+    el plan incluya reportes: si el equipo lo esta metiendo es porque ya llego por otro
+    lado, y bloquearlo por el calendario no protege nada. Queda marcado con quien lo metio,
+    que es lo que hay que poder mirar despues.
+    """
+    profile = await db.client_profiles.find_one({"id": client_id})
+    assert_client_access(user, profile)
+
+    report = {
+        "id": str(uuid.uuid4()),
+        "client_id": client_id,
+        "weight": data.weight,
+        "measurements": data.measurements,
+        "photos": data.photos,
+        "training_compliance": data.training_compliance,
+        "nutrition_compliance": data.nutrition_compliance,
+        "sleep_quality": data.sleep_quality,
+        "energy_level": data.energy_level,
+        "stress_level": data.stress_level,
+        "notes": data.notes,
+        "proximo_objetivo": data.proximo_objetivo,
+        "viabilidad_ajuste": data.viabilidad_ajuste,
+        "cumplimiento_entreno": data.cumplimiento_entreno,
+        "trainer_feedback": None,
+        # De quien es el reporte de verdad: lo mando el cliente por otra via y lo paso el
+        # equipo. Sin esta marca, dentro de tres meses nadie sabe por que este reporte
+        # aparecio fuera de su ventana.
+        "metido_por": user.get("name", user.get("email", "equipo")),
+        "origen": "lo metio el equipo",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.reports.insert_one(report)
+
+    set_perfil = {"ultimo_reporte": str(report["created_at"])[:10]}
+    if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
+        if profile.get("goal") != data.proximo_objetivo:
+            set_perfil["goal"] = data.proximo_objetivo
+            set_perfil["fase_desde"] = str(report["created_at"])[:10]
+    await db.client_profiles.update_one({"id": client_id}, {"$set": set_perfil})
+    # El peso, a su serie con la fecha del reporte (punto 30).
+    await anotar_peso(client_id, data.weight, str(report["created_at"])[:10], origen="reporte (lo metió el equipo)")
+
+    return ReportResponse(**report)
+
 
 @router.get("", response_model=List[ReportResponse])
 async def get_reports(skip: int = 0, limit: int = 50, user = Depends(get_current_user)):

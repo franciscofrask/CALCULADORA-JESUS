@@ -571,6 +571,9 @@ class ClientProfile(BaseModel):
     # Lo que este cliente tiene de particular y no cabe en ningun campo (punto 39 del
     # 07-08). Sale en su ficha y salta al cobrar o al generarle algo.
     excepcion: Optional[str] = None
+    # Si tiene acceso y por que no, cuando no (punto 41). Lo calcula el servidor:
+    # {"activo": bool, "motivo": "sin_plan"|"sin_pagar"|"caducado"|None}.
+    acceso: Optional[Dict[str, Any]] = None
     # OJO con estos dos (punto 30 del 07-08): `weight` y `body_fat` son el ULTIMO valor de
     # sus series, calculado, no un dato que se guarde aparte. Los escribe solo
     # core/series_cliente.py; nadie mas debe ponerlos en un $set, o vuelven los dos pesos

@@ -48,7 +48,12 @@ async def get_client_profile(user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    return ClientProfile(**enrich_cycle(profile))
+    # Si tiene acceso y, si no, por que (punto 41): el front necesita distinguir al que
+    # nunca contrato del que se le acabo, porque no se les puede decir lo mismo.
+    from core.plan_access import estado_de_acceso
+    datos = enrich_cycle(profile)
+    datos["acceso"] = estado_de_acceso(profile)
+    return ClientProfile(**datos)
 
 @router.patch("/clients/onboarding", response_model=ClientProfile)
 async def update_onboarding(data: OnboardingUpdate, user = Depends(get_current_user)):

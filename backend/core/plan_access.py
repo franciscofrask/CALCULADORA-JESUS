@@ -77,6 +77,37 @@ def has_active_access(profile: Optional[Dict[str, Any]]) -> bool:
     return status == "activo"
 
 
+def estado_de_acceso(profile: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Si tiene acceso y, si no lo tiene, POR QUE (punto 41 del doc del 07-08).
+
+    Hasta ahora la app solo sabia decir "no tiene acceso", y por eso al cliente que llevaba
+    un ano pagando y se le acababa el ciclo se le ensenaba la misma pantalla que al que
+    acaba de registrarse: "Bienvenido a 12EN12, selecciona un plan". No es lo mismo no
+    haber empezado que haber terminado, y el que termina merece que se le diga y a quien
+    escribir.
+
+    `motivo` es lo que decide el mensaje:
+      sin_plan   - nunca contrato nada
+      sin_pagar  - inicio un checkout y no lo termino
+      caducado   - lo tuvo y se le acabo (baja, cancelacion, impago o fin de ciclo)
+    """
+    if not profile:
+        return {"activo": False, "motivo": "sin_plan"}
+    # Sin plan no hay acceso, aunque el perfil este "activo". `has_active_access` no mira
+    # el plan -- solo el estado y la suscripcion -- asi que un perfil activo y sin plan le
+    # daba el visto bueno. No es un cliente todavia: es alguien que se registro.
+    if not profile.get("plan"):
+        return {"activo": False, "motivo": "sin_plan"}
+    if has_active_access(profile):
+        return {"activo": True, "motivo": None}
+    # Un checkout empezado y nunca pagado: no llego a ser cliente.
+    if (profile.get("status") == "pendiente_pago"
+            and profile.get("checkout_status") in ("draft", "created")):
+        return {"activo": False, "motivo": "sin_pagar"}
+    # Tenia plan y ya no tiene acceso: se le acabo.
+    return {"activo": False, "motivo": "caducado"}
+
+
 def plan_features(plan_code: Optional[str]) -> list:
     """Lista de features que habilita el plan (['rutina','suplementacion',...]).
 

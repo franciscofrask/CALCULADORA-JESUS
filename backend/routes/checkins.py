@@ -296,19 +296,12 @@ async def _resolve_client_id_for_user(user: dict) -> Optional[str]:
     return profile["id"] if profile else None
 
 
-@router.post("/reports/photos")
-async def upload_progress_photo(
-    file: UploadFile = File(..., description="Foto de progreso (JPEG, PNG, WebP, HEIC). Máx 4 MB."),
-    taken_at: Optional[str] = Query(None, description="Fecha ISO de la foto (por defecto ahora)."),
-    pose: Optional[str] = Query(None, description="frente | espalda | perfil"),
-    user = Depends(get_current_user),
-):
-    """El cliente sube una foto de progreso. Guardada en `client_photos`. Devuelve metadatos.
-
-    La `pose` es lo que permite comparar: sin ella, tres fotos de un mes son tres fotos, y
-    con ella son la misma foto de tres meses distintos. Se acepta vacía porque las que ya
-    estaban subidas no la tienen.
-    """
+async def _guardar_foto_de_progreso(*, client_id: str, user_id: Optional[str],
+                                    file: UploadFile, taken_at: Optional[str],
+                                    pose: Optional[str], subida_por: Optional[str] = None) -> dict:
+    """Valida y guarda una foto de progreso. La usan las dos vías: la del cliente y la del
+    equipo subiéndola por él (punto 45). Las comprobaciones tienen que ser las mismas en
+    las dos, y por eso están aquí y no repetidas."""
     content_type = (file.content_type or "").lower()
     if content_type not in ALLOWED_PHOTO_TYPES:
         raise HTTPException(
@@ -324,10 +317,6 @@ async def upload_progress_photo(
             status_code=413,
             detail=f"La foto pesa {len(contents) // 1024} KB; el máximo permitido es {MAX_PHOTO_BYTES // (1024 * 1024)} MB.",
         )
-
-    client_id = await _resolve_client_id_for_user(user)
-    if not client_id:
-        raise HTTPException(status_code=400, detail="No se encontró el perfil de cliente.")
 
     now_iso = datetime.now(timezone.utc).isoformat()
     if taken_at:
@@ -352,7 +341,7 @@ async def upload_progress_photo(
     doc = {
         "id":           str(uuid.uuid4()),
         "client_id":    client_id,
-        "user_id":      user["id"],
+        "user_id":      user_id,
         "filename":     file.filename or "photo.jpg",
         "content_type": content_type,
         "size":         len(contents),
@@ -362,7 +351,57 @@ async def upload_progress_photo(
         "inicial":      es_inicial,
         "data":         Binary(contents),
     }
+    if subida_por:
+        # Quien la subio, cuando no fue el cliente (punto 45).
+        doc["subida_por"] = subida_por
     await db.client_photos.insert_one(doc)
+    return doc
+
+
+@router.post("/reports/photos")
+async def upload_progress_photo(
+    file: UploadFile = File(..., description="Foto de progreso (JPEG, PNG, WebP, HEIC). Máx 4 MB."),
+    taken_at: Optional[str] = Query(None, description="Fecha ISO de la foto (por defecto ahora)."),
+    pose: Optional[str] = Query(None, description="frente | espalda | perfil"),
+    user = Depends(get_current_user),
+):
+    """El cliente sube una foto de progreso. Guardada en `client_photos`. Devuelve metadatos.
+
+    La `pose` es lo que permite comparar: sin ella, tres fotos de un mes son tres fotos, y
+    con ella son la misma foto de tres meses distintos. Se acepta vacía porque las que ya
+    estaban subidas no la tienen.
+    """
+    client_id = await _resolve_client_id_for_user(user)
+    if not client_id:
+        raise HTTPException(status_code=400, detail="No se encontró el perfil de cliente.")
+    doc = await _guardar_foto_de_progreso(
+        client_id=client_id, user_id=user["id"], file=file, taken_at=taken_at, pose=pose)
+    return _photo_meta(doc)
+
+
+@router.post("/admin/clients/{client_id}/reports/photos")
+async def subir_foto_por_el_cliente(
+    client_id: str,
+    file: UploadFile = File(..., description="Foto de progreso (JPEG, PNG, WebP, HEIC). Máx 4 MB."),
+    taken_at: Optional[str] = Query(None, description="Fecha ISO de la foto (por defecto ahora)."),
+    pose: Optional[str] = Query(None, description="frente | espalda | perfil"),
+    user=Depends(get_admin_user),
+):
+    """El equipo sube una foto EN NOMBRE de un cliente (punto 45 del doc del 07-08).
+
+    Los Premium mandan las fotos por WhatsApp y alguien del equipo las sube. Hasta ahora
+    habia que hacerlo entrando con la cuenta del cliente ("subiendo las fotos con el correo
+    del cliente para que se enlacen a su ficha", dice el punto), que es exactamente lo que
+    no deberia hacer falta.
+
+    Es la misma foto y va a la misma coleccion: lo unico que cambia es quien la sube, y eso
+    queda anotado.
+    """
+    profile = await db.client_profiles.find_one({"id": client_id})
+    assert_client_access(user, profile)
+    doc = await _guardar_foto_de_progreso(
+        client_id=client_id, user_id=profile.get("user_id"), file=file,
+        taken_at=taken_at, pose=pose, subida_por=user.get("name", user.get("email", "equipo")))
     return _photo_meta(doc)
 
 

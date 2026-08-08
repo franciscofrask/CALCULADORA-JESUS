@@ -1331,22 +1331,102 @@ añade una tabla de alias (`codigo_de_plan`) para que la forma en que está escr
 migrados resuelva al código bueno. Comprobado: antes `CalMa` no daba ninguna feature; ahora da
 macros, chat, rutina, reportes, mensual, suplementación y cardio, con revisión a 28 días.
 
+### Punto 40 - 13 planes sin llenar el código de «if» · CERRADO
+
+El patrón que pide el punto **ya era el nuestro**: los planes tienen `habilitaciones` y la app
+pregunta `plan_grants_feature(plan, 'rutina')`, no por nombre. Meter un plan nuevo es tocar
+datos. Auditado el código entero buscando decisiones por nombre de plan:
+
+**El backend está limpio.** Los únicos sitios con nombres de plan escritos son los scripts de
+migración y de pruebas, que es donde tienen que estar. **Menos uno**: al convertir un lead en
+cliente, el plan por defecto era `"gold"` - legacy desde el 31-07. Cada lead convertido sin decir
+el plan entraba en un plan que ya no se vende, con el precio de referencia de otra época.
+Ahora el plan es obligatorio y tiene que ser uno de los contratables; si no, el error dice
+cuáles son y recuerda que el plan viejo se puede poner después desde la ficha.
+
+**El frontend tenía tres.** Los tres arreglados:
+
+| Dónde | Qué pasaba |
+|---|---|
+| Filtro de la lista de clientes | Cableados Gold, Silver, Bronze y ELM. Con 17 planes en el catálogo, **había 13 por los que no se podía filtrar** - entre ellos los tres niveles nuevos, con los que entra todo el mundo desde ahora |
+| Convertir un lead | Cableados los mismos cuatro, todos legacy |
+| «Mejorar mi plan» del perfil | Decide con `profile.plan !== 'gold'` y ofrece «Gold, 149€/ciclo» - un plan que ya no se contrata a un precio que no es el suyo |
+
+Los dos primeros salen ya del catálogo. El tercero **está apagado** (`UPGRADE_PLAN_UI = false`)
+desde julio y se queda apagado, pero con un aviso escrito encima: el día que haya checkout de
+upgrade, no se puede encender tal cual.
+
+### Punto 41 - Qué ve el que no renueva · CERRADO
+
+**Lo que pasaba.** Al cliente que llevaba un año pagando y terminaba su ciclo se le enseñaba
+**la misma pantalla que al que acaba de registrarse**: «Bienvenido a 12EN12 · Para comenzar tu
+transformación, selecciona un plan». No es lo mismo no haber empezado que haber terminado.
+
+**Lo que hay ahora.** El servidor dice *por qué* no tiene acceso y no solo *que* no lo tiene:
+`sin_plan`, `sin_pagar` o `caducado`. Con eso, al caducado se le enseña lo que pide el punto,
+copiado de la calculadora antigua: **«Tu suscripción ha caducado»**, con quién escribir y el
+chat de WhatsApp abierto con el mensaje ya redactado - si hay que escribirlo, la mitad no
+escribe. Y debajo, la alternativa de la que se habló: seguir con la Membresía.
+
+Comprobados los siete casos: sin perfil y perfil sin plan dan `sin_plan`; checkout a medias da
+`sin_pagar`; baja, ciclo terminado y suscripción cancelada dan `caducado`. **Y salió un fallo de
+paso**: un perfil `activo` pero **sin plan** daba acceso, porque `has_active_access` mira el
+estado y la suscripción pero no si hay plan. Corregido.
+
+**Falta el número de WhatsApp de soporte**: no está en ninguna parte del código y no me lo puedo
+inventar. Hasta que Francisco lo diga, el bloque sale sin el botón en vez de con un enlace que no
+lleva a nadie. Es una constante, `WHATSAPP_SOPORTE`.
+
+### Punto 45 - Meter un reporte en nombre del cliente · HECHO EL BACKEND
+
+Los Premium mandan el reporte y las fotos por WhatsApp y alguien del equipo se lo pasa a la app.
+Hasta ahora eso solo se podía hacer **entrando con la cuenta del cliente**, que es literalmente
+lo que describe el punto («subiendo las fotos con el correo del cliente para que se enlacen a su
+ficha»).
+
+Dos rutas nuevas:
+
+- `POST /admin/clients/{id}/reporte` - el reporte en su nombre. **No comprueba la ventana de
+  envío ni que el plan incluya reportes**: si el equipo lo está metiendo es porque ya llegó por
+  otro lado, y bloquearlo por el calendario no protege nada. El peso va a su serie con la fecha
+  del reporte (punto 30) y queda marcado con **quién lo metió**.
+- `POST /admin/clients/{id}/reports/photos` - las fotos en su nombre, a la misma colección y con
+  las mismas validaciones que las del cliente (se sacaron a una función común para que no puedan
+  divergir). Queda anotado quién las subió.
+
+**Falta la pantalla**: el formulario en la ficha para usarlo sin llamar a la API a mano.
+
+### Punto 47 - El texto de espera · HECHO A MEDIAS
+
+Al mandar el reporte, el cliente veía «Reporte enviado correctamente», que no le dice nada: ni si
+tiene que hacer algo, ni cuándo tendrá sus macros. Ahora ve **«Estamos revisando tus respuestas.
+En menos de 48 horas recibirás tus nuevos macros»**, con **24 en el Nivel 2**, y las horas salen
+del plan y no de un número escrito a mano - es una de las cosas que tienen que notarse entre
+niveles (punto 46).
+
+Que espere y que se lo ponga una persona es parte del producto, así que el texto no promete nada
+automático.
+
+**Falta** la otra mitad: que el % graso se pida cada 12 semanas y no cada 2.
+
 ### Lo que queda del bloque E, y por qué
 
-- **Punto 40 (13 planes sin `if`)**: el patrón ya existe y es el que pide el punto - las
-  `habilitaciones` del plan y `plan_grants_feature`, que preguntan por permiso y no por nombre.
-  Falta **auditar que no queden `if plan == 'gold'`** sueltos por el código.
-- **Punto 41 (qué ve el que no renueva)**: hay que mirarlo y montar el texto con el enlace de
-  WhatsApp y la alternativa de Mantenimiento.
-- **Punto 44 (calendario por plan)**: los días están **en el código** (`REPORT_RULES`: quincenal
-  miércoles, mensual viernes) y coinciden con lo que dice el punto, pero tienen que ser una
-  propiedad del plan. Y falta el ciclo de Premium (S1 y S2 semanal, S3 mensual, S4 semanal) y que
-  la duración del ciclo sea un campo del contrato, con planes de 4 y de 5 semanas.
-- **Punto 45 (reporte en nombre del cliente, con fotos)**: no existe.
-- **Punto 46 (que se note la diferencia entre niveles)**: falta la vía de cobro con tarjeta
-  después de la llamada del Nivel 3, que el propio punto dice que hoy no existe.
-- **Punto 47 (ajustes cada 2 semanas, validados)**: falta el texto de espera («en menos de 48
-  horas», 24 en Nivel 2) y que el % graso se pida cada 12 semanas y no cada 2.
+- **Punto 44 (calendario y duración por plan)**: es el que queda entero, y el más gordo. Los
+  días están **en el código** (`REPORT_RULES`: quincenal miércoles, mensual viernes) y
+  **coinciden con lo que dice el punto**, incluso las semanas (quincenal en la 2, mensual en la
+  3), pero tienen que ser una propiedad del plan. Falta además el ciclo de Premium (S1 y S2
+  semanal, S3 mensual, S4 semanal) y que la duración sea un campo del contrato, con planes de 4
+  y de 5 semanas y entrada en el ciclo distinta.
+- **Punto 45**: hecho el backend, falta la pantalla en la ficha.
+- **Punto 46 (que se note la diferencia entre niveles)**: las horas de espera ya salen del plan
+  (arriba, punto 47) y el Nivel 3 ya se contrata por llamada. Y ojo con esto: el punto dice que
+  «falta montar la vía de cobro con tarjeta después de esa llamada, que hoy no existe», pero
+  **sí existe** desde el 03-08: en el panel, la llamada pendiente tiene un botón que genera el
+  enlace de pago del Nivel 3 y lo copia para mandarlo por WhatsApp. Lo que queda es que el
+  cliente perciba el resto de diferencias: comprar la rutina del mes suelta y contratar una
+  llamada (Nivel 1), y el reporte semanal del Nivel 3.
+- **Punto 47**: hecho el texto de espera; falta que el % graso se pida cada 12 semanas y no cada
+  2.
 
 ### Una discrepancia que no toco sin que Jesús diga
 
@@ -1421,6 +1501,11 @@ antiguo" hay que comprobarlo contra la calculadora de verdad**.
 
 ### 2 · Lo que espera una orden de Francisco
 
+**El número de WhatsApp de soporte** (punto 41). Hace falta para el cliente cuya suscripción
+caduca: la pantalla está montada y el mensaje redactado, pero el número no está en ninguna parte
+del código y no me lo puedo inventar. Mientras tanto sale el aviso sin el botón. Es una
+constante, `WHATSAPP_SOPORTE` en `ClientDashboard.jsx`.
+
 **¿ELM y Reto 12en12 se pueden volver a contratar?** (bloque E). El catálogo del equipo los da
 como Activos y nuestro código como legacy desde el 31-07. Cambiarlo los pone en el checkout. Que
 lo diga Jesús: si «Activo» en su tabla es «a la venta» o «vivo, con gente pagando».
@@ -1435,7 +1520,7 @@ se borran esas dos también.
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo
 hasta el commit `8421e3b`; lo posterior (el punto 19, el test de entrada del documento de
 textos, las cuatro respuestas de la dieta, las dos reglas nuevas del filtro, y los puntos 23,
-25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 38 y 39) está en GitHub y sin desplegar, esperando la orden.
+25, 27, 28, 29, 30, 31, 32, 33, 34, 35 y el bloque E) está en GitHub y sin desplegar, esperando la orden.
 
 **Y con ese despliegue, pasar los dos rellenos**, cada uno **una sola vez** y después de subir:
 

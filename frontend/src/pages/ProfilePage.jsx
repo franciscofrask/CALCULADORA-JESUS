@@ -21,6 +21,15 @@ import {
 
 // "Mejorar mi plan" OCULTO (petición 2026-07-06): el checkout de upgrade no existe aún
 // (pagos reales pospuestos). Poner a true cuando se habiliten pagos.
+//
+// OJO SI SE REACTIVA (punto 40 del doc del 07-08): el diálogo de abajo tiene el plan y el
+// precio CABLEADOS -- "Gold, 149€/ciclo" -- y decide qué enseñar con `profile.plan !== 'gold'`.
+// Ese Gold es el legacy, que desde el 31-07 ya no se contrata, y 149€ no es su precio (450-847
+// según antigüedad, y de todos modos el que manda es el del contrato de cada cliente, punto
+// 36). Antes de encenderlo hay que sacar las opciones del catálogo, como ya hacen la lista de
+// clientes y la conversión de leads. Se queda escrito y apagado en vez de borrado porque el
+// día que haya checkout de upgrade la maqueta sirve; el aviso es para que no se encienda tal
+// cual y se le ofrezca a un cliente un plan que no existe a un precio que no es.
 const UPGRADE_PLAN_UI = false;
 
 const ProfilePage = () => {

@@ -118,7 +118,11 @@ const PREGUNTAS_REPORTE = [
 ];
 
 const ReportsPage = () => {
-    const { api, token } = useAuth();
+    const { api, token, profile } = useAuth();
+    // Cuánto espera este cliente por sus macros nuevos (puntos 46 y 47): 24 horas en el
+    // Nivel 2, 48 en el resto. Sale del plan, no de un número escrito a mano, porque es una
+    // de las cosas que el cliente tiene que notar entre un nivel y otro.
+    const horasDeEspera = profile?.plan === 'nivel2' ? 24 : 48;
     const [reports, setReports] = useState([]);
     const [evolution, setEvolution] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -245,7 +249,19 @@ const ReportsPage = () => {
                 cumplimiento_entreno: reportData.cumplimiento_entreno || null,
             };
             await api.post('/reports', payload);
-            toast.success('Reporte enviado correctamente');
+            // LO QUE PASA AHORA (punto 47 del doc del 07-08). "Reporte enviado
+            // correctamente" no dice nada: el cliente no sabe si le toca hacer algo, ni
+            // cuándo tendrá sus macros. Y que espere y que se lo ponga una PERSONA es parte
+            // del producto: el sistema propone el ajuste, pero lo valida un entrenador
+            // antes de que salga, y el cliente no debe percibirlo como automático.
+            //
+            // Las horas salen del plan y no de un número escrito aquí: el Nivel 2 espera 24
+            // y el resto 48. Es una de las cosas que tienen que notarse entre niveles
+            // (punto 46).
+            toast.success('Reporte recibido', {
+                description: `Estamos revisando tus respuestas. En menos de ${horasDeEspera} horas recibirás tus nuevos macros.`,
+                duration: 8000,
+            });
             fetchData();
             setActiveTab('history');
             setHuecosResp({});

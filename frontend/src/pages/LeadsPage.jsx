@@ -55,7 +55,7 @@ const isOverdue = (lead) => {
 };
 
 const LeadsPage = () => {
-    const { api } = useAuth();
+    const { api, planCatalog } = useAuth();
     const [leads, setLeads] = useState([]);
     const [staff, setStaff] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -68,7 +68,15 @@ const LeadsPage = () => {
     const [newLeadOpen, setNewLeadOpen] = useState(false);
     const [detailLead, setDetailLead] = useState(null);
     const [convertLead, setConvertLead] = useState(null);
-    const [convertPlan, setConvertPlan] = useState('gold');
+    // El plan con el que entra un lead convertido: uno de los CONTRATABLES del catálogo
+    // (punto 43). La Membresía queda fuera: no se compra, es donde cae el que no renueva.
+    const planesContratables = React.useMemo(() => Object.entries(planCatalog || {})
+        .filter(([, p]) => p.estado === 'activo' && p.asignable && !p.solo_salida)
+        .map(([code, p]) => ({ code, name: p.name })), [planCatalog]);
+    const [convertPlan, setConvertPlan] = useState('');
+    useEffect(() => {
+        if (!convertPlan && planesContratables.length) setConvertPlan(planesContratables[0].code);
+    }, [planesContratables, convertPlan]);
     const [convertTrainer, setConvertTrainer] = useState('');
     const [convertResult, setConvertResult] = useState(null);
 
@@ -644,9 +652,16 @@ const LeadsPage = () => {
                         <div className="space-y-3">
                             <p className="text-white/60 text-sm">Se creará una cuenta para <span className="text-white font-semibold">{convertLead.name}</span> ({convertLead.email})</p>
                             <div><Label className="text-white/60 text-xs">Plan</Label>
-                                <div className="flex gap-2 mt-1">{['gold', 'silver', 'bronze', 'elm'].map(p => (
-                                    <button key={p} onClick={() => setConvertPlan(p)} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all ${convertPlan === p ? 'bg-[#FF671F] text-white' : 'bg-[#1A1A1A] text-white/40 border border-[#333]'}`} data-testid={`plan-${p}`}>{p}</button>
+                                {/* Los planes CONTRATABLES del catálogo, no una lista a mano
+                                    (puntos 40 y 43). Estaban cableados gold/silver/bronze/elm,
+                                    que son legacy: cada lead convertido entraba en un plan que
+                                    ya no se vende. Convertir un lead es un alta nueva. */}
+                                <div className="flex flex-wrap gap-2 mt-1">{planesContratables.map(p => (
+                                    <button key={p.code} onClick={() => setConvertPlan(p.code)} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all ${convertPlan === p.code ? 'bg-[#FF671F] text-white' : 'bg-[#1A1A1A] text-white/40 border border-[#333]'}`} data-testid={`plan-${p.code}`}>{p.name}</button>
                                 ))}</div>
+                                {planesContratables.length === 0 && (
+                                    <p className="text-white/40 text-xs mt-1">No hay ningún plan contratable en el catálogo.</p>
+                                )}
                             </div>
                             <div><Label className="text-white/60 text-xs">Coach</Label>
                                 <select value={convertTrainer} onChange={e => setConvertTrainer(e.target.value)}

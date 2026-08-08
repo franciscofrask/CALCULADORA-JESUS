@@ -805,10 +805,17 @@ const AdminClientsList = () => {
                     </SelectTrigger>
                     <SelectContent className="bg-[#111111] border-[#333]">
                         <SelectItem value="all">Todos los planes</SelectItem>
-                        <SelectItem value="gold">Gold</SelectItem>
-                        <SelectItem value="silver">Silver</SelectItem>
-                        <SelectItem value="bronze">Bronze</SelectItem>
-                        <SelectItem value="elm">ELM</SelectItem>
+                        {/* Del CATÁLOGO, no cableados (punto 40). Estaban puestos a mano los
+                            cuatro de siempre, así que con 17 planes en el catálogo había 13
+                            por los que no se podía filtrar - entre ellos los tres niveles
+                            nuevos, que son con los que entra todo el mundo desde ahora. */}
+                        {Object.entries(planCatalog || {})
+                            .filter(([, p]) => p.estado !== 'complemento')
+                            .map(([code, p]) => (
+                                <SelectItem key={code} value={code}>
+                                    {p.name}{p.estado === 'legacy' ? ' · legacy' : ''}
+                                </SelectItem>
+                            ))}
                     </SelectContent>
                 </Select>
             </div>

@@ -10,7 +10,7 @@ import {
     LogOut, Bell, ChevronRight, CreditCard, Target, Bot,
     Flame, Activity, Scale, Search, SlidersHorizontal, Pill,
     ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen,
-    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone
+    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone, Clock
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import ThemeToggle from '../components/ThemeToggle';
@@ -144,6 +144,58 @@ const QuickCard = ({ icon: Icon, color, label, sub, path, navigate, testId, badg
     </button>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EL PLAN SE ACABÓ (punto 41 del doc del 07-08).
+//
+// La calculadora antigua ya lo tenía resuelto y es lo que se copia: se corta el acceso, se
+// dice que la suscripción ha caducado y se le da a quién escribir - con el chat de WhatsApp
+// ya abierto y el mensaje escrito, porque si hay que redactarlo la mitad no escribe. Y se
+// añade la salida de la que se habló: la Membresía, que es donde cae el que no renueva.
+//
+// OJO: el número de soporte hay que ponerlo. No estaba en ninguna parte del código y no me
+// lo puedo inventar, así que hasta que Francisco lo diga se enseña el bloque sin el botón de
+// WhatsApp en vez de un enlace que no lleva a nadie.
+const WHATSAPP_SOPORTE = '';   // ← el número con prefijo y sin signos: "34600111222"
+const MENSAJE_SOPORTE = 'Hola, soy {nombre}. Se me ha caducado la suscripción de 12EN12 y quiero saber cómo seguir.';
+
+const PlanCaducado = ({ navigate, nombre }) => {
+    const texto = MENSAJE_SOPORTE.replace('{nombre}', nombre || '');
+    const enlace = WHATSAPP_SOPORTE
+        ? `https://wa.me/${WHATSAPP_SOPORTE}?text=${encodeURIComponent(texto)}`
+        : null;
+    return (
+        <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto animate-fade-in" data-testid="plan-caducado">
+            <div className="surface p-8 text-center">
+                <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Clock className="w-8 h-8 text-brand" />
+                </div>
+                <h2 className="heading-2 text-foreground mb-2">Tu suscripción ha caducado</h2>
+                <p className="text-muted-foreground mb-6 text-sm">
+                    Ponte en contacto con nosotros y vemos cómo sigues.
+                </p>
+                {enlace ? (
+                    <a href={enlace} target="_blank" rel="noopener noreferrer"
+                        className="btn-brand inline-flex items-center gap-2" data-testid="soporte-whatsapp">
+                        Escribir por WhatsApp <ChevronRight className="w-4 h-4" />
+                    </a>
+                ) : (
+                    <p className="text-muted-foreground text-sm mb-2">Escríbenos y lo vemos.</p>
+                )}
+                {/* La alternativa de la que se habló: seguir con la Membresía en vez de irse. */}
+                <div className="mt-6 pt-6 border-t border-border">
+                    <p className="text-sm text-foreground font-medium mb-1">¿Prefieres seguir por tu cuenta?</p>
+                    <p className="text-muted-foreground text-xs mb-3">
+                        La Membresía son 97 €/mes y te deja la calculadora y tus alimentos.
+                    </p>
+                    <button onClick={() => navigate('/planes')} className="text-brand text-sm hover:underline" data-testid="ver-membresia">
+                        Ver la Membresía
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // =============== CLIENT DASHBOARD ===============
 
 const ClientDashboard = () => {
@@ -225,6 +277,14 @@ const ClientDashboard = () => {
         if (done) dismissChecklist();
     }, [dashDataLoaded, checklistDismissed, profile, macros, hasPreferences, hasDiet, dismissChecklist]);
 
+    // AL QUE SE LE ACABÓ EL PLAN NO SE LE DA LA BIENVENIDA (punto 41 del doc del 07-08).
+    // Hasta ahora el cliente que llevaba un año pagando y terminaba su ciclo veía la misma
+    // pantalla que el que acaba de registrarse: "Bienvenido a 12EN12, selecciona un plan".
+    // No es lo mismo no haber empezado que haber terminado. El servidor dice cuál de los
+    // tres casos es (profile.acceso.motivo).
+    if (profile?.acceso?.motivo === 'caducado') {
+        return <PlanCaducado navigate={navigate} nombre={user?.name} />;
+    }
     if (!profile || planUnpaid) {
         return (
             <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto animate-fade-in">

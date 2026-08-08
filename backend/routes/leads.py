@@ -12,6 +12,7 @@ from pymongo.errors import DuplicateKeyError
 from core.database import db
 from core.security import get_admin_user, generate_temp_password
 from core.notion_sync import upsert_lead_to_notion
+from models.user import PLAN_CATALOG, planes_contratables
 from routes.audit import audit
 
 router = APIRouter(prefix="/leads", tags=["leads"])
@@ -324,7 +325,13 @@ async def delete_lead(lead_id: str, user=Depends(get_admin_user)):
 async def convert_lead_to_client(lead_id: str, data: dict, user=Depends(get_admin_user)):
     """
     Convierte un lead en cliente: crea user + client_profile automáticamente.
-    Body: {"plan": "gold", "password": "temp123"} (optional password, defaults to email)
+    Body: {"plan": "nivel2", "password": "temp123"} (la contraseña es opcional)
+
+    El plan tiene que ser uno de los CONTRATABLES (punto 43 del doc del 07-08): convertir
+    un lead es un alta nueva, y a un alta nueva no se le puede poner un plan legacy. Antes
+    el valor por defecto era "gold", que es legacy desde el 31-07: cada lead convertido sin
+    decir el plan entraba en un plan que ya no se vende, con el precio de referencia de
+    otra época.
     """
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
@@ -342,7 +349,19 @@ async def convert_lead_to_client(lead_id: str, data: dict, user=Depends(get_admi
     if existing:
         raise HTTPException(status_code=400, detail=f"Ya existe un usuario con email {email}")
 
-    plan = data.get("plan", "gold")
+    plan = (data.get("plan") or "").lower().strip()
+    contratables = planes_contratables()
+    if not plan:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dime con qué plan entra. Se puede contratar: {', '.join(contratables)}")
+    if plan not in contratables:
+        nombre = (PLAN_CATALOG.get(plan) or {}).get("name", plan)
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{nombre}' ya no se contrata. Un alta nueva entra con uno de estos: "
+                   f"{', '.join(contratables)}. Si de verdad tiene que quedarse con el plan "
+                   f"viejo, se le cambia después desde su ficha.")
     password = data.get("password") or generate_temp_password()
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
