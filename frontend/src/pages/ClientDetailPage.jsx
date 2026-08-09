@@ -425,10 +425,21 @@ const ClientDetailPage = () => {
             training: { protein: p.entreno?.proteina ?? '', carbs: p.entreno?.hidratos ?? '', fat: p.entreno?.grasa ?? '' },
             rest: { protein: p.descanso?.proteina ?? '', carbs: p.descanso?.hidratos ?? '', fat: p.descanso?.grasa ?? '' },
             peri: { protein: p.perientreno?.proteina ?? '', carbs: p.perientreno?.hidratos ?? '' },
-            note: (sugerencia?.razonamiento || '').slice(0, 300),
+            // EL RAZONAMIENTO VA AL CRITERIO INTERNO, NO AL FEEDBACK DEL CLIENTE (punto 4.2).
+            // Estaba al revés: se escribía en «Feedback para el cliente», que es lo que le
+            // llega como novedad, y el criterio interno se quedaba vacío. Ese texto está
+            // escrito para el entrenador -- habla del cliente en tercera persona y con jerga
+            // ("venía sin intra", "el coach ya le había dejado contenido de hidrato") --, así
+            // que el cliente recibía un informe sobre sí mismo escrito como si no lo fuera a
+            // leer.
+            // El feedback se deja EN BLANCO a propósito: es obligatorio para guardar, así que
+            // el entrenador tiene que escribirlo. Rellenarlo con algo genérico solo
+            // conseguiría que se enviara sin mirarlo.
+            criterio: (sugerencia?.razonamiento || '').slice(0, 1000),
+            note: '',
             effective_date: hoyISO(1),
         });
-        toast.success('Propuesta cargada en el editor: revísala y guarda');
+        toast.success('Propuesta cargada: el razonamiento va en el criterio interno. Escribe el feedback del cliente');
         editorMacrosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
     const openEditEntry = (h) => { setEditingEntryId(h.id); setEntryForm(macroFormFromEntry(h)); setEntryModalOpen(true); };

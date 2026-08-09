@@ -126,6 +126,25 @@ COMO AJUSTAR:
 11. Si un dato no esta (no hay reporte, no hay % graso, falta historial), DILO en los
     avisos y baja la confianza. No te lo inventes ni rellenes el hueco.
 
+COMO SE ESCRIBE LO QUE DEVUELVES (punto 4.2 de la revision del 09-08):
+
+12. EN CASTELLANO BIEN ESCRITO, CON TILDES. Este prompt va sin ellas por comodidad al
+    teclearlo, y eso se te estaba pegando: salian "definicion", "aun", "venia", "asi",
+    "habia", "dia", "logica", "seria" y hasta un acento invertido ("tambien"). Lo que
+    escribes lo lee una persona en su pantalla. Espanol de Espana, tuteo, sin voseo ni
+    lexico latinoamericano.
+13. NI "COACH" NI ABREVIATURAS DE GIMNASIO. Se dice ENTRENADOR. Y las palabras enteras:
+    PROTEINA (no "prote"), FARMACOLOGIA o QUIMICA (no "quimio", que es otra cosa muy
+    distinta y en un texto sobre la salud de alguien no se puede escribir), HIDRATOS (no
+    "hc" suelto en medio de una frase). "Coach" esta fuera de toda la app.
+14. EL RAZONAMIENTO ES PARA EL ENTRENADOR, y va a su campo interno: puedes usar el
+    lenguaje del metodo (intra, escalon, techo, suelo) y hablar del cliente en tercera
+    persona. No es el mensaje que recibe el cliente: ese lo escribe el entrenador.
+15. NO DIGAS QUE "SE MANTIENE" LO QUE CAMBIA. Si el intra no lo tenia y ahora le pones un
+    numero, eso es ANADIRLO, y hay que decirlo con esa palabra. Y distingue "no tiene
+    intra" de "no consta el intra en esa fila del historial": son cosas distintas y en los
+    datos vienen marcadas aparte. Si no consta, no concluyas que no lo tenia.
+
 Devuelve SIEMPRE un JSON valido con esta forma exacta:
 {
   "propuesta": {
@@ -134,8 +153,8 @@ Devuelve SIEMPRE un JSON valido con esta forma exacta:
     "descanso": {"proteina": int, "hidratos": int, "grasa": int}
   },
   "cambios": ["texto corto por cada cambio, p.ej. 'HC entreno -20'"],
-  "razonamiento": "2-5 frases explicando el porque, como lo narraria Jesus",
-  "avisos": ["avisos para el coach: en suelo, cambio de fase, no cumple, hormonal..."],
+  "razonamiento": "2-5 frases para el ENTRENADOR explicando el porque, como lo narraria Jesus",
+  "avisos": ["avisos para el entrenador: en suelo, cambio de fase, no cumple, hormonal..."],
   "confianza": "alta|media|baja"
 }
 Todos los numeros en multiplos de 5. Si no procede cambiar nada, devuelve los mismos
@@ -146,6 +165,29 @@ def _num(x):
     return x if isinstance(x, (int, float)) else None
 
 
+def _intra_legible(p: Optional[Dict]) -> str:
+    """El intra, distinguiendo las tres cosas que antes se escribian igual.
+
+    Se pintaba siempre `Intra P-/H-`, y ese guion valia a la vez para "no tiene intra" y
+    para "esa fila del historial no guardo el intra". El agente leia el guion del historial
+    como un cero y escribia "venia sin intra" -- y dos frases despues "manteniendo el intra
+    en 50", contradiciendose con los macros actuales, que si lo traen. Es el problema 3 del
+    punto 4.2, y no era del modelo: era del dato, que decia dos cosas con el mismo simbolo.
+
+    En produccion muchas filas de `macro_history` no guardan `peri`, asi que esto no es un
+    caso raro: es el caso normal en clientes que vienen de antes.
+    """
+    if not isinstance(p, dict) or not p:
+        return "Intra: NO CONSTA en esta fila (no es lo mismo que no tenerlo)"
+    pr = next((p[i] for i in ("proteina", "protein") if p.get(i) is not None), None)
+    hc = next((p[i] for i in ("hidratos", "carbs") if p.get(i) is not None), None)
+    if pr is None and hc is None:
+        return "Intra: NO CONSTA en esta fila (no es lo mismo que no tenerlo)"
+    if (pr in (0, None)) and (hc in (0, None)):
+        return "Intra: NO TIENE (a cero)"
+    return f"Intra P{pr if pr is not None else '-'}/H{hc if hc is not None else '-'}"
+
+
 def formatear_macros(m: Dict) -> str:
     e, p, d = m.get("entreno", {}), m.get("perientreno", {}), m.get("descanso", {})
     g = lambda x, *k: next((x[i] for i in k if x.get(i) is not None), "-")
@@ -154,7 +196,7 @@ def formatear_macros(m: Dict) -> str:
     he, hi = _num(g(e, 'hidratos', 'carbs')), _num(g(p, 'hidratos', 'carbs'))
     total = f" [HC total entreno {he + hi}]" if he is not None and hi is not None else ""
     return (f"Entreno P{g(e,'proteina','protein')}/H{g(e,'hidratos','carbs')}/G{g(e,'grasa','fat')} | "
-            f"Intra P{g(p,'proteina','protein')}/H{g(p,'hidratos','carbs')} | "
+            f"{_intra_legible(p)} | "
             f"Descanso P{g(d,'proteina','protein')}/H{g(d,'hidratos','carbs')}/G{g(d,'grasa','fat')}{total}")
 
 
@@ -310,6 +352,16 @@ def intra_esperado(hc_entreno: Optional[float]) -> Optional[int]:
 ESCALONES = (0, 10, 15, 20, 25, 30, 40, 50, 60)
 SUELO_GRASA = 40
 
+# CUANTO SE MUEVE EN TOTAL, no macro a macro. Punto 4.2 de la revision del 09-08: la IA
+# propuso "HC entreno -20, grasa entreno -10, HC descanso -20" y cada uno de los tres es un
+# escalon legal del metodo, asi que el guardarrail no decia nada. Pero suman 50 g en un solo
+# ajuste, y "40 g o mas es un cambio de fase, no un ajuste prudente".
+#
+# Esto NO bloquea ni cambia la propuesta: la saca a la vista, que es lo que se puede hacer
+# sin decidir por Jesus. **El numero esta pendiente de que el lo confirme**: sale de una
+# frase de su revision, no de su documento de metodo.
+MOVIMIENTO_DE_CAMBIO_DE_FASE = 40
+
 
 def validar(propuesta: Dict, macros_actuales: Dict, avisos_llm: List[str]) -> List[str]:
     """Guardarrail deterministico: marca si la propuesta viola la metodologia
@@ -403,4 +455,30 @@ def validar(propuesta: Dict, macros_actuales: Dict, avisos_llm: List[str]) -> Li
         if salto and salto not in ESCALONES:
             warns.append(f"El salto de {campo} en {blk} ({act}->{nue}, {salto} g) no es un escalon del metodo "
                          f"(10/15/20/25/30/40/50/60).")
+
+    # CUANTO SE MUEVE EN TOTAL, no macro a macro. Tres escalones legales por separado pueden
+    # sumar un cambio de fase: -20 de HC entreno, -10 de grasa entreno y -20 de HC descanso
+    # son 50 g de una sentada, y los tres pasaban el control de arriba sin decir nada.
+    movidos = []
+    total_movido = 0
+    for blk, campo in (("entreno", "hidratos"), ("entreno", "grasa"),
+                       ("perientreno", "hidratos"),
+                       ("descanso", "hidratos"), ("descanso", "grasa")):
+        act = g(macros_actuales, blk, campo, {"hidratos": "carbs", "grasa": "fat"}[campo])
+        nue = g(propuesta, blk, campo)
+        if act is None or nue is None or nue == act:
+            continue
+        total_movido += abs(nue - act)
+        movidos.append(f"{campo} de {blk} {nue - act:+d}")
+    if total_movido >= MOVIMIENTO_DE_CAMBIO_DE_FASE and not cambio_fase:
+        warns.append(
+            f"El ajuste mueve {total_movido} g en total ({', '.join(movidos)}). "
+            f"Desde {MOVIMIENTO_DE_CAMBIO_DE_FASE} g eso es un cambio de fase, no un ajuste "
+            f"prudente: revisa si de verdad toca mover tanto de una vez.")
+        sin_datos = any(t in (a or "").lower()
+                        for a in (avisos_llm or [])
+                        for t in ("no hay dato", "sin dato", "no hay datos", "falta"))
+        if sin_datos:
+            warns.append("Y la propia propuesta avisa de que le faltan datos: un movimiento "
+                         "asi de grande a ciegas no se sostiene.")
     return warns
