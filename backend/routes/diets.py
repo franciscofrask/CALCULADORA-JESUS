@@ -146,7 +146,14 @@ async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
     ).sort("fecha", -1).limit(limit)
     
     diets = await cursor.to_list(length=limit)
-    
+
+    # Las cantidades, a gramos tambien aqui (punto 4.5). Por esta lista entra «Repetir de otro
+    # dia»: si un dia migrado se sirviera con el conteo de piezas en el campo de gramos, la
+    # copia se llevaria un huevo de 1 g al dia de hoy y lo dejaria guardado asi. El fallo se
+    # arregla al leer, y leer es tambien esto.
+    for diet in diets:
+        await _normalizar_cantidades(diet)
+
     result = []
     for diet in diets:
         comidas_resumen = {}
@@ -275,6 +282,59 @@ async def copy_day(data: dict, user = Depends(get_current_user)):
     )
     return {"message": "Día copiado", "origen": source_date, "destino": target_date}
 
+def _ids_de(diet: dict) -> set:
+    """Los ids de alimento que aparecen en un dia."""
+    ids = {
+        a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
+        for comida in (diet.get("comidas") or {}).values()
+        for a in ((comida or {}).get("alimentos") or [])
+    }
+    ids.discard(None)
+    return ids
+
+
+def _normalizar_con_catalogo(diet: dict, catalogo: dict) -> int:
+    """Pasa a gramos las cantidades del dia. Punto 4.5 de la revision del 09-08.
+
+    En las dietas que vinieron de Calma los alimentos POR UNIDADES guardan el CONTEO de piezas
+    en `cantidad_g`: un huevo entero aparece como "1". Leido como un gramo de huevo da 0,1 de
+    proteina y al pintarlo en unidades sale "0 ud", que es lo que reporto Jesus.
+
+    Se convierte AL LEER y no en la pantalla porque por aqui pasan todas -- Nutricion, el
+    asistente, el PDF, la ficha del entrenador --, y arreglarlo en una sola dejaria a las
+    otras enseñando el numero malo. Y ademas era el escritor: al abrir un dia migrado, la
+    pantalla recalculaba los macros con la cantidad como gramos y al guardar los dejaba
+    escritos, convirtiendo un registro incompleto en uno falso.
+    """
+    from calculator import get_food_config
+    from core.cantidad_de_dieta import normalizar_dieta
+
+    cfgs = {}
+
+    def config_de(alimento_id, item):
+        if alimento_id not in cfgs:
+            ficha = catalogo.get(alimento_id)
+            cfgs[alimento_id] = get_food_config(ficha) if ficha else None
+        return cfgs[alimento_id]
+
+    return normalizar_dieta(diet, config_de)
+
+
+async def _normalizar_cantidades(diet: dict) -> int:
+    """Lo mismo, trayendose el catalogo que haga falta. Para las rutas que no lo tienen ya."""
+    ids = _ids_de(diet)
+    if not ids:
+        return 0
+    catalogo = {
+        f["id"]: f
+        async for f in db.foods.find(
+            {"id": {"$in": list(ids)}},
+            {"_id": 0, "id": 1, "racion": 1, "unidades": 1, "categorias": 1, "nombre": 1},
+        )
+    }
+    return _normalizar_con_catalogo(diet, catalogo)
+
+
 async def _adjuntar_urls(diet: dict) -> None:
     """
     Pone en cada alimento del dia lo que hay que resolver contra el catalogo:
@@ -304,10 +364,17 @@ async def _adjuntar_urls(diet: dict) -> None:
         f["id"]: f
         async for f in db.foods.find(
             {"id": {"$in": list(ids)}},
+            # `categorias` va en la proyeccion porque la necesita `get_food_config` para
+            # saber si un alimento va por unidades y cuanto pesa una.
             {"_id": 0, "id": 1, "url": 1, "proteinas": 1, "hidratos": 1, "grasas": 1,
-             "racion": 1, "unidades": 1},
+             "racion": 1, "unidades": 1, "categorias": 1},
         )
     }
+
+    # Las cantidades, a gramos ANTES de calcular nada (punto 4.5): si no, `macros_reales`
+    # saldria del numero equivocado.
+    _normalizar_con_catalogo(diet, catalogo)
+
     for comida in comidas.values():
         for a in ((comida or {}).get("alimentos") or []):
             clave = a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
