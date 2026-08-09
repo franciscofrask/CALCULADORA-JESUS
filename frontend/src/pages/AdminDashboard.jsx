@@ -684,7 +684,10 @@ const KpiCard = ({ value, label, icon: Icon, color, testId, pie = null }) => (
 
 // Admin Clients List
 const AdminClientsList = () => {
-    const { api, user } = useAuth();
+    // `planCatalog` lo usa el filtro de planes de más abajo. Faltaba aquí -- lo sacaba solo
+    // AdminDashboard, que es otro componente y otro ámbito -- y la pantalla entera reventaba
+    // con «planCatalog is not defined» nada más entrar en /admin/clients.
+    const { api, user, planCatalog } = useAuth();
     const navigate = useNavigate();
     const [clients, setClients] = useState([]);
     const [trainers, setTrainers] = useState([]);
