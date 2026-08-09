@@ -1587,8 +1587,23 @@ class NutritionChatbot:
         if u not in ("g", "ud"):
             u = "ud" if alimento.get("unidades") else "g"
         if u == "ud":
-            racion = float(alimento.get("racion") or 100) or 100.0
-            cantidad_g = cantidad * racion
+            # El peso de UNA unidad es `peso_unidad`, no `racion`.
+            #
+            # `racion` es la cantidad de referencia con la que están escritos los macros de
+            # la ficha, y para casi todo son 100 g. Usarla como peso de una unidad hacía
+            # que «3 claras» entraran como 3 x 100 = 300 g -- tres claras son unos 100 --,
+            # y con eso una comida de 47 g de proteína se iba al triple. Con los huevos no
+            # se notaba porque ahí `racion` (63) sí es el peso de uno.
+            config = get_food_config(alimento)
+            peso_unidad = float(config.get("peso_unidad") or 0)
+            if not config.get("por_unidad") or peso_unidad <= 0:
+                # Este alimento NO se mide por unidades (las claras van por gramos,
+                # `unidades=False` en la ficha). Antes se inventaba que una unidad eran
+                # 100 g; ahora se dice, y quien convierta que lo pida en gramos.
+                return {"ok": False, "nombre": alimento.get("nombre", name),
+                        "no_va_por_unidades": True,
+                        "racion": float(alimento.get("racion") or 100)}
+            cantidad_g = cantidad * peso_unidad
         else:
             cantidad_g = cantidad
         # Incremento ("agrega un huevo"): sumar lo pedido a lo que ya hay de ese alimento
@@ -2304,6 +2319,14 @@ class NutritionChatbot:
                         f"Ojo: {res['cantidad_display']} de {res['nombre']} es una cantidad enorme "
                         f"(lo habitual es no pasar de {int(maxr)} g). Lo dejo porque lo has pedido tú."
                     )
+            elif res.get("no_va_por_unidades"):
+                not_found.append({
+                    "buscado": it["nombre"],
+                    "razon": (f"{res['nombre']} no se mide por unidades en el método, va por "
+                              f"GRAMOS. Convierte tú lo que ha pedido a gramos (una clara "
+                              f"de huevo son unos 33 g, una cucharada unos 10) y vuelve a "
+                              f"pedirlo con unidad='g'. No te lo inventes en unidades."),
+                    "va_por_gramos": True})
             elif res.get("excesivo"):
                 not_found.append({"buscado": it["nombre"],
                                   "razon": "Esa cantidad no es realista (más de 5 kg). Dime una cantidad normal y lo añado."})

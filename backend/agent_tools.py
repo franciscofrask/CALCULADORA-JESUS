@@ -132,6 +132,12 @@ class AgentTools:
             "cantidad_display": self.bot._format_cantidad(cantidad_g, food, config),
             "macros": {m: round(float(macros.get(m, 0) or 0), 1) for m in ("P", "H", "G")},
             "categorias": food.get("categorias"),   # para el emoji de la tarjeta
+            # Cómo se mide ESTE alimento. Sin decirlo, el asistente lo suponía: a «ponme 3
+            # claras» les puso 300 g dando por hecho que una clara son 100 (son unos 33), y
+            # con eso una comida de 47 g de proteína se iba al triple.
+            "medida": (f"unidades de {int(config['peso_unidad'])} g"
+                       if config.get("por_unidad") and config.get("peso_unidad")
+                       else "gramos (NO tiene unidades)"),
         }
 
     # ============================================================ 1. buscar_alimentos
@@ -140,7 +146,8 @@ class AgentTools:
                                etiquetas: List[str] = None,
                                coherente_con_momento: bool = True,
                                limite: int = 8,
-                               heredar_estilo: bool = True) -> dict:
+                               heredar_estilo: bool = True,
+                               acompanando_a: List[dict] = None) -> dict:
         """Busca en el catálogo con el texto TAL CUAL lo dijo el cliente (la traducción
         coloquial→catálogo es semántica, no una tabla). Sin texto, ordena por lo que más
         aporta al macro pedido (o al que más falta). Devuelve cada alimento ya
@@ -199,11 +206,24 @@ class AgentTools:
         # --- filtros duros (datos del catálogo, nunca juicios)
         marca_norm = self.bot._norm_text(marca) if marca else None
         etiquetas = {e.upper() for e in (etiquetas or [])}
-        vetados_momento = 0
+        vetados_momento = vetados_solos = 0
         items, no_caben = [], []
+        # Lo que ya hay en el plato: decide si un acompañamiento tiene a quién acompañar.
+        # `acompanando_a` lo pasa quien está MONTANDO un menú, donde el plato todavía está
+        # vacío pero las piezas ya están elegidas; sin eso, un menú compuesto de cero nunca
+        # podría llevar mermelada ni miel.
+        ya_en_la_comida = list(acompanando_a or []) + [
+            self.foods[int(f["alimento"]["id"])]
+            for f in (self.bot.state["comidas_completadas"]
+                      .get(self.bot.current_meal_key()) or {}).get("alimentos", [])
+            if (f.get("alimento") or {}).get("id") is not None
+            and int(f["alimento"]["id"]) in self.foods]
         for aid in orden:
             food = universo.get(aid)
-            if not food or not es_sugerible(food):
+            if not food:
+                continue
+            if not es_sugerible(food) and not self._acompana_a_algo(food, ya_en_la_comida):
+                vetados_solos += 1
                 continue
             if generico is True and food.get("url"):
                 continue
@@ -275,8 +295,14 @@ class AgentTools:
         # Solo cuando lo pedido es UNA palabra, que es donde estaba el hueco: con varias ya
         # actúa la cobertura de search_foods, y aquí daría falsos positivos ("pechuga de
         # pollo" no es una palabra de ningún nombre).
+        #
+        # Y solo cuando NO se ha vetado nada por soledad: si lo pedido son mermeladas y se
+        # han apartado 18 por no tener a qué acompañar, la lista se queda con los vecinos
+        # semánticos (melón, zumos) y concluir de ahí que «no hay ninguna mermelada» es
+        # mentira. Los dos arreglos son de la misma tarde y este choque salió en la app:
+        # el asistente respondió «ahora mismo en el catálogo no tengo ninguna mermelada».
         sig = [w for w in self.bot._norm_text(texto_buscado or "").split() if len(w) > 1]
-        if len(sig) == 1 and items:
+        if len(sig) == 1 and items and not vetados_solos:
             if not any(self.bot._en_nucleo(sig[0], i.get("nombre", "")) for i in items):
                 out["items"] = []
                 out["sin_resultados_porque"] = [
@@ -286,6 +312,17 @@ class AgentTools:
                     + f". Dile que no tienes '{texto}', enséñale esos y que elija él si "
                       f"quiere alguno."]
                 return out
+        # Lo apartado por soledad se cuenta SIEMPRE, haya items o no: es la diferencia
+        # entre «no lo tengo» y «no te lo pongo suelto».
+        if vetados_solos and any(self.bot._en_nucleo(w, f.get("nombre", ""))
+                                 for w in sig
+                                 for f in self.foods.values()
+                                 if not es_sugerible(f)):
+            out["ojo"] = (
+                f"'{texto}' SÍ está en el catálogo ({vetados_solos} fichas), pero es un "
+                f"acompañamiento y no se ofrece suelto: nadie desayuna un bote de "
+                f"mermelada. NO digas que no lo tienes. Monta antes la base de la comida "
+                f"y vuelve a pedirlo, o dile sobre qué se lo puedes poner.")
         if not items:
             # El error enseña: qué se probó y por qué no salió nada.
             notas = []
@@ -295,11 +332,57 @@ class AgentTools:
             if vetados_momento:
                 notas.append(f"{vetados_momento} descartados por atípicos para {momento} "
                              "(repite con coherente_con_momento=false si lo quiere igualmente)")
+            # SÍ están en el catálogo: no se ofrecen solos. Sin esta nota el asistente lo
+            # contaba como que no existen -- «ahora mismo en el catálogo no tengo ninguna
+            # mermelada» con 18 mermeladas dentro --, que es peor que el veto original.
+            if vetados_solos:
+                notas.append(
+                    f"OJO: {vetados_solos} sí existen en el catálogo, pero son "
+                    f"acompañamientos y no se proponen sueltos (nadie desayuna un bote de "
+                    f"mermelada). NO digas que no los tienes: dile que se los pones sobre "
+                    f"algo, y monta primero la base de la comida.")
             if not notas:
                 notas.append("nada en el catálogo pasa esos filtros; prueba con otro texto "
                              "o quita algún filtro")
             out["sin_resultados_porque"] = notas
         return out
+
+    # Con quién tiene que casar un acompañamiento para poder ofrecerlo: elevación por
+    # encima de 1.0 (en las dietas reales SÍ se ponen juntos) Y un mínimo de veces que haya
+    # pasado de verdad.
+    #
+    # Las dos condiciones hacen falta. Con la elevación sola entraba el 89 % de lo vetado
+    # en cuanto hubiera cualquier cosa en el plato -- el azúcar moreno colándose en las
+    # tres comidas que se probaron --, porque con pocos usos una coincidencia suelta ya da
+    # una elevación alta. Exigiendo además cinco coincidencias reales, baja al 14 %.
+    COMPANYIA_PARA_ACOMPANAR = 1.0
+    VECES_PARA_ACOMPANAR = 5
+
+    def _acompana_a_algo(self, food: dict, presentes: List[dict]) -> bool:
+        """¿Este alimento, que no se propone suelto, acompaña a algo que ya hay en el plato?
+
+        La regla de «no sugerible» vetaba CATEGORÍAS enteras: mermeladas, cacao y azúcares,
+        salsas, harinas. Francisco, 08-08: *«esta regla está mal, porque no podría ofrecer
+        mermelada? o cacao? necesita ser más específica»*. Y el dato le da la razón, en las
+        147.820 comidas reales de Jesús:
+
+            mermeladas       1.230 usos       0 veces solas
+            cacao y azúcares 3.136 usos       1 vez sola
+            salsas           2.342 usos       4 veces solas
+
+        No es que no se usen: es que **nunca son el plato**. La miel va con el pan, la
+        mermelada con las claras, el cacao con los copos de avena. Así que el veto deja de
+        ser por categoría y pasa a ser por soledad: se puede ofrecer lo que acompaña a algo
+        que ya está, y no se ofrece cuando no hay a qué acompañar.
+        """
+        if not self.companyia or not presentes:
+            return False
+        for otro in presentes:
+            e = self.companyia.elevacion(food, otro)
+            if e is not None and e >= self.COMPANYIA_PARA_ACOMPANAR \
+                    and self.companyia.coincidencias(food, otro) >= self.VECES_PARA_ACOMPANAR:
+                return True
+        return False
 
     def _semilla_variedad(self) -> int:
         """Con qué se baraja: estable por CLIENTE, DÍA y COMIDA.
@@ -498,9 +581,13 @@ class AgentTools:
                 textos = [estilo] if estilo else []
                 textos.append("")
                 for txt in textos:
-                    rx = await self.buscar_alimentos(texto=txt, para_macro=peor,
-                                                     generico=generico, marca=marca,
-                                                     limite=6, heredar_estilo=False)
+                    rx = await self.buscar_alimentos(
+                        texto=txt, para_macro=peor, generico=generico, marca=marca,
+                        limite=6, heredar_estilo=False,
+                        # El complemento SÍ puede ser un acompañamiento (la mermelada de
+                        # las tostadas), porque a estas alturas ya hay piezas a las que
+                        # acompañar aunque el plato del cliente siga vacío.
+                        acompanando_a=[self.foods[i] for i in ids_opcion if i in self.foods])
                     extra = next((i for i in rx["items"]
                                   if i["id"] not in ids_opcion
                                   and _cat2_de_id(i["id"]) not in tipos_opcion), None)
@@ -852,7 +939,14 @@ class AgentTools:
                                                        "unidad": op.get("unidad"),
                                                        "sumar": bool(op.get("sumar"))}])
                         ok = bool(r.get("foods_added"))
-                        if not ok and self.semantica:
+                        # El respaldo es para cuando NO SE ENCUENTRA el alimento; no para
+                        # cuando se ha encontrado y el problema es la cantidad. Si no, el
+                        # aviso se pierde y el motor dimensiona a su gusto: a «3 claras»
+                        # les ponía 300 g y a «2 huevos», 1 ud. Justo lo que se quería
+                        # evitar, y encima por la puerta de atrás.
+                        problema_de_cantidad = any(
+                            f.get("va_por_gramos") for f in (r.get("foods_not_found") or []))
+                        if not ok and self.semantica and not problema_de_cantidad:
                             # El nombre pedido no existe tal cual en el catálogo
                             # ("<preparación> de <alimento>" con otro nombre comercial):
                             # la vecindad semántica encuentra lo que el léxico no.

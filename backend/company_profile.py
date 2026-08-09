@@ -119,6 +119,15 @@ class PerfilCompanyia:
             return None
         return self._elevacion_en(self.categorias, ca, cb, MIN_USOS_CATEGORIA)
 
+    def coincidencias(self, food_a: dict, food_b: dict) -> int:
+        """Cuántas VECES han estado juntos de verdad. La elevación sola no basta para
+        decidir si algo acompaña a algo: con pocos usos, una coincidencia suelta ya da una
+        elevación alta, y así entraba el azúcar moreno en cualquier comida."""
+        ia = str(int(food_a.get("id", 0) or 0))
+        ib = str(int(food_b.get("id", 0) or 0))
+        pa = self.alimentos.get(ia)
+        return int((pa or {}).get("con", {}).get(ib, 0))
+
     def peor_pareja(self, foods: List[dict]) -> Optional[Tuple[float, dict, dict]]:
         """El par que peor casa de una comida, con su elevación. None si no hay datos de
         ninguna pareja."""

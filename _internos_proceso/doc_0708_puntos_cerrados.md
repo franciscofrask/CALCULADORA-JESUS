@@ -2601,6 +2601,70 @@ coherente: la app compone por macros, exactamente igual que las dietas de las qu
 que se comen sin cocinar (siete alimentos sueltos en un desayuno). Si quiere revisarlos, la
 lista completa sale con `_perfil_companyia.py`.
 
+
+## «¿Por qué no podría ofrecer mermelada? o cacao?»
+
+Francisco, 08-08, sobre la regla de «no sugerible»: *«esta regla está mal, porque no podría
+ofrecer mermelada? o cacao? necesita ser más específica»*. Tenía razón, y el dato lo dice
+sin margen.
+
+La regla vetaba **categorías enteras** -- mermeladas, cacao y azúcares, salsas, harinas,
+masas, refrescos: 242 alimentos, el 8 % del catálogo -- para que el asistente no propusiera
+tonterías por su cuenta. Pero en las 147.820 comidas reales de Jesús:
+
+```
+mermeladas (11.9)        1.230 usos       0 veces solas
+cacao y azúcares (37)    3.136 usos       1 vez sola
+salsas (16)              2.342 usos       4 veces solas
+
+Miel de flores            952 usos       0 veces sola   (con aceite de oliva y pan)
+Mermelada fresa s/azúcar  738 usos       0 veces sola   (con claras y whey)
+Cacao desgrasado          210 usos       0 veces solo   (con copos de avena y whey)
+```
+
+No es que no se usen: **es que nunca son el plato**. El veto estaba puesto en el sitio
+equivocado -- en el alimento -- cuando lo que sobraba era la soledad.
+
+Ahora se puede ofrecer lo que **acompaña a algo que ya está en la comida**, y sigue sin
+ofrecerse cuando no hay a qué acompañar. Quién acompaña a quién lo dice el perfil de
+compañía, no una lista.
+
+### Hizo falta calibrarlo dos veces
+
+Con solo mirar la elevación entraba el **89 %** de lo vetado en cuanto hubiera cualquier
+cosa en el plato: con pocos usos, una coincidencia suelta ya da elevación alta, y el azúcar
+moreno se colaba en las tres comidas que se probaron. Pidiendo **además cinco coincidencias
+reales** baja al 14 %, y cada cosa aparece donde le toca:
+
+```
+mermelada    plato vacío -> no          con pan y claras -> sí
+cacao        plato vacío -> no          con avena y whey -> sí   (con pan NO: no se pone)
+miel                                    con pan y claras -> sí
+azúcar moreno                           con pan y claras -> no
+kétchup                                 con pan y claras -> no
+masa de pizza                           con pan y claras -> sí
+```
+
+Lo de la masa de pizza merece una nota, porque **el primer test que se escribió aquí daba
+por hecho que no pegaba con las claras, y se equivocaba el test**: la masa de pizza tiene
+127 usos y sus dos compañías más frecuentes son la mozzarella y las claras. Es la pizza
+proteica que hace todo el mundo en estas dietas. El dato mandó sobre la intuición.
+
+### Y un choque entre dos arreglos de la misma tarde
+
+Probándolo en la app, el asistente contestó *«ahora mismo en el catálogo no tengo ninguna
+mermelada»*. Con 18 mermeladas dentro. Era el arreglo de la sal chocando con este: el veto
+por soledad vaciaba la lista, quedaban los vecinos semánticos (melón, zumos), y de ahí el
+otro filtro concluía que la mermelada no existe.
+
+Ahora se distinguen las tres cosas, que son distintas y hay que decirlas distinto:
+
+```
+"sal"                    -> no lo tengo (de verdad no está)
+"mermelada", plato vacío -> SÍ lo tengo, pero no te lo pongo suelto
+"arroz"                  -> aquí lo tienes
+```
+
 ### Y de paso, el cuelgue otra vez
 
 Probando esto el chat se quedó bloqueado **en el arranque**, no en el envío: el tope al

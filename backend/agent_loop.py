@@ -99,7 +99,10 @@ _ESQUEMAS = [
                      "(nombre), ajustar (nombre + 'a' para fijar el TOTAL, 'mas' para "
                      "SUMAR sobre lo que hay, 'por' para multiplicar). OJO: 'uno más', "
                      "'otro' = ajustar con mas:1, nunca fijar a 1. "
-                     "Cantidad null = que el motor la dimensione."),
+                     "Cantidad null = que el motor la dimensione. "
+                     "Si el cliente cuenta en PIEZAS ('3 claras', '2 rebanadas'), pásalo "
+                     "con unidad='ud' y deja que la herramienta lo resuelva; NO conviertas "
+                     "tú a gramos por tu cuenta."),
      "parameters": {"type": "object", "properties": {
          "operaciones": {"type": "array", "items": {"type": "object", "properties": {
              "op": {"type": "string", "enum": ["añadir", "quitar", "ajustar"]},
