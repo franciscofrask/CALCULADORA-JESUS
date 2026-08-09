@@ -24,4 +24,8 @@ pycryptodome==3.20.0
 # agent_tools la importa arriba del fichero, así que sin numpy el chat no arranca. Estaba
 # instalada en el venv local y no declarada aquí, y al desplegar el asistente-agente el
 # 08-08-2026 el pod se quedó sin ella: `import agent_tools` -> ModuleNotFoundError.
-numpy==2.5.1
+#
+# 2.4.6 y no la 2.5.1 que hay en local: el contenedor va con Python 3.11 y de la 2.5 en
+# adelante numpy pide 3.12. Si algún día se sube el Python del Dockerfile, esto se puede
+# subir con él.
+numpy==2.4.6
