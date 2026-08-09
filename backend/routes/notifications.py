@@ -8,6 +8,7 @@ from typing import Optional
 import uuid
 
 from core.database import db
+from core.sin_futuro import hasta_hoy
 from core.security import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -104,8 +105,10 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
 
     client_id, user_id = perfil.get("id"), perfil.get("user_id")
 
+    # Hasta hoy (punto 22): un reporte fechado en 2028 hacia creer que se acababa de pesar,
+    # y el aviso de "hace X que no te pesas" no salia nunca.
     ultimo_peso = await db.reports.find_one(
-        {"client_id": client_id, "weight": {"$ne": None}},
+        hasta_hoy({"client_id": client_id, "weight": {"$ne": None}}),
         {"_id": 0, "created_at": 1, "photos": 1}, sort=[("created_at", -1)])
     ultima_dieta = await db.diets.find_one(
         {"user_id": user_id}, {"_id": 0, "fecha": 1}, sort=[("fecha", -1)])

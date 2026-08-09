@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MEDIDAS } from '../lib/medidas';
@@ -113,11 +113,31 @@ const PhotoThumb = ({ photo, api, onDeleted }) => {
                     <Trash2 className="w-3.5 h-3.5" />
                 </button>
             )}
+            {/* La pose, arriba a la izquierda. Sin ella tres fotos de un mes son tres
+                fotos sueltas; con ella son la misma foto desde tres sitios, que es lo
+                único que se puede comparar de un mes a otro. Las subidas antes del 06-08
+                no la tienen y ahí no se pinta nada, en vez de inventarse una. */}
+            {photo.pose && (
+                <span className="absolute top-1.5 left-1.5 text-[9px] font-bold uppercase tracking-wide bg-black/60 text-white/90 px-1.5 py-1 rounded">
+                    {POSE_LABEL[photo.pose] || photo.pose}
+                </span>
+            )}
             <span className="absolute bottom-1 left-1.5 text-[10px] text-white/90 bg-black/50 px-1.5 py-0.5 rounded">
                 {new Date(photo.taken_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
             </span>
         </div>
     );
+};
+
+// Las tres poses, con el nombre que ve el cliente y el orden en que se miran.
+const POSE_LABEL = { frente: 'Frente', espalda: 'Espalda', perfil: 'Perfil' };
+const POSE_ORDEN = ['frente', 'perfil', 'espalda'];
+
+const _mesDe = (iso) => String(iso || '').slice(0, 7);
+const _mesTitulo = (key) => {
+    const [y, m] = key.split('-');
+    const d = new Date(+y, +m - 1, 1);
+    return isNaN(d) ? key : d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 };
 
 /**
@@ -141,6 +161,29 @@ const PhotosSection = ({ api }) => {
         catch (err) { toast.error(err.response?.data?.detail || 'Error borrando la foto'); }
     };
 
+    // POR MESES, Y DENTRO DEL MES POR POSE. Era una parrilla plana de todas las fotos de
+    // todos los meses mezcladas -- frente, espalda y perfil seguidas, con la fecha diminuta
+    // en una esquina -- y por eso Jesús la llamó «un álbum»: para ver si alguien ha
+    // cambiado hay que poder poner el mes de al lado debajo, y así no se podía.
+    const meses = useMemo(() => {
+        const mapa = new Map();
+        for (const p of photos) {
+            const k = _mesDe(p.taken_at);
+            if (!mapa.has(k)) mapa.set(k, []);
+            mapa.get(k).push(p);
+        }
+        return [...mapa.entries()]
+            .sort((a, b) => b[0].localeCompare(a[0]))            // el mes más reciente arriba
+            .map(([key, fotos]) => ({
+                key,
+                fotos: fotos.sort((a, b) => {
+                    const d = POSE_ORDEN.indexOf(a.pose) - POSE_ORDEN.indexOf(b.pose);
+                    // Las que no tienen pose (las de antes del 06-08) al final, por fecha.
+                    return d !== 0 ? d : String(a.taken_at).localeCompare(String(b.taken_at));
+                }),
+            }));
+    }, [photos]);
+
     return (
         <Card className="p-5">
             <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
@@ -150,20 +193,31 @@ const PhotosSection = ({ api }) => {
                 </div>
                 <button onClick={() => navigate('/dashboard/reports')}
                     className="text-xs text-brand hover:underline underline-offset-4 font-semibold">
-                    Se suben en tu reporte mensual
+                    Se suben en tu reporte
                 </button>
             </div>
-            {/* MENSUAL, y no «tu reporte» a secas: las fotos y las medidas solo se piden en
-                el reporte mensual (semanas 3, 7, 11...), así que en una semana normal el
-                cliente iba a Reportes, no encontraba dónde subirlas y la app quedaba como
-                si le mintiera. Es lo que reportó Jesús el 09-08. */}
+            {/* Vuelve a decir «tu reporte» a secas, y ahora es verdad. El 09-08 esto decía
+                «mensual» como parche: las fotos solo se pedían en el reporte mensual y en una
+                semana normal el cliente venía aquí, iba a Reportes y no encontraba dónde
+                subirlas. El parche avisaba de la contradicción pero no la quitaba -- seguía
+                sin haber sitio 3 de cada 4 semanas. Ahora el bloque de fotos está siempre en
+                Reportes (punto 21), así que el enlace lleva a algo. */}
             {photos.length === 0 ? (
                 <p className="text-foreground/40 text-center py-6 text-sm">
                     Aún no has subido fotos. Se piden en el reporte mensual, junto con las medidas.
                 </p>
             ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                    {photos.map(p => <PhotoThumb key={p.id} photo={p} api={api} onDeleted={remove} />)}
+                <div className="space-y-5">
+                    {meses.map(m => (
+                        <div key={m.key}>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 mb-2 capitalize">
+                                {_mesTitulo(m.key)}
+                            </p>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                                {m.fotos.map(p => <PhotoThumb key={p.id} photo={p} api={api} onDeleted={remove} />)}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
         </Card>

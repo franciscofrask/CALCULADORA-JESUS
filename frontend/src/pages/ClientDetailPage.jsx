@@ -2518,7 +2518,11 @@ const EvolutionTimeline = ({ api, clientId, reportes, calmaFotos, reports, macro
         arr.sort((a, b) => b.key.localeCompare(a.key));
         arr.forEach(m => {
             m.peso = m.reporte?.peso != null ? m.reporte.peso : _pesoCercano(pesos, m.key + '-15');
+            // Siempre en el mismo orden -- frontal, lateral, espalda -- en los dos orígenes.
+            // Las de la app se quedaban sin ordenar, así que dentro de un mes salían por
+            // fecha de subida: una espalda, un frente, otra espalda.
             m.cal.sort((a, b) => _POSE_ORDER.indexOf(_poseDeKind(a.kind)) - _POSE_ORDER.indexOf(_poseDeKind(b.kind)));
+            m.app.sort((a, b) => _POSE_ORDER.indexOf(_poseDeFoto(a)) - _POSE_ORDER.indexOf(_poseDeFoto(b)));
         });
         // Variación de peso respecto al hito anterior (el siguiente en el array = más antiguo).
         arr.forEach((m, i) => {
@@ -2584,6 +2588,15 @@ const _poseDeKind = (kind) => {
 };
 const _POSE_ORDER = ['Frontal', 'Lateral', 'Espalda', 'Otras', 'Sin clasificar'];
 
+// La pose de una foto subida desde la app. El backend la guarda en `pose` desde el 06-08
+// ('frente' | 'espalda' | 'perfil') y aquí se ignoraba: todas entraban como "Sin
+// clasificar", así que la comparativa no podía poner una espalda debajo de otra espalda,
+// que es lo único que se puede comparar. Se pasa por el mismo mapeo que las de Calma
+// porque las palabras coinciden.
+// Sin pose se queda en "Sin clasificar" a propósito: las que ya estaban subidas no la
+// tienen (las 180 de producción), y meterlas en "Otras" las colaría por delante.
+const _poseDeFoto = (p) => (p?.pose ? _poseDeKind(p.pose) : 'Sin clasificar');
+
 const _mesKey = (fecha) => (fecha || '').slice(0, 7);  // YYYY-MM
 const _mesLabel = (key) => {
     const [y, m] = key.split('-');
@@ -2636,7 +2649,7 @@ const MuralFotos = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
     const sesiones = useMemo(() => {
         const todas = [
             ...(calmaFotos || []).map(f => ({ key: `calma:${f.file}`, source: 'calma', file: f.file, date: f.fecha || '', pose: _poseDeKind(f.kind) })),
-            ...(appFotos || []).map(p => ({ key: `app:${p.id}`, source: 'app', foto: p, date: (p.taken_at || p.uploaded_at || '').slice(0, 10), pose: 'Sin clasificar' })),
+            ...(appFotos || []).map(p => ({ key: `app:${p.id}`, source: 'app', foto: p, date: (p.taken_at || p.uploaded_at || '').slice(0, 10), pose: _poseDeFoto(p) })),
         ].filter(f => f.date);
         const porDia = new Map();
         for (const f of todas) {
@@ -2805,7 +2818,7 @@ const ComparativaFases = ({ api, clientId, calmaFotos, reports, macroHistory, fa
     const sesiones = useMemo(() => {
         const todas = [
             ...(calmaFotos || []).map(f => ({ key: `calma:${f.file}`, source: 'calma', file: f.file, date: f.fecha || '', pose: _poseDeKind(f.kind) })),
-            ...(appFotos || []).map(p => ({ key: `app:${p.id}`, source: 'app', foto: p, date: (p.taken_at || p.uploaded_at || '').slice(0, 10), pose: 'Sin clasificar' })),
+            ...(appFotos || []).map(p => ({ key: `app:${p.id}`, source: 'app', foto: p, date: (p.taken_at || p.uploaded_at || '').slice(0, 10), pose: _poseDeFoto(p) })),
         ].filter(f => f.date);
         const porDia = new Map();
         for (const f of todas) {

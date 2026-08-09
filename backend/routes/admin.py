@@ -27,6 +27,8 @@ from core.cycle import enrich_cycle, compute_cycle
 from core.seguimiento import marcar_ajuste, dias_desde
 from core.series_cliente import anotar_peso, anotar_grasa, actual as actual_de_serie
 from core.cambios_macros import marcar_cambios, palancas
+from core.historial_macros import guardar as guardar_en_historial
+from core.sin_futuro import hasta_hoy
 from core import semaforo
 from models.common import FoodSuggestionUpdate, AdminFoodCreate
 from calculator import invalidate_foods_cache
@@ -298,7 +300,9 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
 
     user_data = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
     routines = await db.routines.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(10)
-    reports = await db.reports.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    # Hasta hoy (punto 22): la ficha abria por un reporte de noviembre. Los 31 reportes
+    # fechados por delante vinieron de la importacion de Calma, no de la app.
+    reports = await db.reports.find(hasta_hoy({"client_id": client_id}), {"_id": 0}).sort("created_at", -1).to_list(50)
     payments = await db.payments.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
     messages = await db.messages.find(
         {"$or": [{"sender_id": profile["user_id"]}, {"receiver_id": profile["user_id"]}]},
@@ -307,9 +311,12 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     # Por fecha de efecto y, a igualdad, por cuándo se hizo el cambio. Ordenar solo por
     # effective_date dejaba al azar el orden de varios ajustes del MISMO día: el panel del
     # coach podía enseñar primero el cambio más viejo de hoy.
-    macro_history = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).sort(
-        [("effective_date", -1), ("created_at", -1)]
-    ).to_list(500)
+    # Hasta hoy tambien aqui (punto 22): hay 37 entradas con fecha de vigencia por delante
+    # -- 2026-09, 2027, 2029 --, y el historial del coach abria por una de ellas, o sea por
+    # unos macros que todavia no aplican a nadie.
+    macro_history = await db.macro_history.find(
+        hasta_hoy({"client_id": client_id}, campo="effective_date"), {"_id": 0}
+    ).sort([("effective_date", -1), ("created_at", -1)]).to_list(500)
     # El protocolo va RESUELTO POR FECHA (punto 33): `actual` es el que le toca hoy y
     # `siguiente` el que ya esta preparado, y viaja el historico entero.
     from routes.supplements import _respuesta as _protocolo_resuelto
@@ -500,7 +507,7 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         fecha_peso = h.get("peso_fecha") or h.get("effective_date")
         if w and fecha_peso:
             pesos[fecha_peso] = w
-    async for r in db.reports.find({"client_id": client_id}, {"_id": 0, "created_at": 1, "weight": 1}):
+    async for r in db.reports.find(hasta_hoy({"client_id": client_id}), {"_id": 0, "created_at": 1, "weight": 1}):
         w = _sanea_peso(r.get("weight")); f = (r.get("created_at") or "")[:10]
         if w and f:
             pesos[f] = w
@@ -929,7 +936,7 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
                 "criterio_coach": data.criterio,
             }})
 
-    await db.macro_history.insert_one(macro_log)
+    await guardar_en_historial(macro_log)
     # "¿Quien me toca esta semana?" (punto 29): la fecha se queda tambien en el cliente.
     await marcar_ajuste(client_id, macro_log["created_at"])
     # Peso y % graso van a sus SERIES, con la fecha del pesaje (puntos 27 y 30). Ni uno ni
@@ -1133,7 +1140,7 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
                   "ajustes": ajustes},
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.macro_history.insert_one(macro_log)
+    await guardar_en_historial(macro_log)
     await marcar_ajuste(client_id, macro_log["created_at"])   # punto 29
     # Peso y % graso, a sus series con la fecha del ajuste (punto 30).
     await anotar_peso(client_id, peso, macro_log["effective_date"], origen="calculadora del coach")

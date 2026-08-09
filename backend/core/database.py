@@ -59,6 +59,18 @@ async def create_indexes():
     await _ensure("messages", [("receiver_id", 1), ("created_at", -1)])
     await _ensure("reports", [("client_id", 1), ("created_at", -1)])    # ficha, at-risk
     await _ensure("macro_history", [("client_id", 1), ("effective_date", -1)])  # macros por fecha
+    # UNA fila por (cliente, fecha de vigencia) -- punto 62. El upsert de
+    # `core/historial_macros.py` es quien lo hace bien; este indice es el cinturon: cierra
+    # la carrera de dos guardados a la vez, que el upsert por si solo no cierra.
+    # Parcial porque las filas viejas pueden no tener effective_date, y un unique con
+    # varios null en la misma clave chocaria.
+    await _ensure("macro_history", [("client_id", 1), ("effective_date", 1)], unique=True,
+                  name="una_por_cliente_y_fecha",
+                  partialFilterExpression={"client_id": {"$type": "string"},
+                                           "effective_date": {"$type": "string"}})
+    # Las filas sustituidas: no se pintan en ningun sitio, se consultan cuando hace falta
+    # saber quien escribio que.
+    await _ensure("macro_history_auditoria", [("client_id", 1), ("effective_date", -1)])
     await _ensure("routines", [("client_id", 1), ("status", 1)])        # rutina activa, overview
     await _ensure("diet_favorites", "user_id")                          # dietas favoritas
     await _ensure("food_favorites", "user_id", unique=True)             # alimentos favoritos

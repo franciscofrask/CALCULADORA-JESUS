@@ -433,9 +433,6 @@ const ReportsPage = () => {
                     </div>
                     )}
 
-                    {/* Las tres fotos, aquí y no en los check-ins: un solo sitio para
-                        subirlas, y la rejilla de check-ins se queda para verlas. */}
-                    {esMensual && <TresFotos api={api} token={token} />}
 
                     {/* Confirmación de huecos: sustituye a los dos deslizadores de
                         cumplimiento (documento 31-07, parte 7.1). El cumplimiento sale del
@@ -524,6 +521,18 @@ const ReportsPage = () => {
                         {submitting ? 'Enviando...' : 'Enviar reporte'}
                     </button>
                     </fieldset>
+
+                    {/* LAS TRES FOTOS, SIEMPRE Y FUERA DEL FIELDSET (punto 21 / 2.2).
+                        Estaban dentro y con `esMensual`, y eso hacía que la app se
+                        contradijera: Check-ins manda al cliente aquí a subirlas y en una
+                        semana normal -- o con la ventana cerrada -- aquí no había nada que
+                        pulsar. Jesús recorrió el reporte de un cliente real y no encontró
+                        la subida.
+                        Fuera del fieldset porque una foto no es un campo del reporte: se
+                        sube sola, en su propia petición, y no tiene por qué depender de que
+                        la ventana de envío esté abierta. Que se pidan en el mensual es una
+                        cosa; que el resto del mes no se puedan subir es otra. */}
+                    <TresFotos api={api} token={token} esMensual={esMensual} />
                 </form>
             )}
 

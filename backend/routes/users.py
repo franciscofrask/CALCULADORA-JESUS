@@ -22,6 +22,7 @@ from core.cycle import enrich_cycle
 from core.seguimiento import marcar_ajuste
 from core.series_cliente import anotar_peso, anotar_grasa
 from core.cambios_macros import marcar_cambios
+from core.historial_macros import guardar as guardar_en_historial
 
 router = APIRouter(tags=["users"])
 
@@ -184,7 +185,7 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
             ),
             "created_at": ahora.isoformat(),
         }
-        await db.macro_history.insert_one(macro_log)
+        await guardar_en_historial(macro_log)
         await marcar_ajuste(profile["id"], macro_log["created_at"])
 
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -278,7 +279,7 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         rest = update["macros_rest"]
         peri = update.get("macros_periworkout")
         effective_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        await db.macro_history.insert_one({
+        await guardar_en_historial({
             "id": str(uuid.uuid4()),
             "client_id": client_id,
             "user_id": user["id"],
@@ -655,7 +656,7 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     # Igual que el alta: se versiona en macro_history para que el resolver por fecha coja estos
     # macros y no los del alta.
     if "macros_training" in update:
-        await db.macro_history.insert_one({
+        await guardar_en_historial({
             "id": str(uuid.uuid4()),
             "client_id": client_id,
             "user_id": user["id"],
@@ -1070,7 +1071,7 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
             # El desglose del front es informativo; el recalculado manda.
             "desglose": (resultado_v2 or {}).get("desglose") or data.desglose,
         }
-    await db.macro_history.insert_one(macro_log)
+    await guardar_en_historial(macro_log)
     await marcar_ajuste(client_id, macro_log.get("created_at"))   # punto 29
     # Peso y % graso, a sus series con la fecha de vigencia del ajuste (punto 30).
     if data.peso is not None:

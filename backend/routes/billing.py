@@ -14,6 +14,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from core.database import db
+from core.sin_futuro import hasta_hoy
 from core.security import get_current_user, get_admin_user
 from models.common import (
     CheckoutSessionRequest, CheckoutSessionResponse, BillingPortalResponse,
@@ -172,7 +173,7 @@ async def get_renovacion(user=Depends(get_current_user)):
         {"client_id": perfil["id"], "photos": {"$ne": []}}, {"_id": 0},
         sort=[("created_at", 1)])
     ultimo = await db.reports.find_one(
-        {"client_id": perfil["id"]}, {"_id": 0}, sort=[("created_at", -1)])
+        hasta_hoy({"client_id": perfil["id"]}), {"_id": 0}, sort=[("created_at", -1)])
 
     desde = perfil.get("arranque_lunes") or perfil.get("created_at")
     dias_totales, dias_dieta = 84, 0

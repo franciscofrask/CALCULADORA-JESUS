@@ -23,7 +23,7 @@ const POSES = [
     { key: 'perfil', label: 'De perfil', ayuda: 'De lado, brazos relajados, sin girar el cuerpo hacia la cámara.' },
 ];
 
-const TresFotos = ({ api, token }) => {
+const TresFotos = ({ api, token, esMensual = true }) => {
     const [fotos, setFotos] = useState([]);
     const [subiendo, setSubiendo] = useState(null);
     const [urls, setUrls] = useState({});
@@ -91,8 +91,16 @@ const TresFotos = ({ api, token }) => {
             </div>
 
             <p className="text-xs text-foreground/50 mb-4 leading-relaxed">
-                Colócate como en la foto del mes pasado: misma distancia, misma luz y mismo sitio.
-                Es lo que permite comparar una con otra.
+                {/* En una semana que no es la del mensual esto sigue estando, pero dicho de
+                    otra manera: no se le pide nada, se le deja subirlas. Antes el bloque
+                    entero desaparecía y el cliente venía aquí desde Check-ins a buscar algo
+                    que no estaba (punto 21). */}
+                {esMensual
+                    ? <>Colócate como en la foto del mes pasado: misma distancia, misma luz y mismo
+                        sitio. Es lo que permite comparar una con otra.</>
+                    : <>Las fotos se piden en el reporte mensual, así que hoy no hacen falta. Si ya
+                        las tienes hechas, súbelas y quedan guardadas: mismo sitio, misma luz y
+                        misma distancia que la del mes pasado.</>}
             </p>
 
             <div className="grid grid-cols-3 gap-3">

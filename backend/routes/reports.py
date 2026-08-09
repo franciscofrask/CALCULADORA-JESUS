@@ -10,6 +10,7 @@ from core.database import db
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import plan_grants_feature
 from core.series_cliente import anotar_peso
+from core.sin_futuro import hasta_hoy
 from models.common import ReportCreate, ReportResponse
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -48,7 +49,8 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     cumpl = None
     if respuestas_huecos:
         prev_rep = await db.reports.find_one(
-            {"client_id": profile["id"]}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)]
+            hasta_hoy({"client_id": profile["id"]}), {"_id": 0, "created_at": 1},
+            sort=[("created_at", -1)],
         )
         desde = now - timedelta(days=28)
         if prev_rep and prev_rep.get("created_at"):
@@ -168,8 +170,10 @@ async def get_reports(skip: int = 0, limit: int = 50, user = Depends(get_current
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
+    # HASTA HOY (punto 22): el historial empezaba por un reporte de noviembre de este año.
+    # Son 31 reportes fechados por delante de hoy, casi todos de la importacion de Calma.
     reports = await db.reports.find(
-        {"client_id": profile["id"]},
+        hasta_hoy({"client_id": profile["id"]}),
         {"_id": 0}
     ).sort("created_at", -1).skip(max(0, skip)).to_list(min(max(1, limit), 100))
 
@@ -240,8 +244,9 @@ async def get_evolution_data(user = Depends(get_current_user)):
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
     
+    # La grafica tampoco: un peso de 2028 estiraba el eje y aplastaba el resto de la curva.
     reports = await db.reports.find(
-        {"client_id": profile["id"]},
+        hasta_hoy({"client_id": profile["id"]}),
         {"_id": 0, "weight": 1, "measurements": 1, "created_at": 1}
     ).sort("created_at", 1).to_list(100)
     
