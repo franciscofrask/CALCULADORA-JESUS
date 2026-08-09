@@ -182,8 +182,13 @@ async def get_previous_report(user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    # Hasta HOY: en producción hay reportes fechados en 2027 y 2028, y ordenando por fecha
+    # a secas ganaba uno de esos. Esta pantalla enseñaba «Último: 118 kg · 21 feb» -- de un
+    # reporte de 2028 -- mientras Ajustar macros decía 94 kg, que es el punto 9 del
+    # documento del 07-08: dos pesos distintos en la misma app.
+    hoy = datetime.now(timezone.utc).isoformat()
     prev = await db.reports.find_one(
-        {"client_id": profile["id"]},
+        {"client_id": profile["id"], "created_at": {"$lte": hoy}},
         {"_id": 0, "weight": 1, "measurements": 1, "created_at": 1},
         sort=[("created_at", -1)],
     )

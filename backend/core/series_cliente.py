@@ -59,8 +59,20 @@ def poner_en_serie(serie: Optional[List[Dict[str, Any]]], fecha: str, valor: flo
 
 
 def actual(serie: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
-    """El ultimo punto de la serie: {'valor', 'fecha'}. None si no hay ninguno."""
-    puntos = [x for x in (serie or []) if x.get("valor") is not None and x.get("fecha")]
+    """El ultimo punto de la serie HASTA HOY: {'valor', 'fecha'}. None si no hay ninguno.
+
+    Lo de «hasta hoy» no es un detalle. En produccion hay pesajes y reportes fechados en
+    2027 y 2028 -- de pruebas --, y cogiendo el maximo por fecha a secas ganaba uno de esos:
+    Reportes enseñaba «Ultimo: 118 kg · 21 feb» (un reporte de 2028) mientras Ajustar macros
+    decia 94 kg. Es el punto 9 del documento del 07-08, «hay dos pesos distintos en la misma
+    app».
+
+    Un pesaje del futuro no es el peso de nadie. Si algun dia hace falta programar algo a
+    futuro, sera con otro campo y a proposito.
+    """
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    puntos = [x for x in (serie or [])
+              if x.get("valor") is not None and x.get("fecha") and _dia(x.get("fecha")) <= hoy]
     if not puntos:
         return None
     ultimo = max(puntos, key=lambda x: _dia(x.get("fecha")))

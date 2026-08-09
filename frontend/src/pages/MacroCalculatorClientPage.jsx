@@ -169,6 +169,13 @@ const MacroCalculatorClientPage = () => {
     // Precarga: última versión guardada en el perfil; si no hay, mapea el
     // activity_level del cuestionario antiguo a la escala nueva de 3.
     const [ajustes, setAjustes] = useState(AJUSTES_VACIOS);
+    // El resultado que hay en pantalla ya no corresponde a lo que está contestado.
+    const [resultsViejos, setResultsViejos] = useState(false);
+    const refResultados = useRef(null);
+    // Las cuatro preguntas contestadas. `sigue_dieta` puede ser `false` y eso ES una
+    // respuesta, así que se compara contra null y no por si es "vacío".
+    const ajustesCompletos = ['actividad_diaria', 'deporte_extra', 'facilidad_engordar', 'sigue_dieta']
+        .every(k => ajustes[k] !== null && ajustes[k] !== undefined);
     useEffect(() => {
         const guardados = profile?.ajustes_macros;
         if (guardados) {
@@ -184,7 +191,13 @@ const MacroCalculatorClientPage = () => {
         }
     }, [profile]);
 
-    const setAjuste = (field, value) => { setAjustes(prev => ({ ...prev, [field]: value })); setResults(null); };
+    // Cambiar una respuesta NO borra el resultado: lo marca como viejo.
+    //
+    // Antes se hacía `setResults(null)` y el bloque entero desaparecía, con lo que la
+    // página se encogía y la vista saltaba arriba. El ciclo era: contestar, bajar,
+    // calcular, bajar otra vez (punto 15 del 07-08). Dejándolo en pantalla con el aviso de
+    // que hay que recalcular, ni salta ni se pierde lo que ya había.
+    const setAjuste = (field, value) => { setAjustes(prev => ({ ...prev, [field]: value })); setResultsViejos(true); };
 
     // Payload de ajustes para el backend (números parseados, vacíos como null)
     const ajustesPayload = () => {
@@ -200,7 +213,7 @@ const MacroCalculatorClientPage = () => {
         };
     };
 
-    const set = (field, value) => { setForm(prev => ({ ...prev, [field]: value })); setResults(null); };
+    const set = (field, value) => { setForm(prev => ({ ...prev, [field]: value })); setResultsViejos(true); };
 
     const handleCalculate = async () => {
         const peso = parseFloat(form.peso);
@@ -215,6 +228,10 @@ const MacroCalculatorClientPage = () => {
                 ajustes: ajustesPayload(),
             });
             setResults(res.data);
+            setResultsViejos(false);
+            // Al resultado, sin que tenga que buscarlo: el bloque se pinta debajo del botón
+            // y quedaba fuera de pantalla justo en el momento más importante del alta.
+            setTimeout(() => refResultados.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
         } catch (err) {
             toast.error(err.response?.data?.detail || 'Error calculando macros');
         } finally { setLoading(false); }
@@ -355,14 +372,31 @@ const MacroCalculatorClientPage = () => {
                                 )}
                             </div>
 
-                            <button onClick={handleCalculate} disabled={loading || !form.peso || !(form.porcentaje_graso || (grasaVale && !cambiarGrasa))}
+                            {/* Bloqueado hasta que estén contestadas las preguntas, no solo
+                                el peso y la grasa (punto 14 del 07-08): sin ellas calculaba
+                                igual y devolvía la tabla pelada, sin modificadores, y el
+                                cliente se quedaba con unos macros que no son los suyos sin
+                                enterarse de que le faltaba media pantalla. */}
+                            {!ajustesCompletos && (
+                                <p className="text-xs text-foreground/50 text-center" data-testid="faltan-preguntas">
+                                    Contesta las preguntas de arriba para poder calcular.
+                                </p>
+                            )}
+                            <button onClick={handleCalculate}
+                                disabled={loading || !form.peso || !(form.porcentaje_graso || (grasaVale && !cambiarGrasa)) || !ajustesCompletos}
+                                data-testid="btn-calcular"
                                 className="btn-outline-brand w-full flex items-center justify-center gap-2 uppercase tracking-wider disabled:opacity-40">
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
                                 {loading ? 'Calculando...' : 'Calcular'}
                             </button>
 
                             {results && (
-                                <div className="space-y-3 pt-1">
+                                <div ref={refResultados} className={`space-y-3 pt-1 transition-opacity ${resultsViejos ? 'opacity-50' : ''}`}>
+                                    {resultsViejos && (
+                                        <p className="text-xs text-amber-400 text-center" data-testid="resultado-viejo">
+                                            Has cambiado algo: vuelve a pulsar Calcular para actualizar estos números.
+                                        </p>
+                                    )}
                                     <div className="grid grid-cols-3 gap-2 text-center">
                                         {[
                                             ['Entreno', results.macros.entreno.proteina, results.macros.entreno.hidratos, results.macros.entreno.grasa],
