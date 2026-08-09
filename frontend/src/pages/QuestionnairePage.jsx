@@ -792,8 +792,22 @@ const QuestionnairePage = () => {
         if (guardado?.respuestas && Object.keys(guardado.respuestas).length) {
             answersRef.current = { ...answersRef.current, ...guardado.respuestas };
             setAnswers(a => ({ ...a, ...guardado.respuestas }));
+            // AL REANUDAR, SALTARSE LAS QUE YA NO APLICAN (punto 4.12 del 09-08).
+            //
+            // Aquí se hacía `setIdx(paso)` a secas, y el paso guardado puede ser una pregunta
+            // cuya condición ya no se cumple. Jesús aterrizaba en «¿Habría posibilidad de que
+            // lo hicieras en días en que no vayas al gimnasio?» -- que solo sale si practica
+            // otro deporte -- teniendo contestado que NO. Doblemente mal: la pregunta no le
+            // tocaba, y ese «lo» se refiere a una pregunta que no está en pantalla.
+            //
+            // Se avanza hasta la primera que sí aplique con las respuestas ya restauradas,
+            // que es exactamente lo que hace `goNext` durante el recorrido normal.
             const paso = Number(guardado.paso) || 0;
-            if (paso > 0 && paso < flow.length) setIdx(paso);
+            if (paso > 0 && paso < flow.length) {
+                let j = paso;
+                while (j < flow.length - 1 && !visible(flow[j])) j++;
+                setIdx(Math.min(j, flow.length - 1));
+            }
             recalcularEnVivo(guardado.respuestas);
             toast.info('Seguimos donde lo dejaste');
         } else {

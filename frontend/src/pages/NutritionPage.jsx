@@ -559,7 +559,17 @@ const NutritionPage = () => {
     // Y la fecha también va por cliente (punto 4.7): era la otra mitad de lo mismo. Sin el
     // id dentro, el cliente B abría Nutrición en el día que estaba mirando el cliente A, que
     // es justo por donde empezaba el problema.
+    //
+    // Y ANTES QUE NADA, ?date=AAAA-MM-DD SI VIENE EN LA URL (punto 4.14). No funcionaba, y
+    // con 991 días de dietas migradas por cliente es la única forma de mandar un enlace a un
+    // día concreto -- o de que el entrenador abra el que quiere mirar sin ir pasando flechas.
+    // Manda sobre lo guardado: si alguien pide un día por la URL, es ese y no otro.
     useEffect(() => {
+        const pedida = new URLSearchParams(window.location.search).get('date');
+        if (pedida && /^\d{4}-\d{2}-\d{2}$/.test(pedida)) {
+            setCurrentDate(pedida);
+            return;
+        }
         if (!uid) return;
         const stored = leerLocal('nutrition_last_date', uid);
         const guardadoEn = leerLocal('nutrition_last_date_guardado', uid);
@@ -570,11 +580,20 @@ const NutritionPage = () => {
         setCurrentDate(hoyISO());
     }, [uid]);
 
-    // Se guarda la fecha vista y el día en que se vio, para lo de arriba.
+    // Se guarda la fecha vista y el día en que se vio, para lo de arriba. Y se refleja en la
+    // URL, para que copiar la barra de direcciones lleve al día que estás mirando: se cambia
+    // sin recargar ni apilar historial, así que el botón de atrás sigue haciendo lo suyo.
     useEffect(() => {
         if (!currentDate || !uid) return;
         escribirLocal('nutrition_last_date', uid, currentDate);
         escribirLocal('nutrition_last_date_guardado', uid, hoyISO());
+        try {
+            const url = new URL(window.location.href);
+            if (url.searchParams.get('date') !== currentDate) {
+                url.searchParams.set('date', currentDate);
+                window.history.replaceState(null, '', url.toString());
+            }
+        } catch (e) { /* si el navegador no deja tocar la URL, no pasa nada */ }
     }, [currentDate, uid]);
 
     // Initial load

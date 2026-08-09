@@ -588,6 +588,10 @@ class ClientProfile(BaseModel):
     # y que se los termine el. `ajuste_macros_completado` no vale para eso: es False para
     # todo el que no paso por NUESTRO cuestionario, y eso son 169 de los 174 activos.
     macros_puestos_por_alguien: Optional[bool] = None
+    # ¿Puede el cliente ajustarse los macros? (punto 4.10): {puede, por_que_no}. Sale del
+    # campo `habilitaciones.calculadora` del plan, que existia y no lo miraba nadie al
+    # guardar: un cliente de plan personalizado podia machacar los de su entrenador.
+    macros_ajustables: Optional[Dict[str, Any]] = None
     # EL CONTRATO DE ESTE CLIENTE (punto 44 del 07-08). La duracion del ciclo NO es un
     # supuesto: hay planes de 4 semanas y de 5, y clientes con un ciclo distinto al de su
     # plan (es una de las 17 excepciones del punto 39, y aqui tiene donde vivir). Vacios =

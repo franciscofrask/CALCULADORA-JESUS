@@ -66,6 +66,12 @@ async def get_client_profile(user = Depends(get_current_user)):
         {"client_id": profile.get("id")}, {"_id": 0, "origen": 1, "changed_by": 1},
         sort=[("created_at", -1)])
     datos["macros_puestos_por_alguien"] = de_una_persona(ultimo)
+    # Y si PUEDE ajustarselos el (punto 4.10). Lo decide el servidor y viaja al front para que
+    # la pantalla no le enseñe un formulario y un boton de Guardar que van a devolver un 403:
+    # dejarle contestar quince preguntas para negarselo al final es peor que decirselo antes.
+    from core.quien_pone_los_macros import puede_ajustarlos
+    puede, por_que_no = await puede_ajustarlos(db, profile)
+    datos["macros_ajustables"] = {"puede": puede, "por_que_no": por_que_no}
     return ClientProfile(**datos)
 
 @router.patch("/clients/onboarding", response_model=ClientProfile)
@@ -591,6 +597,14 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado. Selecciona un plan primero.")
 
+    # Igual que el guardado manual (punto 4.10): en un plan personalizado esto vale para
+    # sacar los macros de arranque, pero no para volver a calcularlos por encima de los que
+    # ya le puso su entrenador.
+    from core.quien_pone_los_macros import puede_ajustarlos
+    puede, por_que_no = await puede_ajustarlos(db, profile)
+    if not puede:
+        raise HTTPException(status_code=403, detail=por_que_no)
+
     peso, sexo = profile.get("weight"), (profile.get("sex") or "hombre")
     bf, objetivo = profile.get("body_fat"), profile.get("goal")
     if not all([peso, bf is not None, objetivo]):
@@ -993,6 +1007,14 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    # NO EN LOS PLANES CON ENTRENADOR (punto 4.10). El catalogo dice desde hace tiempo quien
+    # ajusta los macros de cada plan y nadie lo miraba aqui: un cliente de plan personalizado
+    # podia machacar lo que le hubiera puesto su entrenador sin que este se enterase.
+    from core.quien_pone_los_macros import puede_ajustarlos
+    puede, por_que_no = await puede_ajustarlos(db, profile)
+    if not puede:
+        raise HTTPException(status_code=403, detail=por_que_no)
 
     training = data.training.model_dump()
     rest = data.rest.model_dump()
