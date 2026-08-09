@@ -147,13 +147,20 @@ class AgentTools:
                                coherente_con_momento: bool = True,
                                limite: int = 8,
                                heredar_estilo: bool = True,
-                               acompanando_a: List[dict] = None) -> dict:
+                               acompanando_a: List[dict] = None,
+                               hueco: dict = None) -> dict:
         """Busca en el catálogo con el texto TAL CUAL lo dijo el cliente (la traducción
         coloquial→catálogo es semántica, no una tabla). Sin texto, ordena por lo que más
         aporta al macro pedido (o al que más falta). Devuelve cada alimento ya
         dimensionado a lo que cabe en la comida actual."""
         limite = max(1, min(int(limite or 8), 15))
-        restante = self.bot.get_remaining_macros()
+        # El hueco contra el que se dimensiona y se ordena. Normalmente es lo que le falta
+        # a la comida, pero quien está MONTANDO un menú tiene que pasar lo que le falta al
+        # menú ya empezado: si no, al buscar el complemento se mide contra la comida entera
+        # y entran alimentos que la cubren de golpe -- un muffin de 40 P / 40 H / 6 G
+        # encima de una base que ya llevaba 43 g de hidratos de avena, y el menú se pasaba
+        # 40 g. Se veía como «pidiendo algo con avena no sale ninguna opción».
+        restante = dict(hueco) if hueco else self.bot.get_remaining_macros()
         momento = self._momento_actual()
         universo = {int(f["id"]): f for f in self._universo()}
 
@@ -644,6 +651,9 @@ class AgentTools:
                     rx = await self.buscar_alimentos(
                         texto=txt, para_macro=peor, generico=generico, marca=marca,
                         limite=6, heredar_estilo=False,
+                        # Lo que le falta AL MENÚ, no a la comida entera: el complemento
+                        # se pone encima de lo que ya se ha elegido.
+                        hueco={m: max(float(rem.get(m, 0) or 0), 0) for m in ("P", "H", "G")},
                         # El complemento SÍ puede ser un acompañamiento (la mermelada de
                         # las tostadas), porque a estas alturas ya hay piezas a las que
                         # acompañar aunque el plato del cliente siga vacío.

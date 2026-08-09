@@ -3272,6 +3272,25 @@ Y un caso que parece un fallo y no lo es: con 3 g de proteína pendientes y los 
 grasa ya pasados, ofrece 5 g de aislado. Es correcto -- cualquier comida real arrastraría lo
 que ya sobra --, y es el criterio de Jesús funcionando.
 
+
+### Un fallo que introdujo el arreglo del 76, y cómo salió
+
+Al ordenar por distancia, la búsqueda del COMPLEMENTO de un menú empezó a devolver
+alimentos que cubren el hueco entero de golpe -- un «Chocolate protein muffin» de
+40 P / 40 H / 6 G --, porque se buscaba contra lo que le falta a la COMIDA y no contra lo
+que le falta al MENÚ ya empezado. Puesto encima de una base que ya llevaba 43 g de hidratos
+de avena, el menú se pasaba 40 g y se descartaba; y como se descartaban todos, pidiendo
+«algo con avena» el cliente se quedaba **sin ninguna opción**.
+
+El fallo estaba latente desde antes -- el complemento siempre se midió contra el hueco
+entero --, pero con el orden viejo no se notaba porque devolvía cosas pequeñas y
+concentradas. Ahora `buscar_alimentos` acepta el hueco contra el que dimensionar, y quien
+monta el menú le pasa lo que le falta a ese menú.
+
+Lo cazó el test de menús cortos escrito el día anterior
+(`test_nadie_se_queda_sin_opciones`), ya con el commit hecho y subido. Es exactamente para
+lo que estaba escrito.
+
 ## 80 - Los objetivos no coincidían: 70 g de hidratos al día
 
 El más grave de los cinco, y el diagnóstico inicial fue **equivocado**: buscando el
