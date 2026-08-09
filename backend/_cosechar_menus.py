@@ -41,6 +41,8 @@ from core.cosecha_menus import (  # noqa: E402
     es_desayuno, es_peri, firma, pasa_el_filtro, personas_distintas, recontar,
 )
 from meal_builder import get_effective_macros_per_100g  # noqa: E402
+from calculator import get_food_config  # noqa: E402
+from core.cantidad_de_dieta import gramos as a_gramos  # noqa: E402
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -212,9 +214,17 @@ async def main():
             para_filtro = "desayuno"
         vale, motivo = pasa_el_filtro(fs, para_filtro)
         tot = {"P": 0.0, "H": 0.0, "G": 0.0}
+        # A GRAMOS ANTES DE CONTAR (punto 4.5). Estos menús vienen de Calma tal cual, y ahí
+        # los alimentos por unidades guardan el CONTEO de piezas en el campo de gramos: un
+        # plátano entero aparece como "1". Sin convertirlo, la biblioteca ofrecía menús con
+        # «1 g de plátano» y con los macros calculados sobre ese gramo.
+        alimentos_ok = []
         for a in d["alimentos"]:
-            ef = get_effective_macros_per_100g(foods[int(a["alimento_id"])])
-            fac = float(a["cantidad_g"]) / 100.0
+            food = foods[int(a["alimento_id"])]
+            cantidad = a_gramos(a.get("cantidad_g"), get_food_config(food)) or 0.0
+            alimentos_ok.append({**a, "cantidad_g": cantidad})
+            ef = get_effective_macros_per_100g(food)
+            fac = cantidad / 100.0
             for m in tot:
                 tot[m] += (float(ef.get(m, 0) or 0)) * fac
         macros = {m: round(v, 1) for m, v in tot.items()}
@@ -224,6 +234,9 @@ async def main():
             macros_corregidos += 1
         campos = {
             "macros": macros,
+            # La cantidad convertida se guarda: si no, el menú se ofrecería con los macros
+            # buenos y las cantidades malas, que es peor que tenerlo todo mal.
+            "alimentos": alimentos_ok,
             "usos": 0,
             "clientes": 0,
             "calidad": {"pasa": vale, "motivo": motivo},

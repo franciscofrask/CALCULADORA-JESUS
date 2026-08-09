@@ -152,7 +152,27 @@ async def recontar(db, desde: Optional[datetime] = None) -> Dict[tuple, dict]:
     `desde` acota por fecha para poder mirar una semana suelta, pero la cosecha de
     verdad va sin acotar: ver la explicación de arriba sobre por qué no es
     incremental.
+
+    LAS CANTIDADES SE PASAN A GRAMOS ANTES DE CONTARLAS (punto 4.5 del 09-08). En las
+    dietas que vinieron de Calma los alimentos por unidades guardan el CONTEO de piezas en
+    `cantidad_g`: un plátano entero aparece como "1". Cosechado tal cual, la biblioteca
+    acababa ofreciendo menús con «1 g de plátano» y «1 g de yogur», y con los macros
+    calculados sobre eso. Medido tras la primera cosecha del 09-08: 10.732 de los 42.364
+    menús que pasan el filtro -- uno de cada cuatro -- llevaban algún alimento así.
     """
+    from calculator import get_food_config
+    from core.cantidad_de_dieta import gramos as a_gramos
+
+    # La configuración de cada alimento, una sola vez: aquí se recorren cientos de miles
+    # de items y resolverla por item multiplicaría el trabajo por nada.
+    cfgs: Dict[int, dict] = {}
+    async for f in db.foods.find({}, {"_id": 0, "id": 1, "categorias": 1,
+                                      "racion": 1, "unidades": 1}):
+        try:
+            cfgs[int(f["id"])] = get_food_config(f)
+        except (TypeError, ValueError, KeyError):
+            pass
+
     q = {}
     if desde:
         q["fecha"] = {"$gte": desde.strftime("%Y-%m-%d")}
@@ -184,6 +204,12 @@ async def recontar(db, desde: Optional[datetime] = None) -> Dict[tuple, dict]:
                 # tarde, al sacar la mediana.
                 if cant != cant or cant in (float("inf"), float("-inf")) or cant <= 0:
                     continue
+                # Y a gramos, si lo que hay guardado era un conteo de piezas (punto 4.5).
+                cfg = cfgs.get(aid)
+                if cfg:
+                    convertida = a_gramos(cant, cfg)
+                    if convertida:
+                        cant = convertida
                 ids.append(aid)
                 cants[aid] = cant
             if len(set(ids)) < MIN_ALIMENTOS:
