@@ -24,7 +24,7 @@ import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
-    ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp, ChevronRight, SlidersHorizontal,
+    ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp, ChevronRight, SlidersHorizontal, UserCog,
     AlertCircle, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw,
     Headphones, CalendarClock, Camera
 } from 'lucide-react';
@@ -259,7 +259,7 @@ const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
 const ClientDetailPage = () => {
     const { clientId } = useParams();
     const navigate = useNavigate();
-    const { api, user: adminUser, planCatalog } = useAuth();
+    const { api, user: adminUser, planCatalog, actuarComo } = useAuth();
     const { confirm } = useConfirm();
     // Planes asignables del catálogo (excluye complementos), para el selector de plan.
     const assignablePlans = Object.values(planCatalog || {}).filter(p => p.asignable);
@@ -1565,6 +1565,31 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB 7: NUTRICIÓN ========== */}
                 <TabsContent value="nutricion" className="space-y-4">
+                    {/* ENTRAR EN SU CALCULADORA (punto 4.11). Esta pestaña era de solo
+                        lectura: se veían sus dietas, sus alimentos y sus gramos, y no había
+                        forma de añadir nada ni de montarle una comida. Desde aquí se abre el
+                        MISMO editor que usa él, con una barra naranja arriba que no deja
+                        olvidarse de en qué cuenta estás. */}
+                    <Card className="bg-[#111] border-[#222]">
+                        <CardContent className="p-4 flex items-center gap-3 flex-wrap">
+                            <UserCog className="w-5 h-5 text-[#FF671F] shrink-0" />
+                            <div className="min-w-0 flex-1">
+                                <p className="text-white text-sm font-semibold">Montarle el día tú mismo</p>
+                                <p className="text-white/40 text-xs">
+                                    Abre su calculadora tal y como la ve él. Lo que guardes queda
+                                    firmado con tu nombre y él lo verá.
+                                </p>
+                            </div>
+                            <Button onClick={() => actuarComo({
+                                userId: profile?.user_id,
+                                clientId: clientId,
+                                nombre: user?.name || profile?.name || 'tu cliente',
+                            })} data-testid="entrar-en-su-calculadora"
+                                className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white">
+                                Entrar en su calculadora
+                            </Button>
+                        </CardContent>
+                    </Card>
                     {nutrition_stats?.total_diets > 0 ? (<>
                         <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Top 5 alimentos</CardTitle></CardHeader>
                             <CardContent><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">{nutrition_stats.top_foods?.map((f, i) => (

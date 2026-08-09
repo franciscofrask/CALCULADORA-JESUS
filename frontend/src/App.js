@@ -39,6 +39,7 @@ import PlanesPage from "./pages/PlanesPage";
 import RenovacionPage from "./pages/RenovacionPage";
 import QuizVentaPage from "./pages/QuizVentaPage";
 import InstallPrompt from "./components/InstallPrompt";
+import BarraActuandoComo from "./components/BarraActuandoComo";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -271,6 +272,10 @@ function App() {
                 <AuthProvider>
                     <ConfirmProvider>
                         <OnboardingProvider>
+                            {/* Arriba del todo y en todas las pantallas: si el entrenador
+                                está dentro de la cuenta de un cliente, tiene que verlo esté
+                                donde esté (punto 4.11). */}
+                            <BarraActuandoComo />
                             <AppRoutes />
                             <Toaster position="top-center" richColors />
                             <InstallPrompt />

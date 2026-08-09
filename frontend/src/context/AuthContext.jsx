@@ -24,9 +24,25 @@ export const AuthProvider = ({ children }) => {
     const [profile, setProfile] = useState(null);
     const [planCatalog, setPlanCatalog] = useState({});
 
+    // ACTUAR COMO UN CLIENTE (punto 4.11). Cuando el entrenador abre la calculadora de un
+    // cliente desde su ficha, la app entera trabaja como ese cliente: cada petición lleva la
+    // cabecera y el backend resuelve el usuario ahí (ver core/actuar_como.py). Así funcionan
+    // las dietas, el reparto, el buscador, el sugeridor y el recetario sin duplicar media API.
+    //
+    // Vive en sessionStorage y no en localStorage a propósito: se acaba al cerrar la pestaña.
+    // Quedarse "actuando como" otra persona sin darte cuenta, y encima entre reinicios del
+    // navegador, es exactamente lo que no puede pasar.
+    const actuandoComo = (() => {
+        try { return JSON.parse(sessionStorage.getItem('actuar_como') || 'null'); }
+        catch { return null; }
+    })();
+
     const api = axios.create({
         baseURL: API,
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(actuandoComo?.userId ? { 'X-Actuar-Como': actuandoComo.userId } : {}),
+        },
     });
 
     api.interceptors.response.use(
@@ -181,6 +197,21 @@ export const AuthProvider = ({ children }) => {
         [loading, planCatalog, myPlan, capabilities]
     );
 
+    // Empezar y dejar de actuar como un cliente (punto 4.11). Recarga a propósito: la app
+    // entera tiene que recomponerse con el otro usuario -- perfil, macros, capacidades --, y
+    // hacerlo a medias es peor que no hacerlo.
+    const actuarComo = (cliente) => {
+        sessionStorage.setItem('actuar_como', JSON.stringify({
+            userId: cliente.userId, nombre: cliente.nombre, clientId: cliente.clientId,
+        }));
+        window.location.assign('/dashboard/nutrition');
+    };
+    const dejarDeActuar = () => {
+        const vuelta = actuandoComo?.clientId ? `/admin/clients/${actuandoComo.clientId}` : '/admin/clients';
+        sessionStorage.removeItem('actuar_como');
+        window.location.assign(vuelta);
+    };
+
     const value = {
         user,
         token,
@@ -189,6 +220,9 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        actuandoComo,
+        actuarComo,
+        dejarDeActuar,
         updateProfile,
         refreshProfile,
         refreshUser: fetchUser,

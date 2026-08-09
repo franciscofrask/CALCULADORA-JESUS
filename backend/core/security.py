@@ -8,7 +8,7 @@ import base64
 import hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from fastapi import HTTPException, Depends
+from fastapi import HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from .config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
@@ -79,15 +79,59 @@ def decode_token(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido")
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
-    """Get the current user from the JWT token."""
+async def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> dict:
+    """El usuario de esta peticion, a partir del JWT.
+
+    Y, si la manda alguien del equipo con la cabecera `X-Actuar-Como`, el CLIENTE por el que
+    esta actuando (punto 4.11): asi el entrenador abre la calculadora de su cliente y todas
+    las pantallas funcionan sin duplicar media API. Los cerrojos y el porque, en
+    `core/actuar_como.py`.
+    """
     payload = decode_token(credentials.credentials)
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
     if user.get("deleted_at"):
         raise HTTPException(status_code=403, detail="Cuenta desactivada")
-    return user
+
+    from .actuar_como import CABECERA, CLAVE
+
+    objetivo_id = (request.headers.get(CABECERA) or "").strip()
+    if not objetivo_id or objetivo_id == user.get("id"):
+        return user
+
+    # Cerrojo 1: solo el equipo.
+    if user.get("role") not in ("admin", "trainer"):
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+
+    objetivo = await db.users.find_one({"id": objetivo_id}, {"_id": 0})
+    if not objetivo or objetivo.get("deleted_at"):
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    # Cerrojo 2: solo hacia clientes. Actuar como otro admin seria una escalada de
+    # privilegios con nombre bonito.
+    if objetivo.get("role") != "client":
+        raise HTTPException(status_code=403, detail="Solo se puede actuar como un cliente")
+
+    # Cerrojo 3: solo sobre los suyos, la misma regla que la ficha.
+    perfil = await db.client_profiles.find_one({"user_id": objetivo_id}, {"_id": 0})
+    assert_client_access(user, perfil)
+
+    # Cerrojo 4: queda anotado. Solo lo que ESCRIBE -- anotar cada lectura llenaria el
+    # registro de ruido y taparia justo lo que hay que poder encontrar.
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        try:
+            from routes.audit import audit
+            await audit(user, "actuar_como",
+                        f"{request.method} {request.url.path} como {objetivo.get('name') or objetivo.get('email')}")
+        except Exception:
+            pass  # el registro no puede tumbar la operacion
+
+    return {**objetivo, CLAVE: {"por_id": user.get("id"),
+                                "por_nombre": user.get("name") or user.get("email") or "el equipo"}}
 
 async def get_admin_user(user: dict = Depends(get_current_user)) -> dict:
     """Verify that the current user is staff (admin OR trainer).

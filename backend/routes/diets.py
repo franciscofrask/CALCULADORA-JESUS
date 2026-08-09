@@ -34,16 +34,26 @@ def _as_dict(v):
     return v if isinstance(v, dict) else {}
 
 
-async def upsert_diet_doc(user_id: str, data: dict) -> dict:
+async def upsert_diet_doc(user_id: str, data: dict, quien: Optional[dict] = None) -> dict:
     """
     Construye el documento de dieta de un día y lo upserta en db.diets sobre
     (user_id, fecha). Forma única compartida por save_diet y el volcado del chatbot
     para que ambos escriban exactamente el mismo shape.
+
+    `quien` es el usuario de la petición, para dejar anotado QUIÉN guardó este día
+    (punto 4.11): «si el entrenador le monta una dieta el martes y el cliente la cambia el
+    miércoles, los dos tienen que poder verlo». Se anota siempre, lo haya hecho el cliente o
+    su entrenador: si solo se marcara la intervención del entrenador, un día sin marca
+    querría decir dos cosas -- lo hizo el cliente, o se guardó antes de que esto existiera --
+    y no habría forma de distinguirlas.
     """
+    from core.actuar_como import marca_de_quien_lo_hizo
+
     fecha = data.get("fecha")
     diet_doc = {
         "user_id": user_id,
         "fecha": fecha,
+        **(marca_de_quien_lo_hizo(quien) if quien else {}),
         "tipo_dia": data.get("tipo_dia", "entrenamiento"),
         "num_comidas": data.get("num_comidas", 4),
         "momento_entreno": data.get("momento_entreno", 1),
@@ -86,7 +96,7 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
         )
         return {"message": "Targets actualizados", "fecha": fecha}
 
-    await upsert_diet_doc(user["id"], data)
+    await upsert_diet_doc(user["id"], data, quien=user)
 
     return {"message": "Dieta guardada", "fecha": fecha}
 
