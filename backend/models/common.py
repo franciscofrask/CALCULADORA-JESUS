@@ -2,7 +2,7 @@
 Modelos Pydantic para rutinas, reportes, mensajes y pagos.
 """
 from datetime import datetime, date
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, Dict, List, Any
 
 # Routine Models
@@ -35,7 +35,13 @@ class RoutineResponse(BaseModel):
 
 # Report Models
 class ReportCreate(BaseModel):
-    weight: float
+    # El mismo rango que acepta la serie de peso, `core/series_cliente` (punto 5.4). El peso
+    # del reporte es de donde salen la grafica, el ajuste del mes y lo que lee el agente: un
+    # 5.000 aqui no se queda quieto en su fila.
+    # OJO: solo en lo que ENTRA. El de salida (`ReportResponse`) va sin limites a proposito,
+    # porque en la base ya hay pesos imposibles de antes y ponerselos haria que un reporte
+    # viejo reventara al leerlo, que es peor que enseñarlo raro.
+    weight: float = Field(..., ge=25, le=300)
     measurements: Optional[Dict[str, float]] = None
     photos: Optional[List[str]] = None
     # Confirmación de huecos: {"dieta": "no_lo_hice"|"si_pero_no_apunte", "entrenamiento": ...}.

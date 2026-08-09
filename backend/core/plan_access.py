@@ -68,11 +68,28 @@ def has_active_access(profile: Optional[Dict[str, Any]]) -> bool:
     # Solo el flujo de checkout one-time escribe access_until, así que no afecta a la
     # base existente (importados/alta manual no tienen este campo).
     access_until = profile.get("access_until")
-    if access_until and access_until < datetime.now(timezone.utc).isoformat():
+    ahora = datetime.now(timezone.utc).isoformat()
+    if access_until and access_until < ahora:
         return False
     # Perfil gestionado por Stripe: manda el estado real de la suscripción.
     if profile.get("stripe_subscription_id"):
         return (profile.get("subscription_status") or "").lower() in ACTIVE_SUBSCRIPTION_STATES
+
+    # SIN STRIPE, SI SE SABE CUANDO ACABA, SE MIRA (punto 5.4). Aquí bastaba con que el perfil
+    # dijera "activo", así que un ciclo terminado dejaba al cliente dentro para siempre: el
+    # estado es una etiqueta que alguien puso una vez y no se entera de que pasa el tiempo.
+    #
+    # Solo `current_period_end`, que es cuando SE ACABA lo pagado. `next_payment` no vale para
+    # esto: que un cobro se retrase no quiere decir que la membresía haya terminado, y cortarle
+    # la app a alguien que paga por un cobro que no ha entrado todavía sería peor que el fallo.
+    #
+    # Medido en producción el 09-08: de 169 perfiles sin Stripe, 168 no tienen ninguna fecha de
+    # fin, así que hoy esto no le quita el acceso a nadie. Es un cerrojo para el que la tenga y
+    # para los que vengan.
+    fin = str(profile.get("current_period_end") or "")
+    if fin and fin[:10] < ahora[:10]:
+        return False
+
     # Sin suscripción Stripe → alta manual/comp/legacy: basta que el perfil esté activo.
     return status == "activo"
 

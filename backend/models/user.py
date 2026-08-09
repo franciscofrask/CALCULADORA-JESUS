@@ -698,12 +698,20 @@ class ClientProfileUpdate(BaseModel):
     # Uso ACTUAL de farmacologia -> +10 g de proteina en descanso. Solo por la ruta de
     # admin: en PUT /users/clients/profile se descarta (el cliente no se lo marca solo).
     farmacologia: Optional[bool] = None
-    weight: Optional[float] = None
-    height: Optional[float] = None
-    age: Optional[int] = None
+    # RANGOS (punto 5.4). Sin esto se guardaban con un 200 tan tranquilo un peso de -80, uno
+    # de 0 y uno de 5.000, y un % graso de 200. De ahi salen los pesos imposibles que aparecen
+    # en el historico, y un peso malo no se queda quieto: entra en la serie, en la grafica, en
+    # el calculo de macros y en lo que lee el agente para proponer el ajuste.
+    #
+    # Los limites son los que ya usaba la app en `core/series_cliente` para aceptar un pesaje
+    # (25-300 kg y 3-60 % de grasa): si un valor no vale para la serie, tampoco vale para el
+    # campo. Los macros ya validaban; esto faltaba.
+    weight: Optional[float] = Field(None, ge=25, le=300)
+    height: Optional[float] = Field(None, ge=100, le=250)
+    age: Optional[int] = Field(None, ge=14, le=100)
     sex: Optional[str] = None
     goal: Optional[str] = None
-    body_fat: Optional[float] = None
+    body_fat: Optional[float] = Field(None, ge=3, le=60)
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None
     # Observaciones del coach sobre el ENTRENAMIENTO: van con la maquinaria y las lesiones
