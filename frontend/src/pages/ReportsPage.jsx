@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
+import GraficaDePeso from '../components/GraficaDePeso';
 import {
     FileText, TrendingUp, Scale, Ruler,
     Activity, Moon, Zap, Brain, Send, ChevronRight,
@@ -287,10 +285,10 @@ const ReportsPage = () => {
     const set = (field, value) => setReportData(prevData => ({ ...prevData, [field]: value }));
     const formOpen = windowState ? (windowState.is_open && !windowState.submitted) : true;
 
-    const weightData = evolution?.weight?.map(w => ({
-        date: new Date(w.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
-        peso: w.value
-    })) || [];
+    // Sin formatear: la gráfica necesita la fecha de verdad para poner el eje en el tiempo.
+    // Antes se le daba ya convertida a «9 ago», y con dietas desde 2022 hay cuatro «9 ago»
+    // distintos que el eje juntaba en una sola columna.
+    const weightData = evolution?.weight?.map(w => ({ fecha: w.date, peso: w.value })) || [];
 
     const tabs = [
         { id: 'form', icon: FileText, label: 'Nuevo' },
@@ -545,20 +543,11 @@ const ReportsPage = () => {
                                 <Scale className="w-4 h-4" style={{ color: ORANGE }} />
                                 <p className="text-sm font-bold text-foreground uppercase tracking-wider">Evolución del peso</p>
                             </div>
-                            <div className="h-56">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={weightData}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                                        <XAxis dataKey="date" tick={{ fill: '#ffffff66', fontSize: 11 }} axisLine={false} tickLine={false} />
-                                        <YAxis domain={['auto', 'auto']} tick={{ fill: '#ffffff66', fontSize: 11 }} axisLine={false} tickLine={false} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #333', borderRadius: 12, color: '#fff' }}
-                                            labelStyle={{ color: '#fff' }}
-                                        />
-                                        <Line type="monotone" dataKey="peso" stroke={ORANGE} strokeWidth={2} dot={{ fill: ORANGE, r: 3 }} />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
+                            {/* La gráfica es la MISMA que ve su entrenador (punto 4.13). Aquí
+                                los ejes iban pintados de blanco a pelo, y esta tarjeta es
+                                blanca en tema claro: eran fechas y kilos escritos en blanco
+                                sobre blanco. */}
+                            <GraficaDePeso puntos={weightData} />
                         </div>
                     ) : (
                         <div className="bg-card border border-border rounded-2xl p-8 text-center">

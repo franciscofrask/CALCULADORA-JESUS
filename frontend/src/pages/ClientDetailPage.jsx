@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import PlantillasFeedback from '../components/PlantillasFeedback';
+import GraficaDePeso from '../components/GraficaDePeso';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -20,7 +21,6 @@ import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import CoachCheckins from '../components/CoachCheckins';
 import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
@@ -3116,34 +3116,19 @@ const CalmaSuplementos = ({ sup }) => {
     );
 };
 
+// La MISMA gráfica que ve el cliente (punto 4.13). Antes eran dos, con los mismos fallos
+// escritos dos veces: el eje por categorías juntando todos los «9 ago» de cuatro años y los
+// colores a pelo. Ahora hay una sola y las dos pantallas enseñan lo mismo.
 const WeightEvolution = ({ reports }) => {
-    const data = (reports || [])
+    const puntos = (reports || [])
         .filter(r => r.weight != null)
-        .map(r => ({ ts: new Date(r.created_at).getTime(), date: new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: '2-digit' }), peso: r.weight }))
-        .sort((a, b) => a.ts - b.ts);
-    if (!data.length) return null;
-    const first = data[0].peso, last = data[data.length - 1].peso;
-    const diff = Math.round((last - first) * 10) / 10;
+        .map(r => ({ fecha: r.created_at, peso: r.weight }));
+    if (!puntos.length) return null;
     return (
         <Card className="bg-[#111] border-[#222]">
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><Scale className="w-4 h-4" />Evolución del peso ({data.length})</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><Scale className="w-4 h-4" />Evolución del peso ({puntos.length})</CardTitle></CardHeader>
             <CardContent>
-                <div className="flex items-center gap-5 mb-3 text-sm">
-                    <div><span className="text-white/40 text-xs mr-1">Inicio</span><span className="text-white font-bold">{first} kg</span></div>
-                    <div><span className="text-white/40 text-xs mr-1">Actual</span><span className="text-white font-bold">{last} kg</span></div>
-                    <div><span className="text-white/40 text-xs mr-1">Cambio</span><span className="text-white font-bold">{diff > 0 ? '+' : ''}{diff} kg</span></div>
-                </div>
-                <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={data} margin={{ top: 5, right: 8, bottom: 0, left: -8 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                            <XAxis dataKey="date" tick={{ fill: '#ffffff66', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={28} />
-                            <YAxis domain={['auto', 'auto']} tick={{ fill: '#ffffff66', fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-                            <Tooltip contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #333', borderRadius: 12, color: '#fff' }} labelStyle={{ color: '#fff' }} formatter={(v) => [`${v} kg`, 'Peso']} />
-                            <Line type="monotone" dataKey="peso" stroke="#FF671F" strokeWidth={2} dot={{ fill: '#FF671F', r: 2 }} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
+                <GraficaDePeso puntos={puntos} />
             </CardContent>
         </Card>
     );
