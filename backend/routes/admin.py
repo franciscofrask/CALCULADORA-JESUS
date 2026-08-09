@@ -125,6 +125,21 @@ def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
     return {**celdas, "peor": semaforo.peor(*[c["estado"] for c in celdas.values()])}
 
 
+async def _fuera_el_equipo() -> Dict[str, Any]:
+    """Filtro de `client_profiles` que deja fuera los perfiles del equipo.
+
+    Jesús, 09-08-2026: *«los 13 usuarios figuran con plan Gold (legacy), incluidos Admin y
+    Jesús»*, y salían tanto en la lista de clientes como en todos los contadores del panel
+    -- clientes totales, activos, MRR, el semáforo de "hay que mirarlos" --. Once de los
+    trece tienen perfil de cliente con plan, así que no era una fila suelta.
+
+    Los perfiles no se tocan: hacen falta para que el equipo pueda usar la app en modo
+    cliente y probar las pantallas. Lo que se quita es que cuenten como negocio.
+    """
+    del_equipo = await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}})
+    return {"user_id": {"$nin": del_equipo}} if del_equipo else {}
+
+
 @router.get("/clients", response_model=List[Dict[str, Any]])
 async def get_all_clients(
     plan: Optional[str] = None,
@@ -155,6 +170,11 @@ async def get_all_clients(
             query["trainer_id"] = user["id"]        # "solo los míos", sin los libres
         else:
             return []                               # los de otro coach no son cosa suya
+
+    # El equipo fuera de la lista de clientes. Jesús, 09-08: los 13 usuarios del equipo
+    # figuraban como clientes con plan Gold, él y el admin incluidos, y salían mezclados
+    # con los de verdad y contando en todos los números del panel.
+    query.update(await _fuera_el_equipo())
 
     # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
     # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).
@@ -1223,9 +1243,12 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     now = datetime.now(timezone.utc)
     first_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    total = await db.client_profiles.count_documents({})
-    active = await db.client_profiles.count_documents({"status": "activo"})
-    inactive = await db.client_profiles.count_documents({"status": {"$in": ["inactivo", "baja", "cancelado"]}})
+    # Sin el equipo: son 11 perfiles con plan que no son negocio (ver _fuera_el_equipo).
+    solo_clientes = await _fuera_el_equipo()
+    total = await db.client_profiles.count_documents(solo_clientes)
+    active = await db.client_profiles.count_documents({**solo_clientes, "status": "activo"})
+    inactive = await db.client_profiles.count_documents(
+        {**solo_clientes, "status": {"$in": ["inactivo", "baja", "cancelado"]}})
 
     # HAY QUE MIRARLOS (punto 32 del 07-08). Antes esto era "en riesgo": activo, semana >= 3
     # y sin reporte en 14 dias. Saltaba para el 76% de los activos, o sea que no era una
@@ -1236,7 +1259,7 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     # DE SU PLAN y no contra un 14 fijo, y solo cuenta el que tiene alguna celda en
     # regular-malo o peor. Los `info` (lo que su plan no incluye) no cuentan.
     active_profiles = await db.client_profiles.find(
-        {"status": "activo"},
+        {**solo_clientes, "status": "activo"},
         # OJO con `status`: `has_active_access` lo lee, y sin el en la proyeccion daba
         # "pago pendiente" a todo el mundo y el semaforo salia rojo entero.
         {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "created_at": 1, "cycle_start": 1,
@@ -1267,6 +1290,7 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
 
     # Bajas del mes
     bajas_mes = await db.client_profiles.count_documents({
+        **solo_clientes,
         "status": {"$in": ["baja", "cancelado", "inactivo"]},
     })
 
@@ -1275,7 +1299,9 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     plans = {}
     mrr = 0
     async for row in db.client_profiles.aggregate([
-        {"$match": {"status": "activo"}},
+        # El MRR y el reparto por plan, también sin el equipo: si no, los once perfiles del
+        # equipo con plan Gold sumaban a la facturación mensual.
+        {"$match": {**solo_clientes, "status": "activo"}},
         {"$group": {"_id": "$plan", "count": {"$sum": 1}, "mrr": {"$sum": {"$ifNull": ["$price", 0]}}}},
     ]):
         plans[row["_id"] or "sin_plan"] = row["count"]
