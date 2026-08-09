@@ -585,7 +585,8 @@ const MacrosEnVivo = ({ macros, previos, calculando }) => {
             <span className="text-[10px] uppercase tracking-wider text-foreground/30">Tus macros</span>
             {linea('Entreno', hcE, previos?.entreno?.hidratos)}
             {linea('Descanso', hcD, previos?.descanso?.hidratos)}
-            {linea('Peri', macros.perientreno?.hidratos, previos?.perientreno?.hidratos)}
+            {/* «Perientreno», el mismo nombre que en el resto de la app (punto 4.18). */}
+            {linea('Perientreno', macros.perientreno?.hidratos, previos?.perientreno?.hidratos)}
         </div>
     );
 };

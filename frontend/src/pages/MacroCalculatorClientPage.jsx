@@ -515,7 +515,10 @@ const MacroCalculatorClientPage = () => {
                                     <div className="grid grid-cols-3 gap-2 text-center">
                                         {[
                                             ['Entreno', results.macros.entreno.proteina, results.macros.entreno.hidratos, results.macros.entreno.grasa],
-                                            ['Peri', results.macros.perientreno.proteina, results.macros.perientreno.hidratos, null],
+                                            // «Perientreno», nunca «Peri» (punto 4.18): el bloque
+                                            // se llamaba de tres maneras distintas por la app y
+                                            // el cliente no tenía por qué saber que son lo mismo.
+                                            ['Perientreno', results.macros.perientreno.proteina, results.macros.perientreno.hidratos, null],
                                             ['Descanso', results.macros.descanso.proteina, results.macros.descanso.hidratos, results.macros.descanso.grasa],
                                         ].map(([lbl, p, h, g]) => (
                                             <div key={lbl} className="bg-muted border border-border rounded-xl py-2.5">
