@@ -150,11 +150,17 @@ const PhotosSection = ({ api }) => {
                 </div>
                 <button onClick={() => navigate('/dashboard/reports')}
                     className="text-xs text-brand hover:underline underline-offset-4 font-semibold">
-                    Se suben en tu reporte
+                    Se suben en tu reporte mensual
                 </button>
             </div>
+            {/* MENSUAL, y no «tu reporte» a secas: las fotos y las medidas solo se piden en
+                el reporte mensual (semanas 3, 7, 11...), así que en una semana normal el
+                cliente iba a Reportes, no encontraba dónde subirlas y la app quedaba como
+                si le mintiera. Es lo que reportó Jesús el 09-08. */}
             {photos.length === 0 ? (
-                <p className="text-foreground/40 text-center py-6 text-sm">Aún no has subido fotos. Se suben al rellenar tu reporte.</p>
+                <p className="text-foreground/40 text-center py-6 text-sm">
+                    Aún no has subido fotos. Se piden en el reporte mensual, junto con las medidas.
+                </p>
             ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                     {photos.map(p => <PhotoThumb key={p.id} photo={p} api={api} onDeleted={remove} />)}
