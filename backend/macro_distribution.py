@@ -10,6 +10,7 @@ Periworkout: Intra 20%P/30%H, Post 80%P/70%H (con variantes).
 """
 
 from typing import Dict, List, Optional
+import logging
 import math
 
 
@@ -355,12 +356,57 @@ def distribuir_macros(
     # con un KeyError. Eso llega como un 500 a /distribute, y la pantalla de Nutricion se queda
     # con TODOS los objetivos por comida a cero (se ve como "todo sobra"). Ante un valor que no
     # existe se usa el de siempre, "despues de la Comida 1", que es el que ya asumen las rutas.
+    corregido = []   # lo que llego mal y hubo que arreglar, para poder decirlo
+
     try:
-        momento_entreno = int(momento_entreno)
+        _m = int(momento_entreno)
     except (TypeError, ValueError):
-        momento_entreno = 1
-    if momento_entreno not in (0, 1, 2, 3):
-        momento_entreno = 1
+        _m = None
+    if _m not in (0, 1, 2, 3):
+        corregido.append(f"momento_entreno={momento_entreno!r} no es 0-3: se usa 1")
+        _m = 1
+    momento_entreno = _m
+
+    # NUM_COMIDAS: 3 o 4, y nada mas (punto 5.4). Cualquier otro valor caia en el `else` y se
+    # trataba como 4 sin decir nada: un cliente configurado a 5 comidas recibia el reparto de
+    # cuatro y la quinta se quedaba a cero, que en pantalla se ve como "todo sobra".
+    try:
+        _n = int(num_comidas)
+    except (TypeError, ValueError):
+        _n = None
+    if _n not in (3, 4):
+        corregido.append(f"num_comidas={num_comidas!r} no es 3 ni 4: se usa 4")
+        _n = 4
+    num_comidas = _n
+
+    # Y NADA NEGATIVO. Con -50 de hidratos el reparto devolvia -50 en una comida tan tranquilo,
+    # y de ahi salen objetivos negativos en la pantalla. Un macro negativo no es un macro
+    # pequeño: es un dato roto, y repartirlo es propagarlo.
+    def _no_negativo(valor, nombre):
+        try:
+            v = float(valor or 0)
+        except (TypeError, ValueError):
+            v = 0.0
+        if v < 0:
+            corregido.append(f"{nombre}={valor!r} es negativo: se usa 0")
+            return 0.0
+        return v
+
+    p_entreno = _no_negativo(p_entreno, "p_entreno")
+    h_entreno = _no_negativo(h_entreno, "h_entreno")
+    g_entreno = _no_negativo(g_entreno, "g_entreno")
+    p_peri = _no_negativo(p_peri, "p_peri")
+    h_peri = _no_negativo(h_peri, "h_peri")
+    p_descanso = _no_negativo(p_descanso, "p_descanso")
+    h_descanso = _no_negativo(h_descanso, "h_descanso")
+    g_descanso = _no_negativo(g_descanso, "g_descanso")
+
+    # Se corrige y se sigue -- dejar al cliente sin reparto es peor --, pero queda escrito.
+    # Un valor malo que se arregla en silencio se queda para siempre: nadie va a buscar lo que
+    # nadie ha dicho que este pasando.
+    if corregido:
+        logging.getLogger("uvicorn.error").warning(
+            "distribuir_macros recibio valores fuera de rango: %s", "; ".join(corregido))
 
     # === DÍA DE DESCANSO ===
     if tipo_dia == "descanso":
