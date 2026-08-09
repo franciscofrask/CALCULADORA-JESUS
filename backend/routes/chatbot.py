@@ -55,34 +55,18 @@ async def chatbot_start(current_user: dict = Depends(get_current_user)):
         {"_id": 0}
     )
     
-    user_macros = {}
-    if profile:
-        mt = profile.get("macros_training", {})
-        mr = profile.get("macros_rest", {})
-        mp = profile.get("macros_periworkout", {})
-        
-        user_macros = {
-            "p_entreno": mt.get("proteinas", 160),
-            "h_entreno": mt.get("hidratos", 50),
-            "g_entreno": mt.get("grasas", 40),
-            "p_peri": mp.get("proteinas", 35),
-            "h_peri": mp.get("hidratos", 15),
-            "p_descanso": mr.get("proteinas", 140),
-            "h_descanso": mr.get("hidratos", 40),
-            "g_descanso": mr.get("grasas", 40)
-        }
-    else:
-        user_macros = {
-            "p_entreno": 160,
-            "h_entreno": 50,
-            "g_entreno": 40,
-            "p_peri": 35,
-            "h_peri": 15,
-            "p_descanso": 140,
-            "h_descanso": 40,
-            "g_descanso": 40
-        }
-    
+    # Los macros salen de `macros_por_fecha`, la MISMA función que usa la pantalla de
+    # Nutrición. Aquí se leían del perfil (`macros_training`) y ahí, del historial vigente
+    # para el día: 70 g de hidratos de diferencia al día para el mismo cliente, porque el
+    # perfil se queda viejo en cuanto hay una revisión de macros, y 210 de los 236 clientes
+    # tienen revisiones.
+    #
+    # Al arrancar todavía no se sabe qué día se va a montar (lo dice el front en
+    # /configure), así que se resuelve para HOY y se recalcula allí con la fecha buena.
+    from macros_por_fecha import para_el_chat
+    user_macros = await para_el_chat(db, profile, datetime.now().strftime("%Y-%m-%d"))
+
+
     chatbot = await get_or_create_chatbot(session_id, db, user_macros)
 
     # Cargar preferencias del usuario para filtrar las sugerencias de alimentos
@@ -112,6 +96,16 @@ async def chatbot_configure(
 
     if config.fecha:
         chatbot.state["fecha_objetivo"] = config.fecha
+
+    # Los macros de un cliente cambian con el tiempo, así que se resuelven PARA EL DÍA que
+    # se va a montar, no una vez al arrancar la sesión. Sin esto, cambiar de día dentro de
+    # la conversación («móntame el de mañana») dejaba los objetivos del día anterior.
+    if config.fecha:
+        from macros_por_fecha import para_el_chat
+        user_id = current_user.get("id") or current_user.get("user_id")
+        profile = await db.client_profiles.find_one({"user_id": user_id}, {"_id": 0})
+        if profile:
+            chatbot.set_user_macros(await para_el_chat(db, profile, config.fecha))
 
     distribucion = chatbot.configure_day(
         tipo_dia=config.tipo_dia,

@@ -191,17 +191,24 @@ class AgentTools:
                                                   solo_ids=set(universo))
                 orden.extend(h["id"] for h in sem if h["id"] not in set(orden))
         else:
-            driver = para_macro if para_macro in ("P", "H", "G") else \
-                max(("P", "H", "G"), key=lambda m: restante[m])
-            from meal_builder import get_effective_macros_per_100g
-            orden = sorted(universo,
-                           key=lambda i: -get_effective_macros_per_100g(universo[i]).get(driver, 0))
-            # Sin texto no hay una petición concreta que respetar: barajar la cabeza da
-            # variedad entre sesiones (mismo criterio que el sugeridor de siempre).
-            import random
-            cabeza, resto = orden[:10], orden[10:]
-            random.shuffle(cabeza)
-            orden = cabeza + resto
+            # Sin texto la petición ES el macro («dame algo de proteína»), y ahí lo que
+            # manda es CUÁNTO DESAJUSTA cada alimento, no cuánto aporta del macro que falta.
+            #
+            # Esto ordenaba por `macros_por_100g[macro que falta]`, que es literalmente
+            # «mirar el macro que falta sin mirar lo que desajusta al meterlo» (punto 76
+            # del documento de Jesús). Con 9,3 g de proteína y 6,2 de grasa pendientes
+            # salían en el puesto 6 un aislado de 89,9 g de proteína y una tortita de maíz
+            # de 125 g de grasa. Ordenando por distancia esos se van al final solos y suben
+            # las brochetas de pollo, que dan 9,2 P y 6,2 G: distancia 0,1.
+            #
+            # Se mira el catálogo ENTERO y se ordena después, con cada alimento ya
+            # dimensionado. Acotar antes por «lo que más aporta por 100 g» -- que es lo que
+            # se hacía -- deja fuera justo lo que se busca: los primeros son siempre los
+            # concentrados, así que las brochetas de pollo (9,2 P y 6,2 G, distancia 0,1)
+            # ni llegaban a competir con un aislado (9 P y 0 G, distancia 6,5). Medido:
+            # dimensionar los 3.211 alimentos cuesta 0,53 s, nada al lado de lo que tarda
+            # el modelo en contestar.
+            orden = list(universo)
 
         # --- filtros duros (datos del catálogo, nunca juicios)
         marca_norm = self.bot._norm_text(marca) if marca else None
@@ -271,8 +278,15 @@ class AgentTools:
             elif para_macro in ("P", "H", "G") and macros.get(para_macro, 0) <= 0:
                 continue
             items.append(self._item_de(food, cantidad_g, macros))
-            if len(items) >= limite:
+            # Con texto se corta ya: el orden lo manda lo que pidió el cliente y los
+            # primeros son los suyos. Sin texto NO se corta, porque el orden bueno es por
+            # distancia y esa solo se sabe con el alimento dimensionado: quedarse con los
+            # primeros que pasan los filtros es de donde salían los disparates.
+            if texto and len(items) >= limite:
                 break
+
+        if not texto and items:
+            items = self._ordenar_por_distancia(items, restante)[:limite]
 
         out = {"items": items,
                "comida": describe_comida(self.bot.current_meal_key(),
@@ -383,6 +397,40 @@ class AgentTools:
                     and self.companyia.coincidencias(food, otro) >= self.VECES_PARA_ACOMPANAR:
                 return True
         return False
+
+    # Dos alimentos que se desvían 1,5 g y 3 g del hueco son igual de buenos: compiten en
+    # el mismo tramo y dentro se baraja. Sin esto ganaría siempre el mismo y volveríamos a
+    # tener el sugeridor que da lo mismo a todo el mundo.
+    ESCALON_DISTANCIA = 3.0
+
+    def _ordenar_por_distancia(self, items: List[dict], restante: dict) -> List[dict]:
+        """Los que menos desajustan la comida, primero (`diferenciaDeMacros` de Calma).
+
+        Punto 76 del documento del 07-08: «ordenar por |ΔP| + |ΔH| + |ΔG| respecto al
+        hueco, de menor a mayor». La función ya existía en el motor y la calculadora ya
+        ordenaba así; el asistente no. Ordenaba por lo que más aportaba del macro que
+        faltaba, y por eso con 9,3 g de proteína pendientes ofrecía un aislado de 89,9.
+
+        Arregla de paso el punto 78 (polvos por delante de la comida real) sin penalizar
+        nada a mano: un aislado da 9 g de proteína y 0 de grasa -- distancia 6,5 --,
+        mientras que unas brochetas de pollo dan 9,2 P y 6,2 G a la vez, distancia 0,1. La
+        comida real gana sola porque cubre los dos macros de un golpe.
+        """
+        from calma_suggest import diferencia_de_macros
+        hueco = {"proteinas": float(restante.get("P", 0) or 0),
+                 "hidratos": float(restante.get("H", 0) or 0),
+                 "grasas": float(restante.get("G", 0) or 0)}
+
+        def distancia(it):
+            m = it.get("macros") or {}
+            return diferencia_de_macros(
+                {"proteinas": m.get("P", 0), "hidratos": m.get("H", 0), "grasas": m.get("G", 0)},
+                hueco)
+
+        import random
+        rng = random.Random(self._semilla_variedad())
+        rng.shuffle(items)
+        return sorted(items, key=lambda it: int(distancia(it) // self.ESCALON_DISTANCIA))
 
     def _semilla_variedad(self) -> int:
         """Con qué se baraja: estable por CLIENTE, DÍA y COMIDA.

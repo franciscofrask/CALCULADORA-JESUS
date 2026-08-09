@@ -3219,3 +3219,111 @@ importar --, pero mientras no esté, cada receta nueva hay que clasificarla a ma
 **Pasar la cosecha en producción** (punto 71). `_cosechar_menus.py` se ha pasado en dev, no en
 producción, y ahí las bases son distintas. Conviene dejarlo puesto una vez por semana, que es
 para lo que está pensado.
+
+
+# Bloque K - El asistente de IA
+
+Los cinco puntos que Jesús marcó como imprescindibles para el domingo. Francisco pidió
+analizarlos **sin tocar nada** antes de decidir. Ese análisis cambió el plan: de los cinco,
+tres eran reales, uno se arregló solo con otro y otro ya estaba hecho.
+
+Aviso de método: las rutas del documento (`src/utils/diets.utils.ts:392-403`) son del bundle
+de **Calma**, no de nuestro repo. Todo se buscó por comportamiento.
+
+## 76 y 78 - Ordenar por distancia total (y los polvos se van solos)
+
+Jesús acertaba en el diagnóstico **y en la solución**. La fórmula que pedía --
+Σ|ΔP| + |ΔH| + |ΔG| respecto al hueco -- ya existía en nuestro motor: `diferencia_de_macros`,
+con el comentario *«Calma Ze()»*. Y la **calculadora ya ordenaba por ella**. Quien no la
+usaba era el asistente: ordenaba por `macros_por_100g[macro que falta]`, que es literalmente
+«mirar el macro que falta sin mirar lo que desajusta al meterlo».
+
+Reproducido con su escenario exacto (9,3 g de proteína y 6,2 de grasa pendientes):
+
+```
+                        ANTES (peor de los 10)                AHORA
+pide proteína     86,8  aislado de 89,9 g de P         2,8   huevos, salmón, jamón ibérico
+pide grasa       133,6  tortita de maíz, 125 g de G    2,9   lomo ibérico (0,4), carne picada
+suplementos      10/10                                 0/10
+```
+
+**El 78 no hizo falta arreglarlo aparte**, exactamente como decía Jesús que pasaría: un
+aislado da 9 g de proteína y 0 de grasa -- distancia 6,5 --, mientras que unas brochetas de
+pollo dan 9,2 P **y** 6,2 G a la vez: distancia 0,1. La comida real gana sola porque cubre
+los dos macros de un golpe. Sin listas negras y sin penalizar nada.
+
+Tres cosas que costó ver:
+
+- **Ordenar no bastaba.** Antes de ordenar se acotaba el universo por «lo que más aporta
+  por 100 g», y ahí los primeros son siempre los concentrados: las brochetas ni llegaban a
+  competir. Hay que mirar el catálogo entero. Medido: dimensionar las 3.211 fichas cuesta
+  **0,53 s** y la búsqueda entera tarda **355 ms**, nada al lado de lo que tarda el modelo.
+- **Solo cuando no hay texto.** Si el cliente pide «pollo», manda lo pedido; el orden por
+  distancia es para «dame algo de proteína». Lo contrario habría deshecho el arreglo del
+  08-08.
+- **Con escalones, o se pierde la variedad.** Ordenar por distancia a secas hace ganar
+  siempre al mismo. Se agrupa en tramos de 3 g y dentro se baraja, con la semilla por
+  cliente-día-comida.
+
+En el peri no cambia nada: ahí los polvos son lo que toca y su universo de categorías ya lo
+acota (comprobado: en el intra siguen saliendo palatinosa, amilopectina e iso drink).
+
+Y un caso que parece un fallo y no lo es: con 3 g de proteína pendientes y los hidratos y la
+grasa ya pasados, ofrece 5 g de aislado. Es correcto -- cualquier comida real arrastraría lo
+que ya sobra --, y es el criterio de Jesús funcionando.
+
+## 80 - Los objetivos no coincidían: 70 g de hidratos al día
+
+El más grave de los cinco, y el diagnóstico inicial fue **equivocado**: buscando el
+historial de macros como un campo de `client_profiles` salió que ningún cliente tenía, y
+por ahí parecía un fallo latente. Francisco corrigió -- *«todos los clientes tienen historial
+de macros»* -- y tenía razón: `macro_history` es una **colección propia con 3.439 entradas**,
+y la tienen **210 de los 236 clientes**.
+
+Con eso, la comparación directa para el mismo cliente y el mismo día:
+
+```
+             C1                       día      H entreno
+Nutrición    47,5 P / 51 H / 12 G     220 H       170     <- historial vigente ese día
+Asistente    47,5 P / 72 H / 12 G     290 H       240     <- el perfil, que se queda viejo
+```
+
+**70 g de hidratos y 280 kcal de diferencia.** La proteína y la grasa coincidían; los
+hidratos no. Los macros cambian con el ajuste mensual y cada cambio queda en `macro_history`
+con su `effective_date`; Nutrición leía de ahí (replicando `todosLosMacros` de Calma) y el
+asistente leía la foto suelta del perfil.
+
+Ahora los dos llaman a **`macros_por_fecha`**, que es una sola función -- que es lo que pedía
+el punto: *«unificar de dónde lee el objetivo»*. Y el asistente los recalcula en
+`/configure` con la fecha que se va a montar, no una vez al arrancar la sesión: sin eso,
+cambiar de día dentro de la conversación dejaba los objetivos del día anterior.
+
+```
+2026-08-20   Nutrición 47,5 P / 51 H / 12 G   =   Asistente 47,5 P / 51 H / 12 G
+2026-07-15   Nutrición 42,5 P / 36 H / 10 G   =   Asistente 42,5 P / 36 H / 10 G
+```
+
+(Las dos fechas dan distinto entre sí: el historial funciona y ahora el asistente lo respeta.)
+
+## 79 - Ya estaba hecho
+
+*«Que la sugerencia sea accionable: un botón que la aplique.»* El asistente ya lo tiene: las
+sugerencias son botones (`onElegir`) y cada menú lleva su «Elegir este menú» (`onAplicar`).
+Francisco lo dio por cerrado.
+
+## 77 - Pendiente, y con el dato ya en casa
+
+*«No sabe qué comida está montando.»* Sí lo sabe -- detecta 'desayuno', 'cena' correctamente
+-- y el perfil de momento discrimina de sobra:
+
+```
+                 desayuno  comida  merienda  cena
+Huevos enteros L   2.32     0.48     0.24    0.66
+Pechuga de pollo   0.24     2.05     0.56    1.21
+Salmón             0.03     1.06     0.55    2.20
+```
+
+Lo que falta es **usarlo para ordenar**, no solo para vetar lo muy atípico. Hoy los aislados
+puntúan 0,41-1,07 en todos los momentos, pasan el filtro y por eso el desayuno y la cena
+devolvían la misma lista. Queda para el siguiente turno.
+

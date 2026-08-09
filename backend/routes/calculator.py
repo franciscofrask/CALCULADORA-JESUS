@@ -503,35 +503,18 @@ async def test_calma(user = Depends(get_current_user)):
 
 # ==================== DISTRIBUTE MACROS ====================
 
+# La lógica vive en `macros_por_fecha`, compartida con el asistente. Estaba solo aquí, y
+# el asistente leía el perfil por su cuenta: 70 g de hidratos de diferencia al día para el
+# mismo cliente (punto 80 del documento del 07-08). Se dejan estos dos nombres porque el
+# resto del fichero los usa.
 async def _choose_macro_entry_for_date(profile: dict, fecha: Optional[str]):
-    """Return the macro_history entry effective for `fecha` (latest effective_date <= fecha;
-    before any change -> earliest entry), or None when there's no history / no fecha."""
-    if not fecha:
-        return None
-    entries = await db.macro_history.find({"client_id": profile.get("id")}, {"_id": 0}).to_list(500)
-    if not entries:
-        return None
-    def eff(e):  # effective date (fallback to the created_at date part for legacy entries)
-        return e.get("effective_date") or str(e.get("created_at", ""))[:10]
-    applicable = [e for e in entries if eff(e) and eff(e) <= fecha]
-    return (max(applicable, key=lambda e: (eff(e), e.get("created_at", "")))
-            if applicable else min(entries, key=lambda e: (eff(e), e.get("created_at", ""))))
+    from macros_por_fecha import elegir_entrada
+    return await elegir_entrada(db, profile, fecha)
 
 
 async def _resolve_macros_for_date(profile: dict, fecha: Optional[str]):
-    """Date-versioned macros (Calma todosLosMacros / esDiaConCambioDeMacros): return the macros
-    effective for `fecha` = the macro_history entry with the latest effective_date <= fecha.
-    Before any change -> the earliest entry. No history -> the profile's current macros."""
-    cur_training = profile.get("macros_training") or {}
-    cur_rest = profile.get("macros_rest") or {}
-    cur_peri = profile.get("macros_periworkout") or profile.get("macros_peri") or {}
-    chosen = await _choose_macro_entry_for_date(profile, fecha)
-    if not chosen:
-        return cur_training, cur_rest, cur_peri
-    training = chosen.get("new_training") or chosen.get("training") or cur_training
-    rest = chosen.get("new_rest") or chosen.get("rest") or cur_rest
-    peri = chosen.get("peri") or cur_peri  # legacy entries have no peri -> current
-    return training, rest, peri
+    from macros_por_fecha import resolver
+    return await resolver(db, profile, fecha)
 
 
 @router.post("/distribute")
