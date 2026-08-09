@@ -3346,3 +3346,164 @@ Lo que falta es **usarlo para ordenar**, no solo para vetar lo muy atípico. Hoy
 puntúan 0,41-1,07 en todos los momentos, pasan el filtro y por eso el desayuno y la cena
 devolvían la misma lista. Queda para el siguiente turno.
 
+
+---
+
+# Revisión del 09-08 (segunda tanda)
+
+## 21 y 2.2 - Las fotos no tenían dónde subirse. ARREGLADO
+
+Jesús corrigió su primera valoración: Check-ins anuncia «se suben en tu reporte» y en el
+reporte de un cliente real no hay subida. Tenía razón, y el parche que puse esa mañana
+(cambiar el texto a «tu reporte **mensual**») avisaba de la contradicción sin quitarla.
+
+La causa: `{esMensual && <TresFotos/>}`, y además **dentro del `<fieldset disabled>`** que se
+apaga cuando la ventana de envío está cerrada. O sea que tres de cada cuatro semanas no había
+nada que pulsar, y en las semanas sin ventana tampoco.
+
+Ahora el bloque está **siempre y fuera del fieldset**. Una foto no es un campo del reporte: se
+sube sola, en su propia petición. Que se *pidan* en el mensual es una cosa; que el resto del
+mes no se puedan subir es otra. Cuando no toca, el texto cambia: «hoy no hacen falta, si ya
+las tienes súbelas».
+
+## 48, 49, 50, 51 y 52 - La comparativa SÍ estaba. No se llegaba a ella
+
+Verificado en producción el 09-08, ficha de Carlos Ruiz Bellido, pestaña Seguimiento:
+
+```
+COMPARATIVA
+ DE DÓNDE VENGO      QUÉ HE HECHO ESTE MES     CÓMO ESTOY HOY
+ 24/07/2023          22/09/2024                28/10/2024
+ 92 kg               99 kg                     99.1 kg
+ [% graso]           [% graso]                 [% graso]
+ [Ampliar comparativa]              [Mostrar todas]
+ Sin cambio de fase registrado: la comparativa se queda en tres.
+```
+
+Etiquetas (48), mes a mes (49), la regla de no repetir (50), lo que va debajo -- fecha, peso,
+% graso editable y medidas -- (52) y los dos botones (51). Está entera.
+
+Jesús no pudo verla porque `/admin/clients` estaba roto (punto 2.1) y lo que sí vio fue el
+**álbum del cliente**, que es otra pantalla. Ahí sí faltaba todo, y de paso apareció un fallo
+de verdad:
+
+- **La pose se estaba tirando.** `ComparativaFases` forzaba `pose: 'Sin clasificar'` para las
+  fotos de la app en vez de leer `p.pose`. El backend la guarda desde el 06-08 y nadie la
+  usaba, así que la comparativa no podía poner una espalda debajo de otra espalda.
+- **El álbum del cliente** era una parrilla plana de todos los meses mezclados. Ahora va por
+  meses y, dentro del mes, por pose, con la pose escrita en la miniatura.
+
+Dato de producción: **las 180 fotos que hay tienen la pose vacía**. Se subieron antes de que
+existiera el campo. Las nuevas ya entran con pose por las tres casillas del reporte.
+
+## 62 - Tres caminos para guardar macros. ARREGLADO
+
+Medido en prod: 3.596 filas, **25 días con más de una y 92 filas de más**, y 48 huérfanas
+apuntando a clientes que ya no existen (los usuarios de prueba borrados el 09-08).
+
+Jesús acotó bien: el formulario de la ficha crea UNA fila. Las duplicadas llevan firma de
+**clientes** (Agus Ortega, Jordi Matamoros, Gonzalo Rubio) y fechas de creación separadas por
+segundos o minutos: es la **calculadora del cliente**, que guarda cada vez que pulsa.
+
+Los seis caminos que escribían hacían un insert directo. Ahora todos pasan por
+`core/historial_macros.guardar()`:
+
+- una fila por (cliente, fecha de vigencia), y **la última manda** -- es una corrección, no dos
+  ajustes; misma regla que las series de peso;
+- la sustituida se archiva entera en `macro_history_auditoria`, que es la tabla de auditoría
+  aparte que pedía;
+- se conserva el **«de dónde venía» real**: si a las 19:41 pasa de 200 a 230 y a las 19:45 de
+  230 a 240, la fila que queda dice «de 200 a 240». El 230 no lo vio nadie;
+- índice único parcial de cinturón, para la carrera de dos guardados a la vez.
+
+No era solo ruido: `macros_por_fecha.resolver()` elige la entrada vigente de un día, y con
+cinco candidatas para la misma fecha ganaba la que devolviera Mongo primero.
+
+`_limpiar_historial_macros.py` limpia lo que ya existe (ensayo por defecto). **Falta correrlo
+en producción.**
+
+## 22 - Las fechas futuras. ARREGLADO donde se ve
+
+31 reportes y 37 entradas de macros con fecha por delante de hoy. **Casi todas son de la
+importación de Calma** sobre el perfil del propio Jesús, que es cliente de sí mismo: un día
+sin año en el origen se convirtió en un día de este año que todavía no ha llegado.
+
+`core/sin_futuro.py` pone el corte donde se muestra y donde se calcula: el historial del
+cliente, la gráfica de evolución, la ficha del coach, el historial de macros, el aviso de
+«hace X que no te pesas» y el cálculo de ciclo. **No se borra nada**: adivinar el año bueno
+sería inventárselo.
+
+## 17 - Un solo cuestionario. ARREGLADO por los dos lados
+
+El recorrido ya era uno solo: quien se da de alta encadena las cuatro preguntas de partida, el
+ajuste y el perfil largo sin cortes. Lo que fallaba eran dos cosas distintas:
+
+- **Los dos avisos de Inicio salían a la vez**, y eso es lo que hacía que pareciera que hay dos
+  cuestionarios. El segundo solo sale ya cuando el primero está hecho.
+- **La pestaña Cuestionario del coach no enseñaba las respuestas que deciden los macros.**
+  Enseñaba seis campos y el cuestionario largo; lo que el cliente contestó en «Ajusta tus
+  macros» se guarda desde el 06-08 y no se pintaba en ninguna parte. Ahora hay un bloque «Lo
+  que contestó y mueve sus macros», con «cómo le va» el primero.
+
+## 19 - Cuatro respuestas. ARREGLADO, y traía algo peor
+
+El cuestionario de alta ya preguntaba las cuatro del documento de textos. La que seguía con
+SÍ/NO era **la calculadora del cliente**, así que la misma pregunta daba respuestas distintas
+según por dónde entrara.
+
+Y al mirarla apareció el punto 4.1 entero: **«¿mantienes el peso, ganas o pierdes?» no se
+preguntaba nunca desde esa pantalla**. `macro_engine` la usa (es la matriz de P8) y recibía un
+valor vacío, así que caía en su valor por defecto -- «mantengo» -- en **todos** los reajustes
+hechos desde la app. Es la pregunta que sitúa lo que come respecto a su mantenimiento sin
+pedirle un número. Ya está, con las opciones que cambian según el objetivo.
+
+## 6 - Redondear las cantidades. ARREGLADO
+
+Jesús lo dejó en «queda por comprobar montando una comida desde cero con el asistente». Ahí
+estaba: `calma_suggest` dimensiona con un paso de 1 g, o sea de gramo en gramo, que es lo que
+hacía Calma. De ahí los 223 g de pechuga y los 42 g de whey.
+
+`redondeo_salida.py` se escribió el 07-08 justo para esto, pero solo estaba enchufado en el
+recetario. Ahora también en `_size_food`, que es por donde el asistente monta una comida, con
+los macros **recalculados sobre la cantidad ya redondeada** (enseñar «200 g y 46 P» cuando los
+46 P eran de 223 g sería peor que el número feo).
+
+Comprobado contra el catálogo real: **900 cantidades sobre 300 alimentos, ninguna sin
+redondear**. La pechuga sale a 235 g, el arroz a 75, el aceite a 10.
+
+## 60 - Duplicados del catálogo. BARRIDO ENTERO
+
+`_duplicados_catalogo.py`, con tres redes y una cuarta que apareció por el camino.
+
+```
+3.211 alimentos
+   17 duplicados seguros (mismo nombre exacto)
+   51 pares con nombre parecido y la MISMA tabla, que hay que mirar
+   68 parejas marca/genérico: A PROPÓSITO (marca = con URL, genérico = sin ella)
+1.670 pares con nombre parecido pero tabla distinta: productos distintos
+    7 tablas imposibles
+```
+
+Los 1.670 incluyen el ejemplo del punto -- pistacho genérico / tostados con sal / sin sal -- y
+tienen que seguir estando. Las 68 parejas marca/genérico también.
+
+Lo que sí hay que mirar:
+
+- **Crema de arroz sin azúcares añadidos (Hero Baby)** aparece dos veces, con **1.691 y 1.831
+  usos**, y con macros distintos (7,5/84/1,5 contra 8,0/85/1,0).
+- **Albóndigas de pollo (Hacendado)**: 17,9 P en una y 1,3 P en la otra. Una de las dos está
+  mal.
+- **Tortita de maíz (Hacendado)**: una unidad de 7 g con **125 g de grasa**. No tiene usos,
+  pero está en el catálogo y el motor dimensiona contra ella.
+- **Turrón de coco**: 79 g de proteína por 100 g.
+- Seis pares que son copias exactas (Magro de cerdo Apis, Sardinillas Nixe, Crema de arroz
+  IO.GENIX, Panecillos de Centeno, Crunchy Choco Rings, Mezcla de Aislado FullGas).
+
+**No se ha borrado nada**: las dos entradas de casi todos están usadas en dietas reales, y cuál
+se queda es decisión de Jesús.
+
+## 76 y 78 - Ya estaban, verificados en producción
+
+Con su caso exacto (Comida 1 de 30 P · 20 H · 10 G) la lista sale ordenada por distancia a los
+tres macros a la vez y encabezada por comida real: pulpo a la gallega 272 g (29,9 P · 18,8 H ·
+9,0 G, distancia 2,3), no el aislado de 89,9 P. Cero polvos en las primeras posiciones.
