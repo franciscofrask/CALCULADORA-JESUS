@@ -615,8 +615,10 @@ const ClientDashboard = () => {
                             <ClipboardCheck className="w-5 h-5 text-brand" />
                         </div>
                         <div className="text-left">
-                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">Completa tu perfil para tu coach</p>
-                            <p className="text-muted-foreground text-sm">Te quedan unas preguntas (biotipo, salud, entreno...). No cambian tus macros.</p>
+                            {/* «entrenador», no «coach», y sin el «no cambian tus macros»:
+                                las dos son decisiones de Jesús (punto 4.18). */}
+                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">Completa tu perfil para tu entrenador</p>
+                            <p className="text-muted-foreground text-sm">Te quedan unas preguntas: biotipo, salud, entreno...</p>
                         </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
@@ -884,7 +886,7 @@ const ClientLayout = () => {
                                 <button onClick={() => { setNotifOpen(false); navigate('/dashboard/messages'); }}
                                     className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted border-b border-border">
                                     <Bell className="w-4 h-4 text-brand flex-shrink-0" />
-                                    <span className="text-sm text-foreground flex-1">Tienes {unread} mensaje{unread > 1 ? 's' : ''} sin leer de tu coach</span>
+                                    <span className="text-sm text-foreground flex-1">Tienes {unread} mensaje{unread > 1 ? 's' : ''} sin leer de tu entrenador</span>
                                 </button>
                             )}
                             {notifItems.map(n => (

@@ -55,7 +55,7 @@ const RepeatMealModal = ({
                                                 <div>
                                                     <p className="font-semibold text-foreground">{formatDate(diet.fecha)}</p>
                                                     <p className="text-xs text-muted-foreground">
-                                                        {diet.tipo_dia === 'entrenamiento' ? '🟢 Entreno' : '⚪ Descanso'}, {diet.num_comidas} comidas
+                                                        {diet.tipo_dia === 'entrenamiento' ? '🟢 Entreno' : '⚪ Descanso'}, {diet.num_comidas} {diet.num_comidas === 1 ? 'comida' : 'comidas'}
                                                     </p>
                                                 </div>
                                                 <ChevronRight className="w-5 h-5 text-muted-foreground" />

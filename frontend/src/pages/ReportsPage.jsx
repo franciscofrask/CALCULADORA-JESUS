@@ -343,6 +343,12 @@ const ReportsPage = () => {
             {activeTab === 'form' && (
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <WindowBanner w={windowState} />
+                    {/* SI NO TOCA REPORTE, NO SE ENSEÑA EL FORMULARIO (punto 4.18). Se pintaba
+                        entero en gris debajo de un cartel que dice «esta semana no toca», que
+                        es enseñar un trabajo que no hay que hacer y dejarlo a medio apagar.
+                        Cuando la ventana está abierta pero ya lo mandó, sí se deja a la vista
+                        en gris: ahí el cliente quiere ver lo que envió. */}
+                    {windowState && !windowState.due ? null : (
                     <fieldset disabled={!formOpen} className="space-y-4 p-0 m-0 border-0 min-w-0 disabled:opacity-50">
                     {/* Weight */}
                     <div className="bg-card border border-border rounded-2xl p-4">
@@ -519,6 +525,7 @@ const ReportsPage = () => {
                         {submitting ? 'Enviando...' : 'Enviar reporte'}
                     </button>
                     </fieldset>
+                    )}
 
                     {/* LAS TRES FOTOS, SIEMPRE Y FUERA DEL FIELDSET (punto 21 / 2.2).
                         Estaban dentro y con `esMensual`, y eso hacía que la app se

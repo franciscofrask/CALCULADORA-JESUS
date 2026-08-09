@@ -102,11 +102,15 @@ const MessagesPage = () => {
                     </AvatarFallback>
                 </Avatar>
                 <div>
+                    {/* SU NOMBRE, NO «Tu Entrenador» (punto 4.16). Hablar con la persona que
+                        te lleva no puede parecerse a un formulario de soporte. El nombre lo
+                        da el servidor en el perfil: el cliente no tiene acceso al listado
+                        del equipo. */}
                     <h2 className="font-bold text-foreground uppercase tracking-wider" data-testid="messages-heading">
-                        {profile?.trainer_id ? 'Tu Entrenador' : 'Soporte JG12'}
+                        {profile?.entrenador?.nombre || (profile?.trainer_id ? 'Tu entrenador' : 'Soporte JG12')}
                     </h2>
                     <p className="text-xs text-[#FF671F]">
-                        {profile?.trainer_id ? 'Entrenador asignado' : 'Equipo de soporte'}
+                        {profile?.trainer_id ? 'Tu entrenador' : 'Equipo de soporte'}
                     </p>
                 </div>
             </div>

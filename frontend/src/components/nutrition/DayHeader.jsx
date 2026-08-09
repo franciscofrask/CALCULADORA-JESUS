@@ -35,7 +35,7 @@ const resumenConfig = ({ numComidas, tipoDia, momentoEntreno, opcionPeri }) => {
 
 const DayHeader = ({
     // fecha
-    currentDate, formatDate, changeDate, setCalendarOpen,
+    currentDate, formatDate, changeDate, setCalendarOpen, diaSinMarcar,
     // tipo de día y configuración
     tipoDia, handleSetTipoDia,
     numComidas, setNumComidas, momentoEntreno, setMomentoEntreno, opcionPeri, setOpcionPeri, singleMeal,
@@ -88,7 +88,11 @@ const DayHeader = ({
                         <ChevronRight className="w-5 h-5" />
                     </button>
 
-                    <div className="inline-flex rounded-xl bg-muted p-0.5 ml-1 flex-shrink-0">
+                    {/* Si nadie ha dicho qué día es, el selector se marca (punto 4.17): la app
+                        abre en «Entreno» porque hay que abrir en algo, pero en un día de
+                        descanso eso son 60 g de hidratos y 45 de perientreno de más. Medido en
+                        producción: de 14.027 días guardados, 2 dicen descanso. */}
+                    <div className={`inline-flex rounded-xl bg-muted p-0.5 ml-1 flex-shrink-0 ${diaSinMarcar ? 'ring-2 ring-brand ring-offset-2 ring-offset-background' : ''}`}>
                         <button data-testid="tipo-dia-entrenamiento" onClick={() => handleSetTipoDia('entrenamiento')}
                             className={`px-3 h-8 rounded-lg text-xs font-bold transition-colors ${tipoDia === 'entrenamiento' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}>
                             Entreno
@@ -98,6 +102,11 @@ const DayHeader = ({
                             Descanso
                         </button>
                     </div>
+                    {diaSinMarcar && (
+                        <p className="text-xs text-brand font-semibold w-full sm:w-auto" data-testid="dia-sin-marcar">
+                            ¿Este día entrenas o descansas? Tus macros cambian.
+                        </p>
+                    )}
 
                     {dayStatus === 'cuadrado' && <span className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Cuadrado</span>}
                     {dayStatus === 'sobra' && <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Te pasas</span>}

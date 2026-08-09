@@ -97,8 +97,16 @@ const SupplementsPage = () => {
                 <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Pill className="w-8 h-8 text-brand/60" />
                 </div>
-                <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin protocolo asignado</h2>
-                <p className="text-muted-foreground text-sm">Tu entrenador está preparando tu protocolo de suplementación.</p>
+                {/* NO PROMETER LO QUE NO VA A LLEGAR (punto 4.15). Decía «tu entrenador está
+                    preparando tu protocolo», y no lo está: los protocolos existen, pero en el
+                    sistema anterior. Hay 666 clientes con histórico ahí y todavía no se han
+                    migrado. Un cliente que lee eso espera algo que no va a pasar esta semana.
+                    Este texto se cambia otra vez cuando los protocolos estén migrados. */}
+                <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Tu protocolo todavía no está aquí</h2>
+                <p className="text-muted-foreground text-sm">
+                    Lo tienes en el sistema anterior y lo estamos trayendo. Si necesitas verlo
+                    ahora, pídeselo a tu entrenador por el chat.
+                </p>
             </div>
         </Wrap>;
     }

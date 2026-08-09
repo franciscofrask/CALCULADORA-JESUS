@@ -227,6 +227,24 @@ const NutritionPage = () => {
     // Summary expanded state
     const [summaryExpanded, setSummaryExpanded] = useState(false);
     
+    // ¿NADIE HA DICHO SI ESTE DÍA ES DE ENTRENO? (punto 4.17)
+    //
+    // La app abre todos los días en «Entreno», y eso no es un valor por defecto cualquiera:
+    // en el cliente que miró Jesús son 60 g de hidratos y 45 de perientreno de más un domingo.
+    //
+    // Y no es un despiste de alguno. Medido en producción el 09-08 sobre las 14.027 dietas
+    // guardadas: **14.025 dicen «entrenamiento» y 2 dicen «descanso»**. Prácticamente nadie
+    // lo marca nunca, así que casi todo el mundo come de día de entreno todos los días.
+    //
+    // Tampoco se puede deducir: `training_days` lo tienen 4 clientes de 174 y además es un
+    // número (cuántos días, no cuáles), `nivel1.dias_entreno` lo tiene 1, y clientes activos
+    // con rutina hay 0. No existe el dato en ninguna parte.
+    //
+    // Lo que sí se puede arreglar hoy es que el supuesto deje de ser invisible: si el día no
+    // lo ha marcado nadie, se dice y se le pide que elija. Cuál debe ser la regla automática
+    // es una decisión de Jesús, y con 2 de 14.027 delante se toma mejor.
+    const [diaSinMarcar, setDiaSinMarcar] = useState(false);
+
     // Calendar state
     const [calendarOpen, setCalendarOpen] = useState(false);
     
@@ -421,11 +439,16 @@ const NutritionPage = () => {
                 }
                 setMealsData(updatedMeals);
                 setVolcadoMeal(diet.comida_volcada || null);
+                // Este día ya lo configuró alguien: su tipo es una decisión, no un supuesto.
+                setDiaSinMarcar(false);
                 console.log('[loadDiet] distribution_targets:', diet.distribution_targets);
                 return { targets: diet.distribution_targets || null, config: dietConfig, ok: true, comidas: updatedMeals };
             } else {
                 setMealsData({});
                 setVolcadoMeal(null);
+                // NADIE HA DICHO SI ESTE DÍA ENTRENA (punto 4.17). Se sigue abriendo en
+                // «Entreno» porque hay que abrir en algo, pero se dice.
+                setDiaSinMarcar(true);
                 return { targets: null, config: null, ok: true, comidas: {} };
             }
         } catch (err) {
@@ -754,7 +777,8 @@ const NutritionPage = () => {
     }, [distribTargetsOverlay, distribution, volcadoMeal]);
 
     // Wrappers for user-initiated config changes - persist to profile (cross-device)
-    const handleSetTipoDia = (v) => { setTipoDia(v); };
+    // En cuanto elige, el día deja de estar sin marcar: lo ha dicho él (punto 4.17).
+    const handleSetTipoDia = (v) => { setTipoDia(v); setDiaSinMarcar(false); };
     const handleSetMomentoEntreno = (v) => {
         setMomentoEntreno(v);
         api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ momento_entreno: v }) }).catch(() => {});
@@ -1940,6 +1964,7 @@ const NutritionPage = () => {
                     changeDate={changeDate}
                     setCalendarOpen={setCalendarOpen}
                     handleSetTipoDia={handleSetTipoDia}
+                    diaSinMarcar={diaSinMarcar}
                     numComidas={numComidas}
                     setNumComidas={handleSetNumComidas}
                     momentoEntreno={momentoEntreno}

@@ -592,6 +592,10 @@ class ClientProfile(BaseModel):
     # campo `habilitaciones.calculadora` del plan, que existia y no lo miraba nadie al
     # guardar: un cliente de plan personalizado podia machacar los de su entrenador.
     macros_ajustables: Optional[Dict[str, Any]] = None
+    # Su entrenador, con nombre (punto 4.16): {id, nombre}. El cliente no tenia forma de
+    # saberlo -- el listado del equipo es solo para admins -- y el chat le decia "Tu
+    # Entrenador" en abstracto.
+    entrenador: Optional[Dict[str, Any]] = None
     # EL CONTRATO DE ESTE CLIENTE (punto 44 del 07-08). La duracion del ciclo NO es un
     # supuesto: hay planes de 4 semanas y de 5, y clientes con un ciclo distinto al de su
     # plan (es una de las 17 excepciones del punto 39, y aqui tiene donde vivir). Vacios =

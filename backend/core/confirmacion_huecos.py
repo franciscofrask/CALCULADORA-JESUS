@@ -48,10 +48,14 @@ def huecos_del_periodo(dias_periodo: int, dias_con_dieta: int, dias_con_entreno:
             "tipo": "dieta",
             "dias": sin_dieta,
             "de": dias_periodo,
+            # «de los últimos 1» no lo dice nadie (punto 4.18). Con un solo día del periodo
+            # la frase entera cambia, no basta con quitarle la ese.
             "pregunta": (
-                f"No registraste la dieta {sin_dieta} "
-                f"{'día' if sin_dieta == 1 else 'días'} de los últimos {dias_periodo}. "
-                "¿Es porque no la hiciste, o porque sí la hiciste y no la apuntaste?"
+                (f"Ayer no registraste la dieta. "
+                 if dias_periodo == 1 else
+                 f"No registraste la dieta {sin_dieta} "
+                 f"{'día' if sin_dieta == 1 else 'días'} de los últimos {dias_periodo}. ")
+                + "¿Es porque no la hiciste, o porque sí la hiciste y no la apuntaste?"
             ),
         })
 

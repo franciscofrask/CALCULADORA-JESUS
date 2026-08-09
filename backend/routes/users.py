@@ -72,6 +72,14 @@ async def get_client_profile(user = Depends(get_current_user)):
     from core.quien_pone_los_macros import puede_ajustarlos
     puede, por_que_no = await puede_ajustarlos(db, profile)
     datos["macros_ajustables"] = {"puede": puede, "por_que_no": por_que_no}
+    # QUIÉN es su entrenador, con nombre (punto 4.16). El chat decía «Tu Entrenador» en
+    # abstracto porque el cliente no tenía forma de saber su nombre: el listado del equipo es
+    # solo para admins. Sin esto, la conversación con la persona que te lleva se parece a un
+    # formulario de soporte.
+    if profile.get("trainer_id"):
+        t = await db.users.find_one({"id": profile["trainer_id"]}, {"_id": 0, "id": 1, "name": 1})
+        if t:
+            datos["entrenador"] = {"id": t.get("id"), "nombre": t.get("name")}
     return ClientProfile(**datos)
 
 @router.patch("/clients/onboarding", response_model=ClientProfile)

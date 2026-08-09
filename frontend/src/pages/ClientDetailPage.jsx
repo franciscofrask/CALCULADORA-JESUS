@@ -902,7 +902,11 @@ const ClientDetailPage = () => {
                             effective_date: macrosForm.effective_date,
                             training: macrosForm.training, peri: macrosForm.peri, rest: macrosForm.rest,
                             peso: profile?.weight,
-                            body_fat: macrosForm.porcentaje_graso !== '' ? Number(macrosForm.porcentaje_graso) : null,
+                            // «80 kg · NaN%» antes de guardar (punto 4.18). `Number('')` da 0
+                            // pero `Number(undefined)` y `Number('25,5')` dan NaN, y el NaN se
+                            // colaba tal cual a la pantalla. Con coma decimal, que es como se
+                            // escribe aquí, pasaba siempre.
+                            body_fat: _numeroOno(macrosForm.porcentaje_graso),
                             criterio: macrosForm.criterio, note: macrosForm.note,
                         } : null} />
 
@@ -1653,6 +1657,14 @@ const ClientDetailPage = () => {
 };
 
 // ========== SUB-COMPONENTS ==========
+
+// Un número, o null si no lo es. Acepta la coma decimal, que es como se escribe aquí:
+// `Number('25,5')` es NaN, y ese NaN acababa pintado en pantalla (punto 4.18).
+const _numeroOno = (v) => {
+    if (v === '' || v === null || v === undefined) return null;
+    const n = Number(String(v).replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+};
 
 const InfoItem = ({ icon: Icon, label, value }) => (
     <div className="flex items-start gap-2">

@@ -225,6 +225,20 @@ async def get_confirmacion_huecos(user = Depends(get_current_user)):
         except (ValueError, TypeError):
             pass
 
+    # EL PERIODO NO PUEDE EMPEZAR ANTES DE QUE TUVIERA LA APP (punto 4.18). Sin esto, a
+    # alguien que acaba de entrar se le preguntaba por los 28 dias anteriores y lo primero
+    # que leia era «No registraste la dieta 37 dias de los ultimos 38». No es un fallo de
+    # redaccion: es que se le esta pidiendo cuentas de un mes en el que no era cliente.
+    arranque = profile.get("arranque_lunes") or profile.get("created_at")
+    if arranque:
+        try:
+            d = datetime.fromisoformat(str(arranque).replace("Z", "+00:00"))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            desde = max(desde, d)
+        except (ValueError, TypeError):
+            pass
+
     dias_periodo, dias_dieta, dias_entreno, _ = await _actividad_del_periodo(
         profile, desde.isoformat(), hasta.isoformat()
     )

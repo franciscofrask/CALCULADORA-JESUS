@@ -20,7 +20,13 @@ const CopyDietModal = ({
                 </DialogHeader>
                 <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        Copiar dieta del <span className="font-semibold">{currentDateFormatted}</span> a:
+                        {/* «Copiar dieta del Hoy a:» no es castellano (punto 4.18). La fecha
+                            viene con mayúscula porque a veces es «Hoy» o «Mañana»; dentro de
+                            la frase va en minúscula, y en los días de la semana también toca. */}
+                        Copiar la dieta de{' '}
+                        <span className="font-semibold">
+                            {currentDateFormatted ? currentDateFormatted.charAt(0).toLowerCase() + currentDateFormatted.slice(1) : ''}
+                        </span> a:
                     </p>
                     <Input
                         type="date"
