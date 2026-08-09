@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { PlanBadge, JG12Logo } from './ClientDashboard';
+import LimiteDeError from '../components/LimiteDeError';
 import {
     LayoutDashboard, Users, CreditCard, Dumbbell,
     MessageCircle, LogOut, Search, Bell,
@@ -1109,7 +1110,11 @@ const AdminLayout = () => {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF671F] bg-[#FF671F]/10 border border-[#FF671F]/25 rounded-md px-2 py-0.5">Admin</span>
                 </header>
                 <main className="flex-1 min-w-0 pb-20 lg:pb-0">
-                    <Outlet />
+                    {/* Si una pantalla revienta, que se caiga ELLA y no la app entera: el
+                        menú y el resto de secciones siguen accesibles. Ver LimiteDeError. */}
+                    <LimiteDeError clave={location.pathname}>
+                        <Outlet />
+                    </LimiteDeError>
                 </main>
             </div>
 

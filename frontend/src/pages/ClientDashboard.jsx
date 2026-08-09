@@ -15,6 +15,7 @@ import {
 import Logo12EN12 from '../components/Logo12EN12';
 import ThemeToggle from '../components/ThemeToggle';
 import { seLeOfreceLaRevision } from '../lib/revision';
+import LimiteDeError from '../components/LimiteDeError';
 
 // ===== Macro colors (identidad 12EN12) =====
 const MACRO = { protein: '#FF671F', carbs: '#2196F3', fat: '#FFA500' };
@@ -814,7 +815,11 @@ const ClientLayout = () => {
                 </header>
 
                 <main className="flex-1 pb-20 lg:pb-0">
-                    <Outlet />
+                    {/* Igual que en el panel del coach: un fallo de una pantalla no puede
+                        dejar al cliente sin app. Ver LimiteDeError. */}
+                    <LimiteDeError clave={location.pathname}>
+                        <Outlet />
+                    </LimiteDeError>
                 </main>
             </div>
 
