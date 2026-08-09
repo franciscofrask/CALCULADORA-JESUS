@@ -95,10 +95,10 @@ const MessagesPage = () => {
         <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex flex-col animate-fade-in bg-background">
             {/* Header */}
             <div className="p-4 border-b border-border flex items-center gap-3 bg-card" data-testid="messages-content">
+                {/* La inicial de su entrenador, no un muñeco de dicebear (punto 4.18). */}
                 <Avatar className="border-2 border-[#FF671F]">
-                    <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${trainerId}`} />
-                    <AvatarFallback className="bg-[#FF671F] text-white">
-                        <User className="w-4 h-4" />
+                    <AvatarFallback className="bg-[#FF671F] text-white font-bold">
+                        {profile?.entrenador?.nombre?.charAt(0)?.toUpperCase() || <User className="w-4 h-4" />}
                     </AvatarFallback>
                 </Avatar>
                 <div>

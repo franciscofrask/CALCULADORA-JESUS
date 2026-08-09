@@ -95,10 +95,19 @@ const ProfilePage = () => {
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
                             <div className="relative">
+                                {/* SU INICIAL, NO UN MUÑECO (punto 4.18). Salía un dibujo de
+                                    mujer para todo el mundo: el avatar lo generaba
+                                    api.dicebear.com a partir de una semilla, y el dibujo que
+                                    toque es cosa suya.
+                                    Y había algo peor que el dibujo: la semilla era EL CORREO
+                                    DEL CLIENTE, así que cada vez que alguien abría su perfil
+                                    se mandaba su dirección a un servicio de fuera. Para un
+                                    avatar por defecto. Con la inicial no sale nada de aquí, no
+                                    depende de que un tercero esté vivo y no hay que pedir
+                                    permiso a nadie. */}
                                 <Avatar className="w-16 h-16 border-2 border-[#FF671F]">
-                                    <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
                                     <AvatarFallback className="text-xl bg-[#FF671F] text-white">
-                                        {user?.name?.charAt(0)?.toUpperCase()}
+                                        {user?.name?.charAt(0)?.toUpperCase() || '?'}
                                     </AvatarFallback>
                                 </Avatar>
                             </div>

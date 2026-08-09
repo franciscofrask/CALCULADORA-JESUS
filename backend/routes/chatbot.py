@@ -69,11 +69,15 @@ async def chatbot_start(current_user: dict = Depends(get_current_user)):
 
     chatbot = await get_or_create_chatbot(session_id, db, user_macros)
 
-    # Cargar preferencias del usuario para filtrar las sugerencias de alimentos
+    # Cargar preferencias del usuario para filtrar las sugerencias de alimentos.
+    # En NOMBRES (punto 4.18): el filtro busca en AVOIDABLE_PREFIXES, que esta indexado por
+    # nombre, y los clientes migrados las tienen guardadas como codigos. Sin traducirlas, el
+    # asistente ignoraba lo que le gusta y lo que evita a 100 clientes.
     if profile:
+        from core.preferencias import a_nombres
         chatbot.set_preferences(
-            food_preferences=profile.get("food_preferences", []),
-            avoided_categories=profile.get("avoided_categories", []),
+            food_preferences=a_nombres(profile.get("food_preferences", [])),
+            avoided_categories=a_nombres(profile.get("avoided_categories", [])),
             avoided_keywords=profile.get("avoided_keywords", []),
         )
     await save_chatbot_session(chatbot)

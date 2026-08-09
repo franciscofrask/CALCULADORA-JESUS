@@ -851,10 +851,16 @@ async def get_user_preferences(user = Depends(get_current_user)):
     if not profile:
         return {"food_preferences": [], "avoided_categories": [], "avoided_keywords": [], "has_preferences": False}
 
-    preferences = profile.get("food_preferences", [])
+    # En NOMBRES, no en codigos (punto 4.18). Los clientes que vinieron de Calma tienen
+    # guardados los codigos de categoria ('8', '2.3') y toda la app trabaja con nombres
+    # ('panes', 'vacuno'), asi que sus preferencias no se marcaban en la pantalla ni filtraban
+    # nada. Se traducen al leer: no hace falta reescribir la base para que empiecen a servir.
+    from core.preferencias import a_nombres
+
+    preferences = a_nombres(profile.get("food_preferences", []))
     return {
         "food_preferences": preferences,
-        "avoided_categories": profile.get("avoided_categories", []),
+        "avoided_categories": a_nombres(profile.get("avoided_categories", [])),
         "avoided_keywords": profile.get("avoided_keywords", []),
         "has_preferences": len(preferences) > 0
     }
