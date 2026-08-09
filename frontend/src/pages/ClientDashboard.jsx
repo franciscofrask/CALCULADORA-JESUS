@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -209,7 +210,13 @@ const ClientDashboard = () => {
     const [todayConsumed, setTodayConsumed] = useState({ P: 0, H: 0, G: 0 });
     const [hasPreferences, setHasPreferences] = useState(true); // optimista: evita parpadeo del checklist
     const [hasDiet, setHasDiet] = useState(false);
-    const [checklistDismissed, setChecklistDismissed] = useState(() => localStorage.getItem('onboarding-checklist-dismissed') === '1');
+    // POR CLIENTE (punto 4.7). Esta bandera dice si ya cerró el checklist, y guardada sin
+    // dueño el segundo que entrara en el mismo navegador se lo encontraba cerrado sin haberlo
+    // tocado. La verdad vive en su perfil, en el servidor; esto es solo caché.
+    const [checklistDismissed, setChecklistDismissed] = useState(false);
+    useEffect(() => {
+        if (user?.id) setChecklistDismissed(leerLocal('onboarding-checklist-dismissed', user.id) === '1');
+    }, [user?.id]);
     const [dashDataLoaded, setDashDataLoaded] = useState(false);
     const [dueReports, setDueReports] = useState([]);
 
@@ -219,10 +226,10 @@ const ClientDashboard = () => {
     // El cierre/completado vive en el perfil (backend); localStorage es solo caché local.
     useEffect(() => {
         if (profile?.checklist_dismissed) {
-            localStorage.setItem('onboarding-checklist-dismissed', '1');
+            escribirLocal('onboarding-checklist-dismissed', user?.id, '1');
             setChecklistDismissed(true);
         }
-    }, [profile?.checklist_dismissed]);
+    }, [profile?.checklist_dismissed, user?.id]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -264,10 +271,10 @@ const ClientDashboard = () => {
     }, [api, profile]);
 
     const dismissChecklist = useCallback(() => {
-        localStorage.setItem('onboarding-checklist-dismissed', '1');
+        escribirLocal('onboarding-checklist-dismissed', user?.id, '1');
         setChecklistDismissed(true);
         api.patch('/clients/onboarding', { checklist_dismissed: true }).catch(() => {});
-    }, [api]);
+    }, [api, user?.id]);
 
     // Al completar los 3 pasos una vez, el checklist queda cerrado para siempre
     // (si no, el paso "primer día de comidas" volvería a salir incompleto cada día).

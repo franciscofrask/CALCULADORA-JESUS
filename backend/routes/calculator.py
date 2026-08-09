@@ -1585,6 +1585,109 @@ async def menu_catalog(user = Depends(get_current_user)):
     return {"menus": menus, "total": len(menus), "momentos": momentos}
 
 
+async def _items_con_macros(opcion: dict):
+    """Los items de una comida ya cuadrada, con sus macros y lo que necesitan los steppers.
+
+    Los macros de `_ajustar_plantilla` salen de escalar los efectivos por 100 g; aqui se
+    recalculan a la cantidad final con `_efectivos_calma`, que es el MISMO motor que usa
+    añadir o editar un alimento. Asi la tarjeta enseña justo lo que va a sumar la comida al
+    volcarla, y no una aproximacion.
+
+    Estaba escrito dentro de `menu-apply`. Se saca aqui porque `cuadrar-comida` (punto 4.9)
+    necesita exactamente lo mismo, y tener dos copias de esto es tener dos formas de contar.
+    """
+    ids = [int(it["alimento_id"]) for it in opcion["items"] if it.get("alimento_id") is not None]
+    foods = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": ids}}, {"_id": 0}):
+            foods[int(f["id"])] = f
+
+    items = []
+    tot = {"P": 0.0, "H": 0.0, "G": 0.0}
+    for it in opcion["items"]:
+        cantidad_g = float(it.get("cantidad_g") or 0)
+        food = foods.get(int(it["alimento_id"])) if it.get("alimento_id") is not None else None
+        if food:
+            efectivos, brutos, cuenta = _efectivos_calma(food, cantidad_g)
+        else:
+            efectivos = {m: float(it.get("macros_efectivos", {}).get(m, 0) or 0) for m in ("P", "H", "G")}
+            brutos, cuenta = dict(efectivos), {"P": True, "H": True, "G": True}
+        for m in ("P", "H", "G"):
+            tot[m] += efectivos[m]
+        por_unidades = bool(food and food.get("unidades"))
+        racion = float((food or {}).get("racion") or 100) or 100.0
+        unidades_n = round(cantidad_g / racion, 2) if por_unidades else None
+        items.append({
+            "alimento_id": it.get("alimento_id"),
+            "nombre": it.get("nombre") or (food or {}).get("nombre"),
+            "cantidad_g": cantidad_g,
+            "unidades_n": unidades_n,
+            "cantidad_display": f"{unidades_n:g} ud" if unidades_n else f"{cantidad_g:g} g",
+            "macros_efectivos": efectivos,
+            "macros_brutos": brutos,
+            "que_cuenta": cuenta,
+            "rol": it.get("rol"),
+            "categorias": (food or {}).get("categorias", ""),
+            "racion": (food or {}).get("racion"),
+            "unidades": por_unidades,
+            "url": (food or {}).get("url"),
+        })
+    return items, {m: round(tot[m], 1) for m in ("P", "H", "G")}
+
+
+@router.post("/cuadrar-comida")
+async def cuadrar_comida(data: dict, user = Depends(get_current_user)):
+    """Cuadra una lista de alimentos a los macros de una comida. Punto 4.9 del 09-08.
+
+    Lo usa «Repetir de otro día». Hasta ahora esa pantalla escalaba las cantidades por el
+    RATIO DE PROTEINA y ya: la proteina caia cerca del objetivo y los hidratos y la grasa
+    donde salieran. En la prueba de Jesus, con un objetivo de 30 P / 20 H / 10 G:
+
+        Proteina  34,2 / 30     sobran 4,2
+        Hidratos  30,0 / 20     sobran 10
+        Grasas     3,2 / 10     faltan 6,8
+
+    O sea que no era «copiar tal cual» -- cambiaba las cantidades -- ni cuadrar. Lo peor de
+    las dos cosas: ni es fiel al dia que copias ni te deja la comida en verde.
+
+    Y por el recetario si cuadra, con `_ajustar_plantilla`. Dos caminos haciendo cosas
+    distintas sin decirlo. Aqui se usa ESE MISMO motor, asi que los dos hacen lo mismo:
+    parten de la cantidad minima de cada alimento y escalan hasta cuadrar P/H/G.
+
+    `best_effort=True`: una comida copiada no se rechaza nunca. Si no cuadra del todo se
+    devuelve lo mas cerca que se pueda y se dice con `cuadrada: false`.
+
+    Body: {items: [{alimento_id, cantidad_g?}], macros_objetivo?, mealKey? + config del dia}
+    """
+    from meal_templates import MARGEN_MENU, _ajustar_plantilla
+
+    crudos = data.get("items") or data.get("alimentos") or []
+    items_in = [{"alimento_id": it.get("alimento_id"), "cantidad_g": it.get("cantidad_g"),
+                 "nombre": it.get("nombre")}
+                for it in crudos if isinstance(it, dict) and it.get("alimento_id") is not None]
+    if not items_in:
+        raise HTTPException(status_code=422, detail="No hay alimentos que cuadrar.")
+
+    meal_key = (data.get("mealKey") or data.get("meal_key") or "").strip()
+    obj = await _objetivo_de_comida(data, user, meal_key)
+    opcion = await _ajustar_plantilla(db, {"items": items_in}, obj, best_effort=True)
+    if not opcion:
+        raise HTTPException(status_code=422,
+                            detail="No se pudo cuadrar: algún alimento ya no está en el catálogo.")
+
+    items, totales = await _items_con_macros(opcion)
+    err = sum(abs(obj[m] - totales[m]) for m in ("P", "H", "G"))
+    return {
+        "items": items,
+        "macros_totales": {**totales,
+                           "kcal": round(totales["P"] * 4 + totales["H"] * 4 + totales["G"] * 9, 1)},
+        "macros_objetivo": obj,
+        "cuadrada": all(abs(obj[m] - totales[m]) <= MARGEN_MENU for m in ("P", "H", "G")),
+        "err": round(err, 1),
+        "origen": "repetido",
+    }
+
+
 @router.post("/menu-apply")
 async def menu_apply(data: dict, user = Depends(get_current_user)):
     """Cuadra UN menú del recetario a los macros objetivo (al elegirlo en la

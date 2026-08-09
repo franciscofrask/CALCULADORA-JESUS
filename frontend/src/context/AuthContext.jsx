@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import axios from 'axios';
 import { toast } from 'sonner';
 import { deriveCapabilities } from '../lib/planAccess';
+import { limpiarLoDeLaPersona } from '../lib/almacenLocal';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -126,6 +127,11 @@ export const AuthProvider = ({ children }) => {
             try { api.delete('/chatbot/sessions').catch(() => {}); } catch (e) {}
         }
         try { sessionStorage.removeItem('chatbot_session_state'); } catch (e) {}
+        // Y TODO LO DEMÁS QUE SEA DE ESTA PERSONA (punto 4.7). No solo la conversación: la
+        // copia local del día de Nutrición se quedaba puesta, y el siguiente que entrara en
+        // este navegador se encontraba los alimentos del anterior -- y al guardar, se los
+        // metía en su propia dieta. Se queda lo que es del aparato (tema, barra lateral).
+        limpiarLoDeLaPersona();
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);

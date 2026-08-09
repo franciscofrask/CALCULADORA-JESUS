@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
+import { leer as leerLocal, escribir as escribirLocal, borrar as borrarLocal } from '../lib/almacenLocal';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -119,7 +120,11 @@ const hoyISO = () => {
 };
 
 const NutritionPage = () => {
-    const { token } = useAuth();
+    // `user` hace falta para separar por cliente lo que se guarda en el navegador (punto
+    // 4.7): la copia local del día se guardaba solo con la fecha, así que en un ordenador
+    // compartido el siguiente que entrara se encontraba la dieta del anterior.
+    const { token, user } = useAuth();
+    const uid = user?.id;
     const navigate = useNavigate();
     const { notify } = useOnboarding();
 
@@ -143,22 +148,29 @@ const NutritionPage = () => {
     const [modoMacros, setModoMacros] = useState(leerModoMacros);
     const cambiarModoMacros = useCallback((v) => { guardarModoMacros(v); setModoMacros(v); }, []);
 
-    // Intro guiado de primera visita (una sola vez por dispositivo)
-    const [showIntro, setShowIntro] = useState(() => localStorage.getItem('nutrition-intro-seen') !== '1');
+    // Intro guiado de primera visita. POR CLIENTE, no por dispositivo (punto 4.7): si un
+    // cliente lo cierra en el ordenador de casa, el siguiente que entre ahí no debería
+    // perderse el tutorial por algo que hizo otro.
+    const [showIntro, setShowIntro] = useState(false);
+    useEffect(() => {
+        if (uid) setShowIntro(leerLocal('nutrition-intro-seen', uid) !== '1');
+    }, [uid]);
     const dismissIntro = useCallback(() => {
-        localStorage.setItem('nutrition-intro-seen', '1');
+        escribirLocal('nutrition-intro-seen', uid, '1');
         setShowIntro(false);
-    }, []);
+    }, [uid]);
 
     // Paso 4 del doc: la primera vez que viene a por su dieta se le piden los gustos (que es
     // cuando sirven de algo) y se le enseña como esta repartido su dia. Va antes que el tutorial:
     // primero se configura lo suyo, y despues se le explica la pantalla.
-    const [primeraDieta, setPrimeraDieta] = useState(
-        () => localStorage.getItem('primera-dieta-hecha') !== '1');
+    const [primeraDieta, setPrimeraDieta] = useState(false);
+    useEffect(() => {
+        if (uid) setPrimeraDieta(leerLocal('primera-dieta-hecha', uid) !== '1');
+    }, [uid]);
     const cerrarPrimeraDieta = useCallback(() => {
-        localStorage.setItem('primera-dieta-hecha', '1');
+        escribirLocal('primera-dieta-hecha', uid, '1');
         setPrimeraDieta(false);
-    }, []);
+    }, [uid]);
 
     // Date & Config state
     const [currentDate, setCurrentDate] = useState(hoyISO);
@@ -446,22 +458,21 @@ const NutritionPage = () => {
     // El dia se copia en el navegador en cuanto lo tocas. Si el servidor no responde, ni la
     // pantalla se queda vacia ni se pierde nada: se recupera de aqui y se sube solo cuando el
     // servidor vuelve. La copia se borra en cuanto el guardado remoto confirma.
+    // LA COPIA VA CON EL NOMBRE DEL CLIENTE DENTRO (punto 4.7). Antes la clave era solo la
+    // fecha, así que en un ordenador compartido el segundo que entrara se encontraba el día
+    // del primero -- y al guardarlo, se lo metía en su propia dieta. Sin cliente no se
+    // guarda nada: mejor perder la red de seguridad que dejarla donde la vea otro.
     const claveLocal = (date) => `nutrition_dia_${date}`;
 
     const guardarCopiaLocal = (date, snap) => {
-        try {
-            if (hayAlimentos(snap)) localStorage.setItem(claveLocal(date), JSON.stringify(snap));
-        } catch (e) { /* almacenamiento lleno o bloqueado: no es critico */ }
+        if (!uid || !hayAlimentos(snap)) return;
+        escribirLocal(claveLocal(date), uid, JSON.stringify(snap));
     };
     const leerCopiaLocal = (date) => {
-        try {
-            const s = localStorage.getItem(claveLocal(date));
-            return s ? JSON.parse(s) : null;
-        } catch (e) { return null; }
+        const s = leerLocal(claveLocal(date), uid);
+        try { return s ? JSON.parse(s) : null; } catch (e) { return null; }
     };
-    const borrarCopiaLocal = (date) => {
-        try { localStorage.removeItem(claveLocal(date)); } catch (e) {}
-    };
+    const borrarCopiaLocal = (date) => borrarLocal(claveLocal(date), uid);
 
     const hayAlimentos = (snap) =>
         Object.values(snap?.comidas || {}).some(m => (m?.alimentos || []).length > 0);
@@ -545,22 +556,26 @@ const NutritionPage = () => {
     // en el que estabas trabajando, vuelves al día que tenías abierto en vez de perderlo. Por
     // eso se guarda también CUÁNDO se guardó, y la fecha solo se restaura si se guardó hoy y
     // no es futura.
+    // Y la fecha también va por cliente (punto 4.7): era la otra mitad de lo mismo. Sin el
+    // id dentro, el cliente B abría Nutrición en el día que estaba mirando el cliente A, que
+    // es justo por donde empezaba el problema.
     useEffect(() => {
-        const stored = localStorage.getItem('nutrition_last_date');
-        const guardadoEn = localStorage.getItem('nutrition_last_date_guardado');
+        if (!uid) return;
+        const stored = leerLocal('nutrition_last_date', uid);
+        const guardadoEn = leerLocal('nutrition_last_date_guardado', uid);
         if (stored && guardadoEn === hoyISO() && stored <= hoyISO()) {
             setCurrentDate(stored);
             return;
         }
         setCurrentDate(hoyISO());
-    }, []);
+    }, [uid]);
 
     // Se guarda la fecha vista y el día en que se vio, para lo de arriba.
     useEffect(() => {
-        if (!currentDate) return;
-        localStorage.setItem('nutrition_last_date', currentDate);
-        localStorage.setItem('nutrition_last_date_guardado', hoyISO());
-    }, [currentDate]);
+        if (!currentDate || !uid) return;
+        escribirLocal('nutrition_last_date', uid, currentDate);
+        escribirLocal('nutrition_last_date_guardado', uid, hoyISO());
+    }, [currentDate, uid]);
 
     // Initial load
     useEffect(() => {
@@ -1249,19 +1264,47 @@ const NutritionPage = () => {
             return;
         }
         
-        // Get target macros and source total macros
+        // CUADRAR CON EL MISMO MOTOR QUE EL RECETARIO (punto 4.9).
+        //
+        // Aquí se escalaban las cantidades por el RATIO DE PROTEÍNA y ya: la proteína caía
+        // cerca del objetivo y los hidratos y la grasa donde salieran. Con 30 P · 20 H · 10 G,
+        // la prueba de Jesús dio 34,2 / 30,0 / 3,2 y la comida en rojo.
+        //
+        // Es decir: ni copiaba tal cual -- cambiaba las cantidades -- ni cuadraba. Lo peor de
+        // las dos cosas. Y por el recetario sí cuadra, sin que nada dijera que los dos
+        // caminos hacen cosas distintas. Ahora los dos llaman al mismo sitio.
+        let scaledFoods = null;
+        try {
+            const r = await api('/api/calculator/cuadrar-comida', {
+                method: 'POST',
+                body: JSON.stringify({
+                    items: sourceAlimentos.map(a => ({
+                        alimento_id: a.alimento_id, cantidad_g: a.cantidad_g, nombre: a.nombre,
+                    })),
+                    mealKey: targetMealKey,
+                    fecha: currentDate,
+                    tipo_dia: tipoDia,
+                    num_comidas: numComidas,
+                    momento_entreno: momentoEntreno,
+                    opcion_peri: opcionPeri,
+                }),
+            });
+            scaledFoods = (r.items || []).length ? r.items : null;
+        } catch (err) {
+            console.error('cuadrar-comida falló; se escala por proteína:', err);
+        }
+
+        // Si el servidor no responde se usa el escalado de antes. Es peor que cuadrar, pero
+        // mucho mejor que dejar al cliente sin poder repetir su día.
+        if (!scaledFoods) {
         const targetMacros = getMealTarget(targetMealKey);
         const sourceMacros = sourceAlimentos.reduce((acc, a) => ({
             P: acc.P + (a.macros_efectivos?.P || 0),
             H: acc.H + (a.macros_efectivos?.H || 0),
             G: acc.G + (a.macros_efectivos?.G || 0)
         }), { P: 0, H: 0, G: 0 });
-        
-        // Calculate scaling factor based on protein (primary macro)
         const scaleFactor = sourceMacros.P > 0 ? targetMacros.P / sourceMacros.P : 1;
-        
-        // Scale and recalculate each food
-        const scaledFoods = [];
+        scaledFoods = [];
         for (const food of sourceAlimentos) {
             const scaledQuantity = Math.round(food.cantidad_g * scaleFactor);
             try {
@@ -1293,15 +1336,16 @@ const NutritionPage = () => {
                 });
             }
         }
-        
+        }
+
         setMealsData(prev => ({
             ...prev,
             [targetMealKey]: { alimentos: scaledFoods }
         }));
-        
+
         setRepeatMealModal({ open: false, mealKey: null });
         setSelectedDietForRepeat(null);
-        toast.success(`Copiada ${mealInfo[sourceMealKey]?.name || sourceMealKey} del ${formatDate(sourceDiet.fecha)}`);
+        toast.success(`Copiada ${mealInfo[sourceMealKey]?.name || sourceMealKey} del ${formatDate(sourceDiet.fecha)}, cuadrada a tu objetivo`);
     };
 
     // "Sugiéreme un menú": modal con dos pestañas. Biblioteca REAL (db.meal_library,
