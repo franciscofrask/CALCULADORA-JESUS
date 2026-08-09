@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { X, Download, Share } from 'lucide-react';
 
 // Aviso de instalación de la PWA.
@@ -8,6 +9,21 @@ import { X, Download, Share } from 'lucide-react';
 //   "Compartir > Añadir a pantalla de inicio" una vez, descartable.
 const DISMISS_KEY = 'install-prompt-dismissed';
 
+// DONDE NO SE ENSEÑA NUNCA (09-08-2026).
+//
+// Este banner es `fixed bottom-20`, o sea que flota sobre lo que haya. En una pantalla de
+// móvil eso cae justo encima del formulario de acceso: medido en una ventana de 315 px, el
+// campo de contraseña, el botón Entrar, «¿olvidaste tu contraseña?» y «regístrate» quedaban
+// TODOS tapados. Solo se llegaba al email y al propio botón de Instalar. Es decir: **desde el
+// móvil no se podía iniciar sesión**, que es como entra la mayoría.
+//
+// Lo encontró Francisco el 09-08 diciendo que no podía entrar con un usuario, y no eran las
+// credenciales: el backend las aceptaba con un 200.
+//
+// Y aunque no tapara nada: a quien todavía no ha entrado no se le pide que se instale la app.
+// Primero entra, luego ya le ofreceremos el acceso directo.
+const FUERA_DE = ['/auth', '/login', '/register', '/registro', '/reset', '/recuperar'];
+
 const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const yaInstalada = () =>
     window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -15,6 +31,8 @@ const yaInstalada = () =>
 const InstallPrompt = () => {
     const [deferred, setDeferred] = useState(null);
     const [showIOS, setShowIOS] = useState(false);
+    const { pathname } = useLocation();
+    const enPantallaDeAcceso = FUERA_DE.some(p => pathname === p || pathname.startsWith(p + '/'));
 
     useEffect(() => {
         if (yaInstalada() || localStorage.getItem(DISMISS_KEY)) return;

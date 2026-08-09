@@ -65,9 +65,15 @@ app = FastAPI(
 )
 
 # CORS middleware
+#
+# Se registra en el log de arranque QUE ORIGENES quedan permitidos. Sin esto, una lista mal
+# escrita en las variables del servidor solo se nota cuando alguien no puede entrar, y desde
+# el navegador parece un fallo de credenciales: la peticion ni sale, asi que el backend no
+# tiene ni constancia del intento. Con la linea en el log se mira y se acabo.
+logging.getLogger("uvicorn.error").info("CORS permitido para: %s", CORS_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS if CORS_ORIGINS != ['*'] else ["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

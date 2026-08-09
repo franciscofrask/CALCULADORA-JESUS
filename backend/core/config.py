@@ -24,7 +24,21 @@ if JWT_SECRET in ('12en12-secret-key', '12en12-super-secret-jwt-key-2024') or le
     )
 
 # CORS
-CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
+#
+# El navegador compara el origen LETRA POR LETRA, asi que un espacio detras de la coma o una
+# barra al final dejan fuera a un dominio que parece estar en la lista. Y cuando eso pasa, lo
+# que ve el usuario no es "CORS mal configurado": es que no puede iniciar sesion, porque la
+# peticion ni sale. Paso el 09-08-2026 con el entorno de Vercel + Render, donde NINGUN origen
+# pasaba -- ni siquiera localhost:3000 --, y desde fuera parecia un fallo de contraseña.
+#
+# Por eso se limpia lo que venga: espacios, barras finales y entradas vacias. Escribir
+# "https://a.com, https://b.com/" en el panel de Render tiene que funcionar.
+def _origenes(crudo: str):
+    lista = [o.strip().rstrip('/') for o in (crudo or '').split(',')]
+    return [o for o in lista if o] or ['*']
+
+
+CORS_ORIGINS = _origenes(os.environ.get('CORS_ORIGINS', '*'))
 
 # Stripe (billing). Test mode by default: STRIPE_SECRET_KEY must be sk_test_...
 STRIPE_API_VERSION = "2026-02-25.clover"
