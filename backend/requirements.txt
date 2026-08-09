@@ -20,3 +20,8 @@ anyio==4.12.1
 passlib==1.7.4
 stripe==14.4.0
 pycryptodome==3.20.0
+# La usa food_semantic (embeddings de los alimentos) y por tanto TODO el asistente:
+# agent_tools la importa arriba del fichero, así que sin numpy el chat no arranca. Estaba
+# instalada en el venv local y no declarada aquí, y al desplegar el asistente-agente el
+# 08-08-2026 el pod se quedó sin ella: `import agent_tools` -> ModuleNotFoundError.
+numpy==2.5.1
