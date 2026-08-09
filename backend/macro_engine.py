@@ -200,7 +200,9 @@ def calcular_macros_v2(
     sexo: str,
     porcentaje_graso: float,
     objetivo: str,
-    actividad_diaria: Optional[str] = None,   # 'sedentario' | 'normal' | 'muy_activo'
+    # Las cuatro de la pantalla 5 del documento de textos. Solo 'muy_activo' suma: las otras
+    # tres estan para que el cliente se reconozca y no se suba de categoria por no encontrarse.
+    actividad_diaria: Optional[str] = None,   # 'sedentario'|'normal'|'moderado'|'muy_activo'
     deporte_extra: Optional[bool] = None,
     facilidad_engordar: Optional[str] = None,  # 'enseguida' | 'normal' | 'casi_no'
     dieta_reportada: Optional[Dict] = None,    # {'hc_entreno': g, 'grasa_entreno': g|None, 'texto': str}

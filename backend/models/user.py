@@ -582,6 +582,12 @@ class ClientProfile(BaseModel):
     # Su % graso vigente y si toca volver a pedirlo (punto 47): {valor, fecha, semanas,
     # hay_que_pedirlo}. Se pide cada 12 semanas, no en cada ajuste.
     grasa: Optional[Dict[str, Any]] = None
+    # ¿Sus macros los puso ALGUIEN, o salieron del calculo del alta? (punto 4.1)
+    # Lo calcula el servidor mirando el ultimo apunte del historial. Sirve para no decirle a
+    # un cliente al que su coach le acaba de ajustar los macros que los tiene "provisionales"
+    # y que se los termine el. `ajuste_macros_completado` no vale para eso: es False para
+    # todo el que no paso por NUESTRO cuestionario, y eso son 169 de los 174 activos.
+    macros_puestos_por_alguien: Optional[bool] = None
     # EL CONTRATO DE ESTE CLIENTE (punto 44 del 07-08). La duracion del ciclo NO es un
     # supuesto: hay planes de 4 semanas y de 5, y clientes con un ciclo distinto al de su
     # plan (es una de las 17 excepciones del punto 39, y aqui tiene donde vivir). Vacios =

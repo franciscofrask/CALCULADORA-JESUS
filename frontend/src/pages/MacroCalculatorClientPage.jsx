@@ -51,6 +51,16 @@ const ToggleGroup = ({ options, value, onChange, vertical = false }) => (
     </div>
 );
 
+// Las cuatro de la pantalla 5 del documento de textos, literales y con los mismos valores
+// que el cuestionario. `sedentario` es «muy sedentario» y `normal` «ligeramente activo»: los
+// valores viejos se conservan para no invalidar lo que ya contestaron los clientes.
+const OPCIONES_ACTIVIDAD = [
+    { value: 'sedentario', label: 'Muy sedentario: paso casi todo el día sentado, apenas me muevo.' },
+    { value: 'normal', label: 'Ligeramente activo: me muevo algo, pero sin esfuerzos físicos.' },
+    { value: 'moderado', label: 'Moderadamente activo: estoy de pie o en movimiento buena parte del día.' },
+    { value: 'muy_activo', label: 'Muy activo: mi día a día es muy demandante físicamente, no paro.' },
+];
+
 // Las cuatro respuestas de «¿Sigues algún tipo de dieta?» (punto 19). Son literalmente las
 // del cuestionario de alta -- mismos textos y mismos valores -- porque es la misma pregunta:
 // si aquí dijera Sí/No y allí cuatro cosas, el mismo cliente contestaría distinto según por
@@ -382,9 +392,22 @@ const MacroCalculatorClientPage = () => {
                             <div className="border-t border-border pt-4 space-y-4" data-testid="ajusta-tus-macros">
                                 <p className="caption">Ajusta tus macros</p>
                                 <div>
-                                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Actividad diaria (fuera del gym)</label>
-                                    <ToggleGroup options={[{ value: 'sedentario', label: 'Sedentario' }, { value: 'normal', label: 'Normal' }, { value: 'muy_activo', label: 'Muy activo' }]}
+                                    {/* LAS CUATRO, y con los textos de la pantalla 5 del documento
+                                        (punto 4.1). Aquí había tres -- Sedentario / Normal / Muy
+                                        activo -- y eso no es un detalle de redacción: el +10 % de
+                                        hidratos lo cobra SOLO «muy activo», así que a quien está
+                                        de pie todo el día no le quedaba más remedio que elegir
+                                        entre «Normal» (correcto, +0 %) y «Muy activo» (+10 % que
+                                        no le tocan). La opción que le corresponde -- moderadamente
+                                        activo, que tampoco suma -- no existía en esta pantalla y
+                                        sí en el cuestionario. */}
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">¿Cómo describirías tu nivel de actividad diaria?</label>
+                                    <ToggleGroup vertical options={OPCIONES_ACTIVIDAD}
                                         value={ajustes.actividad_diaria} onChange={v => setAjuste('actividad_diaria', v)} />
+                                    <p className="text-[11px] text-foreground/40 mt-1.5">
+                                        Ir al gimnasio 1 hora 4-5 veces a la semana no te convierte en una persona
+                                        activa, OJO. Piensa en lo mucho o lo poco que te mueves en tu día a día.
+                                    </p>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">¿Practicas otro deporte además de las pesas?</label>

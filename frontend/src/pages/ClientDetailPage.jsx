@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import PlantillasFeedback from '../components/PlantillasFeedback';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -996,6 +997,11 @@ const ClientDetailPage = () => {
                                     <Label className="text-white/60 text-xs">Feedback para el cliente (obligatorio)</Label>
                                     <Textarea value={macrosForm.note} onChange={e => setMacrosForm({ ...macrosForm, note: e.target.value })} placeholder="Ej: Bajamos un poco los hidratos por la pérdida de peso, sigue así..." className="bg-[#0A0A0A] border-[#333] text-white mt-1 min-h-[38px]" data-testid="macro-note" />
                                     <p className="text-[10px] text-white/30 mt-1">Le llega al cliente como novedad al guardar (sustituye al audio).</p>
+                                    {/* Aquí es donde más falta hacen: el feedback es obligatorio
+                                        para guardar un ajuste, así que se escribe uno por cada
+                                        cliente y cada quincena (punto 4.1). */}
+                                    <PlantillasFeedback actual={macrosForm.note} testid="plantillas-macros"
+                                        onInsertar={t => setMacrosForm({ ...macrosForm, note: t })} />
                                 </div>
                             </div>
                         </div>
@@ -1221,6 +1227,8 @@ const ClientDetailPage = () => {
                                     <Label className="text-white/60 text-xs">Feedback para el cliente {editingEntryId ? '(opcional)' : '(obligatorio)'}</Label>
                                     <Textarea value={entryForm.note} onChange={e => setEntryForm({...entryForm, note: e.target.value})} placeholder="Ej: Bajamos un poco los hidratos por la pérdida de peso, sigue así..." className="bg-[#0A0A0A] border-[#333] text-white mt-1" data-testid="macro-note" />
                                     <p className="text-[10px] text-white/30 mt-1">Le llega al cliente como novedad al guardar (sustituye al audio).</p>
+                                    <PlantillasFeedback actual={entryForm.note} testid="plantillas-entrada"
+                                        onInsertar={t => setEntryForm({ ...entryForm, note: t })} />
                                 </div>
                             </div>
                             <DialogFooter>
@@ -3234,6 +3242,9 @@ const ReportsFeedbackList = ({ initialReports }) => {
                             <Textarea value={draftAbierto} onChange={e => setDrafts(prev => ({ ...prev, [abierto.id]: e.target.value }))}
                                 placeholder="Escribe feedback para el cliente..." rows={3}
                                 className="bg-[#0A0A0A] border-[#333] text-white mt-1" />
+                            {/* Los cuatro mensajes de siempre, en un botón (punto 4.1). */}
+                            <PlantillasFeedback actual={draftAbierto}
+                                onInsertar={t => setDrafts(prev => ({ ...prev, [abierto.id]: t }))} />
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setDetalleId(null)} className="bg-transparent border-[#333] text-white">Cerrar</Button>

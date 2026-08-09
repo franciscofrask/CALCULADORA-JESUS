@@ -62,6 +62,7 @@ async def sincronizar_avisos(user_id: str) -> int:
             perfil=perfil, ahora=ahora,
             proximo_ajuste=datos["proximo_ajuste"],
             semanas_ciclo=datos["semanas_ciclo"],
+            macros_puestos_por_alguien=datos["macros_puestos_por_alguien"],
         )
         condicionados = avisos_condicionados(
             ahora=ahora,
@@ -112,8 +113,13 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
         {"_id": 0, "created_at": 1, "photos": 1}, sort=[("created_at", -1)])
     ultima_dieta = await db.diets.find_one(
         {"user_id": user_id}, {"_id": 0, "fecha": 1}, sort=[("fecha", -1)])
+    # `origen` y `changed_by` van en la proyeccion para saber si sus macros los puso ALGUIEN
+    # o salieron del calculo del alta. De eso depende que se le diga o no que son
+    # provisionales (punto 4.1): si se los puso su coach, no lo son.
     ultimos_macros = await db.macro_history.find_one(
-        {"client_id": client_id}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+        {"client_id": client_id},
+        {"_id": 0, "created_at": 1, "origen": 1, "changed_by": 1},
+        sort=[("created_at", -1)])
 
     dias_sin_ajustar = _dias_desde((ultimos_macros or {}).get("created_at"), ahora)
     dias_sin_dieta = None
@@ -138,6 +144,11 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     except Exception:
         pass
 
+    # ¿Sus macros los puso alguien, o salieron del calculo del alta? (punto 4.1). La regla
+    # vive en un solo sitio porque la usan dos pantallas -- los avisos y el Inicio -- y si
+    # cada una tuviera la suya volveriamos a tener dos verdades.
+    from core.macros_de_quien import de_una_persona
+
     return {
         "dias_sin_peso": _dias_desde((ultimo_peso or {}).get("created_at"), ahora),
         "dias_sin_dieta": dias_sin_dieta,
@@ -145,6 +156,7 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
         "reporte_sin_fotos": sin_fotos,
         "proximo_ajuste": proximo_ajuste,
         "semanas_ciclo": semanas_ciclo,
+        "macros_puestos_por_alguien": de_una_persona(ultimos_macros),
     }
 
 

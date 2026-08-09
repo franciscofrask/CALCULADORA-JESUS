@@ -58,12 +58,26 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                          arranque: Optional[datetime] = None,
                          proximo_ajuste: Optional[datetime] = None,
                          rutina_caduca: Optional[datetime] = None,
-                         semanas_ciclo: Optional[int] = None) -> List[Dict[str, Any]]:
+                         semanas_ciclo: Optional[int] = None,
+                         macros_puestos_por_alguien: bool = False) -> List[Dict[str, Any]]:
     fuera: List[Dict[str, Any]] = []
     hoy = ahora.date()
 
     # "Tus macros son provisionales": a las 2 h de darse de alta, si aun no los ha ajustado.
-    if not perfil.get("ajuste_macros_completado"):
+    #
+    # Y SOLO SI DE VERDAD LO SON. `ajuste_macros_completado` es False para todo el que no
+    # paso por NUESTRO cuestionario de ajuste, y eso incluye a los 160 clientes que vinieron
+    # de Calma y a todos aquellos a los que el coach les puso los macros a mano. Medido en
+    # produccion el 09-08: el aviso le llegaba a los **174 clientes activos**, 171 de ellos
+    # con macros escritos por una persona y 164 con tres semanas o mas en el programa.
+    #
+    # O sea que la app le decia a un cliente en la semana 6, con los macros que le puso Jesus
+    # la semana pasada, que sus numeros son provisionales y que se los ajuste el mismo. Es
+    # justo lo contrario de lo que vende el plan con entrenador.
+    #
+    # Provisional es el que acaba de entrar y no ha terminado. En cuanto alguien -- el coach,
+    # el equipo, la migracion -- le ha puesto unos macros, ya no lo son.
+    if not perfil.get("ajuste_macros_completado") and not macros_puestos_por_alguien:
         alta = perfil.get("created_at")
         try:
             d_alta = datetime.fromisoformat(str(alta).replace("Z", "+00:00")) if alta else None

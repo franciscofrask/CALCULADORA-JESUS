@@ -494,7 +494,16 @@ const ClientDashboard = () => {
             {/* Aquí se separan los planes: el mismo hueco dice tres cosas distintas.
                 El Nivel 3 no rellena nada -- se lo preguntan en la llamada -- así que ni
                 se le manda al cuestionario ni se le dice que le falta algo por hacer. */}
-            {profile?.questionnaire_completed && !profile?.ajuste_macros_completado && (() => {
+            {/* Y SOLO SI DE VERDAD LE FALTA (punto 4.1). `ajuste_macros_completado` es False
+                para todo el que no pasó por NUESTRO cuestionario de ajuste, y eso son los 160
+                que vinieron de Calma más todo aquel al que el coach le puso los macros a mano:
+                medido en producción, 169 de los 174 activos veían este aviso. Gente que lleva
+                meses con Jesús, a la que él mismo les pone los números cada quincena, abriendo
+                la app y leyendo que les falta terminar de sacar sus macros.
+                `macros_puestos_por_alguien` lo calcula el servidor mirando quién escribió su
+                último ajuste. */}
+            {profile?.questionnaire_completed && !profile?.ajuste_macros_completado
+                && !profile?.macros_puestos_por_alguien && (() => {
                 const porLlamada = (profile?.plan || '') === 'nivel3';
                 const conCoach = can('macros_personalizados');
                 const texto = porLlamada
@@ -589,7 +598,9 @@ const ClientDashboard = () => {
                 dos cuestionarios. No los hay: es el mismo recorrido, y el de arriba sigue
                 de largo hasta aquí sin cortes. Este solo tiene sentido cuando el de arriba
                 ya está hecho -- es decir, cuando de verdad se quedó a medias. */}
-            {can('macros_personalizados') && profile?.questionnaire_completed && profile?.ajuste_macros_completado && !profile?.questionnaire_nivel1_completed && (
+            {can('macros_personalizados') && profile?.questionnaire_completed
+                && (profile?.ajuste_macros_completado || profile?.macros_puestos_por_alguien)
+                && !profile?.questionnaire_nivel1_completed && (
                 <button onClick={() => navigate('/questionnaire')} data-testid="nivel1-pending-banner"
                     className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">
                     <div className="flex items-center gap-4">

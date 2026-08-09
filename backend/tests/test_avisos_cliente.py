@@ -142,6 +142,22 @@ class TestCalendario:
                   "ajuste_macros_completado": True}
         assert avisos_de_calendario(perfil=perfil, ahora=AHORA) == []
 
+    def test_si_se_los_puso_su_coach_no_son_provisionales(self):
+        """El fallo del punto 4.1, que en produccion afectaba a los 174 clientes activos.
+
+        `ajuste_macros_completado` es False para todo el que no paso por NUESTRO cuestionario
+        de ajuste, y eso incluye a los 160 que vinieron de Calma y a todo aquel al que el
+        coach le puso los macros a mano. Resultado: la app le decia a un cliente en la semana
+        6, con los macros que le acababa de poner Jesus, que sus numeros eran provisionales y
+        que se los ajustase el mismo.
+        """
+        perfil = {"created_at": (AHORA - timedelta(days=40)).isoformat()}
+        # Sin que nadie se los haya puesto, el aviso sigue teniendo sentido.
+        assert _claves(avisos_de_calendario(perfil=perfil, ahora=AHORA)) == ["macros_provisionales"]
+        # En cuanto se los pone alguien, ya no.
+        assert avisos_de_calendario(perfil=perfil, ahora=AHORA,
+                                    macros_puestos_por_alguien=True) == []
+
     def test_el_domingo_de_antes_de_arrancar(self):
         a = avisos_de_calendario(perfil={"ajuste_macros_completado": True}, ahora=AHORA,
                                  arranque=AHORA + timedelta(days=1))
@@ -153,8 +169,22 @@ class TestCalendario:
         assert a == []
 
     def test_la_rutina_avisa_tres_dias_antes_no_el_dia_que_caduca(self):
+        """Y solo mientras Rutinas sea visible para el cliente.
+
+        Esta pantalla esta oculta a proposito (`RUTINA_VISIBLE_PARA_EL_CLIENTE = False`), y
+        entonces el aviso NO sale: mandarle a renovar una rutina a una pantalla que no puede
+        abrir es peor que no avisarle. Al ocultarla se apago el aviso y este test se quedo
+        sin actualizar, asi que llevaba tiempo en rojo por un motivo que no era un fallo.
+        """
+        from core.plan_access import RUTINA_VISIBLE_PARA_EL_CLIENTE
+
         base = {"perfil": {"ajuste_macros_completado": True}, "ahora": AHORA}
-        assert avisos_de_calendario(**base, rutina_caduca=AHORA + timedelta(days=3))
+        tres_dias_antes = avisos_de_calendario(**base, rutina_caduca=AHORA + timedelta(days=3))
+        if RUTINA_VISIBLE_PARA_EL_CLIENTE:
+            assert tres_dias_antes
+        else:
+            assert tres_dias_antes == [], "con Rutinas oculta el aviso no debe salir"
+        # El dia que caduca no se avisa nunca: ya es tarde.
         assert avisos_de_calendario(**base, rutina_caduca=AHORA) == []
 
     def test_el_ajuste_avisa_a_seis_dias_y_el_dia(self):

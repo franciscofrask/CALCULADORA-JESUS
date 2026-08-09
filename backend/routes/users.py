@@ -58,6 +58,14 @@ async def get_client_profile(user = Depends(get_current_user)):
     # Su % graso vigente y si toca volver a pedirlo (punto 47). Lo decide el servidor para
     # que las pantallas no tengan cada una su version de "cuanto hace de esto".
     datos["grasa"] = grasa_vigente(profile)
+    # ¿Hay alguien detras de sus macros? (punto 4.1). De esto depende que Inicio le diga o no
+    # que le falta terminar de ajustarlos, y en produccion se lo estaba diciendo a 169 de los
+    # 174 activos -- gente que lleva meses con Jesus y a la que el mismo les pone los numeros.
+    from core.macros_de_quien import de_una_persona
+    ultimo = await db.macro_history.find_one(
+        {"client_id": profile.get("id")}, {"_id": 0, "origen": 1, "changed_by": 1},
+        sort=[("created_at", -1)])
+    datos["macros_puestos_por_alguien"] = de_una_persona(ultimo)
     return ClientProfile(**datos)
 
 @router.patch("/clients/onboarding", response_model=ClientProfile)
