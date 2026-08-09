@@ -125,6 +125,48 @@ def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
     return {**celdas, "peor": semaforo.peor(*[c["estado"] for c in celdas.values()])}
 
 
+def precio_de_ciclo(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> float:
+    """Lo que paga este cliente cada ciclo.
+
+    El `price` del perfil manda -- ahí van los precios pactados --, pero cuando está a cero
+    o no está, el precio es el de SU PLAN en el catálogo. Eso era lo que enseñaba «0 €/ciclo»
+    a clientes de pago sin cortesía marcada: los que vinieron de Calma llegaron con el campo
+    a cero, y son **168 de los 174 activos**.
+
+    Un cero SOLO se respeta cuando hay cortesía marcada (`comp_plan`), que es la casilla
+    «Plan de cortesía (sin pago)» de la ficha. Sin ella, un cero no es una decisión: es un
+    dato que no llegó.
+    """
+    if perfil.get("comp_plan"):
+        return 0.0
+    propio = perfil.get("price")
+    if propio not in (None, "", 0, 0.0):
+        try:
+            return float(propio)
+        except (TypeError, ValueError):
+            pass
+    plan = (catalogo or {}).get(perfil.get("plan") or "") or {}
+    try:
+        return float(plan.get("precio") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+# De cuántos meses es cada ciclo, para poder sumar peras con peras.
+_MESES_DE_CICLO = {"mensual": 1, "bimestral": 2, "trimestral": 3, "semestral": 6}
+
+
+def precio_mensual(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> float:
+    """Lo que aporta este cliente AL MES. Es lo que hay que sumar para un MRR.
+
+    El MRR sumaba los `price` tal cual, y son precios de CICLO: un gold son 450 € cada
+    trimestre, no cada mes. Mezclado con los mensuales, la cifra no significaba nada.
+    """
+    plan = (catalogo or {}).get(perfil.get("plan") or "") or {}
+    meses = _MESES_DE_CICLO.get(((plan.get("ciclo") or {}).get("tipo") or "mensual"), 1)
+    return precio_de_ciclo(perfil, catalogo) / max(meses, 1)
+
+
 async def _fuera_el_equipo() -> Dict[str, Any]:
     """Filtro de `client_profiles` que deja fuera los perfiles del equipo.
 
@@ -209,11 +251,20 @@ async def get_all_clients(
         if uid and ca and (uid not in hablado or ca > hablado[uid]):
             hablado[uid] = ca
 
+    # El precio que se ENSEÑA sale del catálogo cuando el perfil no trae uno propio. Los
+    # clientes que vinieron de Calma llegaron con `price` a cero y la lista les ponía 0 €
+    # aunque estuvieran pagando; ver `precio_de_ciclo`.
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+    catalogo = merged_catalog(await _overrides_by_code())
+
     result = []
     for profile in profiles:
         user_data = umap.get(profile["user_id"])
         if user_data:
             result.append({**enrich_cycle(profile), "user": user_data,
+                           "price": precio_de_ciclo(profile, catalogo),
+                           "precio_mensual": round(precio_mensual(profile, catalogo), 2),
                            "semaforo": _semaforo_del_cliente(profile, hablado, ahora)})
 
     # Registros incompletos: solo el admin sin filtros (no tienen plan/estado/coach que filtrar)
@@ -1298,14 +1349,20 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     # catálogo (activos, legacy, especiales), no solo los cuatro históricos.
     plans = {}
     mrr = 0
-    async for row in db.client_profiles.aggregate([
-        # El MRR y el reparto por plan, también sin el equipo: si no, los once perfiles del
-        # equipo con plan Gold sumaban a la facturación mensual.
-        {"$match": {**solo_clientes, "status": "activo"}},
-        {"$group": {"_id": "$plan", "count": {"$sum": 1}, "mrr": {"$sum": {"$ifNull": ["$price", 0]}}}},
-    ]):
-        plans[row["_id"] or "sin_plan"] = row["count"]
-        mrr += row["mrr"]
+    # El MRR se calcula en Python y no con una agregación porque hace falta el catálogo:
+    # el precio del cliente casi nunca está en su perfil (168 de 174 lo tienen vacío) y hay
+    # que normalizar el ciclo a meses. Sumando `price` a secas salían 2.115 € con 184
+    # activos -- 11,50 € por cliente y mes, con planes que van de 60 a 1.500 €.
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+    catalogo = merged_catalog(await _overrides_by_code())
+    for p in await db.client_profiles.find(
+            {**solo_clientes, "status": "activo"},
+            {"_id": 0, "plan": 1, "price": 1}).to_list(3000):
+        plan = p.get("plan") or "sin_plan"
+        plans[plan] = plans.get(plan, 0) + 1
+        mrr += precio_mensual(p, catalogo)
+    mrr = round(mrr, 2)
 
     # Revenue: suma en la base de datos, no en Python
     rev = await db.payments.aggregate([
