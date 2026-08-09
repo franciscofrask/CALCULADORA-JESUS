@@ -23,7 +23,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
     FileText, Scale, Target, Zap, Save, Loader2, History, Shield,
-    ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp, ChevronRight,
+    ClipboardList, TrendingUp, Utensils, Activity, ChevronDown, ChevronUp, ChevronRight, SlidersHorizontal,
     AlertCircle, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw,
     Headphones, CalendarClock, Camera
 } from 'lucide-react';
@@ -1327,6 +1327,9 @@ const ClientDetailPage = () => {
                             )}
                         </CardContent></Card>
                     ) : (!calma_raw?.formulario_inicial && <EmptyState icon={ClipboardList} message="Cuestionario pendiente." />)}
+                    {/* Las respuestas que deciden sus macros (punto 17). Van ANTES del
+                        cuestionario largo porque son las que se miran para ajustar. */}
+                    <AjustesDelCuestionario ajustes={profile?.ajustes_macros} />
                     {/* El cuestionario largo. Se rellenaba entero y NO se veía en ninguna
                         parte de la ficha: treinta preguntas de historia, salud, entreno,
                         suplementación y comida que el cliente contestaba para nadie. */}
@@ -2276,6 +2279,82 @@ const VALORES_NIVEL1 = {
     // Intolerancias
     bien: 'Sin problema', tolera_algo: 'Tolera yogur y queso curado', nada: 'Nada de lactosa',
     sensibilidad: 'Sensibilidad, no celiaquía', celiaquia: 'Celiaquía diagnosticada',
+};
+
+/**
+ * LO QUE CONTESTÓ Y MUEVE SUS MACROS (punto 17 del doc del 07-08).
+ *
+ * La pestaña Cuestionario enseñaba seis campos -- objetivo, peso, sexo, % graso, edad y
+ * altura -- y el cuestionario largo. Faltaba justo lo que decide los números: cuánto se
+ * mueve al día, si hace otro deporte, si engorda con facilidad, qué dieta trae y cómo le
+ * está funcionando. Eso vive en `ajustes_macros`, se guarda desde el 06-08 y no se pintaba
+ * en ningún sitio: el coach ajustaba a ciegas sobre unas respuestas que no podía leer.
+ *
+ * `como_va` es la que más pesa -- sitúa lo que come respecto a su mantenimiento -- y va la
+ * primera a propósito.
+ */
+const ETIQUETAS_AJUSTES = {
+    como_va: 'Cómo le va',
+    sigue_dieta: '¿Sigue una dieta?',
+    tiempo_dieta: 'Cuánto lleva con ella',
+    hambre_saturacion: 'Hambre / saturación',
+    actividad_diaria: 'Actividad diaria',
+    deporte_extra: 'Otro deporte además de pesas',
+    facilidad_engordar: 'Engorda al pasarse',
+    dieta_hc_entreno: 'HC del día de entreno (g)',
+    dieta_grasa_entreno: 'Grasa aprox. (g)',
+    dieta_texto: 'Su día tipo, tal cual lo escribió',
+};
+
+// Los valores se guardan en clave; el coach lee castellano. Los textos son los mismos que
+// ve el cliente al contestar, para que no haya dos vocabularios para lo mismo.
+const VALORES_AJUSTES = {
+    // sigue_dieta -- las cuatro del punto 19
+    true: 'Estricta, mide todo lo que come', parecido: 'No pesa, pero se cuida bastante',
+    false: 'Sin control, pero no come mal', desorganizado: 'Come mal y desorganizado',
+    // como_va
+    bien: 'Bien, va a buen ritmo', lento: 'Va, pero muy lento',
+    mucha_grasa: 'Sube, pero coge más grasa de la cuenta',
+    mantengo: 'Se mantiene igual', bajando: 'Mal: en vez de subir, baja',
+    cogiendo_peso: 'Mal: está cogiendo peso',
+    // actividad_diaria / facilidad_engordar / hambre / tiempo
+    sedentario: 'Sedentario', normal: 'Normal', muy_activo: 'Muy activo',
+    enseguida: 'Enseguida', casi_no: 'Casi no',
+    mucho: 'Mucha hambre', aguanto_mas: 'Ninguna: aguanta más',
+    no_puedo_mas: 'No saturado, pero no puede comer más', puedo_mas: 'Puede comer más sin problema',
+    menos_1m: 'Menos de un mes', '1_3m': 'Entre 1 y 3 meses',
+    '3_6m': 'Entre 3 y 6 meses', mas_6m: 'Más de 6 meses',
+};
+
+const AjustesDelCuestionario = ({ ajustes }) => {
+    const filas = Object.keys(ETIQUETAS_AJUSTES)
+        .map(k => {
+            const v = ajustes?.[k];
+            if (v == null || v === '') return null;
+            const texto = typeof v === 'boolean' ? (VALORES_AJUSTES[String(v)] || (v ? 'Sí' : 'No'))
+                : (VALORES_AJUSTES[v] || String(v));
+            return [k, ETIQUETAS_AJUSTES[k], texto];
+        })
+        .filter(Boolean);
+    if (!filas.length) return null;
+
+    return (
+        <Card className="bg-[#111] border-[#222]" data-testid="ajustes-del-cuestionario">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4" />Lo que contestó y mueve sus macros
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                {filas.map(([k, etiqueta, texto]) => (
+                    <div key={k} className="grid grid-cols-[minmax(0,13rem)_1fr] gap-3 text-sm">
+                        <span className="text-white/40">{etiqueta}</span>
+                        <span className="text-white/90 whitespace-pre-wrap break-words">{texto}</span>
+                    </div>
+                ))}
+            </CardContent>
+        </Card>
+    );
 };
 
 const PerfilLargo = ({ nivel1 }) => {

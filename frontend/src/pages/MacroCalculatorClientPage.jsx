@@ -36,16 +36,53 @@ const Field = ({ label, color, value, onChange, suffix = 'g' }) => (
 );
 
 // Module-level so inputs keep focus while typing.
-const ToggleGroup = ({ options, value, onChange }) => (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+// `vertical`: una opción por línea, alineada a la izquierda y sin mayúsculas. Es para las
+// respuestas que son frases ("Pesar no, pero me cuido bastante"), que en columnas de un
+// cuarto de ancho salen partidas en cuatro líneas y en versales, ilegibles.
+const ToggleGroup = ({ options, value, onChange, vertical = false }) => (
+    <div className={vertical ? 'grid gap-2' : 'grid gap-2'}
+        style={vertical ? undefined : { gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
         {options.map(o => (
-            <button key={o.value} onClick={() => onChange(o.value)}
-                className={`py-2.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all border ${value === o.value ? 'bg-brand text-white border-brand' : 'bg-card text-muted-foreground border-border hover:border-neutral-400'}`}>
+            <button key={String(o.value)} onClick={() => onChange(o.value)} type="button"
+                className={`rounded-xl transition-all border ${vertical ? 'py-2.5 px-3 text-left text-sm font-semibold' : 'py-2.5 text-sm font-bold uppercase tracking-wider'} ${value === o.value ? 'bg-brand text-white border-brand' : 'bg-card text-muted-foreground border-border hover:border-neutral-400'}`}>
                 {o.label}
             </button>
         ))}
     </div>
 );
+
+// Las cuatro respuestas de «¿Sigues algún tipo de dieta?» (punto 19). Son literalmente las
+// del cuestionario de alta -- mismos textos y mismos valores -- porque es la misma pregunta:
+// si aquí dijera Sí/No y allí cuatro cosas, el mismo cliente contestaría distinto según por
+// dónde entrara, y el motor recibiría dos datos que no se pueden comparar.
+const OPCIONES_DIETA = [
+    { value: true, label: 'Estricta, mido todo lo que como.' },
+    { value: 'parecido', label: 'Pesar no, pero me cuido bastante.' },
+    { value: false, label: 'Sin control, pero no como mal.' },
+    { value: 'desorganizado', label: 'Como mal y desorganizado.' },
+];
+
+// Las dos primeras traen una dieta de la que partir; las dos últimas no. Es la misma regla
+// que `traeDieta` en el cuestionario y que `trae_dieta` en macro_engine.py.
+const traeDieta = (a) => a?.sigue_dieta === true || a?.sigue_dieta === 'parecido';
+
+// «¿Mantienes el peso, ganas o pierdes?» (punto 19, con el 4.1). El cuestionario de alta se
+// la hace a todo el mundo desde el 06-08 y esta pantalla no la hacía nunca, así que el
+// motor recibía `como_va: null` y caía en su valor por defecto -- "mantengo" -- para
+// TODOS los reajustes hechos desde aquí. Es la pregunta que sitúa lo que come respecto a su
+// mantenimiento sin pedirle un número, y era justo la que faltaba.
+const OPCIONES_COMO_VA = (objetivo) => (objetivo === 'volumen' ? [
+    { value: 'bien', label: 'Bien: estoy subiendo peso.' },
+    { value: 'lento', label: 'Regular: subo, pero muy lento.' },
+    { value: 'mucha_grasa', label: 'Regular: subo, pero cojo más grasa de la cuenta.' },
+    { value: 'mantengo', label: 'Me mantengo igual, siento que necesito comer más.' },
+    { value: 'bajando', label: 'Mal: en lugar de subir, estoy bajando.' },
+] : [
+    { value: 'bien', label: 'Bien: estoy bajando a buen ritmo.' },
+    { value: 'lento', label: 'Estoy bajando, pero muy lento.' },
+    { value: 'mantengo', label: 'Me mantengo.' },
+    { value: 'cogiendo_peso', label: 'Mal: estoy cogiendo peso.' },
+]);
 
 const GroupCard = ({ label, group, withFat, macros, setMacro }) => (
     <div className="surface p-4">
@@ -68,7 +105,8 @@ const mapActividadLegacy = (nivel) => {
 
 const AJUSTES_VACIOS = {
     actividad_diaria: null, deporte_extra: null, facilidad_engordar: null,
-    sigue_dieta: null, dieta_texto: '', dieta_hc_entreno: '', dieta_grasa_entreno: '',
+    sigue_dieta: null, como_va: null,
+    dieta_texto: '', dieta_hc_entreno: '', dieta_grasa_entreno: '',
 };
 
 const MacroCalculatorClientPage = () => {
@@ -172,9 +210,9 @@ const MacroCalculatorClientPage = () => {
     // El resultado que hay en pantalla ya no corresponde a lo que está contestado.
     const [resultsViejos, setResultsViejos] = useState(false);
     const refResultados = useRef(null);
-    // Las cuatro preguntas contestadas. `sigue_dieta` puede ser `false` y eso ES una
+    // Las cinco preguntas contestadas. `sigue_dieta` puede ser `false` y eso ES una
     // respuesta, así que se compara contra null y no por si es "vacío".
-    const ajustesCompletos = ['actividad_diaria', 'deporte_extra', 'facilidad_engordar', 'sigue_dieta']
+    const ajustesCompletos = ['actividad_diaria', 'deporte_extra', 'facilidad_engordar', 'sigue_dieta', 'como_va']
         .every(k => ajustes[k] !== null && ajustes[k] !== undefined);
     useEffect(() => {
         const guardados = profile?.ajustes_macros;
@@ -207,9 +245,14 @@ const MacroCalculatorClientPage = () => {
             deporte_extra: ajustes.deporte_extra,
             facilidad_engordar: ajustes.facilidad_engordar,
             sigue_dieta: ajustes.sigue_dieta,
-            dieta_texto: ajustes.sigue_dieta ? (ajustes.dieta_texto || null) : null,
-            dieta_hc_entreno: ajustes.sigue_dieta ? num(ajustes.dieta_hc_entreno) : null,
-            dieta_grasa_entreno: ajustes.sigue_dieta ? num(ajustes.dieta_grasa_entreno) : null,
+            como_va: ajustes.como_va,
+            // Los datos de la dieta solo viajan si TRAE una dieta de la que partir. Antes
+            // bastaba con que `sigue_dieta` fuera truthy, y con cuatro respuestas
+            // 'desorganizado' también lo es: se habrían mandado los gramos de una dieta que
+            // el cliente acaba de decir que no lleva.
+            dieta_texto: traeDieta(ajustes) ? (ajustes.dieta_texto || null) : null,
+            dieta_hc_entreno: traeDieta(ajustes) ? num(ajustes.dieta_hc_entreno) : null,
+            dieta_grasa_entreno: traeDieta(ajustes) ? num(ajustes.dieta_grasa_entreno) : null,
         };
     };
 
@@ -323,7 +366,16 @@ const MacroCalculatorClientPage = () => {
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Objetivo</label>
-                                <ToggleGroup options={[{ value: 'volumen', label: 'Volumen' }, { value: 'definicion', label: 'Definición' }]} value={form.objetivo} onChange={v => set('objetivo', v)} />
+                                {/* Al cambiar de objetivo, «cómo te va» se borra: las respuestas
+                                    de volumen ("subo pero muy lento") no existen en definición,
+                                    y dejarla marcada mandaría al motor un valor que no está en
+                                    su matriz -- que él descarta en silencio. */}
+                                <ToggleGroup options={[{ value: 'volumen', label: 'Volumen' }, { value: 'definicion', label: 'Definición' }]}
+                                    value={form.objetivo}
+                                    onChange={v => {
+                                        set('objetivo', v);
+                                        if (!OPCIONES_COMO_VA(v).some(o => o.value === ajustes.como_va)) setAjuste('como_va', null);
+                                    }} />
                             </div>
 
                             {/* Ajusta tus macros (preguntas 5-8 del quiz, motor v2) */}
@@ -345,11 +397,17 @@ const MacroCalculatorClientPage = () => {
                                         value={ajustes.facilidad_engordar} onChange={v => setAjuste('facilidad_engordar', v)} />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">¿Sigues una dieta ahora y sabes lo que comes?</label>
-                                    <ToggleGroup options={[{ value: true, label: 'Sí' }, { value: false, label: 'No' }]}
+                                    {/* LAS CUATRO RESPUESTAS (punto 19). Aquí seguía con Sí/No
+                                        mientras el cuestionario de alta ya preguntaba las
+                                        cuatro del documento de textos (06-08, pantalla 12), así
+                                        que la misma pregunta daba respuestas distintas según
+                                        por dónde entrara el cliente. Los valores son los
+                                        mismos que allí para no romper lo ya guardado. */}
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">¿Sigues algún tipo de dieta en este momento?</label>
+                                    <ToggleGroup vertical options={OPCIONES_DIETA}
                                         value={ajustes.sigue_dieta} onChange={v => setAjuste('sigue_dieta', v)} />
                                 </div>
-                                {ajustes.sigue_dieta && (
+                                {traeDieta(ajustes) && (
                                     <div className="space-y-3 bg-muted/60 border border-border rounded-xl p-3">
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
@@ -366,10 +424,22 @@ const MacroCalculatorClientPage = () => {
                                             </div>
                                         </div>
                                         <textarea value={ajustes.dieta_texto} onChange={e => setAjuste('dieta_texto', e.target.value)}
-                                            placeholder="Cuéntanos qué comes en un día normal (se guarda tal cual para tu entrenador)"
+                                            placeholder="Ponnos un día tipo. El de ayer, por ejemplo (se guarda tal cual para tu entrenador)"
                                             rows={3} className="input-light resize-none text-sm" />
                                     </div>
                                 )}
+                                <div>
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                                        {traeDieta(ajustes)
+                                            ? '¿Cómo te está funcionando?'
+                                            : 'Con lo que comes ahora, ¿mantienes el peso, ganas o pierdes?'}
+                                    </label>
+                                    <ToggleGroup vertical options={OPCIONES_COMO_VA(form.objetivo)}
+                                        value={ajustes.como_va} onChange={v => setAjuste('como_va', v)} />
+                                    <p className="text-[11px] text-foreground/40 mt-1.5">
+                                        Sé sincero: de esto depende que partamos de lo que comes o de lo que te toca comer.
+                                    </p>
+                                </div>
                             </div>
 
                             {/* Bloqueado hasta que estén contestadas las preguntas, no solo

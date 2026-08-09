@@ -1687,6 +1687,25 @@ class NutritionChatbot:
                 cant = _round_step(max_g, step_granel(a), floor=True) or max_g
                 cantidad_g = cant
 
+        # NÚMEROS REDONDOS (puntos 4 y 6 del doc del 07-08). `calma_suggest` dimensiona de
+        # gramo en gramo (STEP_GRANEL = 1), que es lo que hacía Calma, y de ahí salían los
+        # 223 g de pechuga y los 42 g de whey que reportó Jesús. `redondeo_salida` está
+        # escrito justo para esto desde el 07-08 pero solo estaba enchufado en el recetario:
+        # el asistente, que es por donde el cliente monta una comida desde cero, seguía
+        # entregando el número crudo.
+        #
+        # Se aplica AQUÍ y no más arriba porque este es el punto de salida: lo que devuelve
+        # `_size_food` es a la vez lo que se le enseña y lo que se le mete en la dieta. Si se
+        # redondease dentro del cálculo, cada paso arrastraría su error.
+        #
+        # Y los macros se recalculan sobre la cantidad ya redondeada: enseñar «200 g · 46 P»
+        # cuando los 46 P eran de los 223 g sería peor que el número feo.
+        from redondeo_salida import redondear_cantidad
+        redondeada = redondear_cantidad(a, cantidad_g, minimo_g=minimo_g)
+        if redondeada > 0 and redondeada != cantidad_g:
+            cantidad_g = redondeada
+            cant = (cantidad_g / racion) if es_unidad else cantidad_g
+
         m = macros_at(a, cant)
         macros = {"P": round(m["proteinas"], 1), "H": round(m["hidratos"], 1), "G": round(m["grasas"], 1)}
         return cantidad_g, macros

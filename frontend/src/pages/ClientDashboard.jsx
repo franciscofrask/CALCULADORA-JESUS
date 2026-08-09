@@ -582,8 +582,14 @@ const ClientDashboard = () => {
                 </div>
             )}
 
-            {/* Cuestionario Nivel 1 pendiente (planes con coach): retomable, no bloqueante */}
-            {can('macros_personalizados') && profile?.questionnaire_completed && !profile?.questionnaire_nivel1_completed && (
+            {/* Cuestionario Nivel 1 pendiente (planes con coach): retomable, no bloqueante.
+                UN AVISO CADA VEZ, NO DOS (punto 17). Antes este salía a la vez que el de
+                arriba, así que el cliente veía «Completa tu cuestionario inicial» y
+                «Completa tu perfil para tu coach» uno debajo del otro y parecía que había
+                dos cuestionarios. No los hay: es el mismo recorrido, y el de arriba sigue
+                de largo hasta aquí sin cortes. Este solo tiene sentido cuando el de arriba
+                ya está hecho -- es decir, cuando de verdad se quedó a medias. */}
+            {can('macros_personalizados') && profile?.questionnaire_completed && profile?.ajuste_macros_completado && !profile?.questionnaire_nivel1_completed && (
                 <button onClick={() => navigate('/questionnaire')} data-testid="nivel1-pending-banner"
                     className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">
                     <div className="flex items-center gap-4">

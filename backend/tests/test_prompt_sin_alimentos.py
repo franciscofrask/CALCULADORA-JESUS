@@ -38,6 +38,13 @@ _LENGUAJE_NORMAL = {
     "estilo", "libre", "macros", "macro", "unidad", "momento", "comida", "comidas",
     "minuto", "listo", "lista", "punto", "media", "medio", "corte", "trozos",
     "montar", "relleno", "toque", "total",
+    # "De Nuestra Tierra" es una marca (alcachofas, anchoas, pimientos del piquillo), asi
+    # que "nuestra" entraba en el vocabulario de comida y el test saltaba porque el prompt
+    # del agente dice "nuestra". Es un pronombre, no un alimento.
+    "nuestra", "nuestro", "nuestras", "nuestros", "tierra",
+    # "origen" es una clave de datos del borrador (origen='recetario'), no un alimento.
+    # Entraba en el vocabulario por productos con "denominacion de origen" en el nombre.
+    "origen",
 }
 
 
