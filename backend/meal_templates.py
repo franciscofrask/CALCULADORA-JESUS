@@ -486,6 +486,13 @@ async def _ajustar_plantilla(
         "macros_objetivo": obj,
         "cuadrada": es_cuadrada,
         "tags": plantilla.get("tags", []),
+        # De dónde sale la receta. Se perdía por el camino, y con ella el enlace y la foto
+        # del recetario de Jesús: el asistente enseñaba sus recetas sin nombre de fuente y
+        # llegó a contestar «no tengo un recetario de Jesús como tal dentro de la app»
+        # teniendo 159 dentro.
+        "fuente": plantilla.get("fuente"),
+        "foto": plantilla.get("foto"),
+        "ingredientes_web": plantilla.get("ingredientes_web"),
     }
 
 

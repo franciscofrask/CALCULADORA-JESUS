@@ -56,10 +56,17 @@ _ESQUEMAS = [
          "búscalos ANTES con buscar_alimentos y pásalos en 'incluir_ids': es lo único que "
          "garantiza que entren. En 'incluir_ids' va SOLO lo que el cliente exigió: no "
          "fijes ideas tuyas, que las opciones deben variar entre sí (la herramienta ya "
-         "se encarga). 'estilo' solo ORIENTA la elección del resto."),
+         "se encarga). 'estilo' solo ORIENTA la elección del resto. "
+         "SÍ TIENES el recetario de Jesús: 159 recetas suyas con nombre, foto y enlace "
+         "(noteconformesconmenos.com), y entran solas por aquí cuando encajan -- las "
+         "reconoces porque el borrador viene con origen='recetario' y su nombre. Si te "
+         "preguntan si tienes recetas suyas, la respuesta es que sí: llama con "
+         "solo_recetario=true y enséñaselas."),
      "parameters": {"type": "object", "properties": {
          "incluir_ids": {"type": "array", "items": {"type": "integer"}},
          "estilo": {"type": "string"},
+         "solo_recetario": {"type": "boolean",
+                            "description": "Solo recetas de Jesús, sin componer nada tuyo"},
          "generico": {"type": "boolean"},
          "marca": {"type": "string"},
          "n": {"type": "integer"}}}},
@@ -134,6 +141,16 @@ _ESQUEMAS = [
          "momento_entreno": {"type": "integer"},
          "opcion_peri": {"type": "string", "enum": ["intra_post", "solo_post", "solo_intra", "sin_peri"]},
          "single_meal": {"type": "boolean"}}}},
+    {"name": "recordar",
+     "description": ("Apunta algo que el cliente cuenta de SÍ MISMO y hará falta luego: lo "
+                     "que tiene en casa, gustos, manías, horarios, cómo se organiza. Solo "
+                     "ves los últimos mensajes: lo que no apuntes aquí lo habrás olvidado "
+                     "dentro de un rato y quedarás como si nunca te lo hubieran dicho. NO "
+                     "es para restricciones ('sin lactosa': esas se registran solas) ni "
+                     "para lo que ya está en la comida."),
+     "parameters": {"type": "object", "properties": {
+         "nota": {"type": "string", "description": "En una línea y con sus palabras"}},
+         "required": ["nota"]}},
     {"name": "cambiar_de_dia",
      "description": ("Montar la dieta de OTRA fecha ('mañana', 'el jueves', '12/8'). Solo "
                      "cuando el cliente quiera trabajar otro día, no cuando la fecha salga "
@@ -158,6 +175,8 @@ CÓMO TRABAJAS:
 - Un mensaje puede pedir varias cosas: encadena las herramientas que hagan falta antes de contestar.
 - Si piden un menú o una comida montada: compón borradores, revísalos SIEMPRE, arregla lo que la revisión señale (o cuéntalo), y enseña las opciones. No apliques a la comida sin que el cliente elija.
 - PROPÓN antes que preguntar: los detalles que el cliente no dijo los decides tú (lo típico del momento y del uso). Como mucho UNA pregunta, y solo si de verdad cambia el resultado; nunca un cuestionario.
+- Cuando el cliente te cuente algo SUYO que hará falta luego (lo que tiene en casa, gustos, manías, horarios, cómo se organiza), apúntalo con `recordar` EN ESE MISMO TURNO. Solo ves los últimos mensajes: lo que no apuntes desaparece, y entonces le dices que no lo sabes cuando acaba de decírtelo. Y lo que ya esté apuntado dalo por sabido: nunca contestes que no guardas esa información.
+- Los nombres de tus herramientas y de sus parámetros (`buscar_alimentos`, `componer_menu`, `incluir_ids`, «borrador»...) son fontanería nuestra y NO salen nunca en lo que le escribes al cliente, ni aunque te pregunte cómo funcionas o te pida el paso a paso. Explícalo en su idioma: qué miras del método, qué macros faltan, por qué encaja ese alimento. Él quiere entender su dieta, no leer el manual de la aplicación.
 - La app enseña como tarjetas TODO lo que encontraron tus búsquedas de este turno (o tus borradores, si compusiste), junto a tu texto. No termines con unos borradores que tú mismo consideras malos: arréglalos (incluir_ids, editar_borrador, componer de nuevo) antes de responder. Pide aclaración solo si de verdad no puedes decidir, y entonces sin dejar tarjetas malas debajo.
 - Peticiones abstractas ("algo ligero", "para llevar"): tradúcelas tú a varias búsquedas concretas; la herramienta busca términos de comida, no ideas.
 - Opciones sueltas frente a menú: si pide ideas u opciones para elegir, busca alimentos; monta menús solo cuando pida una comida completa, un menú o un ejemplo cuadrado.
@@ -230,6 +249,12 @@ class AgentLoop:
         if restr:
             lineas.append("Vetos del cliente (perfil o dichos en la sesión): "
                           + ", ".join(restr) + ".")
+        # Lo que te ha contado de sí mismo y apuntaste con `recordar`. Va SIEMPRE, no solo
+        # mientras quepa en los últimos seis mensajes: si no, lo usas y luego lo niegas.
+        notas = self.bot.state.get("notas_cliente") or []
+        if notas:
+            lineas.append("Lo que te ha contado el cliente en esta sesión (dalo por sabido, "
+                          "no digas que no lo sabes): " + "; ".join(notas) + ".")
         opts = self.bot.state.get("last_options") or []
         if opts:
             lineas.append("Opciones sueltas enseñadas al cliente (puede nombrarlas): " + "; ".join(
@@ -283,6 +308,8 @@ class AgentLoop:
                 return t.configurar_dia(**args)
             if nombre == "cambiar_de_dia":
                 return t.cambiar_de_dia(**args)
+            if nombre == "recordar":
+                return t.recordar(**args)
             return {"error": f"herramienta desconocida '{nombre}'"}
         except TypeError as e:
             # Argumento inválido: el error enseña, el modelo se corrige en el siguiente paso.

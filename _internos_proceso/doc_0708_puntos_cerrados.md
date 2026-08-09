@@ -2665,6 +2665,77 @@ Ahora se distinguen las tres cosas, que son distintas y hay que decirlas distint
 "arroz"                  -> aquí lo tienes
 ```
 
+
+## Los cuatro que quedaban de la auditoría del asistente
+
+Francisco eligió el orden y pidió verificar uno a uno. Van medidos antes y después.
+
+### Un menú al que le faltan 73 g no es una comida
+
+La puerta de calidad de `componer_menu` solo miraba el EXCESO. El déficit pasaba entero,
+con el argumento de que era «trabajo pendiente» que alguien remataría. Medido sobre 38
+borradores de diez estilos y dos comidas: **el 37 % salía con más de 30 g sin cubrir**, y el
+peor con 73 -- le faltaban 40 g de proteína y 33 de hidratos. Eso no lo remata nadie: se le
+enseña al cliente y lo da por bueno.
+
+Ahora el déficit se corta con el mismo listón que el exceso. La diferencia entre los dos
+sigue reconocida -- un menú corto se puede completar y uno pasado no --, así que si al final
+no queda ninguna opción, la menos corta se rescata **con su aviso**.
+
+```
+antes:  37 % de los menús a más de 30 g sin cubrir
+ahora:  11 %, ninguna escena sin opciones, y las cortas avisan
+```
+
+### «No tengo un recetario de Jesús como tal dentro de la app»
+
+Eso contestaba, teniendo **159 recetas suyas** importadas de noteconformesconmenos.com con
+nombre, foto y enlace. Eran tres cosas a la vez:
+
+1. Nadie se lo había dicho: la ficha de `componer_menu` no mencionaba el recetario.
+2. El enlace y la foto se perdían por el camino (`_ajustar_plantilla` no los devolvía), así
+   que ni enseñándolas podía citar la fuente -- por eso las tarjetas salían con `url: None`.
+3. Y aunque lo supiera, no tenía forma de PEDIRLAS: el recetario solo entraba cuando la
+   llamada venía sin estilo ni filtros, y una pregunta directa nunca cumple eso. Ahora hay
+   `solo_recetario`.
+
+```
+"tienes recetas de Jesús?"  ->  Oatmeal proteico con hamburguesas / Avocado & Protein
+                                Toast / Pancakes Fit Energy, las tres con su enlace
+```
+
+De la misma tanda se comprobaron otras capacidades que la auditoría daba por dudosas
+--calcular gramos para un objetivo, cambiar la configuración del día, sumar lo que llevas--
+y esas **sí funcionaban**: quedan fijadas en el test para que el arreglo no se las lleve.
+
+### Usaba lo que le contabas y cinco mensajes después lo negaba
+
+Al agente solo se le pasan los **últimos seis mensajes**. Con eso parecía que recordaba...
+hasta que el dato salía de la ventana:
+
+```
+1. cliente: "en casa solo tengo huevos, avena y plátano"
+   asistente: "...montamos el desayuno con tus huevos, avena y plátano"
+   ...
+7. cliente: "¿qué tengo en casa?"
+   asistente: "No puedo ver lo que tienes en casa, no guardo esa info ni tu despensa"
+```
+
+Las dos cosas en la misma conversación, y la segunda desmintiendo a la primera. Ahora hay
+una herramienta `recordar`: lo que el cliente cuenta de sí mismo se apunta y viaja SIEMPRE
+en el contexto. Las restricciones ya funcionaban por otro camino (`avoided_keywords`) y no
+se han tocado.
+
+Es memoria de la SESIÓN, no del cliente: no se guarda en su perfil. Eso sería otra decisión
+y no la he tomado por mi cuenta.
+
+### Y la fontanería a la vista
+
+Preguntándole cómo funciona, soltaba los nombres de sus propias herramientas
+--`buscar_alimentos`, `componer_menu`, `revisar_borrador`-- en la respuesta al cliente. Salía
+en **2 de cada 10** mensajes de ese tipo; en los diez normales, en ninguno. Ahora lo explica
+en su idioma: qué mira del método, qué macros faltan, por qué encaja ese alimento.
+
 ### Y de paso, el cuelgue otra vez
 
 Probando esto el chat se quedó bloqueado **en el arranque**, no en el envío: el tope al

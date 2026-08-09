@@ -84,6 +84,11 @@ class NutritionChatbot:
             "seen_sugg": {},  # Sugerencias ya ofrecidas por comida (para no repetirlas)
             "last_termino": None,  # De qué tipo de alimento iba la última lista ("tostadas")
             "termino_vistos": [],  # Ids ya enseñados de ese término, para no repetirlos
+            # Lo que el cliente cuenta de sí mismo y hace falta luego: lo que tiene en
+            # casa, gustos, horarios. Al agente solo se le pasan los ÚLTIMOS 6 mensajes,
+            # así que sin esto lo usaba y cinco mensajes después contestaba «no puedo ver
+            # lo que tienes en casa, no guardo esa info» -- en la misma conversación.
+            "notas_cliente": [],
         }
         
         # Historial de mensajes para persistencia (lo rellena el agente: solo lo humano)

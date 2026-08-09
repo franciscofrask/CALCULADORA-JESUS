@@ -421,7 +421,7 @@ class AgentTools:
     # ============================================================ 2. componer_menu
     async def componer_menu(self, incluir_ids: List[int] = None, estilo: str = "",
                             generico: bool = None, marca: str = None,
-                            n: int = 3) -> dict:
+                            n: int = 3, solo_recetario: bool = False) -> dict:
         """Monta hasta `n` menús completos para la comida actual con el catálogo entero.
         `incluir_ids` son obligatorios (van en todas las opciones); `estilo` es el texto
         libre del cliente y guía la elección por semántica. El recetario (153 recetas de
@@ -435,8 +435,12 @@ class AgentTools:
         momento = self._momento_actual()
         opciones: List[dict] = []
 
-        # --- 1) Recetario: solo sin estilo/filtros que él no sabe respetar y fuera del peri
-        if momento != PERI and not estilo and not incluir_ids and generico is None and not marca:
+        # --- 1) Recetario: sin estilo ni filtros que él no sabe respetar, y fuera del peri.
+        # `solo_recetario` lo salta a propósito: cuando el cliente PIDE las recetas de
+        # Jesús («¿tienes recetas suyas?»), traerlas es lo que hay que hacer, y antes ni
+        # con esas salían -- el asistente llegó a contestar que no tenía recetario.
+        if momento != PERI and (solo_recetario or
+                                (not estilo and not incluir_ids and generico is None and not marca)):
             try:
                 from meal_templates import generar_opciones_menu
                 from routes.calculator import AVOIDABLE_PREFIXES
@@ -464,9 +468,17 @@ class AgentTools:
                 if items:
                     opciones.append({"items": items, "origen": "recetario",
                                      "nombre": r.get("nombre") or r.get("titulo"),
-                                     "receta_url": r.get("fuente")})
+                                     "receta_url": r.get("fuente"),
+                                     "receta_foto": r.get("foto")})
 
-        # --- 2) Composición propia hasta n, con proteínas distintas entre opciones
+        # --- 2) Composición propia hasta n, con proteínas distintas entre opciones.
+        # Con `solo_recetario` no se compone nada: han pedido las recetas de Jesús, y
+        # rellenar con invento propio sería colar lo nuestro como suyo. Si no encaja
+        # ninguna, se dice, que también es información.
+        if solo_recetario and not opciones:
+            return {"borradores": [], "sin_resultados_porque": [
+                "ninguna receta del recetario cuadra con lo que falta en esta comida; "
+                "dilo así y ofrécele montar algo equivalente tú"]}
         roles_necesarios = [rol for rol, m in _ROL_A_MACRO.items() if restante[m] > 4]
         if not roles_necesarios:
             roles_necesarios = ["proteina"]
@@ -513,7 +525,7 @@ class AgentTools:
         intento = 0
         descartes_bucle = None
         apartadas = []      # descartadas por compañía, por si no queda ninguna otra
-        while len(opciones) < n and intento < n + 5:
+        while not solo_recetario and len(opciones) < n and intento < n + 5:
             nombres, ids_opcion, repetida = [], [], False
             for rol, food in fijos:
                 nombres.append(food.get("nombre"))
@@ -695,15 +707,26 @@ class AgentTools:
         mk = self.bot.current_meal_key()
         numero = max((b.get("numero") or 0 for b in borradores.values()
                       if b.get("meal_key") == mk), default=0)
-        salida, descartes = [], []
+        salida, descartes, cortos = [], [], []
         for op in opciones[:n]:
             tot = {m: round(sum(i["macros"][m] for i in op["items"]), 1) for m in ("P", "H", "G")}
             desvio = {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")}
-            # Solo bloquea el EXCESO gordo (49 g de grasa sobre 12 no es una comida, es
-            # basura). El déficit pasa: es trabajo pendiente que el agente arregla con
-            # editar_borrador o que el revisor señalará. Los obligatorios del cliente
-            # eximen SU exceso, no el del relleno (misma regla que dentro del bucle).
+            # Bloquea el EXCESO gordo (49 g de grasa sobre 12 no es una comida, es basura)
+            # Y TAMBIÉN el déficit gordo.
+            #
+            # El déficit pasaba entero: se daba por hecho que era «trabajo pendiente» que
+            # el agente remataría o que el revisor señalaría. Medido sobre 38 borradores de
+            # diez estilos distintos, **el 37 % salía con más de 30 g sin cubrir**, y el
+            # peor con 73 (le faltaban 40 g de proteína y 33 de hidratos). Eso no es un
+            # menú al que le falta un remate: es medio menú, y el cliente lo acepta creyendo
+            # que cuadra. Un menú corto se puede completar y uno pasado no, cierto -- por
+            # eso, si al final no queda ninguna opción, la mejor se rescata con su aviso en
+            # vez de dejar al cliente sin nada.
+            #
+            # Los obligatorios del cliente eximen SU exceso, no el del relleno (misma regla
+            # que dentro del bucle).
             exceso = sum(max(v, 0) for v in desvio.values())
+            deficit = sum(-v for v in desvio.values() if v < 0)
             ids_fijos = {int(f["id"]) for _, f in fijos}
             tot_fij = {m: sum(i["macros"][m] for i in op["items"] if i["id"] in ids_fijos)
                        for m in ("P", "H", "G")}
@@ -712,6 +735,12 @@ class AgentTools:
                 peor_m = max(desvio, key=lambda m: desvio[m])
                 descartes.append(f"una opción se pasaba {desvio[peor_m]:.0f} g de "
                                  f"{_MACRO_LBL[peor_m]} y se descartó")
+                continue
+            if deficit > 2 * MARGEN_BORRADOR:
+                peor_m = min(desvio, key=lambda m: desvio[m])
+                cortos.append((deficit, op, f"le faltaban {-desvio[peor_m]:.0f} g de "
+                                            f"{_MACRO_LBL[peor_m]}"))
+                descartes.append(f"una opción se quedaba {deficit:.0f} g corta y se descartó")
                 continue
             bid = f"b{len(borradores) + 1}"
             numero += 1
@@ -724,6 +753,25 @@ class AgentTools:
             # Rescatada del filtro de compañía: se enseña, pero diciendo lo que es.
             if op.get("aviso_companyia"):
                 borrador["avisos"] = [op["aviso_companyia"].replace("un intento", "esta opción")]
+            borradores[bid] = borrador
+            salida.append(borrador)
+        # Si TODAS se quedaban cortas, se rescata la que menos, con su aviso. Un menú corto
+        # se puede rematar; quedarse sin nada que enseñar, no.
+        if not salida and cortos:
+            cortos.sort(key=lambda x: x[0])
+            _, op, motivo = cortos[0]
+            tot = {m: round(sum(i["macros"][m] for i in op["items"]), 1) for m in ("P", "H", "G")}
+            bid = f"b{len(borradores) + 1}"
+            numero += 1
+            borrador = {"id": bid, "numero": numero,
+                        "items": op["items"], "origen": op["origen"],
+                        "nombre": op["nombre"], "receta_url": op.get("receta_url"),
+                        "macros_totales": tot, "objetivo": dict(restante),
+                        "desvio": {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")},
+                        "filtros": {"generico": generico, "marca": marca, "estilo": estilo or None},
+                        "momento": momento, "meal_key": self.bot.current_meal_key(),
+                        "avisos": [f"esta opción se queda corta: {motivo}. Complétala antes "
+                                   f"de dársela por buena."]}
             borradores[bid] = borrador
             salida.append(borrador)
         if not salida:
@@ -1083,7 +1131,33 @@ class AgentTools:
                 "no existen, y que revise esas comidas porque los macros han cambiado.")
         return out
 
-    # ========================================================= 9. cambiar_de_dia
+    # ============================================================= 9. recordar
+    # Tope: son notas de trabajo, no un expediente. Con las últimas basta.
+    MAX_NOTAS = 8
+
+    def recordar(self, nota: str = None) -> dict:
+        """Apunta algo que el cliente ha contado de sí mismo y va a hacer falta después.
+
+        Al agente solo se le pasan los ÚLTIMOS 6 MENSAJES de la conversación. Con eso
+        parecía que recordaba -- y lo usaba -- hasta que el dato salía de la ventana y
+        contestaba lo contrario. Medido el 08-08: el cliente dice «en casa solo tengo
+        huevos, avena y plátano», el asistente monta el desayuno «con tus huevos, avena y
+        plátano», y seis mensajes más tarde responde *«no puedo ver lo que tienes en casa,
+        no guardo esa info ni tu despensa»*. Las dos cosas en la misma conversación.
+
+        Lo apuntado aquí viaja SIEMPRE en el contexto, no dependa de la ventana. Es memoria
+        de la sesión, no del cliente: no se guarda en su perfil.
+        """
+        nota = (nota or "").strip()
+        if not nota:
+            return {"ok": False, "error": "no hay nada que apuntar"}
+        notas = self.bot.state.setdefault("notas_cliente", [])
+        if nota not in notas:
+            notas.append(nota)
+            del notas[:-self.MAX_NOTAS]
+        return {"ok": True, "apuntado": nota, "notas": list(notas)}
+
+    # ========================================================= 10. cambiar_de_dia
     def cambiar_de_dia(self, fecha: str = None) -> dict:
         """Montar OTRA fecha. Quién decide que el cliente quiere cambiar de día es el
         agente, no un regex: hasta el 08-08 lo miraba el front con
