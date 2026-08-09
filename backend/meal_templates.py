@@ -9,6 +9,7 @@ grasa) y las cantidades se autoajustan a los macros del usuario.
 """
 
 import math
+import random
 
 from typing import Dict, List, Optional
 from calma_engine import _redondear_cantidad, parse_categories
@@ -55,6 +56,7 @@ async def generar_opciones_menu(
     max_opciones: int = 3,
     variar_proteinas: bool = True,
     incluir_lejanas: bool = False,
+    semilla=None,
 ) -> List[Dict]:
     """
     Genera hasta 3 opciones de menú (A, B, C) autoajustadas para un momento.
@@ -154,7 +156,26 @@ async def generar_opciones_menu(
             ajustadas.append((opcion, prot_principal, err))
 
     # Priorizar: primero las CUADRADAS exactas, luego las más cercanas al objetivo.
-    ajustadas.sort(key=lambda x: (not x[0].get("cuadrada", False), x[2]))
+    #
+    # El error se agrupa en ESCALONES de 5 g antes de ordenar, y dentro de cada escalón se
+    # baraja. Sin esto el orden era totalmente determinista y dos clientes con los mismos
+    # macros recibían exactamente las mismas tres recetas, siempre; Francisco, 08-08:
+    # «siempre que piden sugerencias sugiere lo mismo a todos, esto porque tienen los
+    # mismos macros pero igual debería variar». Un menú que se desvía 2 g y otro que se
+    # desvía 5 son igual de buenos: elegir siempre el primero por 3 g de diferencia no es
+    # precisión, es aburrimiento.
+    #
+    # La semilla la pone quien llama, y es estable por cliente-día-comida: el mismo
+    # cliente ve lo mismo si recarga, y otro cliente ve otra cosa.
+    # Sin semilla no se baraja: el orden queda como estaba. Quien quiera variedad la pide,
+    # y así la calculadora y el buscador del coach siguen dando el mismo orden de siempre.
+    if semilla is not None:
+        rng = random.Random(semilla)
+        rng.shuffle(ajustadas)
+        ajustadas.sort(key=lambda x: (not x[0].get("cuadrada", False),
+                                      int(x[2] // ESCALON_ERROR)))
+    else:
+        ajustadas.sort(key=lambda x: (not x[0].get("cuadrada", False), x[2]))
 
     # Selección: por defecto hasta max_opciones con proteínas diferentes (variedad);
     # con variar_proteinas=False se devuelven todas las que encajan, en orden.
@@ -190,6 +211,11 @@ def _food_avoided(alimento: dict, avoided_prefixes: set, avoided_keywords: list)
                 return True
     return False
 
+
+# Escalón para agrupar el error al ordenar: dos menús que se desvían 2 g y 5 g son igual
+# de buenos, así que compiten en el mismo tramo y se decide barajando. Es el mismo criterio
+# que ya se usó para ordenar la biblioteca de menús (punto 71 del documento).
+ESCALON_ERROR = 5.0
 
 MARGEN_MENU = 4.0  # ±4 g por macro para considerar el menú "cuadrado" (badge "Cuadrada")
 # Margen más laxo, SOLO para los menús preestablecidos (no toca la calculadora ni CALMA):

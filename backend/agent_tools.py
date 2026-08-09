@@ -50,13 +50,17 @@ class AgentTools:
     _CORRECTOR = None
     _FOODS = None          # id -> doc del catálogo
 
-    def __init__(self, bot, semantica, corrector, perfil, foods: Dict[int, dict]):
+    _COMPANYIA = None      # qué va con qué, aprendido de las dietas
+
+    def __init__(self, bot, semantica, corrector, perfil, foods: Dict[int, dict],
+                 companyia=None):
         self.bot = bot
         self.db = bot.db
         self.semantica = semantica
         self.corrector = corrector
         self.perfil = perfil
         self.foods = foods
+        self.companyia = companyia
 
     @classmethod
     async def crear(cls, bot) -> "AgentTools":
@@ -69,8 +73,15 @@ class AgentTools:
                 cls._SEMANTICA = False   # sin embeddings generados: búsqueda solo léxica
         if cls._CORRECTOR is None:
             cls._CORRECTOR = await CorrectorErratas.cargar(bot.db)
+        if cls._COMPANYIA is None:
+            from company_profile import PerfilCompanyia
+            perfil_c = await PerfilCompanyia.cargar(bot.db)
+            # Sin la colección generada (entorno nuevo) se sigue como siempre: el perfil
+            # de compañía afina, no es imprescindible para montar una comida.
+            cls._COMPANYIA = perfil_c if perfil_c.comidas else False
         perfil = await bot._perfil_momento()
-        return cls(bot, cls._SEMANTICA or None, cls._CORRECTOR, perfil, cls._FOODS)
+        return cls(bot, cls._SEMANTICA or None, cls._CORRECTOR, perfil, cls._FOODS,
+                   cls._COMPANYIA or None)
 
     # ------------------------------------------------------------ contexto común
     def _momento_actual(self) -> str:
@@ -290,6 +301,40 @@ class AgentTools:
             out["sin_resultados_porque"] = notas
         return out
 
+    def _semilla_variedad(self) -> int:
+        """Con qué se baraja: estable por CLIENTE, DÍA y COMIDA.
+
+        Ni fija ni al azar puro. Fija daba lo que Francisco vio el 08-08 -- todos los
+        clientes con los mismos macros recibiendo exactamente las mismas tres recetas --;
+        al azar puro cambiaría las opciones cada vez que se recarga la página, y el
+        cliente no entendería nada. Así el mismo cliente ve lo mismo mientras esté en esa
+        comida, y mañana o el de al lado ven otra cosa."""
+        st = self.bot.state
+        partes = (str(self.bot.session_id or ""), str(st.get("fecha_objetivo") or ""),
+                  self.bot.current_meal_key())
+        return abs(hash("|".join(partes))) % (2 ** 31)
+
+    def _companyia_mala(self, items: List[dict], ids_exentos: set = None):
+        """¿Hay en esta comida un par que en las dietas reales no se pone junto? Devuelve
+        el motivo, o None si la comida es normal (o si no hay datos para juzgarla).
+
+        Los alimentos que el cliente ha pedido por su nombre quedan fuera del juicio: si
+        quiere yogur con atún, es su comida y no hay nada que discutir. Lo que se corrige
+        es lo que el asistente propone POR SU CUENTA."""
+        if not self.companyia:
+            return None
+        ids_exentos = ids_exentos or set()
+        foods = [self.foods[i["id"]] for i in items
+                 if i.get("id") in self.foods and i["id"] not in ids_exentos]
+        if len(foods) < 2:
+            return None
+        malo = self.companyia.discordante(foods)
+        if not malo:
+            return None
+        elev, a, b = malo
+        return (f"un intento juntaba {a.get('nombre')} con {b.get('nombre')}, y en las "
+                f"dietas reales casi no coinciden (elevación {elev:.2f})", elev)
+
     # ============================================================ 2. componer_menu
     async def componer_menu(self, incluir_ids: List[int] = None, estilo: str = "",
                             generico: bool = None, marca: str = None,
@@ -319,7 +364,8 @@ class AgentTools:
                     self.db, momento, restante,
                     avoided_prefixes=avoid,
                     avoided_keywords=self.bot.state.get("avoided_keywords", []),
-                    max_opciones=n)
+                    max_opciones=n,
+                    semilla=self._semilla_variedad())
             except Exception:
                 recetas = []
             for r in recetas:
@@ -383,6 +429,7 @@ class AgentTools:
                                  for i in o.get("items", []) if i.get("id") in self.foods}
         intento = 0
         descartes_bucle = None
+        apartadas = []      # descartadas por compañía, por si no queda ninguna otra
         while len(opciones) < n and intento < n + 5:
             nombres, ids_opcion, repetida = [], [], False
             for rol, food in fijos:
@@ -435,7 +482,14 @@ class AgentTools:
             # complementaria de ese macro y se recuadra. Primero respetando el estilo;
             # si el estilo no da candidatos, sin él: mejor un menú completo que uno
             # puramente fiel al estilo pero corto.
+            # Y con un techo de piezas: el 84,5 % de las 147.820 comidas reales tienen 5
+            # alimentos o menos, y aquí salían menús de 6 y de 7 (yogur, frambuesas,
+            # almendras, pan, tomate, fiambre de pavo y atún, todo en el mismo desayuno).
+            # El número lo dicen las dietas, no una constante escrita a mano.
+            tope_piezas = self.companyia.tamano_habitual() if self.companyia else 5
             for _ in range(2):   # hasta DOS complementos: lácteo+fruta topan sus máximos
+                if len(nombres) >= tope_piezas:
+                    break
                 rem = resultado.get("remaining") or {}
                 peor = max(("P", "H", "G"), key=lambda m: float(rem.get(m, 0) or 0))
                 if float(rem.get(peor, 0) or 0) <= 8:
@@ -514,8 +568,34 @@ class AgentTools:
                 peor_m = max(("P", "H", "G"), key=lambda m: tot_i[m] - restante[m])
                 descartes_bucle = f"un intento se pasaba {tot_i[peor_m] - restante[peor_m]:.0f} g de {_MACRO_LBL[peor_m]}"
                 continue
+            # Combinaciones que nadie come. Cuadrar los macros era lo único que se miraba,
+            # y salían cosas como yogur con atún, pollo con fiambre de pavo en el desayuno
+            # o caseína con chocolate negro -- Francisco, 08-08: «esa combinación de
+            # alimentos no tiene sentido». Qué va con qué no lo decide una lista escrita a
+            # mano sino las 147.820 comidas reales de la base (ver company_profile).
+            #
+            # Lo que el cliente ha pedido por su nombre no se juzga: si quiere yogur con
+            # atún, es su comida.
+            discordante = self._companyia_mala(items, ids_fijos)
+            if discordante:
+                descartes_bucle = discordante[0]
+                # Guardada, no tirada: si al final no queda NINGUNA opción, es mejor
+                # ofrecer la menos mala con su aviso que dejar al cliente sin nada. Pasa
+                # de verdad: pidiendo "tostadas" todo lo que cuadra son tres tostadas
+                # distintas juntas, y las tres se descartaban.
+                apartadas.append((discordante[1], {
+                    "items": items, "origen": "compuesto", "nombre": None,
+                    "receta_url": None, "aviso_companyia": discordante[0]}))
+                continue
             opciones.append({"items": items, "origen": "compuesto", "nombre": None,
                              "receta_url": None})
+
+        # Si el filtro de compañía se lo ha llevado TODO, se rescata lo menos malo con su
+        # aviso: quedarse sin nada que ofrecer es peor que ofrecer una combinación rara y
+        # decir que lo es.
+        if not opciones and apartadas:
+            apartadas.sort(key=lambda x: -x[0])
+            opciones = [op for _, op in apartadas[:n]]
 
         # --- 3) A borrador, con totales, desvío y PUERTA DE CALIDAD del motor: un menú
         # que se va a lo loco del objetivo (49 g de grasa sobre 12 se vio en real) no
@@ -554,6 +634,9 @@ class AgentTools:
                         "macros_totales": tot, "objetivo": dict(restante), "desvio": desvio,
                         "filtros": {"generico": generico, "marca": marca, "estilo": estilo or None},
                         "momento": momento, "meal_key": self.bot.current_meal_key()}
+            # Rescatada del filtro de compañía: se enseña, pero diciendo lo que es.
+            if op.get("aviso_companyia"):
+                borrador["avisos"] = [op["aviso_companyia"].replace("un intento", "esta opción")]
             borradores[bid] = borrador
             salida.append(borrador)
         if not salida:

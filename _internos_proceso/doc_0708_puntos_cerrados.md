@@ -2504,6 +2504,103 @@ falta y aquí no.
 (`test_cobertura_varias_palabras.py`) para que la medida quede fijada y quien toque la
 cobertura lo vea contra el catálogo entero.
 
+
+## «Siempre sugiere lo mismo, y esas combinaciones no tienen sentido»
+
+Dos quejas de Francisco en la misma frase (08-08), y al medirlas resultaron ser **tres
+cosas distintas**, una de ellas no nuestra.
+
+### 1. La variedad: cero, y no por los macros
+
+Medido: tres llamadas seguidas devolvían menús **idénticos**, alimento a alimento. Entre
+comidas del día sí variaba (el perfil de momento funciona), pero dos clientes con los
+mismos macros recibían exactamente las mismas tres recetas, siempre.
+
+La causa no era el sugeridor sino el recetario: `generar_opciones_menu` ordenaba las
+recetas por error respecto al objetivo y se quedaba con las tres primeras. Con los mismos
+macros, las mismas tres. Siempre.
+
+Ahora el error se agrupa en **escalones de 5 g** antes de ordenar -- un menú que se desvía
+2 g y otro que se desvía 5 son igual de buenos; elegir siempre el primero por 3 g no es
+precisión, es aburrimiento -- y dentro del escalón se baraja. Es el mismo criterio que ya
+se usó para ordenar la biblioteca de menús (punto 71).
+
+La semilla no es fija ni al azar puro, sino **estable por cliente, día y comida**:
+
+```
+mismo cliente, misma comida, 3 llamadas   ->  repite  (recargar no cambia nada)
+5 clientes con los MISMOS macros          ->  4 listas distintas
+mismo cliente, 4 días distintos           ->  4 listas distintas
+```
+
+Y sin semilla no se baraja, así que la calculadora y el buscador del coach -- que llaman a
+la misma función -- conservan el orden de siempre.
+
+### 2. El sentido: qué va con qué, sacado de 147.820 comidas reales
+
+Lo que el asistente monta por su cuenta solo miraba una cosa: que cuadraran los macros. Por
+eso salían cosas como yogur con atún, pollo con fiambre de pavo en el desayuno, o tres
+tipos de tostada distintos en el mismo plato.
+
+Qué combina con qué **no lo decide una lista escrita a mano** -- eso es justo lo que está
+prohibido en este repo -- sino las comidas que Jesús ha montado durante años. La medida es
+la **elevación**: cuántas veces coinciden dos alimentos frente a las que coincidirían por
+azar. Separa limpiamente:
+
+```
+pollo + fiambre de pavo   0.14        arroz + aceite de oliva   2.59
+caseína + frutos rojos    0.25        whey + plátano            2.19
+harina de avena + copos   0.30        claras + pan de barra     1.63
+yogur + atún              0.37        copos de avena + nueces   0.65
+```
+
+El **harina con avena** que citó Francisco sale 0.30: su intuición y el dato coinciden.
+
+El corte (0.40) sale de medir, no de elegirlo a ojo: se compara el peor par de 4.000
+comidas reales con el de 4.000 comidas inventadas al azar.
+
+```
+corte   deja fuera de las reales   deja fuera de las inventadas
+0.20           5.2 %                        95.5 %
+0.30           9.2 %                        95.7 %
+0.40          14.1 %                        95.8 %
+0.50          18.6 %                        95.9 %
+```
+
+De 0.40 en adelante la detección ya no sube y los descartes de comidas legítimas casi se
+duplican. Ese 14 % que queda por debajo no son comidas malas: son comidas con algún par
+poco habitual, y aquí no es un veto sino una preferencia entre varias opciones.
+
+Tres cosas más, todas aprendidas del mismo sitio:
+
+- **El tamaño.** El 84,5 % de las comidas reales tienen 5 alimentos o menos, y el sugeridor
+  ofrecía de 6 y de 7. Ahora hay techo, y el número lo dicen las dietas.
+- **Lo que el cliente pide por su nombre no se juzga.** Si quiere yogur con atún, es su
+  comida; lo que se corrige es lo que el asistente propone por su cuenta.
+- **Si el filtro se lo lleva todo, se rescata lo menos malo con su aviso.** Pasa de verdad:
+  pidiendo «tostadas», todo lo que cuadra son tres tostadas distintas juntas, y las tres se
+  descartaban. Quedarse sin nada que ofrecer es peor que ofrecer algo raro y decir que lo es.
+
+### 3. Y lo que NO se ha tocado: el recetario es de Jesús
+
+Los menús concretos que le chirriaron a Francisco -- «Tostadas proteicas de pollo y pavo»,
+«Tostas proteicas + bol de yogur» con siete alimentos -- **no los inventa la app**: son
+recetas del recetario de Jesús, importadas de noteconformesconmenos.com con su nombre, su
+foto y su URL.
+
+Así que el filtro **no se les aplica**. Corregir las recetas de Jesús con una estadística no
+nos toca, y además el dato no sirve para eso: el **57 % de las 159 recetas** del recetario
+tienen algún par con elevación 0.00, pero es que son **platos cocinados** -- calabacín
+relleno, cheesecake, bizcocho proteico -- y el perfil mide comidas armadas por macros, no
+recetas de cocina. «Calabacín + tomate triturado» sale 0.00 y tiene todo el sentido.
+
+Que el mismo criterio funcione para lo que compone la app y no para el recetario es
+coherente: la app compone por macros, exactamente igual que las dietas de las que aprende.
+
+**Queda para Jesús**: los dos menús que Francisco señaló están entre ese 57 %, y son de los
+que se comen sin cocinar (siete alimentos sueltos en un desayuno). Si quiere revisarlos, la
+lista completa sale con `_perfil_companyia.py`.
+
 ### Y de paso, el cuelgue otra vez
 
 Probando esto el chat se quedó bloqueado **en el arranque**, no en el envío: el tope al
@@ -2800,6 +2897,12 @@ contra la calculadora de verdad**.
 ---
 
 ### 2 · Lo que espera una orden de Francisco
+
+**Un paso extra cuando se despliegue el perfil de compañía.** `db.company_profiles` es un
+dato derivado, y los datos no viajan con el código: hay que ejecutar
+`_perfil_companyia.py` **en producción** después de desplegar, como se hizo con el perfil
+de momento. Sin la colección no se rompe nada -- el asistente se comporta como antes --,
+pero tampoco filtra las combinaciones raras, así que el arreglo estaría a medias.
 
 **Desplegar a producción.** Desde el punto 19 no se ha subido nada. En producción está todo hasta
 el commit `8421e3b`; lo posterior está en GitHub y sin desplegar, esperando la orden: el punto
