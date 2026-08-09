@@ -926,6 +926,25 @@ async def get_macros(fecha: Optional[str] = None, user = Depends(get_current_use
             "periworkout": {"protein": 35, "carbs": 15},
             "source": "default"
         }
+    # SIN FECHA SIGNIFICA HOY, no "lo ultimo que se escribio" (punto 4.6).
+    #
+    # Aqui estaba la tercera version de los macros de un cliente. Sin `fecha` se devolvian
+    # los campos sueltos del perfil (`macros_training`...), que son un espejo de la ultima
+    # escritura y no saben de fechas de vigencia. Nutricion y Ajustar macros SI pasan fecha y
+    # pasan por el resolver, asi que Inicio -- que llama sin ella -- podia enseñar unos macros
+    # y las otras dos pantallas otros:
+    #
+    #     Inicio            170 P / 70 H / 50 G  |  peri 40/25
+    #     Ajustar macros    120 P / 60 H / 50 G  |  peri 30/30
+    #     Nutricion         120 P / 60 H / 50 G  |  peri 30/30
+    #
+    # Pasaba con un ajuste programado a futuro o con dos filas del mismo dia: el espejo se
+    # queda con la ultima escrita y el resolver con la vigente, que es la buena.
+    #
+    # No se cambia la firma ni se toca ninguna pantalla: se le da a "sin fecha" el unico
+    # significado que puede tener, que es hoy. Sin historial el resolver cae al perfil, asi
+    # que para un cliente nuevo devuelve exactamente lo mismo que antes.
+    fecha = fecha or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if fecha:
         # Reusa el mismo resolver que las dietas, para no divergir.
         from routes.calculator import _resolve_macros_for_date, _choose_macro_entry_for_date

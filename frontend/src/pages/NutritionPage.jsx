@@ -1221,10 +1221,23 @@ const NutritionPage = () => {
         await loadRecentDiets();
     };
 
-    const copyMealFromDay = async (sourceMealKey) => {
+    // EL DÍA VIENE POR PARÁMETRO, NO POR ESTADO (punto 4.3).
+    //
+    // Antes el modal hacía `setSelectedDietForRepeat(dia); copyMealFromDay(comida)` en la
+    // misma línea, y `setState` de React es asíncrono: esta función se ejecutaba en el mismo
+    // tick y leía el valor ANTERIOR del estado. De ahí las dos caras del fallo que reportó
+    // Jesús, que son la misma:
+    //
+    //   - la primera vez el estado valía null -> "No hay alimentos en esa comida";
+    //   - la segunda valía el día que había elegido en el intento anterior -> pedía el 3 de
+    //     mayo y le copiaba el 17, y el aviso decía "Copiada Comida 1 del lun, 17 may".
+    //
+    // La vista previa nunca fallaba porque la pinta el modal con su propia selección, que sí
+    // es la buena. No era una clave distinta: era el mismo dato leído un tick antes.
+    const copyMealFromDay = async (sourceMealKey, dietElegida) => {
         const targetMealKey = repeatMealModal.mealKey;
-        const sourceDiet = selectedDietForRepeat;
-        
+        const sourceDiet = dietElegida || selectedDietForRepeat;
+
         if (!sourceDiet || !sourceDiet.comidas || !sourceDiet.comidas[sourceMealKey]) {
             toast.error('No hay alimentos en esa comida');
             return;
@@ -2063,10 +2076,9 @@ const NutritionPage = () => {
                 recentDiets={recentDiets}
                 mealInfo={mealInfo}
                 formatDate={formatDate}
-                onCopyMeal={(sourceMealKey, sourceDiet) => {
-                    setSelectedDietForRepeat(sourceDiet);
-                    copyMealFromDay(sourceMealKey);
-                }}
+                /* El día viaja como argumento, no por el estado: leerlo del estado en el
+                   mismo tick devolvía el del intento anterior (punto 4.3). */
+                onCopyMeal={(sourceMealKey, sourceDiet) => copyMealFromDay(sourceMealKey, sourceDiet)}
             />
 
             {/* Copy Diet Modal */}

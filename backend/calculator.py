@@ -305,6 +305,30 @@ def get_food_config(alimento: dict) -> dict:
     # ===========================================
     alimento_unidades = alimento.get("unidades") == True or alimento.get("por_unidad") == True
 
+    # ...SALVO QUE LA TABLA DEL ALIMENTO NO SEA POR UNIDAD (punto 4.4 de la revision del
+    # 09-08). "1 ud de aislado de proteina con 89,9 g de proteina" no es un fallo de la
+    # conversion: es un alimento marcado `unidades=True` con racion 20 g cuya tabla esta
+    # escrita POR 100 G. Al contarlo por unidades, una racion de 20 g pasaba a valer 89,9 g
+    # de proteina, que es mas de lo que pesa el cacito entero.
+    #
+    # Un macro no puede pesar mas que el alimento que lo contiene. Cuando pasa, el dato que
+    # esta mal es la marca de unidades, no la tabla, asi que se degrada a peso: contado en
+    # gramos sobre una tabla por 100 g los numeros salen bien, y el cliente ve "20 g" en vez
+    # de un "1 ud" que miente. Es lo que pedia el punto: degradarlos en vez de mentir.
+    #
+    # Medido en produccion el 09-08: 6 alimentos de 1.182 por unidades. Y NO hay ninguno sin
+    # peso de unidad, asi que el defecto silencioso de 100 g que sospechaba el informe no
+    # llega a usarse nunca; el fallo venia por aqui.
+    if alimento_unidades and racion > 0:
+        _macros = []
+        for _k in ("proteinas", "hidratos", "grasas", "protein", "carbs", "fat"):
+            try:
+                _macros.append(float(alimento.get(_k) or 0))
+            except (TypeError, ValueError):
+                pass
+        if _macros and max(_macros) > racion:
+            alimento_unidades = False
+
     # Hamburguesas por unidad con medias (0.5, 1, 1.5...) - SOLO si BD marca unidades=True
     # Hamburguesas sin unidades=True se tratan por peso (e.g. "Hamburguesa de cerdo" = 93g)
     if "hamburguesa" in nombre and alimento_unidades:

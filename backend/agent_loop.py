@@ -107,9 +107,16 @@ _ESQUEMAS = [
                      "SUMAR sobre lo que hay, 'por' para multiplicar). OJO: 'uno más', "
                      "'otro' = ajustar con mas:1, nunca fijar a 1. "
                      "Cantidad null = que el motor la dimensione. "
-                     "Si el cliente cuenta en PIEZAS ('3 de eso', 'dos trozos', 'un par'), "
-                     "pásalo con unidad='ud' y deja que la herramienta lo resuelva; NO "
-                     "conviertas tú a gramos por tu cuenta."),
+                     # OJO AL CAMBIAR ESTO. Aqui habia dos ejemplos con nombres de alimento y
+                     # se quitaron el 09-08 por la regla del 8 bis (nada de comida en los
+                     # prompts). Al quitarlos el modelo dejo de reconocer el patron y ya no
+                     # mandaba unidad='ud': lo caza `test_unidades.py`. La regla se cumple
+                     # igual describiendo la FORMA de la frase en vez de dar ejemplos.
+                     "Si el cliente cuenta PIEZAS o raciones en vez de gramos -- o sea, un "
+                     "numero seguido del nombre del alimento y SIN unidad de peso, del tipo "
+                     "'ponme 3 de X' o 'dos X' --, pasalo con unidad='ud' y deja que la "
+                     "herramienta lo resuelva. NO conviertas tu a gramos por tu cuenta ni "
+                     "supongas lo que pesa una pieza."),
      "parameters": {"type": "object", "properties": {
          "operaciones": {"type": "array", "items": {"type": "object", "properties": {
              "op": {"type": "string", "enum": ["añadir", "quitar", "ajustar"]},
