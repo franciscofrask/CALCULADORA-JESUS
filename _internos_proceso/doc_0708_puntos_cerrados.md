@@ -3507,3 +3507,52 @@ se queda es decisión de Jesús.
 Con su caso exacto (Comida 1 de 30 P · 20 H · 10 G) la lista sale ordenada por distancia a los
 tres macros a la vez y encabezada por comida real: pulpo a la gallega 272 g (29,9 P · 18,8 H ·
 9,0 G, distancia 2,3), no el aislado de 89,9 P. Cero polvos en las primeras posiciones.
+
+## 4.15 - El protocolo de suplementos de cada cliente: DÓNDE ESTÁ, y qué falta para traerlo
+
+Lo del catálogo estaba cerrado desde el punto 33: los 106 suplementos con su "¿Cuándo? /
+¿Cuánto? / Observaciones" ya están en `db.supplements`. Lo que quedaba era lo otro: **qué
+protocolo tiene puesto cada cliente hoy**, para que al abrir 12EN12 no se encuentre la
+pantalla de Suplementación vacía.
+
+Ese dato no estaba en el bundle ni en ningún volcado. Lo busqué en Calma con el navegador y
+lo encontré. La ruta, para que no haya que volver a buscarla:
+
+    Calma -> Administración -> Miembros            (#/admin-miembros, 145 miembros activos)
+      -> "ficha" de cada uno                       (#/admin-cliente/<email>)
+        -> pestaña "Suplementación"
+
+Dentro hay dos cosas que valen:
+
+  - **Histórico de suplementaciones**, versionado por fecha. La última línea es el protocolo
+    vigente. Ejemplo real (Ivan Pascual, ivanpas1976@gmail.com):
+
+        2024-9-2 : Whey Isolate + crema de arroz, Hydropeptides o MAP, Creatina hombre,
+                   Omega 3 hombre y Pre-workout 2 dosis
+        2024-9-30: ... + Ciclodextrina y Pre-workout 3 dosis
+        2026-8-10: Whey Isolate + crema de arroz, Hydropeptides o MAP, Creatina hombre,
+                   Omega 3 hombre, Ciclodextrina, Fat burner hardcore mes 1 y Sinefrina con
+                   termogénico mes 1 (1 cápsula las 2 primeras semanas y desde la 3 sube a 1 y 1)
+
+  - **Observaciones de suplementación**, texto libre del entrenador.
+
+Es el mismo formato que ya come `_migrar_protocolos_suplementos.py` (fecha + lista de
+suplementos del catálogo), así que la importación es directa: no hay que traducir nada, los
+nombres son literalmente los del catálogo que ya tenemos.
+
+**Lo que falta.** Los datos hay que sacarlos de 145 fichas, una a una. La hoja de cliente
+tarda entre 10 y 40 segundos en montarse (Calma es Vue + Firestore y lee los documentos de
+uno en uno), así que a mano son varias horas de pantalla. Intenté recorrerlas con un guión
+dentro de la página y el permiso quedó denegado por ser una recogida masiva de datos
+personales de clientes sin autorización explícita, cosa razonable.
+
+Dos salidas, y las dos las tiene que abrir Francisco:
+
+  1. **Autorizar el barrido** por la interfaz de Calma con la sesión de admin ya abierta. Es
+     lo mismo que haría él a mano, pero seguido. Una hora larga de reloj.
+  2. **Exportar la colección `usuarios` de Firestore** (consola de Firebase o una cuenta de
+     servicio del proyecto). Son minutos en vez de horas, trae el histórico entero y de paso
+     sirve para cualquier otro dato de Calma que haga falta después. Es la vía limpia para
+     una migración.
+
+Mientras tanto el 4.15 se queda a medias a propósito: catálogo sí, asignación por cliente no.
