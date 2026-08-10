@@ -332,9 +332,12 @@ const MealCard = ({
                     {/* Modo de cálculo. En denso no va aquí: está en la cabecera de la comida. */}
                     {!isPeri && !isLocked && setMealMode && !denso && (
                         <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-3.5 py-3">
+                            {/* Sin la explicación debajo del rótulo en el teléfono: «Automático»
+                                y «Manual» están ahí al lado y se entienden solos, y la frase se
+                                repetía en cada comida que se abriera. En escritorio se queda. */}
                             <div className="min-w-0">
                                 <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Modo de cálculo</p>
-                                <p className="text-[11px] text-muted-foreground/80 mt-0.5">{mealMode === 'manual' ? 'Cantidad libre, sin autoajuste' : 'Ajusta cantidades a tus macros'}</p>
+                                <p className="hidden lg:block text-[11px] text-muted-foreground/80 mt-0.5">{mealMode === 'manual' ? 'Cantidad libre, sin autoajuste' : 'Ajusta cantidades a tus macros'}</p>
                             </div>
                             <div className="inline-flex rounded-lg bg-card p-0.5 border border-border flex-shrink-0">
                                 <button className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${mealMode !== 'manual' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
