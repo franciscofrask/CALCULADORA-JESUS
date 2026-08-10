@@ -253,3 +253,21 @@
     box-shadow: inset 0 0 0 3px #FF671F, 0 0 0 3px #FF671F, inset 0 0 28px rgba(255,103,31,0.22) !important;
     transition: box-shadow .2s ease;
 }
+
+/* EL BANNER DE INSTALAR NO PUEDE TAPAR BOTONES.
+ *
+ * Es `fixed bottom-20`, o sea que flota sobre el contenido sin reservar sitio, y en un
+ * móvil de 844 px cae justo donde acaba la página. Encontrado dos veces, y las dos con un
+ * botón debajo: el de ENTRAR de la pantalla de acceso y el de «Ver más» del buscador de
+ * alimentos. Playwright lo dice con un error; una persona solo ve que el botón no responde.
+ *
+ * Mientras el banner está, el contenido reserva su alto. Se hace desde CSS y no moviendo el
+ * banner porque el sitio donde está es el correcto: lo que faltaba era el hueco.
+ *
+ * Solo por debajo de 1.024 px, que es donde está medido y donde el rediseño actúa.
+ */
+@media (max-width: 1023px) {
+    body.con-banner-instalar main {
+        padding-bottom: 12rem;
+    }
+}

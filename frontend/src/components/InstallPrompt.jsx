@@ -59,7 +59,23 @@ const InstallPrompt = () => {
         try { await deferred.userChoice; } finally { dismiss(); }
     };
 
-    if (!deferred && !showIOS) return null;
+    // MIENTRAS EL BANNER ESTÁ, EL CONTENIDO LE DEJA HUECO. Es `fixed`, así que no aparta
+    // nada por su cuenta y se planta encima de lo último de la página: se ha comido el botón
+    // de ENTRAR de la pantalla de acceso y el de «Ver más» del buscador de alimentos. La
+    // regla vive en index.css (`body.con-banner-instalar main`), que es donde se puede
+    // acotar a móvil sin tocar el resto.
+    // EL `enPantallaDeAcceso` DE ARRIBA NO SE USABA EN NINGÚN SITIO. El arreglo del 09-08
+    // -- el que quitaba el banner de la pantalla de acceso porque tapaba el botón de Entrar
+    // -- se escribió a medias: quedaron el comentario, la lista `FUERA_DE` y esta variable,
+    // y nunca se llegó a aplicar la condición. Así que el fallo seguía vivo, y con toda la
+    // pinta de estar resuelto, que es la peor forma de que siga vivo.
+    const visible = (!!deferred || showIOS) && !enPantallaDeAcceso;
+    useEffect(() => {
+        document.body.classList.toggle('con-banner-instalar', visible);
+        return () => document.body.classList.remove('con-banner-instalar');
+    }, [visible]);
+
+    if (!visible) return null;
 
     return (
         <div className="fixed bottom-20 lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-md">
