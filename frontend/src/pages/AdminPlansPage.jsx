@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { Layers, Pencil, RotateCcw, Check, X } from 'lucide-react';
-import { habilitacionesToList, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
+import { queIncluyeElPlan, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
 
 // Orden y etiquetas de las categorías (pestañas del catálogo original).
 const ESTADOS = [
@@ -84,6 +84,9 @@ const PlanCard = ({ plan, onEdit }) => {
                         <span className="text-white/50">Harbiz</span><Dot on={!!h.harbiz} />
                     </div>
                     <HabRow label="Responsable" value={plan.responsable || '-'} />
+                    {/* Si el «Tu plan incluye» de este plan está escrito a mano o se deriva de
+                        las habilitaciones (punto 6.4). */}
+                    <HabRow label="Qué incluye" value={plan.que_incluye ? 'escrito' : 'derivado'} />
                 </div>
             </CardContent>
         </Card>
@@ -120,6 +123,7 @@ const AdminPlansPage = () => {
             precio: plan.precio ?? 0,
             precio_nota: plan.precio_nota || '',
             responsable: plan.responsable || '',
+            que_incluye: plan.que_incluye || '',
             ciclo_tipo: plan.ciclo?.tipo || 'mensual',
             ciclo_semanas: plan.ciclo?.semanas ?? '',
             calculadora: plan.habilitaciones?.calculadora || 'personalizado',
@@ -149,6 +153,7 @@ const AdminPlansPage = () => {
                 precio: parseFloat(form.precio) || 0,
                 precio_nota: form.precio_nota,
                 responsable: form.responsable,
+                que_incluye: form.que_incluye.trim(),
                 ciclo: {
                     tipo: form.ciclo_tipo,
                     semanas: form.ciclo_semanas === '' ? null : parseInt(form.ciclo_semanas, 10),
@@ -263,6 +268,20 @@ const AdminPlansPage = () => {
                                 <Input value={form.precio_nota} onChange={e => setForm(f => ({ ...f, precio_nota: e.target.value }))} className="bg-[#111] border-[#333] text-white mt-1" />
                             </div>
 
+                            {/* QUÉ INCLUYE, ESCRITO A MANO (punto 6.4). Lo que se pinta tal cual en
+                                «Tu plan incluye» de Mi perfil. Si se deja vacío se siguen derivando
+                                las líneas de las habilitaciones, que es lo que les toca a los planes
+                                que ya no se venden. */}
+                            <div><Label className="text-white/60 text-xs">Qué incluye (una línea por punto)</Label>
+                                <textarea value={form.que_incluye} rows={5} data-testid="plan-que-incluye"
+                                    onChange={e => setForm(f => ({ ...f, que_incluye: e.target.value }))}
+                                    placeholder={'Dieta personalizada y ajustada cada quince días\nRutina de entrenamiento a tu medida\nChat directo con tu entrenador'}
+                                    className="w-full bg-[#111] border border-[#333] text-white text-sm rounded-lg px-3 py-2 mt-1 resize-y placeholder:text-white/25" />
+                                <p className="text-[11px] text-white/30 mt-1">
+                                    Se escribe solo para los cuatro que se venden. Vacío = se derivan de las habilitaciones.
+                                </p>
+                            </div>
+
                             <div className="border-t border-[#222] pt-3">
                                 <p className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Habilitaciones</p>
                                 <div className="grid grid-cols-2 gap-3">
@@ -320,10 +339,17 @@ const AdminPlansPage = () => {
 
                             <div className="border-t border-[#222] pt-2">
                                 <p className="text-xs text-white/40 mb-1">Vista previa "tu plan incluye":</p>
-                                <ul className="text-xs text-white/70 list-disc list-inside space-y-0.5">
-                                    {habilitacionesToList({
-                                        calculadora: form.calculadora, rutina: form.rutina,
-                                        reportes: form.reportes, suplementacion: form.suplementacion, harbiz: form.harbiz,
+                                {/* Lo mismo que verá el cliente: si hay texto escrito manda ese, y
+                                    si no, las líneas derivadas. Así se ve al escribirlo. */}
+                                <ul className="text-xs text-white/70 list-disc list-inside space-y-0.5" data-testid="plan-que-incluye-preview">
+                                    {queIncluyeElPlan({
+                                        que_incluye: form.que_incluye,
+                                        habilitaciones: {
+                                            calculadora: form.calculadora, rutina: form.rutina,
+                                            reportes: form.reportes, suplementacion: form.suplementacion,
+                                            harbiz: form.harbiz, acompanamiento: form.acompanamiento,
+                                            frecuencia_contacto: form.frecuencia_contacto,
+                                        },
                                     }).map((x, i) => <li key={i}>{x}</li>)}
                                 </ul>
                             </div>

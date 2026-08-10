@@ -3528,8 +3528,24 @@ const DietDetail = ({ diet }) => {
         });
         return { k, foods, mt };
     });
+    // QUIÉN GUARDÓ ESTE DÍA (punto 4.11). Se anota desde que el entrenador puede entrar en la
+    // calculadora de un cliente, y no se veía en ninguna pantalla. Aquí es donde contesta a la
+    // pregunta de Jesús: si le montaste el martes una dieta y el miércoles aparece firmada por
+    // él, es que la ha cambiado -- y esa es justo la conversación que hay que tener.
+    const loGuardo = diet?.editado_por;
+    const loGuardoElCoach = diet?.editado_como === 'entrenador';
     return (
         <div className="space-y-2.5">
+            {loGuardo && (
+                <p className="text-[11px] text-white/40" data-testid="dieta-quien-la-guardo">
+                    Lo guardó{' '}
+                    <span className={loGuardoElCoach ? 'text-[#FF671F] font-semibold' : 'text-white/70 font-semibold'}>
+                        {loGuardo}
+                    </span>
+                    {loGuardoElCoach ? ' (del equipo)' : ' (el cliente)'}
+                    {diet?.updated_at ? ` · ${_fechaCorta(String(diet.updated_at).slice(0, 10))}` : ''}
+                </p>
+            )}
             {meals.map(({ k, foods, mt }) => (
                 <div key={k} className="bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
                     <div className="flex items-center justify-between mb-1.5">

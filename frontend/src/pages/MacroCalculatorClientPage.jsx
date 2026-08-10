@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import { MACRO } from './ClientDashboard';
 import DesgloseChips from '../components/DesgloseChips';
+import MisMacrosPage from './MisMacrosPage';
 
 // Fecha de HOY en la zona del usuario. Con toISOString() (que es UTC) a partir de las
 // 22:00 en Espana el "hoy" saltaba al dia siguiente.
@@ -309,6 +310,12 @@ const MacroCalculatorClientPage = () => {
     const ajustables = profile?.macros_ajustables;
     const puedeAjustar = ajustables ? ajustables.puede !== false : true;
 
+    // SI NO PUEDE, ESTA PANTALLA NO ES LA SUYA (punto 6.2). Aquí se le enseñaba la calculadora
+    // capada: los mismos campos editables, sin quiz y sin botón de Guardar. Lo que le toca es
+    // «Mis macros», que en vez de un formulario que no hace nada le enseña sus números, lo que
+    // le escribió su entrenador en este ajuste, su histórico y su peso.
+    if (!puedeAjustar) return <MisMacrosPage />;
+
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1200px] mx-auto space-y-6 animate-fade-in">
             {/* Header */}
@@ -318,21 +325,13 @@ const MacroCalculatorClientPage = () => {
                 </div>
                 <div>
                     <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="macros-heading">
-                        {puedeAjustar ? 'Ajustar macros' : 'Tus macros'}
+                        Ajustar macros
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        {puedeAjustar
-                            ? 'Modifica tus macros y elige desde qué fecha aplican'
-                            : 'Los que te lleva tu entrenador ahora mismo'}
+                        Modifica tus macros y elige desde qué fecha aplican
                     </p>
                 </div>
             </header>
-
-            {!puedeAjustar && (
-                <div className="surface p-4 border-2 border-brand/40" data-testid="macros-los-lleva-tu-coach">
-                    <p className="text-sm text-foreground">{ajustables?.por_que_no}</p>
-                </div>
-            )}
 
             {/* MOMENTO 2 de la revisión suelta (documento del 06-08-2026): al recibir su
                 ajuste del mes. Línea pequeña y sin botón, nunca un popup. La pantalla de
@@ -351,11 +350,8 @@ const MacroCalculatorClientPage = () => {
             {loadingMacros ? (
                 <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-muted-foreground" /></div>
             ) : (
-                <div className={`grid grid-cols-1 gap-6 items-start ${puedeAjustar ? 'lg:grid-cols-2' : ''}`}>
-                    {/* ── Calculator (helper) ──
-                        Fuera entera si sus macros los lleva el entrenador (punto 4.10): sin
-                        botón de Calcular, el cuestionario de quince preguntas no pinta nada. */}
-                    {puedeAjustar && (
+                <div className="grid grid-cols-1 gap-6 items-start lg:grid-cols-2">
+                    {/* ── Calculator (helper) ── */}
                     <section className="space-y-3">
                         <p className="caption flex items-center gap-2"><Calculator className="w-4 h-4" /> Calcula tus macros</p>
                         <div className="surface p-5 space-y-4" data-testid="macros-content">
@@ -564,14 +560,11 @@ const MacroCalculatorClientPage = () => {
                             )}
                         </div>
                     </section>
-                    )}
 
                     {/* ── Macros editor ── */}
                     <section ref={editorRef} className="space-y-3">
                         <p className="caption flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Mis macros</p>
 
-                        {/* «Aplican desde» solo tiene sentido si va a guardar (punto 4.10). */}
-                        {puedeAjustar && (
                         <div className="surface p-4">
                             <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                                 <CalendarDays className="w-4 h-4 text-brand" /> Aplican desde
@@ -600,25 +593,19 @@ const MacroCalculatorClientPage = () => {
                                 </div>
                             )}
                         </div>
-                        )}
 
                         <GroupCard label="Día entrenamiento" group="training" withFat macros={macros} setMacro={setMacro} />
                         <GroupCard label="Perientreno (intra + post)" group="peri" withFat={false} macros={macros} setMacro={setMacro} />
                         <GroupCard label="Día descanso" group="rest" withFat macros={macros} setMacro={setMacro} />
 
-                        {/* El motivo y el botón, solo si puede guardar (punto 4.10). */}
-                        {puedeAjustar && (
-                            <>
-                                <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Motivo del cambio (opcional)" className="input-light" />
+                        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Motivo del cambio (opcional)" className="input-light" />
 
-                                <button onClick={handleSaveMacros} disabled={saving}
-                                    className="btn-brand w-full flex items-center justify-center gap-2 uppercase tracking-wider"
-                                    data-testid="save-my-macros">
-                                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    {saving ? 'Guardando...' : 'Guardar macros'}
-                                </button>
-                            </>
-                        )}
+                        <button onClick={handleSaveMacros} disabled={saving}
+                            className="btn-brand w-full flex items-center justify-center gap-2 uppercase tracking-wider"
+                            data-testid="save-my-macros">
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            {saving ? 'Guardando...' : 'Guardar macros'}
+                        </button>
                     </section>
                 </div>
             )}
