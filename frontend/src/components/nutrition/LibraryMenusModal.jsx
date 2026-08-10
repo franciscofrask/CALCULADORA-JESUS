@@ -397,9 +397,17 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             Las cantidades a 15 y el nombre a 15. */}
                                         <ul className="space-y-2">
                                             {menu.items.map((it, i) => (
-                                                <li key={i} className="flex items-baseline gap-2.5 text-[17px]">
-                                                    <span className="font-bold text-brand-orange whitespace-nowrap w-16 flex-shrink-0 text-right">{it.cantidad_display}</span>
-                                                    <span className="text-foreground leading-snug text-justify">{it.nombre}</span>
+                                                // LAS CANTIDADES, TODAS EMPEZANDO EN LA MISMA
+                                                // LÍNEA. Estaban alineadas a la derecha, así
+                                                // que «1 ud», «150 g» y «2 cucharadas»
+                                                // arrancaban cada una en un sitio distinto y
+                                                // la columna se leía en zigzag. Alineadas a la
+                                                // izquierda y en la tipografía de datos, que
+                                                // tiene todas las cifras del mismo ancho, las
+                                                // dos columnas quedan a plomo.
+                                                <li key={i} className="flex items-baseline gap-3 text-[17px]">
+                                                    <span className="font-data font-bold text-brand-orange whitespace-nowrap w-[72px] flex-shrink-0">{it.cantidad_display}</span>
+                                                    <span className="text-foreground leading-snug">{it.nombre}</span>
                                                 </li>
                                             ))}
                                         </ul>
