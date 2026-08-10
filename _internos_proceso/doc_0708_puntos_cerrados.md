@@ -4297,3 +4297,24 @@ la TABLA 17 salen correctas y las dos de la TABLA 18 coinciden con lo que hace l
   calculadora de un cliente (4.11): «los dos tienen que poder verlo».
 - El campo libre «Qué incluye» del catálogo (6.4).
 
+
+## La suite entera, y por qué fallan once
+
+Se pasó la suite completa después del repaso: **1.950 pasan, 11 fallan, 6 se saltan** (1 h 16
+min). Los once se comprobaron uno a uno contra el código de ANTES del repaso, en un worktree
+aparte, para saber cuáles eran regresiones. **Ninguno lo es.**
+
+| Test | Por qué falla |
+|---|---|
+| `test_pedir_alimento_concreto` (5) | **La conexión a Atlas se corta.** `ConnectionAbortedError` / `pymongo.errors.AutoReconnect` al cargar el catálogo entero; de ahí el `KeyError` en `agent_tools.py:231`, que es la caché vacía, no un fallo de orden. Fallan igual en el código de ayer y en el de hace tres días |
+| `test_iteration12` y `test_iteration13` · `test_get_macros` | **Estado compartido.** Leen `macros_source` del perfil del demo, sobre el que otros tests escriben (el propio test lo dice en un comentario). Comprobado: con la base como quedó tras la suite, fallan también en el código de antes |
+| `test_agent_tools::test_estado_lleva_el_momento` | Ya fallaba antes del repaso |
+| `test_iteration19::test_macros_update_creates_history_entry` | Ya fallaba antes del repaso |
+| `test_cambio_de_dia` (1 caso) | Ya fallaba antes del repaso |
+| `test_f1_4_diet_features::test_search_foods_by_category` | El conocido desde el 07-08: un «Caldo de cocido» mal clasificado. Es dato, no buscador |
+
+Dos de estos merecen arreglo aparte, y no son del documento de Jesús: los dos `test_get_macros`
+dependen del orden en que corran los tests, y los cinco del asistente necesitan que la carga del
+catálogo aguante un corte de Atlas. Mientras estén así, la suite no puede decir «verde» y eso
+vale menos de lo que parece.
+
