@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MEDIDAS } from '../lib/medidas';
+import { useEsTelefono } from '../lib/esTelefono';
 import { toast } from 'sonner';
 import {
     Activity, TrendingUp, CheckCircle2, Smile, Frown, Meh,
@@ -230,6 +231,9 @@ const CheckInsPage = () => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [openForm, setOpenForm] = useState(null);
+    // En el teléfono, el semanal y el mensual empiezan detrás de una línea (ver abajo).
+    const enTelefono = useEsTelefono();
+    const [otrosAbiertos, setOtrosAbiertos] = useState(false);
 
     const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null, comido_hoy: '' });
     const [weekly, setWeekly] = useState({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
@@ -351,8 +355,18 @@ const CheckInsPage = () => {
                     <Activity className="w-6 h-6 text-brand" />
                 </div>
                 <div>
-                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="checkins-heading">Seguimiento</h1>
-                    <p className="text-sm text-muted-foreground mt-1">Tus check-ins diarios, semanales y mensuales</p>
+                    {/* En el teléfono se entra aquí desde la tarjeta «Hoy · 10 segundos» de
+                        Seguimiento, así que la pantalla se llama como lo que promete esa
+                        tarjeta. «Seguimiento» era el nombre de la pestaña de la que viene, y
+                        el subtítulo anunciaba tres check-ins cuando el documento deja uno. */}
+                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="checkins-heading">
+                        <span className="lg:hidden">¿Cómo vas hoy?</span>
+                        <span className="hidden lg:inline">Seguimiento</span>
+                    </h1>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        <span className="lg:hidden">Energía, hambre y qué has comido.</span>
+                        <span className="hidden lg:inline">Tus check-ins diarios, semanales y mensuales</span>
+                    </p>
                 </div>
             </header>
 
@@ -436,8 +450,25 @@ const CheckInsPage = () => {
                 </Card>
             )}
 
-            {/* Semanal + Mensual */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* EL SEMANAL Y EL MENSUAL, DETRÁS DE UNA LÍNEA EN EL TELÉFONO.
+                El documento del 10-08 los quita del todo: «desaparecen el check-in semanal y
+                el mensual como formularios sueltos; el peso se pide una vez, no tres; el
+                sueño y el estrés, una vez, no dos». Y tiene razón en el diagnóstico: lo que
+                piden está también en el reporte del mes.
+
+                Pero borrarlos es quitar dos formularios que hoy funcionan y a los que el
+                reporte solo llega cuando su ventana está abierta, así que aquí se DEMOTAN en
+                vez de borrarse: dejan de ocupar media pantalla y se abren desde una línea.
+                Si Francisco confirma que se van, es quitar este bloque.
+
+                En escritorio siguen los dos como estaban. */}
+            {enTelefono && !otrosAbiertos && (
+                <button onClick={() => setOtrosAbiertos(true)} data-testid="ver-otros-checkins"
+                    className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2">
+                    Ver el check-in semanal y el mensual
+                </button>
+            )}
+            <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${enTelefono && !otrosAbiertos ? 'hidden' : ''}`}>
                 <Collapsible open={openForm === 'weekly'} onToggle={() => setOpenForm(openForm === 'weekly' ? null : 'weekly')}
                     icon={Calendar} title="Check-in semanal" subtitle="Peso + adherencia + sueño">
                     <Field label="Peso (kg)">
