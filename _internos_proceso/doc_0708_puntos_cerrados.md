@@ -3810,3 +3810,94 @@ se quedan como están.
 **Queda apuntado a la vista, sin tapar:** el afinado del paso 3.5 sigue sin conocer el
 concepto, y en «Tostas proteicas + bol de yogur» usa el tomate como palanca fina y lo sube de
 250 a 300 g. Es un caso entre 153 y taparlo cuesta 5 menús cuadrados.
+
+## 10.3 - La biblioteca devolvía cero · ERA UNA LÍNEA, Y NOS COSTÓ DOS VUELTAS
+
+En `library_menus`:
+
+    q["calidad.pasa"] = True
+
+`calidad` no viene con el menú: es un dato derivado que calcula `_cosechar_menus.py`, y esa
+cosecha **no se había corrido nunca** contra la base. Sin ella no lo cumple **ni un solo
+documento**, así que la consulta sale vacía con cualquier objetivo, cualquier margen y
+cualquier criterio de orden. Por eso los cinco casos de Jesús daban exactamente lo mismo: no
+los estaba filtrando el margen, los filtraba esa línea.
+
+Medido contra producción (`_medir_biblioteca.py`):
+
+    meal_library ......................... 266.199 documentos
+    con tipo_comida ...................... 266.170     (el tipo NUNCA fue el problema)
+    Comida 1 30/20/10 sin filtro ......... 48.085 candidatos
+    Comida 1 30/20/10 con filtro sin cosechar ..... 0
+    ya cosechada, pasan el filtro ........ 42.364
+
+Con la cosecha corrida, los cinco casos de Jesús en producción: 266 · 300 · 287 · 98 · 108.
+
+**No se relaja el filtro**: sin él vuelven los batidos y las listas de botes que hicieron
+apagar la biblioteca el 06-08. Lo que se arregla es que **deje de fallar en silencio**: si la
+preselección sale vacía se comprueba si hay algo cosechado, se avisa en el log y la respuesta
+lo dice en `filtros.sin_cosechar`. Averiguarlo costó dos vueltas del documento (4.8 y 10.3).
+
+**Y un segundo fallo con el mismo síntoma.** La preselección traía los 4.000 candidatos con la
+lista de ingredientes entera, cuando de esos solo se materializan 300. Contra Atlas eran 86 s
+solo esa consulta y 88-113 s la llamada completa. Ahora va en dos vueltas: dev 9-25 s, prod
+3-7 s, con los totales idénticos.
+
+**Queda apuntado:** la cosecha se llama «semanal» pero no hay nada que la dispare. Si se
+restaura una base o entran menús nuevos, el cero vuelve. Ahora al menos avisa.
+
+## 10.4 - Las 13 categorías del «Construir Post» · CON NOMBRE
+
+Eran círculos con solo el icono y el nombre vivía en un tooltip, o sea en el hover, que en
+móvil no existe. Había además un apaño previo que forzaba el tooltip abierto en la última
+categoría tocada -- puesto justamente por eso --, pero solo servía para la ya seleccionada y
+superponía una cajita negra sobre la rejilla.
+
+Ahora son **pills con icono y nombre**, el patrón que ya usa el buscador de alimentos. Los
+nombres de Calma son frases enteras («Cacao en polvo y azúcares de todo tipo, chucherías y
+miel»), así que hay un nombre corto para pantalla y el largo se conserva en el tooltip y en el
+`aria-label`:
+
+    Frecuentes · Prot. polvo · Lácteos · Cremas y tortas · Cereales · Panes · Fruta
+    Sustitutivos · Beb. vegetales · Refrescos y café · Cacao y azúcar · Postres · Salsas
+
+Medido con el CSS y las fuentes reales sobre 366 px (lo que queda de una pantalla de 390 con
+el padding del modal): la pill más ancha es «Refrescos y café» con 136 px, sin desbordes ni
+texto cortado. Las 13 caen en 5 filas, plegadas a 2 con «Ver todas (13)».
+
+**Pendiente de mirar en pantalla a 390 px**: plegado se ven 6 de 13 y las otras 7 quedan tras
+el botón. Antes se veían los 13 iconos de golpe, aunque sin saber qué eran.
+
+## 10.5 (cierre) - El «(desayuno)» lo poníamos nosotros
+
+Después de dos intentos de corregirlo por prompt -- uno de los cuales lo EMPEORÓ, ver arriba --
+apareció el origen de verdad. `meal_moment.describe_comida()` devolvía literalmente:
+
+    "Comida 2 (almuerzo)"
+
+y esa función alimenta el estado que lee el asistente. O sea que cuando escribía «Comida 1
+(desayuno)» **no se inventaba la nomenclatura: copiaba la nuestra**. Por eso ninguna regla del
+prompt podía ganarle.
+
+Y esa palabra se le enseñaba al cliente en la tarjeta: «⚠ Arroz basmati es atípico para
+desayuno».
+
+**Decisión de Francisco, 09-08: «que no diga desayuno, que diga la comida que corresponde».**
+
+  - `describe_comida` devuelve ya solo el nombre que el cliente ve en su pantalla.
+  - Los dos avisos que acaban en la tarjeta pasan a «X es atípico para la Comida 1».
+
+**No deshace la decisión del 06-08.** El momento (desayuno / comida / merienda / cena) sigue
+existiendo igual y sigue decidiendo qué alimento es típico de cada comida; `etiqueta_momento`
+se queda para el panel del entrenador. Lo único que cambia es que esa palabra ya no se le
+enseña al cliente.
+
+Un test barre los repartos de 1 a 5 comidas y comprueba que ninguno puede colar una hora del
+día en lo que lee el cliente.
+
+### La lección, que vale más que el punto
+
+Di el arreglo por bueno con tres pasadas de un guion (0 de 3) y al abrirlo en la pantalla real
+volvió a salir. **Medir con un guion no es verlo.** Y cuando algo NO PUEDE salir en pantalla,
+se quita en código; pedírselo al modelo, por bien que se le pida, es una probabilidad, no una
+garantía.
