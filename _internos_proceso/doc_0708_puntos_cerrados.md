@@ -3740,3 +3740,73 @@ del cliente le añade al nombre el sexo, el mes o la dosis.
 
 La importación a 12EN12 está en marcha en modo simulacro. **Escribir estos protocolos en
 producción es un cambio de datos de clientes reales y espera la orden de Francisco.**
+
+## 10.1 - Las verduras con rol «Hidrato» · CERRADO, y sin rol nuevo
+
+Jesús vio lechuga y tomate con rol «Hidrato» y proporción 1, igual que la pasta y el pan,
+sin aportar hidratos, y pidió barrer el catálogo. Barrido hecho (`_barrer_roles_menus.py`,
+contra producción): de 870 items en 153 menús, **193 apariciones** que no sostienen su rol, en
+44 combinaciones alimento+rol, **todas de hidrato**. Las que más se repiten: tomate (32 menús,
+5 g/100 g), calabacín (16), queso havarti light (13), champiñones (10), lechuga (9).
+
+**No era un error de datos suyo.** El editor de menús solo admite tres roles -- proteína,
+hidrato y grasa --, así que para meter una ensalada tenía que elegir uno, y eligió el menos
+malo. El concepto que faltaba era nuestro.
+
+**El arreglo.** En el reparto de `_ajustar_plantilla` (paso 3) los motores de cada macro se
+filtran por `MINIMO_PARA_TIRAR = {P: 6, H: 6, G: 3}` g por 100 g, con respaldo: si ninguno
+llega al corte se usan los que haya. La guarnición se queda en su cantidad mínima, sigue en el
+menú y sus macros siguen contando en el total; lo único que no pasa es que se le pida cubrir
+un macro que no puede cubrir.
+
+**Lo que cambia y lo que NO, medido sobre los 153 menús y seis objetivos:**
+
+    cuadran        393  ->  395
+    error medio   98,3  -> 98,2 g
+
+Eso es ruido, y no se vende como una mejora de precisión. **Lo que arregla es el plato**, que
+es lo que Jesús señaló. En «Ensalada templada de solomillo con patata, judías y guisantes»
+(35 P · 80 H · 10 G):
+
+    tomate ................ 250 g  ->   50 g
+    pimientos asados ...... 300 g  ->   50 g
+    patatas en conserva ... 100 g  ->  225 g
+    guisantes ............. 130 g  ->  240 g
+    error ................. 5,5    ->  2,9
+
+Los hidratos se los llevan la patata y los guisantes, que es de donde tienen que salir.
+
+**Por qué el umbral de hidratos es 6 y no 8.** Con 8 se caían las fresas (7,0) y los frutos
+rojos, y la fruta es fuente de hidratos en el método. A 6 la frontera del catálogo queda
+limpia: por debajo solo verdura, salsa y leche (tomate 5,0 · pimiento verde 5,0 · yogures
+4,6-5,0); justo por encima, todo lo que sí lleva hidratos (mandarina 8,7 · garbanzos 9,5 ·
+patata 11 · pasta 26 · pan 60). Barrido de 0 a 15: con 6 cuadran 395 y el error es 98,2; con
+8, 394 y 98,6 -- peor que antes del cambio.
+
+**Alcance real, para no venderlo de más:** lechuga, pepino y calabacín ya estaban fuera por el
+`> 1e-6` de siempre (Calma les pone los macros efectivos a cero). Lo que añade el filtro es la
+franja de en medio: la que no es cero pero no llega. Las 193 apariciones del barrido suenan a
+mucho más de lo que el arreglo mueve.
+
+**Un menú se rompe**: «Carpaccio 2.0» cuadraba justo en el límite (grasa 12,0 contra objetivo
+8, exactamente los ±4 del margen) y ahora se queda en 13,5. Falla por 0,5 g. A cambio su
+tomate baja de 150 a 50 g. Cualquier umbral que atrape al tomate rompe ese menú: es el precio
+del punto, y se paga.
+
+**Dos alternativas probadas y descartadas** (queda escrito en el código para que no se
+reintenten): clavar la guarnición en su mínimo bajándole también el máximo deja sin palancas
+al afinado del paso 3.5 y hunde el post (42 -> 37 cuadrados); y una regla relativa (descartar
+al que da menos de una fracción del más fuerte del menú) baja el error medio pero se lleva por
+delante los cuadrados, 393 -> 318.
+
+### Lo que NO se hace, por decisión de Francisco
+
+El arreglo no llega a la zanahoria (10 g/100 g), la cebolla (9,0) ni el pisto (9,7), que
+siguen pudiendo salir a 300 g. Subir el umbral para atraparlas se lleva la fruta por delante,
+así que la salida de fondo sería **añadir un rol «guarnición»** al editor de menús. Francisco
+lo descarta el 09-08: «nada de guarnición». El punto se cierra con el umbral y esos tres casos
+se quedan como están.
+
+**Queda apuntado a la vista, sin tapar:** el afinado del paso 3.5 sigue sin conocer el
+concepto, y en «Tostas proteicas + bol de yogur» usa el tomate como palanca fina y lo sube de
+250 a 300 g. Es un caso entre 153 y taparlo cuesta 5 menús cuadrados.
