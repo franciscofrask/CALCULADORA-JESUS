@@ -12,7 +12,7 @@ import {
     LogOut, Bell, ChevronRight, CreditCard, Target, Bot,
     Flame, Activity, Scale, Search, SlidersHorizontal, Pill,
     ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen,
-    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone, Clock
+    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone, Clock, TrendingUp
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import ThemeToggle from '../components/ThemeToggle';
@@ -62,6 +62,40 @@ const CircularTracker = ({ value, max, label, unit, color, size = 84, strokeWidt
                 </div>
             </div>
             <span className="text-[11px] font-bold uppercase tracking-wider mt-2" style={{ color: displayColor }}>{label}</span>
+        </div>
+    );
+};
+
+/**
+ * UN MACRO DEL DÍA: el número grande, el nombre y cuánto es el objetivo.
+ *
+ * Sustituye al anillo + barra del panel (documento del 10-08, pantalla 4). Tres decisiones,
+ * y las tres son suyas:
+ *
+ *  - «Los números suben de tamaño y se les quita el anillo». El anillo ocupaba 92 px para
+ *    decir lo mismo que dice el número.
+ *  - «"de 190" DEBAJO del número, no arriba en una franja aparte»: antes había que mirar a
+ *    dos sitios para saber cuánto faltaba.
+ *  - El nombre del macro debajo del número y en negrita.
+ *
+ * La barra fina de abajo se queda: es lo que sustituye al anillo de un vistazo y ocupa, en
+ * palabras del documento, «una décima parte». Cuando se pasa del objetivo se pone en rojo,
+ * que es la única alarma de esta pantalla.
+ */
+const MacroGrande = ({ valor, objetivo, label, color }) => {
+    const pct = objetivo > 0 ? Math.min((valor / objetivo) * 100, 100) : 0;
+    const pasado = valor > objetivo + 4;
+    return (
+        <div className="text-center" data-testid={`macro-${slug(label)}`}>
+            <p className="font-data font-bold leading-none text-foreground text-[34px] sm:text-[40px]">
+                {Math.round(valor)}
+            </p>
+            <p className="text-sm font-bold mt-1.5" style={{ color: pasado ? '#DC2626' : color }}>{label}</p>
+            <p className="text-sm text-muted-foreground font-data">de {Math.round(objetivo)}</p>
+            <div className="h-1 bg-muted rounded-full overflow-hidden mt-2">
+                <div className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, backgroundColor: pasado ? '#DC2626' : color }} />
+            </div>
         </div>
     );
 };
@@ -340,22 +374,46 @@ const ClientDashboard = () => {
     const isRestDay = todayRoutine?.is_rest;
     const activeTarget = isRestDay ? mr : mt;
 
+    // UN AVISO CADA VEZ, EL DE MÁS ARRIBA QUE CUMPLA (documento del 10-08, pantalla 4).
+    //
+    // Aquí salían apilados: el reporte que toca, la checklist de primeros pasos, el de
+    // ajustar macros, el de elegir plan y el del perfil a medias. Cinco tarjetas grandes,
+    // una debajo de otra, antes de llegar a nada. Cuando le pides cinco cosas a la vez no
+    // le estás pidiendo ninguna.
+    //
+    // El orden es el del documento, adaptado a los avisos que hoy tienen dato de verdad.
+    // Los que faltan por poder calcularlos -- «estos son tus macros provisionales» y «ya
+    // puedes hacer tu revisión mensual» -- van cuando exista de dónde sacarlos, y su sitio
+    // es esta lista.
+    const avisoPendiente = (() => {
+        if (!myPlan) return 'plan';                                   // sin plan no puede hacer nada
+        if (profile?.questionnaire_completed && !profile?.ajuste_macros_completado
+            && !profile?.macros_puestos_por_alguien) return 'ajustar';
+        if (can('macros_personalizados') && profile?.questionnaire_completed
+            && (profile?.ajuste_macros_completado || profile?.macros_puestos_por_alguien)
+            && !profile?.questionnaire_nivel1_completed) return 'perfil';
+        if (dueReports.length) return 'reporte';
+        if (showChecklist) return 'checklist';
+        return null;
+    })();
+
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6 animate-fade-in" data-testid="client-dashboard">
-            {/* Header */}
-            <header className="flex items-end justify-between gap-4">
-                <div>
-                    <p className="caption text-brand mb-1">Panel del cliente</p>
-                    <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase text-foreground leading-none">
-                        Hola, {user?.name?.split(' ')[0]}
-                    </h1>
-                    <div className="flex items-center gap-3 mt-2">
-                        <PlanBadge plan={profile.plan} planName={myPlan?.name} />
-                        <span className="text-muted-foreground text-sm">
-                            {cicloSemanas ? `Semana ${profile.week}/${cicloSemanas}` : `Semana ${profile.week}`}
-                        </span>
-                    </div>
-                </div>
+            {/* LA CABECERA, EN UNA LÍNEA (documento del 10-08, pantalla 4): «Semana 6 de 12»
+                y a los números.
+
+                Aquí había cuatro cosas apiladas -- «PANEL DEL CLIENTE», «HOLA, CLIENTE» a
+                48 px, la insignia del plan y la semana --, casi 300 px de los 844 de un
+                móvil para saludar y decir en qué app estás. Nada de eso responde a la
+                pregunta con la que el cliente abre la app, que es cuánto tiene que comer
+                hoy.
+
+                Se queda la semana, que es lo único que sitúa, y sube a la línea de arriba.
+                El nombre y el plan no se pierden: están en Perfil, que es donde se miran. */}
+            <header className="flex items-center justify-between gap-4">
+                <p className="text-sm font-semibold text-muted-foreground" data-testid="cabecera-semana">
+                    {cicloSemanas ? `Semana ${profile.week} de ${cicloSemanas}` : `Semana ${profile.week}`}
+                </p>
                 {unreadMessages > 0 && (
                     <button onClick={() => navigate('/dashboard/messages')} data-testid="notif-btn"
                         className="relative w-11 h-11 rounded-xl border border-border bg-card flex items-center justify-center hover:border-brand transition-colors">
@@ -365,8 +423,9 @@ const ClientDashboard = () => {
                 )}
             </header>
 
-            {/* Reporte pendiente esta semana (amarillo en plazo, rojo vencido) */}
-            {dueReports.map((r) => (
+            {/* Reporte pendiente esta semana (amarillo en plazo, rojo vencido). Solo el
+                primero: si le tocan dos, el segundo sale cuando mande el primero. */}
+            {avisoPendiente === 'reporte' && dueReports.slice(0, 1).map((r) => (
                 <div key={r.tipo}
                     className={`surface p-4 flex flex-col sm:flex-row sm:items-center gap-3 border ${
                         r.overdue ? 'border-red-500/40 bg-red-500/5' : 'border-yellow-500/40 bg-yellow-500/5'
@@ -404,33 +463,38 @@ const ClientDashboard = () => {
             ))}
 
             {/* Checklist de primeros pasos */}
-            {showChecklist && (
+            {avisoPendiente === 'checklist' && (
                 <OnboardingChecklist steps={checklistSteps} onDismiss={dismissChecklist} navigate={navigate}
                     onResume={resumeTour} showResume={!tourCompleted && !tourActive} />
             )}
 
             {/* Main grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Sin rejilla de 12 columnas: ya no hay dos columnas que repartir. */}
+            <div>
                 {/* Macros / Today */}
-                <div className="lg:col-span-8">
+                <div>
                     {hasMacros ? (
                         <div className="surface surface-hover overflow-hidden cursor-pointer h-full" data-testid="macro-trackers-card" onClick={() => navigate('/dashboard/nutrition')}>
-                            <div className="px-5 pt-5 pb-3 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    {isRestDay ? <Activity className="w-4 h-4 text-emerald-500" /> : <Flame className="w-4 h-4 text-brand" />}
-                                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">Hoy · {isRestDay ? 'Descanso' : 'Entreno'}</span>
-                                </div>
+                            {/* LA FECHA ARRIBA, y el tipo de día detrás (documento del 10-08,
+                                pantalla 4). Antes ponía «Hoy · Entreno», que no sitúa: el
+                                cliente que abre la app a las once de la noche o el que navega
+                                a otro día necesita ver de qué día son estos números. */}
+                            <div className="px-5 pt-5 pb-1">
+                                <p className="text-sm font-semibold text-foreground first-letter:uppercase" data-testid="hoy-fecha">
+                                    {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                    <span className="text-muted-foreground font-normal"> · {isRestDay ? 'descanso' : 'entreno'}</span>
+                                </p>
                             </div>
-                            <div className="px-5 pb-5 pt-1">
-                                <div className="flex items-center justify-around">
-                                    <CircularTracker value={todayConsumed.P} max={getP(activeTarget)} label="Proteína" unit="g" color={MACRO.protein} size={92} />
-                                    <CircularTracker value={todayConsumed.H} max={getH(activeTarget)} label="Hidratos" unit="g" color={MACRO.carbs} size={92} />
-                                    <CircularTracker value={todayConsumed.G} max={getG(activeTarget)} label="Grasa" unit="g" color={MACRO.fat} size={92} />
-                                </div>
-                                <div className="flex items-center justify-center gap-5 mt-4 flex-wrap">
-                                    <MacroBar label="P" consumed={todayConsumed.P} target={getP(activeTarget)} color={MACRO.protein} />
-                                    <MacroBar label="H" consumed={todayConsumed.H} target={getH(activeTarget)} color={MACRO.carbs} />
-                                    <MacroBar label="G" consumed={todayConsumed.G} target={getG(activeTarget)} color={MACRO.fat} />
+                            <div className="px-5 pb-5 pt-3">
+                                {/* NÚMEROS GRANDES, SIN ANILLO. Del documento: «el anillo dice
+                                    lo mismo que la barra, y la barra ocupa una décima parte».
+                                    Aquí había las dos cosas -- tres anillos de 92 px y, debajo,
+                                    tres barras con los mismos números --, o sea media pantalla
+                                    de móvil para decir una cosa dos veces. */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <MacroGrande valor={todayConsumed.P} objetivo={getP(activeTarget)} label="Proteína" color={MACRO.protein} />
+                                    <MacroGrande valor={todayConsumed.H} objetivo={getH(activeTarget)} label="Hidratos" color={MACRO.carbs} />
+                                    <MacroGrande valor={todayConsumed.G} objetivo={getG(activeTarget)} label="Grasa" color={MACRO.fat} />
                                 </div>
                             </div>
                             <div className="border-t border-border px-5 py-3 flex items-center justify-between">
@@ -452,47 +516,19 @@ const ClientDashboard = () => {
                     )}
                 </div>
 
-                {/* Side column */}
-                <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-5">
-                    {/* Cycle */}
-                    <div className="surface p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="caption">Ciclo</span>
-                            <span className="text-xs text-muted-foreground font-data">
-                                {cicloSemanas ? `${profile.week}/${cicloSemanas}` : `Semana ${profile.week}`}
-                            </span>
-                        </div>
-                        {cicloSemanas ? (
-                            <>
-                                <div className="w-full bg-muted rounded-full h-2">
-                                    <div className="bg-brand h-2 rounded-full transition-all duration-500" style={{ width: `${weekProgress}%` }} />
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-2">Semana {profile.week} de tu ciclo de {plural(cicloSemanas, 'semana')}</p>
-                            </>
-                        ) : (
-                            <p className="text-xs text-muted-foreground mt-1">Plan mensual · semana {profile.week}</p>
-                        )}
-                        {(myPlan?.habilitaciones?.reportes?.length > 0) && (
-                            <p className="text-[11px] text-muted-foreground mt-2 capitalize">
-                                Reportes: {myPlan.habilitaciones.reportes.join(' + ')}
-                            </p>
-                        )}
-                    </div>
-                    {/* Next payment */}
-                    {profile.next_payment && (
-                        <div className="surface p-4 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
-                                <CreditCard className="w-5 h-5 text-muted-foreground" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="caption">Próxima renovación</p>
-                                <p className="text-sm text-foreground mt-0.5">
-                                    {new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })} · <span className="text-brand font-bold font-data">{profile.price}€</span>
-                                </p>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                {/* LA COLUMNA DE AL LADO SE FUE ENTERA. Eran dos tarjetas que en móvil
+                    caen debajo y ocupan otra media pantalla:
+
+                      - CICLO: la semana ya está en la cabecera, y «Reportes: quincenal +
+                        mensual» es una característica del plan, que se lee en Perfil ->
+                        «Tu plan incluye». Aquí solo repetía.
+                      - PRÓXIMA RENOVACIÓN: es de Mi perfil, que es donde alguien va a
+                        mirar qué paga y cuándo. En Inicio no responde a ninguna pregunta
+                        del día a día.
+
+                    La barra de progreso del ciclo es lo único que no está en otro sitio, y
+                    es decoración: la misma información en texto («Semana 7 de 12») ya va
+                    arriba. */}
             </div>
 
             {/* Ajustar macros: el cuestionario del paso 2. Sale mientras tenga los macros
@@ -510,8 +546,7 @@ const ClientDashboard = () => {
                 la app y leyendo que les falta terminar de sacar sus macros.
                 `macros_puestos_por_alguien` lo calcula el servidor mirando quién escribió su
                 último ajuste. */}
-            {profile?.questionnaire_completed && !profile?.ajuste_macros_completado
-                && !profile?.macros_puestos_por_alguien && (() => {
+            {avisoPendiente === 'ajustar' && (() => {
                 const porLlamada = (profile?.plan || '') === 'nivel3';
                 const conCoach = can('macros_personalizados');
                 const texto = porLlamada
@@ -543,7 +578,7 @@ const ClientDashboard = () => {
 
             {/* Sin plan contratado no puede hacer casi nada, y hasta ahora no habia forma de
                 llegar a contratarlo desde dentro de la app. Va lo primero a proposito. */}
-            {!myPlan && (
+            {avisoPendiente === 'plan' && (
                 <button onClick={() => navigate('/planes')} data-testid="elegir-plan-banner"
                     className="surface surface-hover w-full p-4 flex items-center justify-between group border border-brand/40">
                     <div className="flex items-center gap-4">
@@ -606,9 +641,7 @@ const ClientDashboard = () => {
                 dos cuestionarios. No los hay: es el mismo recorrido, y el de arriba sigue
                 de largo hasta aquí sin cortes. Este solo tiene sentido cuando el de arriba
                 ya está hecho -- es decir, cuando de verdad se quedó a medias. */}
-            {can('macros_personalizados') && profile?.questionnaire_completed
-                && (profile?.ajuste_macros_completado || profile?.macros_puestos_por_alguien)
-                && !profile?.questionnaire_nivel1_completed && (
+            {avisoPendiente === 'perfil' && (
                 <button onClick={() => navigate('/questionnaire')} data-testid="nivel1-pending-banner"
                     className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">
                     <div className="flex items-center gap-4">
@@ -647,20 +680,15 @@ const ClientDashboard = () => {
             </button>
             )}
 
-            {/* Quick actions */}
-            <div>
-                <p className="caption mb-3">Accesos rápidos</p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <QuickCard icon={Apple} color="#16A34A" label="Nutrición" sub="Montar dieta" path="/dashboard/nutrition" navigate={navigate} testId="nutrition-quick" />
-                    <QuickCard icon={SlidersHorizontal} color={MACRO.protein} label="Macros" sub="Ajustar valores" path="/dashboard/macro-calculator" navigate={navigate} testId="macros-card" />
-                    <QuickCard icon={Bot} color="#7C3AED" label="Asistente IA" sub="Dieta con IA" path="/dashboard/chatbot" navigate={navigate} testId="chatbot-card" />
-                    {can('reportes') && <QuickCard icon={FileText} color="#CA8A04" label="Reportes" sub="Ver evolución" path="/dashboard/reports" navigate={navigate} testId="reports-card" />}
-                    <QuickCard icon={Search} color="#0891B2" label="Alimentos" sub="Buscador" path="/dashboard/foods" navigate={navigate} testId="foods-card" />
-                    {can('suplementacion') && <QuickCard icon={Pill} color="#DB2777" label="Suplementos" sub="Tu protocolo" path="/dashboard/supplements" navigate={navigate} testId="supplements-card" />}
-                    {can('reportes') && <QuickCard icon={ClipboardCheck} color="#2563EB" label="Check-ins" sub="Seguimiento" path="/dashboard/checkins" navigate={navigate} testId="checkins-card" />}
-                    {can('chat') && <QuickCard icon={MessageCircle} color="#9333EA" label="Chat" sub={unreadMessages > 0 ? `${unreadMessages} sin leer` : 'Tu entrenador'} path="/dashboard/messages" navigate={navigate} testId="messages-card" badge={unreadMessages} />}
-                </div>
-            </div>
+            {/* LOS OCHO ACCESOS RÁPIDOS SE FUERON (documento del 10-08, pantalla 4):
+                «repetían la barra de abajo. Eran cuatro cosas que ocupaban media pantalla y
+                no llevaban a ningún sitio nuevo». Aquí eran ocho, con icono, título y
+                subtítulo cada una, y ocupaban 1.000 de los 1.616 px de alto de la pantalla.
+
+                Nada se pierde: Nutrición y Seguimiento están en la barra de abajo, y las
+                otras seis -- Mis macros, Asistente, Alimentos, Suplementos, Check-ins y
+                Chat -- viven ahora en Perfil, que es donde el documento pone «Mis macros»
+                («de la pestaña Perfil, abajo a la derecha»). */}
         </div>
     );
 };
@@ -685,11 +713,23 @@ const NAV_ITEMS = [
     { path: '/dashboard/profile', icon: User, label: 'Mi perfil' },
 ];
 
+// LAS CUATRO DE ABAJO (documento del 10-08): Inicio · Nutrición · Seguimiento · Perfil.
+//
+// Antes eran tres más un botón «Más» que abría un cajón con las once. Dos problemas: el
+// cajón escondía media app detrás de una palabra que no dice nada, y «Macros» ocupaba un
+// hueco de cuatro para una pantalla a la que se entra una vez al mes.
+//
+// «Seguimiento» en vez de «Reportes» es del documento, y es la unificación de las cuatro
+// vías de hoy (reportes, check-ins, fotos e informe). Mientras esas cuatro no se junten de
+// verdad -- pantallas 20 a 24 del recorrido -- apunta a Reportes, que es donde está lo
+// principal, y las otras siguen alcanzables desde Perfil.
+//
+// Todo lo que sale de aquí tiene su entrada en Perfil. Ninguna pantalla se queda sin puerta.
 const BOTTOM_ITEMS = [
     { path: '/dashboard', icon: Home, label: 'Inicio', end: true },
     { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
-    { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina', cap: 'rutina' },
-    { path: '/dashboard/macro-calculator', icon: SlidersHorizontal, label: 'Macros' },
+    { path: '/dashboard/reports', icon: TrendingUp, label: 'Seguimiento', cap: 'reportes' },
+    { path: '/dashboard/profile', icon: User, label: 'Perfil' },
 ];
 
 const SidebarLink = ({ item, collapsed, unread, onClick }) => (
@@ -865,11 +905,11 @@ const ClientLayout = () => {
                             </>)}
                         </NavLink>
                     ))}
-                    <button onClick={() => setDrawerOpen(true)} data-testid="bottomnav-mas"
-                        className="flex flex-col items-center justify-center flex-1 gap-1 text-white/55">
-                        <Menu className="w-[22px] h-[22px]" strokeWidth={2} />
-                        <span className="text-[10px] font-medium">Más</span>
-                    </button>
+                    {/* SIN «MÁS» (documento del 10-08): eran cuatro pestañas y un cajón que
+                        escondía media app detrás de una palabra que no dice qué hay dentro.
+                        Lo que había en el cajón vive ahora en Perfil, con su nombre.
+                        El cajón sigue existiendo para el escritorio, donde es la barra
+                        lateral entera y ahí sí tiene sentido. */}
                 </div>
             </nav>
 

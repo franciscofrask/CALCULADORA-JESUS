@@ -16,7 +16,7 @@ import {
     User, Mail,
     LogOut, Lock, ChevronRight, Crown,
     TrendingUp, Edit2, Camera, Check,
-    Compass
+    Compass, SlidersHorizontal, Bot, Search, Pill, ClipboardCheck, MessageCircle
 } from 'lucide-react';
 
 // "Mejorar mi plan" OCULTO (petición 2026-07-06): el checkout de upgrade no existe aún
@@ -34,7 +34,7 @@ const UPGRADE_PLAN_UI = false;
 
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const { user, profile, logout, api, refreshUser, myPlan, planUnpaid } = useAuth();
+    const { user, profile, logout, api, refreshUser, myPlan, planUnpaid, can } = useAuth();
     const { startTour } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
@@ -244,6 +244,47 @@ const ProfilePage = () => {
                         </CardContent>
                     </Card>
                 )}
+
+                {/* TODO LO DEMÁS, CON SU NOMBRE.
+                    La barra de abajo bajó a cuatro (Inicio · Nutrición · Seguimiento ·
+                    Perfil) y de Inicio se fueron los ocho accesos rápidos. Lo que dejó de
+                    tener puerta aterriza aquí, que es donde el propio documento pone «Mis
+                    macros»: «de la pestaña Perfil, abajo a la derecha».
+                    Cada entrada respeta las capacidades del plan, igual que antes: al que
+                    no tiene suplementación no se le enseña Suplementos, y al plan sin
+                    entrenador no se le enseña el Chat. */}
+                <Card className="bg-card border-border">
+                    <CardContent className="p-0">
+                        {[
+                            { icon: SlidersHorizontal, title: 'Mis macros', sub: 'Tus números y por qué son esos', path: '/dashboard/macro-calculator' },
+                            { icon: Bot, title: 'Asistente IA', sub: 'Monta la comida hablando', path: '/dashboard/chatbot' },
+                            { icon: Search, title: 'Alimentos', sub: 'Buscador del catálogo', path: '/dashboard/foods' },
+                            can('suplementacion') && { icon: Pill, title: 'Suplementos', sub: 'Tu protocolo', path: '/dashboard/supplements' },
+                            can('reportes') && { icon: ClipboardCheck, title: 'Check-ins', sub: 'Tu seguimiento diario', path: '/dashboard/checkins' },
+                            can('chat') && { icon: MessageCircle, title: 'Chat', sub: 'Escríbenos cuando quieras', path: '/dashboard/messages' },
+                        ].filter(Boolean).map((item, i) => (
+                            <React.Fragment key={item.title}>
+                                {i > 0 && <Separator className="bg-border" />}
+                                <button
+                                    className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+                                    onClick={() => navigate(item.path)}
+                                    data-testid={`ir-a-${item.path.split('/').pop()}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                                            <item.icon className="w-5 h-5 text-[#FF671F]" />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-medium text-foreground text-sm">{item.title}</p>
+                                            <p className="text-xs text-foreground/50">{item.sub}</p>
+                                        </div>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-foreground/30" />
+                                </button>
+                            </React.Fragment>
+                        ))}
+                    </CardContent>
+                </Card>
 
                 {/* Settings */}
                 <Card className="bg-card border-border">
