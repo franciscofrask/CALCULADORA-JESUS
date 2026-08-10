@@ -395,11 +395,11 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             cuadran en todos los de la lista, así que entre un
                                             menú y otro lo que elige el cliente es la comida.
                                             Las cantidades a 15 y el nombre a 15. */}
-                                        <ul className="space-y-1.5">
+                                        <ul className="space-y-2">
                                             {menu.items.map((it, i) => (
-                                                <li key={i} className="flex items-baseline gap-2.5 text-[15px]">
-                                                    <span className="font-bold text-brand-orange whitespace-nowrap w-14 flex-shrink-0 text-right">{it.cantidad_display}</span>
-                                                    <span className="text-foreground leading-snug">{it.nombre}</span>
+                                                <li key={i} className="flex items-baseline gap-2.5 text-[17px]">
+                                                    <span className="font-bold text-brand-orange whitespace-nowrap w-16 flex-shrink-0 text-right">{it.cantidad_display}</span>
+                                                    <span className="text-foreground leading-snug text-justify">{it.nombre}</span>
                                                 </li>
                                             ))}
                                         </ul>
@@ -516,7 +516,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                         )}
                                         <div className="p-4">
                                         <div className="flex items-start justify-between gap-2 mb-1">
-                                            <h3 className="font-bold text-foreground text-base leading-snug">{receta.nombre}</h3>
+                                            <h3 className="font-bold text-foreground text-lg leading-snug">{receta.nombre}</h3>
                                             <div className="flex items-center gap-1 flex-shrink-0">
                                                 {(receta.momentos || []).map(m => (
                                                     <span key={m} className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
@@ -524,8 +524,12 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             </div>
                                         </div>
                                         {/* Los alimentos de la receta, igual que en la
-                                            biblioteca: es lo que se lee para elegir. */}
-                                        <p className="text-[15px] text-foreground/70 leading-relaxed">
+                                            biblioteca: es lo que se lee para elegir. Van
+                                            justificados porque aquí sí es un párrafo -- los
+                                            alimentos van seguidos separados por puntos -- y
+                                            en un ancho de móvil el borde derecho en zigzag es
+                                            lo que hace que un bloque de texto se lea peor. */}
+                                        <p className="text-[17px] text-foreground/70 leading-relaxed text-justify hyphens-auto">
                                             {(receta.alimentos || []).join(' · ')}
                                         </p>
                                         <p className="text-[11px] text-brand-orange font-semibold mt-1.5 flex items-center gap-1">
