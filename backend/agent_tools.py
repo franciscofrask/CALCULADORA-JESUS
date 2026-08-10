@@ -91,6 +91,16 @@ class AgentTools:
             self.bot.state.get("single_meal", False),
         )
 
+    def _nombre_comida_actual(self) -> str:
+        """Cómo se llama esta comida en la pantalla del cliente: «Comida 1», «Post-entreno».
+
+        Para los avisos que ACABAN VIÉNDOSE en la tarjeta. El momento (desayuno, almuerzo...)
+        sigue decidiendo qué es típico de cada comida, pero esa palabra ya no se le enseña:
+        decisión de Francisco del 09-08-2026, punto 10.5. Ver `meal_moment.describe_comida`.
+        """
+        key = self.bot.current_meal_key()
+        return self.bot.meal_label(key) or key
+
     def _universo(self) -> List[dict]:
         """El catálogo que aplica a la comida actual (el peri tiene el suyo)."""
         key = self.bot.current_meal_key()
@@ -351,7 +361,8 @@ class AgentTools:
                 notas.append("hay candidatos pero no caben: "
                              + "; ".join(f"{c['nombre']} ({c['por_que_no']})" for c in no_caben))
             if vetados_momento:
-                notas.append(f"{vetados_momento} descartados por atípicos para {momento} "
+                notas.append(f"{vetados_momento} descartados por atípicos para la "
+                             f"{self._nombre_comida_actual()} "
                              "(repite con coherente_con_momento=false si lo quiere igualmente)")
             # SÍ están en el catálogo: no se ofrecen solos. Sin esta nota el asistente lo
             # contaba como que no existen -- «ahora mismo en el catálogo no tengo ninguna
@@ -867,8 +878,11 @@ class AgentTools:
                                   "detalle": f"pidió genéricos y {it['nombre']} es de marca"})
             if self.perfil and momento != PERI \
                     and self.perfil.coherencia(food, momento) < COHERENCIA_MINIMA:
+                # Este `detalle` SE VE en la tarjeta del menú («⚠ Arroz basmati es atípico
+                # para desayuno»), así que la comida se nombra como en la pantalla.
                 problemas.append({"item_id": it["id"], "tipo": "momento_incoherente",
-                                  "detalle": f"{it['nombre']} es atípico para {momento}"})
+                                  "detalle": f"{it['nombre']} es atípico para la "
+                                             f"{self._nombre_comida_actual()}"})
         firma = tuple(sorted(i["id"] for i in b["items"]))
         if list(firma) in (self.bot.state.get("menus_vistos") or []):
             problemas.append({"item_id": None, "tipo": "ya_ofrecido",

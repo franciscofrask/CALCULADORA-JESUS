@@ -84,14 +84,31 @@ class TestEntrenoComoContexto:
 
 class TestEtiquetas:
     def test_comida_se_le_dice_almuerzo(self):
+        """La etiqueta se queda: vale para el panel del entrenador y para lo interno.
+        Lo que ya no hace es salir en lo que lee el cliente."""
         assert etiqueta_momento(COMIDA) == "almuerzo"
 
-    def test_describe_lleva_el_momento(self):
-        assert describe_comida("C2", 4, meal_label="Comida 2") == "Comida 2 (almuerzo)"
-        assert describe_comida("C1", 3, meal_label="Comida 1") == "Comida 1 (desayuno)"
+    def test_al_cliente_se_le_nombra_la_comida_QUE_LE_CORRESPONDE(self):
+        """Punto 10.5. Esto devolvia «Comida 2 (almuerzo)» y es lo que alimenta el estado
+        que lee el asistente, asi que el parentesis se lo dabamos hecho: cuando escribia
+        «Comida 1 (desayuno)» copiaba nuestro formato. Decision de Francisco del 09-08:
+        que diga la comida que corresponde, la misma que ve en su pantalla."""
+        assert describe_comida("C2", 4, meal_label="Comida 2") == "Comida 2"
+        assert describe_comida("C1", 3, meal_label="Comida 1") == "Comida 1"
 
-    def test_el_peri_no_se_duplica(self):
+    def test_sin_etiqueta_se_cae_a_la_clave(self):
+        assert describe_comida("C2", 4) == "C2"
+
+    def test_el_peri_tampoco(self):
         assert describe_comida("Post", 4, meal_label="Post-entreno") == "Post-entreno"
+
+    def test_ninguna_comida_se_describe_con_hora_del_dia(self):
+        """Barrido: ningun reparto puede colar desayuno/almuerzo/merienda/cena."""
+        prohibidas = ("desayuno", "almuerzo", "merienda", "cena")
+        for n in (1, 2, 3, 4, 5):
+            for i in range(1, n + 1):
+                texto = describe_comida(f"C{i}", n, meal_label=f"Comida {i}").lower()
+                assert not any(p in texto for p in prohibidas), texto
 
 
 class TestEntradasRaras:

@@ -90,13 +90,24 @@ def etiqueta_momento(momento: str) -> str:
 
 def describe_comida(meal_key: str, num_comidas: int, single_meal: bool = False,
                     meal_label: Optional[str] = None) -> str:
-    """Línea para el contexto del asistente y para la cabecera del chat:
-    'Comida 2 (almuerzo)'. `meal_label` es la etiqueta que ya calcula el chatbot."""
-    momento = momento_de_comida(meal_key, num_comidas, single_meal)
-    base = meal_label or meal_key
-    if momento == PERI:
-        return base           # "Post-entreno (peri-entreno)" es redundante
-    return f"{base} ({etiqueta_momento(momento)})"
+    """Cómo se nombra esta comida DE CARA AL CLIENTE: 'Comida 2', 'Post-entreno'.
+
+    AQUÍ ESTABA EL ORIGEN DEL «(desayuno)» DEL PUNTO 10.5. Esto devolvía
+    'Comida 2 (almuerzo)' y es lo que alimenta el estado que lee el asistente, así que el
+    paréntesis se lo estábamos dando hecho: cuando escribía «Comida 1 (desayuno)» no se
+    inventaba nada, copiaba nuestro propio formato. Se intentó corregir por prompt dos veces
+    y falló las dos, como tenía que pasar.
+
+    Decisión de Francisco, 09-08-2026: «que no diga desayuno, que diga la comida que
+    corresponde». La app nombra las comidas por su POSICIÓN, que es lo que el cliente ve en
+    su pantalla, y una sola forma de llamarlas.
+
+    Ojo, esto NO deshace la decisión del 06-08: el momento (desayuno / comida / merienda /
+    cena) sigue existiendo igual y sigue decidiendo qué alimento es típico de cada comida.
+    Lo único que cambia es que esa palabra ya no se le enseña al cliente. `etiqueta_momento`
+    se queda para el panel del entrenador y para explicaciones internas.
+    """
+    return meal_label or meal_key
 
 
 def entreno_antes_de(meal_key: str, momento_entreno: int, meal_order: list) -> bool:
