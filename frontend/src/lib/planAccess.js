@@ -74,6 +74,18 @@ export function habilitacionesToList(habilitaciones) {
     return out;
 }
 
+// LO QUE SE LE ENSEÑA AL CLIENTE EN «TU PLAN INCLUYE» (punto 6.4 de la revisión del 09-08).
+//
+// Manda el campo libre `que_incluye` del catálogo, una línea por punto, escrito a mano y
+// pintado tal cual. Las líneas derivadas de las habilitaciones son el respaldo: describen lo
+// que la app enciende («Calculadora en autogestión», «Reporte quincenal»), no lo que el
+// cliente compró, y eso vale para los planes que ya no se venden pero no para los cuatro que
+// sí. Vacío = se sigue derivando, así que quitar el texto no deja la tarjeta en blanco.
+export function queIncluyeElPlan(plan) {
+    const escrito = (plan?.que_incluye || '').split('\n').map(l => l.trim()).filter(Boolean);
+    return escrito.length ? escrito : habilitacionesToList(plan?.habilitaciones);
+}
+
 // Acompañamiento y frecuencia de contacto (especificación 31-07-2026): lo que separa
 // dos planes que, por lo demás, solo se diferencian en el precio.
 export const ACOMPANAMIENTO_OPTS = [

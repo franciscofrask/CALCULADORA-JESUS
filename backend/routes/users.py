@@ -1053,6 +1053,171 @@ async def get_macros(fecha: Optional[str] = None, user = Depends(get_current_use
         "objetivo": profile.get("goal"),
     }
 
+
+# ==================== MIS MACROS (punto 6.2 de la revision del 09-08) ====================
+#
+# El historial de macros existe desde hace meses y solo lo veia el entrenador. Lo que pide el
+# 6.2 es enseñarselo al cliente al que le pasan las cosas: sus numeros de hoy, lo que le dijo
+# su entrenador en el ultimo ajuste, la escalera de los anteriores con lo que cambio marcado, y
+# su peso. Todo eso ya esta guardado; lo unico que faltaba era una puerta para el.
+#
+# La puerta es nueva y no reutiliza la del admin a proposito: la entrada del historial lleva
+# cosas que el cliente NO puede ver, y la unica forma de garantizarlo es construir la respuesta
+# campo a campo en vez de tapar lo que sobra.
+
+# Lo que nunca sale de aqui, y por que:
+#
+#   criterio        es la nota INTERNA del entrenador ("bajo hidratos, viene de una fase
+#                   larga y no responde"). Se escribe sabiendo que no la lee el cliente.
+#   evaluacion      como salio la fase, con la casilla de "de quien fue la culpa".
+#   sugerencia_*    lo que propuso la IA y cuanto lo corrigio el coach.
+#   correccion_coach, motor, origen, changed_by
+#
+# Por eso abajo se construye un diccionario nuevo con los campos elegidos: si algun dia se
+# guarda un campo mas en `macro_history`, no se cuela solo en esta respuesta.
+
+# Los origenes que escribe el PROPIO cliente. La nota de esas entradas es suya -- el «motivo
+# del cambio» de su calculadora --, asi que no puede pintarse bajo «lo que te dijo tu
+# entrenador»: seria devolverle sus propias palabras en boca de otro.
+LOS_ESCRIBE_EL_CLIENTE = {"cliente_calculadora", "cliente_perfil", "quiz_alta",
+                          "quiz_ajuste", "cuestionario_cliente"}
+
+# Las notas que escribe la APP, no una persona: la etiqueta de la migracion y el nombre del
+# camino por el que se calcularon esos macros. En el historial del entrenador se leen como lo
+# que son, pero debajo de «lo que te dijo tu entrenador» se leerian como un mensaje suyo, y
+# «Importado de Calma» no es nada que Jesus le haya dicho a nadie.
+#
+# Van por texto y no solo por `origen` porque el origen se empezo a guardar el 05-08: de las
+# 3.400 entradas de desarrollo, 3.200 no lo tienen y si tienen una de estas notas. Filtrando
+# solo por origen, a todo cliente migrado le saldria «Importado de Calma» entrecomillado como
+# el consejo de su entrenador.
+NOTAS_QUE_ESCRIBE_LA_APP = {
+    "Importado de Calma",
+    "Cuestionario inicial",
+    "Cuestionario de ajuste de macros",
+    "Recalculados al editar su perfil",
+}
+
+
+def _bloque_de_macros(m: Optional[Dict[str, Any]], con_grasa: bool = True) -> Optional[Dict[str, Any]]:
+    """Un bloque de macros con los nombres de siempre. None si no hay nada que enseñar.
+
+    En la base conviven los dos vocabularios (`protein`/`carbs`/`fat` y
+    `proteinas`/`hidratos`/`grasas`) segun quien lo escribiera; aqui se sale por uno solo.
+    """
+    if not isinstance(m, dict):
+        return None
+    def _n(*nombres):
+        for k in nombres:
+            v = m.get(k)
+            if v is not None:
+                try:
+                    return round(float(v))
+                except (TypeError, ValueError):
+                    return None
+        return None
+    fuera = {"proteina": _n("protein", "proteinas"), "hidratos": _n("carbs", "hidratos")}
+    if con_grasa:
+        fuera["grasa"] = _n("fat", "grasas")
+    return fuera if any(v is not None for v in fuera.values()) else None
+
+
+def _feedback_del_entrenador(h: Dict[str, Any]) -> Optional[str]:
+    """La `note` del ajuste, solo si de verdad se la escribio su entrenador."""
+    nota = (h.get("note") or "").strip()
+    if not nota or nota in NOTAS_QUE_ESCRIBE_LA_APP:
+        return None
+    if (h.get("origen") or "") in LOS_ESCRIBE_EL_CLIENTE:
+        return None
+    return nota
+
+
+@router.get("/macros/historial")
+async def get_mi_historial_de_macros(user = Depends(get_current_user)):
+    """Lo que se pinta en «Mis macros»: sus ajustes, su feedback y su peso (punto 6.2).
+
+    QUIEN VE EL HISTORICO lo decide su plan, como manda la TABLA 20 del documento:
+
+        calculadora: personalizado   sus macros los lleva una persona -> CON historico
+        calculadora: sin_ajuste      no se le tocan                   -> SIN historico
+
+    La diferencia no es cosmetica. En el plan personalizado el historico ES el producto: es la
+    prueba de que alguien mira sus numeros cada quince dias y por que los movio. En el plan sin
+    ajuste no hay ajustes que enseñar, y una tabla con una sola fila repetida solo consigue que
+    parezca que le hemos dejado de hacer caso.
+    """
+    from core.plan_access import modo_calculadora
+    from core.sin_futuro import hasta_hoy
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    modo = modo_calculadora(profile.get("plan"))
+    con_historico = modo == "personalizado"
+    client_id = profile.get("id")
+
+    # HASTA HOY, igual que el panel del entrenador (punto 22): hay ajustes programados con
+    # fecha por delante, y al cliente le tiene que salir arriba el que le aplica HOY, no uno
+    # que todavia no ha empezado. Su fecha de vigencia es lo que ordena, y el momento en que se
+    # guardo desempata: dos ajustes del mismo dia van del mas nuevo al mas viejo.
+    entradas_crudas = []
+    if client_id:
+        entradas_crudas = await db.macro_history.find(
+            hasta_hoy({"client_id": client_id}, campo="effective_date"), {"_id": 0}
+        ).sort([("effective_date", -1), ("created_at", -1)]).to_list(60)
+
+    entradas = []
+    for h in entradas_crudas:
+        peri = h.get("peri") or h.get("macros_periworkout")
+        entradas.append({
+            "id": h.get("id"),
+            "fecha": h.get("effective_date") or (h.get("created_at") or "")[:10],
+            "peso": h.get("peso") if h.get("peso") is not None else h.get("client_weight"),
+            "entreno": _bloque_de_macros(h.get("training") or h.get("new_training")),
+            "peri": _bloque_de_macros(peri, con_grasa=False),
+            "descanso": _bloque_de_macros(h.get("rest") or h.get("new_rest")),
+            # Que macro se movio, calculado al guardar (punto 31). Es el mismo dato con el que
+            # el entrenador lee la escalera en su panel, asi que los dos ven lo mismo marcado.
+            "cambios": h.get("cambios"),
+            "feedback": _feedback_del_entrenador(h),
+        })
+
+    # SU PESO, de la serie (punto 30), que es donde caen los pesajes vengan de donde vengan. Se
+    # le suman los que viajaron con un ajuste y no llegaron a la serie -- los importados de
+    # Calma son de 2022 en adelante --, porque si no la curva empieza el dia que estrenamos la
+    # serie y se pierde justo el recorrido que le da sentido.
+    hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    pesos: Dict[str, float] = {}
+    for p in (profile.get("pesos") or []):
+        fecha, valor = str(p.get("fecha") or "")[:10], p.get("valor")
+        if fecha and fecha <= hoy and valor is not None:
+            pesos[fecha] = float(valor)
+    for e in entradas:
+        if e["peso"] is not None and e["fecha"] and e["fecha"] not in pesos:
+            try:
+                pesos[e["fecha"]] = float(e["peso"])
+            except (TypeError, ValueError):
+                pass
+
+    # «HOY · ENTRENO»: si tiene el dia montado en su calculadora, ya dijo si entrena o descansa,
+    # y entonces la tarjeta puede decirle cual de los tres bloques le toca. Si no lo ha montado
+    # no se supone nada: se le enseñan los tres sin destacar ninguno.
+    dia_de_hoy = await db.diets.find_one({"user_id": user["id"], "fecha": hoy},
+                                         {"_id": 0, "tipo_dia": 1})
+
+    vigente = entradas[0] if entradas else None
+    return {
+        "con_historico": con_historico,
+        "tipo_dia_hoy": (dia_de_hoy or {}).get("tipo_dia"),
+        # La tabla solo va en los planes que la TABLA 20 dice. `vigente` y la curva de peso
+        # salen siempre: son sus numeros de hoy y su peso, no el registro de ajustes.
+        "entradas": entradas if con_historico else [],
+        "vigente": vigente,
+        "evolucion_peso": [{"fecha": f, "peso": p} for f, p in sorted(pesos.items())],
+    }
+
+
 @router.put("/macros", response_model=Dict[str, Any])
 async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
     """Actualizar macros del usuario (override manual, versionado por fecha).

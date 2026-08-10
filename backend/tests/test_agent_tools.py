@@ -210,10 +210,32 @@ class TestEditarComida:
 # ------------------------------------------------------------ estado / navegar / explicar / configurar
 class TestEstadoYNavegacion:
     def test_estado_lleva_el_momento(self):
+        """El momento sigue viajando en el estado, pero YA NO dentro del nombre de la comida.
+
+        Este test exigía «desayuno» dentro de `est["comida"]` porque hasta el 09-08
+        `describe_comida()` devolvía literalmente «Comida 1 (desayuno)». Ese paréntesis era
+        el origen del «(desayuno)» del punto 10.5: cuando el asistente lo escribía no se
+        inventaba nada, copiaba nuestro propio formato, y por eso los dos intentos de
+        corregirlo por prompt fallaron (uno lo empeoró: prohibir la palabra la subió a 6 de
+        cada 6). Decisión de Francisco del 09-08: las comidas se nombran por la que
+        corresponde, así que de las herramientas sale «Comida 1» y punto.
+
+        Lo que sí tiene que seguir llegando -- y es lo que se vigila aquí ahora -- es el
+        momento como DATO, porque es quien decide qué alimento es típico de cada comida y va
+        al contexto del agente en la línea del día («Comida 1 (desayuno, vacía) <- actual»).
+        No se comprueba dentro de `ver_estado("comida")` a propósito: ese diccionario vuelve
+        al modelo como resultado de herramienta, y volver a meter ahí la palabra es regalarle
+        otra vez el paréntesis que tanto costó localizar.
+        """
         async def t():
             tools = await _tools()
             est = tools.ver_estado("comida")
-            assert "desayuno" in est["comida"] or "almuerzo" in est["comida"]
+            assert est["comida"] == "Comida 1", est["comida"]
+            assert not any(h in est["comida"].lower()
+                           for h in ("desayuno", "almuerzo", "merienda", "cena")), est["comida"]
+            dia = tools.ver_estado("dia")
+            actual = next(c for c in dia["comidas"] if c["es_actual"])
+            assert actual["momento"] == "desayuno", actual
         correr(t())
 
     def test_navegar_y_volver(self):

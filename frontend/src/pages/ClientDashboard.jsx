@@ -835,7 +835,17 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
 
 const ClientLayout = () => {
     const { user, logout, profile, api, can, planUnpaid, myPlan } = useAuth();
-    const navItems = NAV_ITEMS.filter(i => !i.cap || can(i.cap));
+    // «Ajustar macros» solo si de verdad puede ajustarlos (punto 6.2). Al cliente al que se los
+    // lleva su entrenador la pantalla se llama «Mis macros», y el menú tiene que decir lo mismo:
+    // un enlace que promete ajustar y lleva a una pantalla de solo lectura es la misma promesa
+    // rota que la calculadora sin botón de guardar.
+    const lesAjustaSuCoach = profile?.macros_ajustables?.puede === false;
+    const conNombreDeMacros = (i) => (
+        i.path === '/dashboard/macro-calculator' && lesAjustaSuCoach ? { ...i, label: 'Mis macros' } : i
+    );
+    const navItems = NAV_ITEMS.filter(i => !i.cap || can(i.cap)).map(conNombreDeMacros);
+    // La barra de abajo no se toca: ahí ya pone «Macros» a secas, que vale para los dos casos y
+    // es lo que cabe en un móvil.
     const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
     // EN EL TELÉFONO, «SEGUIMIENTO» ES LA ÚNICA PUERTA (decisión de Francisco, 10-08).
     //

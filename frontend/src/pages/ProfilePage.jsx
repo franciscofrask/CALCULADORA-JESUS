@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
-import { habilitacionesToList } from '../lib/planAccess';
+import { queIncluyeElPlan } from '../lib/planAccess';
 import {
     User, Mail,
     LogOut, Lock, ChevronRight, Crown,
@@ -84,8 +84,9 @@ const ProfilePage = () => {
         toast.success('Sesión cerrada');
     };
 
-    // "Tu plan incluye" derivado del catálogo del backend (habilitaciones del plan).
-    const currentPlanFeatures = habilitacionesToList(myPlan?.habilitaciones);
+    // «Tu plan incluye»: el texto que escribió el equipo para su plan (punto 6.4) y, si no lo
+    // hay, las líneas que se derivan de las habilitaciones, que es lo que había.
+    const currentPlanFeatures = queIncluyeElPlan(myPlan);
 
     return (
         <div className="p-4 md:p-6 pb-24 md:pb-6 animate-fade-in bg-background min-h-screen relative overflow-hidden">

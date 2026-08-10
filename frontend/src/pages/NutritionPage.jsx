@@ -7,7 +7,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
-    Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle, Settings
+    Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle, Settings, UserCheck
 } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
@@ -31,6 +31,13 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 // values, defaulting unknown to intra_post.
 const PERI_VALUES = ['intra_post', 'solo_post', 'solo_intra', 'sin_peri'];
 const normPeri = (v) => (PERI_VALUES.includes(v) ? v : 'intra_post');
+
+// Cuándo se guardó el día, en corto. Aparte del `formatDate` de la pantalla porque aquel dice
+// «Hoy» para la fecha de hoy, y «te lo montó Francisco el Hoy» no se puede leer.
+const fechaDeEdicion = (iso) => {
+    const d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+};
 
 // 12EN12 Logo Component
 const Logo12EN12 = () => (
@@ -403,6 +410,16 @@ const NutritionPage = () => {
         }
     }, [api, tipoDia, numComidas, momentoEntreno, opcionPeri, currentDate]);
 
+    // QUIÉN MONTÓ ESTE DÍA (punto 4.11). El servidor lo guarda con la dieta desde que el
+    // entrenador puede entrar en la calculadora de un cliente, y no se enseñaba en ninguna
+    // pantalla. Jesús lo pidió con estas palabras: «si el entrenador le monta una dieta el
+    // martes y el cliente la cambia el miércoles, los dos tienen que poder verlo».
+    //
+    // Al cliente solo se le dice cuando lo montó SU ENTRENADOR: que un día suyo lo montara él
+    // no es una noticia, y una línea en todos los días acabaría siendo invisible justo el día
+    // que dice algo.
+    const [loMontoSuCoach, setLoMontoSuCoach] = useState(null);
+
     // Load saved diet - returns { targets, config } where config has the diet's day values
     const loadDiet = useCallback(async (date) => {
         try {
@@ -447,6 +464,8 @@ const NutritionPage = () => {
                 }
                 setMealsData(updatedMeals);
                 setVolcadoMeal(diet.comida_volcada || null);
+                setLoMontoSuCoach(diet.editado_como === 'entrenador'
+                    ? { por: diet.editado_por, cuando: diet.updated_at } : null);
                 // Este día ya lo configuró alguien: su tipo es una decisión, no un supuesto.
                 setDiaSinMarcar(false);
                 console.log('[loadDiet] distribution_targets:', diet.distribution_targets);
@@ -454,6 +473,7 @@ const NutritionPage = () => {
             } else {
                 setMealsData({});
                 setVolcadoMeal(null);
+                setLoMontoSuCoach(null);
                 // NADIE HA DICHO SI ESTE DÍA ENTRENA (punto 4.17). Se sigue abriendo en
                 // «Entreno» porque hay que abrir en algo, pero se dice.
                 setDiaSinMarcar(true);
@@ -525,6 +545,9 @@ const NutritionPage = () => {
             if (hasFood) {
                 await api('/api/diets', { method: 'POST', body: JSON.stringify({ fecha: date, ...snap }) });
                 teniaAlimentosRef.current = true;
+                // A partir de este guardado el día lleva su firma, no la de su entrenador: el
+                // aviso tiene que irse o estaría diciendo que lo montó otro.
+                setLoMontoSuCoach(null);
             } else if (teniaAlimentosRef.current) {
                 await api(`/api/diets/${date}`, { method: 'DELETE' }).catch(() => {}); // 404 = nothing to delete
                 teniaAlimentosRef.current = false;
@@ -1948,6 +1971,15 @@ const NutritionPage = () => {
                     <p className="caption text-brand mb-1">Plan nutricional</p>
                     <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none hidden lg:block">Nutrición</h1>
                     <div className="mt-1 h-4">{renderEstadoGuardado()}</div>
+                    {/* Este día se lo montó su entrenador (punto 4.11). */}
+                    {loMontoSuCoach && (
+                        <p className="mt-1 text-xs text-brand font-semibold flex items-center gap-1.5"
+                            data-testid="dieta-la-monto-el-coach">
+                            <UserCheck className="w-3.5 h-3.5" />
+                            Este día te lo montó {loMontoSuCoach.por || 'tu entrenador'}
+                            {loMontoSuCoach.cuando ? ` el ${fechaDeEdicion(loMontoSuCoach.cuando)}` : ''}
+                        </p>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={exportPdf} disabled={exportingPdf} data-testid="export-pdf-btn"

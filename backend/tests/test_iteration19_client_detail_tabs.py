@@ -252,14 +252,21 @@ class TestMacrosUpdateWithHistory:
         assert response.status_code in [200, 422], f"Unexpected status: {response.status_code}"
     
     def test_macros_update_creates_history_entry(self, admin_token, client_id):
-        """PUT /api/admin/clients/{id}/macros stores history with changed_by, client_weight"""
-        # Get current macro_history count
-        response = requests.get(
-            f"{BASE_URL}/api/admin/clients/{client_id}",
-            headers={"Authorization": f"Bearer {admin_token}"}
-        )
-        initial_history_count = len(response.json()["macro_history"])
-        
+        """PUT /api/admin/clients/{id}/macros deja el ajuste en el historial.
+
+        Ojo con lo que se comprueba: este test exigía que el historial CRECIERA una fila, y
+        eso dejó de ser cierto con el punto 62 (09-08-2026). Ahora hay UNA fila por (cliente,
+        fecha de vigencia): guardar cuatro veces el mismo día -- que es lo normal, se calcula,
+        se mira, se toca un número y se vuelve a guardar -- dejaba cuatro filas idénticas en
+        el historial que mira el entrenador (medido en prod: 25 días con más de una fila y 92
+        filas de más), y encima `macros_por_fecha.resolver()` elegía una u otra según el orden
+        en que las devolviera Mongo. Desde entonces la fila se SUSTITUYE y la vieja se archiva
+        en `macro_history_auditoria`, así que el contador se queda igual y este test fallaba
+        en cuanto se ejecutaba dos veces el mismo día (que es siempre: el fichero entero
+        vuelve a correr contra la misma base). Lo que hay que exigir es que el ajuste esté
+        y esté entero, no cuántas filas hay; que no se dupliquen lo vigila
+        `test_historial_una_por_dia.py`.
+        """
         # Update macros with note
         response = requests.put(
             f"{BASE_URL}/api/admin/clients/{client_id}/macros",
@@ -278,16 +285,25 @@ class TestMacrosUpdateWithHistory:
             headers={"Authorization": f"Bearer {admin_token}"}
         )
         new_history = response.json()["macro_history"]
-        assert len(new_history) > initial_history_count, "History entry not created"
-        
-        # Check latest history entry has required fields
-        latest = new_history[0]  # Sorted by created_at desc
+        assert new_history, "El historial llegó vacío después de guardar un ajuste"
+
+        # El endpoint ordena por effective_date desc y created_at desc, así que el ajuste
+        # que se acaba de guardar es el primero.
+        latest = new_history[0]
         assert "changed_by" in latest, "History missing changed_by"
         assert "client_weight" in latest, "History missing client_weight"
         assert "note" in latest, "History missing note"
         assert "training" in latest, "History missing training macros"
         assert "rest" in latest, "History missing rest macros"
         assert "TEST_Ajuste semanal" in latest.get("note", ""), "Note not saved correctly"
+        assert latest["training"]["protein"] == 195, latest["training"]
+        assert latest["rest"]["protein"] == 228, latest["rest"]
+
+        # Y la regla del punto 62: ese día tiene UNA fila, no una por guardado.
+        mismo_dia = [h for h in new_history
+                     if h.get("effective_date") == latest.get("effective_date")]
+        assert len(mismo_dia) == 1, \
+            f"{len(mismo_dia)} filas para el {latest.get('effective_date')}: se han duplicado"
     
     def test_macros_update_stores_previous_values(self, admin_token, client_id):
         """PUT /api/admin/clients/{id}/macros stores previous macros in history"""

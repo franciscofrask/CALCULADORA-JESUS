@@ -491,6 +491,15 @@ def plan_habilitaciones(code: Optional[str]) -> Dict[str, Any]:
 PLAN_EDITABLE_FIELDS = {
     "name", "estado", "ciclo", "precio", "precio_nota", "precios",
     "responsable", "habilitaciones",
+    # QUE INCLUYE, ESCRITO A MANO (punto 6.4 de la revision del 09-08). Hasta ahora «Tu plan
+    # incluye» de Mi perfil se derivaba de la matriz de habilitaciones, y de ahi solo salen
+    # frases de sistema: «Macros personalizados por tu entrenador», «Reporte quincenal». Eso
+    # describe lo que la app enciende, no lo que se compro.
+    #
+    # Es un campo LIBRE, una linea por renglon, y solo se escribe para los cuatro planes que se
+    # venden. Los antiguos se quedan con las lineas derivadas, que para lo que son -- planes
+    # que ya no se contratan -- bastan.
+    "que_incluye",
 }
 
 

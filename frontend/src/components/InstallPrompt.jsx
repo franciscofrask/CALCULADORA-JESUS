@@ -75,6 +75,8 @@ const InstallPrompt = () => {
         return () => document.body.classList.remove('con-banner-instalar');
     }, [visible]);
 
+    // Encontrado el 10-08 al automatizar el móvil: Playwright no podía pulsar ENTRAR porque
+    // el banner interceptaba el toque. Una persona solo ve que el botón no responde.
     if (!visible) return null;
 
     return (
