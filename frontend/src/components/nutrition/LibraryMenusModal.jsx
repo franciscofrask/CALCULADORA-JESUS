@@ -390,10 +390,15 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                                 )}
                                             </div>
                                         </div>
-                                        <ul className="space-y-1">
+                                        {/* Los alimentos, en tamaño de lectura. Iban a 12 px, y
+                                            son LO ÚNICO que se lee para decidir: los macros ya
+                                            cuadran en todos los de la lista, así que entre un
+                                            menú y otro lo que elige el cliente es la comida.
+                                            Las cantidades a 15 y el nombre a 15. */}
+                                        <ul className="space-y-1.5">
                                             {menu.items.map((it, i) => (
-                                                <li key={i} className="flex items-baseline gap-2 text-xs">
-                                                    <span className="font-bold text-brand-orange whitespace-nowrap w-12 flex-shrink-0 text-right">{it.cantidad_display}</span>
+                                                <li key={i} className="flex items-baseline gap-2.5 text-[15px]">
+                                                    <span className="font-bold text-brand-orange whitespace-nowrap w-14 flex-shrink-0 text-right">{it.cantidad_display}</span>
                                                     <span className="text-foreground leading-snug">{it.nombre}</span>
                                                 </li>
                                             ))}
@@ -511,14 +516,16 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                         )}
                                         <div className="p-4">
                                         <div className="flex items-start justify-between gap-2 mb-1">
-                                            <h3 className="font-bold text-foreground text-sm leading-snug">{receta.nombre}</h3>
+                                            <h3 className="font-bold text-foreground text-base leading-snug">{receta.nombre}</h3>
                                             <div className="flex items-center gap-1 flex-shrink-0">
                                                 {(receta.momentos || []).map(m => (
                                                     <span key={m} className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
                                                 ))}
                                             </div>
                                         </div>
-                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                        {/* Los alimentos de la receta, igual que en la
+                                            biblioteca: es lo que se lee para elegir. */}
+                                        <p className="text-[15px] text-foreground/70 leading-relaxed">
                                             {(receta.alimentos || []).join(' · ')}
                                         </p>
                                         <p className="text-[11px] text-brand-orange font-semibold mt-1.5 flex items-center gap-1">
