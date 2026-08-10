@@ -3,6 +3,7 @@ import { useNavigate, Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
 import { plural } from '../lib/labels';
+import { useEsTelefono } from '../lib/esTelefono';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -237,6 +238,7 @@ const PlanCaducado = ({ navigate, nombre }) => {
 
 const ClientDashboard = () => {
     const { user, profile, api, myPlan, planUnpaid, can } = useAuth();
+    const enTelefono = useEsTelefono();
     const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
     const [routine, setRoutine] = useState(null);
@@ -385,7 +387,13 @@ const ClientDashboard = () => {
     // Los que faltan por poder calcularlos -- «estos son tus macros provisionales» y «ya
     // puedes hacer tu revisión mensual» -- van cuando exista de dónde sacarlos, y su sitio
     // es esta lista.
+    //
+    // Y SOLO EN EL TELÉFONO: en escritorio se apilan como estaban, que ahí caben y el
+    // rediseño todavía no ha llegado a esa vista. `enTelefono` mira el mismo corte que usa
+    // Tailwind para `lg` (1024 px), porque esto no se puede resolver con una clase: no es
+    // ocultar una tarjeta, es elegir cuál de las cinco se pinta.
     const avisoPendiente = (() => {
+        if (!enTelefono) return null;                                 // en escritorio, todos
         if (!myPlan) return 'plan';                                   // sin plan no puede hacer nada
         if (profile?.questionnaire_completed && !profile?.ajuste_macros_completado
             && !profile?.macros_puestos_por_alguien) return 'ajustar';
@@ -396,6 +404,9 @@ const ClientDashboard = () => {
         if (showChecklist) return 'checklist';
         return null;
     })();
+    // En el teléfono manda la lista de arriba (uno solo); en escritorio, la condición de
+    // siempre de cada tarjeta, que es como estaba.
+    const sale = (id, condicionDeSiempre) => (enTelefono ? avisoPendiente === id : condicionDeSiempre);
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6 animate-fade-in" data-testid="client-dashboard">
@@ -414,8 +425,14 @@ const ClientDashboard = () => {
                     <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase text-foreground leading-none">
                         Hola, {user?.name?.split(' ')[0]}
                     </h1>
-                    <div className="mt-2">
+                    <div className="flex items-center gap-3 mt-2">
                         <PlanBadge plan={profile.plan} planName={myPlan?.name} />
+                        {/* La semana, solo en escritorio: en el teléfono la lleva la tarjeta
+                            de Ciclo con su barra, y decirla dos veces en la misma pantalla
+                            sobra. */}
+                        <span className="hidden lg:inline text-muted-foreground text-sm">
+                            {cicloSemanas ? `Semana ${profile.week}/${cicloSemanas}` : `Semana ${profile.week}`}
+                        </span>
                     </div>
                 </div>
                 {unreadMessages > 0 && (
@@ -429,7 +446,7 @@ const ClientDashboard = () => {
 
             {/* Reporte pendiente esta semana (amarillo en plazo, rojo vencido). Solo el
                 primero: si le tocan dos, el segundo sale cuando mande el primero. */}
-            {avisoPendiente === 'reporte' && dueReports.slice(0, 1).map((r) => (
+            {sale('reporte', dueReports.length > 0) && (enTelefono ? dueReports.slice(0, 1) : dueReports).map((r) => (
                 <div key={r.tipo}
                     className={`surface p-4 flex flex-col sm:flex-row sm:items-center gap-3 border ${
                         r.overdue ? 'border-red-500/40 bg-red-500/5' : 'border-yellow-500/40 bg-yellow-500/5'
@@ -467,16 +484,15 @@ const ClientDashboard = () => {
             ))}
 
             {/* Checklist de primeros pasos */}
-            {avisoPendiente === 'checklist' && (
+            {sale('checklist', showChecklist) && (
                 <OnboardingChecklist steps={checklistSteps} onDismiss={dismissChecklist} navigate={navigate}
                     onResume={resumeTour} showResume={!tourCompleted && !tourActive} />
             )}
 
             {/* Main grid */}
-            {/* Sin rejilla de 12 columnas: ya no hay dos columnas que repartir. */}
-            <div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 {/* Macros / Today */}
-                <div>
+                <div className="lg:col-span-8">
                     {hasMacros ? (
                         <div className="surface surface-hover overflow-hidden cursor-pointer h-full" data-testid="macro-trackers-card" onClick={() => navigate('/dashboard/nutrition')}>
                             {/* LA FECHA ARRIBA, y el tipo de día detrás (documento del 10-08,
@@ -536,17 +552,13 @@ const ClientDashboard = () => {
                     )}
                 </div>
 
-                {/* EL CICLO SE QUEDA. Lo quité en la primera pasada por considerarlo
-                    repetido con la semana de la cabecera, y Francisco lo devolvió: la barra
-                    con las doce semanas no es el mismo dato que el número. El número dice
-                    en qué semana está; la barra dice cuánto le queda, que es lo que sitúa
-                    en un método que se llama 12 en 12. Por eso la línea de la cabecera es
-                    la que sobra, y no esta tarjeta.
-
-                    De la columna de al lado sí se fue la PRÓXIMA RENOVACIÓN, que es de Mi
-                    perfil: ahí es donde alguien va a mirar qué paga y cuándo, y en Inicio
-                    no responde a ninguna pregunta del día a día. */}
-                <div className="surface p-4 mt-5">
+                {/* La columna de al lado, tal cual estaba. EL CICLO SE QUEDA también en el
+                    teléfono: lo quité en la primera pasada por considerarlo repetido con la
+                    semana de la cabecera, y Francisco lo devolvió. El número dice en qué
+                    semana está; la barra dice cuánto le queda, que es lo que sitúa en un
+                    método que se llama 12 en 12. */}
+                <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-5">
+                <div className="surface p-4">
                     <div className="flex items-center justify-between mb-2">
                         <span className="caption">Ciclo</span>
                         <span className="text-xs text-muted-foreground font-data">
@@ -569,6 +581,23 @@ const ClientDashboard = () => {
                         </p>
                     )}
                 </div>
+
+                {/* La próxima renovación, solo en escritorio: en el teléfono es de Mi perfil,
+                    que es donde alguien va a mirar qué paga y cuándo. */}
+                {profile.next_payment && (
+                    <div className="hidden lg:flex surface p-4 items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                            <CreditCard className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="caption">Próxima renovación</p>
+                            <p className="text-sm text-foreground mt-0.5">
+                                {new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })} · <span className="text-brand font-bold font-data">{profile.price}€</span>
+                            </p>
+                        </div>
+                    </div>
+                )}
+                </div>
             </div>
 
             {/* Ajustar macros: el cuestionario del paso 2. Sale mientras tenga los macros
@@ -586,7 +615,8 @@ const ClientDashboard = () => {
                 la app y leyendo que les falta terminar de sacar sus macros.
                 `macros_puestos_por_alguien` lo calcula el servidor mirando quién escribió su
                 último ajuste. */}
-            {avisoPendiente === 'ajustar' && (() => {
+            {sale('ajustar', profile?.questionnaire_completed && !profile?.ajuste_macros_completado
+                && !profile?.macros_puestos_por_alguien) && (() => {
                 const porLlamada = (profile?.plan || '') === 'nivel3';
                 const conCoach = can('macros_personalizados');
                 const texto = porLlamada
@@ -618,7 +648,7 @@ const ClientDashboard = () => {
 
             {/* Sin plan contratado no puede hacer casi nada, y hasta ahora no habia forma de
                 llegar a contratarlo desde dentro de la app. Va lo primero a proposito. */}
-            {avisoPendiente === 'plan' && (
+            {sale('plan', !myPlan) && (
                 <button onClick={() => navigate('/planes')} data-testid="elegir-plan-banner"
                     className="surface surface-hover w-full p-4 flex items-center justify-between group border border-brand/40">
                     <div className="flex items-center gap-4">
@@ -681,7 +711,9 @@ const ClientDashboard = () => {
                 dos cuestionarios. No los hay: es el mismo recorrido, y el de arriba sigue
                 de largo hasta aquí sin cortes. Este solo tiene sentido cuando el de arriba
                 ya está hecho -- es decir, cuando de verdad se quedó a medias. */}
-            {avisoPendiente === 'perfil' && (
+            {sale('perfil', can('macros_personalizados') && profile?.questionnaire_completed
+                && (profile?.ajuste_macros_completado || profile?.macros_puestos_por_alguien)
+                && !profile?.questionnaire_nivel1_completed) && (
                 <button onClick={() => navigate('/questionnaire')} data-testid="nivel1-pending-banner"
                     className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">
                     <div className="flex items-center gap-4">
@@ -720,15 +752,27 @@ const ClientDashboard = () => {
             </button>
             )}
 
-            {/* LOS OCHO ACCESOS RÁPIDOS SE FUERON (documento del 10-08, pantalla 4):
-                «repetían la barra de abajo. Eran cuatro cosas que ocupaban media pantalla y
-                no llevaban a ningún sitio nuevo». Aquí eran ocho, con icono, título y
-                subtítulo cada una, y ocupaban 1.000 de los 1.616 px de alto de la pantalla.
+            {/* LOS OCHO ACCESOS RÁPIDOS, SOLO EN ESCRITORIO (documento del 10-08, pantalla
+                4): «repetían la barra de abajo. Eran cuatro cosas que ocupaban media
+                pantalla y no llevaban a ningún sitio nuevo». En el teléfono eran ocho, con
+                icono, título y subtítulo, y se llevaban 1.000 de los 1.616 px de la pantalla.
 
-                Nada se pierde: Nutrición y Seguimiento están en la barra de abajo, y las
-                otras seis -- Mis macros, Asistente, Alimentos, Suplementos, Check-ins y
-                Chat -- viven ahora en Perfil, que es donde el documento pone «Mis macros»
-                («de la pestaña Perfil, abajo a la derecha»). */}
+                Ahí no se pierde nada: Nutrición y Seguimiento están en la barra de abajo, y
+                las otras seis viven en Perfil, que es donde el documento pone «Mis macros».
+                En escritorio se quedan como estaban: esa vista no se ha rediseñado. */}
+            <div className="hidden lg:block">
+                <p className="caption mb-3">Accesos rápidos</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <QuickCard icon={Apple} color="#16A34A" label="Nutrición" sub="Montar dieta" path="/dashboard/nutrition" navigate={navigate} testId="nutrition-quick" />
+                    <QuickCard icon={SlidersHorizontal} color={MACRO.protein} label="Macros" sub="Ajustar valores" path="/dashboard/macro-calculator" navigate={navigate} testId="macros-card" />
+                    <QuickCard icon={Bot} color="#7C3AED" label="Asistente IA" sub="Dieta con IA" path="/dashboard/chatbot" navigate={navigate} testId="chatbot-card" />
+                    {can('reportes') && <QuickCard icon={FileText} color="#CA8A04" label="Reportes" sub="Ver evolución" path="/dashboard/reports" navigate={navigate} testId="reports-card" />}
+                    <QuickCard icon={Search} color="#0891B2" label="Alimentos" sub="Buscador" path="/dashboard/foods" navigate={navigate} testId="foods-card" />
+                    {can('suplementacion') && <QuickCard icon={Pill} color="#DB2777" label="Suplementos" sub="Tu protocolo" path="/dashboard/supplements" navigate={navigate} testId="supplements-card" />}
+                    {can('reportes') && <QuickCard icon={ClipboardCheck} color="#2563EB" label="Check-ins" sub="Seguimiento" path="/dashboard/checkins" navigate={navigate} testId="checkins-card" />}
+                    {can('chat') && <QuickCard icon={MessageCircle} color="#9333EA" label="Chat" sub={unreadMessages > 0 ? `${unreadMessages} sin leer` : 'Tu entrenador'} path="/dashboard/messages" navigate={navigate} testId="messages-card" badge={unreadMessages} />}
+                </div>
+            </div>
         </div>
     );
 };

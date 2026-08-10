@@ -118,11 +118,21 @@ const DayHeader = ({
                         </p>
                     )}
 
-                    {/* Los distintivos de «Cuadrado» y «Te pasas» se van de aquí: lo mismo lo
-                        dice ya el titular de debajo -- «Día cuadrado», «Te has pasado» -- con
-                        los números al lado, que es donde se mira. */}
+                    {/* Los distintivos de «Cuadrado» y «Te pasas», solo en escritorio: en el
+                        teléfono lo dice ya el titular de debajo -- «Día cuadrado», «Te has
+                        pasado» -- con los números al lado, que es donde se mira. */}
+                    {dayStatus === 'cuadrado' && <span className="hidden lg:inline px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Cuadrado</span>}
+                    {dayStatus === 'sobra' && <span className="hidden lg:inline px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Te pasas</span>}
                 </div>
 
+                {/* En escritorio, el resumen de la configuración va aquí arriba, como estaba.
+                    En el teléfono baja debajo de los números (documento, pantalla 9). */}
+                <button onClick={() => setConfigExpanded(!configExpanded)} data-testid="toggle-config-escritorio"
+                    className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    title="Cambiar comidas, horario de entreno o perientreno">
+                    {resumenConfig({ numComidas, tipoDia, momentoEntreno, opcionPeri })}
+                    {configExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
             </div>
 
             {/* LO QUE LE QUEDA POR COMER, no lo que lleva (documento del 10-08, pantallas
@@ -144,7 +154,7 @@ const DayHeader = ({
                     : nadaPuesto ? 'Hoy tienes que comer'
                     : pasado ? 'Te has pasado' : 'Te queda por comer';
                 return (
-                    <div className="mt-5" data-testid="dia-resumen">
+                    <div className="mt-5 lg:hidden" data-testid="dia-resumen">
                         <p className={`text-sm font-bold ${cuadrado ? 'text-emerald-600 dark:text-emerald-400' : pasado ? 'text-red-500' : 'text-muted-foreground'}`}
                             data-testid="dia-titular">{titular}</p>
                         <div className="grid grid-cols-3 gap-3 max-w-md mt-2">
@@ -180,24 +190,47 @@ const DayHeader = ({
                         {/* Y se despliega JUSTO DEBAJO del botón que lo abre. Antes el panel
                             salía arriba del todo y el botón estaba en otra parte: se pulsaba
                             y no parecía que hubiera pasado nada. */}
-                        {configExpanded && (
-                            <div className="flex flex-col sm:flex-row sm:items-end gap-4 mt-3" data-testid="config-section">
-                                <ConfigSection
-                                    inline
-                                    tipoDia={tipoDia}
-                                    momentoEntreno={momentoEntreno}
-                                    setMomentoEntreno={setMomentoEntreno}
-                                    opcionPeri={opcionPeri}
-                                    setOpcionPeri={setOpcionPeri}
-                                    numComidas={numComidas}
-                                    setNumComidas={setNumComidas}
-                                    singleMeal={singleMeal}
-                                />
-                            </div>
-                        )}
                     </div>
                 );
             })()}
+
+            {/* ESCRITORIO: las tres barras de siempre, tal cual estaban. El rediseño de esta
+                vista todavía no ha empezado. */}
+            <div className="hidden lg:block mt-5 max-w-2xl space-y-2">
+                {macros.map(({ key, label, val, tgt, color }) => {
+                    const over = tgt > 0 && val > tgt + 4;
+                    return (
+                        <div key={key} className="flex items-center gap-3">
+                            <span className="text-[13px] text-muted-foreground w-[64px] flex-shrink-0">{label}</span>
+                            <span className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+                                <span className="block h-full rounded-full transition-all duration-300"
+                                    style={{ width: `${tgt > 0 ? Math.min((val / tgt) * 100, 100) : 0}%`, backgroundColor: over ? '#EF4444' : color }} />
+                            </span>
+                            <span className={`font-data text-[13px] text-right w-[92px] flex-shrink-0 ${over ? 'text-red-500 font-bold' : 'text-foreground'}`}>
+                                {val.toFixed(0)} <span className="text-muted-foreground">/ {tgt.toFixed(0)}</span>
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* La configuración desplegada. En el teléfono el botón que la abre está debajo
+                de los números; en escritorio, arriba con la fecha. El panel es el mismo. */}
+            {configExpanded && (
+                <div className="flex flex-col sm:flex-row sm:items-end gap-4 mt-3" data-testid="config-section">
+                    <ConfigSection
+                        inline
+                        tipoDia={tipoDia}
+                        momentoEntreno={momentoEntreno}
+                        setMomentoEntreno={setMomentoEntreno}
+                        opcionPeri={opcionPeri}
+                        setOpcionPeri={setOpcionPeri}
+                        numComidas={numComidas}
+                        setNumComidas={setNumComidas}
+                        singleMeal={singleMeal}
+                    />
+                </div>
+            )}
 
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 {/* «Perientreno», nunca «peri» (punto 4.18): el bloque se llamaba de tres

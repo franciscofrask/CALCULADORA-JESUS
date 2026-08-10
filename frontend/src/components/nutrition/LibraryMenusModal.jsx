@@ -239,12 +239,25 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                             <X className="w-5 h-5 text-white" />
                         </button>
                     </div>
-                    {/* La cabecera queda con el título y poco más. Fuera «Comida 1 - menús
-                        reales que ya cuadran con tu objetivo» y fuera «Tu objetivo P·H·G»:
-                        aquí ya está eligiendo, y todos los menús de la lista cuadran con ese
-                        objetivo -- por eso están en la lista. Repetirlo arriba no le ayuda a
-                        elegir, que es lo único que está haciendo en esta pantalla. Sus macros
-                        del día los tiene en Nutrición, de donde viene. */}
+                    {/* En el teléfono la cabecera queda con el título y poco más: fuera
+                        «Comida 1 - menús reales que ya cuadran con tu objetivo» y fuera «Tu
+                        objetivo P·H·G». Ahí ya está eligiendo, y todos los menús de la lista
+                        cuadran con ese objetivo -- por eso están en la lista. En escritorio
+                        se quedan las dos líneas, como estaban. */}
+                    <DialogDescription className="hidden lg:block text-muted-foreground">
+                        {mealKey && (mealInfo?.[mealKey]?.name || mealKey)}
+                        {tab === 'biblioteca'
+                            ? ' - menús reales que ya cuadran con tu objetivo'
+                            : ' - recetas del recetario, cuadradas a tu objetivo'}
+                    </DialogDescription>
+                    <div className="hidden lg:flex items-center gap-2 mt-1">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-white/60">Tu objetivo</span>
+                        <span className="text-sm font-black text-white">
+                            <span className="text-red-400">{Math.round(obj.P)}P</span>
+                            {' · '}<span className="text-blue-400">{Math.round(obj.H)}H</span>
+                            {' · '}<span className="text-yellow-400">{Math.round(obj.G)}G</span>
+                        </span>
+                    </div>
                 </DialogHeader>
 
                 {/* Pestañas: biblioteca real / recetario ELM. Con la biblioteca apagada
@@ -276,12 +289,16 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${orden === 'usado' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setOrden('usado')} data-testid="library-orden-usado">Lo que más gente monta</button>
                             </div>
-                            {/* El conmutador Método/Reales sale de aquí. Está eligiendo un
-                                menú: lo que le importa es cuál coge, y los dos juegos de
-                                números para el mismo plato en el momento de decidir son ruido.
-                                `verReales` se queda en el componente -- las tarjetas siguen
-                                sabiendo pintar los dos -- y el modo del día se elige en la
-                                tuerca de Nutrición, que es donde vive esa preferencia. */}
+                            {/* El conmutador Método/Reales sale del teléfono: ahí está
+                                eligiendo un menú, y los dos juegos de números para el mismo
+                                plato en el momento de decidir son ruido. En escritorio se
+                                queda. */}
+                            <div className="hidden lg:inline-flex rounded-lg bg-muted p-0.5 border border-border">
+                                <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${!verReales ? 'bg-brand text-white' : 'text-muted-foreground'}`}
+                                    onClick={() => setVerReales(false)} data-testid="library-ver-metodo">Método</button>
+                                <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${verReales ? 'bg-brand text-white' : 'text-muted-foreground'}`}
+                                    onClick={() => setVerReales(true)} data-testid="library-ver-reales">Reales</button>
+                            </div>
                         </div>
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -363,6 +380,10 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 <p className="text-xs text-muted-foreground">
                                     Hay <span className="font-bold text-foreground">{total}</span> menús que cuadran (±{margen} g)
                                     {textFilter.trim() ? ` · ${filtrados.length} con "${textFilter.trim()}"` : ''}
+                                    <span className="hidden lg:inline">
+                                        {menus.length < total ? `, y aquí tienes los ${menus.length} que mejor te encajan` : ''}
+                                        . Las cantidades vienen ajustadas a tu objetivo.
+                                    </span>
                                 </p>
                                 {filtrados.map((menu, index) => (
                                     <button key={menu.biblioteca_id}
@@ -390,7 +411,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             cuadran en todos los de la lista, así que entre un
                                             menú y otro lo que elige el cliente es la comida.
                                             Las cantidades a 15 y el nombre a 15. */}
-                                        <ul className="space-y-2">
+                                        <ul className="space-y-2 lg:space-y-1">
                                             {menu.items.map((it, i) => (
                                                 // LAS CANTIDADES, TODAS EMPEZANDO EN LA MISMA
                                                 // LÍNEA. Estaban alineadas a la derecha, así
@@ -406,8 +427,8 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                                 // para que los casos normales queden a plomo, y
                                                 // una cantidad larga empuja el nombre en vez de
                                                 // abrir un claro en todas las demás filas.
-                                                <li key={i} className="flex items-baseline gap-2 text-[17px]">
-                                                    <span className="font-data font-bold text-brand-orange whitespace-nowrap min-w-[46px] flex-shrink-0">{it.cantidad_display}</span>
+                                                <li key={i} className="flex items-baseline gap-2 lg:gap-2.5 text-[17px] lg:text-xs">
+                                                    <span className="font-data font-bold text-brand-orange whitespace-nowrap min-w-[46px] lg:min-w-0 lg:w-12 lg:text-right flex-shrink-0">{it.cantidad_display}</span>
                                                     <span className="text-foreground leading-snug">{it.nombre}</span>
                                                 </li>
                                             ))}
@@ -525,7 +546,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                         )}
                                         <div className="p-4">
                                         <div className="flex items-start justify-between gap-2 mb-1">
-                                            <h3 className="font-bold text-foreground text-lg leading-snug">{receta.nombre}</h3>
+                                            <h3 className="font-bold text-foreground text-lg lg:text-sm leading-snug">{receta.nombre}</h3>
                                             <div className="flex items-center gap-1 flex-shrink-0">
                                                 {(receta.momentos || []).map(m => (
                                                     <span key={m} className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
@@ -538,7 +559,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             alimentos van seguidos separados por puntos -- y
                                             en un ancho de móvil el borde derecho en zigzag es
                                             lo que hace que un bloque de texto se lea peor. */}
-                                        <p className="text-[17px] text-foreground/70 leading-relaxed text-justify hyphens-auto">
+                                        <p className="text-[17px] lg:text-xs text-foreground/70 lg:text-muted-foreground leading-relaxed text-justify lg:text-left hyphens-auto">
                                             {(receta.alimentos || []).join(' · ')}
                                         </p>
                                         <p className="text-[11px] text-brand-orange font-semibold mt-1.5 flex items-center gap-1">

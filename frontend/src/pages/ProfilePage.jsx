@@ -253,7 +253,7 @@ const ProfilePage = () => {
                     Cada entrada respeta las capacidades del plan, igual que antes: al que
                     no tiene suplementación no se le enseña Suplementos, y al plan sin
                     entrenador no se le enseña el Chat. */}
-                <Card className="bg-card border-border">
+                <Card className="bg-card border-border lg:hidden">
                     <CardContent className="p-0">
                         {[
                             { icon: SlidersHorizontal, title: 'Mis macros', sub: 'Tus números y por qué son esos', path: '/dashboard/macro-calculator' },

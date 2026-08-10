@@ -143,11 +143,11 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
                 data-testid={`meal-progress-${mealKey}`}>
                 {bars.map(({ label, name, val, tgt, color, st }) => (
                     <div key={label} className="flex items-center gap-1.5 whitespace-nowrap">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                        <span className="text-[15px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
-                        <span className="text-[15px] font-bold sm:hidden" style={{ color }}>{label}</span>
-                        <span className={`font-data text-[15px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
-                        {hasFoods && st.label && <span className={`font-data text-[15px] font-semibold ${st.cls}`}>{st.label}</span>}
+                        <span className="w-2.5 h-2.5 lg:w-2 lg:h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                        <span className="text-[15px] lg:text-[11px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
+                        <span className="text-[15px] lg:text-[11px] font-bold sm:hidden" style={{ color }}>{label}</span>
+                        <span className={`font-data text-[15px] lg:text-[11px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
+                        {hasFoods && st.label && <span className={`font-data text-[15px] lg:text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
                     </div>
                 ))}
             </div>
@@ -189,20 +189,20 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                     lleva su comida, y estaba en 14, por debajo del texto normal. */}
                 {food.url ? (
                     <a href={food.url} target="_blank" rel="noopener noreferrer"
-                        className="block text-[17px] font-semibold text-brand underline underline-offset-2 truncate"
+                        className="block text-[17px] lg:text-sm font-semibold text-brand underline underline-offset-2 truncate"
                         title={`${food.nombre} (abre la ficha del producto)`}>
                         {food.nombre}
                     </a>
                 ) : (
-                    <span className="block text-[17px] font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
+                    <span className="block text-[17px] lg:text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
                 )}
             </div>
 
             {/* Macros: en movil comparten linea con los controles, para no gastar una fila
                 entera. En sm van justo detras del nombre, como siempre. */}
-            <span className="order-3 flex-1 min-w-0 truncate text-[14px] text-muted-foreground font-data sm:hidden"
+            <span className="order-3 flex-1 min-w-0 truncate text-[14px] lg:text-[11px] text-muted-foreground font-data sm:hidden"
                 title={macrosLine(macros)}>{macrosLineCorta(macros)}</span>
-            <span className="hidden sm:inline order-3 text-[14px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0"
+            <span className="hidden sm:inline order-3 text-[14px] lg:text-[11px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0"
                 title={macrosLine(macros)}>{macrosLine(macros)}</span>
 
             {/* Reorder (prioridad) */}
@@ -284,7 +284,7 @@ const MealCard = ({
                     a 15, que es el tamaño del texto normal. */}
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-xl' : 'text-2xl'}`}>{info.name}</h3>
+                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-xl lg:text-base' : 'text-2xl lg:text-lg'}`}>{info.name}</h3>
                         {/* El punto de color, solo en escritorio: en el teléfono el estado se
                             pide con «ver detalles», dentro de la comida. */}
                         <StatusDot status={status} className="hidden lg:inline-block flex-shrink-0" />
@@ -294,7 +294,7 @@ const MealCard = ({
                         comidas se repite cinco veces para decir lo que ya se entiende por
                         dónde está -- los números debajo del nombre de la comida son lo que
                         hay que meter en ella. En escritorio se queda. */}
-                    <p className="text-[17px] text-foreground/70 font-data mt-1">
+                    <p className="text-[17px] lg:text-xs lg:text-muted-foreground font-data mt-1 lg:mt-0.5 text-foreground/70">
                         <span className="hidden lg:inline">Objetivo: </span>
                         {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
                     </p>

@@ -201,11 +201,13 @@ const NutritionPage = () => {
     // When set, every OTHER meal is locked (target = its served = cuadrada). null = no volcado.
     const [volcadoMeal, setVolcadoMeal] = useState(null);
     const [mealsData, setMealsData] = useState({});
-    // TODAS CERRADAS AL ENTRAR. Aquí se abría la Comida 1 sola, cada vez que se recargaba o
-    // se volvía a la pantalla, y con ella se desplegaban su modo de cálculo, su fila de
-    // macros y sus tres botones: unos 600 px antes de llegar a la Comida 2. Lo primero que
-    // tiene que ver el cliente es el día entero, no una comida cualquiera abierta por él.
-    const [expandedMeals, setExpandedMeals] = useState({});
+    // TODAS CERRADAS AL ENTRAR, EN EL TELÉFONO. Aquí se abría la Comida 1 sola, cada vez que
+    // se recargaba o se volvía a la pantalla, y con ella se desplegaban su modo de cálculo,
+    // su fila de macros y sus tres botones: unos 600 px antes de llegar a la Comida 2. Lo
+    // primero que tiene que ver el cliente es el día entero, no una comida cualquiera
+    // abierta por él. En escritorio se queda como estaba, con la primera abierta.
+    const [expandedMeals, setExpandedMeals] = useState(
+        () => (typeof window !== 'undefined' && window.innerWidth < 1024 ? {} : { C1: true }));
     const [selectedMeal, setSelectedMeal] = useState('C1');
     const [loading, setLoading] = useState(true);
     
@@ -1970,15 +1972,15 @@ const NutritionPage = () => {
                         se tocan de higos a brevas. Uno cambia solo lo que pone en la lista de
                         ingredientes; el otro es una preferencia que se elige una vez. */}
                     <button onClick={() => setAjustesVistaAbierto(v => !v)} data-testid="toggle-ajustes-vista"
-                        className={`inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition-colors ${ajustesVistaAbierto ? 'rounded-2xl bg-brand text-white' : 'surface text-muted-foreground hover:text-brand'}`}
+                        className={`lg:hidden inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition-colors ${ajustesVistaAbierto ? 'rounded-2xl bg-brand text-white' : 'surface text-muted-foreground hover:text-brand'}`}
                         title="Cómo ver las comidas y qué macros mostrar">
-                        <Settings size={16} /> <span className="hidden sm:inline">Vista</span>
+                        <Settings size={16} />
                     </button>
                 </div>
             </header>
 
             {ajustesVistaAbierto && (
-                <div className="surface p-4 mb-4 space-y-4" data-testid="ajustes-vista">
+                <div className="lg:hidden surface p-4 mb-4 space-y-4" data-testid="ajustes-vista">
                     <div>
                         <p className="caption mb-1.5">Qué macros se muestran</p>
                         <ModoMacrosSelector modo={modoMacros} onCambiar={cambiarModoMacros} />
@@ -2024,10 +2026,11 @@ const NutritionPage = () => {
                     getDayStatus={getDayStatus}
                 />
 
-                {/* Sin la raya que separaba los macros del día de las comidas: son la misma
-                    cosa contada dos veces -- lo que te queda arriba, de dónde va a salir
-                    debajo -- y la raya las presentaba como dos secciones ajenas. */}
-                <div className="my-4" />
+                {/* En el teléfono, sin la raya que separaba los macros del día de las
+                    comidas: son la misma cosa contada dos veces -- lo que te queda arriba,
+                    de dónde va a salir debajo -- y la raya las presentaba como dos secciones
+                    ajenas. En escritorio se queda. */}
+                <div className="my-4 lg:my-6 lg:border-t lg:border-border" />
 
                 {/* ── Comidas: selector en columna + detalle ── */}
                 <div data-testid="nutrition-meals">
@@ -2050,9 +2053,16 @@ const NutritionPage = () => {
                     {/* Cabecera de sección: el título y, a la derecha, cómo quiere verlas.
                         El switch de macros vive aquí porque solo cambia lo que pone en
                         la lista de ingredientes; ni los totales ni el reparto se mueven. */}
-                    {/* Sin «COMIDAS DEL DÍA»: debajo vienen las comidas, una detrás de otra
-                        y con su nombre. El rótulo no añadía nada que no dijera la propia
-                        lista. */}
+                    {/* En el teléfono, sin «COMIDAS DEL DÍA» y sin los dos conmutadores:
+                        debajo vienen las comidas con su nombre, y los conmutadores están en
+                        la tuerca de arriba. En escritorio, la fila de siempre. */}
+                    <div className="hidden lg:flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2.5">
+                        <p className="caption">Comidas del día</p>
+                        <div className="flex items-center gap-3">
+                            <ModoMacrosSelector modo={modoMacros} onCambiar={cambiarModoMacros} />
+                            <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
+                        </div>
+                    </div>
                     {modoMacros === 'reales' && <div className="mb-3"><AvisoMacrosReales /></div>}
 
                     {vistaComidas === 'actual' && (
