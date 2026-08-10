@@ -63,17 +63,25 @@ export const ChatSuggestions = ({ data, onElegir, disabled }) => {
                                 {i + 1}
                             </span>
                             <span className="text-base leading-5">{getFoodEmoji(s.categorias)}</span>
+                            {/* EL NOMBRE, SIN SALIRSE DE LA PANTALLA.
+                                Este `truncate` no recortaba nada: colgaba de un `flex
+                                flex-wrap` sin `min-w-0`, y un flex sin eso mide por su
+                                contenido entero. Con «Fiambre de pechuga de pavo pimienta
+                                finas lonchas (Hacendado)» la tarjeta se iba a 626 px en una
+                                pantalla de 390 y empujaba fuera la cantidad y los macros --
+                                lo único que hace falta para elegir --, sin scroll con el que
+                                llegar a ellos. Medido en el navegador, 10-08.
+                                Y ya de paso deja de recortar: en dos líneas cabe entero, que
+                                es donde vive la marca. */}
                             <span className="min-w-0 flex-1">
-                                <span className="flex flex-wrap items-baseline gap-x-2">
-                                    <span className="truncate text-sm font-semibold text-foreground">
-                                        {(s.nombre || '').trim()}
-                                    </span>
-                                    {otros.length > 0 && (
-                                        <span className="font-data text-[10px] text-muted-foreground">
-                                            {otros.join(' · ')}
-                                        </span>
-                                    )}
+                                <span className="block break-words text-sm font-semibold text-foreground line-clamp-2">
+                                    {(s.nombre || '').trim()}
                                 </span>
+                                {otros.length > 0 && (
+                                    <span className="block font-data text-[10px] text-muted-foreground">
+                                        {otros.join(' · ')}
+                                    </span>
+                                )}
                             </span>
                             <span className="shrink-0 text-right">
                                 <span className="block font-data text-xs text-foreground">

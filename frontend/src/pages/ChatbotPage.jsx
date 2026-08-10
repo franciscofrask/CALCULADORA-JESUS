@@ -841,16 +841,31 @@ export default function ChatbotPage() {
   // Renderizar mensaje
   const renderMessage = (msg, idx) => {
     const isUser = msg.isUser;
-    
+    const conTarjetas = !isUser && (
+      msg.data?.action === 'suggestions' || msg.data?.action === 'menus' || msg.data?.vista === 'dia'
+    );
+
     return (
       <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-        <div className={`flex items-start gap-2 max-w-[85%] ${isUser ? 'flex-row-reverse' : ''}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+        {/* EL ANCHO DE LAS BURBUJAS EN EL TELÉFONO. Medido en un iPhone 13: al mensaje del
+            asistente le quedaban 220 px de texto de los 390 de la pantalla -- el 44% se iba
+            en el muñeco, los huecos y el margen del 15% --, así que se leía en columnas de
+            tres palabras y un solo mensaje suyo ocupaba 288 px de los 505 que tiene la
+            conversación. Con la letra de la app a 18 px en móvil, a propósito, eso es
+            justamente lo que no puede pasar.
+            Aquí el margen baja al 4% y el muñeco no sale: quién habla ya se sabe por el lado
+            y por el color, como en cualquier chat. De 640 px para arriba, todo como estaba. */}
+        <div className={`flex items-start gap-2 max-w-[96%] sm:max-w-[85%] ${isUser ? 'flex-row-reverse' : ''}`}>
+          <div className={`w-8 h-8 rounded-full hidden sm:flex items-center justify-center flex-shrink-0 ${
             isUser ? 'bg-orange-500' : 'bg-muted'
           }`}>
             {isUser ? <User size={16} /> : <Bot size={16} />}
           </div>
-          <div className={`rounded-2xl px-4 py-2 ${
+          {/* Cuando el mensaje trae tarjetas -- opciones, menús o el resumen del día -- la
+              burbuja ocupa todo el ancho que tiene permitido en vez de encogerse a la frase
+              que las acompaña, que suele ser una línea. Si no, las opciones se pintan en una
+              columna de 275 px con el nombre partido en tres renglones. Solo en el teléfono. */}
+          <div className={`rounded-2xl px-4 py-2 ${conTarjetas ? 'w-full sm:w-auto' : ''} ${
             isUser
               ? 'bg-orange-500 text-white rounded-br-md'
               : 'bg-card text-foreground rounded-bl-md'
@@ -1033,6 +1048,29 @@ export default function ChatbotPage() {
     );
   };
 
+  // Está montando una comida: es el estado en el que la cabecera deja de anunciarse y pasa a
+  // decir en qué va. Se usa en varios sitios de la cabecera, así que se nombra una vez.
+  const montando = step === 'building_meal';
+
+  /**
+   * LO QUE LE QUEDA A LA COMIDA, EN UNA LÍNEA Y SIN NÚMEROS NEGATIVOS.
+   *
+   * `macrosRestantes` viene con signo: si se pasa de hidratos, llega -8.4. Puesto en fila
+   * salía «Te faltan 8 P · -8 H · 12 G», que no quiere decir nada -- y con 200 g de pollo y
+   * 80 g de arroz es exactamente lo que se leía. Lo que falta y lo que sobra son dos cosas
+   * distintas y se cuentan por separado, como ya hace la tarjeta de la comida.
+   */
+  const loQueQueda = (() => {
+    const macros = [['P', macrosRestantes.P], ['H', macrosRestantes.H], ['G', macrosRestantes.G]];
+    const faltan = macros.filter(([, v]) => Math.round(v) > 0).map(([k, v]) => `${Math.round(v)} ${k}`);
+    const sobran = macros.filter(([, v]) => Math.round(v) < 0).map(([k, v]) => `${Math.round(-v)} ${k}`);
+    if (!faltan.length && !sobran.length) return 'Esta comida ya cuadra';
+    const partes = [];
+    if (faltan.length) partes.push(`Te faltan ${faltan.join(' · ')}`);
+    if (sobran.length) partes.push(`te pasas ${sobran.join(' · ')}`);
+    return partes.join(' · ');
+  })();
+
   return (
     // Altura fija de viewport (en móvil descontando top bar y nav inferior del layout):
     // el header y el input quedan fijos y solo la zona de mensajes hace scroll.
@@ -1042,20 +1080,34 @@ export default function ChatbotPage() {
           conversacion, y con el teclado abierto quedan unos 300 px utiles. */}
       <header className="bg-card border-b border-border px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+          {/* EL ROBOT NO SALE EN EL TELÉFONO MIENTRAS SE MONTA LA COMIDA. Son 32 px de ancho
+              para un dibujo que ya está en cada mensaje suyo, y ese ancho es justo lo que le
+              falta a la línea de macros para no cortarse. */}
+          <div className={`w-8 h-8 sm:w-10 sm:h-10 bg-orange-500 rounded-full items-center justify-center flex-shrink-0 ${montando ? 'hidden sm:flex' : 'flex'}`}>
             <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="font-bold truncate" data-testid="chatbot-heading">Asistente de Nutrición</h1>
+            {/* MIENTRAS MONTA, MANDA LO QUE ESTÁ HACIENDO, NO EL NOMBRE DE LA PANTALLA.
+                En el teléfono ponía «Asistente de Nutrición» en grande -- que ya lo sabe:
+                acaba de entrar desde ahí -- y debajo, pequeño, lo único que de verdad
+                necesita: en qué comida va y cuánto le falta. Se cambian de sitio. */}
+            <h1 className={`font-bold truncate ${montando ? 'hidden sm:block' : ''}`} data-testid="chatbot-heading">Asistente de Nutrición</h1>
+            {montando && (
+              <p className="sm:hidden font-bold truncate" data-testid="chatbot-comida">
+                {mealNombre}
+                {dayOverview && <span className="font-normal text-muted-foreground"> · {dayOverview.completas} de {dayOverview.total_comidas} hechas</span>}
+              </p>
+            )}
             {/* En movil el detalle va abreviado y en una sola linea: la version larga
                 ocupaba tres y dejaba la conversacion en un tercio de la pantalla. */}
             <p className="text-xs text-muted-foreground truncate">
               {step === 'building_meal' && (
                 <>
-                  <span className="sm:hidden">
-                    {mealNombre} · faltan {macrosRestantes.P}P · {macrosRestantes.H}H · {macrosRestantes.G}G
-                    {dayOverview && ` · ${dayOverview.completas}/${dayOverview.total_comidas}`}
-                  </span>
+                  {/* SIN DECIMALES. Ponía «faltan 58.8P · 66.0H · 12.0G»: nadie se sirve
+                      0,8 g de proteína, y esos cuatro caracteres de más son los que hacían
+                      que la línea se cortara. Los objetivos exactos siguen en el mensaje
+                      del asistente, que es donde se miran con calma. */}
+                  <span className="sm:hidden">{loQueQueda}</span>
                   <span className="hidden sm:inline">
                     {mealNombre} • Falta: proteína {macrosRestantes.P} g · hidratos {macrosRestantes.H} g · grasa {macrosRestantes.G} g
                     {dayOverview && ` · Día: ${dayOverview.completas}/${dayOverview.total_comidas} comidas`}

@@ -44,10 +44,15 @@ export const ChatMenus = ({ data, onAplicar, disabled }) => {
                                         </span>
                                     )}
                                 </span>
-                                <span className="shrink-0 font-data text-[11px]">
-                                    {['P', 'H', 'G'].map(k => (
-                                        <span key={k} className="ml-1.5 font-bold" style={{ color: MACRO[k] }}>
-                                            {fmt(t[k])}{k}
+                                {/* SEPARADOS Y CON AIRE. Iban tres spans pegados de 11 px con
+                                    6 px de margen: en el teléfono se leía «47.5P54H9.5G», un
+                                    churro de doce caracteres. Un punto entre medias y un
+                                    espacio antes de la letra y ya son tres números. */}
+                                <span className="shrink-0 font-data text-[11px] whitespace-nowrap">
+                                    {['P', 'H', 'G'].map((k, n) => (
+                                        <span key={k} className="font-bold" style={{ color: MACRO[k] }}>
+                                            {n > 0 && <span className="mx-1 font-normal text-muted-foreground">·</span>}
+                                            {fmt(t[k])} {k}
                                         </span>
                                     ))}
                                 </span>
@@ -57,12 +62,15 @@ export const ChatMenus = ({ data, onAplicar, disabled }) => {
                                 {(b.items || []).map((it, j) => (
                                     <li key={j} className="flex items-center gap-1.5 text-xs text-foreground">
                                         <span className="text-sm leading-4">{getFoodEmoji(it.categorias)}</span>
-                                        <span className="min-w-0 flex-1 truncate">{it.nombre}</span>
+                                        {/* Sin `truncate`: en el teléfono, con los macros y la
+                                            cantidad a la derecha, «Cecina de vacuno» ya no
+                                            cabía y se cortaba. Que baje de línea. */}
+                                        <span className="min-w-0 flex-1 break-words">{it.nombre}</span>
                                         {/* Macros por alimento: sin esto, el cliente preguntaba
                                             "muéstrame los macros" porque solo veía el total */}
-                                        <span className="shrink-0 font-data text-[10px] text-muted-foreground">
+                                        <span className="shrink-0 font-data text-[10px] text-muted-foreground whitespace-nowrap">
                                             {['P', 'H', 'G'].filter(k => (it.macros?.[k] || 0) > 0)
-                                                .map(k => `${fmt(it.macros[k])}${k}`).join(' ')}
+                                                .map(k => `${fmt(it.macros[k])} ${k}`).join(' · ')}
                                         </span>
                                         <span className="shrink-0 font-data text-muted-foreground">
                                             {it.cantidad_display || `${it.cantidad_g}g`}
