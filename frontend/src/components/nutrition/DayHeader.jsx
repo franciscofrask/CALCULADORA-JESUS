@@ -73,7 +73,12 @@ const DayHeader = ({
         <section data-testid="day-summary" className="mt-4">
             {/* Fecha, tipo de día y configuración resumida */}
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-                <div className="flex items-center gap-2 min-w-0">
+                {/* `flex-wrap`, y no es cosmética: sin ella esta fila no parte nunca, y el
+                    aviso de «¿Este día entrenas o descansas?» -- que lleva `w-full` para
+                    caer a su línea -- se salía por la derecha de la pantalla en 390 px. Se
+                    leía «¿Este día entrenas o descansa... Tus macro... cambian.», cortado.
+                    Justo el aviso que existe para que no se coma 60 g de hidratos de más. */}
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <button onClick={() => changeDate(-1)} aria-label="Día anterior"
                         className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-brand hover:bg-brand/10 transition-colors flex-shrink-0">
                         <ChevronLeft className="w-5 h-5" />
@@ -112,48 +117,78 @@ const DayHeader = ({
                     {dayStatus === 'sobra' && <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Te pasas</span>}
                 </div>
 
-                <button onClick={() => setConfigExpanded(!configExpanded)} data-testid="toggle-config"
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    title="Cambiar comidas, horario de entreno o perientreno">
-                    {resumenConfig({ numComidas, tipoDia, momentoEntreno, opcionPeri })}
-                    {configExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                </button>
             </div>
 
-            {configExpanded && (
-                <div className="flex flex-col sm:flex-row sm:items-end gap-4 mt-3" data-testid="config-section">
-                    <ConfigSection
-                        inline
-                        tipoDia={tipoDia}
-                        momentoEntreno={momentoEntreno}
-                        setMomentoEntreno={setMomentoEntreno}
-                        opcionPeri={opcionPeri}
-                        setOpcionPeri={setOpcionPeri}
-                        numComidas={numComidas}
-                        setNumComidas={setNumComidas}
-                        singleMeal={singleMeal}
-                    />
-                </div>
-            )}
+            {/* LO QUE LE QUEDA POR COMER, no lo que lleva (documento del 10-08, pantallas
+                8, 9 y 10). «Es la pregunta real a las diez de la noche. Nadie abre la app
+                para saber lo que ya se ha comido.»
 
-            {/* Macros del día: siempre los del método, que es lo que reparte el día */}
-            <div className="mt-5 max-w-2xl space-y-2">
-                {macros.map(({ key, label, val, tgt, color }) => {
-                    const over = tgt > 0 && val > tgt + 4;
-                    return (
-                        <div key={key} className="flex items-center gap-3">
-                            <span className="text-[13px] text-muted-foreground w-[64px] flex-shrink-0">{label}</span>
-                            <span className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
-                                <span className="block h-full rounded-full transition-all duration-300"
-                                    style={{ width: `${tgt > 0 ? Math.min((val / tgt) * 100, 100) : 0}%`, backgroundColor: over ? '#EF4444' : color }} />
-                            </span>
-                            <span className={`font-data text-[13px] text-right w-[92px] flex-shrink-0 ${over ? 'text-red-500 font-bold' : 'text-foreground'}`}>
-                                {val.toFixed(0)} <span className="text-muted-foreground">/ {tgt.toFixed(0)}</span>
-                            </span>
+                Aquí había tres barras con «120 / 190», que obligan a restar de cabeza tres
+                veces para saber lo único que hace falta saber. Ahora el número grande es lo
+                que falta, y debajo, pequeño, sigue estando de cuánto era el total, que es lo
+                que da la referencia.
+
+                Tres estados, con su titular, que es lo que el documento echaba en falta:
+                la app no distinguía «sin empezar» de «a medias» ni de «terminado». */}
+            {(() => {
+                const nadaPuesto = macros.every(m => m.val === 0);
+                const pasado = macros.some(m => m.tgt > 0 && m.val > m.tgt + 4);
+                const cuadrado = !nadaPuesto && macros.every(m => m.tgt > 0 && Math.abs(m.tgt - m.val) < 4);
+                const titular = cuadrado ? 'Día cuadrado'
+                    : nadaPuesto ? 'Hoy tienes que comer'
+                    : pasado ? 'Te has pasado' : 'Te queda por comer';
+                return (
+                    <div className="mt-5" data-testid="dia-resumen">
+                        <p className={`text-sm font-bold ${cuadrado ? 'text-emerald-600 dark:text-emerald-400' : pasado ? 'text-red-500' : 'text-muted-foreground'}`}
+                            data-testid="dia-titular">{titular}</p>
+                        <div className="grid grid-cols-3 gap-3 max-w-md mt-2">
+                            {macros.map(({ key, label, val, tgt, color }) => {
+                                const over = tgt > 0 && val > tgt + 4;
+                                // Cuadrado o pasado, el número que importa es el total, no un
+                                // «te quedan 0» repetido tres veces.
+                                const grande = (cuadrado || over) ? Math.round(val) : Math.max(0, Math.round(tgt - val));
+                                return (
+                                    <div key={key} data-testid={`dia-${key}`}>
+                                        <p className="font-data font-bold leading-none text-foreground text-[30px] sm:text-[34px]">{grande}</p>
+                                        <p className="text-sm font-bold mt-1" style={{ color: over ? '#EF4444' : color }}>{label}</p>
+                                        <p className="text-xs text-muted-foreground font-data">
+                                            {cuadrado || over ? `de ${tgt.toFixed(0)}` : `de ${tgt.toFixed(0)} en total`}
+                                        </p>
+                                    </div>
+                                );
+                            })}
                         </div>
-                    );
-                })}
-            </div>
+                        {/* LA CONFIGURACIÓN DEL DÍA, DEBAJO DE LOS NÚMEROS y en una línea
+                            (documento del 10-08, pantalla 9): «se toca una vez al mes;
+                            verla, se ve siempre». Estaba arriba, al lado de la fecha,
+                            compitiendo por el sitio con el conmutador de entreno. */}
+                        <button onClick={() => setConfigExpanded(!configExpanded)} data-testid="toggle-config"
+                            className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            title="Cambiar comidas, horario de entreno o perientreno">
+                            {resumenConfig({ numComidas, tipoDia, momentoEntreno, opcionPeri })}
+                            {configExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
+                        {/* Y se despliega JUSTO DEBAJO del botón que lo abre. Antes el panel
+                            salía arriba del todo y el botón estaba en otra parte: se pulsaba
+                            y no parecía que hubiera pasado nada. */}
+                        {configExpanded && (
+                            <div className="flex flex-col sm:flex-row sm:items-end gap-4 mt-3" data-testid="config-section">
+                                <ConfigSection
+                                    inline
+                                    tipoDia={tipoDia}
+                                    momentoEntreno={momentoEntreno}
+                                    setMomentoEntreno={setMomentoEntreno}
+                                    opcionPeri={opcionPeri}
+                                    setOpcionPeri={setOpcionPeri}
+                                    numComidas={numComidas}
+                                    setNumComidas={setNumComidas}
+                                    singleMeal={singleMeal}
+                                />
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 {hayPeri && (
