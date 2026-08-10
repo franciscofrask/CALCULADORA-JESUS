@@ -16,7 +16,8 @@ import {
     User, Mail,
     LogOut, Lock, ChevronRight, Crown,
     TrendingUp, Edit2, Camera, Check,
-    Compass, SlidersHorizontal, Bot, Search, Pill, ClipboardCheck, MessageCircle
+    Compass, SlidersHorizontal, Bot, Search, Pill, ClipboardCheck, MessageCircle,
+    ChevronDown
 } from 'lucide-react';
 
 // "Mejorar mi plan" OCULTO (petición 2026-07-06): el checkout de upgrade no existe aún
@@ -37,6 +38,7 @@ const ProfilePage = () => {
     const { user, profile, logout, api, refreshUser, myPlan, planUnpaid, can } = useAuth();
     const { startTour } = useOnboarding();
     const [editing, setEditing] = useState(false);
+    const [verIncluye, setVerIncluye] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
     const [formData, setFormData] = useState({ name: user?.name || '', phone: user?.phone || '' });
     const [saving, setSaving] = useState(false);
@@ -205,8 +207,16 @@ const ProfilePage = () => {
                                         miraba `next_payment` -- el próximo COBRO --, y los
                                         migrados de Calma no tienen ninguno. Ahora se dice lo que
                                         se sabe, y si ya pasó, se dice que pasó. */}
+                                    {/* «Próxima renovación» ocupa dos líneas en 390 px y deja la
+                                        columna descuadrada frente al precio. En el teléfono,
+                                        «Renovación»; en escritorio, el nombre entero. */}
                                     <p className="text-sm text-foreground/50 uppercase tracking-wider">
-                                        {profile.renovacion?.vencida ? 'Tu plan venció' : 'Próxima renovación'}
+                                        {profile.renovacion?.vencida ? 'Tu plan venció' : (
+                                            <>
+                                                <span className="lg:hidden">Renovación</span>
+                                                <span className="hidden lg:inline">Próxima renovación</span>
+                                            </>
+                                        )}
                                     </p>
                                     <p className={`font-semibold text-sm ${profile.renovacion?.vencida ? 'text-amber-500' : 'text-foreground'}`}
                                         data-testid="perfil-renovacion">
@@ -220,10 +230,21 @@ const ProfilePage = () => {
                             </div>
                             <Separator className="bg-white/10" />
                             <div>
-                                <p className="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Tu plan incluye:</p>
-                                <ul className="space-y-2">
+                                {/* LO QUE INCLUYE EL PLAN, EN EL TELÉFONO DETRÁS DE UNA LÍNEA.
+                                    Son seis líneas fijas que no cambian nunca y que se leen una
+                                    vez, el día que se contrata: 250 px de los 1.742 de esta
+                                    pantalla ocupados por algo que ya se sabe. En escritorio se
+                                    quedan a la vista, que ahí no estorban. */}
+                                <button type="button" onClick={() => setVerIncluye(v => !v)}
+                                    data-testid="ver-que-incluye"
+                                    className="lg:hidden w-full flex items-center justify-between text-left">
+                                    <span className="text-base font-bold text-foreground uppercase tracking-wider">Tu plan incluye</span>
+                                    <ChevronDown className={`w-5 h-5 text-foreground/40 transition-transform ${verIncluye ? 'rotate-180' : ''}`} />
+                                </button>
+                                <p className="hidden lg:block text-sm font-bold text-foreground uppercase tracking-wider mb-3">Tu plan incluye:</p>
+                                <ul className={`space-y-2 lg:block ${verIncluye ? 'mt-3' : 'hidden'}`}>
                                     {currentPlanFeatures.map((feature, index) => (
-                                        <li key={index} className="flex items-center gap-2 text-sm text-foreground/80">
+                                        <li key={index} className="flex items-center gap-2 text-[15px] lg:text-sm text-foreground/80">
                                             <div className="w-5 h-5 rounded bg-[#FF671F]/20 flex items-center justify-center flex-shrink-0">
                                                 <Check className="w-3 h-3 text-[#FF671F]" />
                                             </div>
@@ -260,7 +281,10 @@ const ProfilePage = () => {
                             { icon: Bot, title: 'Asistente IA', sub: 'Monta la comida hablando', path: '/dashboard/chatbot' },
                             { icon: Search, title: 'Alimentos', sub: 'Buscador del catálogo', path: '/dashboard/foods' },
                             can('suplementacion') && { icon: Pill, title: 'Suplementos', sub: 'Tu protocolo', path: '/dashboard/supplements' },
-                            can('reportes') && { icon: ClipboardCheck, title: 'Check-ins', sub: 'Tu seguimiento diario', path: '/dashboard/checkins' },
+                            // Aquí había una fila de «Check-ins». Se va: desde el 10-08 la
+                            // puerta de eso es Seguimiento, que está en la barra de abajo, y
+                            // dentro tiene su tarjeta de «Hoy». Dos puertas a lo mismo, una de
+                            // ellas con el nombre viejo, es justo lo que había que quitar.
                             can('chat') && { icon: MessageCircle, title: 'Chat', sub: 'Escríbenos cuando quieras', path: '/dashboard/messages' },
                         ].filter(Boolean).map((item, i) => (
                             <React.Fragment key={item.title}>
@@ -275,8 +299,11 @@ const ProfilePage = () => {
                                             <item.icon className="w-5 h-5 text-[#FF671F]" />
                                         </div>
                                         <div className="text-left">
-                                            <p className="font-medium text-foreground text-sm">{item.title}</p>
-                                            <p className="text-xs text-foreground/50">{item.sub}</p>
+                                            {/* En el teléfono el texto sube un escalón: estas
+                                                filas son ahora la puerta de media app y se leían
+                                                en 14 y 12 px. En escritorio se quedan igual. */}
+                                            <p className="font-medium text-foreground text-base lg:text-sm">{item.title}</p>
+                                            <p className="text-sm lg:text-xs text-foreground/50">{item.sub}</p>
                                         </div>
                                     </div>
                                     <ChevronRight className="w-5 h-5 text-foreground/30" />
@@ -291,11 +318,17 @@ const ProfilePage = () => {
                     <CardContent className="p-0">
                         {[
                             { icon: Lock, title: 'Cambiar contraseña', sub: 'Seguridad de la cuenta', onClick: () => setShowPasswordDialog(true) },
+                            // El recorrido guiado era un botón suelto de ancho completo debajo,
+                            // con el mismo peso visual que «Cerrar sesión». Es una fila más de
+                            // ajustes, y aquí se lee mejor. En escritorio sigue siendo el botón
+                            // de siempre, que es donde estaba.
+                            { icon: Compass, title: 'Repetir recorrido guiado', sub: 'Te volvemos a enseñar la app', soloMovil: true,
+                                onClick: () => { navigate('/dashboard'); startTour(); } },
                         ].map((item, i) => (
                             <React.Fragment key={item.title}>
-                                {i > 0 && <Separator className="bg-border" />}
+                                {i > 0 && <Separator className={`bg-border ${item.soloMovil ? 'lg:hidden' : ''}`} />}
                                 <button
-                                    className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+                                    className={`w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors ${item.soloMovil ? 'lg:hidden' : ''}`}
                                     onClick={item.onClick}
                                     data-testid={`setting-${i}`}
                                 >
@@ -304,8 +337,11 @@ const ProfilePage = () => {
                                             <item.icon className="w-5 h-5 text-[#FF671F]" />
                                         </div>
                                         <div className="text-left">
-                                            <p className="font-medium text-foreground text-sm">{item.title}</p>
-                                            <p className="text-xs text-foreground/50">{item.sub}</p>
+                                            {/* En el teléfono el texto sube un escalón: estas
+                                                filas son ahora la puerta de media app y se leían
+                                                en 14 y 12 px. En escritorio se quedan igual. */}
+                                            <p className="font-medium text-foreground text-base lg:text-sm">{item.title}</p>
+                                            <p className="text-sm lg:text-xs text-foreground/50">{item.sub}</p>
                                         </div>
                                     </div>
                                     <ChevronRight className="w-5 h-5 text-foreground/30" />
@@ -315,10 +351,11 @@ const ProfilePage = () => {
                     </CardContent>
                 </Card>
 
-                {/* Repetir recorrido guiado */}
+                {/* Repetir recorrido guiado. En el teléfono es una fila más de la tarjeta de
+                    arriba; aquí se queda para escritorio, tal cual estaba. */}
                 <Button
                     variant="outline"
-                    className="w-full bg-transparent border-brand/40 text-brand hover:bg-brand/10 hover:border-brand uppercase tracking-wider"
+                    className="hidden lg:inline-flex w-full bg-transparent border-brand/40 text-brand hover:bg-brand/10 hover:border-brand uppercase tracking-wider"
                     onClick={() => { navigate('/dashboard'); startTour(); }}
                     data-testid="replay-tour-btn"
                 >
