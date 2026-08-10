@@ -490,15 +490,30 @@ const ClientDashboard = () => {
                                 </p>
                             </div>
                             <div className="px-5 pb-5 pt-3">
-                                {/* NÚMEROS GRANDES, SIN ANILLO. Del documento: «el anillo dice
-                                    lo mismo que la barra, y la barra ocupa una décima parte».
-                                    Aquí había las dos cosas -- tres anillos de 92 px y, debajo,
-                                    tres barras con los mismos números --, o sea media pantalla
-                                    de móvil para decir una cosa dos veces. */}
-                                <div className="grid grid-cols-3 gap-3">
+                                {/* NÚMEROS GRANDES, SIN ANILLO, SOLO EN MÓVIL. Del documento:
+                                    «el anillo dice lo mismo que la barra, y la barra ocupa una
+                                    décima parte». En el teléfono estaban las dos cosas -- tres
+                                    anillos de 92 px y, debajo, tres barras con los mismos
+                                    números --, media pantalla para decir una cosa dos veces.
+
+                                    En escritorio se queda como estaba: ahí el sitio no es el
+                                    problema y el rediseño todavía no ha llegado a esa vista. */}
+                                <div className="grid grid-cols-3 gap-3 lg:hidden">
                                     <MacroGrande valor={todayConsumed.P} objetivo={getP(activeTarget)} label="Proteína" color={MACRO.protein} />
                                     <MacroGrande valor={todayConsumed.H} objetivo={getH(activeTarget)} label="Hidratos" color={MACRO.carbs} />
                                     <MacroGrande valor={todayConsumed.G} objetivo={getG(activeTarget)} label="Grasa" color={MACRO.fat} />
+                                </div>
+                                <div className="hidden lg:block">
+                                    <div className="flex items-center justify-around">
+                                        <CircularTracker value={todayConsumed.P} max={getP(activeTarget)} label="Proteína" unit="g" color={MACRO.protein} size={92} />
+                                        <CircularTracker value={todayConsumed.H} max={getH(activeTarget)} label="Hidratos" unit="g" color={MACRO.carbs} size={92} />
+                                        <CircularTracker value={todayConsumed.G} max={getG(activeTarget)} label="Grasa" unit="g" color={MACRO.fat} size={92} />
+                                    </div>
+                                    <div className="flex items-center justify-center gap-5 mt-4 flex-wrap">
+                                        <MacroBar label="P" consumed={todayConsumed.P} target={getP(activeTarget)} color={MACRO.protein} />
+                                        <MacroBar label="H" consumed={todayConsumed.H} target={getH(activeTarget)} color={MACRO.carbs} />
+                                        <MacroBar label="G" consumed={todayConsumed.G} target={getG(activeTarget)} color={MACRO.fat} />
+                                    </div>
                                 </div>
                             </div>
                             <div className="border-t border-border px-5 py-3 flex items-center justify-between">

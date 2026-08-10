@@ -7,6 +7,13 @@ import {
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
+// EN EL TELÉFONO NO HAY DISTINTIVOS DE ESTADO en las comidas: ni el punto de color, ni el
+// «falta 12» / «sobra 3» al lado de cada macro. Decisión de Francisco, y tiene sentido: los
+// números ya están ahí -- «40.0/59g» dice por sí solo que faltan 19 --, y el aviso repetía
+// en palabras lo que la resta ya dice, tres veces por comida y cinco comidas por pantalla.
+//
+// En escritorio se quedan: esa vista todavía no se ha rediseñado y ahí el sitio no aprieta.
+
 const fmtHalf = (x) => (Math.round((x || 0) * 2) / 2).toString();
 const fmt1 = (x) => { const r = Math.round((x || 0) * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
 
@@ -96,6 +103,13 @@ export const MealTab = ({ mealKey, mealInfo, getMealStatus, isLocked, selected, 
 
 // ===== Macro progress block =====
 const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFoods }) => {
+    // EN EL TELÉFONO, EL ESTADO VA DETRÁS DE «VER DETALLES». Los «Cuadrado», «Válido» y
+    // «faltan 12g» de cada macro son tres avisos por comida y cinco comidas por pantalla:
+    // en 390 px eso es media pantalla diciendo en palabras lo que la resta de al lado ya
+    // dice. No se quitan -- cuando hace falta, hacen falta --, se piden.
+    //
+    // En escritorio salen siempre, como hasta ahora: esa vista no se ha rediseñado todavía.
+    const [verDetalles, setVerDetalles] = React.useState(false);
     const target = getMealTarget(mealKey);
     const served = calculateMealMacros(mealKey);
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
@@ -119,20 +133,29 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     // Sin barras: los tres macros en una sola linea (servido/objetivo + cuanto falta
     // o sobra). El color del texto ya dice como va cada uno.
     return (
-        // Los tres macros de la comida, en tamaño de lectura: iban a 11 px y son el
-        // marcador de la comida que se está montando -- lo que se mira después de cada
-        // alimento que se añade.
-        <div className="bg-muted/50 rounded-xl px-3 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5" data-testid={`meal-progress-${mealKey}`}>
-            {bars.map(({ label, name, val, tgt, color, st }) => (
-                <div key={label} className="flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                    <span className="text-[15px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
-                    <span className="text-[15px] font-bold sm:hidden" style={{ color }}>{label}</span>
-                    <span className={`font-data text-[15px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
-                    {hasFoods && st.label && <span className={`font-data text-[15px] font-semibold ${st.cls}`}>{st.label}</span>}
-                </div>
-            ))}
-        </div>
+        <>
+            {/* EL BLOQUE ENTERO DE P/H/G VA DETRÁS DE «VER DETALLES» EN EL TELÉFONO, tal cual
+                estaba, sin quitarle nada: los tres macros con lo servido, lo objetivo y el
+                «Cuadrado» o «faltan 12g» de cada uno. Ocupaba una franja permanente en cada
+                una de las cinco comidas, y arriba del todo ya está lo que le queda del día.
+                Cuando lo necesita -- mientras monta esa comida -- lo pide. */}
+            <div className={`bg-muted/50 rounded-xl px-3 py-2.5 flex-wrap items-center gap-x-5 gap-y-1.5 ${verDetalles ? 'flex' : 'hidden lg:flex'}`}
+                data-testid={`meal-progress-${mealKey}`}>
+                {bars.map(({ label, name, val, tgt, color, st }) => (
+                    <div key={label} className="flex items-center gap-1.5 whitespace-nowrap">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                        <span className="text-[15px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
+                        <span className="text-[15px] font-bold sm:hidden" style={{ color }}>{label}</span>
+                        <span className={`font-data text-[15px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
+                        {hasFoods && st.label && <span className={`font-data text-[15px] font-semibold ${st.cls}`}>{st.label}</span>}
+                    </div>
+                ))}
+            </div>
+            <button onClick={() => setVerDetalles(v => !v)} data-testid={`ver-detalles-${mealKey}`}
+                className="lg:hidden text-[14px] text-muted-foreground hover:text-foreground underline underline-offset-2 self-start">
+                {verDetalles ? 'ocultar detalles' : 'ver detalles'}
+            </button>
+        </>
     );
 };
 
@@ -262,7 +285,9 @@ const MealCard = ({
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
                         <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-xl' : 'text-2xl'}`}>{info.name}</h3>
-                        <StatusDot status={status} className="flex-shrink-0" />
+                        {/* El punto de color, solo en escritorio: en el teléfono el estado se
+                            pide con «ver detalles», dentro de la comida. */}
+                        <StatusDot status={status} className="hidden lg:inline-block flex-shrink-0" />
                         {isLocked && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </div>
                     <p className="text-[17px] text-foreground/70 font-data mt-1">

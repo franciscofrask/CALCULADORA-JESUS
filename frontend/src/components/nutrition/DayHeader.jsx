@@ -118,8 +118,9 @@ const DayHeader = ({
                         </p>
                     )}
 
-                    {dayStatus === 'cuadrado' && <span className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Cuadrado</span>}
-                    {dayStatus === 'sobra' && <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Te pasas</span>}
+                    {/* Los distintivos de «Cuadrado» y «Te pasas» se van de aquí: lo mismo lo
+                        dice ya el titular de debajo -- «Día cuadrado», «Te has pasado» -- con
+                        los números al lado, que es donde se mira. */}
                 </div>
 
             </div>
