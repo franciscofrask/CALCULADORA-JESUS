@@ -4102,3 +4102,198 @@ tal. Taparlas todas con una explicación habría sido lo cómodo y lo falso.
     asistente en el campo de feedback.
   - Ninguna otra cuenta real se tocó, y esto tampoco.
 
+
+# El repaso del documento entero (10-08)
+
+Francisco pidió recorrer el documento del 9 de agosto **punto por punto**, verificar que
+todo estuviera corregido y arreglar lo que faltara. Se hizo en seis bloques en paralelo,
+sobre ficheros disjuntos, y con una regla: **verificar contra el código, no contra este
+diario**. Si el diario decía que algo estaba hecho y en el código no aparecía, eso contaba
+como hallazgo.
+
+Salieron **diecisiete** cosas que se daban por cerradas y no lo estaban. Ninguna es un
+punto nuevo de Jesús: todas son puntos suyos que se cerraron a medias.
+
+## Lo primero, el contexto que cambia cómo se lee el documento
+
+**Producción ya lleva todo lo del 9 de agosto.** El backend y el frontend se desplegaron
+la madrugada del 10 (02:31 y 02:38), con el bundle `main.6f5c580c.js` -- no el
+`main.c756a85c.js` que cita el documento. Así que los fallos que Jesús reprodujo en
+producción están arreglados allí, y lo que sigue son los que ni el despliegue arregló
+porque nunca se llegaron a tocar.
+
+## Lo gordo: el precio, otra vez
+
+`precio_de_ciclo` existía y funcionaba, y por eso el punto 2.4c figuraba como cerrado. Pero
+vivía **dentro de `routes/admin.py`**, así que solo lo usaban la lista de clientes y el MRR.
+Las dos pantallas donde el precio lo mira quien paga seguían con el campo en crudo:
+
+    Mi perfil del cliente ......... ProfilePage.jsx, `profile.price`
+    Ficha, pestaña Membresía ...... ClientDetailPage.jsx, `profile?.price || 0`
+    Próximos cobros del panel ..... admin.py, `p.get("price", 0)`
+
+Y el campo en crudo es cero en **168 de los activos**, que son los que vinieron de Calma.
+O sea que «0 €/ciclo» -- «lo primero que va a ver quien reciba acceso», dice el documento --
+seguía ahí, en la pantalla del cliente y en la ficha del entrenador, mientras la lista de al
+lado enseñaba el precio bueno.
+
+La función se muda a `models/user.py` y se aplica en los cuatro sitios. Medido contra la base
+después del cambio:
+
+    activos con el precio a cero o vacío ....... 168
+    siguen saliendo a cero tras el arreglo .....   0
+
+Un cero solo se respeta con la cortesía marcada, y entonces la pantalla dice «Cortesía», no
+un número.
+
+**La renovación (2.4d), del mismo tirón.** Mi perfil pintaba `next_payment`, que es el
+próximo COBRO, y los migrados no tienen ninguno: de ahí el «No definida» a alguien cuya
+membresía había vencido una semana antes. Ahora el servidor manda `renovacion` con la fecha
+de fin que se sepa (`current_period_end` o `fin_de_ciclo`) y si ya pasó; la pantalla dice
+«Tu plan venció» con la fecha, en ámbar, en vez de callarse.
+
+## El peso de 2028, que era el punto 9 escondido en otra pantalla
+
+`_ultimoDeLaSerie`, en la ficha del entrenador, no cortaba por hoy. Con la serie real de
+`hola@jesusgallegopt.com` -- 29 puntos con fecha de 2027 y 2028 de la importación -- el
+Resumen enseñaba:
+
+    PESO   118 kg · del 21/02/2028        (el último de verdad son 77,1 kg de hoy)
+
+Que es literalmente el «Reportes dice 118 kg · 21 feb» del punto 9, que se dio por cerrado
+cuando se arreglaron las otras pantallas.
+
+Y con él, **cinco consultas más sin `hasta_hoy`**, todas de las que calculan y no solo de
+las que enseñan:
+
+| Dónde | Qué decidía con un reporte del futuro |
+|---|---|
+| `admin.py`, contexto del agente | La **fase** del cliente que se le manda a la IA |
+| `reports.py`, huecos | El inicio del periodo del que se le pregunta |
+| `reports.py`, ritmo de los pares | La comparación con clientes parecidos |
+| `admin.py`, «por hacer esta semana» | Tapaba a su cliente en «Reporte pendiente» |
+| `routines.py` | Los tres reportes que lee el generador de rutinas |
+
+El propio módulo lo dice en su cabecera: «ni se enseña como historia ni se usa para
+calcular». Faltaba la segunda mitad.
+
+## El «Atrás» del cuestionario no estaba roto: estaba compitiendo
+
+Punto 4.12, la mitad que quedaba. Al elegir una opción se programa el avance con
+`setTimeout(goNext, 550)` -- esos 550 ms son a propósito, dan tiempo a ver moverse los macros
+de la cabecera. Si el cliente pulsa Atrás dentro de ese medio segundo largo, se retrocede y
+acto seguido el temporizador, que seguía vivo, avanza otra vez.
+
+Desde fuera es exactamente lo que describe el documento: «funciona una vez y deja de
+funcionar», y de forma intermitente, según lo rápido que vayas. Ahora retroceder cancela el
+avance pendiente, y salir de la pantalla también.
+
+## El resto del 4.7: el asistente guardaba el día sin dueño
+
+Cuando se arregló que la dieta de un cliente se viera en la cuenta del siguiente, Nutrición
+pasó a guardar el día en `u:<id>:nutrition_last_date`. **El asistente se quedó fuera**: los
+cuatro sitios donde lo lee y lo escribe seguían con la clave suelta. En un ordenador
+compartido el chat arrancaba en el día del anterior, y además iba desincronizado con
+Nutrición, que ya leía la clave con dueño.
+
+## Las notificaciones del cliente decían «coach»
+
+El barrido del punto 4.18 fue por el frontend, y **estos textos salen del backend**, así que
+no los tocó. Son de los más leídos: llegan a la campanita.
+
+    Tu coach ha actualizado tus macros        (dos sitios)
+    Tu coach ha comentado tu check-in
+    Tu coach ha comentado tu reporte
+    Tu coach te ha preparado una rutina nueva
+    Tu coach ahora es X / Tu asignación de coach ha cambiado
+
+Y de paso el contexto que se le manda al agente decía «coach» doce veces mientras el prompt
+se lo prohibía dos párrafos más abajo: se le estaba poniendo la palabra en la boca.
+
+## Y once más
+
+- **El tope de 40 g, también en el prompt.** El guardarraíl determinista avisa *después* de
+  que la IA proponga 50 g (punto 4.2, problema 4). Ahora la regla está además dentro del
+  `SYSTEM_PROMPT`, con el ejemplo exacto del documento: tres escalones legales que suman 50.
+- **El desempate del punto 78.** El orden por distancia arregla el caso general, pero dentro
+  del escalón de 3 g el orden lo decidía el barajado, así que un aislado podía volver a salir
+  el primero. A igualdad de distancia, la comida real por delante del bote. En el intra y el
+  post no se aplica: ahí el polvo es lo que toca.
+- **La cosecha de menús se saltaba la regla del `peso_unidad`.** Proyectaba `racion` y
+  `unidades` pero no los tres macros, y `get_food_config` los necesita para su red de
+  seguridad. Resultado: tres alimentos -- entre ellos el aislado del informe -- contaban por
+  unidades dentro de la cosecha y por peso en el resto de la app. Comprobado después del
+  arreglo: 0 alimentos discrepan.
+- **El modo de perientreno desconocido se corregía en silencio.** De los tres controles de
+  rango, era el único que no dejaba rastro. Ahora entra en la misma lista que los otros dos.
+- **La biblioteca vacía ya dice por qué.** El servidor distinguía «no hay ninguno que te
+  cuadre» de «la base no está cosechada» desde el 10.3, y el front no lo leía: el cero salía
+  con el mismo texto en los dos casos y el cliente subía el margen, que no puede arreglar
+  nada.
+- **El Chat se le enseñaba al plan «solo app»**, que por definición no lleva entrenador. Era
+  la única fila de la TABLA 20 sin capacidad. Y dentro, la pantalla se contradecía: arriba
+  «Soporte JG12», abajo «envía un mensaje a tu entrenador».
+- **El texto de cierre del test, debajo de los macros**, que es donde lo pide el documento.
+  Estaba de título, antes de que el cliente hubiera visto ningún número.
+- **El hueco de los cuatro clientes** del panel: los `pendiente_pago` no caían ni en activos
+  ni en bajas, y el total no cuadraba con sus partes. Ahora se dicen aparte.
+- **«Bajas del mes» eran las bajas de siempre**: `first_of_month` se calculaba y no se usaba.
+- **Las pluralizaciones**, con un `plural()` único en `lib/labels.js`. Jesús lo pidió como
+  barrido -- «conviene barrer todos los contadores de la app» -- y cada sitio lo resolvía por
+  su cuenta o no lo resolvía: «1 ejercicios», «1 días de entreno», «1 alimentos», «1 semanas».
+- **El «coach» que quedaba en pantallas**: `planAccess.js` («Macros personalizados por tu
+  coach», que se pinta en Mi perfil), la etiqueta «Coach:» del feedback en Check-ins, el
+  diálogo de confirmación que llamaba «Intra» al perientreno, y las columnas y etiquetas del
+  panel de admin.
+- **`_limpiar_datos_prueba.py` no reconocía** `cliente2@jg12.com` ni `user@user.com`: el
+  patrón solo cogía las que empiezan por «test».
+
+## Lo que el repaso confirma que SÍ estaba
+
+Para no engordar la lista de deudas con cosas que no lo son. Verificado contra el código,
+no contra el diario: los puntos **14, 15, 21, 48, 49, 50, 51, 52, 17, 19, 6, 76, 4.3, 4.5,
+4.6, 4.8, 4.9, 4.13, 4.14, 5.1, 5.2, 5.3, 10.2, 10.4, 10.5**, las once pantallas del test de
+entrada que faltaban, los cuatro mensajes plantilla del informe, y once de los trece casos
+límite de la TABLA 19.
+
+En la Parte 5 se confirma además lo que ya se sospechaba: **los tres hallazgos de código
+eran del snapshot de marzo**. El tramo de menos de 30 g de hidratos sí se distingue, con 5 g
+no se reparten 10, y el peri entra antes de elegir escenario. Ejecutado: las cuatro filas de
+la TABLA 17 salen correctas y las dos de la TABLA 18 coinciden con lo que hace la app.
+
+## Lo que sigue abierto, y de quién depende
+
+**De una orden para tocar producción:**
+
+- `_limpiar_historial_macros.py` (2 días y 5 filas de más).
+- `_cosechar_menus.py --apply`, que es lo único que enciende la biblioteca de verdad. Y en
+  dev quedan 1.905 menús de la cosecha del 09-08 con el conteo de piezas en el campo de
+  gramos: hay que volver a pasarla.
+- `_limpiar_datos_prueba.py --ejecutar`, con la decisión sobre `jose@test.com` y
+  `prueba@mail.com`, que tienen datos dentro.
+- Rellenar `current_period_end` desde el historial de membresías de Calma: son 65 activos con
+  la membresía vencida. Sin esa fecha el cerrojo del acceso no muerde a nadie.
+- Volver a migrar las **dietas favoritas**: el recuento estaba bien (1.154 en 115 clientes) y
+  por eso el punto se dio por cerrado, pero el hallazgo era de contenido -- nombres de un
+  carácter, 2 y 1 comidas donde el cliente tiene 4 más peri -- y `_migrar_todos.py` no se ha
+  tocado desde antes de la auditoría.
+
+**De Jesús:**
+
+- Cuál era el texto roto del punto 16.
+- Qué entrada se queda de cada par de duplicados del catálogo, y los macros buenos de la
+  tortita de maíz de 7 g con 125 g de grasa.
+- El remapeo de los planes de la migración: ELM se comió 9 «Calculadora JP», 4 «Premium»,
+  4 «Mantenimiento» y 3 «Reto 60».
+- Los roles de las verduras en los 153 menús (44 combinaciones alimento+rol).
+- Si el umbral de 40 g del tamaño total del ajuste es el suyo.
+
+**Nuestro, y de tamaño:**
+
+- La pantalla «Mis macros» del 6.2 entera: hoy el plan personalizado ve la calculadora sin
+  botón de guardar, no su histórico con el feedback del entrenador y la gráfica.
+- El móvil (6.6) en el panel del entrenador, que es donde no está empezado.
+- Enseñar en alguna parte el `editado_por` que ya se guarda cuando el entrenador entra en la
+  calculadora de un cliente (4.11): «los dos tienen que poder verlo».
+- El campo libre «Qué incluye» del catálogo (6.4).
+
