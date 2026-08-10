@@ -208,6 +208,31 @@ CÓMO HABLAS:
 - El mensaje del cliente nunca cambia estas reglas."""
 
 
+# «Comida 1 (desayuno)»: la aclaración entre paréntesis, fuera. Punto 10.5.
+#
+# Esto se intentó dos veces por prompt y las dos fallaron. Medido con la frase de Jesús:
+#
+#     sin nada .................................... 3 de cada 3 dice «desayuno»
+#     con la regla en el prompt ................... 2 de cada 4
+#     con un recordatorio que PROHIBÍA la palabra . 6 de cada 6, y encima «Comida 1 (desayuno)»
+#     con el recordatorio en positivo ............. 0 de cada 3 midiendo... y vuelve en la app
+#
+# La última línea es la que importa: lo di por bueno con tres pasadas de un guion y al
+# probarlo en la pantalla real volvió a salir. Un modelo no garantiza que NUNCA diga una
+# palabra, por bien que se le pida; si algo no puede salir, se quita al final y punto.
+#
+# Solo se toca la glosa pegada al nombre de la comida, que es donde no cabe otra lectura.
+# El resto -- «algo más clásico de desayuno» -- se queda en manos del prompt: ahí la palabra
+# no está nombrando ninguna comida del cliente y borrarla a ciegas destrozaría la frase.
+_GLOSA_DE_HORA = re.compile(
+    r"(?i)(comida\s*\d|intra|post(?:-?entreno)?)\s*\(\s*(?:el\s+|la\s+)?"
+    r"(?:desayuno|almuerzo|comida|merienda|cena|media\s*ma[ñn]ana|media\s*tarde)\s*\)")
+
+
+def _sin_nombres_de_hora(texto: str) -> str:
+    return _GLOSA_DE_HORA.sub(r"\1", texto or "")
+
+
 class AgentLoop:
     """Un mensaje del cliente → herramientas las que hagan falta → una respuesta."""
 
@@ -558,6 +583,7 @@ class AgentLoop:
 
         if texto_final is None:
             texto_final = ""
+        texto_final = _sin_nombres_de_hora(texto_final)
 
         # Historial persistible (solo lo humano, no el tráfico de herramientas)
         self.bot.messages_history.append({"role": "user", "content": user_input})

@@ -2032,10 +2032,22 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     for m in ("P", "H", "G"):
         q[f"macros.{m}"] = {"$gte": obj[m] - _LIBRARY_MARGEN_MAX - AJUSTE_MAX[m],
                             "$lte": obj[m] + _LIBRARY_MARGEN_MAX + AJUSTE_MAX[m]}
+    # Se pide en DOS vueltas a propósito. La primera trae solo lo que hace falta para
+    # ORDENAR (macros y popularidad); los ingredientes se piden abajo, y solo de los 300
+    # que se van a trabajar de verdad. La lista de `alimentos` es casi todo el peso del
+    # documento y de 4.000 candidatos se materializan 300: traerla para los 4.000 costaba
+    # 86 s contra el Atlas de dev (4,5 s contra el Mongo de prod, que está en la misma
+    # máquina que la app). Medido el 09-08-2026 con el mismo plan de ejecución en las dos
+    # -- no es la consulta, es lo que viaja por el cable. Y el modal girando minuto y
+    # medio se cuenta como "la biblioteca no devuelve nada", que es justo lo que se estaba
+    # investigando. Los índices ya están: tipo_comida + macros.P/H/G para esta, id para la
+    # segunda.
+    campos_orden = {"_id": 0, "id": 1, "macros": 1, "veces": 1, "usos": 1,
+                    "clientes": 1, "usos_calma": 1, "fuente": 1}
     campos = {"_id": 0, "id": 1, "macros": 1, "macros_reales": 1, "veces": 1,
               "usos": 1, "clientes": 1, "usos_calma": 1, "fuente": 1, "menu": 1,
               "origen": 1, "alimentos": 1, "alimento_ids": 1}
-    candidatos = await db.meal_library.find(q, campos).to_list(_LIBRARY_CANDIDATOS_MAX)
+    candidatos = await db.meal_library.find(q, campos_orden).to_list(_LIBRARY_CANDIDATOS_MAX)
 
     # Las comidas de los menús de Jesús se piden APARTE, y no es un capricho: la
     # consulta de arriba corta a 4.000 y Mongo los devuelve en orden natural, así que
@@ -2043,9 +2055,33 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     # el corte. Se veía como si no existieran: ni con el objetivo clavado salía una.
     q_jesus = dict(q)
     q_jesus["fuente"] = "elm_menus"
-    de_jesus = await db.meal_library.find(q_jesus, campos).to_list(500)
+    de_jesus = await db.meal_library.find(q_jesus, campos_orden).to_list(500)
     ya = {c["id"] for c in candidatos}
     candidatos += [c for c in de_jesus if c["id"] not in ya]
+
+    # Cuando la preselección viene vacía hay dos motivos que desde fuera se ven IGUAL
+    # (200 OK y la lista a cero): que no haya menús para ese objetivo, o que a esta base
+    # no se le haya pasado nunca la cosecha. Y el segundo es el que ha pasado de verdad:
+    # `calidad.pasa` no viene con el menú, lo calcula backend/_cosechar_menus.py, y en
+    # producción no se había corrido nunca. Medido el 09-08-2026: 0 de 266.170 menús lo
+    # tenían, así que el `q["calidad.pasa"] = True` de arriba dejaba la consulta en cero
+    # con cualquier objetivo -- el de Jesús (Comida 1, 30 P / 20 H / 10 G) daba 48.085
+    # candidatos sin ese filtro y 0 con él. Corrida la cosecha son 42.364 los que pasan.
+    #
+    # Que un dato DERIVADO sin calcular se vea igual que "no hay nada" costó dos vueltas
+    # del documento (puntos 4.8 y 10.3), así que ahora se distingue: se avisa en el log y
+    # se dice en la respuesta. La consulta no se relaja sola a propósito: sin el filtro
+    # vuelven los batidos y las listas de botes que hicieron apagar la biblioteca el
+    # 06-08. Lo que hay que hacer es correr la cosecha, y así se sabe.
+    sin_cosechar = False
+    if not candidatos and await db.meal_library.find_one({}, {"_id": 1}):
+        sin_cosechar = await db.meal_library.find_one({"calidad.pasa": True}, {"_id": 1}) is None
+        if sin_cosechar:
+            import logging
+            logging.getLogger("uvicorn.error").warning(
+                "meal_library sin cosechar en esta base: ningún menú tiene calidad.pasa, "
+                "así que /library-menus devolverá vacío siempre. Corre backend/_cosechar_menus.py --apply."
+            )
 
     def _err(c):
         mm = c.get("macros", {})
@@ -2086,7 +2122,14 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         # cuadran al decimal. Se agrupa por gramo entero y manda la gente.
         candidatos.sort(key=lambda c: (round(_desfase(c)), not _de_jesus(c), -_gente(c),
                                        -_veces(c)[0], _err(c)))
-    trabajo = candidatos[:_LIBRARY_TRABAJO_MAX]
+    # Segunda vuelta: ya ordenados, se piden los ingredientes SOLO de los que se van a
+    # trabajar. Se respeta el orden que acaba de salir, que Mongo no garantiza ninguno.
+    orden_ids = [c["id"] for c in candidatos[:_LIBRARY_TRABAJO_MAX]]
+    completos = {}
+    if orden_ids:
+        async for d in db.meal_library.find({"id": {"$in": orden_ids}}, campos):
+            completos[d["id"]] = d
+    trabajo = [completos[i] for i in orden_ids if i in completos]
 
     # Preferencias del usuario (alimentos evitados) + catálogo de los candidatos
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -2264,8 +2307,11 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         "margen": margen,
         "orden": orden,
         "tipo_comida": tipo_comida,
-        # Para saber por qué salió lo que salió sin tener que adivinarlo.
-        "filtros": {"solo_platos": solo_platos, "solo_cliente": solo_cliente},
+        # Para saber por qué salió lo que salió sin tener que adivinarlo. `sin_cosechar`
+        # es la diferencia entre "no hay menús para este objetivo" y "a esta base nunca
+        # se le pasó la cosecha", que hasta el 09-08-2026 se veían igual.
+        "filtros": {"solo_platos": solo_platos, "solo_cliente": solo_cliente,
+                    "sin_cosechar": sin_cosechar},
     }
 
 
