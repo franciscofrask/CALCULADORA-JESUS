@@ -158,6 +158,12 @@ _ESQUEMAS = [
      "parameters": {"type": "object", "properties": {
          "nota": {"type": "string", "description": "En una línea y con sus palabras"}},
          "required": ["nota"]}},
+    # OJO AL AMPLIAR ESTA DESCRIPCIÓN. Se probó el 10-08 añadirle un matiz más («si además
+    # te pide comida, quédate en el día») y, midiendo, se resintió la frase de al lado:
+    # «mañana descanso» pasó de cambiar de día en 3 de 3 a no llamar a NINGUNA herramienta
+    # en 1 de cada 3. Misma lección que el punto 10.5: cargar la instrucción de matices la
+    # afloja donde no toca. Lo que no puede pasar se corta abajo en el bucle
+    # (_TOCAN_LA_COMIDA_DEL_DIA), que no depende de que el modelo acierte.
     {"name": "cambiar_de_dia",
      "description": ("Montar la dieta de OTRA fecha ('mañana', 'el jueves', '12/8'). Solo "
                      "cuando el cliente quiera trabajar otro día, no cuando la fecha salga "
@@ -231,6 +237,49 @@ _GLOSA_DE_HORA = re.compile(
 
 def _sin_nombres_de_hora(texto: str) -> str:
     return _GLOSA_DE_HORA.sub(r"\1", texto or "")
+
+
+# PONER COMIDA EN ESTE DÍA Y SALTAR A OTRO NO CABEN EN EL MISMO TURNO.
+#
+# Con «esto lo dejo para mañana, ponme atún» -- la frase que ya motivó quitar el regex del
+# front el 08-08 -- el agente acierta casi siempre, pero no siempre. Medido el 10-08 con
+# gpt-5.1, tres pasadas de la misma frase:
+#
+#     pasada 1 ... editar_comida                        (bien: se queda en el día)
+#     pasada 2 ... editar_comida                        (bien)
+#     pasada 3 ... cambiar_de_dia + editar_comida       (mal, y las dos en la MISMA tanda)
+#
+# Esa tercera acaba en una respuesta que se contradice sola: «te he pasado al día de mañana
+# y en Comida 1 ya tienes atún puesto». El atún entra en la sesión del día que se abandona,
+# el front lee `fecha_pedida`, arranca la fecha nueva con SU configuración y ese atún no
+# existe en ninguna pantalla. El cliente pidió una cosa concreta y lo que ve es que no ha
+# pasado nada.
+#
+# No se arregla pidiéndoselo mejor al modelo: la descripción de la herramienta ya trae esa
+# frase como contraejemplo literal y aun así la llama. Y no es cuestión de acertar más: la
+# combinación es incoherente SIEMPRE, la diga quien la diga, porque el trabajo de este turno
+# se queda en el día viejo. Así que se decide aquí, con lo que el agente HA HECHO (no con
+# palabras del mensaje, que es justo el hardcodeo que se quitó): manda la comida y el salto
+# de día se cae. Es lo reversible -- si de verdad quiere otro día, lo dice y no se pierde
+# nada; al revés se le borra lo que acababa de pedir.
+#
+# `guardar_comida` se queda FUERA a propósito: «guárdala y vamos a mañana» es una petición
+# coherente y explícita, y bloquearla sería desobedecer. (Que el volcado al plan se pierda
+# en ese caso es otra cosa, y es del front: `syncEstado` sale por el `return` de la fecha
+# antes de llegar a `syncToDiet`.)
+#
+# Después del arreglo, otras tres pasadas de cada frase: «esto lo dejo para mañana, ponme
+# atún» 3 de 3 sin cambiar de día (el modelo la sigue pidiendo, pero ya no llega), y
+# «mañana descanso» y «vamos a montar el de mañana» 3 de 3 cambiando de día como siempre.
+_TOCAN_LA_COMIDA_DEL_DIA = ("editar_comida", "aplicar_borrador")
+
+_NO_CAMBIA_DE_DIA = {
+    "ok": False,
+    "error": ("En este mismo mensaje has puesto comida en el día que está montando. Si "
+              "ahora abro otro día, eso se queda ahí y el cliente lo ve desaparecer, así "
+              "que me quedo en el día actual. Cuéntale lo que has puesto y, si quieres, "
+              "ofrécele cambiar de día en el mensaje siguiente."),
+}
 
 
 class AgentLoop:
@@ -468,6 +517,9 @@ class AgentLoop:
         sugerencias, borradores_vistos, hubo_mutacion = [], [], False
         comida_guardada = False
         texto_final = None
+        # Para el guardarraíl de la fecha (ver _TOCAN_LA_COMIDA_DEL_DIA).
+        toco_la_comida = False
+        fecha_al_entrar = self.bot.state.get("fecha_pedida")
 
         for _ in range(MAX_LLAMADAS):
             kwargs = {"model": self.model, "messages": mensajes,
@@ -499,6 +551,11 @@ class AgentLoop:
 
             mensajes.append({"role": "assistant", "content": msg.content,
                              "tool_calls": [tc.model_dump() for tc in msg.tool_calls]})
+            # La tanda entera, para el guardarraíl de la fecha: cuando el modelo pide las dos
+            # cosas a la vez las manda en el MISMO mensaje, y ahí el orden dentro de la lista
+            # lo pone él. Mirando solo lo ya ejecutado, «cambiar_de_dia» colada la primera se
+            # escaparía (es justo el orden que salió al medirlo).
+            nombres_de_la_tanda = [tc.function.name for tc in msg.tool_calls]
             for tc in msg.tool_calls:
                 nombre = tc.function.name
                 try:
@@ -510,7 +567,13 @@ class AgentLoop:
                         self.progreso(nombre)
                     except Exception:
                         pass
-                resultado = await self._despachar(nombre, args)
+                if nombre == "cambiar_de_dia" and (toco_la_comida or any(
+                        n in _TOCAN_LA_COMIDA_DEL_DIA for n in nombres_de_la_tanda)):
+                    resultado = dict(_NO_CAMBIA_DE_DIA)
+                else:
+                    resultado = await self._despachar(nombre, args)
+                if nombre in _TOCAN_LA_COMIDA_DEL_DIA and resultado.get("ok"):
+                    toco_la_comida = True
                 self.traza.append({"herramienta": nombre, "args": args,
                                    "resultado_resumen": str(resultado)[:300]})
                 if nombre == "buscar_alimentos" and resultado.get("items"):
@@ -584,6 +647,20 @@ class AgentLoop:
         if texto_final is None:
             texto_final = ""
         texto_final = _sin_nombres_de_hora(texto_final)
+
+        # El mismo guardarraíl, cerrado por detrás: la comprobación de arriba mira la tanda
+        # en curso, y queda el orden en dos pasos distintos (apuntar la fecha en el paso 1 y
+        # tocar la comida en el 2), donde al apuntarla todavía no había nada que perder.
+        # Aquí ya se sabe todo lo que ha hecho el turno. Se restaura el valor con el que se
+        # entró, no se borra a secas: `fecha_pedida` la consume la ruta al responder, y si
+        # quedara una de un turno anterior sin servir tampoco es este el sitio de tirarla.
+        if toco_la_comida and self.bot.state.get("fecha_pedida") != fecha_al_entrar:
+            logger.info("fecha_pedida descartada (%s): el turno puso comida en el día en curso",
+                        self.bot.state.get("fecha_pedida"))
+            if fecha_al_entrar is None:
+                self.bot.state.pop("fecha_pedida", None)
+            else:
+                self.bot.state["fecha_pedida"] = fecha_al_entrar
 
         # Historial persistible (solo lo humano, no el tráfico de herramientas)
         self.bot.messages_history.append({"role": "user", "content": user_input})
