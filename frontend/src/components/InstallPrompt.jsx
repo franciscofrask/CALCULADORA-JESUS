@@ -59,7 +59,16 @@ const InstallPrompt = () => {
         try { await deferred.userChoice; } finally { dismiss(); }
     };
 
+    // EL `enPantallaDeAcceso` DE ARRIBA NO SE USABA EN NINGÚN SITIO. El arreglo del 09-08 --
+    // el que quita el banner de la pantalla de acceso porque tapa el botón de Entrar -- se
+    // escribió a medias: quedaron el comentario, la lista `FUERA_DE` y la variable, y nunca
+    // se aplicó la condición. O sea que el fallo seguía vivo EN PRODUCCIÓN, y con toda la
+    // pinta de estar resuelto, que es la peor forma de que siga vivo.
+    //
+    // Encontrado el 10-08 al automatizar el móvil: Playwright no podía pulsar ENTRAR porque
+    // el banner interceptaba el toque. Una persona solo ve que el botón no responde.
     if (!deferred && !showIOS) return null;
+    if (enPantallaDeAcceso) return null;
 
     return (
         <div className="fixed bottom-20 lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-md">
