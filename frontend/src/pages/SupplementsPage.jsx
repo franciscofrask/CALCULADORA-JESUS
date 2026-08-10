@@ -97,15 +97,19 @@ const SupplementsPage = () => {
                 <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Pill className="w-8 h-8 text-brand/60" />
                 </div>
-                {/* NO PROMETER LO QUE NO VA A LLEGAR (punto 4.15). Decía «tu entrenador está
-                    preparando tu protocolo», y no lo está: los protocolos existen, pero en el
-                    sistema anterior. Hay 666 clientes con histórico ahí y todavía no se han
-                    migrado. Un cliente que lee eso espera algo que no va a pasar esta semana.
-                    Este texto se cambia otra vez cuando los protocolos estén migrados. */}
-                <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Tu protocolo todavía no está aquí</h2>
+                {/* YA NO HAY NADA QUE TRAER (punto 4.15, cerrado el 09-08-2026). Este texto
+                    decía «lo tienes en el sistema anterior y lo estamos trayendo», que era
+                    verdad mientras los protocolos seguían en Calma. Ya no: se migraron los 98
+                    clientes que tenían uno, con su histórico entero. Quien llegue aquí ahora es
+                    porque de verdad no tiene protocolo puesto, y hay que decírselo tal cual en
+                    vez de hacerle esperar algo que no va a llegar.
+
+                    El texto anterior hablaba además de 666 clientes pendientes: un dato interno
+                    nuestro que no le decía nada a quien lo leía. */}
+                <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Todavía no tienes suplementación</h2>
                 <p className="text-muted-foreground text-sm">
-                    Lo tienes en el sistema anterior y lo estamos trayendo. Si necesitas verlo
-                    ahora, pídeselo a tu entrenador por el chat.
+                    Tu entrenador no te ha puesto ningún protocolo por ahora. Si crees que te
+                    corresponde alguno, díselo por el chat y lo revisa.
                 </p>
             </div>
         </Wrap>;
