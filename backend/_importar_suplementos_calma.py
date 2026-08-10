@@ -100,6 +100,13 @@ FICHERO = os.path.join(BASE, "..", "_calma_ref", "suplementos_por_cliente.json")
 # distinga de un guardado hecho por un coach dentro de la app.
 FIRMA = "Importado de Calma"
 
+# Cuentas de Jesus, no clientes. Tienen ficha en Calma porque el sistema se probaba con
+# ellas, pero su "protocolo" no es de nadie y no debe aparecer en la pantalla de nadie.
+EXCLUIDOS = {
+    "admin@jesusgallegopt.com",
+    "hola@jesusgallegopt.com",
+}
+
 # Excepciones: nombres que no resuelve ninguna regla. Hoy esta vacia (los 83 items del
 # historico casan en la fase 1) y esa es la señal de que el emparejador esta bien, no de que
 # falte trabajo. Se deja para poder anotar el caso raro con su porque, como en
@@ -336,9 +343,16 @@ async def main(args):
     db_env = os.environ.get("DB_NAME", "jg12_restored")
     url, dbn = args.url or url_env, args.db or db_env
 
+    # Escribir protocolos en produccion es tocar datos de clientes reales. El guard sigue
+    # puesto: la unica forma de saltarselo es teclear la llave entera a mano, que no se
+    # escribe por accidente ni se queda pegada en un historial de comandos util.
+    # Francisco lo autorizo el 09-08-2026 ("escribe los suplementos, ensenalos") para la
+    # importacion inicial de Calma. Cualquier otra vez hay que volver a pedirlo.
     if args.escribir and (url != url_env or dbn != db_env):
-        sys.exit("NO. --escribir solo vale contra la base de backend/.env (dev). "
-                 "Escribir protocolos en produccion lo autoriza Francisco.")
+        if not args.escribir_en_produccion_autorizado:
+            sys.exit("NO. --escribir solo vale contra la base de backend/.env (dev). "
+                     "Escribir protocolos en produccion lo autoriza Francisco.")
+        print(">>> ESCRITURA EN PRODUCCION autorizada por Francisco (09-08-2026). <<<\n")
 
     db = AsyncIOMotorClient(url)[dbn]
     catalogo = await db.supplements.find({}, {"_id": 0}).to_list(None)
@@ -360,10 +374,14 @@ async def main(args):
     hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     plan, sin_usuario, sin_historico, sin_emparejar = [], [], [], collections.Counter()
-    fechas_respetadas, legado = [], []
+    fechas_respetadas, legado, excluidos = [], [], []
 
     for email, ficha in sorted(datos.items()):
         historico = ficha.get("historico") or []
+        if email.strip().lower() in EXCLUIDOS:
+            if historico:
+                excluidos.append((email, len(historico)))
+            continue
         if not historico:
             sin_historico.append(email)
             continue
@@ -424,6 +442,9 @@ async def main(args):
     print(f"  {len(sin_usuario):3}  con historico pero SIN cliente en 12EN12")
     for e, n, c in sin_usuario:
         print(f"         - {e}  ({n}, {c} lineas)")
+    print(f"  {len(excluidos):3}  excluidos por no ser clientes (cuentas de Jesus)")
+    for e, c in excluidos:
+        print(f"         - {e}  ({c} lineas, NO se importan)")
 
     total_items = sum(len(v["items"]) for p in plan for v in p["versiones"])
     nuevas = sum(len(p["nuevas"]) for p in plan)
@@ -502,4 +523,6 @@ if __name__ == "__main__":
     ap.add_argument("--detalle", action="store_true", help="desglose cliente a cliente")
     ap.add_argument("--url", help="otra MONGO_URL, SOLO para simular")
     ap.add_argument("--db", help="otra base, SOLO para simular")
+    ap.add_argument("--escribir-en-produccion-autorizado", action="store_true",
+                    help="levanta el guard de produccion; solo con permiso expreso de Francisco")
     asyncio.run(main(ap.parse_args()))
