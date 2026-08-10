@@ -239,12 +239,9 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                             <X className="w-5 h-5 text-white" />
                         </button>
                     </div>
-                    <DialogDescription className="text-muted-foreground">
-                        {mealKey && (mealInfo?.[mealKey]?.name || mealKey)}
-                        {tab === 'biblioteca'
-                            ? ' - menús reales que ya cuadran con tu objetivo'
-                            : ' - recetas del recetario, cuadradas a tu objetivo'}
-                    </DialogDescription>
+                    {/* Sin la línea de «Comida 1 - menús reales que ya cuadran con tu
+                        objetivo»: el objetivo está justo debajo con sus tres números, y que
+                        cuadran lo dice el contador de la lista. Era la tercera vez. */}
                     <div className="flex items-center gap-2 mt-1">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-white/60">Tu objetivo</span>
                         <span className="text-sm font-black text-white">
@@ -362,12 +359,15 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                             </div>
                         ) : (
                             <div className="p-4 space-y-3">
-                                {/* Si no caben todos, se dice cuántos se están enseñando. Decir
-                                    «hay 173» y pintar 120 sin más deja al cliente contando. */}
+                                {/* Solo el recuento. Lo de «y aquí tienes los 120 que mejor te
+                                    encajan» y «las cantidades vienen ajustadas a tu objetivo»
+                                    se va: lo segundo ya se lee en cada tarjeta, que trae los
+                                    gramos puestos.
+                                    Queda apuntado que, cuando la lista se recorta, ya no se
+                                    dice: se enseñan 120 de 207 sin avisar. */}
                                 <p className="text-xs text-muted-foreground">
                                     Hay <span className="font-bold text-foreground">{total}</span> menús que cuadran (±{margen} g)
-                                    {menus.length < total ? `, y aquí tienes los ${menus.length} que mejor te encajan` : ''}
-                                    {textFilter.trim() ? ` · ${filtrados.length} con "${textFilter.trim()}"` : ''}. Las cantidades vienen ajustadas a tu objetivo.
+                                    {textFilter.trim() ? ` · ${filtrados.length} con "${textFilter.trim()}"` : ''}
                                 </p>
                                 {filtrados.map((menu, index) => (
                                     <button key={menu.biblioteca_id}
