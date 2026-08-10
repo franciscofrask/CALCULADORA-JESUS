@@ -399,21 +399,25 @@ const ClientDashboard = () => {
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6 animate-fade-in" data-testid="client-dashboard">
-            {/* LA CABECERA, EN UNA LÍNEA (documento del 10-08, pantalla 4): «Semana 6 de 12»
-                y a los números.
+            {/* LA CABECERA SE QUEDA como estaba: «Panel del cliente», el saludo y el plan
+                contratado. La quité en la primera pasada por ganar los 300 px que ocupa, y
+                Francisco la devolvió: «era info que no molestaba». Y es verdad que no
+                molesta -- es lo primero que se lee y se lee de un vistazo --, así que lo
+                que había que recortar no era esto.
 
-                Aquí había cuatro cosas apiladas -- «PANEL DEL CLIENTE», «HOLA, CLIENTE» a
-                48 px, la insignia del plan y la semana --, casi 300 px de los 844 de un
-                móvil para saludar y decir en qué app estás. Nada de eso responde a la
-                pregunta con la que el cliente abre la app, que es cuánto tiene que comer
-                hoy.
-
-                Se queda la semana, que es lo único que sitúa, y sube a la línea de arriba.
-                El nombre y el plan no se pierden: están en Perfil, que es donde se miran. */}
-            <header className="flex items-center justify-between gap-4">
-                <p className="text-sm font-semibold text-muted-foreground" data-testid="cabecera-semana">
-                    {cicloSemanas ? `Semana ${profile.week} de ${cicloSemanas}` : `Semana ${profile.week}`}
-                </p>
+                Lo único que no vuelve es la semana, que aquí salía al lado de la insignia
+                del plan y ahora la lleva la tarjeta de Ciclo con su barra. Decirla dos
+                veces en la misma pantalla sí sobraba. */}
+            <header className="flex items-end justify-between gap-4">
+                <div>
+                    <p className="caption text-brand mb-1">Panel del cliente</p>
+                    <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase text-foreground leading-none">
+                        Hola, {user?.name?.split(' ')[0]}
+                    </h1>
+                    <div className="mt-2">
+                        <PlanBadge plan={profile.plan} planName={myPlan?.name} />
+                    </div>
+                </div>
                 {unreadMessages > 0 && (
                     <button onClick={() => navigate('/dashboard/messages')} data-testid="notif-btn"
                         className="relative w-11 h-11 rounded-xl border border-border bg-card flex items-center justify-center hover:border-brand transition-colors">
@@ -516,19 +520,39 @@ const ClientDashboard = () => {
                     )}
                 </div>
 
-                {/* LA COLUMNA DE AL LADO SE FUE ENTERA. Eran dos tarjetas que en móvil
-                    caen debajo y ocupan otra media pantalla:
+                {/* EL CICLO SE QUEDA. Lo quité en la primera pasada por considerarlo
+                    repetido con la semana de la cabecera, y Francisco lo devolvió: la barra
+                    con las doce semanas no es el mismo dato que el número. El número dice
+                    en qué semana está; la barra dice cuánto le queda, que es lo que sitúa
+                    en un método que se llama 12 en 12. Por eso la línea de la cabecera es
+                    la que sobra, y no esta tarjeta.
 
-                      - CICLO: la semana ya está en la cabecera, y «Reportes: quincenal +
-                        mensual» es una característica del plan, que se lee en Perfil ->
-                        «Tu plan incluye». Aquí solo repetía.
-                      - PRÓXIMA RENOVACIÓN: es de Mi perfil, que es donde alguien va a
-                        mirar qué paga y cuándo. En Inicio no responde a ninguna pregunta
-                        del día a día.
-
-                    La barra de progreso del ciclo es lo único que no está en otro sitio, y
-                    es decoración: la misma información en texto («Semana 7 de 12») ya va
-                    arriba. */}
+                    De la columna de al lado sí se fue la PRÓXIMA RENOVACIÓN, que es de Mi
+                    perfil: ahí es donde alguien va a mirar qué paga y cuándo, y en Inicio
+                    no responde a ninguna pregunta del día a día. */}
+                <div className="surface p-4 mt-5">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="caption">Ciclo</span>
+                        <span className="text-xs text-muted-foreground font-data">
+                            {cicloSemanas ? `${profile.week}/${cicloSemanas}` : `Semana ${profile.week}`}
+                        </span>
+                    </div>
+                    {cicloSemanas ? (
+                        <>
+                            <div className="w-full bg-muted rounded-full h-2">
+                                <div className="bg-brand h-2 rounded-full transition-all duration-500" style={{ width: `${weekProgress}%` }} />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">Semana {profile.week} de tu ciclo de {plural(cicloSemanas, 'semana')}</p>
+                        </>
+                    ) : (
+                        <p className="text-xs text-muted-foreground mt-1">Plan mensual · semana {profile.week}</p>
+                    )}
+                    {(myPlan?.habilitaciones?.reportes?.length > 0) && (
+                        <p className="text-[11px] text-muted-foreground mt-2 capitalize">
+                            Reportes: {myPlan.habilitaciones.reportes.join(' + ')}
+                        </p>
+                    )}
+                </div>
             </div>
 
             {/* Ajustar macros: el cuestionario del paso 2. Sale mientras tenga los macros
