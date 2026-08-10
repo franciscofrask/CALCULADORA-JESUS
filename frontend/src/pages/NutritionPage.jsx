@@ -7,7 +7,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
-    Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle
+    Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle, Settings
 } from 'lucide-react';
 import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
@@ -137,6 +137,8 @@ const NutritionPage = () => {
     // La configuracion del dia (comidas / horario / peri) va plegada: se resume en una
     // linea de texto y solo se despliega cuando de verdad se quiere cambiar algo.
     const [configExpanded, setConfigExpanded] = useState(false);
+    // La tuerca de «Comidas del día»: dentro van «Método/Reales» y cómo ver las comidas.
+    const [ajustesVistaAbierto, setAjustesVistaAbierto] = useState(false);
 
     // Como quiere ver las comidas del dia (lista y detalle, pestañas o todo seguido).
     // Se recuerda de un dia para otro; ver components/nutrition/VistaComidas.jsx.
@@ -199,7 +201,11 @@ const NutritionPage = () => {
     // When set, every OTHER meal is locked (target = its served = cuadrada). null = no volcado.
     const [volcadoMeal, setVolcadoMeal] = useState(null);
     const [mealsData, setMealsData] = useState({});
-    const [expandedMeals, setExpandedMeals] = useState({ C1: true });
+    // TODAS CERRADAS AL ENTRAR. Aquí se abría la Comida 1 sola, cada vez que se recargaba o
+    // se volvía a la pantalla, y con ella se desplegaban su modo de cálculo, su fila de
+    // macros y sus tres botones: unos 600 px antes de llegar a la Comida 2. Lo primero que
+    // tiene que ver el cliente es el día entero, no una comida cualquiera abierta por él.
+    const [expandedMeals, setExpandedMeals] = useState({});
     const [selectedMeal, setSelectedMeal] = useState('C1');
     const [loading, setLoading] = useState(true);
     
@@ -1958,8 +1964,31 @@ const NutritionPage = () => {
                         className="inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Preferencias alimentarias">
                         <SlidersHorizontal size={16} /> <span className="hidden sm:inline">Preferencias</span>
                     </button>
+                    {/* LA TUERCA, ARRIBA CON LAS DEMÁS. Dentro van «Método/Reales» y cómo ver
+                        las comidas: dos conmutadores que estaban a la vista y permanentes
+                        justo encima de las comidas -- que es lo que se viene a ver -- y que
+                        se tocan de higos a brevas. Uno cambia solo lo que pone en la lista de
+                        ingredientes; el otro es una preferencia que se elige una vez. */}
+                    <button onClick={() => setAjustesVistaAbierto(v => !v)} data-testid="toggle-ajustes-vista"
+                        className={`inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition-colors ${ajustesVistaAbierto ? 'rounded-2xl bg-brand text-white' : 'surface text-muted-foreground hover:text-brand'}`}
+                        title="Cómo ver las comidas y qué macros mostrar">
+                        <Settings size={16} /> <span className="hidden sm:inline">Vista</span>
+                    </button>
                 </div>
             </header>
+
+            {ajustesVistaAbierto && (
+                <div className="surface p-4 mb-4 space-y-4" data-testid="ajustes-vista">
+                    <div>
+                        <p className="caption mb-1.5">Qué macros se muestran</p>
+                        <ModoMacrosSelector modo={modoMacros} onCambiar={cambiarModoMacros} />
+                    </div>
+                    <div>
+                        <p className="caption mb-1.5">Cómo ver las comidas</p>
+                        <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
+                    </div>
+                </div>
+            )}
 
             {/* Cabecera del día: fecha, tipo de día, configuración resumida y macros */}
                 <DayHeader
@@ -1995,7 +2024,10 @@ const NutritionPage = () => {
                     getDayStatus={getDayStatus}
                 />
 
-                <div className="border-t border-border my-6" />
+                {/* Sin la raya que separaba los macros del día de las comidas: son la misma
+                    cosa contada dos veces -- lo que te queda arriba, de dónde va a salir
+                    debajo -- y la raya las presentaba como dos secciones ajenas. */}
+                <div className="my-4" />
 
                 {/* ── Comidas: selector en columna + detalle ── */}
                 <div data-testid="nutrition-meals">
@@ -2018,13 +2050,9 @@ const NutritionPage = () => {
                     {/* Cabecera de sección: el título y, a la derecha, cómo quiere verlas.
                         El switch de macros vive aquí porque solo cambia lo que pone en
                         la lista de ingredientes; ni los totales ni el reparto se mueven. */}
-                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2.5">
-                        <p className="caption">Comidas del día</p>
-                        <div className="flex items-center gap-3">
-                            <ModoMacrosSelector modo={modoMacros} onCambiar={cambiarModoMacros} />
-                            <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
-                        </div>
-                    </div>
+                    {/* Sin «COMIDAS DEL DÍA»: debajo vienen las comidas, una detrás de otra
+                        y con su nombre. El rótulo no añadía nada que no dijera la propia
+                        lista. */}
                     {modoMacros === 'reales' && <div className="mb-3"><AvisoMacrosReales /></div>}
 
                     {vistaComidas === 'actual' && (
@@ -2054,7 +2082,10 @@ const NutritionPage = () => {
                                 </div>
 
                                 {/* Móvil/tablet (<lg): acordeón de comidas en una sola columna */}
-                                <div className="lg:hidden space-y-3" data-testid="meals-accordion">
+                                {/* Las comidas, pegadas: es una lista que se va tachando, no
+                                    cinco tarjetas sueltas. El aire entre ellas sumaba casi
+                                    una pantalla de móvil sin decir nada. */}
+                                <div className="lg:hidden space-y-1" data-testid="meals-accordion">
                                     {getMealOrder().map(mealKey => renderMealCard(mealKey, false))}
                                 </div>
 

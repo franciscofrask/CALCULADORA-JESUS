@@ -256,11 +256,11 @@ const MealCard = ({
                     a 15, que es el tamaño del texto normal. */}
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-lg' : 'text-xl'}`}>{info.name}</h3>
+                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-xl' : 'text-2xl'}`}>{info.name}</h3>
                         <StatusDot status={status} className="flex-shrink-0" />
                         {isLocked && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </div>
-                    <p className="text-[15px] text-muted-foreground font-data mt-1">
+                    <p className="text-[17px] text-foreground/70 font-data mt-1">
                         Objetivo: {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
                     </p>
                 </div>

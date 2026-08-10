@@ -284,12 +284,12 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${orden === 'usado' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setOrden('usado')} data-testid="library-orden-usado">Lo que más gente monta</button>
                             </div>
-                            <div className="inline-flex rounded-lg bg-muted p-0.5 border border-border">
-                                <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${!verReales ? 'bg-brand text-white' : 'text-muted-foreground'}`}
-                                    onClick={() => setVerReales(false)} data-testid="library-ver-metodo">Método</button>
-                                <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${verReales ? 'bg-brand text-white' : 'text-muted-foreground'}`}
-                                    onClick={() => setVerReales(true)} data-testid="library-ver-reales">Reales</button>
-                            </div>
+                            {/* El conmutador Método/Reales sale de aquí. Está eligiendo un
+                                menú: lo que le importa es cuál coge, y los dos juegos de
+                                números para el mismo plato en el momento de decidir son ruido.
+                                `verReales` se queda en el componente -- las tarjetas siguen
+                                sabiendo pintar los dos -- y el modo del día se elige en la
+                                tuerca de Nutrición, que es donde vive esa preferencia. */}
                         </div>
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />

@@ -892,13 +892,19 @@ const ClientLayout = () => {
             {/* ===== Main ===== */}
             <div className="flex-1 min-w-0 flex flex-col">
                 {/* Mobile top bar */}
-                <header className="lg:hidden sticky top-0 z-40 bg-ink h-14 flex items-center justify-between px-4">
+                {/* EL LOGO, CENTRADO DE VERDAD. Con `justify-between` el logo se coloca entre
+                    lo que tiene a los lados, y a la izquierda hay un botón y a la derecha
+                    dos: quedaba desplazado a la izquierda. Se centra sobre la barra entera y
+                    los dos grupos de botones se quedan en sus esquinas. */}
+                <header className="lg:hidden sticky top-0 z-40 bg-ink h-14 flex items-center justify-between px-4 relative">
                     <button onClick={() => setDrawerOpen(true)} data-testid="mobile-menu-btn"
-                        className="w-10 h-10 -ml-2 rounded-lg flex items-center justify-center text-white/80 hover:bg-white/10">
+                        className="w-10 h-10 -ml-2 rounded-lg flex items-center justify-center text-white/80 hover:bg-white/10 relative z-10">
                         <Menu className="w-6 h-6" />
                     </button>
-                    <Logo12EN12 size="sm" tone="dark" />
-                    <div className="flex items-center -mr-2">
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <Logo12EN12 size="sm" tone="dark" />
+                    </div>
+                    <div className="flex items-center -mr-2 relative z-10">
                         <ThemeToggle variant="icon" testId="theme-toggle-topbar" />
                         <button onClick={openNotifications} data-testid="client-bell"
                             className="relative w-10 h-10 rounded-lg flex items-center justify-center text-white/80 hover:bg-white/10">
