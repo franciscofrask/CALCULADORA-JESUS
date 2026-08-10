@@ -312,6 +312,36 @@ def afinar_cantidades(foods: list, obj: Dict[str, float], max_iter: int = 60) ->
             f["cantidad"] += d
 
 
+# Cuánto tiene que llevar un alimento por 100 g (EFECTIVO, ya con las reglas de Calma) para
+# que se le pueda pedir que TIRE de ese macro en el reparto del menú (punto 10.1). Por debajo
+# va de guarnición: no se le asigna cupo en el reparto, pero sigue en el menú y sus macros
+# siguen contando en el total.
+#
+# Los tres números están MEDIDOS sobre los 153 menús de producción (`_medir_guarnicion.py`,
+# 09-08), no puestos a ojo:
+#
+#   - H = 6.0 es el único que decide algo. Barrido de umbrales sobre 153 menús x 6 objetivos:
+#     con 6.0 cuadran 395 casos frente a 393 sin filtro, y el error medio baja de 98,3 g a
+#     98,2 g (suma de los 6 objetivos). Por encima de 8 el error empieza a subir y a 15 se
+#     pierden menús. Y 6.0 es donde está la frontera en el catálogo: por debajo solo hay
+#     verdura (tomate 5,0 · pimiento verde 5,0 · pimientos asados 5,4), salsa (tomate frito
+#     2,1) y bebida (leches y yogures 4,6-5,0); justo por encima ya está todo lo que de
+#     verdad lleva hidratos (garbanzos 9,5 · patata 11 · lentejas 11,2 · fruta desde la
+#     mandarina 8,7 · pasta 26 · pan 60). La fruta NO se toca: era el riesgo del corte alto.
+#
+#   - P = 6.0 y G = 3.0 no muerden: el alimento más flojo que Jesús usa con rol proteína da
+#     8,0 g/100 g (queso batido 0 %) y el más flojo con rol grasa da 13,0 (aguacate). Se
+#     dejan escritos porque el día que entre un alimento flojo el criterio ya está puesto.
+#
+# Dos alternativas MEDIDAS y descartadas, para que no se vuelvan a intentar:
+#   - Clavar la guarnición en su mínimo (bajarle también el `maximo`): el afinado del paso
+#     3.5 se queda sin palancas y se hunde -- en el objetivo Post se pasa de 42 menús
+#     cuadrados a 37, y el error medio sube de 20,8 g a 23,5 g.
+#   - Descartar al que da menos de una fracción del más fuerte del propio menú: baja el error
+#     medio pero se lleva por delante los menús cuadrados (393 -> 318 con fracción 0,15).
+MINIMO_PARA_TIRAR = {"P": 6.0, "H": 6.0, "G": 3.0}
+
+
 def _driver_macro(rol: str) -> Optional[str]:
     """Macro que ESE alimento escala según su rol en el menú."""
     return {"proteina": "P", "hidrato": "H", "grasa": "G"}.get(rol)
@@ -419,6 +449,38 @@ async def _ajustar_plantilla(
     # la grasa incidental de proteínas)
     for m in ("H", "P", "G"):
         drivers = [f for f in foods if f["driver"] == m and f["ef"][m] > 1e-6]
+        # UNA GUARNICIÓN NO TIRA DE UN MACRO (punto 10.1 del doc del 09-08).
+        #
+        # El reparto es a partes iguales entre los motores, así que pedirle a la lechuga la
+        # misma parte de los hidratos que al pan es pedirle lo imposible: sube al máximo,
+        # sigue sin llegar, y el pan se queda con menos de lo que le tocaba.
+        #
+        # Y no es un error de datos de Jesús: el editor de menús solo ofrece tres roles
+        # (proteína, hidrato, grasa), así que para meter una ensalada tenía que elegir uno.
+        # Marcó «hidrato», que es lo menos malo. El concepto que falta es nuestro.
+        #
+        # Barrido sobre los 153 menús de producción (09-08, `_barrer_roles_menus.py`): 193
+        # apariciones, 44 combinaciones alimento+rol, TODAS de rol hidrato. Las que más se
+        # repiten: tomate (32 menús, 5 g/100 g), calabacín (16, 3,1), champiñones (10, 3,3),
+        # lechuga (9, 0,0), pepino (6, 0,0).
+        #
+        # OJO con el efecto real, que es más pequeño de lo que parece: la lechuga, el pepino y
+        # el calabacín ya salían de aquí por el `> 1e-6` de arriba, porque Calma les pone los
+        # macros efectivos a cero. Lo que este filtro añade es la franja de en medio, la que
+        # no es cero pero tampoco llega: tomate 5,0 · pimiento verde 5,0 · pimientos asados
+        # 5,4 · queso havarti light 0,2 · leches y yogures 4,6-5,0.
+        #
+        # Con esto la guarnición se queda en su cantidad mínima -- sigue en el menú y sus
+        # macros siguen contando en el total, no se esconde nada -- y el macro lo llevan los
+        # alimentos que de verdad lo llevan. Medido en el objetivo Post (35P 80H 10G): el
+        # tomate del «Combo clásico de pollo, pasta y pan» pasa de 300 g a 50 g, y los
+        # pimientos asados de la «Ensalada templada de solomillo» de 300 g a 50 g.
+        #
+        # Si NINGUNO llega al umbral se usan los que haya: más vale repartir entre flojos que
+        # no repartir. Es lo que salva a un menú de solo fruta o de solo verdura.
+        fuertes = [f for f in drivers if f["ef"][m] >= MINIMO_PARA_TIRAR[m]]
+        if fuertes:
+            drivers = fuertes
         if not drivers:
             continue
         T = totales()

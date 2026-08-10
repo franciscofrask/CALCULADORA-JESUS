@@ -71,7 +71,18 @@ export const AuthProvider = ({ children }) => {
         }
         
         try {
-            const response = await api.get('/auth/me');
+            // Un reintento si la primera no llega. Conservar el token ya evita tener que
+            // volver a escribir la contraseña, pero sin esto la app te deja igualmente en la
+            // pantalla de login hasta que recargues. Un corte de un segundo -- entrar en el
+            // metro, el servidor terminando de arrancar -- se recupera solo.
+            let response;
+            try {
+                response = await api.get('/auth/me');
+            } catch (primera) {
+                if (primera.response) throw primera;      // el servidor contestó: no insistas
+                await new Promise((r) => setTimeout(r, 1500));
+                response = await api.get('/auth/me');
+            }
             setUser(response.data);
 
             // Cargar perfil de cliente si existe (el staff tambien puede tener uno, p.ej. con plan)
@@ -83,8 +94,29 @@ export const AuthProvider = ({ children }) => {
                 setProfile(null);
             }
         } catch (error) {
-            console.error('Error fetching user:', error);
-            logout();
+            // UN FALLO DE RED NO ES UNA SESIÓN CADUCADA.
+            //
+            // Aquí se llamaba a `logout()` ante CUALQUIER excepción, y eso incluye el
+            // «Network Error» de axios: sin cobertura, wifi que se cae, servidor
+            // reiniciándose. O sea que abrir la app en el ascensor te echaba, y no solo eso:
+            // `logout()` llama a `limpiarLoDeLaPersona()`, así que además te borraba la copia
+            // local del día de Nutrición. Volvías a entrar y te faltaba lo del día.
+            //
+            // Salió buscando otra cosa: la sesión del entorno local se caía cada dos por tres
+            // y parecía que alguien pulsaba «Cerrar sesión». No: era el backend reiniciándose
+            // (recarga automática al guardar un fichero) mientras el navegador preguntaba
+            // quién eres. En un móvil con mala cobertura pasa exactamente lo mismo.
+            //
+            // Solo se cierra sesión si el SERVIDOR dice que el token no vale. Los 401 de
+            // verdad los recoge además el interceptor de arriba, que avisa al cliente.
+            const status = error.response?.status;
+            if (status === 401 || status === 403) {
+                logout();
+            } else {
+                // Se conserva el token: al recuperar la conexión, recargar devuelve la sesión
+                // sin volver a escribir la contraseña.
+                console.error('No se pudo comprobar la sesión (se conserva):', error?.message || error);
+            }
         } finally {
             setLoading(false);
         }

@@ -32,8 +32,75 @@ const FREQUENT_CATEGORY = {
     id: '__frequent__',
     value: '__frequent__',
     label: 'Alimentos frecuentes',
+    short: 'Frecuentes',
     icon: faStopwatch20,
 };
+
+// Nombre corto que se ve dentro de la pill. Los nombres de Calma son frases enteras
+// ("Cacao en polvo y azúcares de todo tipo, chucherías y miel") y con trece categorías
+// en 390 px no cabe ninguna: el largo se queda en el tooltip y en el aria-label.
+// Abreviaturas coherentes con los chips del buscador de alimentos ("Prot. polvo",
+// "Beb. vegetales"). Clave = id de la categoría, compartido entre pasos.
+const NOMBRE_CORTO = {
+    __frequent__: 'Frecuentes',
+    // Proteínas
+    huevos: 'Huevos',
+    embutidos: 'Embutidos',
+    aves: 'Aves',
+    vacuno: 'Vacuno',
+    cerdo: 'Cerdo',
+    otras_carnes: 'Otras carnes',
+    carnes_blancas: 'Carnes blancas',
+    carnes_rojas: 'Carnes rojas',
+    casqueria: 'Casquería',
+    pescados: 'Pescados',
+    lacteos: 'Lácteos',
+    proteina: 'Prot. polvo',
+    proteina_polvo: 'Prot. polvo',
+    proteina_vegetal: 'Prot. vegetal',
+    legumbres: 'Legumbres',
+    // Hidratos y acompañamientos
+    arroces: 'Arroces',
+    panes: 'Panes',
+    pan: 'Panes',
+    cereales: 'Cereales',
+    pasta: 'Pasta',
+    tuberculos: 'Tubérculos',
+    fruta: 'Fruta',
+    verduras: 'Verduras',
+    cremas_arroz: 'Cremas y tortas',
+    sustitutivos: 'Sustitutivos',
+    sopas: 'Sopas y caldos',
+    cocina_esp: 'Cocina española',
+    pizza: 'Pizza y lasaña',
+    comida_rapida: 'Comida rápida',
+    aperitivos: 'Aperitivos',
+    // Bebidas
+    beb_vegetales: 'Beb. vegetales',
+    bebidas: 'Refrescos y café',
+    isotonicas: 'Isotónicas',
+    aminoacidos: 'Aminoácidos',
+    // Dulces
+    cremas: 'Bollería',
+    bolleria: 'Bollería',
+    chocolates: 'Chocolates',
+    barritas: 'Barritas',
+    helados: 'Helados',
+    postres: 'Postres',
+    cacao: 'Cacao y azúcar',
+    azucar: 'Cacao y azúcar',
+    // Grasas y otros
+    grasas_buenas: 'Grasas buenas',
+    grasas_todo: 'Otras grasas',
+    grasas: 'Otras grasas',
+    salsas: 'Salsas',
+    superalimentos: 'Superalimentos',
+};
+
+const conNombreCorto = (cats) => cats.map(c => ({
+    ...c,
+    short: c.short || NOMBRE_CORTO[c.id] || c.label,
+}));
 import CategoryRail from './CategoryRail';
 import { PREFERENCE_CATEGORIES } from './PreferencesSetup';
 
@@ -112,21 +179,21 @@ const POST_CATEGORIES = [
 // Ordered to match Calma's `A.preparaciones`:
 // [GEN, PRO, FRE, CGE, AHU, LAT, POL, PRE, HAM, SNA, MIN, YCO, UNI, YA, SGL]
 const PREPARATIONS = [
-    { value: 'GEN', label: 'Genérico',                                 icon: faCircleInfo },
-    { value: 'PRO', label: 'Marca recomendada con descuento especial', icon: faMedal },
-    { value: 'FRE', label: 'Frescos',                                  icon: faDroplet },
-    { value: 'CGE', label: 'Congelados',                               icon: faSnowflake },
-    { value: 'AHU', label: 'Ahumados',                                 icon: faSmog },
-    { value: 'LAT', label: 'Conservas',                                icon: faRing },
-    { value: 'POL', label: 'En Polvo',                                 icon: faJar },
-    { value: 'PRE', label: 'Preparado',                                icon: faThumbsUp },
-    { value: 'HAM', label: 'Carne picada y hamburguesas',              icon: faBurger },
-    { value: 'SNA', label: 'Snacks fáciles de transportar',            icon: faCookieBite },
-    { value: 'MIN', label: '1 Minuto al micro y listo',                icon: faClock },
-    { value: 'YCO', label: 'Ya cocinados',                             icon: faFireBurner },
-    { value: 'UNI', label: 'Ya pesado',                                icon: faScaleBalanced },
-    { value: 'YA',  label: 'Listo para comer',                         icon: faSquareCheck },
-    { value: 'SGL', label: 'Sin gluten',                               icon: faWheatAwnCircleExclamation },
+    { value: 'GEN', label: 'Genérico',                                 short: 'Genérico',     icon: faCircleInfo },
+    { value: 'PRO', label: 'Marca recomendada con descuento especial', short: 'Recomendada',  icon: faMedal },
+    { value: 'FRE', label: 'Frescos',                                  short: 'Frescos',      icon: faDroplet },
+    { value: 'CGE', label: 'Congelados',                               short: 'Congelados',   icon: faSnowflake },
+    { value: 'AHU', label: 'Ahumados',                                 short: 'Ahumados',     icon: faSmog },
+    { value: 'LAT', label: 'Conservas',                                short: 'Conservas',    icon: faRing },
+    { value: 'POL', label: 'En Polvo',                                 short: 'En polvo',     icon: faJar },
+    { value: 'PRE', label: 'Preparado',                                short: 'Preparado',    icon: faThumbsUp },
+    { value: 'HAM', label: 'Carne picada y hamburguesas',              short: 'Carne picada', icon: faBurger },
+    { value: 'SNA', label: 'Snacks fáciles de transportar',            short: 'Para llevar',  icon: faCookieBite },
+    { value: 'MIN', label: '1 Minuto al micro y listo',                short: 'Al micro',     icon: faClock },
+    { value: 'YCO', label: 'Ya cocinados',                             short: 'Ya cocinado',  icon: faFireBurner },
+    { value: 'UNI', label: 'Ya pesado',                                short: 'Ya pesado',    icon: faScaleBalanced },
+    { value: 'YA',  label: 'Listo para comer',                         short: 'Listo',        icon: faSquareCheck },
+    { value: 'SGL', label: 'Sin gluten',                               short: 'Sin gluten',   icon: faWheatAwnCircleExclamation },
 ];
 
 // Food emojis
@@ -329,7 +396,7 @@ const BuildMealModal = ({
             // (PREFERENCE_CATEGORIES = the 38 canonical category codes) for free browsing.
             // Order within a category is alphabetical.
             base = filterAvoided(PREFERENCE_CATEGORIES.map(cat => ({ ...cat, value: cat.id })));
-            return [FREQUENT_CATEGORY, ...base];
+            return conNombreCorto([FREQUENT_CATEGORY, ...base]);
         }
         if (isIntraMode) {
             base = INTRA_CATEGORIES;
@@ -355,7 +422,7 @@ const BuildMealModal = ({
         } else {
             base = SIDE_CATEGORIES;
         }
-        return [FREQUENT_CATEGORY, ...base];
+        return conNombreCorto([FREQUENT_CATEGORY, ...base]);
     };
 
     useEffect(() => {
@@ -886,22 +953,27 @@ const BuildMealModal = ({
 
                     {/* Category + Preparation Rails - hidden for intra (Calma: chips hidden) */}
                     {(isManual || !isCuadrada) && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-card space-y-2">
+                        {/* Dos filas visibles y el resto tras "Mostrar más": con el nombre dentro
+                            de cada pill entran unas 3 por fila en móvil, y una sola fila dejaba
+                            casi todas las categorías escondidas. */}
                         <CategoryRail
-                            label="Categorías:"
+                            label="Categorías"
                             categories={categories}
                             value={selectedCategories.map(c => c.id)}
                             onChange={handleCategoriesChange}
                             size="sm"
                             collapsible
-                            maxRows={1}
+                            maxRows={2}
                         />
                         {selectedCategories.length > 0 && availablePreparations.length > 0 && (
                             <CategoryRail
-                                label="Preparación:"
+                                label="Preparación"
                                 categories={availablePreparations}
                                 value={selectedPreparations}
                                 onChange={setSelectedPreparations}
                                 size="sm"
+                                collapsible
+                                maxRows={2}
                             />
                         )}
                     </div>}
