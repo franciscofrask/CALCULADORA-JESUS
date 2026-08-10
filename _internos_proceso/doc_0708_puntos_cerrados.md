@@ -3901,3 +3901,204 @@ Di el arreglo por bueno con tres pasadas de un guion (0 de 3) y al abrirlo en la
 volvió a salir. **Medir con un guion no es verlo.** Y cuando algo NO PUEDE salir en pantalla,
 se quita en código; pedírselo al modelo, por bien que se le pida, es una probabilidad, no una
 garantía.
+
+# Partes 7, 8 y 9 del documento del 09-08
+
+La Parte 8 es el orden sugerido: 33 puntos numerados del 12 al 44. Casi todos son el mismo
+trabajo de las partes anteriores visto desde el calendario, así que lo primero fue comprobar
+cuáles seguían abiertos de verdad y cuáles ya estaban cerrados con su commit. **Quedaban
+tres**, y dos se cierran hoy.
+
+Aviso de método: el repaso de abajo se hizo contra el repositorio y contra este documento, no
+reproduciendo los 33 en pantalla otra vez. Lo que se volvió a ver con los ojos está marcado;
+el resto se apoya en el commit que lo cerró.
+
+## La Parte 8, punto por punto
+
+### Antes de abrir a clientes (12 al 18) - los siete, cerrados
+
+| # | Qué | Dónde quedó |
+|---|---|---|
+| 12 | `planCatalog`, la lista de clientes en blanco (2.1) | `45999a7`. **Visto hoy**: la lista carga y dice 245 clientes |
+| 13 | Datos de prueba, duplicados y fechas futuras (2.3) | 18 cuentas borradas el 09-08, duplicados barridos (punto 60) y `core/sin_futuro.py` |
+| 14 | Que el menú lea el campo Calculadora del plan (4.10 y 6.1) | `57fb1f0`: el cerrojo estaba en dos puertas y la casa tenía seis |
+| 15 | El precio real y la renovación en Mi perfil (2.4c y 2.4d) | `00ac825` |
+| 16 | El texto de Suplementos (4.15) | `7a12772` |
+| 17 | Subida de fotos en el reporte (2.2) | `25c958a` y `8ec7abb`: fuera del `fieldset` y todo el mes |
+| 18 | Caché de navegador o fuga de datos (4.7) | `ee440ea`. **Era lo segundo**: la dieta de un cliente se guardaba dentro de la de otro. El documento decía «si es lo segundo, es lo primero de todo», y está |
+
+### Primera semana (19 al 30) - los doce, cerrados
+
+| # | Qué | Dónde quedó |
+|---|---|---|
+| 19 | El texto de la IA, al criterio interno (4.2) | `3b50652` |
+| 20 | «Repetir de otro día» (4.3) | `f83759d` |
+| 21 | `peso_unidad` (4.4) | `f83759d` |
+| 22 | Descarte por mínimo, los «0 ud» (4.5) | `19d27e5` |
+| 23 | Unificar de dónde se leen los macros vigentes (4.6) | `f83759d` |
+| 24 | Cerrar los caminos de guardado y limpiar duplicadas (62) | `25c958a`. **Falta correr `_limpiar_historial_macros.py` en producción**, ver abajo |
+| 25 | Reconciliar MRR, precios y distribución (2.4) | `00ac825` y `d62c412` |
+| 26 | Bloquear el cálculo sin respuestas y subir el resultado (14 y 15) | `396d75d` |
+| 27 | Que el icono de calendario abra el selector (4.14) | `18098fe` |
+| 28 | Error boundary y buscador en Clientes | `c0d3198` (`LimiteDeError.jsx`). **El buscador ya estaba** (`data-testid="client-search"`): no se veía porque la lista salía vacía, que es el punto 12 |
+| 29 | Los textos: coach a entrenador y las pluralizaciones (4.18) | `163cebc` y `8cd9321` |
+| 30 | El cuestionario reanudado: saltos y botón Atrás (4.12) | `18098fe` |
+
+### Después (31 al 44) - trece cerrados, uno abierto
+
+| # | Qué | Dónde quedó |
+|---|---|---|
+| 31 | Las seis pantallas que faltan y el cuarto modificador (4.1) | Ver abajo |
+| 32 | Por qué la biblioteca devuelve cero (4.8) | `8eb3ade` y el 10.3: era `q["calidad.pasa"] = True` sin cosecha |
+| 33 | Los tres hallazgos de código (5.1, 5.2, 5.3) | `47b29d0`: el snapshot de marzo era viejo en los tres. Y `99032cd` para el 5.4 |
+| 34 | La comparativa de fotos completa (48 a 52) | Verificada en producción el 09-08. Estaba entera; lo que faltaba era llegar a ella |
+| 35 | Gráfica de peso legible (4.13) | `808703f`: los ejes estaban escritos en blanco sobre blanco |
+| 36 | Orden del asistente por distancia y penalizar polvos (76 y 78) | Verificado en producción con su caso exacto |
+| 37 | Terminar migraciones: favoritas y suplementación (4.15) | Suplementación, el 09-08. **Favoritas ya estaban**: medido hoy contra producción, 1.161 favoritas, 1.154 de Calma, repartidas en 115 clientes |
+| 38 | Un solo cuestionario y que llegue a la ficha (17) | Cerrado por los dos lados el 09-08 |
+| 39 | Si «Repetir» debe cuadrar las cantidades (4.9) | `ee440ea` |
+| 40 | El tipo de día sin depender del cliente (4.17) | `8f7d583` |
+| 41 | El chat con el entrenador, no con soporte (4.16) | `8f7d583` |
+| 42 | Entrar en la calculadora del cliente desde su ficha (4.11) | `e2c9e1d`, con registro de quién tocó qué |
+| 43 | La vista «decidir el ajuste» (Parte 7) | **HOY**, ver abajo |
+| 44 | Móvil y la estructura de la pantalla de dieta (6.5 y 6.6) | **ABIERTO** |
+
+### El 31, con su matiz
+
+Las **doce** pantallas del test están en `QuestionnairePage.jsx`, contadas una a una contra
+el documento de textos: objetivo, confirmación, experiencia entrenando, datos, actividad
+diaria, otro deporte, apetito, engordo, definición, biotipo, porcentaje de grasa y dieta
+actual. Las seis que faltaban entraron con el test de entrada del 07-08.
+
+El cuarto modificador es el de la dieta actual (P8, `TOPE_DIETA_REPORTADA` en
+`macro_engine.py`) y se enchufó el 09-08 con el punto 19: hasta ese día la pregunta no se
+hacía desde la calculadora del cliente y el motor caía en «mantengo» en todos los reajustes.
+
+**Si el cuarto modificador de Jesús es otro, hay que decirlo.** El único que está sin aplicar
+a propósito es el del historial de dieta (`APLICAR_HISTORIAL_DIETA = False`, +-10 %), en
+pausa desde el doc del 29-07 por no estar validado.
+
+## 43 - «Decidir el ajuste»: no hacía falta una pantalla nueva, faltaba un cuarto de ella
+
+El punto viene de la queja del entrenador: «para decidir un ajuste tiene que ir a cuatro
+pestañas: reporte, peso, fotos y macros. Cuatro idas y venidas para una decisión de treinta
+segundos. Con 20 clientes, 80 cada lunes.»
+
+Al ir a montarla apareció que **tres de las cuatro ya vivían en la pestaña de Macros**: la
+escalera (`MacroHistoryTable`, arriba del todo desde el vídeo del 05-08), las fotos
+(`MuralFotos`, puestas ahí por el punto 3.1 precisamente para esto) y el peso con su
+variación contra el ajuste anterior (dentro del editor). La que faltaba era la primera, la
+que abre la decisión: **lo que el cliente contestó**.
+
+Así que no se hace una pantalla nueva. Se pone el reporte donde ya está todo lo demás y la
+decisión entera cabe en una pestaña. Una pantalla más que mantener, con los mismos datos
+repartidos otra vez, habría sido peor que el problema.
+
+Qué trae la tarjeta, en este orden:
+
+    SU ÚLTIMO REPORTE          [importado de Calma]  23/07/2026 · hace 18 días   Ver todos
+    75,5 kg   -19,5 kg desde los últimos macros (95 kg)
+    [entreno 80%] [nutrición 80%] [sueño 7/10] [energía 7/10] [estrés 5/10]
+    > Medidas del reporte (5) · contra las del 23/07/2026
+    "Semana muy productiva, buena adherencia en entreno y nutrición."
+
+Y por encima de los porcentajes, cuando el reporte las trae, **las tres preguntas que mueven
+el ajuste**: próximo objetivo, margen para ajustar y entrenamientos cumplidos.
+
+Cuatro decisiones dentro del punto que vale la pena dejar escritas:
+
+- **Los días se dicen siempre, también pasado el mes.** `_haceCuanto` se cae a la fecha a los
+  30 días («del 06/07»), y aquí el dato que decide es justo ese: con qué antigüedad se está
+  ajustando. Un reporte de hace 40 días no es «del 06/07», es viejo. Pasados los 30, la
+  fecha sale en ámbar.
+- **El «Importado de Calma» no se enseña como si lo hubiera escrito el cliente.** Ese texto
+  lo puso la migración en el campo de notas. El historial ya lo filtraba; la tarjeta lo
+  filtra igual y en su sitio pone la etiqueta de importado, que es lo que de verdad dice.
+- **Las medidas se leen también con los nombres viejos.** Los reportes de antes guardaban
+  `waist`, `hip`, `chest`, `arm` y `thigh`. Las dos que son la misma medida (cintura y
+  cadera) entran por `valorAnterior`; las otras tres se pintan con su nombre y un «(medida
+  antigua)» detrás. Descartar lo que no casa con las diez habría dejado el bloque vacío
+  justo en los clientes que sí mandaron medidas.
+- **La comparación va contra el último reporte QUE TRAIGA MEDIDAS**, no contra el reporte
+  anterior sin más: no se piden todos los meses y comparar con un hueco daría una diferencia
+  inventada.
+
+Visto en pantalla con los dos extremos: un cliente migrado de Calma (Rocío Fernández, que no
+tiene más que el peso) y uno con el reporte entero (Cliente Demo, con los cinco chips, las
+cinco medidas y la nota). Los dos salen bien.
+
+Lo que **no** hace: no sustituye a Seguimiento. Ahí siguen el histórico de reportes y el
+feedback de cada uno. Aquí está el último, que es el único que se usa para ajustar, con un
+«Ver todos» que lleva a la otra pestaña.
+
+## Las columnas «Criterio interno» y «Feedback» vacías: qué se enseña ahí
+
+Del mismo sitio: «están vacías en las filas antiguas. Son justo lo que convierte un histórico
+de números en un histórico de decisiones. Hay que decidir qué se enseña ahí.»
+
+Medido contra producción antes de decidir nada:
+
+    filas de macro_history .......... 3.502
+    sin criterio .................... 3.501
+    de ellas, importadas de Calma ... 3.446
+
+O sea que el hueco casi nunca es un olvido del entrenador: **es que ahí no decidió nadie**.
+Son macros que trajo la migración, que calculó un cuestionario o que cambió el propio cliente
+desde su calculadora.
+
+Decidido: en vez de un guion, **por qué** está vacía.
+
+    importado de Calma
+    lo calculó el cuestionario de alta
+    lo recalculó el cliente con el cuestionario
+    lo cambió el cliente desde su calculadora
+    revisión suelta del cliente
+
+En gris y en cursiva, para que no se confunda con un criterio escrito. Es la misma distinción
+que ya hacía el agente al leer el historial (`NO_ES_DEL_COACH` en `macro_agent.py`): existía
+del lado del modelo y no se veía en pantalla.
+
+**Las filas que sí son del entrenador y están vacías se quedan con el guion.** En producción
+son unas 50 de las 3.501, y ahí el hueco sí es un olvido y tiene que seguir viéndose como
+tal. Taparlas todas con una explicación habría sido lo cómodo y lo falso.
+
+## Lo demás de la Parte 7
+
+- **Buscar un cliente desde Clientes**: se puede, y se podía. El buscador está en la cabecera
+  de la lista y filtra por nombre y por correo. Lo que estaba roto era la lista entera (punto
+  12), y sin filas no hay nada que buscar.
+- **Un dato dudoso invalida el cuadro de mando entero**: el MRR, los precios y los cuatro
+  avisos se reconciliaron con el catálogo el 09-08 (`00ac825`, `d62c412`), incluido que el
+  equipo dejara de contar como clientes.
+- **Entrar en la calculadora de un cliente**: hecho en el punto 4.11.
+- **Móvil**: es lo único de la Parte 7 que queda abierto. Va con el punto 44.
+
+## Parte 9 - lo que hacía falta para cerrar esto, hoy
+
+| # | Qué pedía | Cómo está |
+|---|---|---|
+| 45 | El código de producción | **Ya no hace falta pedirlo**: producción va con este repositorio desde el 19-07, y lo marcado [CÓDIGO] se comprobó contra él en el bloque 5 |
+| 46 | Acceso a la base o un export actual | **Resuelto**: túnel SSH al Mongo del VPS por el puerto 27018 (`tocar_datos_de_produccion.md`). Todas las cifras de esta parte salen de ahí |
+| 47 | La lista de clientes arreglada | Arreglada en el punto 12, y con ella se auditaron los flujos del entrenador que estaban cortados |
+| 48 | Tres puntos que no se ven desde fuera | Los tres avisos del código antiguo (punto 4), los importes fijos al convertir un lead (63) y el webhook de GHL (64) se cerraron en los bloques D e I |
+| 49 | Cuál era el texto roto del punto 16 | **Sigue pendiente de Jesús.** Se leyó entero «18 · LOS TEXTOS DE LA APP» dos veces y no señala cuál |
+| 50 | Un cliente con reportes que incluyan medidas | **Lo hay**: `clientedemo@test.com` en dev trae cinco medidas y con él se probó hoy la tarjeta del 43. En producción hay 30 reportes con medidas o con los rangos de sueño, energía y estrés |
+
+## Lo que sigue esperando una orden
+
+- **`_limpiar_historial_macros.py` en producción.** Medido hoy: quedan **2 días con más de
+  una fila y 5 filas de más**, sobre 3.502. El 09-08 eran 25 días y 92 filas; la diferencia
+  se fue con las cuentas de prueba que se borraron. Es poco, pero mientras esté sin correr,
+  `macros_por_fecha.resolver()` puede elegir la fila equivocada esos dos días.
+- **Las fechas futuras siguen en la base**: 29 reportes y 34 entradas de macros con fecha por
+  delante de hoy. No se ven en ninguna pantalla ni entran en ningún cálculo (punto 22), y no
+  se borran porque adivinar el año bueno sería inventárselo.
+- **El anexo del documento.** En producción quedaron escritas tres cosas durante la revisión
+  y ninguna se ha tocado, porque tocar datos de clientes reales espera la orden de Francisco:
+  - En la cuenta de cliente de Jesús, la dieta de hoy: Comida 1 con «Arroz salteado con pavo
+    y verduras» y Comida 2 con la comida copiada del 17 de mayo. Se vacían desde el botón
+    «Vaciar» de cada comida.
+  - En «Usuario Demo», un ajuste de macros con fecha 10/08/2026, etiqueta IA y el texto del
+    asistente en el campo de feedback.
+  - Ninguna otra cuenta real se tocó, y esto tampoco.
+

@@ -891,6 +891,12 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB 2: MACROS ========== */}
                 <TabsContent value="macros" className="space-y-4">
+                    {/* Lo primero que se lee para decidir: lo que contestó en su último reporte
+                        (Parte 7 del 09-08). Debajo van la escalera, las fotos y el formulario,
+                        que ya estaban, para que la decisión entera quepa en esta pestaña. */}
+                    <ReporteParaDecidir reporte={reporteDelAjuste} reportes={reports}
+                        pesoUltimoAjuste={pesoUltimoAjuste} onVerReportes={() => setActiveTab('seguimiento')} />
+
                     {/* LA TABLA VA ARRIBA, ANTES DEL EDITOR (vídeo del 05-08): el coach no pone un
                         número en abstracto, decide comparando con la escalera anterior. Con la
                         tabla debajo tenía que subir y bajar por la pantalla o acordarse. La fila
@@ -2037,6 +2043,43 @@ const ReportePorElCliente = ({ api, clientId, onHecho }) => {
 const CAUSA_LABEL = { ajuste: 'fallo del ajuste', cliente: 'no cumplió', otro: 'otros motivos' };
 
 // Respuestas de las tres preguntas del reporte (punto 5 del 05-08), en legible.
+/**
+ * QUÉ SE ENSEÑA EN «CRITERIO INTERNO» Y «FEEDBACK» CUANDO LA FILA NO LOS TRAE.
+ *
+ * Parte 7 del documento del 09-08: «Las columnas Criterio interno y Feedback del histórico
+ * están vacías en las filas antiguas. Son justo lo que convierte un histórico de números en
+ * un histórico de decisiones. Hay que decidir qué se enseña ahí.»
+ *
+ * Decidido: en vez de un guion, POR QUÉ está vacía. No todas las filas son una decisión del
+ * coach. Las hay importadas de Calma, calculadas por un cuestionario o cambiadas por el
+ * propio cliente desde su calculadora, y esas no tienen criterio que enseñar ni feedback que
+ * mandar: el hueco no es un olvido, es que ahí no decidió nadie. Es la misma distinción que
+ * ya hace el agente al leer el historial (`NO_ES_DEL_COACH` en `macro_agent.py`), que hasta
+ * ahora solo existía del lado del modelo y no se veía en pantalla.
+ *
+ * Las filas que SÍ son del coach y están vacías se quedan con el guion: ahí el hueco sí es
+ * un olvido y tiene que seguir viéndose como tal.
+ */
+const _ORIGEN_SIN_CRITERIO = {
+    quiz_alta: 'lo calculó el cuestionario de alta',
+    quiz_ajuste: 'lo recalculó el cliente con el cuestionario',
+    cliente_calculadora: 'lo cambió el cliente desde su calculadora',
+    revision_suelta: 'revisión suelta del cliente',
+};
+const _huecoExplicado = (h) => {
+    if (h?.calma_migrated || h?.changed_by === 'migracion') return 'importado de Calma';
+    return _ORIGEN_SIN_CRITERIO[h?.origen] || null;
+};
+const CeldaHistorial = ({ texto, hueco, testid }) => (
+    <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]" data-testid={testid}>
+        {texto
+            ? <span className="block truncate" title={texto}>{texto}</span>
+            : hueco
+                ? <span className="block truncate italic text-white/25" title={hueco}>{hueco}</span>
+                : <span className="text-white/30">-</span>}
+    </td>
+);
+
 const OBJETIVO_REPORTE = { definicion: 'Definición', volumen: 'Volumen', mantenimiento: 'Mantenimiento' };
 const VIABILIDAD_REPORTE = {
     me_adapto: 'se adapta a lo que le pongas',
@@ -2045,6 +2088,169 @@ const VIABILIDAD_REPORTE = {
 };
 const ENTRENO_REPORTE = {
     todos: 'todos', casi_todos: 'casi todos', la_mitad: 'la mitad', pocos: 'pocos', ninguno: 'ninguno',
+};
+
+/**
+ * EL REPORTE CON EL QUE SE AJUSTA, en la misma pestaña en la que se ajusta.
+ *
+ * Parte 7 del documento del 09-08: «para decidir un ajuste tiene que ir a cuatro pestañas:
+ * reporte, peso, fotos y macros. Cuatro idas y venidas para una decisión de treinta
+ * segundos. Con 20 clientes, 80 cada lunes.»
+ *
+ * Tres de las cuatro ya vivían aquí: la escalera (`MacroHistoryTable`), las fotos
+ * (`MuralFotos`) y el peso con su variación (dentro del editor). La que faltaba era esta,
+ * y es la que abre la decisión: lo que el cliente contestó. Va arriba del todo porque es
+ * lo primero que se lee, y va ENTERA -- no un resumen -- para que no haya que abrir el
+ * reporte en Seguimiento a comprobar nada.
+ *
+ * No sustituye a la pestaña de Seguimiento: ahí está el histórico y el feedback de cada
+ * reporte. Aquí está el último, que es el único que se usa para ajustar.
+ */
+const ReporteParaDecidir = ({ reporte, reportes, pesoUltimoAjuste, onVerReportes }) => {
+    if (!reporte) return (
+        <Card className="bg-[#111] border-[#222]"><CardContent className="p-4">
+            <p className="text-white/40 text-sm" data-testid="decidir-sin-reporte">
+                Sin reportes todavía: el ajuste va con el peso de la ficha y sin nada de lo que
+                el cliente contesta.
+            </p>
+        </CardContent></Card>
+    );
+
+    const fecha = String(reporte.created_at).slice(0, 10);
+    // Aquí los días se dicen SIEMPRE, también pasado el mes. `_haceCuanto` se cae a la fecha
+    // a los 30 días, y en esta pantalla el dato que decide es justo ese: con qué antigüedad
+    // se está ajustando. Un reporte de hace 40 días no es «del 06/07», es viejo.
+    const dias = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(fecha + 'T00:00:00').getTime()) / 86400000);
+    const cuando = isNaN(dias) ? '' : dias <= 0 ? 'hoy' : dias === 1 ? 'ayer' : `hace ${dias} días`;
+    const viejo = dias >= 30;
+    // El texto que dejó la migración no es lo que escribió el cliente: en el histórico ya se
+    // filtra igual, y enseñarlo entrecomillado como una nota suya sería mentir.
+    const notas = reporte.notes && reporte.notes !== 'Importado de Calma' ? reporte.notes : '';
+    const importado = !!(reporte.calma_migrated || reporte.notes === 'Importado de Calma');
+    const dif = (pesoUltimoAjuste != null && reporte.weight != null)
+        ? Math.round((reporte.weight - pesoUltimoAjuste) * 10) / 10
+        : null;
+    // Las medidas se leen contra las del reporte anterior QUE TRAIGA MEDIDAS, no contra el
+    // reporte de antes sin más: no se piden todos los meses y comparar con un hueco daría
+    // una diferencia inventada.
+    const medidas = reporte.measurements || null;
+    const previoConMedidas = (reportes || [])
+        .filter(r => r.id !== reporte.id && r.measurements && String(r.created_at) < String(reporte.created_at))
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
+    // Se lee con `valorAnterior`, que además de la medida por su nombre entiende los dos
+    // nombres viejos (cintura/cadera). Y lo que quede fuera de las diez -- pecho, brazo y
+    // muslo de los reportes de antes -- se pinta igual con su nombre: son medidas que el
+    // cliente mandó, y descartarlas en silencio es peor que enseñarlas etiquetadas.
+    const _VIEJAS = { chest: 'Pecho (medida antigua)', arm: 'Brazo (medida antigua)', thigh: 'Muslo (medida antigua)' };
+    const _DE_LAS_DIEZ = new Set([...MEDIDAS.map(m => m.key), 'waist', 'hip']);
+    const filasMedidas = medidas ? [
+        ...MEDIDAS
+            .map(m => ({ key: m.key, label: m.label, valor: valorAnterior(medidas, m.key) }))
+            .filter(f => f.valor != null),
+        ...Object.entries(medidas)
+            .filter(([k, v]) => v != null && v !== '' && !_DE_LAS_DIEZ.has(k))
+            .map(([k, v]) => ({ key: k, label: _VIEJAS[k] || k, valor: Number(v) })),
+    ] : [];
+    const rangos = [
+        ['Sueño', reporte.sleep_quality],
+        ['Energía', reporte.energy_level],
+        ['Estrés', reporte.stress_level],
+    ].filter(([, v]) => v != null);
+
+    return (
+        <Card className="bg-[#111] border-[#222] text-white" data-testid="decidir-reporte">
+            <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
+                        <FileText className="w-4 h-4" />Su último reporte
+                    </CardTitle>
+                    <div className="flex items-center gap-3">
+                        {importado && <CalmaBadge />}
+                        <span className={`text-[11px] ${viejo ? 'text-amber-500' : 'text-white/30'}`} data-testid="decidir-fecha">
+                            {_fechaCorta(fecha)} · {cuando}
+                        </span>
+                        {onVerReportes && (
+                            <button onClick={onVerReportes} className="text-[#FF671F] text-[11px] hover:underline"
+                                data-testid="decidir-ver-reportes">Ver todos</button>
+                        )}
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                {/* El peso y su variación: el número con el que arranca la decisión. */}
+                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                    <span className="text-2xl font-bold text-[#FF671F] tabular-nums">{String(reporte.weight).replace('.', ',')} kg</span>
+                    {dif != null && (
+                        <span className="text-sm tabular-nums" data-testid="decidir-variacion">
+                            <span className={dif > 0 ? 'text-red-400' : dif < 0 ? 'text-emerald-400' : 'text-white/50'}>
+                                {dif === 0 ? 'sin cambios' : `${dif > 0 ? '+' : ''}${String(dif).replace('.', ',')} kg`}
+                            </span>
+                            <span className="text-white/30"> desde los últimos macros ({String(pesoUltimoAjuste).replace('.', ',')} kg)</span>
+                        </span>
+                    )}
+                </div>
+
+                {/* Lo que contestó. Las tres preguntas nuevas primero: son las que mueven el
+                    ajuste. Los porcentajes y los rangos van detrás, que son contexto. */}
+                {(reporte.proximo_objetivo || reporte.viabilidad_ajuste || reporte.cumplimiento_entreno) && (
+                    <div className="space-y-1 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
+                        {reporte.proximo_objetivo && (
+                            <p className="text-white/50">Próximo objetivo{' '}
+                                <b className="text-[#FF671F] uppercase">{OBJETIVO_REPORTE[reporte.proximo_objetivo] || reporte.proximo_objetivo}</b></p>
+                        )}
+                        {reporte.viabilidad_ajuste && (
+                            <p className="text-white/50">Margen para ajustar{' '}
+                                <b className="text-white">{VIABILIDAD_REPORTE[reporte.viabilidad_ajuste] || reporte.viabilidad_ajuste}</b></p>
+                        )}
+                        {reporte.cumplimiento_entreno && (
+                            <p className="text-white/50">Entrenamientos{' '}
+                                <b className="text-white">{ENTRENO_REPORTE[reporte.cumplimiento_entreno] || reporte.cumplimiento_entreno}</b></p>
+                        )}
+                    </div>
+                )}
+
+                {(reporte.training_compliance != null || reporte.nutrition_compliance != null || rangos.length > 0) && (
+                    <div className="flex flex-wrap gap-2">
+                        {reporte.training_compliance != null && <MiniStat label="Entreno" value={`${reporte.training_compliance}%`} />}
+                        {reporte.nutrition_compliance != null && <MiniStat label="Nutrición" value={`${reporte.nutrition_compliance}%`} />}
+                        {rangos.map(([l, v]) => <MiniStat key={l} label={l} value={`${v}/10`} />)}
+                    </div>
+                )}
+
+                {/* Las medidas, con la diferencia contra el último reporte que las traiga.
+                    Plegadas: son diez y no siempre se leen, pero cuando se leen se leen aquí
+                    y no en otra pestaña. */}
+                {filasMedidas.length > 0 && (
+                    <details className="group">
+                        <summary className="cursor-pointer text-white/40 text-xs hover:text-white/70 select-none">
+                            Medidas del reporte ({filasMedidas.length})
+                            {previoConMedidas && <span className="text-white/25"> · contra las del {_fechaCorta(String(previoConMedidas.created_at).slice(0, 10))}</span>}
+                        </summary>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mt-2">
+                            {filasMedidas.map(m => {
+                                const prev = previoConMedidas?.measurements;
+                                const antes = prev ? (valorAnterior(prev, m.key) ?? (prev[m.key] != null ? Number(prev[m.key]) : null)) : null;
+                                const d = diferencia(m.valor, antes);
+                                return (
+                                    <div key={m.key} className="bg-[#0A0A0A] rounded p-2 border border-[#222]">
+                                        <p className="text-white/40 text-[10px] uppercase truncate" title={m.label}>{m.label}</p>
+                                        <p className="text-white text-sm font-bold tabular-nums">
+                                            {String(m.valor).replace('.', ',')}
+                                            {d && <span className={`ml-1 text-xs font-normal ${d.signo > 0 ? 'text-red-400' : d.signo < 0 ? 'text-emerald-400' : 'text-white/40'}`}>{d.texto}</span>}
+                                        </p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </details>
+                )}
+
+                {notas && (
+                    <p className="text-white/70 text-sm italic border-l-2 border-[#333] pl-3" data-testid="decidir-notas">"{notas}"</p>
+                )}
+            </CardContent>
+        </Card>
+    );
 };
 
 const EvaluacionBadge = ({ ev }) => (
@@ -2180,8 +2386,8 @@ const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar, borra
                                             <MacroCeldas m={h.training} prev={ant?.training} apagado={esBorrador} cambios={h.cambios?.entreno} />
                                             <MacroCeldas m={peri} prev={antPeri} showG={false} apagado={esBorrador} cambios={h.cambios?.perientreno} />
                                             <MacroCeldas m={h.rest} prev={ant?.rest} apagado={esBorrador} cambios={h.cambios?.descanso} />
-                                            <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]"><span className="block truncate" title={h.criterio || ''}>{h.criterio || '-'}</span></td>
-                                            <td className="px-2 py-2 text-white/50 text-xs max-w-[200px]"><span className="block truncate" title={nota}>{nota || '-'}</span></td>
+                                            <CeldaHistorial texto={h.criterio} hueco={_huecoExplicado(h)} testid="hist-criterio" />
+                                            <CeldaHistorial texto={nota} hueco={_huecoExplicado(h)} testid="hist-feedback" />
                                             <td className="px-2 py-2 whitespace-nowrap">
                                                 {onEvaluar && h.id ? (
                                                     <button onClick={() => onEvaluar(h)} title="Cómo salió la fase que abrió este ajuste"
