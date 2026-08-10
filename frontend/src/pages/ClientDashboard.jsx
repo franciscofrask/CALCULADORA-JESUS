@@ -837,6 +837,20 @@ const ClientLayout = () => {
     const { user, logout, profile, api, can, planUnpaid, myPlan } = useAuth();
     const navItems = NAV_ITEMS.filter(i => !i.cap || can(i.cap));
     const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
+    // EN EL TELÉFONO, «SEGUIMIENTO» ES LA ÚNICA PUERTA (decisión de Francisco, 10-08).
+    //
+    // El menú tenía «Reportes» y «Check-ins» como dos entradas distintas, y el cliente tenía
+    // que saber de antemano en cuál de las dos está lo que busca. Ahora las dos se sustituyen
+    // por una sola, «Seguimiento», que es la portada desde la que se entra a cada cosa: la
+    // revisión del mes, el check-in de hoy, la evolución y lo ya mandado.
+    //
+    // Solo en el teléfono: la barra lateral de escritorio sigue con sus once entradas, que
+    // ahí caben todas a la vez y no hay nada que simplificar.
+    const navItemsMovil = navItems
+        .filter(i => i.path !== '/dashboard/checkins')
+        .map(i => i.path === '/dashboard/reports'
+            ? { ...i, icon: TrendingUp, label: 'Seguimiento' }
+            : i);
     const navigate = useNavigate();
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === '1');
@@ -1063,7 +1077,7 @@ const ClientLayout = () => {
                             </button>
                         </div>
                         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-                            {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={false} unread={unread} onClick={() => setDrawerOpen(false)} />)}
+                            {navItemsMovil.map(item => <SidebarLink key={item.path} item={item} collapsed={false} unread={unread} onClick={() => setDrawerOpen(false)} />)}
                         </nav>
                         <div className="p-3 border-t border-white/10 space-y-2">
                             <UserChip />
