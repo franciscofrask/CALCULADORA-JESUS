@@ -381,7 +381,9 @@ const NutritionPage = () => {
             URL.revokeObjectURL(url);
             toast.success('PDF descargado');
         } catch (err) {
-            toast.error(err.message || 'Error exportando PDF');
+            // El mensaje de la excepción va a la consola, no a la cara del cliente.
+            console.error('[PDF de la dieta]', err);
+            toast.error('No hemos podido generar el PDF. Inténtalo de nuevo.');
         }
         setExportingPdf(false);
     };
@@ -1513,7 +1515,10 @@ const NutritionPage = () => {
             toast.success(`Copiada a ${formatDate(copyDate)}`);
             setCopyModalOpen(false);
             setCopyDate('');
-        } catch (err) { toast.error(err.message || 'Error copiando dieta'); }
+        } catch (err) {
+            console.error('[copiar dieta]', err);
+            toast.error('No hemos podido copiar la dieta. Inténtalo de nuevo.');
+        }
     };
 
     // ── Dietas favoritas (Calma guardarFavorita / favoritas) ──────────────────
@@ -1842,7 +1847,11 @@ const NutritionPage = () => {
                     <p className="text-sm text-muted-foreground mb-5">
                         {sinMacros
                             ? 'Sin macros no podemos repartir objetivos entre tus comidas. Calcúlalos en un minuto con la calculadora, o pídeselos a tu entrenador.'
-                            : `Sin el reparto, las comidas no tienen objetivo. Inténtalo de nuevo. (${distribError})`}
+                            /* Aquí se pegaba `distribError` entre paréntesis, que es el mensaje
+                               de la excepción: «Request failed with status code 500», «Network
+                               Error». Al cliente no le dice nada y no puede hacer nada con ello.
+                               Sigue yendo entero a la consola, que es donde sirve. */
+                            : 'Sin el reparto, las comidas no tienen objetivo. Inténtalo de nuevo en un momento.'}
                     </p>
                     <div className="flex flex-col gap-2">
                         {sinMacros ? (
