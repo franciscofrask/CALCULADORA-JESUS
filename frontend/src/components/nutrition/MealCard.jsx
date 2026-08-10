@@ -7,12 +7,31 @@ import {
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
-// EN EL TELÉFONO NO HAY DISTINTIVOS DE ESTADO en las comidas: ni el punto de color, ni el
-// «falta 12» / «sobra 3» al lado de cada macro. Decisión de Francisco, y tiene sentido: los
-// números ya están ahí -- «40.0/59g» dice por sí solo que faltan 19 --, y el aviso repetía
-// en palabras lo que la resta ya dice, tres veces por comida y cinco comidas por pantalla.
-//
-// En escritorio se quedan: esa vista todavía no se ha rediseñado y ahí el sitio no aprieta.
+/**
+ * EN QUÉ PUNTO ESTÁ ESTA COMIDA, con la palabra que usa el documento del 10-08.
+ *
+ * «Sin hacer», «Válida» y «Cuadrada» son las suyas, y «Montar» se cambió por «Sin hacer»
+ * a petición de Jesús. Van al final de la fila, que es lo que convierte la lista en algo
+ * que se va tachando.
+ *
+ * La app distingue MENOS estados que el documento: `getMealStatus` da por cuadrada todo lo
+ * que caiga dentro de ±4 g en los tres macros, y el documento separa «Cuadrada» (clavada)
+ * de «Válida» (dentro del margen pero no clavada). Esa distinción se hace aquí, con los
+ * mismos números que ya usa el marcador de dentro de la comida, para no inventar un
+ * criterio nuevo: clavado es diferencia menor de medio gramo.
+ *
+ * En el perientreno la grasa no cuenta, igual que en el resto del cálculo.
+ */
+const estadoDeLaComida = (status, target, served, cuantosAlimentos) => {
+    if (!cuantosAlimentos) return { texto: 'Sin hacer', cls: 'text-muted-foreground' };
+    if (status === 'sobra') return { texto: 'Te pasas', cls: 'text-red-500' };
+    if (status === 'falta') return { texto: 'Te falta', cls: 'text-amber-600 dark:text-amber-400' };
+    const dif = ['P', 'H', 'G'].map(m => Math.abs((target[m] || 0) - (served[m] || 0)));
+    const clavada = dif.every(d => d < 0.5);
+    return clavada
+        ? { texto: 'Cuadrada', cls: 'text-emerald-600 dark:text-emerald-400' }
+        : { texto: 'Válida', cls: 'text-emerald-600/70 dark:text-emerald-400/70' };
+};
 
 const fmtHalf = (x) => (Math.round((x || 0) * 2) / 2).toString();
 const fmt1 = (x) => { const r = Math.round((x || 0) * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
@@ -300,6 +319,15 @@ const MealCard = ({
                     </p>
                 </div>
             </div>
+
+            {/* CÓMO VA ESTA COMIDA, CON SU PALABRA (documento del 10-08, pantalla 9): la
+                lista se lee de arriba abajo como algo que se va tachando, y para eso cada
+                fila tiene que decir en qué punto está. Solo en el teléfono: en escritorio
+                está el punto de color de siempre. */}
+            <span className={`lg:hidden text-[15px] font-bold flex-shrink-0 ml-auto ${estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length).cls}`}
+                data-testid={`estado-comida-${mealKey}`}>
+                {estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length).texto}
+            </span>
             {/* Con el día entero desplegado el modo va aquí, en pequeño: la banda de
                 "Modo de cálculo" repetida seis veces no cabía, pero esconderla dejaba
                 sin Automático/Manual a las comidas que aún no tienen alimentos. */}
