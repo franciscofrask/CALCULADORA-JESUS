@@ -5,10 +5,11 @@ import { MEDIDAS } from '../lib/medidas';
 import { useEsTelefono } from '../lib/esTelefono';
 import { toast } from 'sonner';
 import {
-    Activity, TrendingUp, CheckCircle2, Smile, Frown, Meh,
-    Zap, Apple, Dumbbell, Scale, Send, ChevronDown, ChevronUp, Calendar,
+    Activity, TrendingUp, Smile, Frown, Meh,
+    Apple, Dumbbell, Scale, Send, ChevronDown, ChevronUp, Calendar,
     Camera, Trash2, Loader2,
 } from 'lucide-react';
+import CheckInDiario from '../components/reports/CheckInDiario';
 
 const ORANGE = '#FF671F';
 const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
@@ -235,7 +236,8 @@ const CheckInsPage = () => {
     const enTelefono = useEsTelefono();
     const [otrosAbiertos, setOtrosAbiertos] = useState(false);
 
-    const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null, comido_hoy: '' });
+    // El estado del diario ya no vive aquí: se lo lleva CheckInDiario, que es el que lo pinta
+    // en esta pantalla y en la portada de Seguimiento.
     const [weekly, setWeekly] = useState({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
     const [monthly, setMonthly] = useState({ weight: '', body_fat_pct: '', goals_progress: '', challenges: '', notes: '',
         ...Object.fromEntries(MEDIDAS.map(m => [m.key, ''])) });
@@ -275,23 +277,6 @@ const CheckInsPage = () => {
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
     const todayDaily = checkins.find(c => c.type === 'daily' && isSameDay(c.created_at));
-
-    const submitDaily = async () => {
-        if (daily.energy == null || daily.hunger_anxiety == null) {
-            return toast.error('Dinos cómo vas de energía y de hambre');
-        }
-        setSubmitting(true);
-        try {
-            await api.post('/checkins', {
-                type: 'daily', ...daily,
-                comido_hoy: (daily.comido_hoy || '').trim() || null,
-            });
-            toast.success('Check-in diario enviado');
-            setDaily({ energy: null, hunger_anxiety: null, comido_hoy: '' });
-            fetchAll();
-        } catch { toast.error('Error al enviar check-in'); }
-        finally { setSubmitting(false); }
-    };
 
     const submitWeekly = async () => {
         if (!weekly.weight) return toast.error('Indica tu peso');
@@ -370,85 +355,21 @@ const CheckInsPage = () => {
                 </div>
             </header>
 
-            {/* Diario */}
-            {todayDaily ? (
-                <Card className="p-4 border-l-4 border-l-emerald-500 flex items-start gap-3" data-testid="checkins-content">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                    <div>
-                        <p className="font-bold text-foreground">Check-in de hoy hecho</p>
-                        <p className="text-sm text-foreground/60 mt-0.5">
-                            Energía {todayDaily.energy}/5
-                            {todayDaily.hunger_anxiety != null && ` · Hambre ${todayDaily.hunger_anxiety}/5`}
-                            {/* La dieta la rellena el sistema con lo registrado, no él. */}
-                            {todayDaily.nutrition_followed != null && (todayDaily.nutrition_followed ? ' · Dieta registrada' : ' · Sin dieta registrada')}
-                        </p>
-                    </div>
-                </Card>
-            ) : (
-                <Card className="overflow-hidden" data-testid="checkins-content">
+            {/* EL CHECK-IN DIARIO, QUE AHORA VIVE EN UN SOLO SITIO.
+                El formulario se fue a components/reports/CheckInDiario.jsx para poder
+                ponerlo tambien dentro de Seguimiento, en la tarjeta de «Hoy · 10 segundos»,
+                y que se rellene ahi sin cambiar de pantalla. Aqui se pinta el mismo. */}
+            <Card className={`overflow-hidden ${todayDaily ? 'p-4 border-l-4 border-l-emerald-500' : ''}`} data-testid="checkins-content">
+                {!todayDaily && (
                     <div className="px-5 pt-5 pb-3 flex items-center gap-2">
                         <Activity className="w-4 h-4 text-brand" />
                         <p className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Check-in diario · 10 segundos</p>
                     </div>
-                    <div className="px-5 pb-5 space-y-5">
-                        {/* DOS campos, ni uno más (documento 31-07, partes 6 y 7.2): solo lo
-                            que no está en ningún dato. El ánimo salió, y la dieta y el
-                            entreno no se preguntan porque ya constan en lo registrado. */}
-                        <div>
-                            <span className="text-sm text-foreground/70 mb-2 block">Nivel de energía</span>
-                            <div className="flex gap-2">
-                                {[1, 2, 3, 4, 5].map(v => {
-                                    const active = daily.energy === v;
-                                    return (
-                                        <button key={v} type="button" onClick={() => setDaily({ ...daily, energy: v })}
-                                            data-testid={`daily-energy-${v}`}
-                                            className={`flex-1 py-3 rounded-xl border transition-all flex items-center justify-center gap-1 font-bold text-sm ${active ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-muted text-foreground/50 hover:border-white/30'}`}>
-                                            <Zap className="w-3.5 h-3.5" />{v}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <div>
-                            <span className="text-sm text-foreground/70 mb-2 block">Ansiedad y hambre</span>
-                            <div className="flex gap-2">
-                                {[1, 2, 3, 4, 5].map(v => {
-                                    const active = daily.hunger_anxiety === v;
-                                    return (
-                                        <button key={v} type="button" onClick={() => setDaily({ ...daily, hunger_anxiety: v })}
-                                            data-testid={`daily-hunger-${v}`}
-                                            className={`flex-1 py-3 rounded-xl border transition-all flex items-center justify-center gap-1 font-bold text-sm ${active ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-muted text-foreground/50 hover:border-white/30'}`}>
-                                            {v}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <p className="text-[11px] text-foreground/40 mt-1.5">1 = nada · 5 = mucha</p>
-                        </div>
-                        {/* Lo que ha comido de verdad, con sus palabras. No es su dieta: esa ya
-                            está en la app. Es el picoteo, la cerveza y el trozo de tarta que no
-                            aparecen en ningún sitio, y que son justo lo que explica por qué
-                            alguien coge peso sin saber por qué. */}
-                        <div>
-                            <span className="text-sm text-foreground/70 mb-2 block">¿Qué has comido hoy?</span>
-                            <textarea
-                                rows={3}
-                                value={daily.comido_hoy}
-                                onChange={e => setDaily({ ...daily, comido_hoy: e.target.value })}
-                                data-testid="daily-comido"
-                                placeholder="Cuéntalo a tu manera, sin pesar nada. Incluye lo que picaste entre horas."
-                                className={inputCls + ' resize-none'} />
-                            <p className="text-[11px] text-foreground/40 mt-1.5">
-                                Opcional, pero es lo que más ayuda a entender cómo te va.
-                            </p>
-                        </div>
-                        <button onClick={submitDaily} disabled={submitting}
-                            className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
-                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar check-in
-                        </button>
-                    </div>
-                </Card>
-            )}
+                )}
+                <div className={todayDaily ? '' : 'px-5 pb-5'}>
+                    <CheckInDiario api={api} hecho={todayDaily} onEnviado={fetchAll} inputCls={inputCls} />
+                </div>
+            </Card>
 
             {/* EL SEMANAL Y EL MENSUAL, DETRÁS DE UNA LÍNEA EN EL TELÉFONO.
                 El documento del 10-08 los quita del todo: «desaparecen el check-in semanal y

@@ -12,6 +12,7 @@ import {
 import InformeMensual from '../components/reports/InformeMensual';
 import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import TresFotos from '../components/reports/TresFotos';
+import CheckInDiario from '../components/reports/CheckInDiario';
 
 const ORANGE = '#FF671F';
 
@@ -114,7 +115,58 @@ const TarjetaSeguimiento = ({ cuando, titulo, sub, cta, onClick, tono = 'gris', 
     );
 };
 
-const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial, onCheckins }) => {
+/**
+ * LA TARJETA DE HOY, QUE NO LLEVA A NINGUNA PARTE.
+ *
+ * Es la única de las cuatro que se resuelve aquí dentro. El check-in diario son dos escalas
+ * y una frase: si se le promete que son diez segundos, cambiar de pantalla ya se come dos, y
+ * volver otras dos. Se toca, se despliega debajo y se envía sin moverse (decisión del 10-08).
+ *
+ * Las otras tres sí abren: la revisión del mes son varios minutos -- peso, diez medidas,
+ * huecos, notas, tres preguntas y tres fotos -- y solo se puede rellenar con su ventana
+ * abierta; evolución e historial son de consulta. Meterlo todo en la misma vista es
+ * exactamente como se llegó a la pantalla de 3.770 px que había que arreglar.
+ */
+const TarjetaHoy = ({ api, hecho, onEnviado, destacada }) => {
+    const [abierta, setAbierta] = useState(false);
+
+    // Ya lo mandó: se le dice lo que contestó y no se le vuelve a ofrecer el formulario.
+    if (hecho) {
+        return (
+            <div className="w-full rounded-2xl p-4 border border-border bg-card" data-testid="seg-hoy">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Hoy · hecho</p>
+                <div className="mt-2">
+                    <CheckInDiario api={api} hecho={hecho} />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={`w-full rounded-2xl border transition-colors ${
+            destacada ? 'border-brand/50 bg-brand/5' : 'border-border bg-card'}`} data-testid="seg-hoy">
+            <button onClick={() => setAbierta(a => !a)} data-testid="seg-hoy-abrir"
+                className="w-full text-left p-4">
+                <p className={`text-xs font-bold uppercase tracking-wider ${destacada ? 'text-brand' : 'text-muted-foreground'}`}>
+                    Hoy · 10 segundos
+                </p>
+                <p className="text-lg font-bold text-foreground mt-1">¿Cómo vas hoy?</p>
+                <p className="text-[15px] text-muted-foreground mt-0.5">Energía, hambre y qué has comido.</p>
+                <span className={`inline-flex items-center gap-1 mt-3 text-sm font-bold ${destacada ? 'text-brand' : 'text-foreground/70'}`}>
+                    {abierta ? 'Cerrar' : 'Rellenar'}
+                    <ChevronRight className={`w-4 h-4 transition-transform ${abierta ? 'rotate-90' : ''}`} />
+                </span>
+            </button>
+            {abierta && (
+                <div className="px-4 pb-4 pt-1">
+                    <CheckInDiario api={api} onEnviado={onEnviado} inputCls={inputCls} />
+                </div>
+            )}
+        </div>
+    );
+};
+
+const PortadaSeguimiento = ({ api, windowState, checkinDeHoy, onCheckinEnviado, onRevision, onEvolucion, onHistorial, onCheckins }) => {
     // Le toca reporte y no lo ha mandado: es lo único que va arriba y en naranja.
     const tocaRevision = !!windowState?.due && !windowState?.submitted;
     const yaMandado = !!windowState?.submitted;
@@ -133,14 +185,15 @@ const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial,
                 tono={tocaRevision ? 'ahora' : 'gris'}
                 onClick={onRevision} />
 
-            <TarjetaSeguimiento
-                testid="seg-hoy"
-                cuando="Hoy · 10 segundos"
-                titulo="¿Cómo vas hoy?"
-                sub="Energía, hambre y qué has comido."
-                cta="Rellenar"
-                tono={tocaRevision ? 'gris' : 'ahora'}
-                onClick={onCheckins} />
+            <TarjetaHoy api={api} hecho={checkinDeHoy} onEnviado={onCheckinEnviado}
+                destacada={!tocaRevision} />
+
+            {/* La pantalla de Check-ins sigue existiendo: ahí están el semanal, el mensual y
+                los últimos días. Desde aquí es un enlace, no una de las cuatro tarjetas. */}
+            <button onClick={onCheckins} data-testid="seg-mas-checkins"
+                className="w-full text-center text-sm font-semibold text-muted-foreground hover:text-foreground py-1">
+                Ver mis últimos check-ins
+            </button>
 
             <TarjetaSeguimiento
                 testid="seg-evolucion"
@@ -223,6 +276,18 @@ const ReportsPage = () => {
     // que puntúe su propio cumplimiento (documento, parte 7.1).
     const [huecos, setHuecos] = useState(null);
     const [huecosResp, setHuecosResp] = useState({});
+    // El check-in diario se rellena aquí mismo, en la portada, sin cambiar de pantalla.
+    const [checkins, setCheckins] = useState([]);
+    const hoyISO = new Date().toISOString().slice(0, 10);
+    const checkinDeHoy = checkins.find(
+        c => c.type === 'daily' && c.created_at && new Date(c.created_at).toISOString().slice(0, 10) === hoyISO
+    );
+    const recargarCheckins = async () => {
+        try {
+            const r = await api.get('/checkins');
+            setCheckins(Array.isArray(r.data) ? r.data : []);
+        } catch { /* si falla, la tarjeta se queda como está */ }
+    };
     // Las medidas solo van en el mensual, y allí van LAS DIEZ, todas visibles y todas
     // obligatorias (06-08-2026). Ya no hay nada plegado que desplegar.
 
@@ -266,12 +331,15 @@ const ReportsPage = () => {
 
     const fetchData = async () => {
         try {
-            const [reportsRes, evolutionRes, dueRes, prevRes, huecosRes] = await Promise.all([
+            const [reportsRes, evolutionRes, dueRes, prevRes, huecosRes, checkinsRes] = await Promise.all([
                 api.get('/reports'),
                 api.get('/reports/evolution'),
                 api.get('/reports/due').catch(() => ({ data: { window: null } })),
                 api.get('/reports/previous').catch(() => ({ data: null })),
                 api.get('/reports/confirmacion-huecos').catch(() => ({ data: null })),
+                // Para saber si el de hoy ya está hecho, que es lo que decide si la tarjeta
+                // de «Hoy» ofrece el formulario o cuenta lo que contestó.
+                api.get('/checkins').catch(() => ({ data: [] })),
             ]);
             setReports(reportsRes.data);
             setHasMore(reportsRes.data.length === 50);
@@ -279,6 +347,7 @@ const ReportsPage = () => {
             setWindowState(dueRes.data?.window || null);
             setPrev(prevRes.data && Object.keys(prevRes.data).length ? prevRes.data : null);
             setHuecos(huecosRes.data || null);
+            setCheckins(Array.isArray(checkinsRes.data) ? checkinsRes.data : []);
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
@@ -424,7 +493,10 @@ const ReportsPage = () => {
                 Solo en el teléfono. En escritorio siguen las tres pestañas de siempre. */}
             {enTelefono && !seccionAbierta && (
                 <PortadaSeguimiento
+                    api={api}
                     windowState={windowState}
+                    checkinDeHoy={checkinDeHoy}
+                    onCheckinEnviado={recargarCheckins}
                     onRevision={() => setSeccionAbierta('form')}
                     onEvolucion={() => setSeccionAbierta('evolution')}
                     onHistorial={() => setSeccionAbierta('history')}
