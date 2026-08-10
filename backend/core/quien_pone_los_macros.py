@@ -28,6 +28,36 @@ Lo segundo se responde igual que en el punto 4.1, con `core/macros_de_quien`: mi
 salio su ultimo apunte del historial. Un `quiz_alta` no cuenta como que se los puso alguien.
 
 Los de `sin_ajuste` no ajustan nunca: ese plan no incluye ajustes, y ahi no hay matiz.
+
+LOS CAMINOS DE REBOTE (segunda vuelta, 09-08)
+
+El cerrojo se puso primero en los dos sitios donde el cliente toca sus macros A PROPOSITO:
+`PUT /macros` y `POST /clients/ajustar-macros`. Pero hay cuatro mas que los reescriben de
+rebote, haciendo el cliente otra cosa:
+
+    PUT  /clients/profile           cambia su peso, sexo, grasa u objetivo -> recalcula
+    POST /clients/questionnaire     repite el cuestionario del alta        -> recalcula
+    POST /clients/mi-cuerpo         vuelve a pasar por «Mi cuerpo»         -> recalcula
+    POST /calculator/targets/apply  calcula y aplica, sin mirar nada
+
+Los tres primeros se guardaban con `macros_source != "manual"`, y eso NO es el mismo cerrojo:
+la calculadora del panel del coach (`POST /admin/clients/{id}/calculator/apply`) deja
+`macros_source: "auto"`, asi que justo los clientes a los que el coach les puso los macros
+desde su calculadora quedaban abiertos. El cuarto no miraba ni eso: con un peso y un objetivo
+cualquier cliente autenticado se machacaba los macros de su entrenador.
+
+Medido en produccion el 09-08 sobre 184 perfiles activos: 180 son de plan personalizado, 176
+de ellos con `macros_source: "manual"` (a salvo de los tres primeros pero NO del cuarto) y 4
+con "auto" (abiertos por todos). O sea: por el camino de la calculadora estaban expuestos los
+180, y por los otros tres, 4 hoy y todos los que el coach ajustara desde su calculadora a
+partir de manana.
+
+La diferencia de trato entre unos y otros es a proposito:
+
+  - En los caminos DE PROPOSITO se devuelve 403 con el motivo escrito para el cliente.
+  - En los DE REBOTE no: el cliente esta haciendo algo legitimo (apuntar su peso nuevo). Se
+    le guarda lo que venia a guardar y lo unico que no pasa es el recalculo. Un 403 ahi le
+    impediria actualizar su propio peso, que no es lo que dice el punto.
 """
 from typing import Any, Dict, Optional, Tuple
 
@@ -56,3 +86,16 @@ async def puede_ajustarlos(db, perfil: Dict[str, Any]) -> Tuple[bool, Optional[s
 
     # Todavia nadie se los ha puesto: son los de su alta y puede recalcularlos.
     return True, None
+
+
+async def exigir_que_pueda(db, perfil: Dict[str, Any]) -> None:
+    """Cierra la puerta con un 403 y el motivo escrito para el cliente.
+
+    Para los caminos en los que el cliente viene expresamente a tocarse los macros. En los de
+    rebote no se usa esto, sino `puede_ajustarlos` a secas para saltarse el recalculo.
+    """
+    from fastapi import HTTPException
+
+    puede, por_que_no = await puede_ajustarlos(db, perfil)
+    if not puede:
+        raise HTTPException(status_code=403, detail=por_que_no)

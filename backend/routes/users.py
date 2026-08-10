@@ -119,8 +119,19 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
         update_data.pop(campo, None)
 
     # Auto-calculate macros if body data is provided and macros_source is not 'manual'
+    #
+    # PERO NO SI SUS MACROS LOS LLEVA SU ENTRENADOR (punto 4.10, segunda vuelta). Este es un
+    # camino de rebote: el cliente viene a apuntar su peso nuevo y de paso se le recalculaban
+    # los macros por encima de los que le habia puesto una persona. `macros_source != "manual"`
+    # no bastaba de cerrojo, porque la calculadora del panel del coach deja "auto".
+    #
+    # No se devuelve 403: guardar su peso es legitimo y es a lo que venia. Lo unico que no
+    # pasa es el recalculo.
+    from core.quien_pone_los_macros import puede_ajustarlos
+    puede_recalcular, _ = await puede_ajustarlos(db, profile)
+
     body_fields = {"weight", "sex", "goal", "body_fat"}
-    if body_fields & set(update_data.keys()):
+    if puede_recalcular and (body_fields & set(update_data.keys())):
         # Merge with existing profile data
         peso = update_data.get("weight") or profile.get("weight")
         sexo = update_data.get("sex") or profile.get("sex")
@@ -260,6 +271,14 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         update["ajustes_macros"] = ajustes
 
     # Calcular y aplicar macros con el motor v2 (no pisar si el coach ya los fijó manualmente).
+    #
+    # Camino de rebote del punto 4.10: los 160 que vinieron de Calma nunca pasaron por este
+    # cuestionario y ya tienen macros puestos por Jesús, así que el día que lo rellenen no se
+    # les puede recalcular por encima. Se guardan sus respuestas -- que valen para el perfil y
+    # para el agente -- y los macros se quedan como estaban.
+    from core.quien_pone_los_macros import puede_ajustarlos
+    puede_recalcular, _ = await puede_ajustarlos(db, profile)
+
     resultado = None
     try:
         resultado = calcular_macros_v2(
@@ -270,7 +289,7 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         targets = {"macros": resultado["macros"],
                    "multiplicadores": multiplicadores_de(resultado)}
         profile_macros = targets_to_profile_macros(targets)
-        if profile.get("macros_source") != "manual":
+        if puede_recalcular and profile.get("macros_source") != "manual":
             update["macros_training"] = profile_macros["macros_training"]
             update["macros_rest"] = profile_macros["macros_rest"]
             update["macros_periworkout"] = profile_macros["macros_periworkout"]
@@ -424,7 +443,15 @@ async def calcular_mi_cuerpo(data: dict, user = Depends(get_current_user)):
     # es un extra -- sin macros no hay a qué cuadrar los menús, y el momento mágico
     # ("estas son comidas que puedes comer hoy") se quedaría vacío, que es justo la parte
     # que convence. La app queda usable desde aquí.
-    if profile.get("macros_source") != "manual":
+    #
+    # Salvo que sus macros los lleve su entrenador (punto 4.10): esto es el regalo del acceso
+    # gratis, pensado para quien llega sin nada. A un cliente de plan personalizado que ya
+    # tiene macros puestos se le enseña su composición igual -- que es a lo que venía -- pero
+    # no se le tocan los números.
+    from core.quien_pone_los_macros import puede_ajustarlos
+    puede_recalcular, _ = await puede_ajustarlos(db, profile)
+
+    if puede_recalcular and profile.get("macros_source") != "manual":
         try:
             targets = calcular_targets(peso, sexo, bf, fase)
             m = targets_to_profile_macros(targets)

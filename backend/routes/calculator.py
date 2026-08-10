@@ -2382,6 +2382,18 @@ async def calculate_and_apply_targets(data: dict, user = Depends(get_current_use
         raise HTTPException(status_code=400, detail="Faltan campos: peso, sexo, porcentaje_graso, objetivo")
 
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+
+    # ESTE ERA EL AGUJERO GRANDE DEL 4.10. Los demás caminos por lo menos miraban
+    # `macros_source != "manual"`; éste no miraba nada. Con un peso y un objetivo, cualquier
+    # cliente autenticado se machacaba los macros que le había puesto su entrenador -- los 180
+    # de plan personalizado que hay hoy en producción, no sólo los cuatro con "auto".
+    #
+    # Aquí sí es un 403 con su motivo: el cliente viene expresamente a aplicarse unos macros,
+    # no de rebote, así que hay que decírselo en vez de callar y no hacer nada.
+    if profile:
+        from core.quien_pone_los_macros import exigir_que_pueda
+        await exigir_que_pueda(db, profile)
+
     ajustes_guardados = profile.get("ajustes_macros")
     try:
         if ajustes_guardados:

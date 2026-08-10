@@ -3556,3 +3556,76 @@ Dos salidas, y las dos las tiene que abrir Francisco:
      una migración.
 
 Mientras tanto el 4.15 se queda a medias a propósito: catálogo sí, asignación por cliente no.
+
+## 4.10 - Segunda vuelta: el cerrojo estaba en dos puertas y la casa tenía seis
+
+La primera vuelta cerró los dos sitios por los que el cliente viene **a propósito** a tocarse
+los macros: `PUT /macros` y `POST /clients/ajustar-macros`. Y la pantalla «Ajustar macros» del
+front ya no le enseña ni el cuestionario ni el botón de Guardar cuando sus macros los lleva su
+entrenador.
+
+Al repasarlo aparecieron **cuatro caminos más** que los reescriben de rebote, haciendo el
+cliente otra cosa:
+
+| Camino | Qué hacía el cliente | Cerrojo que tenía |
+|---|---|---|
+| `PUT /clients/profile` | apuntar su peso nuevo | `macros_source != "manual"` |
+| `POST /clients/questionnaire` | rellenar el cuestionario del alta | `macros_source != "manual"` |
+| `POST /clients/mi-cuerpo` | volver a pasar por «Mi cuerpo» | `macros_source != "manual"` |
+| `POST /calculator/targets/apply` | aplicarse unos macros | **ninguno** |
+
+**Y `macros_source` no valía de cerrojo.** Describe CÓMO se calcularon los macros, no QUIÉN
+los decidió, y no son la misma pregunta. La calculadora del panel del coach
+(`POST /admin/clients/{id}/calculator/apply`) deja `macros_source: "auto"`, así que justo los
+clientes a los que Jesús les pone los macros desde su calculadora eran los que quedaban
+abiertos. El cuarto camino no miraba ni eso.
+
+**Medido en producción el 09-08**, sobre 184 perfiles activos:
+
+    de plan personalizado ............................................ 180
+      con macros de una persona y macros_source "manual" ............. 176   a salvo de los tres primeros
+      con macros de una persona y macros_source "auto" ...............   4   abiertos por los cuatro
+      sin nadie detrás todavía (macros de su alta) ...................   3   pueden, y deben poder
+    de autogestión o sin_ajuste .......................................   1
+
+O sea: por el camino de la calculadora estaban expuestos **los 180**, no los 4. Con un peso y
+un objetivo, cualquier cliente con su token se machacaba lo que le había puesto su entrenador.
+
+**Cómo queda.** La regla vive en un solo sitio, `core/quien_pone_los_macros`, y ahora tiene dos
+puertas según el caso:
+
+  - `exigir_que_pueda(db, perfil)` -> **403 con el motivo escrito para el cliente**. Para los
+    caminos de propósito, incluido el cuarto: si viene expresamente a aplicarse unos macros hay
+    que decírselo, no callar y no hacer nada.
+  - `puede_ajustarlos(db, perfil)` a secas -> **se salta el recálculo, sin error**. Para los
+    tres de rebote: el cliente está apuntando su peso, que es legítimo y es a lo que venía. Un
+    403 ahí le impediría actualizar su propio peso, que no es lo que dice el punto.
+
+**Probado contra la API de verdad** (`_probar_410`, backend local): se le pone plan `silver`,
+el coach le aplica macros desde su calculadora -- el camino que deja "auto" -- y el cliente
+intenta machacarlos por los seis sitios:
+
+    PUT  /clients/profile (cambia su peso a 95) ....... 200  macros intactos
+    POST /clients/mi-cuerpo .......................... 200  macros intactos
+    POST /calculator/targets/apply ................... 403  "Tus macros los lleva tu entrenador..."
+    POST /clients/questionnaire ...................... 409  macros intactos
+    PUT  /macros ..................................... 403  macros intactos
+    POST /clients/ajustar-macros ..................... 403  macros intactos
+    y en plan de autogestión SÍ se los aplica ........ 200  (200, 160, 60)
+
+Lo último importa tanto como lo demás: el cerrojo no puede cerrarle la calculadora al que sí
+la tiene incluida en su plan.
+
+17 tests nuevos en `backend/tests/test_quien_pone_los_macros.py`, cuatro de ellos comprobando
+sobre el propio código que ninguno de los seis caminos se queda sin preguntar en un refactor.
+
+**Dos cosas que quedan apuntadas, no arregladas** (ninguna afecta al cliente hoy):
+
+  - `POST /calculator/targets/apply` escribe el perfil pero **no versiona en `macro_history`**,
+    y `GET /macros` resuelve por historial. No lo llama nadie desde el front -- sólo se llega
+    por API -- así que hoy no se ve; si algún día se usa, hay que versionarlo.
+  - La calculadora del coach sigue dejando `macros_source: "auto"`. Se deja como está a
+    propósito: quien manda ahora es el `origen` del historial, y un test avisa si eso cambia.
+
+Lo que Jesús dejó para la **Parte 6** del documento sigue sin llegar. Esto es el agujero, no la
+pantalla: lo que la Parte 6 diga sobre qué ve el cliente y cómo pide un cambio se monta encima.
