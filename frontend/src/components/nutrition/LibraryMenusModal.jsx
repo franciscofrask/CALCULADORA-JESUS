@@ -405,8 +405,14 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                                 // izquierda y en la tipografía de datos, que
                                                 // tiene todas las cifras del mismo ancho, las
                                                 // dos columnas quedan a plomo.
-                                                <li key={i} className="flex items-baseline gap-3 text-[17px]">
-                                                    <span className="font-data font-bold text-brand-orange whitespace-nowrap w-[72px] flex-shrink-0">{it.cantidad_display}</span>
+                                                // `min-w` y no `w`: con la columna fija en 72 px,
+                                                // un «1 ud» dejaba un hueco enorme hasta el
+                                                // nombre. Así la columna solo reserva lo justo
+                                                // para que los casos normales queden a plomo, y
+                                                // una cantidad larga empuja el nombre en vez de
+                                                // abrir un claro en todas las demás filas.
+                                                <li key={i} className="flex items-baseline gap-2 text-[17px]">
+                                                    <span className="font-data font-bold text-brand-orange whitespace-nowrap min-w-[46px] flex-shrink-0">{it.cantidad_display}</span>
                                                     <span className="text-foreground leading-snug">{it.nombre}</span>
                                                 </li>
                                             ))}
