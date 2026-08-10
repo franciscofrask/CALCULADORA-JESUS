@@ -290,8 +290,13 @@ const MealCard = ({
                         <StatusDot status={status} className="hidden lg:inline-block flex-shrink-0" />
                         {isLocked && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </div>
+                    {/* Sin la palabra «Objetivo» en el teléfono: en una lista de cinco
+                        comidas se repite cinco veces para decir lo que ya se entiende por
+                        dónde está -- los números debajo del nombre de la comida son lo que
+                        hay que meter en ella. En escritorio se queda. */}
                     <p className="text-[17px] text-foreground/70 font-data mt-1">
-                        Objetivo: {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
+                        <span className="hidden lg:inline">Objetivo: </span>
+                        {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
                     </p>
                 </div>
             </div>
