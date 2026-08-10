@@ -12,7 +12,9 @@ const PERI_OPTIONS = [
     { value: 'intra_post', label: 'Intra + Post' },
     { value: 'solo_post', label: 'Solo Post' },
     { value: 'solo_intra', label: 'Solo Intra' },
-    { value: 'sin_peri', label: 'Sin peri' },
+    // «Perientreno», no «peri» (punto 4.18): es el desplegable donde el cliente elige, así
+    // que si aquí sale abreviado no hay ningún otro sitio donde aprenda cómo se llama.
+    { value: 'sin_peri', label: 'Sin perientreno' },
 ];
 
 const COMIDAS_OPTIONS = [

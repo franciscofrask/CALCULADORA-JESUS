@@ -190,7 +190,8 @@ const DaySummary = ({
             <div className="px-4 sm:px-5 pb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border pt-2.5">
                 {tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri' ? (
                     <span className="text-[11px] text-muted-foreground font-data">
-                        Peri {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
+                        {/* «Perientreno», no «Peri» (punto 4.18). */}
+                        Perientreno {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
                     </span>
                 ) : <span />}
                 <div className="flex items-center gap-2.5 flex-wrap">

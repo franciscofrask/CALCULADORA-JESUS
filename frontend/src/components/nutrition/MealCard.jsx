@@ -249,13 +249,18 @@ const MealCard = ({
                 <div className={`${denso ? 'w-9 h-9 text-sm' : 'w-12 h-12 text-lg'} rounded-xl flex items-center justify-center flex-shrink-0 font-heading font-bold ${isPeri ? 'bg-brand/10 text-brand' : 'bg-muted text-foreground'}`}>
                     {isPeri ? <Zap className={denso ? 'w-4 h-4' : 'w-5 h-5'} /> : info.shortName}
                 </div>
+                {/* EL TEXTO, MÁS GRANDE. Esta fila es lo que el cliente recorre de arriba
+                    abajo para saber qué le queda por hacer, y el objetivo -- los tres
+                    números que decide todo lo demás -- iba en 12 px, más pequeño que
+                    cualquier otra cosa de la pantalla. El nombre sube a 20 px y el objetivo
+                    a 15, que es el tamaño del texto normal. */}
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-base' : 'text-lg'}`}>{info.name}</h3>
+                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-lg' : 'text-xl'}`}>{info.name}</h3>
                         <StatusDot status={status} className="flex-shrink-0" />
                         {isLocked && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </div>
-                    <p className="text-xs text-muted-foreground font-data mt-0.5">
+                    <p className="text-[15px] text-muted-foreground font-data mt-1">
                         Objetivo: {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
                     </p>
                 </div>

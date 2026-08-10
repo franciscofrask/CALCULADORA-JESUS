@@ -107,8 +107,13 @@ const DayHeader = ({
                             Descanso
                         </button>
                     </div>
+                    {/* El aviso, solo en escritorio. En el teléfono la frase ocupaba dos
+                        líneas enteras justo debajo del conmutador, que es lo que la propia
+                        frase te manda mirar. El aviso NO se pierde: el conmutador se queda
+                        con su aro naranja mientras el día esté sin marcar, que es la misma
+                        señal en el sitio donde se actúa (punto 4.17). */}
                     {diaSinMarcar && (
-                        <p className="text-xs text-brand font-semibold w-full sm:w-auto" data-testid="dia-sin-marcar">
+                        <p className="hidden lg:block text-xs text-brand font-semibold w-full sm:w-auto" data-testid="dia-sin-marcar">
                             ¿Este día entrenas o descansas? Tus macros cambian.
                         </p>
                     )}
@@ -148,7 +153,10 @@ const DayHeader = ({
                                 // «te quedan 0» repetido tres veces.
                                 const grande = (cuadrado || over) ? Math.round(val) : Math.max(0, Math.round(tgt - val));
                                 return (
-                                    <div key={key} data-testid={`dia-${key}`}>
+                                    // Centrado dentro de su columna, como en Inicio: los tres
+                                    // números tienen anchos distintos (235, 60) y alineados a
+                                    // la izquierda el bloque se ve descolgado.
+                                    <div key={key} className="text-center" data-testid={`dia-${key}`}>
                                         <p className="font-data font-bold leading-none text-foreground text-[30px] sm:text-[34px]">{grande}</p>
                                         <p className="text-sm font-bold mt-1" style={{ color: over ? '#EF4444' : color }}>{label}</p>
                                         <p className="text-xs text-muted-foreground font-data">
@@ -191,20 +199,33 @@ const DayHeader = ({
             })()}
 
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                {/* «Perientreno», nunca «peri» (punto 4.18): el bloque se llamaba de tres
+                    maneras distintas por la app y el abreviado no lo entiende nadie que no
+                    lleve meses aquí. */}
                 {hayPeri && (
                     <span className="text-[11px] text-muted-foreground font-data">
-                        peri {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
+                        perientreno {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
                     </span>
                 )}
+                {/* «Ver detalle» y su tabla, fuera del teléfono. Lo que despliega es el
+                    reparto del día comida a comida, y en móvil eso mismo está justo debajo:
+                    la lista de comidas con su objetivo. Era la tercera vez que se decía lo
+                    mismo en la misma pantalla. En escritorio se queda, donde la tabla se lee
+                    de un vistazo y no obliga a bajar. */}
                 <button onClick={() => setSummaryExpanded(!summaryExpanded)}
-                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                    className="hidden lg:flex text-[11px] text-muted-foreground hover:text-foreground transition-colors items-center gap-1">
                     {summaryExpanded ? 'ocultar detalle' : 'ver detalle'}
                     {summaryExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </button>
 
                 {/* Cómo va cada comida, de un vistazo y sin bajar: en la vista de todo
                     seguido es lo único que dice el estado del día sin recorrerlo entero. */}
-                <span className="flex items-center gap-2.5 flex-wrap ml-auto">
+                {/* Los puntos de C1 · Intra · C2... tampoco salen en el teléfono: ahí las
+                    comidas están unas líneas más abajo, cada una con su estado y su nombre
+                    completo, así que esto era el mismo dato dos veces y en abreviado. En
+                    escritorio sí vale, porque con la vista de todo seguido es lo único que
+                    dice cómo va el día sin recorrerlo entero. */}
+                <span className="hidden lg:flex items-center gap-2.5 flex-wrap ml-auto">
                     {mealOrder.map((mealKey) => (
                         <span key={mealKey} className="flex items-center gap-1">
                             <StatusDot status={getMealStatus(mealKey)} />
@@ -215,7 +236,7 @@ const DayHeader = ({
             </div>
 
             {summaryExpanded && (
-                <div className="mt-3 max-w-2xl">
+                <div className="mt-3 max-w-2xl hidden lg:block">
                     <DayDetailTable
                         mealOrder={mealOrder} mealInfo={mealInfo} calculateMealMacros={calculateMealMacros}
                         tipoDia={tipoDia} opcionPeri={opcionPeri}

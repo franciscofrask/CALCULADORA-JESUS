@@ -1932,9 +1932,13 @@ const NutritionPage = () => {
                 />
             ) : showIntro && <NutritionIntro onClose={dismissIntro} />}
             <header className="flex items-center justify-between gap-4 mb-4">
-                <div>
+                <div className="min-w-0">
+                    {/* EL TÍTULO «NUTRICIÓN» NO SALE EN EL TELÉFONO: en la barra de abajo ya
+                        está marcada «Nutrición» en naranja, así que a 48 px lo dice por
+                        tercera vez. En escritorio se queda, que ahí no hay barra inferior.
+                        «Plan nutricional» y el estado de guardado se quedan siempre. */}
                     <p className="caption text-brand mb-1">Plan nutricional</p>
-                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none">Nutrición</h1>
+                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none hidden lg:block">Nutrición</h1>
                     <div className="mt-1 h-4">{renderEstadoGuardado()}</div>
                 </div>
                 <div className="flex items-center gap-2">

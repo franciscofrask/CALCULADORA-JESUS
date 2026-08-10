@@ -503,7 +503,8 @@ const ClientDashboard = () => {
                             </div>
                             <div className="border-t border-border px-5 py-3 flex items-center justify-between">
                                 <div className="flex items-center gap-4 text-[11px] text-muted-foreground uppercase tracking-wider font-data">
-                                    {mp && getP(mp) > 0 && <span>Peri {getP(mp)}/{getH(mp)}</span>}
+                                    {/* «Perientreno», no «Peri» (punto 4.18). */}
+                                    {mp && getP(mp) > 0 && <span>Perientreno {getP(mp)}/{getH(mp)}</span>}
                                 </div>
                                 {source && (
                                     <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${source === 'auto' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400'}`}>{source}</span>
