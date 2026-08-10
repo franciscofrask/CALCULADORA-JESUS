@@ -2441,8 +2441,54 @@ async def calculate_and_apply_targets(data: dict, user = Depends(get_current_use
     )
 
     perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
-    await anotar_peso((perfil or {}).get("id"), peso, origen="calculadora")
-    await anotar_grasa((perfil or {}).get("id"), bf, origen="calculadora")
+    client_id = (perfil or {}).get("id")
+    await anotar_peso(client_id, peso, origen="calculadora")
+    await anotar_grasa(client_id, bf, origen="calculadora")
+
+    # Y SE VERSIONA, COMO TODOS LOS DEMAS CAMINOS (punto 10.5 del doc del 09-08). Esto
+    # escribia el perfil y nada mas, mientras que las dietas y el chatbot resuelven los macros
+    # por `macro_history` (la version vigente a cada fecha, Calma todosLosMacros). Resultado:
+    # un cliente de plan de autogestion se aplicaba unos macros, la pantalla los enseñaba y el
+    # asistente le seguia cuadrando las comidas con los anteriores.
+    #
+    # Salio al probar el cerrojo del 4.10: con una entrada de historial delante, el chatbot
+    # leia 140 g de hidratos cuando el perfil ya decia 170.
+    from core.cambios_macros import marcar_cambios
+    from core.historial_macros import guardar as guardar_en_historial
+
+    training = profile_macros["macros_training"]
+    rest = profile_macros["macros_rest"]
+    peri = profile_macros.get("macros_periworkout")
+    await guardar_en_historial({
+        "id": str(uuid.uuid4()),
+        "client_id": client_id,
+        "user_id": user["id"],
+        "previous_training": profile.get("macros_training"),
+        "previous_rest": profile.get("macros_rest"),
+        "new_training": training,
+        "new_rest": rest,
+        "training": training,
+        "rest": rest,
+        "peri": peri,
+        "effective_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        # Sale de la tabla con SUS datos, no lo decide una persona: `quiz_ajuste` es lo que
+        # `core/macros_de_quien` cuenta como calculado por la app. Ponerle un `changed_by`
+        # aqui haria que el propio cliente contara como «alguien detras» y se cerrara a si
+        # mismo la calculadora en la siguiente vuelta.
+        "origen": "quiz_ajuste",
+        "cambios": marcar_cambios(
+            {"entreno": profile.get("macros_training"),
+             "perientreno": profile.get("macros_periworkout"),
+             "descanso": profile.get("macros_rest")},
+            {"entreno": training, "perientreno": peri, "descanso": rest},
+        ),
+        "peso": peso,
+        "client_weight": peso,
+        "porcentaje_graso": bf,
+        "sexo": sexo,
+        "objetivo": objetivo,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
 
     return {
         "applied": True,

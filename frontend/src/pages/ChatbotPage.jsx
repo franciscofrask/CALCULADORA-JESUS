@@ -569,6 +569,12 @@ export default function ChatbotPage() {
   const handleBotResponse = async (resp) => {
     if (!resp) return;
     if (resp.day_overview) setDayOverview(resp.day_overview);
+    // SI LA RESPUESTA TRAE EL ESTADO DE LA COMIDA, SE APLICA VENGA CON EL `action` QUE VENGA
+    // (punto 10.5). Antes solo lo miraba la rama `meal_updated`, y un turno del asistente
+    // puede buscar Y añadir a la vez: entonces llegaba `action: "suggestions"` y la cabecera
+    // se quedaba diciendo «faltan 30P 20H 10G» con la comida ya montada. El asistente decía
+    // la verdad y la pantalla la desmentía.
+    if (resp.meal_status) applyMealResponse(resp);
     switch (resp.action) {
       case 'meal_updated':
         applyMealResponse(resp);

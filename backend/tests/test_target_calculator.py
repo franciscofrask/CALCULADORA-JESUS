@@ -42,6 +42,38 @@ class TestTargetCalculatorSetup:
         """Get authorization headers"""
         return {"Authorization": f"Bearer {client_token}"}
 
+    @pytest.fixture(scope="class")
+    def admin_headers(self):
+        r = requests.post(f"{BASE_URL}/api/auth/login",
+                          json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+        assert r.status_code == 200, f"Login admin failed: {r.text}"
+        return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+@pytest.fixture(scope="class")
+def cliente_que_se_los_lleva_el(request):
+    """Deja al cliente demo en un plan de AUTOGESTION mientras dure la clase, y lo devuelve.
+
+    Punto 4.10: `POST /calculator/targets/apply` ya no aplica macros por encima de los que
+    puso un entrenador, y el cliente demo es de plan `gold` (personalizado) con macros de
+    coach en su historial, asi que el endpoint le responde 403. La MECANICA de aplicar sigue
+    siendo la misma y hay que seguir probandola: se prueba con quien si puede.
+
+    El cerrojo en si tiene su propio test, `test_al_que_lo_lleva_su_coach_se_le_dice_que_no`.
+    """
+    ha = {"Authorization": f"Bearer {requests.post(f'{BASE_URL}/api/auth/login', json={'email': ADMIN_EMAIL, 'password': ADMIN_PASSWORD}).json()['access_token']}"}
+    hc = {"Authorization": f"Bearer {requests.post(f'{BASE_URL}/api/auth/login', json={'email': CLIENT_EMAIL, 'password': CLIENT_PASSWORD}).json()['access_token']}"}
+    perfil = requests.get(f"{BASE_URL}/api/clients/profile", headers=hc).json()
+    cid, plan_antes = perfil.get("id"), perfil.get("plan")
+    requests.put(f"{BASE_URL}/api/admin/clients/{cid}", json={"plan": "nivel1"}, headers=ha)
+
+    def devolver():
+        if plan_antes:
+            requests.put(f"{BASE_URL}/api/admin/clients/{cid}", json={"plan": plan_antes}, headers=ha)
+
+    request.addfinalizer(devolver)
+    return cid
+
 
 class TestTargetCalculatorCanonical(TestTargetCalculatorSetup):
     """Test canonical case: Hombre 80kg 20%BF volumen"""
@@ -238,10 +270,51 @@ class TestTargetCalculatorSnapping(TestTargetCalculatorSetup):
         print("✅ BF 8% (hombre) clamped to 10% correctly")
 
 
+class TestElCerrojoDelPlanConEntrenador(TestTargetCalculatorSetup):
+    """Punto 4.10: este endpoint era el agujero grande.
+
+    Los demas caminos que reescriben macros por lo menos miraban `macros_source != "manual"`;
+    este no miraba nada. Con un peso y un objetivo, cualquier cliente con su token se
+    machacaba los macros que le habia puesto su entrenador. Medido en produccion el 09-08:
+    180 de 184 perfiles activos son de plan personalizado.
+
+    Ojo con el orden: esta clase se apoya en que el cliente demo esta en su plan normal
+    (`gold`), asi que va ANTES de la que lo pasa a autogestion con el fixture.
+    """
+
+    def test_al_que_lo_lleva_su_coach_se_le_dice_que_no(self, auth_headers):
+        antes = requests.get(f"{BASE_URL}/api/clients/profile", headers=auth_headers).json()
+        macros_antes = antes.get("macros_training")
+
+        r = requests.post(f"{BASE_URL}/api/calculator/targets/apply",
+                          json={"peso": 95, "sexo": "hombre", "porcentaje_graso": 28,
+                                "objetivo": "volumen"},
+                          headers=auth_headers)
+
+        # Si el cliente demo estuviera en un plan de autogestion esto no aplicaria; el propio
+        # perfil dice cual es su caso, asi que se comprueba contra eso y no contra un supuesto.
+        puede = (antes.get("macros_ajustables") or {}).get("puede")
+        if puede is False:
+            assert r.status_code == 403, f"deberia cerrarse: {r.status_code} {r.text[:200]}"
+            assert "entrenador" in r.json().get("detail", "").lower()
+            despues = requests.get(f"{BASE_URL}/api/clients/profile", headers=auth_headers).json()
+            assert despues.get("macros_training") == macros_antes, "le ha tocado los macros igual"
+        else:
+            assert r.status_code == 200
+
+    def test_el_perfil_dice_si_puede_y_por_que_no(self, auth_headers):
+        """Lo que lee el front para no ensenarle el formulario y negarselo al final."""
+        perfil = requests.get(f"{BASE_URL}/api/clients/profile", headers=auth_headers).json()
+        aj = perfil.get("macros_ajustables")
+        assert aj is not None and "puede" in aj
+        if aj["puede"] is False:
+            assert aj.get("por_que_no"), "si no puede, hay que decirle por que"
+
+
 class TestTargetCalculatorApply(TestTargetCalculatorSetup):
     """Test applying targets to client profile"""
-    
-    def test_apply_targets_to_profile(self, auth_headers):
+
+    def test_apply_targets_to_profile(self, auth_headers, cliente_que_se_los_lleva_el):
         """Apply targets and verify macros_source is 'auto'"""
         response = requests.post(
             f"{BASE_URL}/api/calculator/targets/apply",
@@ -283,7 +356,7 @@ class TestTargetCalculatorApply(TestTargetCalculatorSetup):
         assert pm["macros_training"]["fat"] == entreno["grasa"], \
             "Lo guardado en el perfil no coincide con lo calculado"
     
-    def test_verify_macros_after_apply(self, auth_headers):
+    def test_verify_macros_after_apply(self, auth_headers, cliente_que_se_los_lleva_el):
         """Verify GET /api/macros returns applied macros with source='auto'"""
         # First apply targets
         requests.post(
@@ -312,7 +385,7 @@ class TestTargetCalculatorApply(TestTargetCalculatorSetup):
 class TestTargetCalculatorChatbot(TestTargetCalculatorSetup):
     """Test chatbot reads auto-calculated macros"""
     
-    def test_chatbot_reads_auto_macros(self, auth_headers):
+    def test_chatbot_reads_auto_macros(self, auth_headers, cliente_que_se_los_lleva_el):
         """POST /api/chatbot/start should read macros from profile"""
         # Se aplican unos objetivos y se comprueba que el chatbot arranca CON ESOS, sean
         # los que sean. Clavar 190/170/60 daba por hecho un cliente sin modificadores

@@ -200,6 +200,7 @@ CÓMO TRABAJAS:
 CÓMO HABLAS:
 - Español de España, tuteo, frases cortas. Prohibido el voseo y los regionalismos; di siempre "añadir", nunca "agregar".
 - Contesta a lo que ha preguntado, en 1-4 frases; las listas y tarjetas las pinta la app desde los datos de las herramientas, no las repitas en texto.
+- A cada comida llámala por el nombre que trae el ESTADO ACTUAL («Comida 1», «Comida 2», «intra», «post»), tal cual y sin traducirlo a horas del día ni aclararlo entre paréntesis. Es el mismo nombre que está viendo en su pantalla: cualquier otro le obliga a adivinar de cuál hablas. Los clientes no comen a la misma hora -- unos entrenan a las seis y otros arrancan a las dos -- así que la hora no identifica ninguna comida.
 - A un saludo o un gracias, una sola frase y ya.
 - Nunca menciones identificadores internos ("b1", "borrador 2") ni tarjetas que el cliente no está viendo: para él cada menú es "la opción N", donde N es el `numero` que trae el borrador, el MISMO que enseña su tarjeta. Usa siempre ese número, nunca cuentes por tu lado (todas se enseñan, las flojas con su aviso). Si no hay opciones buenas que enseñar, dilo claro y ofrece rehacerlas.
 - Solo hablas de su dieta, sus macros, sus alimentos, su entreno y esta app. Fuera de eso, dilo con simpatía y vuelve a la comida, SIN responder lo preguntado ni de pasada.
@@ -224,6 +225,33 @@ class AgentLoop:
         return cls(bot, await AgentTools.crear(bot), model, progreso)
 
     # ------------------------------------------------------------ contexto
+    def _recordatorio(self, hubo_mutacion: bool) -> str:
+        """El nombre de la comida y lo que le falta AHORA, pegado al momento de redactar.
+
+        Punto 10.5. Dos aprendizajes de medirlo, que explican por qué es tan corto y por qué
+        está escrito en positivo:
+
+          - La regla del prompt queda doscientas líneas por encima y con el turno lleno de
+            resultados de herramientas se diluye: llamaba «desayuno» a la Comida 1 en 3 de
+            cada 3 pasadas, y añadir la regla arriba solo lo bajó a 2 de cada 4.
+
+          - PROHIBIR LA PALABRA LA PLANTA. Un recordatorio que decía «nunca digas desayuno,
+            almuerzo ni cena» la subió a 6 de cada 6, y encima en la forma más tonta:
+            «la Comida 1 (desayuno)». Aquí solo se dice cómo SE LLAMA.
+
+        Tampoco se le cuenta si ha tocado la comida o no. Se probó y salió peor: leía el «no
+        has tocado nada» como que no debía tocarla y dejaba de montar, contradiciendo la regla
+        de que varios alimentos nombrados son una comida montada. Lo que la app enseña ya no
+        depende de su prosa desde que `meal_status` viaja siempre.
+        """
+        actual = self.tools.ver_estado("dia")["actual"]
+        falta = actual["falta"]
+        return (f"ANTES DE ESCRIBIR: esta comida se llama «{actual['comida']}». Nómbrala así, "
+                f"tal cual, sin equivalencias de hora ni aclaraciones entre paréntesis. "
+                f"Ahora mismo le falta P={falta.get('P')} H={falta.get('H')} "
+                f"G={falta.get('G')} (negativo = pasado): cuenta esto, no lo de antes de "
+                f"usar las herramientas.")
+
     def _contexto(self) -> str:
         estado = self.tools.ver_estado("dia")
         actual = estado["actual"]
@@ -511,6 +539,13 @@ class AgentLoop:
                     comida_guardada = True
                 mensajes.append({"role": "tool", "tool_call_id": tc.id,
                                  "content": json.dumps(resultado, ensure_ascii=False)[:4000]})
+
+            # LA VERDAD, PEGADA AL MOMENTO DE ESCRIBIR (punto 10.5). Las reglas del prompt
+            # quedan doscientas líneas por encima y con el turno lleno de resultados de
+            # herramientas se diluyen: llamaba «desayuno» a la Comida 1 en 3 de cada 3
+            # pasadas, y la regla escrita arriba solo lo bajó a 2 de cada 4. Repetir el
+            # nombre exacto y lo que falta JUSTO ANTES de que redacte es lo que lo fija.
+            mensajes.append({"role": "system", "content": self._recordatorio(hubo_mutacion)})
         else:
             # Tope de pasos alcanzado. Si hay algo bueno que enseñar, se presenta como
             # tal; el "me he quedado a medias" junto a una tarjeta válida descolocaba.
@@ -570,4 +605,26 @@ class AgentLoop:
             out["message"] = texto_final or out.get("message") or ""
         else:
             out["action"] = "message"
+
+        # SI SE TOCÓ LA COMIDA, LA RESPUESTA LO LLEVA SIEMPRE (punto 10.5 del doc del 09-08).
+        #
+        # Los tres `elif` de arriba son excluyentes, y un turno puede hacer las dos cosas a la
+        # vez: buscar (deja `sugerencias`) Y añadir a la comida (deja `hubo_mutacion`). Cuando
+        # pasaba eso ganaba la rama de las tarjetas y `meal_status` no salía, que es lo ÚNICO
+        # de lo que el front se fía para repintar la cabecera («Comida 1 · faltan 30P 20H 10G»)
+        # y la lista de alimentos.
+        #
+        # Reproducido el 09-08 con «Pechuga de pollo y arroz basmati»: corren buscar_alimentos,
+        # buscar_alimentos y editar_comida; la sesión queda con P=0 H=-4,5 G=8 -- o sea, la
+        # comida montada -- y la respuesta salía con action="suggestions" y sin `meal_status`.
+        # El asistente decía la verdad («te he montado... la proteína está clavada») y la app
+        # seguía enseñando la comida vacía. El cliente lee las dos cosas y se cree la pantalla:
+        # pasa a la comida siguiente con la primera a medias.
+        #
+        # `action` NO se toca: las tarjetas de opciones tienen que seguir saliendo. Lo que se
+        # añade es el estado de la comida, que es información, no una forma de pintar.
+        if hubo_mutacion and "meal_status" not in out:
+            estado = self.bot._meal_response([], [])
+            out["meal_status"] = estado["meal_status"]
+            out["day_overview"] = estado["day_overview"]
         return out

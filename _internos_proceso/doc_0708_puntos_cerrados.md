@@ -3629,3 +3629,114 @@ sobre el propio código que ninguno de los seis caminos se queda sin preguntar e
 
 Lo que Jesús dejó para la **Parte 6** del documento sigue sin llegar. Esto es el agujero, no la
 pantalla: lo que la Parte 6 diga sobre qué ve el cliente y cómo pide un cambio se monta encima.
+
+## 10.5 - «Dice que ha montado la comida cuando no ha montado nada». Mentía la pantalla, no él
+
+Jesús escribió «Pechuga de pollo y arroz basmati» y el asistente le contestó «te he montado el
+desayuno... la proteína y los hidratos están casi clavados», pero la cabecera seguía diciendo
+«Comida 1 · Falta: proteína 30 g · hidratos 20 g · grasa 10 g» y debajo salían opciones a
+elegir. Su lectura -- razonable -- fue que el asistente se lo estaba inventando.
+
+**Y no.** Reproduciendo el caso exacto: corren `buscar_alimentos`, `buscar_alimentos` y
+`editar_comida`, y la sesión queda con **P=0 · H=-4,5 · G=8**. O sea, la comida montada, la
+proteína clavada, los hidratos pasados por 4,5 y la grasa por poner. Exactamente lo que él
+decía. El que mentía era el front.
+
+**Por qué.** El bucle del agente arma la respuesta con tres ramas EXCLUYENTES:
+
+    if borradores_vistos:   action = "menus"
+    elif sugerencias:       action = "suggestions"
+    elif hubo_mutacion:     action = "meal_updated"   <- la única que mandaba `meal_status`
+
+Un turno puede hacer las dos cosas a la vez: buscar (deja `sugerencias`) y añadir a la comida
+(deja `hubo_mutacion`). Cuando pasa eso gana la rama de las tarjetas y **`meal_status` no
+sale**, que es lo único de lo que se fía el front para repintar la cabecera y la lista de
+alimentos. Y por el otro lado, `handleBotResponse` solo lo aplicaba en el `case 'meal_updated'`.
+
+Los dos extremos arreglados:
+
+  - `backend/agent_loop.py`: si se tocó la comida, la respuesta lleva SIEMPRE su estado. El
+    `action` no se toca -- las tarjetas de opciones tienen que seguir saliendo --; lo que se
+    añade es información, no una forma de pintar.
+  - `frontend/src/pages/ChatbotPage.jsx`: si la respuesta trae `meal_status`, se aplica venga
+    con el `action` que venga.
+
+Medido antes y después con el caso de Jesús: **0 de 6 pasadas pierden la comida**.
+
+### Lo de «el desayuno», y una lección que se queda escrita en el código
+
+Llamaba «desayuno» a la Comida 1 en **3 de cada 3** pasadas. La app no usa esa palabra en
+ningún sitio: usa Comida 1, 2, 3 y 4, intra y post. Y no es un capricho de nomenclatura --
+unos clientes entrenan a las seis y otros arrancan a las dos, así que la hora no identifica
+ninguna comida.
+
+Añadir la regla al prompt lo bajó a 2 de cada 4. Lo que la fijó fue repetir el nombre exacto
+JUSTO ANTES de redactar, después de cada tanda de herramientas (`_recordatorio`): a doscientas
+líneas de distancia y con el turno lleno de resultados, una regla se diluye.
+
+**Y un intento que salió al revés, que es lo que merece quedar escrito:** el primer
+recordatorio decía «nunca digas desayuno, almuerzo ni cena» y subió el fallo a **6 de cada 6**,
+además en la forma más tonta: «la Comida 1 (desayuno)». Prohibir la palabra la planta. La
+versión que funciona solo dice cómo SE LLAMA la comida, en positivo.
+
+El mismo recordatorio llevaba una segunda parte -- contarle si había tocado la comida o no --
+y también hubo que quitarla: leía el «no has tocado nada» como que no debía tocarla y dejaba
+de montar, contradiciendo la regla de que varios alimentos nombrados son una comida montada.
+Ya no hace falta: lo que la app enseña no depende de su prosa desde que `meal_status` viaja
+siempre.
+
+### De rebote: la calculadora del cliente no versionaba
+
+Al probar esto salió que `POST /calculator/targets/apply` escribía el perfil y nada más,
+mientras que las dietas y el chatbot resuelven los macros por `macro_history`. Un cliente de
+plan de autogestión se aplicaba unos macros, la pantalla los enseñaba y el asistente le seguía
+cuadrando las comidas con los anteriores (140 g de hidratos cuando el perfil ya decía 170). Ya
+versiona, con `origen: "quiz_ajuste"` -- que es lo que `core/macros_de_quien` cuenta como
+calculado por la app, para que aplicárselos él no le cierre a él mismo la calculadora en la
+vuelta siguiente.
+
+## 10.2 - El aviso de «no puedo cuadrar esto» · YA ESTABA BIEN
+
+Jesús lo da por bueno y lo está. Con «Combo clásico de pollo, pasta y patata» sobre una Comida
+3 de 24 P · 10 H · 15 G, en vez de meterla a ciegas avisa de que se va 12,9 g de hidratos,
+enseña los dos juegos de números y ofrece elegir otra o meterla igual.
+
+Vale la pena apuntar de dónde sale ese caso, porque no es casualidad: **su causa es el 10.1**.
+«Con cinco fuentes de hidrato en la receta y un objetivo de solo 10 g, las cantidades mínimas
+de cada alimento ya suman 22,9 y no puede bajar más». Parte de esas cinco fuentes son
+verduras marcadas como hidrato. Cuanto mejor quede el 10.1, menos veces hará falta este aviso.
+
+## 4.15 - Los protocolos de suplementación de Calma: RECOGIDOS, 145 de 145
+
+Con el permiso de Francisco se barrieron las 145 fichas de Calma (Administración -> Miembros
+-> ficha -> pestaña Suplementación), una a una. Resultado en `_calma_ref/suplementos_por_cliente.json`
+(ese directorio está en .gitignore: son datos personales de clientes y no entran en el repo).
+
+    clientes recogidos ............. 145 / 145   (0 fallos)
+    con protocolo (>=1 línea) ...... 100
+    con el histórico vacío .......... 45
+    fechas ......................... de 2022-11-27 a 2026-08-10
+
+De cada cliente se trae el histórico ENTERO versionado por fecha, no solo el vigente, más las
+observaciones de texto libre del entrenador.
+
+**Lo que hay que saber antes de importar.** En las líneas vigentes aparecen 53 ítems literales
+distintos (36 conceptos si se agrupan las variantes) y solo 11 casan literalmente con el
+catálogo de 106. Los otros 42 no fallan por datos, fallan por convención de nombres: la ficha
+del cliente le añade al nombre el sexo, el mes o la dosis.
+
+    Creatina hombre / Creatina mujer ....... catálogo: Monohidrato de creatina
+    Omega 3 hombre / Omega 3 mujer ......... catálogo: Omega 3
+    Fat burner hardcore mes 1 .............. catálogo: Fat burner hardcore (termogénico)
+    CBD 40% ................................ catálogo: Aceite de CBD al 40 %
+
+**Cosas raras del barrido, para que las vea Jesús:**
+
+  - De los 145 «miembros activos», al menos cuatro no son clientes: `admin@`, `hola@` (con el
+    histórico marcado «prueba»), `reto12en12@` y una cuenta del equipo.
+  - Dos personas con dos cuentas cada una: Jordi Matamoros (`.digital` y `.elite`) y Gonzalo
+    Rubio (dos correos distintos).
+  - El campo «Membresía» a veces concatena varias sin separador, o repite la misma dos veces.
+
+La importación a 12EN12 está en marcha en modo simulacro. **Escribir estos protocolos en
+producción es un cambio de datos de clientes reales y espera la orden de Francisco.**
