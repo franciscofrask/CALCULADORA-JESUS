@@ -53,9 +53,14 @@ class LimiteDeError extends React.Component {
                         El resto de la aplicación sigue funcionando: puedes seguir navegando
                         por el menú. Si vuelve a pasar, avísanos y dinos qué estabas haciendo.
                     </p>
-                    <p className="text-xs font-mono text-red-300/80 break-all">
-                        {String(this.state.error?.message || this.state.error)}
-                    </p>
+                    {/* AQUÍ SE PINTABA EL MENSAJE DE LA EXCEPCIÓN, en rojo y con letra de
+                        máquina de escribir. O sea que a un cliente se le enseñaba
+                        «loQueQueda is not defined» -- el nombre de una variable de nuestro
+                        código -- en su propia pantalla. No le dice nada, no puede hacer nada
+                        con ello y enseña las tripas de la app a quien no tiene por qué verlas.
+                        El detalle sigue yendo entero a la consola desde `componentDidCatch`,
+                        que es donde sirve para arreglarlo. Regla de Francisco, 10-08-2026:
+                        ningún error del sistema le llega al usuario en lenguaje técnico. */}
                     <button
                         type="button"
                         onClick={() => this.setState({ error: null })}

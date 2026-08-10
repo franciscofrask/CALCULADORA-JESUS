@@ -4,7 +4,10 @@ Rutas de usuarios: perfiles, preferencias y macros.
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
+import logging
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from core.database import db
 from core.security import get_current_user
@@ -699,7 +702,14 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
             **ajustes_to_kwargs(ajustes),
         )
     except (ValueError, KeyError) as e:
-        raise HTTPException(status_code=400, detail=f"No se pueden calcular tus macros: {e}")
+        # El detalle va al log, no al cliente: un KeyError se formatea como `'porcentaje_graso'`
+        # -- el nombre de un campo nuestro entre comillas -- y eso acababa impreso en su
+        # pantalla. Se le dice qué le falta a él, que es lo único que puede arreglar.
+        logger.warning("No se pudieron calcular los macros de %s: %r", user.get("id"), e)
+        raise HTTPException(
+            status_code=400,
+            detail="No hemos podido calcular tus macros. Revisa tu peso, tu sexo y tu porcentaje graso.",
+        )
 
     targets = {"macros": resultado["macros"], "multiplicadores": multiplicadores_de(resultado)}
     profile_macros = targets_to_profile_macros(targets)
