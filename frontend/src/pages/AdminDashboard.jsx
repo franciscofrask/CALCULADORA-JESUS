@@ -33,7 +33,7 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
     if (!todo) return null;
     const flt = (arr) => (arr || []).filter(c => !soloAlCorriente || c.al_corriente);
     const cols = [
-        { key: 'macros', label: 'Sin macros', icon: Apple, color: '#FF671F', sub: 'Necesitan macros del coach', items: flt(todo.sin_macros) },
+        { key: 'macros', label: 'Sin macros', icon: Apple, color: '#FF671F', sub: 'Necesitan macros del entrenador', items: flt(todo.sin_macros) },
         { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina, sin una activa', items: flt(todo.sin_rutina) },
         { key: 'reportes', label: 'Reporte pendiente', icon: FileText, color: '#EAB308', sub: 'No enviado esta semana', items: flt(todo.reporte_pendiente) },
         // "Hoy no puedes ver si un cliente de 1.500 lleva tres semanas sin que nadie le
@@ -426,7 +426,16 @@ const AdminDashboard = () => {
                             <span>ajuste <b className="text-red-400">{stats.semaforo.ajuste?.malo || 0}</b></span>
                         </span>
                     )} />
-                <KpiCard value={stats?.inactive_clients || 0} label="Bajas" icon={UserMinus} color="#EF4444" testId="kpi-bajas" />
+                {/* Punto 2.4g: «"0 bajas" con 188 totales y 184 activos: faltan cuatro por
+                    algún sitio». Los que no son ni activos ni bajas -- pendiente de pago,
+                    checkout sin terminar -- no aparecían en ninguna casilla, y un total que
+                    no cuadra con sus partes tira por tierra el panel entero. */}
+                <KpiCard value={stats?.inactive_clients || 0} label="Bajas" icon={UserMinus} color="#EF4444" testId="kpi-bajas"
+                    pie={stats?.otros_clients ? (
+                        <span className="text-[10px] text-white/50 mt-0.5" data-testid="kpi-otros">
+                            + {stats.otros_clients} ni activos ni de baja
+                        </span>
+                    ) : null} />
                 <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />
             </div>
 
@@ -768,8 +777,8 @@ const AdminClientsList = () => {
         cual === 'sin_coach' ? !c.trainer_id : cual === 'mios' ? c.trainer_id === user?.id : true).length;
 
     const CARTERAS = esAdmin
-        ? [['todos', 'Todos'], ['sin_coach', 'Sin coach']]
-        : [['mios', 'Mis clientes'], ['sin_coach', 'Sin coach']];
+        ? [['todos', 'Todos'], ['sin_coach', 'Sin entrenador']]
+        : [['mios', 'Mis clientes'], ['sin_coach', 'Sin entrenador']];
 
     return (
         <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen">
@@ -839,7 +848,7 @@ const AdminClientsList = () => {
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Plan</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Precio</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Semana</TableHead>
-                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden sm:table-cell">Coach</TableHead>
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden sm:table-cell">Entrenador</TableHead>
                                     {/* Punto 29: la columna que contesta "¿quién me toca esta
                                         semana?". Se pincha para ordenar por ella. */}
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden lg:table-cell">

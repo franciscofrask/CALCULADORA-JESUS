@@ -22,6 +22,7 @@ from routes.notifications import notify
 from routes.audit import audit
 from models.user import (
     ClientProfile, ClientProfileUpdate, MacrosUpdate, MacroEvaluacion, TrainerAssign, PLAN_CATALOG,
+    precio_de_ciclo,
 )
 from core.cycle import enrich_cycle, compute_cycle
 from core.seguimiento import marcar_ajuste, dias_desde
@@ -127,31 +128,8 @@ def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
     return {**celdas, "peor": semaforo.peor(*[c["estado"] for c in celdas.values()])}
 
 
-def precio_de_ciclo(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> float:
-    """Lo que paga este cliente cada ciclo.
-
-    El `price` del perfil manda -- ahí van los precios pactados --, pero cuando está a cero
-    o no está, el precio es el de SU PLAN en el catálogo. Eso era lo que enseñaba «0 €/ciclo»
-    a clientes de pago sin cortesía marcada: los que vinieron de Calma llegaron con el campo
-    a cero, y son **168 de los 174 activos**.
-
-    Un cero SOLO se respeta cuando hay cortesía marcada (`comp_plan`), que es la casilla
-    «Plan de cortesía (sin pago)» de la ficha. Sin ella, un cero no es una decisión: es un
-    dato que no llegó.
-    """
-    if perfil.get("comp_plan"):
-        return 0.0
-    propio = perfil.get("price")
-    if propio not in (None, "", 0, 0.0):
-        try:
-            return float(propio)
-        except (TypeError, ValueError):
-            pass
-    plan = (catalogo or {}).get(perfil.get("plan") or "") or {}
-    try:
-        return float(plan.get("precio") or 0)
-    except (TypeError, ValueError):
-        return 0.0
+# `precio_de_ciclo` se mudó a models/user.py y se importa arriba: lo necesitan también el
+# perfil del cliente y su ficha, y viviendo aquí solo lo tenía el panel (punto 2.4c).
 
 
 # De cuántos meses es cada ciclo, para poder sumar peras con peras.
@@ -356,6 +334,14 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
         "top_foods": [{"nombre": n, "count": c} for n, c in top_foods],
     }
 
+    # El precio que se enseña en la pestaña Membresía de la ficha, resuelto igual que en la
+    # lista (punto 2.4c): sin esto, el entrenador veía «0 €/ciclo» en la ficha del mismo
+    # cliente al que la lista le pone su precio.
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+    profile["precio_ciclo"] = precio_de_ciclo(profile, merged_catalog(await _overrides_by_code()))
+    profile["precio_cortesia"] = bool(profile.get("comp_plan"))
+
     return {
         "profile": profile,
         "user": user_data,
@@ -536,8 +522,11 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
 
     # El ultimo reporte hecho EN LA APP (los de arriba son los importados de Calma). De aqui
     # salen el margen del cliente y su proximo objetivo, que es el que dispara la fase.
+    # Hasta hoy (punto 22): sin el corte, un reporte importado con fecha de 2028 gana el
+    # sort y es el que decide la FASE que se le manda al agente. No es solo que no se
+    # enseñe: es que no se calcula con el.
     reporte_app = await db.reports.find_one(
-        {"client_id": client_id}, {"_id": 0}, sort=[("created_at", -1)])
+        hasta_hoy({"client_id": client_id}), {"_id": 0}, sort=[("created_at", -1)])
     if (reporte_app or {}).get("proximo_objetivo") in ("definicion", "volumen"):
         fase = reporte_app["proximo_objetivo"]
 
@@ -770,7 +759,7 @@ async def assign_client_trainer(client_id: str, data: TrainerAssign, user = Depe
     trainer_name = trainer_doc.get("name") if trainer_doc else None
     if new_trainer != current_trainer:
         await notify(profile["user_id"], "coach",
-                     f"Tu coach ahora es {trainer_name}" if trainer_name else "Tu asignación de coach ha cambiado",
+                     f"Tu entrenador ahora es {trainer_name}" if trainer_name else "Tu asignación de entrenador ha cambiado",
                      "/dashboard/messages")
         client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
         client_name = (client_user or {}).get("name") or (client_user or {}).get("email") or client_id
@@ -950,7 +939,7 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     # El banco de casos (clientes gemelos) se refresca solo con cada ajuste nuevo.
     _refrescar_casos()
 
-    await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition", body=data.note)
+    await notify(profile["user_id"], "macros", "Tu entrenador ha actualizado tus macros", "/dashboard/nutrition", body=data.note)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Actualizó macros de {(client_user or {}).get('name') or client_id} (manual)")
 
@@ -1154,7 +1143,7 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
                   "sexo": sexo, "objetivo": objetivo},
     )
 
-    await notify(profile["user_id"], "macros", "Tu coach ha actualizado tus macros", "/dashboard/nutrition", body=note)
+    await notify(profile["user_id"], "macros", "Tu entrenador ha actualizado tus macros", "/dashboard/nutrition", body=note)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Aplicó macros por calculadora a {(client_user or {}).get('name') or client_id}")
 
@@ -1307,6 +1296,11 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     active = await db.client_profiles.count_documents({**solo_clientes, "status": "activo"})
     inactive = await db.client_profiles.count_documents(
         {**solo_clientes, "status": {"$in": ["inactivo", "baja", "cancelado"]}})
+    # EL HUECO DE LOS CUATRO (punto 2.4g): «"0 bajas" con 188 totales y 184 activos: faltan
+    # cuatro por algún sitio». Son los `pendiente_pago` y demás estados intermedios, que no
+    # caían ni en activos ni en bajas y desaparecían de la suma. Un total que no cuadra con
+    # sus partes hace que no te creas ninguna de las tres cifras.
+    otros = max(0, total - active - inactive)
 
     # HAY QUE MIRARLOS (punto 32 del 07-08). Antes esto era "en riesgo": activo, semana >= 3
     # y sin reporte en 14 dias. Saltaba para el 76% de los activos, o sea que no era una
@@ -1346,10 +1340,16 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         if s["peor"] == semaforo.MALO:
             at_risk += 1
 
-    # Bajas del mes
+    # Bajas DEL MES (punto 2.4g): `first_of_month` se calculaba arriba y no se usaba, así
+    # que «bajas del mes» eran todas las bajas de la historia. Se cuenta por cuándo se dio
+    # de baja, y si esa fecha no está, por la última vez que se tocó el perfil.
     bajas_mes = await db.client_profiles.count_documents({
         **solo_clientes,
         "status": {"$in": ["baja", "cancelado", "inactivo"]},
+        "$or": [
+            {"baja_fecha": {"$gte": first_of_month.isoformat()}},
+            {"baja_fecha": {"$exists": False}, "updated_at": {"$gte": first_of_month.isoformat()}},
+        ],
     })
 
     # Plan distribution + MRR en una sola agregación. Cubre TODOS los planes del
@@ -1387,6 +1387,8 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         "semaforo": reparto,
         "bajas_mes": bajas_mes,
         "inactive_clients": inactive,
+        # Los que no son ni activos ni bajas (punto 2.4g): total = activos + bajas + otros.
+        "otros_clients": otros,
         "plans": plans,
         "mrr": mrr,
         "total_revenue": total_revenue,
@@ -1416,6 +1418,11 @@ async def get_upcoming_payments(user = Depends(get_admin_user)):
     ).to_list(len(uids) or 1)
     umap = {u["id"]: u for u in users}
 
+    # Del catálogo, como el resto (punto 2.4b): aquí salía «jose · GOLD · 0 EUR» y «GOLD ·
+    # 149 EUR», que no son precios de ningún plan. Los dos venían del `price` en crudo.
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+    catalogo = merged_catalog(await _overrides_by_code())
     results = []
     for p in profiles:
         user_data = umap.get(p["user_id"])
@@ -1424,7 +1431,7 @@ async def get_upcoming_payments(user = Depends(get_admin_user)):
             "name": user_data.get("name", "?") if user_data else "?",
             "email": user_data.get("email", "") if user_data else "",
             "plan": p.get("plan"),
-            "price": p.get("price", 0),
+            "price": precio_de_ciclo(p, catalogo),
             "next_payment": p.get("next_payment"),
         })
 
@@ -1461,8 +1468,10 @@ async def get_todo_semana(user = Depends(get_admin_user)):
     # Rutinas activas y reportes recientes: una consulta cada uno (no N+1).
     active_routine_clients = set(await db.routines.distinct("client_id", {"status": "active"}))
     cutoff = (now - timedelta(days=10)).isoformat()
+    # Con tope hoy (punto 22): un reporte fechado en 2027 cumple el «>= cutoff» y contaba
+    # como reporte reciente, o sea que tapaba a su cliente en «Reporte pendiente».
     recent = await db.reports.find(
-        {"created_at": {"$gte": cutoff}}, {"_id": 0, "client_id": 1, "created_at": 1}
+        hasta_hoy({"created_at": {"$gte": cutoff}}), {"_id": 0, "client_id": 1, "created_at": 1}
     ).to_list(5000)
     last_report: Dict[str, str] = {}
     for r in recent:

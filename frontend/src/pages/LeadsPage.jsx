@@ -663,7 +663,7 @@ const LeadsPage = () => {
                                     <p className="text-white/40 text-xs mt-1">No hay ningún plan contratable en el catálogo.</p>
                                 )}
                             </div>
-                            <div><Label className="text-white/60 text-xs">Coach</Label>
+                            <div><Label className="text-white/60 text-xs">Entrenador</Label>
                                 <select value={convertTrainer} onChange={e => setConvertTrainer(e.target.value)}
                                     className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1" data-testid="convert-trainer">
                                     <option value="">Sin asignar (asignar después)</option>
@@ -684,7 +684,7 @@ const LeadsPage = () => {
                             <UserPlus className="w-4 h-4 text-green-500" />Cliente creado
                         </DialogTitle></DialogHeader>
                         <div className="space-y-3">
-                            <p className="text-white/60 text-sm"><span className="text-white font-semibold">{convertResult.name || convertResult.email}</span> ya es cliente (plan {convertResult.plan}{convertResult.trainer_name ? `, coach ${convertResult.trainer_name}` : ', sin coach'}).</p>
+                            <p className="text-white/60 text-sm"><span className="text-white font-semibold">{convertResult.name || convertResult.email}</span> ya es cliente (plan {convertResult.plan}{convertResult.trainer_name ? `, entrenador ${convertResult.trainer_name}` : ', sin entrenador'}).</p>
                             <div className="bg-[#0A0A0A] border border-[#333] rounded-xl p-4 space-y-2">
                                 <div className="flex justify-between text-sm"><span className="text-white/40">Usuario</span><span className="text-white font-mono">{convertResult.email}</span></div>
                                 <div className="flex justify-between text-sm"><span className="text-white/40">Contraseña temporal</span><span className="text-[#FF671F] font-mono font-bold" data-testid="temp-password">{convertResult.temp_password}</span></div>

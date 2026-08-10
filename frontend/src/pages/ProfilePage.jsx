@@ -179,22 +179,42 @@ const ProfilePage = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-sm text-foreground/50 uppercase tracking-wider">Precio</p>
+                                    {/* EL PRECIO LO RESUELVE EL SERVIDOR (punto 2.4c). Aquí se
+                                        pintaba `profile.price` en crudo, y ese campo llegó a cero
+                                        en los 168 perfiles que vinieron de Calma: a un cliente de
+                                        pago, sin cortesía marcada, se le decía «0 €/ciclo». Y es
+                                        lo primero que ve quien recibe acceso. */}
                                     <p className="text-3xl font-bold text-[#FF671F]" style={{ fontFamily: 'Barlow Condensed' }}>
-                                        {profile.price != null ? `${profile.price}€` : '-'}<span className="text-sm font-normal text-foreground/50">/ciclo</span>
+                                        {profile.precio_cortesia
+                                            ? <>Cortesía</>
+                                            : <>{profile.precio_ciclo ? `${profile.precio_ciclo}€` : '-'}<span className="text-sm font-normal text-foreground/50">/ciclo</span></>}
                                     </p>
+                                    {profile.precio_cortesia && (
+                                        <p className="text-xs text-foreground/50 mt-1">Tu plan no tiene cobro asociado.</p>
+                                    )}
                                     {/* La nota de precio del catálogo (un rango general del plan) solo se
                                         muestra si el cliente no tiene un precio propio, para no dar dos cifras
                                         contradictorias (p.ej. "149€/ciclo" y "450-847€/trimestre"). */}
-                                    {profile.price == null && myPlan?.precio_nota && (
+                                    {!profile.precio_cortesia && !profile.precio_ciclo && myPlan?.precio_nota && (
                                         <p className="text-xs text-foreground/50 mt-1">{myPlan.precio_nota}</p>
                                     )}
                                 </div>
                                 <div>
-                                    <p className="text-sm text-foreground/50 uppercase tracking-wider">Próxima renovación</p>
-                                    <p className="font-semibold text-foreground text-sm">
-                                        {profile.next_payment
-                                            ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })
-                                            : 'No definida'}
+                                    {/* Punto 2.4d: aquí ponía «No definida» a un cliente cuya
+                                        membresía había vencido una semana antes, porque solo
+                                        miraba `next_payment` -- el próximo COBRO --, y los
+                                        migrados de Calma no tienen ninguno. Ahora se dice lo que
+                                        se sabe, y si ya pasó, se dice que pasó. */}
+                                    <p className="text-sm text-foreground/50 uppercase tracking-wider">
+                                        {profile.renovacion?.vencida ? 'Tu plan venció' : 'Próxima renovación'}
+                                    </p>
+                                    <p className={`font-semibold text-sm ${profile.renovacion?.vencida ? 'text-amber-500' : 'text-foreground'}`}
+                                        data-testid="perfil-renovacion">
+                                        {(() => {
+                                            const f = profile.renovacion?.fecha || profile.renovacion?.proximo_cobro || profile.next_payment;
+                                            if (!f) return 'No definida';
+                                            return new Date(f).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+                                        })()}
                                     </p>
                                 </div>
                             </div>

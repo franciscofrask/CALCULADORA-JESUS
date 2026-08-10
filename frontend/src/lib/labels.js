@@ -52,3 +52,22 @@ export const experienciaLabel = (v) => lookup(EXPERIENCIA, v);
 export const actividadLabel = (v) => lookup(ACTIVIDAD, v);
 export const biotipoLabel = (v) => lookup(BIOTIPO, v);
 export const suplementoCatLabel = (v) => lookup(SUPLEMENTO_CAT, v, false);
+
+/**
+ * Contadores en singular cuando toca (punto 4.18).
+ *
+ * «No registraste la dieta 1 día de los últimos 1», «Entreno, 1 comidas», «1 ejercicios
+ * programados». Jesús lo pidió como barrido: «conviene barrer todos los contadores de la
+ * app». Cada sitio lo resolvía por su cuenta o no lo resolvía, así que aquí vive uno.
+ *
+ *   plural(1, 'día')            -> "1 día"
+ *   plural(3, 'día')            -> "3 días"
+ *   plural(1, 'vez', 'veces')   -> "1 vez"
+ *
+ * El plural por defecto es +s, que cubre día/comida/semana/ejercicio/alimento. Cuando no
+ * valga (vez/veces, mes/meses), se pasa el segundo.
+ */
+export const plural = (n, singular, plural_ = null) => {
+    const cantidad = Number(n) || 0;
+    return `${cantidad} ${Math.abs(cantidad) === 1 ? singular : (plural_ || singular + 's')}`;
+};

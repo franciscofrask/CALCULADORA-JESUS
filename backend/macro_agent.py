@@ -25,7 +25,7 @@ MODEL = os.environ.get("MACRO_AGENT_MODEL", "gpt-5.1")
 
 SYSTEM_PROMPT = """\
 Eres el asistente de AJUSTE DE MACROS del entrenador. Tu trabajo es,
-cada mes, PROPONER el siguiente ajuste de macros de un cliente para que el COACH lo
+cada mes, PROPONER el siguiente ajuste de macros de un cliente para que el ENTRENADOR lo
 revise y confirme. NO decides tu solo: eres una sugerencia razonada. Piensas y
 escribes en espanol de Espana, con tuteo, sin tecnicismos innecesarios.
 
@@ -62,6 +62,12 @@ G. ESCALONES reales (nada de 20 g fijos ni progresiones lineales): 10, 15, 20, 2
 H. El TECHO y el SUELO son de cada persona, no generales: sacalos de SU historial (la
    suma mas alta a la que ha llegado y el punto mas bajo que ha aguantado). No apliques
    topes inventados.
+I. EL TAMANO TOTAL DEL AJUSTE, sumando lo que muevas en todos los bloques, tiene que
+   quedar POR DEBAJO DE 40 g. Cada escalon por separado puede ser legal y aun asi la suma
+   ser un cambio de fase: "HC entreno -20, grasa entreno -10, HC descanso -20" son tres
+   escalones correctos que suman 50, y 40 g o mas no es un ajuste prudente, es cambiar de
+   fase. Si crees que hace falta mas, mueve menos ahora y dilo en el razonamiento. Y si no
+   tienes datos de peso o de cumplimiento, muevete todavia menos.
 
 COMO AJUSTAR:
 1. LA FASE MANDA: 'definicion' o 'volumen', y cuantos meses lleva en ella. Una fase va
@@ -70,14 +76,14 @@ COMO AJUSTAR:
 2. EL PERFIL SE VE EN LOS AJUSTES, no en el cuestionario: mira como ha respondido esta
    persona a los ajustes anteriores (cuanto peso movio cada cambio de HC) y calibra con
    eso.
-   Si el historial trae el CRITERIO del coach y la EVALUACION de como salio cada fase,
+   Si el historial trae el CRITERIO del entrenador y la EVALUACION de como salio cada fase,
    son lo mas valioso que tienes: repite lo que funciono y no repitas un ajuste que ya
    se marco como malo. Ojo a de quien fue la culpa: si la fase salio mal porque el
    CLIENTE no cumplio, el ajuste no estaba mal y no hay que cambiar la estrategia.
-   TUS PROPIAS PROPUESTAS: el historial te dice cuales las hiciste tu y que hizo el coach
+   TUS PROPIAS PROPUESTAS: el historial te dice cuales las hiciste tu y que hizo el entrenador
    con ellas. Si te la guardo TAL CUAL, vas bien con esta persona. Si te la CORRIGIO, ahi
    tienes en gramos exactos en que te pasaste o te quedaste corto CON ELLA: aplicalo antes
-   de volver a proponer ese mismo movimiento, y si el coach te corrigio dos veces en la
+   de volver a proponer ese mismo movimiento, y si el entrenador te corrigio dos veces en la
    misma direccion, es un patron suyo y ya no es casualidad. Una correccion suya vale mas
    que cualquier mediana de casos parecidos.
 3. PAUTADO-VS-REAL (clave), con tres escalones segun el cumplimiento:
@@ -117,7 +123,7 @@ COMO AJUSTAR:
     mover el peso. Si te paso las reglas de su perfil (medianas de casos reales), son la
     referencia de que tamano de ajuste funciona en gente como el.
     Ademas, si te paso casos parecidos de otros clientes, usalos igual, y da mas peso a
-    los marcados [MISMO PERFIL] (el "cliente gemelo"). Miralos asi: que se movio, cuanto peso hizo despues y si el coach marco la
+    los marcados [MISMO PERFIL] (el "cliente gemelo"). Miralos asi: que se movio, cuanto peso hizo despues y si el entrenador marco la
     fase como buena o mala. Repite lo que funciono en varios casos parecidos y evita lo
     que salio mal por culpa del ajuste. Manda siempre el historial DEL PROPIO cliente:
     los casos ajenos son apoyo, no sustituyen su respuesta individual. Si te apoyas en
@@ -257,10 +263,10 @@ def construir_contexto(
             if v not in (None, "", {}):
                 L.append(f"  - {k}: {v}")
     # historial de ajustes de ESTA persona (para aprender su patron). Los ajustes
-    # hechos en la app traen ademas el CRITERIO del coach y la EVALUACION de como
+    # hechos en la app traen ademas el CRITERIO del entrenador y la EVALUACION de como
     # salio esa fase: es lo mas valioso que hay aqui, usalo.
     if historial_ajustes:
-        L.append("HISTORIAL DE AJUSTES DE ESTA PERSONA (como ajusto el coach antes; aprende su patron):")
+        L.append("HISTORIAL DE AJUSTES DE ESTA PERSONA (como ajusto el entrenador antes; aprende su patron):")
         for h in historial_ajustes[-12:]:
             L.append(f"  {h.get('fecha','?')}: {formatear_macros(h.get('macros', h))}"
                      + (f" | peso {h.get('peso')}" if h.get('peso') is not None else "")
@@ -273,26 +279,26 @@ def construir_contexto(
             if h.get("palancas"):
                 L.append(f"      movio: {', '.join(h['palancas'])}")
             if h.get("criterio"):
-                L.append(f"      criterio del coach: {h['criterio']}")
+                L.append(f"      criterio del entrenador: {h['criterio']}")
             # Que hizo el coach con TU propuesta anterior de ese mes: la mejor correccion
             # que existe, porque es sobre esta persona y sobre un numero concreto.
             # De donde salio ese ajuste. Los que calculo un cuestionario NO son criterio del
             # coach: son el punto de partida de la calculadora. Aprender de ellos como si
             # fueran decisiones suyas ensucia el patron.
             NO_ES_DEL_COACH = {
-                "quiz_alta": "no lo decidio el coach: son los macros de arranque que calculo el cuestionario inicial",
-                "quiz_ajuste": "no lo decidio el coach: lo recalculo el cuestionario de ajuste del cliente",
-                "cliente_calculadora": "no lo decidio el coach: lo cambio el propio cliente desde su calculadora",
+                "quiz_alta": "no lo decidio el entrenador: son los macros de arranque que calculo el cuestionario inicial",
+                "quiz_ajuste": "no lo decidio el entrenador: lo recalculo el cuestionario de ajuste del cliente",
+                "cliente_calculadora": "no lo decidio el entrenador: lo cambio el propio cliente desde su calculadora",
             }
             if h.get("origen") in NO_ES_DEL_COACH:
                 L.append(f"      OJO: {NO_ES_DEL_COACH[h['origen']]}")
             elif h.get("origen") == "ia":
-                L.append("      esa propuesta la hiciste TU y el coach la guardo TAL CUAL")
+                L.append("      esa propuesta la hiciste TU y el entrenador la guardo TAL CUAL")
             elif h.get("origen") == "ia_corregida":
                 corr = h.get("correccion_coach") or {}
                 partes = [f"{bloque} {campo} {valor:+g}"
                           for bloque, campos in corr.items() for campo, valor in campos.items()]
-                L.append("      esa propuesta la hiciste TU y el coach la CORRIGIO"
+                L.append("      esa propuesta la hiciste TU y el entrenador la CORRIGIO"
                          + (f": {', '.join(partes)} respecto a lo que propusiste" if partes else ""))
             ev = h.get("evaluacion") or {}
             if ev.get("resultado"):

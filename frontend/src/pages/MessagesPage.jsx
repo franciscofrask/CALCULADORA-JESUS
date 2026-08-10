@@ -157,8 +157,16 @@ const MessagesPage = () => {
                             <MessageCircle className="w-10 h-10 text-[#FF671F]" />
                         </div>
                         <h3 className="font-bold text-foreground uppercase tracking-wider mb-2">Sin mensajes</h3>
+                        {/* Que diga lo mismo que la cabecera (punto 4.16). Sin entrenador
+                            asignado, arriba pone «Soporte JG12» y aquí ponía «envía un mensaje
+                            a tu entrenador»: la misma pantalla se contradecía a sí misma, y le
+                            prometía una persona que ese cliente no tiene todavía. */}
                         <p className="text-sm text-foreground/50">
-                            Envía un mensaje a tu entrenador para empezar.
+                            {profile?.entrenador?.nombre
+                                ? `Escribe a ${profile.entrenador.nombre} para empezar.`
+                                : profile?.trainer_id
+                                    ? 'Envía un mensaje a tu entrenador para empezar.'
+                                    : 'Escríbenos y te contesta el equipo. En cuanto tengas entrenador asignado, hablarás aquí mismo con él.'}
                         </p>
                     </div>
                 )}

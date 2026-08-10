@@ -534,7 +534,7 @@ const CheckInsPage = () => {
                                 )}
                                 {c.trainer_feedback && (
                                     <div className="mt-2 p-2 bg-brand/10 border border-brand/20 rounded-lg text-sm text-foreground/80">
-                                        <span className="text-[10px] uppercase tracking-wider text-brand font-bold mr-2">Coach:</span>{c.trainer_feedback}
+                                        <span className="text-[10px] uppercase tracking-wider text-brand font-bold mr-2">Entrenador:</span>{c.trainer_feedback}
                                     </div>
                                 )}
                             </li>

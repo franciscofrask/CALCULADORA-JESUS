@@ -69,6 +69,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
     const [verReales, setVerReales] = React.useState(false);
     const [textFilter, setTextFilter] = React.useState('');
     const [menus, setMenus] = React.useState([]);
+    const [sinCosechar, setSinCosechar] = React.useState(false);
     const [total, setTotal] = React.useState(0);
     const [objetivo, setObjetivo] = React.useState(null);
     const [loading, setLoading] = React.useState(false);
@@ -124,6 +125,11 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                 setMenus(res.menus || []);
                 setTotal(res.total || 0);
                 setObjetivo(res.objetivo || null);
+                // El servidor sabe distinguir «no hay ninguno que te cuadre» de «la base no
+                // está cosechada» y lo dice en `filtros.sin_cosechar` (punto 10.3). Aquí no
+                // se leía, así que el cero salía con el mismo texto en los dos casos y el
+                // cliente subía el margen sin que eso pudiera arreglar nada.
+                setSinCosechar(!!res.filtros?.sin_cosechar);
             } catch (err) {
                 if (!cancelado) {
                     setMenus([]);
@@ -325,6 +331,19 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 <span className="text-4xl mb-3 block">⚠️</span>
                                 <p className="font-semibold text-foreground mb-1.5">{error}</p>
                                 <p className="text-sm text-muted-foreground">Inténtalo de nuevo en unos segundos.</p>
+                            </div>
+                        ) : menus.length === 0 && sinCosechar ? (
+                            /* El cero no es del margen: la biblioteca no está preparada
+                               todavía (punto 10.3). Decirle que suba el margen sería
+                               mandarle a mover una palanca que no puede cambiar nada. */
+                            <div className="text-center py-14 px-6" data-testid="biblioteca-sin-cosechar">
+                                <span className="text-4xl mb-3 block">🧰</span>
+                                <p className="font-semibold text-foreground mb-1.5">La biblioteca todavía no está lista</p>
+                                <p className="text-sm text-muted-foreground">
+                                    No es tu objetivo ni el margen: los menús están sin preparar. Usa el{' '}
+                                    <button className="font-semibold text-brand-orange underline" onClick={() => setTab('recetario')}>recetario</button>{' '}
+                                    mientras tanto.
+                                </p>
                             </div>
                         ) : menus.length === 0 ? (
                             <div className="text-center py-14 px-6">

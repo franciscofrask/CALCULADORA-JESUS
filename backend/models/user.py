@@ -513,6 +513,40 @@ def merged_catalog(overrides_by_code: Optional[Dict[str, Dict[str, Any]]] = None
         out[code] = entry
     return out
 
+
+def precio_de_ciclo(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> float:
+    """Lo que paga este cliente cada ciclo.
+
+    El `price` del perfil manda -- ahí van los precios pactados --, pero cuando está a cero
+    o no está, el precio es el de SU PLAN en el catálogo. Eso era lo que enseñaba «0 €/ciclo»
+    a clientes de pago sin cortesía marcada: los que vinieron de Calma llegaron con el campo
+    a cero, y son **168 de los 174 activos**.
+
+    Un cero SOLO se respeta cuando hay cortesía marcada (`comp_plan`), que es la casilla
+    «Plan de cortesía (sin pago)» de la ficha. Sin ella, un cero no es una decisión: es un
+    dato que no llegó.
+
+    VIVE AQUÍ Y NO EN `routes/admin.py` (punto 2.4c, segunda vuelta): estaba dentro del
+    módulo del panel, así que la lista del entrenador enseñaba el precio bueno y las dos
+    pantallas donde lo mira quien paga -- «Mi perfil» del cliente y la pestaña Membresía de
+    su ficha -- seguían con el cero. El precio de un cliente no puede depender de por qué
+    endpoint se pregunte.
+    """
+    if perfil.get("comp_plan"):
+        return 0.0
+    propio = perfil.get("price")
+    if propio not in (None, "", 0, 0.0):
+        try:
+            return float(propio)
+        except (TypeError, ValueError):
+            pass
+    plan = (catalogo or {}).get(perfil.get("plan") or "") or {}
+    try:
+        return float(plan.get("precio") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 # Auth Models
 class UserRegister(BaseModel):
     """Crear cuenta: correo y contraseña, nada más.
@@ -596,6 +630,17 @@ class ClientProfile(BaseModel):
     # saberlo -- el listado del equipo es solo para admins -- y el chat le decia "Tu
     # Entrenador" en abstracto.
     entrenador: Optional[Dict[str, Any]] = None
+    # LO QUE PAGA DE VERDAD CADA CICLO (punto 2.4c). `price` es el precio pactado y llega a
+    # cero en los 168 perfiles que vinieron de Calma, asi que Mi perfil le decia «0 €/ciclo»
+    # a un cliente de pago sin cortesia marcada -- «lo primero que va a ver quien reciba
+    # acceso». Este campo lo resuelve el servidor con `precio_de_ciclo`: el suyo si lo tiene,
+    # y si no el de su plan en el catalogo. Un cero solo se respeta con cortesia marcada.
+    precio_ciclo: Optional[float] = None
+    precio_cortesia: Optional[bool] = None
+    # Cuando se le acaba lo pagado (punto 2.4d): {fecha, proximo_cobro, vencida}. `fecha` es
+    # `current_period_end` o `fin_de_ciclo`; `proximo_cobro` es el `next_payment` de siempre,
+    # que es otra cosa y era lo unico que se enseñaba.
+    renovacion: Optional[Dict[str, Any]] = None
     # EL CONTRATO DE ESTE CLIENTE (punto 44 del 07-08). La duracion del ciclo NO es un
     # supuesto: hay planes de 4 semanas y de 5, y clientes con un ciclo distinto al de su
     # plan (es una de las 17 excepciones del punto 39, y aqui tiene donde vivir). Vacios =

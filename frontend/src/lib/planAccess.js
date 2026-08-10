@@ -9,6 +9,11 @@ export const CAP = {
     MACROS_PERSONALIZADOS: 'macros_personalizados',
     REPORTES: 'reportes',
     HARBIZ: 'harbiz',
+    // Chat con el entrenador. Sale del `acompanamiento` del plan, que es el único campo de
+    // la matriz que no se estaba mirando: al plan «solo app», que por definición no lleva
+    // entrenador, se le enseñaba el Chat igual, y lo que encontraba dentro era «Soporte
+    // JG12» y un vacío que le decía «envía un mensaje a tu entrenador» (TABLA 20 y 4.16).
+    CHAT: 'chat',
 };
 
 // Deriva capacidades booleanas a partir de la matriz de habilitaciones del plan.
@@ -25,6 +30,10 @@ export function deriveCapabilities(habilitaciones) {
         [CAP.MACROS_PERSONALIZADOS]: h.calculadora === 'personalizado',
         [CAP.REPORTES]: reportes.length > 0,
         [CAP.HARBIZ]: !!h.harbiz,
+        // Con entrenador o con entrenador y llamadas, sí; «solo app», no. Si el campo no
+        // viene (planes viejos sin normalizar) se deja pasar: quitarle el chat a alguien por
+        // un dato que falta es peor que enseñárselo de más.
+        [CAP.CHAT]: h.acompanamiento ? h.acompanamiento !== 'solo_app' : true,
     };
 }
 
@@ -36,7 +45,7 @@ const RUTINA_LABEL = {
     ninguna: 'Sin rutina',
 };
 const CALCULADORA_LABEL = {
-    personalizado: 'Macros personalizados por tu coach',
+    personalizado: 'Macros personalizados por tu entrenador',
     autogestion: 'Calculadora en autogestión',
     sin_ajuste: 'Calculadora sin ajuste activo',
 };

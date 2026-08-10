@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CAP } from '../lib/planAccess';
+import { plural } from '../lib/labels';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import { MEDIDAS, VIDEO_MEDIDAS } from '../lib/medidas';
 import { Button } from '../components/ui/button';
@@ -312,7 +313,10 @@ const STEPS_ONBOARD = [
 // (06-08-2026): estando aquí, el de 297 € no los daba nunca, y sin altura no hay índice
 // de muscularidad. Preguntarlos otra vez aquí sería preguntar dos veces lo mismo.
 const STEPS_NIVEL1 = [
-    { type: 'statement', title: 'Ahora, tu perfil completo', desc: 'Unas preguntas más para el equipo: le sirven para tu estrategia, tu rutina y tus menús. Estas ya no cambian tus macros.', cta: 'Seguir' },
+    // Sin el «estas ya no cambian tus macros» del final (punto 4.18, decisión de Jesús): el
+    // cliente no tiene por qué saber qué pregunta mueve qué número, y decírselo solo invita
+    // a contestar a la ligera lo que él cree que no cuenta.
+    { type: 'statement', title: 'Ahora, tu perfil completo', desc: 'Unas preguntas más para el equipo: le sirven para tu estrategia, tu rutina y tus menús.', cta: 'Seguir' },
     { type: 'date', key: 'birthdate', title: 'Fecha de nacimiento', desc: 'La verdadera, no me engañes.', required: true },
     // La experiencia entrenando SE FUE DE AQUÍ al test de entrada (pantalla 3 del documento
     // de textos de Jesús), y con sus cuatro opciones, no con los cinco tramos por años que
@@ -644,6 +648,17 @@ const QuestionnairePage = () => {
     const [vistaPrevia, setVistaPrevia] = useState(null);
     const [calculandoVivo, setCalculandoVivo] = useState(false);
     const progresoCargadoRef = useRef(false);
+    // EL «ATRÁS» QUE FUNCIONABA UNA VEZ Y DEJABA DE FUNCIONAR (punto 4.12 del 09-08).
+    //
+    // Al elegir una opción se programa el avance con `setTimeout(goNext, 550)` -- esos 550 ms
+    // son a propósito: dan tiempo a ver moverse los macros de la cabecera. Si dentro de ese
+    // medio segundo largo el cliente pulsa Atrás, se retrocede y acto seguido el temporizador,
+    // que seguía vivo, avanza otra vez. Desde fuera es exactamente lo que describe el punto:
+    // el botón deja de responder, y de forma intermitente, según lo rápido que vayas.
+    //
+    // Retroceder cancela el avance pendiente: el último gesto del cliente manda sobre
+    // cualquier cosa que estuviera programada.
+    const avancePendienteRef = useRef(null);
     // Los macros de antes de la ultima respuesta, para poder mostrar cuanto se ha movido cada uno.
     const previosRef = useRef(null);
     // Punto de partida: fotos subidas y la ficha que se le entrega a cambio.
@@ -783,6 +798,11 @@ const QuestionnairePage = () => {
             setIdx(0);
         }
     });
+
+    // Y si se sale de la pantalla con un avance programado, que no quede vivo (punto 4.12).
+    useEffect(() => () => {
+        if (avancePendienteRef.current) clearTimeout(avancePendienteRef.current);
+    }, []);
 
     // Retomar el cuestionario de ajuste donde lo dejó, y arrancar la cabecera con los macros
     // que tiene ahora mismo (los provisionales del alta) para que se vea de dónde parte.
@@ -1057,11 +1077,20 @@ const QuestionnairePage = () => {
         while (j < flow.length - 1 && !visible(flow[j])) j++;
         return Math.min(j, flow.length - 1);
     });
-    const goBack = () => setIdx(i => {
-        let j = i - 1;
-        while (j > 0 && !visible(flow[j])) j--;
-        return Math.max(j, 0);
-    });
+    const cancelarAvancePendiente = () => {
+        if (avancePendienteRef.current) {
+            clearTimeout(avancePendienteRef.current);
+            avancePendienteRef.current = null;
+        }
+    };
+    const goBack = () => {
+        cancelarAvancePendiente();
+        setIdx(i => {
+            let j = i - 1;
+            while (j > 0 && !visible(flow[j])) j--;
+            return Math.max(j, 0);
+        });
+    };
 
     const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 
@@ -1273,8 +1302,13 @@ const QuestionnairePage = () => {
         set(step.key, value);
         trasResponder(step.key, value);
         // Un poco mas de pausa que antes: da tiempo a ver moverse los macros de la cabecera
-        // antes de pasar a la siguiente pregunta.
-        setTimeout(goNext, modoAjuste ? 550 : 150);
+        // antes de pasar a la siguiente pregunta. Se guarda para poder cancelarlo: si el
+        // cliente pulsa Atrás mientras corre, manda el Atrás (punto 4.12).
+        cancelarAvancePendiente();
+        avancePendienteRef.current = setTimeout(() => {
+            avancePendienteRef.current = null;
+            goNext();
+        }, modoAjuste ? 550 : 150);
     };
 
     const confirmOptions = () => {
@@ -1377,19 +1411,22 @@ const QuestionnairePage = () => {
                         Se había quitado al unificar el alta (punto 15), y era pasarse: lo que
                         dejó de tener sentido es llamar "provisionales" a unos macros que ya
                         llevan dentro los modificadores, no el aviso al que espera revisión. */}
-                    {entrega?.con_entrenador ? 'Estos no son tus macros definitivos' : 'Estos son tus macros'}
+                    {/* EL AVISO VA DEBAJO DE LOS NÚMEROS (punto 4.1): «Debe ir DEBAJO DE LOS
+                        MACROS al terminar, para los planes con entrenador». Aquí arriba estaba
+                        antes de verlos, y leer «estos no son tus macros definitivos» sin haber
+                        visto todavía ningún macro no dice nada. */}
+                    Estos son tus macros
                 </h2>
-                <p className="text-foreground/60 mb-4 text-sm">
-                    {/* Sin entrenador asignado no se dice "tu entrenador": casi ningún cliente
-                        tiene uno puesto y prometer una persona que no existe se nota. Quien lo
-                        revisa entonces es el equipo, que es la verdad. */}
-                    {entrega?.con_entrenador
-                        ? 'Son los que vas a usar hasta que revisemos tu cuestionario. Rellénalo lo antes posible y en menos de 48 horas recibirás los tuyos personalizados.'
-                        /* Texto cerrado por Jesús el 06-08-2026 (momento 1 de la revisión
-                           suelta): lo que sostiene el número es el perfil parecido, y así se
-                           le cuenta. */
-                        : `Están adaptados a tu perfil, a partir de tus respuestas y tomando como referencia otros perfiles parecidos al tuyo.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ''}`}
-                </p>
+                {!entrega?.con_entrenador && (
+                    <p className="text-foreground/60 mb-4 text-sm">
+                        {/* Sin entrenador asignado no se dice "tu entrenador": casi ningún cliente
+                            tiene uno puesto y prometer una persona que no existe se nota. Quien lo
+                            revisa entonces es el equipo, que es la verdad.
+                            Texto cerrado por Jesús el 06-08-2026 (momento 1 de la revisión
+                            suelta): lo que sostiene el número es el perfil parecido. */}
+                        {`Están adaptados a tu perfil, a partir de tus respuestas y tomando como referencia otros perfiles parecidos al tuyo.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ''}`}
+                    </p>
+                )}
                 {m ? (
                     /* Punto 13 del doc del 07-08: los números tienen que verse enteros sin
                        mover nada. Es el momento más importante del alta y antes había que
@@ -1420,6 +1457,19 @@ const QuestionnairePage = () => {
                     </div>
                 ) : (
                     <p className="text-foreground/60">Tus macros se han guardado y los verás en tu panel.</p>
+                )}
+
+                {/* EL TEXTO DE CIERRE DEL TEST, literal del documento de Jesús del 06-08 y
+                    DEBAJO DE LOS NÚMEROS, que es donde él lo pide (punto 4.1). Solo para los
+                    planes con entrenador: es a ellos a quienes les queda una revisión. */}
+                {entrega?.con_entrenador && (
+                    <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 p-3" data-testid="cierre-del-test">
+                        <p className="text-sm font-semibold text-foreground">Estos no son tus macros definitivos.</p>
+                        <p className="text-sm text-foreground/70 mt-0.5">
+                            Son los que vas a usar hasta que revisemos tu cuestionario. Rellénalo lo antes posible y en
+                            menos de 48 horas recibirás los tuyos personalizados.
+                        </p>
+                    </div>
                 )}
 
                 {/* MOMENTO 1 de la revisión suelta (documento del 06-08-2026): al recibir sus
@@ -1613,7 +1663,7 @@ const QuestionnairePage = () => {
                                             answers.dieta_fecha_menu === d.fecha
                                                 ? 'border-brand bg-brand/10' : 'border-[#222222] hover:border-white/30'}`}>
                                         <span className="text-foreground text-sm font-semibold">{d.fecha}</span>
-                                        <span className="text-foreground/50 text-xs ml-2">{d.alimentos} alimentos</span>
+                                        <span className="text-foreground/50 text-xs ml-2">{plural(d.alimentos, 'alimento')}</span>
                                     </button>
                                 ))}
                             </div>

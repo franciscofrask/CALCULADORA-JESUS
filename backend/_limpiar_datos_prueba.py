@@ -33,6 +33,12 @@ PATRONES = {"$or": [
     {"email": {"$regex": r"^test[0-9]*@jg12", "$options": "i"}},
     {"email": {"$regex": r"jg12-sim", "$options": "i"}},
     {"email": {"$regex": r"^prueba@", "$options": "i"}},
+    # Las cuentas de simulación con nombre de cliente (`cliente2@jg12.com`, `cliente10@…`).
+    # El patrón de arriba solo cogía las que empiezan por «test», así que estas se quedaban
+    # dentro y salían en la lista de clientes como si fueran gente.
+    {"email": {"$regex": r"^cliente[0-9]+@jg12", "$options": "i"}},
+    {"email": {"$regex": r"^user@user[.]com$", "$options": "i"}},
+    {"email": {"$regex": r"^user@jg12", "$options": "i"}},
 ]}
 
 # Colecciones que cuelgan de un usuario y de qué campo.

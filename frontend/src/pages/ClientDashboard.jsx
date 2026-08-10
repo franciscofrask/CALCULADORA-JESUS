@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
+import { plural } from '../lib/labels';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -466,7 +467,7 @@ const ClientDashboard = () => {
                                 <div className="w-full bg-muted rounded-full h-2">
                                     <div className="bg-brand h-2 rounded-full transition-all duration-500" style={{ width: `${weekProgress}%` }} />
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-2">Semana {profile.week} de tu ciclo de {cicloSemanas} semanas</p>
+                                <p className="text-xs text-muted-foreground mt-2">Semana {profile.week} de tu ciclo de {plural(cicloSemanas, 'semana')}</p>
                             </>
                         ) : (
                             <p className="text-xs text-muted-foreground mt-1">Plan mensual · semana {profile.week}</p>
@@ -638,7 +639,7 @@ const ClientDashboard = () => {
                         {todayRoutine ? (
                             todayRoutine.is_rest
                                 ? <p className="text-muted-foreground text-sm">Día de descanso activo</p>
-                                : <p className="text-muted-foreground text-sm">{todayRoutine.exercises?.length || 0} ejercicios programados</p>
+                                : <p className="text-muted-foreground text-sm">{plural(todayRoutine.exercises?.length || 0, 'ejercicio')} programados</p>
                         ) : <p className="text-muted-foreground text-sm">Sin rutina asignada</p>}
                     </div>
                 </div>
@@ -657,7 +658,7 @@ const ClientDashboard = () => {
                     <QuickCard icon={Search} color="#0891B2" label="Alimentos" sub="Buscador" path="/dashboard/foods" navigate={navigate} testId="foods-card" />
                     {can('suplementacion') && <QuickCard icon={Pill} color="#DB2777" label="Suplementos" sub="Tu protocolo" path="/dashboard/supplements" navigate={navigate} testId="supplements-card" />}
                     {can('reportes') && <QuickCard icon={ClipboardCheck} color="#2563EB" label="Check-ins" sub="Seguimiento" path="/dashboard/checkins" navigate={navigate} testId="checkins-card" />}
-                    <QuickCard icon={MessageCircle} color="#9333EA" label="Chat" sub={unreadMessages > 0 ? `${unreadMessages} sin leer` : 'Tu entrenador'} path="/dashboard/messages" navigate={navigate} testId="messages-card" badge={unreadMessages} />
+                    {can('chat') && <QuickCard icon={MessageCircle} color="#9333EA" label="Chat" sub={unreadMessages > 0 ? `${unreadMessages} sin leer` : 'Tu entrenador'} path="/dashboard/messages" navigate={navigate} testId="messages-card" badge={unreadMessages} />}
                 </div>
             </div>
         </div>
@@ -678,7 +679,9 @@ const NAV_ITEMS = [
     { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
     { path: '/dashboard/reports', icon: FileText, label: 'Reportes', cap: 'reportes' },
     { path: '/dashboard/checkins', icon: ClipboardCheck, label: 'Check-ins', cap: 'reportes' },
-    { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat' },
+    // El plan «solo app» no lleva entrenador: enseñarle el Chat es prometerle una persona
+    // que no tiene (TABLA 20 del documento del 09-08).
+    { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat', cap: 'chat' },
     { path: '/dashboard/profile', icon: User, label: 'Mi perfil' },
 ];
 

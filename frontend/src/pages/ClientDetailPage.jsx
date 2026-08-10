@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { PlanBadge } from './ClientDashboard';
-import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES } from '../lib/labels';
+import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES, plural } from '../lib/labels';
 import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
@@ -66,8 +66,16 @@ const _fechaLarga = (iso) => iso
 // El último punto de una serie {fecha, valor} (punto 30): el peso y el % graso actuales
 // SON el último de su serie, y se enseñan con su fecha. Un número sin fecha no se puede
 // contrastar con nada, y era la mitad del lío de los dos pesos.
+//
+// Y HASTA HOY, como todo lo demás (punto 22). El corte de `sin_futuro.py` está puesto en el
+// servidor para el historial, la gráfica y los cálculos, pero esta función lo hacía por su
+// cuenta aquí y sin filtro: en la ficha de `hola@jesusgallegopt.com`, que arrastra 29 puntos
+// con fecha de 2027 y 2028 de la importación, el Resumen enseñaba «118 kg · del 21/02/2028»
+// cuando el último pesaje de verdad son 77,1 kg de hoy. Es el punto 9 -- los dos pesos
+// distintos -- reapareciendo en otra pantalla.
 const _ultimoDeLaSerie = (serie) => {
-    const puntos = (serie || []).filter(x => x?.valor != null && x?.fecha);
+    const hoy = hoyISO();
+    const puntos = (serie || []).filter(x => x?.valor != null && x?.fecha && String(x.fecha).slice(0, 10) <= hoy);
     if (!puntos.length) return null;
     return puntos.reduce((a, b) => String(b.fecha) > String(a.fecha) ? b : a);
 };
@@ -340,10 +348,10 @@ const ClientDetailPage = () => {
         try {
             const trainerId = value === 'none' ? null : value;
             await api.put(`/admin/clients/${clientId}/trainer`, { trainer_id: trainerId });
-            toast.success(trainerId ? 'Coach asignado' : 'Coach quitado');
+            toast.success(trainerId ? 'Entrenador asignado' : 'Entrenador quitado');
             fetchClient();
         } catch (e) {
-            toast.error(e.response?.data?.detail || 'No se pudo cambiar el coach');
+            toast.error(e.response?.data?.detail || 'No se pudo cambiar el entrenador');
         } finally { setAssigningTrainer(false); }
     };
 
@@ -544,7 +552,10 @@ const ClientDetailPage = () => {
             // momentos en que hay que acordarse de ella, y el coach está mirando aquí.
             description: (client?.profile?.excepcion ? `⚠ ${client.profile.excepcion}\n\n` : '')
                 + `Entreno ${f.training.protein}/${f.training.carbs}/${f.training.fat} · `
-                + `Intra ${f.peri.protein || 0}/${f.peri.carbs || 0} · `
+                // «Perientreno», que es como se llama el bloque en el editor de arriba y en
+                // el resto de la app (punto 4.18). Aquí decía «Intra», que además es solo uno
+                // de sus cuatro modos: el coach confirmaba un número con el nombre de otra cosa.
+                + `Perientreno ${f.peri.protein || 0}/${f.peri.carbs || 0} · `
                 + `Descanso ${f.rest.protein}/${f.rest.carbs}/${f.rest.fat}`
                 + `\nVigente desde el ${_fechaLarga(f.effective_date)}`
                 + (f.peso ? ` · peso ${f.peso} kg${f.peso_fecha ? ` del ${_fechaCorta(f.peso_fecha)}` : ''}` : '')
@@ -868,7 +879,7 @@ const ClientDetailPage = () => {
                                     </select>
                                 );
                             })()} />
-                            <InfoItem icon={Target} label="Rutina" value={activeRoutine ? `${activeRoutine.days?.filter(d => !d.is_rest).length || 0} días` : 'Sin rutina'} />
+                            <InfoItem icon={Target} label="Rutina" value={activeRoutine ? plural(activeRoutine.days?.filter(d => !d.is_rest).length || 0, 'día') : 'Sin rutina'} />
                             <InfoItem icon={CreditCard} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'} />
                             <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
                             {/* Punto 30: el peso, con su fecha. "94 kg · hace 3 días". El
@@ -1074,7 +1085,7 @@ const ClientDetailPage = () => {
                                             <span className="text-white/50">Último peso: <b className="text-white">{sugerencia.contexto_decision.peso_actual} kg</b>{sugerencia.contexto_decision.fecha_actual ? <span className="text-white/30"> · {sugerencia.contexto_decision.fecha_actual}</span> : null}</span>
                                         )}
                                         {sugerencia.contexto_decision.delta_ultimo != null && (
-                                            <span className="text-white/50">Desde el anterior: <b className="text-white">{sugerencia.contexto_decision.delta_ultimo > 0 ? '+' : ''}{sugerencia.contexto_decision.delta_ultimo} kg</b>{sugerencia.contexto_decision.dias_desde_anterior != null ? <span className="text-white/30"> ({sugerencia.contexto_decision.dias_desde_anterior} días)</span> : null}</span>
+                                            <span className="text-white/50">Desde el anterior: <b className="text-white">{sugerencia.contexto_decision.delta_ultimo > 0 ? '+' : ''}{sugerencia.contexto_decision.delta_ultimo} kg</b>{sugerencia.contexto_decision.dias_desde_anterior != null ? <span className="text-white/30"> ({plural(sugerencia.contexto_decision.dias_desde_anterior, 'día')})</span> : null}</span>
                                         )}
                                         {sugerencia.contexto_decision.delta_inicio != null && (
                                             <span className="text-white/50">Desde el inicio: <b className="text-white">{sugerencia.contexto_decision.delta_inicio > 0 ? '+' : ''}{sugerencia.contexto_decision.delta_inicio} kg</b></span>
@@ -1302,7 +1313,11 @@ const ClientDetailPage = () => {
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} />} />
-                            <InfoItem icon={CreditCard} label="Precio" value={`${profile?.price || 0}€/ciclo`} />
+                            {/* Del catálogo cuando el perfil no trae precio propio (punto 2.4c).
+                                Lo resuelve el servidor: aquí salía «0€/ciclo» en la ficha del
+                                mismo cliente al que la lista le pone bien su precio. */}
+                            <InfoItem icon={CreditCard} label="Precio"
+                                value={profile?.precio_cortesia ? 'Cortesía' : `${profile?.precio_ciclo ?? profile?.price ?? 0}€/ciclo`} />
                             <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
                             <InfoItem icon={Calendar} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES') : '-'} />
                         </div>
@@ -2374,7 +2389,7 @@ const MacroHistoryTable = ({ items, onEdit, onRepeat, onDelete, onEvaluar, borra
                                                 <span className={esBorrador ? 'text-white/50' : ''}>{_fechaCorta(_fechaEntrada(h))}</span>
                                                 {esBorrador && <span className="ml-1.5 text-[9px] uppercase text-[#FF671F]">sin guardar</span>}
                                                 {h.origen === 'ia' && <span className="ml-1.5 text-[9px] uppercase text-[#FF671F]" title="Propuesta de la IA aceptada tal cual">IA</span>}
-                                                {h.origen === 'ia_corregida' && <span className="ml-1.5 text-[9px] uppercase text-amber-500" title={`Propuesta de la IA corregida por el coach: ${JSON.stringify(h.correccion_coach || {})}`}>IA·corr</span>}
+                                                {h.origen === 'ia_corregida' && <span className="ml-1.5 text-[9px] uppercase text-amber-500" title={`Propuesta de la IA corregida por el entrenador: ${JSON.stringify(h.correccion_coach || {})}`}>IA·corr</span>}
                                             </td>
                                             <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
                                                 <span className={`font-bold rounded px-1 ${esBorrador ? 'text-white/40' : tonoPeso}`}
@@ -3043,7 +3058,7 @@ const MuralFotos = ({ api, clientId, calmaFotos, reports, macroHistory }) => {
                     {sesiones.length > 3 && (
                         <button onClick={() => setVerTodas(!verTodas)} data-testid="mural-ver-todas"
                             className="w-full py-2 text-xs font-semibold text-white/50 hover:text-[#FF671F] transition-colors">
-                            {verTodas ? 'Ver solo las últimas' : `Ver todas (${sesiones.length} días con fotos)`}
+                            {verTodas ? 'Ver solo las últimas' : `Ver todas (${plural(sesiones.length, 'día')} con fotos)`}
                         </button>
                     )}
                 </CardContent>
@@ -3350,7 +3365,7 @@ const CalmaSuplementos = ({ sup }) => {
                 )}
                 {sup.observaciones && (
                     <div>
-                        <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">Observaciones del coach</p>
+                        <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">Observaciones del entrenador</p>
                         <p className="text-white/80 text-sm whitespace-pre-wrap">{sup.observaciones}</p>
                     </div>
                 )}

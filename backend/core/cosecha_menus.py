@@ -165,9 +165,17 @@ async def recontar(db, desde: Optional[datetime] = None) -> Dict[tuple, dict]:
 
     # La configuración de cada alimento, una sola vez: aquí se recorren cientos de miles
     # de items y resolverla por item multiplicaría el trabajo por nada.
+    #
+    # CON LOS MACROS DENTRO (punto 4.4). La proyección traía solo `racion` y `unidades`, y
+    # `get_food_config` los necesita para su red de seguridad: un alimento «por unidades»
+    # cuyo macro pesa más que la propia ración se degrada a peso, porque la ración está mal.
+    # Sin esos tres campos la red no se activaba aquí, así que el aislado de proteína y las
+    # dos tortitas de maíz contaban por unidades DENTRO de la cosecha y por peso en el resto
+    # de la app. Tres alimentos, pero de los que dimensionan mal un menú entero.
     cfgs: Dict[int, dict] = {}
     async for f in db.foods.find({}, {"_id": 0, "id": 1, "categorias": 1,
-                                      "racion": 1, "unidades": 1}):
+                                      "racion": 1, "unidades": 1,
+                                      "proteinas": 1, "hidratos": 1, "grasas": 1}):
         try:
             cfgs[int(f["id"])] = get_food_config(f)
         except (TypeError, ValueError, KeyError):

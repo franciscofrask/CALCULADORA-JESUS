@@ -10,6 +10,7 @@ import json
 
 from core.database import db
 from core.security import get_current_user, get_admin_user, assert_client_access
+from core.sin_futuro import hasta_hoy
 from core.plan_access import require_access, RUTINA_VISIBLE_PARA_EL_CLIENTE
 from routes.notifications import notify
 from models.common import RoutineResponse, RoutineCreate
@@ -94,7 +95,9 @@ async def generate_routine_ai(data: RoutineCreate, user = Depends(get_admin_user
 
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
     
-    reports = await db.reports.find({"client_id": data.client_id}, {"_id": 0}).sort("created_at", -1).to_list(3)
+    # Hasta hoy (punto 22): los tres reportes que se le mandan a la IA son los tres ultimos
+    # DE VERDAD, no los importados con fecha de 2028, que ganaban el orden.
+    reports = await db.reports.find(hasta_hoy({"client_id": data.client_id}), {"_id": 0}).sort("created_at", -1).to_list(3)
     prev_routines = await db.routines.find({"client_id": data.client_id}, {"_id": 0}).sort("created_at", -1).to_list(2)
     
     plan_features = PLAN_TYPES.get(profile["plan"], {}).get("features", [])
@@ -191,7 +194,7 @@ async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(g
     # decision confirmada el 08-08-2026). Avisarle de algo que no puede abrir le ensena a
     # ignorar los avisos, y son los mismos por los que se entera de sus macros.
     if RUTINA_VISIBLE_PARA_EL_CLIENTE:
-        await notify(profile["user_id"], "rutina", "Tu coach te ha preparado una rutina nueva", "/dashboard/routine")
+        await notify(profile["user_id"], "rutina", "Tu entrenador te ha preparado una rutina nueva", "/dashboard/routine")
 
     return RoutineResponse(**routine_doc)
 

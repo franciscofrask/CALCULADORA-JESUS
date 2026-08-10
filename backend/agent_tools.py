@@ -41,6 +41,19 @@ MARGEN_BORRADOR = 12.0
 _ROL_A_MACRO = {"proteina": "P", "hidrato": "H", "grasa": "G"}
 _MACRO_LBL = {"P": "proteína", "H": "hidratos", "G": "grasa"}
 
+# El bote, detrás del plato a igualdad de distancia (punto 78 del documento del 07-08).
+# NO son categorías prohibidas: el cliente las busca y las mete cuando quiere, y en el intra
+# y el post son justo lo que toca. Es solo el desempate de las SUGERENCIAS en una comida
+# normal, donde «primero un aislado de 90 g de proteína» es lo que hizo saltar el punto.
+CATS_SUPLEMENTO = [
+    '4',      # proteínas en polvo (suero, aislado, caseína, vegetal)
+    '14',     # hidratos en polvo
+    '18.3',   # hidratos de carbono en polvo para entrenar
+    '27',     # sustitutivos de comidas
+    '29',     # barritas proteicas
+    '30',     # proteína en polvo y barritas proteicas
+]
+
 
 class AgentTools:
     """Las herramientas, atadas a una sesión (bot) y a las cachés compartidas."""
@@ -433,6 +446,15 @@ class AgentTools:
         nada a mano: un aislado da 9 g de proteína y 0 de grasa -- distancia 6,5 --,
         mientras que unas brochetas de pollo dan 9,2 P y 6,2 G a la vez, distancia 0,1. La
         comida real gana sola porque cubre los dos macros de un golpe.
+
+        PERO NO SIEMPRE: cuando el polvo y la comida real caen en el MISMO escalón de 3 g,
+        el orden dentro del escalón lo decidía el barajado, así que el aislado podía volver
+        a salir el primero. El punto pedía «penalizar las categorías de suplemento cuando
+        hay alternativas de comida real que cubren igual», y eso es exactamente un
+        desempate: a igualdad de distancia, primero lo que se come.
+
+        En el intra y en el post NO se aplica: ahí el polvo es lo que toca, y el universo
+        de esas dos ya viene filtrado por `_universo`.
         """
         from calma_suggest import diferencia_de_macros
         hueco = {"proteinas": float(restante.get("P", 0) or 0),
@@ -445,10 +467,22 @@ class AgentTools:
                 {"proteinas": m.get("P", 0), "hidratos": m.get("H", 0), "grasas": m.get("G", 0)},
                 hueco)
 
+        # A igualdad de escalón, la comida real por delante del bote (punto 78).
+        en_peri = self.bot.current_meal_key() in ("Intra", "Post")
+
+        def es_polvo(it):
+            if en_peri:
+                return 0
+            for c in parse_categories(it.get("categorias")):
+                for p in CATS_SUPLEMENTO:
+                    if c == p or c.startswith(p + "."):
+                        return 1
+            return 0
+
         import random
         rng = random.Random(self._semilla_variedad())
         rng.shuffle(items)
-        return sorted(items, key=lambda it: int(distancia(it) // self.ESCALON_DISTANCIA))
+        return sorted(items, key=lambda it: (int(distancia(it) // self.ESCALON_DISTANCIA), es_polvo(it)))
 
     def _semilla_variedad(self) -> int:
         """Con qué se baraja: estable por CLIENTE, DÍA y COMIDA.

@@ -18,7 +18,7 @@ const ESTADOS = [
 ];
 
 const CALCULADORA_OPTS = [
-    { value: 'personalizado', label: 'Personalizado (coach ajusta)' },
+    { value: 'personalizado', label: 'Personalizado (lo ajusta el entrenador)' },
     { value: 'autogestion', label: 'Autogestión' },
     { value: 'sin_ajuste', label: 'Sin ajuste activo' },
 ];

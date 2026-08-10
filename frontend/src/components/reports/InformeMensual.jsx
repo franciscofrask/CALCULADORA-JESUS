@@ -13,6 +13,7 @@
  */
 import React from 'react';
 import { Camera, TrendingDown, TrendingUp, Minus, Check, AlertCircle, Lock, Users } from 'lucide-react';
+import { plural } from '../../lib/labels';
 
 const COLOR = {
     verde: 'text-emerald-500',
@@ -250,7 +251,7 @@ export const InformeMensual = ({ informe, onPedirFotos }) => {
             <Apartado titulo="Lo que has cumplido">
                 <div className="grid grid-cols-2 gap-4">
                     <Barra etiqueta="Dieta registrada" dato={cumplimiento.dieta}
-                        sufijo={`de ${cumplimiento.dias_periodo} días`} />
+                        sufijo={`de ${plural(cumplimiento.dias_periodo, 'día')}`} />
                     {/* La barra de entrenos sale de lo que él contesta en el reporte, no de
                         un registro (punto 57 del doc del 07-08): la app guarda el plan de
                         rutina, no las sesiones hechas, y el check-in diario dejó de
@@ -265,8 +266,8 @@ export const InformeMensual = ({ informe, onPedirFotos }) => {
                 </div>
                 {cumplimiento.huecos_dieta > 0 && (
                     <p className="text-[11px] text-muted-foreground mt-3">
-                        Hay {cumplimiento.huecos_dieta} días sin registrar. Si los hiciste y no los apuntaste, dínoslo:
-                        cambia el ajuste.
+                        Hay {plural(cumplimiento.huecos_dieta, 'día')} sin registrar. Si los hiciste y no los apuntaste,
+                        dínoslo: cambia el ajuste.
                     </p>
                 )}
             </Apartado>

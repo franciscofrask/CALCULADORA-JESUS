@@ -392,6 +392,15 @@ def distribuir_macros(
             return 0.0
         return v
 
+    # OPCION_PERI: los cuatro modos, y nada mas (punto 5.4, TABLA 19). Un valor desconocido
+    # cae en el `else` de `_calcular_periworkout` y se trata como intra_post -- que es lo
+    # razonable --, pero era el unico de los tres controles de rango que lo hacia SIN decirlo.
+    # Un cliente configurado en "solo post" cuyo modo llegue mal escrito recibe intra y post
+    # y no hay nada en ninguna parte que permita enterarse.
+    if opcion_peri not in ("intra_post", "solo_intra", "solo_post", "sin_peri"):
+        corregido.append(f"opcion_peri={opcion_peri!r} no es un modo conocido: se usa intra_post")
+        opcion_peri = "intra_post"
+
     p_entreno = _no_negativo(p_entreno, "p_entreno")
     h_entreno = _no_negativo(h_entreno, "h_entreno")
     g_entreno = _no_negativo(g_entreno, "g_entreno")

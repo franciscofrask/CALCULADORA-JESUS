@@ -214,8 +214,10 @@ async def get_confirmacion_huecos(user = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
     # Desde el reporte anterior hasta hoy: es el periodo del que se le pregunta.
+    # Con hasta_hoy (punto 22): un reporte importado con fecha de 2027 ganaba el sort y
+    # ponia el inicio del periodo en el futuro, o sea un periodo negativo.
     prev = await db.reports.find_one(
-        {"client_id": profile["id"]}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)]
+        hasta_hoy({"client_id": profile["id"]}), {"_id": 0, "created_at": 1}, sort=[("created_at", -1)]
     )
     hasta = datetime.now(timezone.utc)
     desde = hasta - timedelta(days=28)
@@ -321,7 +323,7 @@ async def _ritmos_de_su_perfil(perfil: dict) -> List[float]:
     ritmos: List[float] = []
     for p in pares:
         reps = await db.reports.find(
-            {"client_id": p["id"], "weight": {"$ne": None}},
+            hasta_hoy({"client_id": p["id"], "weight": {"$ne": None}}),
             {"_id": 0, "weight": 1, "created_at": 1},
         ).sort("created_at", -1).to_list(2)
         if len(reps) < 2:
@@ -487,6 +489,6 @@ async def set_report_feedback(report_id: str, data: dict, user = Depends(get_adm
         profile = await db.client_profiles.find_one({"id": report["client_id"]}, {"_id": 0, "user_id": 1})
         if profile:
             from routes.notifications import notify
-            await notify(profile["user_id"], "feedback", "Tu coach ha comentado tu reporte", "/dashboard/reports")
+            await notify(profile["user_id"], "feedback", "Tu entrenador ha comentado tu reporte", "/dashboard/reports")
 
     return {"ok": True}

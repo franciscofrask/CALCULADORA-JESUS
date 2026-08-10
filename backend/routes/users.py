@@ -80,6 +80,24 @@ async def get_client_profile(user = Depends(get_current_user)):
         t = await db.users.find_one({"id": profile["trainer_id"]}, {"_id": 0, "id": 1, "name": 1})
         if t:
             datos["entrenador"] = {"id": t.get("id"), "nombre": t.get("name")}
+    # LO QUE PAGA, de verdad (punto 2.4c). `price` viene a cero en los 168 perfiles migrados
+    # de Calma, y Mi perfil enseñaba «0 €/ciclo» a un cliente de pago. El precio del plan
+    # tapa ese hueco; el cero solo se respeta si hay cortesía marcada.
+    from models.user import merged_catalog, precio_de_ciclo
+    from routes.plans import _overrides_by_code
+    datos["precio_ciclo"] = precio_de_ciclo(profile, merged_catalog(await _overrides_by_code()))
+    datos["precio_cortesia"] = bool(profile.get("comp_plan"))
+    # CUÁNDO SE LE ACABA (punto 2.4d). «Próxima renovación: no definida» a alguien cuya
+    # membresía venció hace una semana no es que falte el dato: es que se miraba solo
+    # `next_payment`, que es el próximo COBRO, y los migrados no tienen ninguno. Lo que se
+    # sabe de cuándo termina lo pagado está en `current_period_end` (Stripe) o en
+    # `fin_de_ciclo` (calendario de arranque), y si esa fecha ya pasó hay que decirlo.
+    _fin = str(profile.get("current_period_end") or profile.get("fin_de_ciclo") or "")[:10] or None
+    datos["renovacion"] = {
+        "fecha": _fin,
+        "proximo_cobro": profile.get("next_payment"),
+        "vencida": bool(_fin and _fin < datetime.now(timezone.utc).date().isoformat()),
+    }
     return ClientProfile(**datos)
 
 @router.patch("/clients/onboarding", response_model=ClientProfile)

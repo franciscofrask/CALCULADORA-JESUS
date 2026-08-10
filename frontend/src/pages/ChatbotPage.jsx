@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
 import { useConfirm } from '../components/ui/confirm';
 import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download, ClipboardList } from 'lucide-react';
 import ChatMealSummary from '../components/nutrition/ChatMealSummary';
@@ -73,6 +75,15 @@ const loadPersisted = () => {
 export default function ChatbotPage() {
   const { confirm } = useConfirm();
   const navigate = useNavigate();
+  // EL DÍA QUE SE ESTÁ MIRANDO, GUARDADO CON DUEÑO (punto 4.7). Nutrición ya lo pasó a
+  // `u:<id>:nutrition_last_date` cuando se arregló que la dieta de un cliente se viera en
+  // la cuenta del siguiente, y el asistente se quedó fuera: seguía leyendo y escribiendo la
+  // clave suelta. Con eso, en un ordenador compartido el asistente arrancaba en el día del
+  // anterior, y además iba desincronizado con Nutrición, que ya leía la clave con dueño.
+  const { user } = useAuth();
+  const uid = user?.id || null;
+  const diaEnNutricion = () => leerLocal('nutrition_last_date', uid);
+  const recordarDia = (dia) => escribirLocal('nutrition_last_date', uid, dia);
 
   // Movil: algunos textos van abreviados para que quepan en una linea.
   const [esMovil, setEsMovil] = useState(() => window.matchMedia('(max-width: 640px)').matches);
@@ -241,7 +252,7 @@ export default function ChatbotPage() {
         // Ni una pregunta de configuración: el día que se está mirando en Nutrición y lo
         // que hay puesto ahí. Lo que el cliente quiera cambiar (otro día, descanso, otro
         // número de comidas) lo dice cuando quiera y se recoloca.
-        const dia = localStorage.getItem('nutrition_last_date') || todayLocal();
+        const dia = diaEnNutricion() || todayLocal();
         setTargetDate(dia);
         arrancarConLaConfigDeNutricion(dia, {}, data.session_id);
       }
@@ -735,7 +746,7 @@ export default function ChatbotPage() {
     // fijado, se usa el día que se esté mirando en Nutrición, o hoy: guardar en el día
     // equivocado sería peor, pero no guardar nada y decir que sí es lo que estaba
     // pasando.
-    const dia = targetDate || localStorage.getItem('nutrition_last_date') || todayLocal();
+    const dia = targetDate || diaEnNutricion() || todayLocal();
     try {
       if (!autoSyncRef.current.decided) {
         const ex = await fetchConTope(`${API_URL}/api/diets/${dia}`, {
@@ -765,7 +776,7 @@ export default function ChatbotPage() {
       );
       const data = await res.json();
       if (res.ok && !data.needs_confirmation) {
-        localStorage.setItem('nutrition_last_date', dia);
+        recordarDia(dia);
         addMessage(`✅ Guardado en tu pestaña de nutrición (${formatDateLabel(dia)}).`, false);
       } else {
         // Antes esto se callaba: el cliente leía «comida guardada» y no lo estaba.
@@ -948,7 +959,7 @@ export default function ChatbotPage() {
 
       // 3. Handoff a la pestaña de nutrición en ese día
       addMessage(`✅ Dieta volcada en tu pestaña de nutrición (${formatDateLabel(targetDate)}). Abriéndola…`, false);
-      localStorage.setItem('nutrition_last_date', targetDate);
+      recordarDia(targetDate);
       setTimeout(() => navigate('/dashboard/nutrition'), 600);
     } catch (error) {
       addMessage('Error al volcar la dieta. Inténtalo de nuevo.', false);

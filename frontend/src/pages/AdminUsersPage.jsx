@@ -117,7 +117,7 @@ const AdminUsersPage = () => {
                 <div>
                     <p className="text-xs text-[#FF671F] uppercase tracking-wider mb-1">Administración</p>
                     <h1 className="text-2xl font-bold uppercase">Usuarios</h1>
-                    <p className="text-white/40 text-sm">Equipo: admins y coaches. Los clientes se gestionan desde su ficha.</p>
+                    <p className="text-white/40 text-sm">Equipo: admins y entrenadores. Los clientes se gestionan desde su ficha.</p>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="flex bg-[#111] rounded-lg p-0.5 border border-[#222]">
@@ -137,7 +137,7 @@ const AdminUsersPage = () => {
                 <Card className="bg-[#111] border-[#222] text-white">
                     <CardContent className="p-0">
                         {auditEntries.length === 0 ? (
-                            <p className="text-white/30 text-sm text-center py-10">Sin actividad registrada todavía. Aquí quedará quién cambió macros, coaches, roles, contraseñas y leads.</p>
+                            <p className="text-white/30 text-sm text-center py-10">Sin actividad registrada todavía. Aquí quedará quién cambió macros, entrenadores, roles, contraseñas y leads.</p>
                         ) : (
                             <div className="divide-y divide-[#1a1a1a]">
                                 {auditEntries.map(e => (

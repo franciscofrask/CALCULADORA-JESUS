@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { plural } from '../lib/labels';
 import {
     Dumbbell, Repeat, ChevronDown, ChevronUp, History,
     Flame, Moon, Play, Timer, Trophy, ChevronRight
@@ -85,7 +86,7 @@ const RoutinePage = () => {
                         <div key={r.id} className={`surface p-4 flex items-center justify-between ${i === 0 ? 'border-brand/40' : ''}`}>
                             <div>
                                 <p className="font-semibold text-foreground text-sm">{new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                                <p className="text-xs text-muted-foreground">{r.days?.filter(d => !d.is_rest).length || 0} días de entreno</p>
+                                <p className="text-xs text-muted-foreground">{plural(r.days?.filter(d => !d.is_rest).length || 0, 'día')} de entreno</p>
                             </div>
                             {i === 0 && <span className="badge-elm">Actual</span>}
                         </div>
