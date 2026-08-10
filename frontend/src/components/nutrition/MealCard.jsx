@@ -119,14 +119,17 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     // Sin barras: los tres macros en una sola linea (servido/objetivo + cuanto falta
     // o sobra). El color del texto ya dice como va cada uno.
     return (
-        <div className="bg-muted/50 rounded-xl px-3 py-2 flex flex-wrap items-center gap-x-5 gap-y-1" data-testid={`meal-progress-${mealKey}`}>
+        // Los tres macros de la comida, en tamaño de lectura: iban a 11 px y son el
+        // marcador de la comida que se está montando -- lo que se mira después de cada
+        // alimento que se añade.
+        <div className="bg-muted/50 rounded-xl px-3 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5" data-testid={`meal-progress-${mealKey}`}>
             {bars.map(({ label, name, val, tgt, color, st }) => (
                 <div key={label} className="flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                    <span className="text-[11px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
-                    <span className="text-[11px] font-bold sm:hidden" style={{ color }}>{label}</span>
-                    <span className={`font-data text-[11px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
-                    {hasFoods && st.label && <span className={`font-data text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                    <span className="text-[15px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
+                    <span className="text-[15px] font-bold sm:hidden" style={{ color }}>{label}</span>
+                    <span className={`font-data text-[15px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
+                    {hasFoods && st.label && <span className={`font-data text-[15px] font-semibold ${st.cls}`}>{st.label}</span>}
                 </div>
             ))}
         </div>
@@ -159,22 +162,24 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                 el nombre del alimento se quedaba en una letra o desaparecia del todo, asi que
                 no habia forma de saber que llevaba la comida. Desde sm vuelve a la linea unica. */}
             <div className="order-1 w-full min-w-0 sm:order-2 sm:w-auto sm:flex-1">
+                {/* El nombre del alimento, a 17 px: es lo que la persona lee para saber qué
+                    lleva su comida, y estaba en 14, por debajo del texto normal. */}
                 {food.url ? (
                     <a href={food.url} target="_blank" rel="noopener noreferrer"
-                        className="block text-sm font-semibold text-brand underline underline-offset-2 truncate"
+                        className="block text-[17px] font-semibold text-brand underline underline-offset-2 truncate"
                         title={`${food.nombre} (abre la ficha del producto)`}>
                         {food.nombre}
                     </a>
                 ) : (
-                    <span className="block text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
+                    <span className="block text-[17px] font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
                 )}
             </div>
 
             {/* Macros: en movil comparten linea con los controles, para no gastar una fila
                 entera. En sm van justo detras del nombre, como siempre. */}
-            <span className="order-3 flex-1 min-w-0 truncate text-[11px] text-muted-foreground font-data sm:hidden"
+            <span className="order-3 flex-1 min-w-0 truncate text-[14px] text-muted-foreground font-data sm:hidden"
                 title={macrosLine(macros)}>{macrosLineCorta(macros)}</span>
-            <span className="hidden sm:inline order-3 text-[11px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0"
+            <span className="hidden sm:inline order-3 text-[14px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0"
                 title={macrosLine(macros)}>{macrosLine(macros)}</span>
 
             {/* Reorder (prioridad) */}

@@ -239,17 +239,12 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                             <X className="w-5 h-5 text-white" />
                         </button>
                     </div>
-                    {/* Sin la línea de «Comida 1 - menús reales que ya cuadran con tu
-                        objetivo»: el objetivo está justo debajo con sus tres números, y que
-                        cuadran lo dice el contador de la lista. Era la tercera vez. */}
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-white/60">Tu objetivo</span>
-                        <span className="text-sm font-black text-white">
-                            <span className="text-red-400">{Math.round(obj.P)}P</span>
-                            {' · '}<span className="text-blue-400">{Math.round(obj.H)}H</span>
-                            {' · '}<span className="text-yellow-400">{Math.round(obj.G)}G</span>
-                        </span>
-                    </div>
+                    {/* La cabecera queda con el título y poco más. Fuera «Comida 1 - menús
+                        reales que ya cuadran con tu objetivo» y fuera «Tu objetivo P·H·G»:
+                        aquí ya está eligiendo, y todos los menús de la lista cuadran con ese
+                        objetivo -- por eso están en la lista. Repetirlo arriba no le ayuda a
+                        elegir, que es lo único que está haciendo en esta pantalla. Sus macros
+                        del día los tiene en Nutrición, de donde viene. */}
                 </DialogHeader>
 
                 {/* Pestañas: biblioteca real / recetario ELM. Con la biblioteca apagada
