@@ -309,13 +309,12 @@ const MealCard = ({
                         <StatusDot status={status} className="hidden lg:inline-block flex-shrink-0" />
                         {isLocked && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </div>
-                    {/* Sin la palabra «Objetivo» en el teléfono: en una lista de cinco
-                        comidas se repite cinco veces para decir lo que ya se entiende por
-                        dónde está -- los números debajo del nombre de la comida son lo que
-                        hay que meter en ella. En escritorio se queda. */}
-                    <p className="text-[17px] lg:text-xs lg:text-muted-foreground font-data mt-1 lg:mt-0.5 text-foreground/70">
-                        <span className="hidden lg:inline">Objetivo: </span>
-                        {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
+                    {/* En el teléfono los números bajan al pie de la tarjeta, no van pegados
+                        al nombre: así la fila de arriba queda con lo que se recorre de un
+                        vistazo -- la comida y en qué punto está -- y el objetivo, que es lo
+                        que se lee cuando ya te has parado en esa comida, queda debajo. */}
+                    <p className="hidden lg:block text-xs text-muted-foreground font-data mt-0.5">
+                        Objetivo: {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
                     </p>
                 </div>
             </div>
@@ -349,10 +348,19 @@ const MealCard = ({
             {forceExpanded ? (
                 <div className={`${denso ? 'p-3 sm:p-3.5' : 'p-4 sm:p-5'} flex items-center justify-between gap-3 border-b border-border`}>{HeaderInner}</div>
             ) : (
-                <button className="w-full text-left p-3.5 sm:p-4 flex items-center justify-between gap-3"
+                <button className="w-full text-left p-3.5 sm:p-4 pb-1.5 flex items-center justify-between gap-3"
                     onClick={() => setExpandedMeals(prev => ({ ...prev, [mealKey]: !isExpanded }))}>
                     {HeaderInner}
                 </button>
+            )}
+            {/* EL OBJETIVO, AL PIE DE LA TARJETA (teléfono). Arriba queda la comida y su
+                estado, que es lo que se recorre de un vistazo; los números, que son lo que
+                se lee cuando ya te has parado en esa comida, van debajo y a todo el ancho. */}
+            {!forceExpanded && (
+                <p className="lg:hidden px-3.5 sm:px-4 pb-3 text-[17px] font-data text-foreground/70"
+                    data-testid={`objetivo-${mealKey}`}>
+                    {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
+                </p>
             )}
 
             {isExpanded && (
