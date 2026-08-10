@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useEsTelefono } from '../lib/esTelefono';
 import { toast } from 'sonner';
 import GraficaDePeso from '../components/GraficaDePeso';
 import {
     FileText, TrendingUp, Scale, Ruler,
-    Activity, Moon, Zap, Brain, Send, ChevronRight,
-    Calendar
+    Activity, Moon, Zap, Brain, Send, ChevronRight, ChevronLeft,
+    Calendar, ClipboardCheck, History
 } from 'lucide-react';
 import InformeMensual from '../components/reports/InformeMensual';
 import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
@@ -80,6 +82,85 @@ const WindowBanner = ({ w }) => {
     );
 };
 
+/**
+ * LA PORTADA DE SEGUIMIENTO (documento del 10-08, pantalla 20).
+ *
+ * «Una sola entrada. Lo que toca ahora, arriba y en naranja; lo que ya hizo, en gris.
+ * Nunca tiene que elegir entre cuatro formularios.»
+ *
+ * Sustituye a las dos entradas de hoy -- Reportes y Check-ins eran dos sitios distintos en
+ * el menú -- y a que esta pantalla abriera con el formulario del mes desplegado entero.
+ *
+ * Lo que el documento pide y AQUÍ TODAVÍA NO ESTÁ, para que no se dé por hecho: la tarjeta
+ * de «Esta semana» con el balance («cuadraste 5 de 7 días») necesita un dato que la app no
+ * calcula hoy, y la revisión mensual en seis pasos (pantallas 22 a 24) es otra pantalla.
+ * Aquí cada tarjeta lleva a lo que ya existe.
+ */
+const TarjetaSeguimiento = ({ cuando, titulo, sub, cta, onClick, tono = 'gris', testid }) => {
+    const destacada = tono === 'ahora';
+    return (
+        <button onClick={onClick} data-testid={testid}
+            className={`w-full text-left rounded-2xl p-4 border transition-colors ${
+                destacada ? 'border-brand/50 bg-brand/5 hover:bg-brand/10' : 'border-border bg-card hover:border-foreground/20'}`}>
+            <p className={`text-xs font-bold uppercase tracking-wider ${destacada ? 'text-brand' : 'text-muted-foreground'}`}>{cuando}</p>
+            <p className="text-lg font-bold text-foreground mt-1">{titulo}</p>
+            {sub && <p className="text-[15px] text-muted-foreground mt-0.5">{sub}</p>}
+            {cta && (
+                <span className={`inline-flex items-center gap-1 mt-3 text-sm font-bold ${destacada ? 'text-brand' : 'text-foreground/70'}`}>
+                    {cta} <ChevronRight className="w-4 h-4" />
+                </span>
+            )}
+        </button>
+    );
+};
+
+const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial, onCheckins }) => {
+    // Le toca reporte y no lo ha mandado: es lo único que va arriba y en naranja.
+    const tocaRevision = !!windowState?.due && !windowState?.submitted;
+    const yaMandado = !!windowState?.submitted;
+    return (
+        <div className="space-y-3" data-testid="portada-seguimiento">
+            <TarjetaSeguimiento
+                testid="seg-revision"
+                cuando={tocaRevision ? 'Este mes · te toca' : yaMandado ? 'Este mes · hecho' : 'Este mes'}
+                titulo={windowState?.tipo_label || 'Tu revisión'}
+                sub={tocaRevision
+                    ? 'Unas fotos, tus medidas y unas preguntas. Y tienes tus macros nuevos.'
+                    : yaMandado
+                        ? 'Ya lo mandaste. Lo estamos mirando.'
+                        : 'Todavía no toca. Te avisamos cuando abra.'}
+                cta={tocaRevision ? 'Empezar' : 'Ver'}
+                tono={tocaRevision ? 'ahora' : 'gris'}
+                onClick={onRevision} />
+
+            <TarjetaSeguimiento
+                testid="seg-hoy"
+                cuando="Hoy · 10 segundos"
+                titulo="¿Cómo vas hoy?"
+                sub="Energía, hambre y qué has comido."
+                cta="Rellenar"
+                tono={tocaRevision ? 'gris' : 'ahora'}
+                onClick={onCheckins} />
+
+            <TarjetaSeguimiento
+                testid="seg-evolucion"
+                cuando="Siempre"
+                titulo="Mi evolución"
+                sub="Fotos, medidas, peso y gráficas."
+                cta="Ver"
+                onClick={onEvolucion} />
+
+            <TarjetaSeguimiento
+                testid="seg-historial"
+                cuando="Siempre"
+                titulo="Lo que ya mandaste"
+                sub="Tus reportes anteriores y sus informes."
+                cta="Ver"
+                onClick={onHistorial} />
+        </div>
+    );
+};
+
 // Las tres preguntas del formulario de siempre de Jesús que faltaban en la app
 // (punto 5 del documento del 05-08). Los textos son los suyos.
 const PREGUNTAS_REPORTE = [
@@ -129,6 +210,13 @@ const ReportsPage = () => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState('form');
+    // EN EL TELÉFONO, LA PANTALLA ABRE EN LA PORTADA (documento del 10-08, pantalla 20) y
+    // `seccionAbierta` dice en cuál de las tres ha entrado. En escritorio no se usa: ahí
+    // mandan las pestañas de siempre.
+    const enTelefono = useEsTelefono();
+    const navigate = useNavigate();
+    const [seccionAbierta, setSeccionAbierta] = useState(null);
+    const vista = enTelefono ? seccionAbierta : activeTab;
     const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
     const [prev, setPrev] = useState(null);                 // último reporte (referencia de medidas)
     // Confirmación de huecos: lo que se le pregunta ANTES de rellenar, en vez de pedirle
@@ -316,14 +404,44 @@ const ReportsPage = () => {
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.05em' }} data-testid="reports-heading">
-                        MIS REPORTES
+                        <span className="lg:hidden">SEGUIMIENTO</span>
+                        <span className="hidden lg:inline">MIS REPORTES</span>
                     </h1>
                     <p className="text-xs text-foreground/30">Seguimiento semanal</p>
                 </div>
             </div>
 
+            {/* LA PORTADA DE SEGUIMIENTO (documento del 10-08, pantalla 20). Una sola
+                entrada en vez de dos -- Reportes y Check-ins eran dos sitios distintos --,
+                con lo que toca ahora arriba y lo que ya está hecho debajo en gris: «nunca
+                tiene que elegir entre cuatro formularios».
+
+                Antes esta pantalla abría directamente con el formulario del reporte entero
+                desplegado: peso, las diez medidas, los huecos, las notas, tres preguntas,
+                las fotos y enviar. 3.770 px, cuatro pantallas y media de móvil, tanto si le
+                tocaba reporte como si no.
+
+                Solo en el teléfono. En escritorio siguen las tres pestañas de siempre. */}
+            {enTelefono && !seccionAbierta && (
+                <PortadaSeguimiento
+                    windowState={windowState}
+                    onRevision={() => setSeccionAbierta('form')}
+                    onEvolucion={() => setSeccionAbierta('evolution')}
+                    onHistorial={() => setSeccionAbierta('history')}
+                    onCheckins={() => navigate('/dashboard/checkins')}
+                />
+            )}
+
+            {/* Al entrar en una sección, la portada deja sitio y aparece la vuelta. */}
+            {enTelefono && seccionAbierta && (
+                <button onClick={() => setSeccionAbierta(null)} data-testid="volver-seguimiento"
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
+                    <ChevronLeft className="w-4 h-4" /> Seguimiento
+                </button>
+            )}
+
             {/* Tab bar */}
-            <div className="grid grid-cols-3 gap-1 bg-card border border-border rounded-2xl p-1">
+            <div className={`grid grid-cols-3 gap-1 bg-card border border-border rounded-2xl p-1 ${enTelefono ? 'hidden' : ''}`}>
                 {tabs.map(({ id, icon: Icon, label }) => (
                     <button
                         key={id}
@@ -340,7 +458,7 @@ const ReportsPage = () => {
             </div>
 
             {/* ── FORM TAB ── */}
-            {activeTab === 'form' && (
+            {vista === 'form' && (
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <WindowBanner w={windowState} />
                     {/* SI NO TOCA REPORTE, NO SE ENSEÑA EL FORMULARIO (punto 4.18). Se pintaba
@@ -542,7 +660,7 @@ const ReportsPage = () => {
             )}
 
             {/* ── EVOLUTION TAB ── */}
-            {activeTab === 'evolution' && (
+            {vista === 'evolution' && (
                 <div className="space-y-4">
                     {weightData.length > 0 ? (
                         <div className="bg-card border border-border rounded-2xl p-4">
@@ -567,7 +685,7 @@ const ReportsPage = () => {
             )}
 
             {/* ── HISTORY TAB ── */}
-            {activeTab === 'history' && (
+            {vista === 'history' && (
                 <div className="space-y-3">
                     {reports.length > 0 ? reports.map((report) => (
                         <div key={report.id} className="bg-card border border-border rounded-2xl p-4">
