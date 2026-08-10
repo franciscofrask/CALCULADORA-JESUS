@@ -3,6 +3,7 @@ import { Search, X, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { descripcionCategoria, CATEGORIA_NOMBRES } from '../components/nutrition/calmaCategorias';
 import SuggestFoodModal from '../components/nutrition/SuggestFoodModal';
+import { useEsTelefono } from '../lib/esTelefono';
 
 // Calma $() token match: token === code OR token starts with `${code}.<digit>`.
 const tokenMatchesCode = (token, code) =>
@@ -85,6 +86,20 @@ const TODAS_CATEGORIAS = (() => {
 })();
 
 const RENDER_CAP = 300;
+
+/**
+ * CUÁNTOS SE PINTAN DE GOLPE EN EL TELÉFONO.
+ *
+ * Medido: al entrar sin buscar nada, esta pantalla pintaba los 300 del tope y el documento
+ * quedaba en **69.711 px, ochenta y dos pantallas de móvil**. Nadie recorre 300 alimentos
+ * por orden alfabético con el pulgar, y mientras tanto el teléfono los tiene todos montados.
+ *
+ * Veinte y un botón para traer más. No se quita nada -- se llega a los mismos 300 pulsando
+ * -- y se dice cuántos hay, que es lo que evita que un recorte se lea como «no hay más».
+ *
+ * En escritorio se queda en 300, como estaba.
+ */
+const CAP_TELEFONO = 20;
 
 // Calma EtiquetasMacros: badge por macro > 0 (P verde, H azul, G rojo), 1 decimal.
 const MACRO_DEFS = [
@@ -177,6 +192,12 @@ const FoodSearchPage = () => {
         return () => { alive = false; };
     }, [api]);
 
+    // Cuántos se ven ahora mismo. `deMas` vuelve a cero en cuanto cambia lo buscado: al
+    // afinar la búsqueda se empieza otra vez por arriba, no por donde se quedó la anterior.
+    const enTelefono = useEsTelefono();
+    const [deMas, setDeMas] = useState(0);
+    useEffect(() => { setDeMas(0); }, [query, cats, opcion]);
+
     const filtered = useMemo(() => {
         let list = foods;
         if (opcion === 'genericos') list = list.filter(f => !f.url);        // GEN: sin enlace
@@ -194,6 +215,10 @@ const FoodSearchPage = () => {
         // sin texto: orden alfabético por nombre (getTodosLosAlimentos)
         return [...list].sort((x, y) => (x.nombre || '').localeCompare(y.nombre || ''));
     }, [foods, query, cats, opcion]);
+
+    const aLaVista = enTelefono
+        ? Math.min(CAP_TELEFONO + deMas, filtered.length, RENDER_CAP)
+        : Math.min(filtered.length, RENDER_CAP);
 
     return (
         <div className="min-h-screen bg-background p-4 md:p-6">
@@ -283,14 +308,28 @@ const FoodSearchPage = () => {
                     </div>
                 ) : (
                     <>
+                        {/* Cuántos hay y cuántos se están viendo. Sin esta línea, cortar la
+                            lista se lee como que no hay más. */}
+                        {filtered.length > 0 && (
+                            <p className="text-sm text-muted-foreground mb-2" data-testid="cuantos-alimentos">
+                                <b className="text-foreground">{filtered.length}</b> alimento{filtered.length === 1 ? '' : 's'}
+                                {aLaVista < filtered.length ? ` · viendo ${aLaVista}` : ''}
+                            </p>
+                        )}
                         <div className="space-y-2">
-                            {filtered.slice(0, RENDER_CAP).map((f, i) => (
+                            {filtered.slice(0, aLaVista).map((f, i) => (
                                 <FoodRow key={f.id ?? i} food={f} />
                             ))}
                             {filtered.length === 0 && (
                                 <p className="text-center text-muted-foreground text-sm py-12">Sin resultados</p>
                             )}
                         </div>
+                        {aLaVista < Math.min(filtered.length, RENDER_CAP) && (
+                            <button onClick={() => setDeMas(n => n + CAP_TELEFONO)} data-testid="ver-mas-alimentos"
+                                className="w-full mt-3 py-3 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:text-brand-orange hover:border-brand-orange/40 transition-colors">
+                                Ver {Math.min(CAP_TELEFONO, Math.min(filtered.length, RENDER_CAP) - aLaVista)} más
+                            </button>
+                        )}
                     </>
                 )}
             </div>
