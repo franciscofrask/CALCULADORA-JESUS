@@ -19,6 +19,7 @@ Devuelven diccionarios cortos y en lenguaje de personas (nombre, qué cuenta, po
 cabe), pensados para gastar pocos tokens y enseñar cuando fallan: "no hay genéricos que
 cubran 39 g de proteína; el más cercano cubre 22" en vez de una lista vacía.
 """
+import logging
 import re
 from typing import Dict, List, Optional
 
@@ -76,9 +77,42 @@ class AgentTools:
         self.companyia = companyia
 
     @classmethod
+    async def _cargar_catalogo(cls, db) -> Dict[int, dict]:
+        """El catálogo entero, o nada. Nunca a medias.
+
+        Esta caché es de PROCESO: se llena una vez y la usan todas las sesiones hasta que se
+        reinicie el backend. Si la conexión se corta a mitad de la lectura -- y se corta: los
+        tests del asistente fallan justo así, con `AutoReconnect` de Atlas al traer los 3.200
+        alimentos --, lo que se guardaba era un catálogo incompleto, y a partir de ahí el
+        asistente le decía a todo el mundo que no existe un alimento que sí existe. Un fallo
+        de red de dos segundos se convertía en un fallo permanente hasta el siguiente
+        despliegue, y sin nada en el log que lo dijera.
+
+        Así que se cuenta primero y se compara: si lo que llega no son todos, se reintenta, y
+        si tampoco, se levanta la excepción. Fallar la petición es malo; servir un catálogo
+        mutilado durante horas es peor.
+        """
+        from pymongo.errors import AutoReconnect, NetworkTimeout
+
+        ultimo_error = None
+        for intento in (1, 2):
+            try:
+                esperados = await db.foods.count_documents({})
+                catalogo = {int(f["id"]): f async for f in db.foods.find({}, {"_id": 0})}
+                if esperados and len(catalogo) < esperados:
+                    raise AutoReconnect(
+                        f"catalogo incompleto: {len(catalogo)} de {esperados}")
+                return catalogo
+            except (AutoReconnect, NetworkTimeout) as e:
+                ultimo_error = e
+                logging.getLogger("uvicorn.error").warning(
+                    "[agente] el catalogo no se pudo cargar entero (intento %d): %s", intento, e)
+        raise ultimo_error
+
+    @classmethod
     async def crear(cls, bot) -> "AgentTools":
         if cls._FOODS is None:
-            cls._FOODS = {int(f["id"]): f async for f in bot.db.foods.find({}, {"_id": 0})}
+            cls._FOODS = await cls._cargar_catalogo(bot.db)
         if cls._SEMANTICA is None:
             try:
                 cls._SEMANTICA = await BusquedaSemantica.cargar(bot.db)
@@ -249,9 +283,16 @@ class AgentTools:
         # `acompanando_a` lo pasa quien está MONTANDO un menú, donde el plato todavía está
         # vacío pero las piezas ya están elegidas; sin eso, un menú compuesto de cero nunca
         # podría llevar mermelada ni miel.
+        #
+        # Con `.get`, no con corchetes: el estado de la sesión se guarda en
+        # `chatbot_sessions` y vive entre despliegues, así que una sesión abierta antes de
+        # que existiera esta clave revienta aquí con un KeyError -- y lo hace dentro de la
+        # sugerencia, o sea que al cliente se le cae el asistente entero. Una comida sin
+        # nada puesto y una clave que todavía no existe son lo mismo para este cálculo:
+        # ninguna de las dos tiene alimentos con los que acompañar.
         ya_en_la_comida = list(acompanando_a or []) + [
             self.foods[int(f["alimento"]["id"])]
-            for f in (self.bot.state["comidas_completadas"]
+            for f in ((self.bot.state.get("comidas_completadas") or {})
                       .get(self.bot.current_meal_key()) or {}).get("alimentos", [])
             if (f.get("alimento") or {}).get("id") is not None
             and int(f["alimento"]["id"]) in self.foods]
@@ -493,7 +534,13 @@ class AgentTools:
         cliente no entendería nada. Así el mismo cliente ve lo mismo mientras esté en esa
         comida, y mañana o el de al lado ven otra cosa."""
         st = self.bot.state
-        partes = (str(self.bot.session_id or ""), str(st.get("fecha_objetivo") or ""),
+        # `getattr` y no punto seco: no toda la casa entra por una sesión de chat. El
+        # compositor de menús usa estas mismas herramientas con un bot sin sesión, y ahí
+        # `session_id` no existe: con el acceso directo se cae la ordenación entera, que es
+        # de lo último que uno quiere que dependa de un atributo opcional. Sin sesión, la
+        # semilla es la del día y la comida, que sigue siendo estable.
+        partes = (str(getattr(self.bot, "session_id", None) or ""),
+                  str(st.get("fecha_objetivo") or ""),
                   self.bot.current_meal_key())
         return abs(hash("|".join(partes))) % (2 ** 31)
 
