@@ -293,7 +293,7 @@ const ClientDetailPage = () => {
         // Y la fecha en que se peso, que NO es la del ajuste (punto 27): se archiva ahi.
         peso_fecha: '',
         // Manana, no hoy (2.3): el ajuste se pone para que empiece al dia siguiente.
-        effective_date: hoyISO(1),
+        effective_date: hoyISO(),
     };
     const [macrosForm, setMacrosForm] = useState(MACROS_FORM_VACIO);
     const [entryForm, setEntryForm] = useState(MACROS_FORM_VACIO);
@@ -386,7 +386,7 @@ const ClientDetailPage = () => {
                 porcentaje_graso: p?.body_fat != null ? String(p.body_fat) : '',
                 peso: repPeso ? String(repPeso.weight) : (p?.weight != null ? String(p.weight) : ''),
                 peso_fecha: repPeso ? String(repPeso.created_at).slice(0, 10) : '',
-                effective_date: hoyISO(1),
+                effective_date: hoyISO(),
             });
             setEntrenoForm({
                 equipment: Array.isArray(p?.equipment) ? p.equipment : [],
@@ -445,7 +445,7 @@ const ClientDetailPage = () => {
             // conseguiría que se enviara sin mirarlo.
             criterio: (sugerencia?.razonamiento || '').slice(0, 1000),
             note: '',
-            effective_date: hoyISO(1),
+            effective_date: hoyISO(),
         });
         toast.success('Propuesta cargada: el razonamiento va en el criterio interno. Escribe el feedback del cliente');
         editorMacrosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -785,7 +785,7 @@ const ClientDetailPage = () => {
     const setMacroCampo = (bloque, campo, valor) => setMacrosForm(prev => ({ ...prev, [bloque]: { ...prev[bloque], [campo]: valor } }));
     const descartarCambiosMacros = () => (setSugerenciaId(null), setMacrosForm({
         ...macrosActuales, note: '', criterio: '', porcentaje_graso: bfActual, peso: pesoActual,
-        peso_fecha: pesoFechaActual, effective_date: hoyISO(1),
+        peso_fecha: pesoFechaActual, effective_date: hoyISO(),
     }));
 
     const TAB_CONFIG = [
@@ -964,19 +964,23 @@ const ClientDetailPage = () => {
                             <div className="grid grid-cols-3 gap-3">
                                 <div>
                                     <Label className="text-white/60 text-xs">Vigente desde</Label>
-                                    {/* Por defecto MAÑANA (2.3): el ajuste se pone para que arranque al día
-                                        siguiente, que es como trabaja. Solo se avisa si se sale de ahí. */}
-                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({ ...macrosForm, effective_date: e.target.value })} className={`bg-[#0A0A0A] text-white mt-1 ${macrosForm.effective_date !== hoyISO(1) ? 'border-[#FF671F]' : 'border-[#333]'}`} data-testid="macro-effective-date" />
-                                    {macrosForm.effective_date !== hoyISO(1) ? (
+                                    {/* POR DEFECTO HOY (orden de Francisco, 11-08-2026). Antes venía con la
+                                        fecha de mañana, por el punto 2.3: se entendía que el ajuste arranca al
+                                        día siguiente. En la práctica no es así -- el cambio se quiere aplicar
+                                        el día que se hace --, y quien quisiera lo contrario tenía que corregir
+                                        la fecha en cada ajuste.
+                                        Se sigue avisando solo si se sale de hoy, hacia delante o hacia atrás. */}
+                                    <Input type="date" value={macrosForm.effective_date} onChange={e => setMacrosForm({ ...macrosForm, effective_date: e.target.value })} className={`bg-[#0A0A0A] text-white mt-1 ${macrosForm.effective_date !== hoyISO() ? 'border-[#FF671F]' : 'border-[#333]'}`} data-testid="macro-effective-date" />
+                                    {macrosForm.effective_date !== hoyISO() ? (
                                         <p className="text-[10px] text-[#FF671F] mt-1 leading-relaxed">
                                             {macrosForm.effective_date > hoyISO()
                                                 ? `No se aplican hasta el ${_fechaLarga(macrosForm.effective_date)}: hasta ese día sigue con los actuales. `
                                                 : `Se aplican hacia atrás, desde el ${_fechaLarga(macrosForm.effective_date)}. `}
                                             <button type="button" className="underline font-bold"
-                                                onClick={() => setMacrosForm({ ...macrosForm, effective_date: hoyISO(1) })}>Poner mañana</button>
+                                                onClick={() => setMacrosForm({ ...macrosForm, effective_date: hoyISO() })}>Poner hoy</button>
                                         </p>
                                     ) : (
-                                        <p className="text-[10px] text-white/30 mt-1">Empieza mañana. Los días anteriores conservan los macros previos.</p>
+                                        <p className="text-[10px] text-white/30 mt-1">Empiezan hoy. Los días anteriores conservan los macros previos.</p>
                                     )}
                                 </div>
                                 <div>
@@ -1118,7 +1122,7 @@ const ClientDetailPage = () => {
                                     <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs" onClick={usarSugerencia} data-testid="use-suggestion-btn"><CheckCircle2 className="w-3 h-3 mr-1" />Usar esta propuesta</Button>
                                     <Button size="sm" variant="ghost" className="text-white/50 hover:text-white text-xs" onClick={() => setSugerencia(null)}>Descartar</Button>
                                 </div>
-                                <p className="text-white/30 text-[10px] leading-relaxed">Es una sugerencia para que la revises. Al usarla se cargan estos valores en el editor de arriba (vigentes mañana); nada se guarda hasta que le des a "Guardar macros".</p>
+                                <p className="text-white/30 text-[10px] leading-relaxed">Es una sugerencia para que la revises. Al usarla se cargan estos valores en el editor de arriba (vigentes hoy); nada se guarda hasta que le des a "Guardar macros".</p>
                             </CardContent>
                         </Card>
                     )}
