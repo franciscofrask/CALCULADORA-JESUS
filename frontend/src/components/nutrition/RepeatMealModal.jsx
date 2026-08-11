@@ -44,24 +44,43 @@ const RepeatMealModal = ({
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    {recentDiets.map(diet => (
-                                        <button
-                                            key={diet.fecha}
-                                            className="w-full text-left p-3 bg-muted hover:bg-muted rounded-xl transition-all"
-                                            onClick={() => setSelectedDiet(diet)}
-                                            data-testid={`repeat-diet-${diet.fecha}`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-semibold text-foreground">{formatDate(diet.fecha)}</p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {diet.tipo_dia === 'entrenamiento' ? '🟢 Entreno' : '⚪ Descanso'}, {diet.num_comidas} {diet.num_comidas === 1 ? 'comida' : 'comidas'}
-                                                    </p>
+                                    {/* SE LEE QUÉ HABÍA EN ESA COMIDA, SIN ENTRAR.
+                                        Aquí solo ponía «lun, 10 ago · 🟢 Entreno, 4 comidas» y
+                                        había que abrir día por día hasta dar con el bueno. Lo
+                                        que se busca al repetir no es una fecha: es una comida
+                                        concreta que ya sabes que te gustó.
+                                        El dato ya venía en la respuesta (`comidas_resumen`), pero
+                                        solo se usaba DESPUÉS de elegir el día. Jesús, 11-08:
+                                        siendo el camino más usado, es donde más se nota cada
+                                        clic de más.
+                                        Los días donde esa comida está vacía se quedan sin la
+                                        línea, que es la señal de que ahí no hay nada que copiar. */}
+                                    {recentDiets.map(diet => {
+                                        const loQueHabia = (diet.comidas_resumen || {})[mealKey];
+                                        return (
+                                            <button
+                                                key={diet.fecha}
+                                                className="w-full text-left p-3 bg-muted hover:bg-muted rounded-xl transition-all"
+                                                onClick={() => setSelectedDiet(diet)}
+                                                data-testid={`repeat-diet-${diet.fecha}`}
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="font-semibold text-foreground">{formatDate(diet.fecha)}</p>
+                                                        {loQueHabia ? (
+                                                            <p className="text-sm text-foreground/80 mt-0.5">{loQueHabia}</p>
+                                                        ) : (
+                                                            <p className="text-sm text-muted-foreground/70 mt-0.5">Sin nada en esta comida</p>
+                                                        )}
+                                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                                            {diet.tipo_dia === 'entrenamiento' ? '🟢 Entreno' : '⚪ Descanso'}, {diet.num_comidas} {diet.num_comidas === 1 ? 'comida' : 'comidas'}
+                                                        </p>
+                                                    </div>
+                                                    <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                                                 </div>
-                                                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                                            </div>
-                                        </button>
-                                    ))}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>

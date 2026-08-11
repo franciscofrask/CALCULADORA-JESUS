@@ -63,7 +63,14 @@ const MacroTrio = ({ macros, size = 'lg' }) => (
 );
 
 const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayConfig, onApply }) => {
-    const [tab, setTab] = React.useState(BIBLIOTECA_DE_CLIENTES ? 'biblioteca' : 'recetario');
+    // ABRE EN EL RECETARIO, SIEMPRE.
+    // La cabecera de este fichero ya lo dice: el recetario «es material terminado de Jesús y
+    // va primero», mientras que la biblioteca son comidas de relleno sacadas de dietas de
+    // clientes. Y aun así se abría en la biblioteca. Jesús la dejó más de 30 segundos en
+    // «Buscando en la biblioteca…» sin respuesta, y esta es la puerta de entrada de la
+    // pantalla: si se queda cargando, no se vuelve a pulsar. La biblioteca sigue ahí, en su
+    // pestaña, para quien quiera rebuscar.
+    const [tab, setTab] = React.useState('recetario');
     const [margen, setMargen] = React.useState(5);
     const [orden, setOrden] = React.useState('cuadrado');
     const [verReales, setVerReales] = React.useState(false);
@@ -88,7 +95,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
 
     React.useEffect(() => {
         if (open) {
-            setTab(BIBLIOTECA_DE_CLIENTES ? 'biblioteca' : 'recetario');
+            setTab('recetario');   // ver el porqué donde se declara `tab`
             setTextFilter('');
             setVerReales(false);
             setError(null);
