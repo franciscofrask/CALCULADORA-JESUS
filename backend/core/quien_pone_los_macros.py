@@ -80,9 +80,11 @@ async def puede_ajustarlos(db, perfil: Dict[str, Any]) -> Tuple[bool, Optional[s
         {"client_id": perfil.get("id")}, {"_id": 0, "origen": 1, "changed_by": 1},
         sort=[("created_at", -1)])
     if de_una_persona(ultimo):
-        return False, ("Tus macros los lleva tu entrenador: en tu plan se los ajusta él a "
-                       "partir de tus reportes. Si crees que hay que moverlos, cuéntaselo por "
-                       "el chat y lo revisa.")
+        # En plural y sin «entrenador»: al cliente no se le nombra a quien esté detrás ese
+        # mes, se le habla de nosotros (repaso de Jesús, 11-08).
+        return False, ("Tus macros los llevamos nosotros: en tu plan te los ajustamos a partir "
+                       "de tus reportes. Si crees que hay que moverlos, dínoslo por el chat y "
+                       "lo revisamos.")
 
     # Todavia nadie se los ha puesto: son los de su alta y puede recalcularlos.
     return True, None

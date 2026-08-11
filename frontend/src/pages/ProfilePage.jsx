@@ -88,6 +88,15 @@ const ProfilePage = () => {
     // hay, las líneas que se derivan de las habilitaciones, que es lo que había.
     const currentPlanFeatures = queIncluyeElPlan(myPlan);
 
+    // SIN FECHA DE RENOVACIÓN NO SE ENSEÑA LA ETIQUETA.
+    // Ponía «RENOVACIÓN · No definida», que es un hueco de la base de datos en la cara de
+    // alguien que paga 149 €. Jesús, 11-08: «si hay fecha, se pone la fecha; si no la hay, no
+    // se enseña la etiqueta». Callar dice menos que decir que no se sabe.
+    const fechaDeRenovacion = profile?.renovacion?.fecha
+        || profile?.renovacion?.proximo_cobro
+        || profile?.next_payment
+        || null;
+
     return (
         <div className="p-4 md:p-6 pb-24 md:pb-6 animate-fade-in bg-background min-h-screen relative overflow-hidden">
             <div className="relative z-10 space-y-6 max-w-lg mx-auto">
@@ -207,32 +216,29 @@ const ProfilePage = () => {
                                         <p className="text-xs text-foreground/50 mt-1">{myPlan.precio_nota}</p>
                                     )}
                                 </div>
-                                <div>
-                                    {/* Punto 2.4d: aquí ponía «No definida» a un cliente cuya
-                                        membresía había vencido una semana antes, porque solo
-                                        miraba `next_payment` -- el próximo COBRO --, y los
-                                        migrados de Calma no tienen ninguno. Ahora se dice lo que
-                                        se sabe, y si ya pasó, se dice que pasó. */}
-                                    {/* «Próxima renovación» ocupa dos líneas en 390 px y deja la
-                                        columna descuadrada frente al precio. En el teléfono,
-                                        «Renovación»; en escritorio, el nombre entero. */}
-                                    <p className="text-sm text-foreground/50 uppercase tracking-wider">
-                                        {profile.renovacion?.vencida ? 'Tu plan venció' : (
-                                            <>
-                                                <span className="lg:hidden">Renovación</span>
-                                                <span className="hidden lg:inline">Próxima renovación</span>
-                                            </>
-                                        )}
-                                    </p>
-                                    <p className={`font-semibold text-sm ${profile.renovacion?.vencida ? 'text-amber-500' : 'text-foreground'}`}
-                                        data-testid="perfil-renovacion">
-                                        {(() => {
-                                            const f = profile.renovacion?.fecha || profile.renovacion?.proximo_cobro || profile.next_payment;
-                                            if (!f) return 'No definida';
-                                            return new Date(f).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-                                        })()}
-                                    </p>
-                                </div>
+                                {/* Punto 2.4d: aquí ponía «No definida» a un cliente cuya
+                                    membresía había vencido una semana antes, porque solo miraba
+                                    `next_payment` -- el próximo COBRO --, y los migrados de
+                                    Calma no tienen ninguno. Ahora se dice lo que se sabe, si ya
+                                    pasó se dice que pasó, y si no hay fecha no se enseña nada.
+                                    «Próxima renovación» ocupa dos líneas en 390 px y descuadra
+                                    la columna frente al precio: en el teléfono, «Renovación». */}
+                                {fechaDeRenovacion && (
+                                    <div>
+                                        <p className="text-sm text-foreground/50 uppercase tracking-wider">
+                                            {profile.renovacion?.vencida ? 'Tu plan venció' : (
+                                                <>
+                                                    <span className="lg:hidden">Renovación</span>
+                                                    <span className="hidden lg:inline">Próxima renovación</span>
+                                                </>
+                                            )}
+                                        </p>
+                                        <p className={`font-semibold text-sm ${profile.renovacion?.vencida ? 'text-amber-500' : 'text-foreground'}`}
+                                            data-testid="perfil-renovacion">
+                                            {new Date(fechaDeRenovacion).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                             <Separator className="bg-white/10" />
                             <div>

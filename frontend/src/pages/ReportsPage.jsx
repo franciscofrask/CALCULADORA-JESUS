@@ -116,6 +116,9 @@ const TarjetaSeguimiento = ({ cuando, titulo, sub, cta, onClick, tono = 'gris', 
 
 const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial, onCheckins }) => {
     // Le toca reporte y no lo ha mandado: es lo único que va arriba y en naranja.
+    // LA FECHA LÍMITE VA EN LA TARJETA: la ventana son cuatro días y sin fecha nadie sabe
+    // cuánto margen tiene («hasta el jueves 15», Jesús 11-08). El servidor ya mandaba
+    // `closes_label` y `opens_label`; aquí no se usaban.
     const tocaRevision = !!windowState?.due && !windowState?.submitted;
     const yaMandado = !!windowState?.submitted;
     return (
@@ -125,10 +128,15 @@ const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial,
                 cuando={tocaRevision ? 'Este mes · te toca' : yaMandado ? 'Este mes · hecho' : 'Este mes'}
                 titulo={windowState?.tipo_label || 'Tu revisión'}
                 sub={tocaRevision
-                    ? 'Unas fotos, tus medidas y unas preguntas. Y tienes tus macros nuevos.'
+                    ? `Unas fotos, tus medidas y unas preguntas. Y tienes tus macros nuevos.${
+                        // `closes_label` trae «lunes 10 ago a las 6:00»: la hora sobra en una
+                        // tarjeta que solo tiene que decir cuánto margen queda.
+                        windowState?.closes_label ? ` Hasta el ${String(windowState.closes_label).split(' a las ')[0]}.` : ''}`
                     : yaMandado
                         ? 'Ya lo mandaste. Lo estamos mirando.'
-                        : 'Todavía no toca. Te avisamos cuando abra.'}
+                        : windowState?.opens_label
+                            ? `Todavía no toca. Se abre el ${windowState.opens_label}.`
+                            : 'Todavía no toca. Te avisamos cuando abra.'}
                 cta={tocaRevision ? 'Empezar' : 'Ver'}
                 tono={tocaRevision ? 'ahora' : 'gris'}
                 onClick={onRevision} />
@@ -407,7 +415,9 @@ const ReportsPage = () => {
                         <span className="lg:hidden">SEGUIMIENTO</span>
                         <span className="hidden lg:inline">MIS REPORTES</span>
                     </h1>
-                    <p className="text-xs text-foreground/30">Seguimiento semanal</p>
+                    {/* «Seguimiento semanal» despistaba: lo de dentro es mensual, diario y de
+                        consulta, no semanal (Jesús, 11-08). */}
+                    <p className="text-xs text-foreground/30">Tus reportes, tus check-ins y tu evolución</p>
                 </div>
             </div>
 

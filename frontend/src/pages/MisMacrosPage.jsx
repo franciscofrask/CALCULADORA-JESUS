@@ -138,8 +138,15 @@ const MisMacrosPage = () => {
                     <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="macros-heading">
                         Mis macros
                     </h1>
+                    {/* NI EL NOMBRE PROPIO NI «ENTRENADOR».
+                        Aquí ponía «Te los ajusta Francisco» -- que en pruebas es el nombre del
+                        desarrollador, y con un cliente real sería el de quien le lleve --. Al
+                        cliente se le habla en plural: quien esté detrás ese mes no cambia lo
+                        que él tiene que leer. Jesús, 11-08. Y la fecha desde la que rigen sí
+                        importa, así que se dice aquí y no escondida en el histórico. */}
                     <p className="text-sm text-muted-foreground mt-1">
-                        {nombreDelCoach ? `Te los ajusta ${nombreDelCoach}` : 'Te los ajusta tu entrenador'}
+                        Te los ajustamos nosotros
+                        {vigente?.effective_date && ` · desde el ${fechaLarga(vigente.effective_date)}`}
                     </p>
                 </div>
             </header>
@@ -177,7 +184,7 @@ const MisMacrosPage = () => {
                             </div>
                         </>) : (
                             <p className="text-sm text-muted-foreground">
-                                Todavía no tienes ningún ajuste guardado. En cuanto tu entrenador te ponga
+                                Todavía no tienes ningún ajuste guardado. En cuanto te pongamos
                                 los primeros, los verás aquí.
                             </p>
                         )}
@@ -190,7 +197,7 @@ const MisMacrosPage = () => {
                     {vigente?.feedback && (
                         <section className="surface p-5 border-l-4 border-l-brand" data-testid="mis-macros-feedback">
                             <p className="caption mb-2 flex items-center gap-2">
-                                <Quote className="w-3.5 h-3.5" /> Lo que te dijo tu entrenador en este ajuste
+                                <Quote className="w-3.5 h-3.5" /> Lo que te dijimos en este ajuste
                             </p>
                             <p className="text-foreground leading-relaxed">«{vigente.feedback}»</p>
                         </section>
