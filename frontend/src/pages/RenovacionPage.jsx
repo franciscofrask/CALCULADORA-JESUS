@@ -17,7 +17,7 @@ import { euros } from '../lib/precios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, TrendingDown, TrendingUp, Check, ArrowRight, Info } from 'lucide-react';
+import { Loader2, TrendingDown, TrendingUp, Check, ArrowRight, Info, Phone } from 'lucide-react';
 
 const fmtPct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x}%`);
 
@@ -38,6 +38,14 @@ const RenovacionPage = () => {
         if (salida.tipo === 'renovar') {
             toast.success('Perfecto, seguimos. No tienes que hacer nada más.');
             navigate('/dashboard');
+            return;
+        }
+        // El plan que se cierra hablando no abre pasarela: lleva al chat, que es donde se
+        // pide la llamada. Sin esto, pulsarlo mandaba a pagar 1.500 € por su cuenta algo que
+        // el catálogo dice que se contrata por teléfono.
+        if (salida.por_llamada) {
+            toast.success('Te llamamos para verlo contigo. Dinos por aquí cuándo te viene bien.');
+            navigate('/dashboard/messages');
             return;
         }
         setYendo(salida.plan);
@@ -118,15 +126,24 @@ const RenovacionPage = () => {
             )}
 
             <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                {/* EN KILOS Y CON SIGNO, NO EN PORCENTAJE.
+                    Aquí ponía «PESO 0 %» debajo de «75,5 → 75,9»: había subido 400 gramos y la
+                    cifra grande decía cero, porque 0,4 sobre 75 redondea a 0 %. El porcentaje
+                    esconde justo lo que se viene a mirar. Jesús, 11-08: «mejor en kilos y con
+                    signo: +0,4 kg». */}
                 <div className="surface p-4">
                     <p className="caption mb-1">Peso</p>
                     <div className="flex items-baseline gap-1.5">
-                        {peso.cambio_pct != null && (bajado
+                        {peso.cambio_kg != null && (bajado
                             ? <TrendingDown className="w-4 h-4 text-emerald-500" />
                             : <TrendingUp className="w-4 h-4 text-brand" />)}
-                        <span className="font-data text-2xl font-bold text-foreground">{fmtPct(peso.cambio_pct)}</span>
+                        <span className="font-data text-2xl font-bold text-foreground">
+                            {peso.cambio_kg == null
+                                ? '—'
+                                : `${peso.cambio_kg > 0 ? '+' : ''}${Math.round(peso.cambio_kg * 10) / 10} kg`}
+                        </span>
                     </div>
-                    {peso.cambio_kg != null && (
+                    {peso.antes != null && peso.ahora != null && (
                         <p className="text-[11px] text-muted-foreground mt-0.5">
                             {peso.antes} → {peso.ahora} kg
                         </p>
@@ -141,12 +158,17 @@ const RenovacionPage = () => {
                         <p className="text-[11px] text-muted-foreground mt-0.5">venías del {grasa.antes}%</p>
                     )}
                 </div>
+                {/* LA CONSTANCIA, DICHA COMO LO QUE ES. Un «15 %» a secas, justo cuando le
+                    ofreces subir de nivel, juega en tu contra: parece un suspenso y no dice
+                    qué hacer con él. El mismo dato contado como lo que es -- lo que más pesa
+                    en el resultado, y lo que cambia cuando hay alguien encima -- empuja hacia
+                    arriba en vez de hundir (Jesús, 11-08). */}
                 <div className="surface p-4">
                     <p className="caption mb-1">Constancia</p>
-                    <span className="font-data text-2xl font-bold text-foreground">{constancia.pct}%</span>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {constancia.dias_registrados} de {constancia.dias_totales} días
-                    </p>
+                    <span className="font-data text-2xl font-bold text-foreground">
+                        {constancia.dias_registrados} <span className="text-base font-normal text-muted-foreground">de {constancia.dias_totales}</span>
+                    </span>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">días con el día cuadrado</p>
                 </div>
                 <div className="surface p-4">
                     <p className="caption mb-1">Ajustes</p>
@@ -154,6 +176,16 @@ const RenovacionPage = () => {
                     <p className="text-[11px] text-muted-foreground mt-0.5">de tus macros</p>
                 </div>
             </section>
+
+            {/* Lo que la constancia significa, debajo de los cuatro números y no dentro de la
+                tarjeta: es la frase que convierte un dato flojo en el argumento de subir de
+                nivel. Solo cuando hay margen de mejora; con la constancia alta sobra. */}
+            {constancia.dias_totales > 0 && constancia.pct < 70 && (
+                <p className="text-sm text-muted-foreground -mt-2 mb-6 max-w-prose">
+                    La constancia es lo que más pesa en el resultado, y es justo lo que cambia
+                    cuando hay alguien encima.
+                </p>
+            )}
 
             {/* 2 · LO QUE PUEDE HACER */}
             <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-1">Y ahora, ¿qué?</h2>
@@ -183,13 +215,24 @@ const RenovacionPage = () => {
                             </div>
                             <p className="text-sm text-muted-foreground mt-0.5">{s.detalle}</p>
                         </div>
+                        {/* EL QUE SE CIERRA HABLANDO NO LLEVA PRECIO NI FLECHA DE PAGAR.
+                            Aquí salía el Nivel 3 con «1.500 €» y su flecha, invitando a pagarlo
+                            por dentro cuando el propio catálogo dice que se contrata por
+                            llamada. En /planes ya está bien resuelto con «Agendar una llamada»;
+                            esta pantalla vendía lo mismo mucho peor (Jesús, 11-08). */}
                         <div className="flex items-center gap-3 flex-shrink-0">
-                            <span className="font-heading text-lg font-bold text-foreground">{euros(s.precio)}</span>
+                            {s.por_llamada ? (
+                                <span className="font-bold text-brand text-sm whitespace-nowrap">Pedir llamada</span>
+                            ) : (
+                                <span className="font-heading text-lg font-bold text-foreground">{euros(s.precio)}</span>
+                            )}
                             {yendo === s.plan
                                 ? <Loader2 className="w-4 h-4 animate-spin text-brand" />
-                                : s.tipo === 'renovar'
-                                    ? <Check className="w-5 h-5 text-brand" />
-                                    : <ArrowRight className="w-5 h-5 text-muted-foreground" />}
+                                : s.por_llamada
+                                    ? <Phone className="w-5 h-5 text-brand" />
+                                    : s.tipo === 'renovar'
+                                        ? <Check className="w-5 h-5 text-brand" />
+                                        : <ArrowRight className="w-5 h-5 text-muted-foreground" />}
                         </div>
                     </button>
                 ))}

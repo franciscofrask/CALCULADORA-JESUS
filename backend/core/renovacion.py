@@ -98,6 +98,23 @@ def resumen_del_ciclo(*, reporte_primero: Optional[Dict[str, Any]],
     }
 
 
+#: Planes que NO se venden desde la app: se cierran hablando por telefono.
+#:
+#: La pantalla de renovacion ofrecia el Nivel 3 con su precio y su flecha, o sea invitando a
+#: pagar 1.500 € por dentro un plan que el propio catalogo dice que se contrata por llamada.
+#: En /planes ya sale bien -- «Agendar una llamada» --, asi que la renovacion vendia lo mismo
+#: mucho peor (Jesus, 11-08).
+#:
+#: Esto DEBERIA ser una casilla del catalogo de planes, y Jesus lo pide asi en su bloque 7:
+#: mientras no exista, el criterio vive aqui, en un solo sitio y con su nombre, en vez de
+#: repetido a mano por las pantallas.
+PLANES_POR_LLAMADA = {"nivel3"}
+
+
+def es_por_llamada(plan: Optional[str]) -> bool:
+    return (plan or "").lower().strip() in PLANES_POR_LLAMADA
+
+
 def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             catalogo: Dict[str, Dict[str, Any]], precio_alta: Optional[float]) -> List[Dict[str, Any]]:
     """Las tres salidas del documento, en el orden en que se le ofrecen.
@@ -136,8 +153,10 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             "nombre": info.get("name"),
             "precio": info.get("precio"),
             "precio_congelado": False,
+            "por_llamada": es_por_llamada(code),
             "titulo": "Subir a " + (info.get("name") or code) if sube else "Pasar a " + (info.get("name") or code),
-            "detalle": ("Mas gente encima de tus numeros." if sube
+            "detalle": ("Hablamos antes de entrar." if es_por_llamada(code)
+                        else "Mas gente encima de tus numeros." if sube
                         else "Menos acompañamiento, mismo metodo."),
         })
 
