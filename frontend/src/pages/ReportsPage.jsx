@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useEsTelefono } from '../lib/esTelefono';
 import { toast } from 'sonner';
 import GraficaDePeso from '../components/GraficaDePeso';
 import {
@@ -123,13 +122,25 @@ const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial,
     // LA FECHA LÍMITE VA EN LA TARJETA: la ventana son cuatro días y sin fecha nadie sabe
     // cuánto margen tiene («hasta el jueves 15», Jesús 11-08). El servidor ya mandaba
     // `closes_label` y `opens_label`; aquí no se usaban.
-    const tocaRevision = !!windowState?.due && !windowState?.submitted;
+    //
+    // «TE TOCA» ES CUANDO YA SE PUEDE, NO CUANDO ESTÁ PREVISTO.
+    // La tarjeta miraba solo `due`, que dice que este periodo lleva reporte, no que la
+    // ventana esté abierta. Resultado: salía en naranja con «Empezar» y detrás aparecía el
+    // formulario en gris con «se abre el viernes». Prometía algo que no se podía hacer, que
+    // es de lo que se queja Jesús el 11-08 sobre esta pantalla. Con `is_open` la tarjeta
+    // dice lo que hay: cuando abra, en naranja; hasta entonces, en gris y con la fecha.
+    const yaPuede = windowState?.is_open !== false;
+    const tocaRevision = !!windowState?.due && !windowState?.submitted && yaPuede;
     const yaMandado = !!windowState?.submitted;
+    // Le toca este periodo pero la ventana todavía no ha abierto.
+    const aunNoAbre = !!windowState?.due && !windowState?.submitted && !yaPuede;
     return (
         <div className="space-y-3" data-testid="portada-seguimiento">
             <TarjetaSeguimiento
                 testid="seg-revision"
-                cuando={tocaRevision ? 'Este mes · te toca' : yaMandado ? 'Este mes · hecho' : 'Este mes'}
+                cuando={tocaRevision ? 'Este mes · te toca'
+                    : yaMandado ? 'Este mes · hecho'
+                        : aunNoAbre ? 'Este mes · aún no' : 'Este mes'}
                 titulo={windowState?.tipo_label || 'Tu revisión'}
                 sub={tocaRevision
                     ? `Unas fotos, tus medidas y unas preguntas. Y tienes tus macros nuevos.${
@@ -221,14 +232,20 @@ const ReportsPage = () => {
     const [evolution, setEvolution] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [activeTab, setActiveTab] = useState('form');
-    // EN EL TELÉFONO, LA PANTALLA ABRE EN LA PORTADA (documento del 10-08, pantalla 20) y
-    // `seccionAbierta` dice en cuál de las tres ha entrado. En escritorio no se usa: ahí
-    // mandan las pestañas de siempre.
-    const enTelefono = useEsTelefono();
+    // LA PANTALLA ABRE EN LA PORTADA, TAMBIÉN EN EL ORDENADOR.
+    //
+    // `seccionAbierta` dice en cuál de las cuatro tarjetas ha entrado, y mientras vale null
+    // se ve la portada (documento del 10-08, pantalla 20).
+    //
+    // Esto era solo del teléfono, porque el encargo era no tocar el escritorio, y en el
+    // ordenador seguían las tres pestañas con el formulario entero desplegado de entrada:
+    // peso, vídeo, las diez medidas, dos preguntas, tres barras, notas, objetivo, dos
+    // preguntas más, enviar y las tres fotos, tocara reporte o no. Y en gris, con un «la
+    // ventana se cerró» encima: se le enseñaba todo lo que no podía hacer (Jesús, 11-08).
+    // Es el mismo cliente y el mismo trámite, así que es la misma solución.
     const navigate = useNavigate();
     const [seccionAbierta, setSeccionAbierta] = useState(null);
-    const vista = enTelefono ? seccionAbierta : activeTab;
+    const vista = seccionAbierta;
     const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
     const [prev, setPrev] = useState(null);                 // último reporte (referencia de medidas)
     // Confirmación de huecos: lo que se le pregunta ANTES de rellenar, en vez de pedirle
@@ -390,12 +407,6 @@ const ReportsPage = () => {
     // distintos que el eje juntaba en una sola columna.
     const weightData = evolution?.weight?.map(w => ({ fecha: w.date, peso: w.value })) || [];
 
-    const tabs = [
-        { id: 'form', icon: FileText, label: 'Nuevo' },
-        { id: 'evolution', icon: TrendingUp, label: 'Evolución' },
-        { id: 'history', icon: Calendar, label: 'Historial' },
-    ];
-
     if (loading) {
         return (
             <div className="px-4 pt-6 pb-28">
@@ -415,9 +426,11 @@ const ReportsPage = () => {
                     <FileText className="w-5 h-5" style={{ color: ORANGE }} />
                 </div>
                 <div>
+                    {/* Un solo nombre: en el menú pone «Seguimiento» y aquí ponía «Mis
+                        reportes» en el ordenador, así que la misma sección se llamaba de
+                        dos maneras según el aparato desde el que la abrieras. */}
                     <h1 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.05em' }} data-testid="reports-heading">
-                        <span className="lg:hidden">SEGUIMIENTO</span>
-                        <span className="hidden lg:inline">MIS REPORTES</span>
+                        SEGUIMIENTO
                     </h1>
                     {/* «Seguimiento semanal» despistaba: lo de dentro es mensual, diario y de
                         consulta, no semanal (Jesús, 11-08). */}
@@ -433,10 +446,8 @@ const ReportsPage = () => {
                 Antes esta pantalla abría directamente con el formulario del reporte entero
                 desplegado: peso, las diez medidas, los huecos, las notas, tres preguntas,
                 las fotos y enviar. 3.770 px, cuatro pantallas y media de móvil, tanto si le
-                tocaba reporte como si no.
-
-                Solo en el teléfono. En escritorio siguen las tres pestañas de siempre. */}
-            {enTelefono && !seccionAbierta && (
+                tocaba reporte como si no. */}
+            {!seccionAbierta && (
                 <PortadaSeguimiento
                     windowState={windowState}
                     onRevision={() => setSeccionAbierta('form')}
@@ -447,29 +458,16 @@ const ReportsPage = () => {
             )}
 
             {/* Al entrar en una sección, la portada deja sitio y aparece la vuelta. */}
-            {enTelefono && seccionAbierta && (
+            {seccionAbierta && (
                 <button onClick={() => setSeccionAbierta(null)} data-testid="volver-seguimiento"
                     className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
                     <ChevronLeft className="w-4 h-4" /> Seguimiento
                 </button>
             )}
 
-            {/* Tab bar */}
-            <div className={`grid grid-cols-3 gap-1 bg-card border border-border rounded-2xl p-1 ${enTelefono ? 'hidden' : ''}`}>
-                {tabs.map(({ id, icon: Icon, label }) => (
-                    <button
-                        key={id}
-                        onClick={() => setActiveTab(id)}
-                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
-                            activeTab === id ? 'text-foreground' : 'text-foreground/40 hover:text-foreground/70'
-                        }`}
-                        style={activeTab === id ? { backgroundColor: ORANGE } : {}}
-                    >
-                        <Icon className="w-3.5 h-3.5" />
-                        {label}
-                    </button>
-                ))}
-            </div>
+            {/* Aquí iban las tres pestañas del escritorio. Ya no hacen falta: la portada
+                hace lo mismo diciendo además cuál toca ahora, y tener las dos cosas a la
+                vez era ofrecer dos navegaciones para la misma pantalla. */}
 
             {/* ── FORM TAB ── */}
             {vista === 'form' && (

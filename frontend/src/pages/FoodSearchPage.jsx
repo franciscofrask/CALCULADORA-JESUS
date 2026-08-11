@@ -88,7 +88,7 @@ const TODAS_CATEGORIAS = (() => {
 const RENDER_CAP = 300;
 
 /**
- * CUÁNTOS SE PINTAN DE GOLPE EN EL TELÉFONO.
+ * CUÁNTOS SE PINTAN DE GOLPE.
  *
  * Medido: al entrar sin buscar nada, esta pantalla pintaba los 300 del tope y el documento
  * quedaba en **69.711 px, ochenta y dos pantallas de móvil**. Nadie recorre 300 alimentos
@@ -97,9 +97,14 @@ const RENDER_CAP = 300;
  * Veinte y un botón para traer más. No se quita nada -- se llega a los mismos 300 pulsando
  * -- y se dice cuántos hay, que es lo que evita que un recorte se lea como «no hay más».
  *
- * En escritorio se queda en 300, como estaba.
+ * En el ordenador, cuarenta: caben dos columnas y la pantalla es más alta, así que el
+ * primer golpe de vista da más sin volver a los 69.000 px. Esto era solo del teléfono
+ * porque el encargo era no tocar el escritorio, y allí seguían los 300 de una vez
+ * (Jesús, 11-08: *«el paginado del móvil funciona igual de bien aquí; con más ancho, 40»*).
+ * El problema de fondo -- que se descargan todos -- es el mismo en los dos y sigue ahí.
  */
 const CAP_TELEFONO = 20;
+const CAP_ORDENADOR = 40;
 
 // Calma EtiquetasMacros: badge por macro > 0 (P verde, H azul, G rojo), 1 decimal.
 const MACRO_DEFS = [
@@ -223,9 +228,8 @@ const FoodSearchPage = () => {
         return [...list].sort((x, y) => (x.nombre || '').localeCompare(y.nombre || ''));
     }, [foods, query, cats, opcion]);
 
-    const aLaVista = enTelefono
-        ? Math.min(CAP_TELEFONO + deMas, filtered.length, RENDER_CAP)
-        : Math.min(filtered.length, RENDER_CAP);
+    const porTanda = enTelefono ? CAP_TELEFONO : CAP_ORDENADOR;
+    const aLaVista = Math.min(porTanda + deMas, filtered.length, RENDER_CAP);
 
     return (
         <div className="min-h-screen bg-background p-4 md:p-6">
@@ -337,9 +341,9 @@ const FoodSearchPage = () => {
                             )}
                         </div>
                         {aLaVista < Math.min(filtered.length, RENDER_CAP) && (
-                            <button onClick={() => setDeMas(n => n + CAP_TELEFONO)} data-testid="ver-mas-alimentos"
+                            <button onClick={() => setDeMas(n => n + porTanda)} data-testid="ver-mas-alimentos"
                                 className="w-full mt-3 py-3 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:text-brand-orange hover:border-brand-orange/40 transition-colors">
-                                Ver {Math.min(CAP_TELEFONO, Math.min(filtered.length, RENDER_CAP) - aLaVista)} más
+                                Ver {Math.min(porTanda, Math.min(filtered.length, RENDER_CAP) - aLaVista)} más
                             </button>
                         )}
                     </>

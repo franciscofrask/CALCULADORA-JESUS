@@ -40,32 +40,6 @@ const PlanBadge = ({ plan, planName }) => {
     return <span className={cls} data-testid="plan-badge">{label}</span>;
 };
 
-// ===== Circular tracker (light) =====
-const CircularTracker = ({ value, max, label, unit, color, size = 84, strokeWidth = 7 }) => {
-    const radius = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const pct = max > 0 ? Math.min(value / max, 1.2) : 0;
-    const offset = circumference - pct * circumference;
-    const isOver = value > max + 4;
-    const displayColor = isOver ? '#DC2626' : color;
-    return (
-        <div className="flex flex-col items-center" data-testid={`tracker-${label.toLowerCase()}`}>
-            <div className="relative" style={{ width: size, height: size }}>
-                <svg width={size} height={size} className="-rotate-90">
-                    <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="hsl(var(--track))" strokeWidth={strokeWidth} />
-                    <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={displayColor} strokeWidth={strokeWidth}
-                        strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
-                        className="transition-all duration-700 ease-out" />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="font-data text-foreground font-bold text-lg leading-none">{Math.round(value)}</span>
-                    <span className="text-muted-foreground text-[9px] uppercase font-semibold">{unit}</span>
-                </div>
-            </div>
-            <span className="text-[11px] font-bold uppercase tracking-wider mt-2" style={{ color: displayColor }}>{label}</span>
-        </div>
-    );
-};
 
 /**
  * UN MACRO DEL DÍA: el número grande, el nombre y cuánto es el objetivo.
@@ -97,19 +71,6 @@ const MacroGrande = ({ valor, objetivo, label, color }) => {
                 <div className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${pct}%`, backgroundColor: pasado ? '#DC2626' : color }} />
             </div>
-        </div>
-    );
-};
-
-const MacroBar = ({ label, consumed, target, color }) => {
-    const pct = target > 0 ? Math.min((consumed / target) * 100, 100) : 0;
-    return (
-        <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[11px] font-bold uppercase" style={{ color }}>{label}</span>
-            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
-            </div>
-            <span className="text-[11px] text-muted-foreground font-data">{Math.round(consumed)}/{Math.round(target)}</span>
         </div>
     );
 };
@@ -169,20 +130,6 @@ const OnboardingChecklist = ({ steps, onDismiss, navigate, onResume, showResume 
     );
 };
 
-const QuickCard = ({ icon: Icon, color, label, sub, path, navigate, testId, badge }) => (
-    <button onClick={() => navigate(path)} data-testid={testId}
-        className="surface surface-hover text-left p-4 group relative">
-        {badge > 0 && <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-brand rounded-full animate-pulse" />}
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-transform group-hover:scale-105"
-            style={{ backgroundColor: `${color}14` }}>
-            <Icon className="w-5 h-5" style={{ color }} strokeWidth={2.2} />
-        </div>
-        <p className="font-bold text-foreground uppercase text-[13px] tracking-wide">{label}</p>
-        <p className="text-muted-foreground text-xs mt-0.5">{sub}</p>
-    </button>
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
 // EL PLAN SE ACABÓ (punto 41 del doc del 07-08).
 //
 // La calculadora antigua ya lo tenía resuelto y es lo que se copia: se corta el acceso, se
@@ -506,30 +453,29 @@ const ClientDashboard = () => {
                                 </p>
                             </div>
                             <div className="px-5 pb-5 pt-3">
-                                {/* NÚMEROS GRANDES, SIN ANILLO, SOLO EN MÓVIL. Del documento:
-                                    «el anillo dice lo mismo que la barra, y la barra ocupa una
-                                    décima parte». En el teléfono estaban las dos cosas -- tres
-                                    anillos de 92 px y, debajo, tres barras con los mismos
-                                    números --, media pantalla para decir una cosa dos veces.
+                                {/* NÚMEROS GRANDES, SIN ANILLO. Del documento: «el anillo dice
+                                    lo mismo que la barra, y la barra ocupa una décima parte».
+                                    En el teléfono estaban las dos cosas -- tres anillos de
+                                    92 px y, debajo, tres barras con los mismos números --,
+                                    media pantalla para decir una cosa dos veces.
 
-                                    En escritorio se queda como estaba: ahí el sitio no es el
-                                    problema y el rediseño todavía no ha llegado a esa vista. */}
-                                <div className="grid grid-cols-3 gap-3 lg:hidden">
+                                    En el ordenador seguían los anillos, porque el encargo era
+                                    no tocar el escritorio. Jesús, 11-08: *«el anillo se ve
+                                    bonito y hay que interpretarlo»*. Con el número hay que
+                                    hacer una resta, pero al menos está escrito; con el anillo
+                                    hay que medir un hueco a ojo.
+
+                                    Ojo, que él compara con el «te queda por comer» del móvil y
+                                    eso es de OTRA pantalla: vive en la cabecera de Nutrición
+                                    (DayHeader). Aquí, en Inicio, se enseña lo comido sobre el
+                                    objetivo, y así es en los dos aparatos. Si hay que cambiar
+                                    a «lo que queda», se cambia en Inicio para los dos, y esa
+                                    es una decisión aparte -- no parte de igualar el escritorio
+                                    con el móvil, que es lo que se está haciendo aquí. */}
+                                <div className="grid grid-cols-3 gap-3">
                                     <MacroGrande valor={todayConsumed.P} objetivo={getP(activeTarget)} label="Proteína" color={MACRO.protein} />
                                     <MacroGrande valor={todayConsumed.H} objetivo={getH(activeTarget)} label="Hidratos" color={MACRO.carbs} />
                                     <MacroGrande valor={todayConsumed.G} objetivo={getG(activeTarget)} label="Grasa" color={MACRO.fat} />
-                                </div>
-                                <div className="hidden lg:block">
-                                    <div className="flex items-center justify-around">
-                                        <CircularTracker value={todayConsumed.P} max={getP(activeTarget)} label="Proteína" unit="g" color={MACRO.protein} size={92} />
-                                        <CircularTracker value={todayConsumed.H} max={getH(activeTarget)} label="Hidratos" unit="g" color={MACRO.carbs} size={92} />
-                                        <CircularTracker value={todayConsumed.G} max={getG(activeTarget)} label="Grasa" unit="g" color={MACRO.fat} size={92} />
-                                    </div>
-                                    <div className="flex items-center justify-center gap-5 mt-4 flex-wrap">
-                                        <MacroBar label="P" consumed={todayConsumed.P} target={getP(activeTarget)} color={MACRO.protein} />
-                                        <MacroBar label="H" consumed={todayConsumed.H} target={getH(activeTarget)} color={MACRO.carbs} />
-                                        <MacroBar label="G" consumed={todayConsumed.G} target={getG(activeTarget)} color={MACRO.fat} />
-                                    </div>
                                 </div>
                             </div>
                             <div className="border-t border-border px-5 py-3 flex items-center justify-between">
@@ -761,27 +707,17 @@ const ClientDashboard = () => {
             </button>
             )}
 
-            {/* LOS OCHO ACCESOS RÁPIDOS, SOLO EN ESCRITORIO (documento del 10-08, pantalla
-                4): «repetían la barra de abajo. Eran cuatro cosas que ocupaban media
-                pantalla y no llevaban a ningún sitio nuevo». En el teléfono eran ocho, con
-                icono, título y subtítulo, y se llevaban 1.000 de los 1.616 px de la pantalla.
+            {/* AQUÍ IBAN LOS OCHO ACCESOS RÁPIDOS.
+                «Repetían la barra de abajo. Eran cuatro cosas que ocupaban media pantalla y
+                no llevaban a ningún sitio nuevo» (documento del 10-08, pantalla 4). En el
+                teléfono eran ocho, con icono, título y subtítulo, y se llevaban 1.000 de los
+                1.616 px de la pantalla, así que se quitaron.
 
-                Ahí no se pierde nada: Nutrición y Seguimiento están en la barra de abajo, y
-                las otras seis viven en Perfil, que es donde el documento pone «Mis macros».
-                En escritorio se quedan como estaban: esa vista no se ha rediseñado. */}
-            <div className="hidden lg:block">
-                <p className="caption mb-3">Accesos rápidos</p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <QuickCard icon={Apple} color="#16A34A" label="Nutrición" sub="Montar dieta" path="/dashboard/nutrition" navigate={navigate} testId="nutrition-quick" />
-                    <QuickCard icon={SlidersHorizontal} color={MACRO.protein} label="Macros" sub="Ajustar valores" path="/dashboard/macro-calculator" navigate={navigate} testId="macros-card" />
-                    <QuickCard icon={Bot} color="#7C3AED" label="Asistente IA" sub="Dieta con IA" path="/dashboard/chatbot" navigate={navigate} testId="chatbot-card" />
-                    {can('reportes') && <QuickCard icon={FileText} color="#CA8A04" label="Reportes" sub="Ver evolución" path="/dashboard/reports" navigate={navigate} testId="reports-card" />}
-                    <QuickCard icon={Search} color="#0891B2" label="Alimentos" sub="Buscador" path="/dashboard/foods" navigate={navigate} testId="foods-card" />
-                    {can('suplementacion') && <QuickCard icon={Pill} color="#DB2777" label="Suplementos" sub="Tu protocolo" path="/dashboard/supplements" navigate={navigate} testId="supplements-card" />}
-                    {can('reportes') && <QuickCard icon={ClipboardCheck} color="#2563EB" label="Check-ins" sub="Seguimiento" path="/dashboard/checkins" navigate={navigate} testId="checkins-card" />}
-                    {can('chat') && <QuickCard icon={MessageCircle} color="#9333EA" label="Chat" sub={unreadMessages > 0 ? `${unreadMessages} sin leer` : 'Tu entrenador'} path="/dashboard/messages" navigate={navigate} testId="messages-card" badge={unreadMessages} />}
-                </div>
-            </div>
+                En el ordenador se quedaron, porque el encargo era no tocar el escritorio, y
+                ahí duplicaban la barra lateral entera: Nutrición, Macros, Asistente,
+                Reportes, Alimentos, Suplementos, Check-ins y Chat ya están a la izquierda y
+                siempre a la vista, que es más de lo que tiene el móvil (Jesús, 11-08). No se
+                pierde ninguna puerta, se deja de tener dos veces la misma. */}
         </div>
     );
 };
@@ -852,24 +788,31 @@ const ClientLayout = () => {
     const conNombreDeMacros = (i) => (
         i.path === '/dashboard/macro-calculator' && lesAjustaSuCoach ? { ...i, label: 'Mis macros' } : i
     );
-    const navItems = NAV_ITEMS.filter(i => !i.cap || can(i.cap)).map(conNombreDeMacros);
-    // La barra de abajo no se toca: ahí ya pone «Macros» a secas, que vale para los dos casos y
-    // es lo que cabe en un móvil.
-    const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
-    // EN EL TELÉFONO, «SEGUIMIENTO» ES LA ÚNICA PUERTA (decisión de Francisco, 10-08).
+    // «SEGUIMIENTO» ES LA ÚNICA PUERTA, EN EL TELÉFONO Y EN EL ORDENADOR.
     //
     // El menú tenía «Reportes» y «Check-ins» como dos entradas distintas, y el cliente tenía
-    // que saber de antemano en cuál de las dos está lo que busca. Ahora las dos se sustituyen
-    // por una sola, «Seguimiento», que es la portada desde la que se entra a cada cosa: la
+    // que saber de antemano en cuál de las dos está lo que busca. Las dos se sustituyen por
+    // una sola, «Seguimiento», que es la portada desde la que se entra a cada cosa: la
     // revisión del mes, el check-in de hoy, la evolución y lo ya mandado.
     //
-    // Solo en el teléfono: la barra lateral de escritorio sigue con sus once entradas, que
-    // ahí caben todas a la vez y no hay nada que simplificar.
-    const navItemsMovil = navItems
-        .filter(i => i.path !== '/dashboard/checkins')
+    // Esto se hizo el 10-08 solo en el teléfono, porque el encargo era no tocar el
+    // escritorio. Jesús, 11-08: *«en el teléfono hay nueve entradas y una se llama
+    // Seguimiento; en el ordenador hay once, y ahí siguen Reportes y Check-ins por
+    // separado»*. La misma persona abre la app en el móvil por la mañana y en el ordenador
+    // por la tarde: si la sección se llama distinto en cada sitio, la busca dos veces. Una
+    // sola lista para los dos.
+    //
+    // La ruta /dashboard/checkins sigue viva: lo que desaparece es la entrada del menú, no
+    // la pantalla, y a ella se entra desde Seguimiento.
+    const navItems = NAV_ITEMS
+        .filter(i => (!i.cap || can(i.cap)) && i.path !== '/dashboard/checkins')
+        .map(conNombreDeMacros)
         .map(i => i.path === '/dashboard/reports'
             ? { ...i, icon: TrendingUp, label: 'Seguimiento' }
             : i);
+    // La barra de abajo no se toca: ahí ya pone «Macros» a secas, que vale para los dos casos y
+    // es lo que cabe en un móvil.
+    const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
     const navigate = useNavigate();
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === '1');
@@ -1106,7 +1049,7 @@ const ClientLayout = () => {
                             </button>
                         </div>
                         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-                            {navItemsMovil.map(item => <SidebarLink key={item.path} item={item} collapsed={false} unread={unread} onClick={() => setDrawerOpen(false)} />)}
+                            {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={false} unread={unread} onClick={() => setDrawerOpen(false)} />)}
                         </nav>
                         <div className="p-3 border-t border-white/10 space-y-2">
                             <UserChip />
