@@ -19,7 +19,7 @@ const TipoDiaBadge = ({ tipo }) => (
     </span>
 );
 
-const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, tipoDia = 'entrenamiento' }) => {
+const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, tipoDia = 'entrenamiento', diaVacio = false }) => {
     const [name, setName] = useState('');
     const [saving, setSaving] = useState(false);
     // Favorita con el panel "adaptar o aplicar como se guardó" desplegado.
@@ -64,12 +64,20 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                     <Button
                         className="bg-brand-orange hover:bg-brand-orange-dark text-white font-bold rounded-full shrink-0"
                         onClick={handleSave}
-                        disabled={!name.trim() || saving}
+                        disabled={!name.trim() || saving || diaVacio}
                     >
                         Guardar
                     </Button>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-2">Guarda la comida actual del día como plantilla reutilizable.</p>
+                {/* DICE LO QUE GUARDA, Y NO DEJA GUARDAR UN DÍA VACÍO.
+                    Ponía «guarda la comida actual del día» y lo que guarda es el DÍA ENTERO;
+                    además dejaba guardar uno sin nada, que luego aparece en la lista como
+                    favorita de cero comidas (Jesús, 11-08). */}
+                <p className="text-xs text-muted-foreground -mt-2">
+                    {diaVacio
+                        ? 'Este día no tiene comidas todavía: monta algo y podrás guardarlo.'
+                        : 'Guarda este día entero para repetirlo cuando quieras.'}
+                </p>
 
                 {/* Lista */}
                 <div className="max-h-72 overflow-auto -mx-1 px-1 space-y-1">

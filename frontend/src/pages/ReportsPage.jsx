@@ -75,9 +75,13 @@ const WindowBanner = ({ w }) => {
     return (
         <div className={`${base} ${before ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-red-500/40 bg-red-500/5'} text-foreground`}>
             <Calendar className={`w-4 h-4 flex-shrink-0 ${before ? 'text-yellow-500' : 'text-red-500'}`} />
+            {/* «La semana que viene» no es una fecha, y el servidor sabe cuándo vuelve a abrir:
+                lo mandaba en `opens_label` y aquí no se usaba (Jesús, 11-08). */}
             {before
                 ? `Tu reporte se rellena el fin de semana. La ventana abre el ${w.opens_label}.`
-                : 'La ventana de esta semana se cerró. Espera a la semana que viene.'}
+                : w.opens_label
+                    ? `La ventana de esta semana se cerró. Se abre el ${String(w.opens_label).split(' a las ')[0]}.`
+                    : 'La ventana de esta semana se cerró. Espera a la semana que viene.'}
         </div>
     );
 };

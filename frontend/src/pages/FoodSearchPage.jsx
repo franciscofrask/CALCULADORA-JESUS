@@ -103,9 +103,11 @@ const CAP_TELEFONO = 20;
 
 // Calma EtiquetasMacros: badge por macro > 0 (P verde, H azul, G rojo), 1 decimal.
 const MACRO_DEFS = [
-    ['proteinas', 'proteínas', 'bg-green-100 text-green-700'],
-    ['hidratos', 'hidratos', 'bg-blue-100 text-blue-700'],
-    ['grasas', 'grasas', 'bg-red-100 text-red-700'],
+    // Con unidad y en singular: «18 g proteína» y no «18 proteínas», que no es nada
+    // (Jesús, 11-08).
+    ['proteinas', 'g proteína', 'bg-green-100 text-green-700'],
+    ['hidratos', 'g hidratos', 'bg-blue-100 text-blue-700'],
+    ['grasas', 'g grasa', 'bg-red-100 text-red-700'],
 ];
 
 const FoodRow = ({ food }) => {
@@ -140,21 +142,26 @@ const FoodRow = ({ food }) => {
                             </p>
                         </>
                     ) : (
-                        <em className="text-xs text-muted-foreground">No aporta macros</em>
+                        <em className="text-xs text-muted-foreground">Come lo que quieras</em>
                     )}
                 </div>
             </div>
             {cats.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">{cats.join(' | ')}</p>
             )}
-            {food.cantidad_minima != null && (
-                <p className="text-xs text-muted-foreground">cantidad mínima: {food.cantidad_minima}</p>
-            )}
-            {food.sugerencia && (
-                <p className="text-xs text-brand-orange">{food.sugerencia}</p>
+            {/* QUÉ TE CUENTA, EN VEZ DEL FILTRO DEL TERCIO AL REVÉS.
+                Aquí ponía «Necesita 9g proteínas / 5.5g hidratos / 5.5g grasas para ser
+                sugerido» y, debajo, «cantidad mínima: 50». Lo primero es el filtro dicho en
+                lenguaje de programador; lo segundo, un dato interno sin unidad ni contexto.
+                Y esta es justo la pantalla donde alguien viene a entender por qué la app le
+                cuenta unas cosas y otras no: era la ocasión de explicar el método y se
+                gastaba en jerga (Jesús, 11-08). La frase la arma el servidor comparando lo
+                que dice la etiqueta con lo que de verdad cuenta. */}
+            {food.que_te_cuenta && (
+                <p className="text-xs text-brand-orange mt-1">{food.que_te_cuenta}</p>
             )}
             {food.info_etiqueta && (
-                <p className="text-xs text-muted-foreground">Macros reales: {food.info_etiqueta}</p>
+                <p className="text-xs text-muted-foreground">En la etiqueta pone: {food.info_etiqueta}</p>
             )}
         </div>
     );
@@ -302,7 +309,7 @@ const FoodSearchPage = () => {
                             <input type="radio" name="opcion" checked={opcion === 'sinMacros'} onChange={() => {}}
                                 onClick={() => setOpcion(opcion === 'sinMacros' ? '' : 'sinMacros')}
                                 className="appearance-none shrink-0 w-3.5 h-3.5 rounded-full border border-input bg-card checked:bg-brand-orange checked:border-brand-orange cursor-pointer" />
-                            No aportan macros
+                            Verduras libres
                         </label>
                     </div>
                 </div>

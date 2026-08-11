@@ -107,11 +107,14 @@ const MessagesPage = () => {
                         da el servidor en el perfil: el cliente no tiene acceso al listado
                         del equipo. */}
                     <h2 className="font-bold text-foreground uppercase tracking-wider" data-testid="messages-heading">
-                        {profile?.entrenador?.nombre || (profile?.trainer_id ? 'Tu entrenador' : 'Soporte JG12')}
+                        {profile?.entrenador?.nombre || '12EN12'}
                     </h2>
-                    <p className="text-xs text-[#FF671F]">
-                        {profile?.trainer_id ? 'Tu entrenador' : 'Equipo de soporte'}
-                    </p>
+                    {/* DEBAJO DEL NOMBRE, CUÁNTO SE TARDA EN CONTESTAR.
+                        Aquí ponía «Tu entrenador» otra vez, repitiendo el puesto debajo del
+                        nombre. Lo que de verdad falta es el plazo: sin él, la mitad de los
+                        mensajes son «¿hay alguien?» (Jesús, 11-08). Y al plan de 897 € se le
+                        vende un chat con una persona: decir cuándo responde es parte de eso. */}
+                    <p className="text-xs text-[#FF671F]">Te respondemos en menos de 24 horas</p>
                 </div>
             </div>
 

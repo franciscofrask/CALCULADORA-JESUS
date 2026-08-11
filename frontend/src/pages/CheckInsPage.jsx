@@ -423,6 +423,10 @@ const CheckInsPage = () => {
                                     );
                                 })}
                             </div>
+                            {/* Las dos escalas o ninguna: la de hambre decía «1 = nada · 5 =
+                                mucha» y esta no decía nada, así que había que adivinar si el 5
+                                era mucha energía o poca (Jesús, 11-08). */}
+                            <p className="text-[11px] text-foreground/40 mt-1.5">1 = por los suelos · 5 = a tope</p>
                         </div>
                         <div>
                             <span className="text-sm text-foreground/70 mb-2 block">Ansiedad y hambre</span>
@@ -536,7 +540,17 @@ const CheckInsPage = () => {
                 </Collapsible>
             </div>
 
-            <PhotosSection api={api} />
+            {/* LAS FOTOS NO PINTAN NADA AQUÍ.
+                Este bloque decía «se suben en tu reporte» y justo debajo «aún no has subido
+                fotos»: un cajón entero para mandarte a otro sitio. Esta es la pantalla de los
+                diez segundos -- energía, hambre y qué has comido --, y todo lo que no sean esos
+                dos campos le quita el sentido (Jesús, 11-08).
+                Las fotos siguen donde se suben, en el reporte, y se ven en Mi evolución; aquí
+                no se pierde ninguna forma de llegar a ellas. En escritorio se queda, que ahí
+                sobra sitio y el bloque no estorba a nadie. */}
+            <div className="hidden lg:block">
+                <PhotosSection api={api} />
+            </div>
 
             {/* Historial */}
             <Card className="p-5">

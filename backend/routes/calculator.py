@@ -261,8 +261,52 @@ async def get_foods_listado(user = Depends(get_current_user)):
             "info_etiqueta": _fmt_macros(orig) if eff != orig else None,
             "cantidad_minima": cm,
             "sugerencia": (f"Necesita {mins_str} para ser sugerido" if mins_str else "Siempre puede ser sugerido"),
+            # QUE LE CUENTA DE ESTE ALIMENTO, EN CRISTIANO.
+            #
+            # Debajo de cada alimento salia «Necesita 9g proteinas / 5.5g hidratos / 5.5g
+            # grasas para ser sugerido»: es el filtro del tercio dicho al reves y en lenguaje
+            # de programador. Y esta es justo la pantalla donde alguien viene a entender por
+            # que la app le cuenta unas cosas y otras no, asi que ahi se perdia la ocasion de
+            # explicar el metodo (Jesus, 11-08).
+            #
+            # El dato ya estaba: `orig` son los macros de la etiqueta y `eff` los que cuentan
+            # despues de aplicar la regla. Lo que sobraba era traducirlo.
+            "que_te_cuenta": _que_te_cuenta(orig, eff),
         })
     return out
+
+
+#: Cada macro con el nombre y el articulo con que se lo decimos al cliente. Se guardan los
+#: dos porque «su proteina» y «sus hidratos» no concuerdan igual, y una frase mal concordada
+#: en la pantalla que explica el metodo se lee como un descuido.
+_NOMBRE_MACRO = {"proteinas": "proteína", "hidratos": "hidratos", "grasas": "grasa"}
+_SUYO_MACRO = {"proteinas": "su proteína", "hidratos": "sus hidratos", "grasas": "su grasa"}
+
+
+def _que_te_cuenta(orig: dict, eff: dict) -> str:
+    """Una frase que dice que macros de este alimento cuentan para sus objetivos."""
+    tiene = [k for k in ("proteinas", "hidratos", "grasas") if (orig.get(k) or 0) > 0]
+    cuentan = [k for k in tiene if (eff.get(k) or 0) > 0]
+    no_cuentan = [k for k in tiene if (eff.get(k) or 0) <= 0]
+
+    if not tiene or not cuentan:
+        return "No te cuenta nada: come lo que quieras."
+    if not no_cuentan:
+        return ("Te cuentan los tres." if len(cuentan) == 3
+                else "Te cuenta " + _lista([_NOMBRE_MACRO[k] for k in cuentan]) + ".")
+
+    fuera = [_SUYO_MACRO[k] for k in no_cuentan]
+    if len(fuera) == 1:
+        cola = f"{fuera[0].capitalize()} no te cuenta."
+    else:
+        cola = "Ni " + " ni ".join(fuera) + " te cuentan."
+    return "Te cuenta " + _lista([_NOMBRE_MACRO[k] for k in cuentan]) + ". " + cola
+
+
+def _lista(partes: list) -> str:
+    if len(partes) <= 1:
+        return partes[0] if partes else ""
+    return ", ".join(partes[:-1]) + " y " + partes[-1]
 
 # ==================== CATEGORIES ====================
 

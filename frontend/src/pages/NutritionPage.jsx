@@ -2198,6 +2198,8 @@ const NutritionPage = () => {
                 onApply={applyDietFavorite}
                 onDelete={deleteDietFavorite}
                 tipoDia={tipoDia}
+                // Para no dejar guardar un día sin comidas como favorita.
+                diaVacio={!Object.values(mealsData || {}).some(m => (m?.alimentos || []).length > 0)}
             />
 
             {/* Diet Calendar Modal */}

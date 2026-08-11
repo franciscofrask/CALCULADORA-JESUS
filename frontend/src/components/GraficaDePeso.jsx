@@ -85,6 +85,24 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true }) => {
 
     if (!datos.length) return null;
 
+    // CON UN SOLO PESAJE NO SE DIBUJA UNA CURVA.
+    // Salía una gráfica con un punto y «empezaste en 75,5 · ahora 75,5 · cambio 0 kg · 1
+    // pesaje»: una línea recta que no dice nada y que parece un error. Es la pantalla del
+    // premio -- la que enseña que el trabajo sirve -- y con un punto enseña lo contrario.
+    // Se dice lo que falta para tenerla, que además es una petición concreta (Jesús, 11-08).
+    if (datos.length === 1) {
+        return (
+            <div data-testid="grafica-de-peso" className="surface p-4">
+                <p className="text-sm text-foreground">
+                    Tu primer peso: <span className="font-bold">{datos[0].peso} kg</span>
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                    Con dos pesajes te dibujamos tu evolución. Te falta uno.
+                </p>
+            </div>
+        );
+    }
+
     const primero = datos[0].peso;
     const ultimo = datos[datos.length - 1].peso;
     const cambio = Math.round((ultimo - primero) * 10) / 10;
