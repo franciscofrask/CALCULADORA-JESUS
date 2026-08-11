@@ -489,6 +489,6 @@ async def set_report_feedback(report_id: str, data: dict, user = Depends(get_adm
         profile = await db.client_profiles.find_one({"id": report["client_id"]}, {"_id": 0, "user_id": 1})
         if profile:
             from routes.notifications import notify
-            await notify(profile["user_id"], "feedback", "Tu entrenador ha comentado tu reporte", "/dashboard/reports")
+            await notify(profile["user_id"], "feedback", "Hemos comentado tu reporte", "/dashboard/reports")
 
     return {"ok": True}

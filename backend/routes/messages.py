@@ -69,7 +69,7 @@ async def send_message(data: MessageCreate, user = Depends(get_current_user)):
     # cuando le escribe un cliente, que es el que no puede quedarse sin contestar.
     quien = (user.get("name") or "").strip()
     de_staff = user.get("role") in ("admin", "trainer")
-    titulo = (f"{quien or 'Tu entrenador'} te ha escrito" if de_staff
+    titulo = (f"{quien} te ha escrito" if quien else "Tienes un mensaje nuevo" if de_staff
               else f"{quien or 'Un cliente'} te ha escrito")
     # El propio mensaje va en el cuerpo, recortado: se lee en la campana sin tener que
     # entrar, y si es largo se entra.

@@ -1055,7 +1055,7 @@ const ClientLayout = () => {
                                 <button onClick={() => { setNotifOpen(false); navigate('/dashboard/messages'); }}
                                     className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted border-b border-border">
                                     <Bell className="w-4 h-4 text-brand flex-shrink-0" />
-                                    <span className="text-sm text-foreground flex-1">Tienes {unread} mensaje{unread > 1 ? 's' : ''} sin leer de tu entrenador</span>
+                                    <span className="text-sm text-foreground flex-1">Tienes {unread} mensaje{unread > 1 ? 's' : ''} sin leer</span>
                                 </button>
                             )}
                             {notifItems.map(n => (
@@ -1078,8 +1078,15 @@ const ClientLayout = () => {
                                     </div>
                                 </button>
                             ))}
-                            {notifItems.length === 0 && unread === 0 && (
-                                <p className="text-muted-foreground text-sm text-center py-10">No tienes novedades</p>
+                            {/* LA LISTA SE CIERRA DICIENDO QUE NO QUEDA NADA.
+                                Una lista de avisos que solo termina cuando se acaban deja la
+                                duda de si falta algo por cargar. Al abrir el panel ya se marcan
+                                todos como leídos, así que el estado real es ese: no hay nada
+                                más pendiente, y se dice (Jesús, 11-08). */}
+                            {notifItems.length === 0 && unread === 0 ? (
+                                <p className="text-muted-foreground text-sm text-center py-10">No hay nada pendiente</p>
+                            ) : (
+                                <p className="text-muted-foreground/70 text-xs text-center py-4">No hay nada más pendiente</p>
                             )}
                         </div>
                     </div>

@@ -194,7 +194,7 @@ async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(g
     # decision confirmada el 08-08-2026). Avisarle de algo que no puede abrir le ensena a
     # ignorar los avisos, y son los mismos por los que se entera de sus macros.
     if RUTINA_VISIBLE_PARA_EL_CLIENTE:
-        await notify(profile["user_id"], "rutina", "Tu entrenador te ha preparado una rutina nueva", "/dashboard/routine")
+        await notify(profile["user_id"], "rutina", "Te hemos preparado una rutina nueva", "/dashboard/routine")
 
     return RoutineResponse(**routine_doc)
 

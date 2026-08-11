@@ -759,7 +759,8 @@ async def assign_client_trainer(client_id: str, data: TrainerAssign, user = Depe
     trainer_name = trainer_doc.get("name") if trainer_doc else None
     if new_trainer != current_trainer:
         await notify(profile["user_id"], "coach",
-                     f"Tu entrenador ahora es {trainer_name}" if trainer_name else "Tu asignación de entrenador ha cambiado",
+                     # Al cliente no se le nombra el puesto, se le dice quién le lleva (Jesús, 11-08).
+                     f"Ahora te lleva {trainer_name}" if trainer_name else "Hay un cambio en quien te lleva",
                      "/dashboard/messages")
         client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
         client_name = (client_user or {}).get("name") or (client_user or {}).get("email") or client_id
@@ -939,7 +940,7 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     # El banco de casos (clientes gemelos) se refresca solo con cada ajuste nuevo.
     _refrescar_casos()
 
-    await notify(profile["user_id"], "macros", "Tu entrenador ha actualizado tus macros", "/dashboard/nutrition", body=data.note)
+    await notify(profile["user_id"], "macros", "Hemos actualizado tus macros", "/dashboard/nutrition", body=data.note)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Actualizó macros de {(client_user or {}).get('name') or client_id} (manual)")
 
@@ -1143,7 +1144,7 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
                   "sexo": sexo, "objetivo": objetivo},
     )
 
-    await notify(profile["user_id"], "macros", "Tu entrenador ha actualizado tus macros", "/dashboard/nutrition", body=note)
+    await notify(profile["user_id"], "macros", "Hemos actualizado tus macros", "/dashboard/nutrition", body=note)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Aplicó macros por calculadora a {(client_user or {}).get('name') or client_id}")
 

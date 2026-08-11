@@ -1890,7 +1890,14 @@ const NutritionPage = () => {
                     // La configuración del día está siempre a la vista en esta misma pantalla, así
                     // que "cambiarla" es cerrar esto (y el tutorial) para que la vea sin estorbos.
                     onIrAConfig={() => { cerrarPrimeraDieta(); dismissIntro(); }}
-                    onListo={cerrarPrimeraDieta}
+                    // UNA BIENVENIDA, NO DOS ENCADENADAS.
+                    // Al cerrar esta aparecía el tutorial de la pantalla: dos pantallas completas
+                    // antes de ver la primera dieta, contando lo mismo por partes. Ahora cerrar
+                    // esta da por visto también aquel.
+                    // No se pierde: el tutorial sigue entero en «Repetir recorrido guiado», en Mi
+                    // perfil. Es el argumento de Jesús (11-08): como se puede volver a ver, no
+                    // hace falta contarlo todo la primera vez, con la dieta esperando detrás.
+                    onListo={() => { cerrarPrimeraDieta(); dismissIntro(); }}
                 />
             ) : showIntro && <NutritionIntro onClose={dismissIntro} />}
             <header className="flex items-center justify-between gap-4 mb-4">

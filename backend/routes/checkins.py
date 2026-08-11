@@ -236,7 +236,7 @@ async def admin_set_checkin_feedback(client_id: str, checkin_id: str, data: dict
         profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "user_id": 1})
         if profile:
             from routes.notifications import notify
-            await notify(profile["user_id"], "feedback", "Tu entrenador ha comentado tu check-in", "/dashboard/checkins")
+            await notify(profile["user_id"], "feedback", "Hemos comentado tu check-in", "/dashboard/checkins")
 
     return {"success": True}
 
