@@ -702,11 +702,26 @@ const LeadsPage = () => {
     );
 };
 
+// Cuántos días lleva el lead sin moverse de columna. Los que no han cambiado nunca de
+// estado cuentan desde que entraron, que para el caso es lo mismo: nadie los ha tocado.
+const diasParado = (lead) => {
+    const desde = lead.status_changed_at || lead.created_at;
+    if (!desde) return null;
+    const t = new Date(desde).getTime();
+    if (Number.isNaN(t)) return null;
+    return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+};
+
 // ========== KANBAN CARD ==========
 const KanbanCard = ({ lead, onClick, assignedName, dragging, onDragStart, onDragEnd }) => {
     const src = getSourceObj(lead.source);
     const SrcIcon = src.icon;
     const overdue = isOverdue(lead);
+    // A partir de dos semanas quieto se pinta: es el punto donde un lead deja de estar
+    // en curso y pasa a estar olvidado. Los cerrados no cuentan, ya no esperan nada.
+    const parado = diasParado(lead);
+    const cerrado = ['descartado', 'convertido', 'ganado'].includes(lead.status);
+    const olvidado = !cerrado && parado !== null && parado >= 14;
     return (
         <Card draggable onDragStart={onDragStart} onDragEnd={onDragEnd}
             className={`bg-[#111] cursor-grab active:cursor-grabbing transition-all ${dragging ? 'opacity-40' : ''} ${overdue ? 'border-red-500/50 hover:border-red-400' : 'border-[#222] hover:border-[#FF671F]/40'}`} onClick={onClick} data-testid={`kanban-card-${lead.id}`}>
@@ -723,6 +738,14 @@ const KanbanCard = ({ lead, onClick, assignedName, dragging, onDragStart, onDrag
                 </div>
                 <div className="flex items-center gap-2 mt-1.5">
                     <p className="text-white/20 text-[10px]">{new Date(lead.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
+                    {/* Cuánto lleva quieto en esta columna. Sin esto, el tablero enseña
+                        dónde está cada uno pero no cuál se está enfriando. */}
+                    {!cerrado && parado !== null && (
+                        <span className={`text-[10px] font-semibold ${olvidado ? 'text-red-400' : 'text-white/30'}`}
+                            title={`Lleva ${parado} ${parado === 1 ? 'día' : 'días'} sin cambiar de estado`}>
+                            {parado === 0 ? 'hoy' : `${parado}d aquí`}
+                        </span>
+                    )}
                     {assignedName && <span className="flex items-center gap-1 text-[10px] text-white/40"><Users className="w-3 h-3" />{assignedName}</span>}
                     {lead.next_action_date && (
                         <span className={`flex items-center gap-1 text-[10px] ml-auto ${overdue ? 'text-red-400 font-bold' : 'text-white/40'}`}>

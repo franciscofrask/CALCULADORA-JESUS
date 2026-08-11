@@ -11,7 +11,7 @@ import { PlanBadge } from './ClientDashboard';
 // Vista general de rutinas: quien tiene rutina activa y quien no.
 // La rutina se genera/edita dentro de la ficha del cliente (pestaña Entreno).
 const AdminRoutinesPage = () => {
-    const { api } = useAuth();
+    const { api, planCatalog } = useAuth();
     const navigate = useNavigate();
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -26,11 +26,36 @@ const AdminRoutinesPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // A QUIÉN SE LE PROMETIÓ UNA RUTINA.
+    //
+    // «Con 240 de 240 en rojo, la pantalla no ayuda a priorizar. Yo la ordenaría por plan:
+    // los que pagan rutina primero, que son los únicos a los que se les prometió» (Jesús,
+    // 11-08). El catálogo ya lo sabe: `habilitaciones.rutina` vale "ninguna" en los planes
+    // que no la incluyen. Con 240 filas iguales, esto es la diferencia entre una lista y
+    // una tarea.
+    const pagaRutina = (plan) => {
+        const r = planCatalog?.[plan]?.habilitaciones?.rutina;
+        return Boolean(r) && r !== 'ninguna';
+    };
+
     const filtered = rows.filter(r =>
         (!onlyMissing || !r.has_routine) &&
         (!search || r.name?.toLowerCase().includes(search.toLowerCase()) || r.email?.toLowerCase().includes(search.toLowerCase()))
-    );
+    ).sort((a, b) => {
+        const pa = pagaRutina(a.plan), pb = pagaRutina(b.plan);
+        if (pa !== pb) return pa ? -1 : 1;
+        // Dentro de cada grupo, el que aún no la tiene primero: es el que hay que atender.
+        if (a.has_routine !== b.has_routine) return a.has_routine ? 1 : -1;
+        return (a.name || '').localeCompare(b.name || '', 'es');
+    });
     const withRoutine = rows.filter(r => r.has_routine).length;
+    const laPagan = rows.filter(r => pagaRutina(r.plan));
+    const laPaganSinRutina = laPagan.filter(r => !r.has_routine).length;
+
+    // Las dos columnas solo hablan de rutinas que existen. Si no hay ninguna, son dos
+    // columnas de guiones: «o se rellenan o se quitan», y aquí se quitan solas en cuanto
+    // no hay nada que enseñar, y vuelven cuando lo haya.
+    const hayRutinas = withRoutine > 0;
 
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-96 bg-[#111] rounded-xl" /></div></div>;
 
@@ -42,6 +67,13 @@ const AdminRoutinesPage = () => {
                     {withRoutine} de {rows.length} clientes con rutina activa
                     {rows.length - withRoutine > 0 && <span className="text-yellow-400"> · {rows.length - withRoutine} sin rutina</span>}
                 </p>
+                {/* El número que de verdad es una tarea: a los demás no se les prometió. */}
+                {laPaganSinRutina > 0 && (
+                    <p className="text-white/60 text-sm mt-1" data-testid="rutinas-prometidas">
+                        <span className="text-[#FF671F] font-semibold">{laPaganSinRutina}</span>
+                        {' '}de ellos la tienen incluida en su plan y todavía no la tienen puesta. Van primero en la lista.
+                    </p>
+                )}
             </div>
 
             <div className="flex flex-col md:flex-row gap-3">
@@ -65,8 +97,8 @@ const AdminRoutinesPage = () => {
                                     <th className="px-4 py-3">Cliente</th>
                                     <th className="px-4 py-3 hidden sm:table-cell">Plan</th>
                                     <th className="px-4 py-3">Rutina</th>
-                                    <th className="px-4 py-3 hidden md:table-cell">Días de entreno</th>
-                                    <th className="px-4 py-3 hidden lg:table-cell">Generada</th>
+                                    {hayRutinas && <th className="px-4 py-3 hidden md:table-cell">Días de entreno</th>}
+                                    {hayRutinas && <th className="px-4 py-3 hidden lg:table-cell">Generada</th>}
                                     <th className="px-4 py-3 text-right"></th>
                                 </tr>
                             </thead>
@@ -78,21 +110,32 @@ const AdminRoutinesPage = () => {
                                             <p className="text-white font-medium">{r.name || '-'}</p>
                                             <p className="text-white/40 text-xs">{r.email}</p>
                                         </td>
-                                        <td className="px-4 py-3 hidden sm:table-cell"><PlanBadge plan={r.plan} /></td>
+                                        <td className="px-4 py-3 hidden sm:table-cell">
+                                            <PlanBadge plan={r.plan} />
+                                            {pagaRutina(r.plan) && (
+                                                <span className="ml-2 text-[9px] uppercase font-bold tracking-wide text-[#FF671F] bg-[#FF671F]/15 px-1.5 py-0.5 rounded">
+                                                    la paga
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-3">
                                             {r.has_routine
                                                 ? <Badge className="bg-green-500/15 text-green-500 border-0">Activa</Badge>
-                                                : <Badge className="bg-yellow-500/15 text-yellow-400 border-0">Sin rutina</Badge>}
+                                                : <Badge className={`border-0 ${pagaRutina(r.plan) ? 'bg-red-500/15 text-red-400' : 'bg-white/5 text-white/40'}`}>
+                                                    Sin rutina
+                                                </Badge>}
                                         </td>
-                                        <td className="px-4 py-3 text-white/60 hidden md:table-cell">{r.has_routine ? `${r.training_days} días` : '-'}</td>
-                                        <td className="px-4 py-3 text-white/40 text-xs hidden lg:table-cell">
-                                            {r.routine_created_at ? new Date(r.routine_created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
-                                        </td>
+                                        {hayRutinas && <td className="px-4 py-3 text-white/60 hidden md:table-cell">{r.has_routine ? `${r.training_days} días` : '-'}</td>}
+                                        {hayRutinas && (
+                                            <td className="px-4 py-3 text-white/40 text-xs hidden lg:table-cell">
+                                                {r.routine_created_at ? new Date(r.routine_created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                                            </td>
+                                        )}
                                         <td className="px-4 py-3 text-right"><ChevronRight className="w-4 h-4 text-white/30 inline" /></td>
                                     </tr>
                                 ))}
                                 {filtered.length === 0 && (
-                                    <tr><td colSpan={6} className="px-4 py-10 text-center text-white/30">
+                                    <tr><td colSpan={hayRutinas ? 6 : 4} className="px-4 py-10 text-center text-white/30">
                                         <Dumbbell className="w-8 h-8 mx-auto mb-2 text-white/15" />
                                         {onlyMissing ? 'Todos los clientes tienen rutina' : 'Sin clientes'}
                                     </td></tr>

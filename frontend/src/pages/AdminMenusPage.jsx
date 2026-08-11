@@ -152,12 +152,29 @@ const AdminMenusPage = () => {
     const mostrados = filtro === 'todos' ? items : items.filter(i => i.momento === filtro);
     const cuenta = (m) => items.filter(i => i.momento === m).length;
 
+    // 153 FILAS SON 99 RECETAS.
+    //
+    // «En el panel del equipo hay 163 y el cliente ve 99. ¿Dónde se quedan los otros 64?»
+    // (Jesús, 11-08). No se queda ninguno: los platos principales están guardados dos veces,
+    // una como comida y otra como cena, así que 54 recetas cuentan por dos. La pantalla del
+    // cliente las junta por nombre y por eso enseña 99. Aquí se veían las filas sin decir
+    // que lo eran, y parecía que faltaban menús. Se dice.
+    const recetas = new Set(items.map(i => (i.nombre || '').trim().toLowerCase()).filter(Boolean)).size;
+
     return (
         <div className="p-4 md:p-6 space-y-5 animate-fade-in bg-[#0A0A0A] min-h-screen">
             <div className="flex items-center justify-between flex-wrap gap-2">
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2" style={{ fontFamily: 'Barlow Condensed' }}>
-                    <Utensils className="w-6 h-6 text-[#FF671F]" /> MENÚS PREESTABLECIDOS
-                </h1>
+                <div>
+                    <h1 className="text-2xl font-bold text-white flex items-center gap-2" style={{ fontFamily: 'Barlow Condensed' }}>
+                        <Utensils className="w-6 h-6 text-[#FF671F]" /> MENÚS PREESTABLECIDOS
+                    </h1>
+                    {!loading && recetas > 0 && (
+                        <p className="text-white/40 text-sm mt-1">
+                            {recetas} {recetas === 1 ? 'receta' : 'recetas'}
+                            {items.length !== recetas && ` · ${items.length} fichas, porque las que valen para comida y para cena están guardadas dos veces`}
+                        </p>
+                    )}
+                </div>
                 <Button onClick={openNew} className="bg-[#FF671F] text-white"><Plus className="w-4 h-4 mr-1" />Nuevo menú</Button>
             </div>
 

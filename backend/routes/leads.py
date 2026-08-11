@@ -252,6 +252,12 @@ async def update_lead(lead_id: str, data: dict, user=Depends(get_admin_user)):
     # Eventos automaticos para el historial del lead
     events = []
     if "status" in update and update["status"] != lead.get("status"):
+        # CUÁNTO LLEVA PARADO EN ESTA COLUMNA.
+        # «Un lead de hace tres semanas en "contactado" no es lo mismo que uno de ayer»
+        # (Jesús, 11-08). `updated_at` no vale: lo mueve cualquier edición, así que un
+        # cambio de teléfono disimulaba tres semanas sin tocar. Esta fecha solo la mueve
+        # un cambio de columna, que es justo lo que se quiere medir.
+        update["status_changed_at"] = now
         if update["status"] == "descartado" and update.get("discard_reason"):
             events.append(f"Descartado · motivo: {update['discard_reason'].replace('_', ' ')}")
         else:

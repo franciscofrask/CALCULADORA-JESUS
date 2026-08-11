@@ -32,9 +32,23 @@ const PLAN_COLORS = {
 const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => {
     if (!todo) return null;
     const flt = (arr) => (arr || []).filter(c => !soloAlCorriente || c.al_corriente);
+    // «SIN RUTINA» NO ES UNA LISTA DE PENDIENTES SI ESTÁN TODOS.
+    //
+    // Con 227 de 228 en rojo, esa columna no ayuda a priorizar: no es trabajo pendiente, es el
+    // estado de la casa, y ocupa un cuarto de la mejor herramienta del panel. Jesús, 11-08:
+    // «si es verdad, no es un aviso: es el estado normal, y conviene sacarlo de la lista de
+    // pendientes hasta que se empiecen a poner rutinas».
+    // Vuelve sola en cuanto deje de serlo: el criterio es que falten menos de nueve de cada
+    // diez. Y no se esconde nada, porque la pantalla de Rutinas la lista entera.
+    const conRutinaEnPlan = Number(todo.con_rutina_en_plan || 0);
+    const sinRutina = todo.sin_rutina || [];
+    const rutinaEsLoNormal = conRutinaEnPlan > 0 && sinRutina.length >= conRutinaEnPlan * 0.9;
+
     const cols = [
         { key: 'macros', label: 'Sin macros', icon: Apple, color: '#FF671F', sub: 'Necesitan macros del entrenador', items: flt(todo.sin_macros) },
-        { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina, sin una activa', items: flt(todo.sin_rutina) },
+        ...(rutinaEsLoNormal ? [] : [
+            { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina, sin una activa', items: flt(sinRutina) },
+        ]),
         { key: 'reportes', label: 'Reporte pendiente', icon: FileText, color: '#EAB308', sub: 'No enviado esta semana', items: flt(todo.reporte_pendiente) },
         // "Hoy no puedes ver si un cliente de 1.500 lleva tres semanas sin que nadie le
         // hable". Solo salen los planes con chat, ordenados de más abandonado a menos, y
@@ -298,6 +312,8 @@ const AdminDashboard = () => {
     // Campana: novedades reales (leads nuevos sin gestionar + mensajes sin leer)
     const [notif, setNotif] = useState({ leads: 0, messages: 0 });
     const [notifOpen, setNotifOpen] = useState(false);
+    // El reparto por plan enseña los que se venden; los antiguos, aquí detrás.
+    const [verAntiguos, setVerAntiguos] = useState(false);
 
     useEffect(() => {
         const fetchAll = async () => {
@@ -360,6 +376,26 @@ const AdminDashboard = () => {
     const planLabel = (code) => planCatalog?.[code]?.name || (code === 'sin_plan' ? 'Sin plan' : code);
     const planColor = (code) => PLAN_COLORS[code] || '#666666';
     const pendingReports = cadence.filter(i => i.status !== 'enviado');
+
+    // Los que están a la venta, cada uno con su trozo. Los que ya no se venden se juntan en
+    // uno solo: siguen contando en el total y siguen listados debajo, pero no se llevan
+    // catorce franjas de la barra. Sin minWidth: el ancho es el porcentaje y nada más, que
+    // para eso es una barra de reparto.
+    const pctDe = (n) => (totalPlanActive > 0 ? (n / totalPlanActive) * 100 : 0);
+    const seVende = (code) => planCatalog?.[code]?.estado === 'activo';
+    const antiguos = planEntries.filter(([plan]) => !seVende(plan));
+    const antiguosTotal = antiguos.reduce((a, [, n]) => a + n, 0);
+    const barraPlanes = [
+        ...planEntries
+            .filter(([plan, count]) => seVende(plan) && count > 0)
+            .map(([plan, count]) => ({
+                plan, count, pct: pctDe(count), color: planColor(plan), label: planLabel(plan),
+            })),
+        ...(antiguosTotal > 0 ? [{
+            plan: '__antiguos__', count: antiguosTotal, pct: pctDe(antiguosTotal), color: '#3F3F46',
+            label: `Planes que ya no se venden (${antiguos.length})`,
+        }] : []),
+    ];
 
     return (
         <div className="p-4 md:p-6 space-y-5 md:space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen" data-testid="admin-dashboard">
@@ -452,26 +488,32 @@ const AdminDashboard = () => {
                 <CardContent className="p-5">
                     <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-4">Distribución por plan</p>
                     <div className="flex flex-col gap-3">
-                        {/* Bar */}
+                        {/* LA BARRA MENTÍA CON 17 PLANES.
+                            Cada trozo llevaba minWidth 40px, así que los planes de uno o dos
+                            clientes se inflaban hasta ocupar lo mismo que uno de cuarenta, la
+                            suma se pasaba del ancho y el reparto que se veía no era el real.
+                            Ahora la barra dibuja los seis primeros a escala de verdad y junta
+                            la cola en un trozo gris, que es como se lee un reparto. El detalle
+                            no se pierde: la leyenda de abajo sigue listando los 17 con su
+                            número (Jesús, 11-08). */}
                         <div className="w-full flex h-8 rounded-lg overflow-hidden bg-[#1A1A1A]">
-                            {planEntries.map(([plan, count]) => {
-                                const pct = totalPlanActive > 0 ? (count / totalPlanActive) * 100 : 0;
-                                if (pct === 0) return null;
-                                return (
-                                    <div
-                                        key={plan}
-                                        className="h-full flex items-center justify-center text-xs font-bold transition-all"
-                                        style={{ width: `${pct}%`, backgroundColor: planColor(plan), color: '#fff', minWidth: '40px' }}
-                                        title={`${planLabel(plan)}: ${count}`}
-                                    >
-                                        {count}
-                                    </div>
-                                );
-                            })}
+                            {barraPlanes.map(({ plan, count, pct, color, label }) => (
+                                <div
+                                    key={plan}
+                                    className="h-full flex items-center justify-center text-xs font-bold transition-all overflow-hidden"
+                                    style={{ width: `${pct}%`, backgroundColor: color, color: '#fff' }}
+                                    title={`${label}: ${count}`}
+                                >
+                                    {/* Por debajo de un 6% no cabe el número sin pisar al vecino. */}
+                                    {pct >= 6 ? count : ''}
+                                </div>
+                            ))}
                         </div>
-                        {/* Legend */}
+                        {/* Los que se venden siempre a la vista; los antiguos, detrás de un
+                            desplegable. Están, pero no compiten por la atención con los cuatro
+                            que sí se pueden vender hoy. */}
                         <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-                            {planEntries.map(([plan, count]) => (
+                            {planEntries.filter(([plan]) => seVende(plan)).map(([plan, count]) => (
                                 <div key={plan} className="flex items-center gap-1.5">
                                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: planColor(plan) }} />
                                     <span className="text-xs text-white/50 uppercase">{planLabel(plan)}</span>
@@ -479,6 +521,28 @@ const AdminDashboard = () => {
                                 </div>
                             ))}
                         </div>
+                        {antiguos.length > 0 && (
+                            <div>
+                                <button type="button" onClick={() => setVerAntiguos(v => !v)}
+                                    data-testid="ver-planes-antiguos"
+                                    className="text-xs text-white/40 hover:text-white/70 underline underline-offset-2">
+                                    {verAntiguos
+                                        ? 'Ocultar los planes que ya no se venden'
+                                        : `Ver los ${antiguos.length} planes que ya no se venden (${antiguosTotal} clientes)`}
+                                </button>
+                                {verAntiguos && (
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2.5">
+                                        {antiguos.map(([plan, count]) => (
+                                            <div key={plan} className="flex items-center gap-1.5">
+                                                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: planColor(plan) }} />
+                                                <span className="text-xs text-white/40 uppercase">{planLabel(plan)}</span>
+                                                <span className="text-xs font-bold text-white/70">{count}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>
@@ -705,10 +769,13 @@ const AdminClientsList = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [planFilter, setPlanFilter] = useState('all');
     // Cartera: cada coach lleva la suya, y los que no tienen coach quedan a la vista de
-    // todos para que cualquiera pueda cogerlos (documento del 06-08-2026). El admin
-    // arranca viéndolo todo; el coach, en los suyos.
+    // todos para que cualquiera pueda cogerlos (documento del 06-08-2026). Se abre por los
+    // que no lleva nadie, que es lo que hay que repartir; si no hay ninguno, por la vista
+    // general, porque abrir en una lista vacía no le dice nada a nadie (ver CARTERAS).
     const esAdmin = user?.role === 'admin';
-    const [cartera, setCartera] = useState(esAdmin ? 'todos' : 'mios');
+    const general = esAdmin ? 'todos' : 'mios';
+    const [cartera, setCartera] = useState('sin_coach');
+    const carteraElegida = useRef(false);
     // Orden de la tabla (punto 29): por defecto como venía, y "sin tocar" pone arriba a los
     // que llevan más tiempo sin que les muevan los macros. Desde la home se llega ya
     // ordenado así (/admin/clients?orden=sin_tocar).
@@ -724,6 +791,16 @@ const AdminClientsList = () => {
         api.get('/admin/trainers').then(r => setTrainers(r.data || [])).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Al llegar la lista: si no hay nadie sin entrenador, la pestaña de arriba no tiene
+    // nada que enseñar y se pasa a la general. Solo la primera vez -- después manda lo
+    // que haya pulsado el usuario.
+    useEffect(() => {
+        if (carteraElegida.current || loading || !clients.length) return;
+        carteraElegida.current = true;
+        if (!clients.some(c => !c.trainer_id)) setCartera(general);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loading, clients]);
 
     const trainerName = (id) => trainers.find(t => t.id === id)?.name || id;
 
@@ -776,9 +853,13 @@ const AdminClientsList = () => {
     const cuantos = (cual) => clients.filter(c =>
         cual === 'sin_coach' ? !c.trainer_id : cual === 'mios' ? c.trainer_id === user?.id : true).length;
 
+    // LOS QUE NO LLEVA NADIE, PRIMERO.
+    // «Sin entrenador: 233 de 247. Esa pestaña debería ser lo primero que se abre, no la
+    // segunda» (Jesús, 11-08). Es la única de las dos que es trabajo: un cliente sin
+    // entrenador no lo mira nadie. Va delante y es la que se abre; el resto está a un clic.
     const CARTERAS = esAdmin
-        ? [['todos', 'Todos'], ['sin_coach', 'Sin entrenador']]
-        : [['mios', 'Mis clientes'], ['sin_coach', 'Sin entrenador']];
+        ? [['sin_coach', 'Sin entrenador'], ['todos', 'Todos']]
+        : [['sin_coach', 'Sin entrenador'], ['mios', 'Mis clientes']];
 
     return (
         <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen">
@@ -941,9 +1022,20 @@ const AdminClientsList = () => {
                                                 </Badge>
                                             )}
                                         </TableCell>
+                                        {/* LA FLECHA QUE ABRE LA FICHA.
+                                            Estaba, pero en gris tenue y sin acción propia: si el
+                                            clic de la fila se lo comía otro elemento, no había
+                                            otra salida (a Jesús no se le abrió ninguna ficha en
+                                            todo el repaso, 11-08). Ahora se ve, dice lo que hace
+                                            y navega ella sola. */}
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" className="text-white/50 hover:text-[#FF671F]">
-                                                <ChevronRight className="w-4 h-4" />
+                                            <Button variant="ghost" size="sm" title="Abrir la ficha"
+                                                aria-label={`Abrir la ficha de ${client.user?.name || client.user?.email || 'este cliente'}`}
+                                                data-testid={`abrir-ficha-${client.id || client.user_id}`}
+                                                disabled={!client.id}
+                                                onClick={(e) => { e.stopPropagation(); if (client.id) navigate(`/admin/clients/${client.id}`); }}
+                                                className="text-[#FF671F] hover:bg-[#FF671F]/10 disabled:opacity-30">
+                                                <ChevronRight className="w-5 h-5" />
                                             </Button>
                                         </TableCell>
                                     </TableRow>

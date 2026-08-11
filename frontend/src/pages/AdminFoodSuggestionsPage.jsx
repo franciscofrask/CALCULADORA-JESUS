@@ -159,12 +159,16 @@ const AdminFoodSuggestionsPage = () => {
     };
 
     const approve = async (s) => {
+        // LA CATEGORÍA ES OBLIGATORIA, Y EL AVISO DECÍA OTRA COSA.
+        // Ponía «sin categorías no aparecerá en los filtros del buscador» y dejaba aprobar
+        // igualmente, como si fuera cosmético. No lo es: la categoría decide qué excepción
+        // del filtro del tercio se le aplica, o sea qué macros le cuentan al cliente. Un
+        // alimento sin ella entra al catálogo sin que nadie sepa cómo debe contar, y eso se
+        // ve meses después en las cuentas de alguien que no cuadra (Jesús, 11-08).
+        // El servidor también lo rechaza; esto evita el viaje.
         if (!s.categorias) {
-            if (!await confirm({
-                title: 'Este alimento no tiene categorías',
-                description: 'Sin categorías no aparecerá en los filtros del buscador. ¿Lo apruebas igualmente?',
-                confirmLabel: 'Aprobar igualmente',
-            })) return;
+            toast.error('Ponle una categoría antes de aprobarlo: de ella depende qué macros le cuentan al cliente.');
+            return;
         }
         setBusy(s.id);
         try {

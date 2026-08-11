@@ -55,8 +55,13 @@ admin_router = APIRouter(prefix="/admin/routines", tags=["admin-routines"])
 @admin_router.get("/overview")
 async def routines_overview(user = Depends(get_admin_user)):
     """Vista general para el panel: cada cliente activo y si tiene rutina activa o no."""
+    # El equipo fuera, como en el resto del panel desde el 09-08. Aquí seguían dentro y
+    # salían "Admin" y los entrenadores entre los clientes sin rutina, contando como
+    # trabajo pendiente: nadie le va a poner una rutina al perfil de pruebas del admin.
+    del_equipo = await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}})
+    solo_clientes = {"user_id": {"$nin": del_equipo}} if del_equipo else {}
     profiles = await db.client_profiles.find(
-        {"status": {"$ne": "baja"}}, {"_id": 0, "id": 1, "user_id": 1, "plan": 1}
+        {**solo_clientes, "status": {"$ne": "baja"}}, {"_id": 0, "id": 1, "user_id": 1, "plan": 1}
     ).to_list(2000)
     uids = [p["user_id"] for p in profiles]
     users = await db.users.find(

@@ -3,7 +3,7 @@ Rutas de mensajes: inbox del chat.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 
 from core.config import SUPPORT_EMAILS
@@ -103,27 +103,62 @@ async def get_messages(with_user: Optional[str] = None, user = Depends(get_curre
 
 @router.get("/conversations")
 async def get_conversations(user = Depends(get_admin_user)):
-    """Bandeja del staff: una entrada por persona con la que hay conversación,
-    con último mensaje y cuántos están sin leer."""
-    msgs = await db.messages.find(
-        {"$or": [{"sender_id": user["id"]}, {"receiver_id": user["id"]}]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(5000)
+    """Bandeja del staff: una entrada por cliente con el que hay conversación, con el
+    último mensaje, cuántos están sin leer y si se quedó esperando respuesta.
 
-    convs = {}
+    LA BANDEJA ENSEÑABA UNA SOLA CONVERSACIÓN.
+
+    Jesús, 11-08: *«la bandeja tiene una sola conversación con más de 228 clientes»*. No es
+    que nadie escriba -- en la base hay cien conversaciones abiertas --: es que esta
+    consulta solo traía aquellas en las que el que mira es una de las dos partes, y el
+    equipo ve a todos los clientes desde el 21-07. Así que cada uno entraba y veía las
+    suyas, y las de los demás no las veía nadie.
+
+    Ahora se trae la bandeja del equipo entera y se dice quién contestó por última vez.
+    """
+    staff_ids = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
+    msgs = await db.messages.find(
+        {"$or": [{"sender_id": {"$in": list(staff_ids)}},
+                 {"receiver_id": {"$in": list(staff_ids)}}]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(20000)
+
+    convs: Dict[str, Any] = {}
     for m in msgs:
-        other = m["receiver_id"] if m["sender_id"] == user["id"] else m["sender_id"]
-        c = convs.setdefault(other, {"user_id": other, "last_message": m, "unread": 0})
-        if m["receiver_id"] == user["id"] and not m.get("read"):
+        emisor, receptor = m["sender_id"], m["receiver_id"]
+        # La conversación se archiva por el cliente. Entre dos del equipo, por el otro.
+        if emisor in staff_ids and receptor in staff_ids:
+            otro = receptor if emisor == user["id"] else emisor
+        else:
+            otro = receptor if emisor in staff_ids else emisor
+        if otro == user["id"]:
+            continue
+        c = convs.get(otro)
+        if c is None:
+            # Los mensajes vienen del más nuevo al más viejo, así que el primero que se ve
+            # de cada conversación es el último que se escribió.
+            c = convs[otro] = {
+                "user_id": otro, "last_message": m, "unread": 0,
+                # EL QUE SE PIERDE ES EL QUE NADIE VE: si el último en hablar fue el
+                # cliente, esa conversación está esperando a alguien.
+                "sin_respuesta": emisor not in staff_ids,
+                "ultimo_de": "cliente" if emisor not in staff_ids else "equipo",
+            }
+        if receptor == user["id"] and not m.get("read"):
             c["unread"] += 1
 
     users = await db.users.find(
         {"id": {"$in": list(convs.keys())}}, {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}
-    ).to_list(1000)
+    ).to_list(2000)
     umap = {u["id"]: u for u in users}
-    out = [{**c, "user": umap.get(uid, {"id": uid, "name": "Usuario eliminado", "email": ""})}
-           for uid, c in convs.items()]
-    out.sort(key=lambda c: c["last_message"]["created_at"], reverse=True)
+    # Las conversaciones con gente que ya no existe se quedaban en la bandeja como
+    # "Usuario eliminado" -- en dev son tres, restos del simulador --. No se les puede
+    # contestar, así que no son bandeja de entrada: son ruido delante de las que sí.
+    out = [{**c, "user": umap[uid]} for uid, c in convs.items() if uid in umap]
+    # Las que esperan respuesta, arriba; dentro de cada grupo, la más reciente primero.
+    # En dos pasadas porque el orden de Python es estable: la segunda respeta la primera.
+    out.sort(key=lambda c: c["last_message"]["created_at"] or "", reverse=True)
+    out.sort(key=lambda c: not c["sin_respuesta"])
     return out
 
 

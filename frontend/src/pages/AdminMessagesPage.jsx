@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { Send, MessageCircle, Search, CheckCheck, Check } from 'lucide-react';
+import { Send, MessageCircle, Search, CheckCheck, Check, Clock } from 'lucide-react';
 
 // Bandeja de mensajes del staff: conversaciones a la izquierda, chat a la derecha.
 const AdminMessagesPage = () => {
@@ -82,12 +82,21 @@ const AdminMessagesPage = () => {
         c.user?.email?.toLowerCase().includes(search.toLowerCase())
     );
     const selectedConv = conversations.find(c => c.user_id === selected);
+    const esperando = conversations.filter(c => c.sin_respuesta).length;
 
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-96 bg-[#111] rounded-xl" /></div></div>;
 
     return (
         <div className="p-4 md:p-6 h-[calc(100vh-4rem)] lg:h-screen flex flex-col bg-[#0A0A0A]" data-testid="admin-messages-page">
-            <h1 className="text-2xl font-bold text-white tracking-tight mb-4" style={{ fontFamily: 'Barlow Condensed' }}>MENSAJES</h1>
+            <div className="mb-4">
+                <h1 className="text-2xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>MENSAJES</h1>
+                {esperando > 0 && (
+                    <p className="text-white/50 text-sm mt-0.5" data-testid="conv-esperando">
+                        <span className="text-yellow-400 font-semibold">{esperando}</span>
+                        {esperando === 1 ? ' conversación espera' : ' conversaciones esperan'} respuesta. Van primero.
+                    </p>
+                )}
+            </div>
             <div className="flex-1 flex gap-4 min-h-0">
                 {/* Lista de conversaciones */}
                 <div className={`w-full md:w-80 flex-shrink-0 bg-[#111] border border-[#222] rounded-xl flex flex-col min-h-0 ${selected ? 'hidden md:flex' : 'flex'}`}>
@@ -103,7 +112,7 @@ const AdminMessagesPage = () => {
                                 className={`w-full text-left px-4 py-3 border-b border-[#1A1A1A] transition-all hover:bg-white/5 ${selected === c.user_id ? 'bg-[#FF671F]/10 border-l-2 border-l-[#FF671F]' : ''}`}
                                 data-testid={`conv-${c.user_id}`}>
                                 <div className="flex items-center justify-between gap-2">
-                                    <p className="text-white text-sm font-medium truncate">{c.user?.name || c.user?.email || 'Sin nombre'}</p>
+                                    <p className="text-white text-sm font-medium truncate min-w-0">{c.user?.name || c.user?.email || 'Sin nombre'}</p>
                                     <span className="text-white/30 text-[10px] flex-shrink-0">{formatTime(c.last_message.created_at)}</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-2 mt-0.5">
@@ -114,6 +123,14 @@ const AdminMessagesPage = () => {
                                         <span className="bg-[#FF671F] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center flex-shrink-0">{c.unread}</span>
                                     )}
                                 </div>
+                                {/* «El cliente que se pierde es el que nadie ve» (Jesús, 11-08).
+                                    Escribió él y nadie del equipo ha contestado todavía: eso es
+                                    una tarea, y no se distinguía de una conversación cerrada. */}
+                                {c.sin_respuesta && (
+                                    <p className="text-yellow-400 text-[10px] font-semibold uppercase tracking-wide mt-1 flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> Esperando respuesta
+                                    </p>
+                                )}
                             </button>
                         ))}
                         {filtered.length === 0 && (

@@ -51,10 +51,19 @@ async def list_macro_revisiones(status: str = "pendiente", user = Depends(get_ad
     uids = list({i.get("user_id") for i in items if i.get("user_id")})
     users = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}).to_list(len(uids) or 1)
     umap = {u["id"]: u for u in users}
-    for i in items:
-        u = umap.get(i.get("user_id")) or {}
+
+    # LAS FILAS SIN NOMBRE ERAN REVISIONES HUÉRFANAS.
+    #
+    # «Las ocho filas dicen "Cliente" sin nombre» (Jesús, 11-08). Seis de esas ocho son de
+    # usuarios que se borraron después: la revisión se quedó, el usuario no. Poníamos
+    # "Cliente" de relleno y la fila llevaba a una ficha que ya no existe, así que la lista
+    # con la que se decide a quién ajustar contaba trabajo que nadie puede hacer.
+    # Si no hay a quién revisar, no es una revisión pendiente.
+    vivas = [i for i in items if i.get("user_id") in umap]
+    for i in vivas:
+        u = umap[i["user_id"]]
         i["client_name"] = u.get("name") or u.get("email") or "Cliente"
-    return {"items": items}
+    return {"items": vivas}
 
 
 @router.post("/macro-revisiones/{revision_id}/resolver")
@@ -1453,8 +1462,15 @@ async def get_todo_semana(user = Depends(get_admin_user)):
     now = datetime.now(timezone.utc)
     catalog = merged_catalog(await _overrides_by_code())
 
+    # UN CONTADOR NO PUEDE SER MAYOR QUE EL TOTAL.
+    #
+    # «Sin contacto: 234» sobre 228 clientes (Jesús, 11-08). El motivo es que esta consulta
+    # contaba con el equipo dentro y los totales del panel (/admin/stats) los dejan fuera
+    # desde el 09-08: dos bases distintas para números que se leen juntos en la misma
+    # pantalla. Los perfiles del equipo existen para poder probar la app en modo cliente,
+    # así que no son trabajo pendiente de nadie.
     profiles = await db.client_profiles.find(
-        {"status": {"$in": ["activo", "pago_pendiente"]}},
+        {**await _fuera_el_equipo(), "status": {"$in": ["activo", "pago_pendiente"]}},
         {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "status": 1, "macros_training": 1,
          "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
          "cycle_start": 1, "created_at": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1},
@@ -1495,6 +1511,7 @@ async def get_todo_semana(user = Depends(get_admin_user)):
 
     sin_macros, sin_rutina, reporte_pendiente, sin_contacto = [], [], [], []
     te_tocan = []
+    con_rutina_en_plan = 0
     for p in profiles:
         u = umap.get(p.get("user_id"), {})
         base = {
@@ -1509,8 +1526,14 @@ async def get_todo_semana(user = Depends(get_admin_user)):
             sin_macros.append(base)
 
         # Sin rutina: el plan incluye rutina y el cliente no tiene una activa.
-        if plan_grants_feature(p.get("plan"), "rutina") and p["id"] not in active_routine_clients:
-            sin_rutina.append(base)
+        if plan_grants_feature(p.get("plan"), "rutina"):
+            # Contamos también a cuántos les tocaría tener rutina, no solo a los que no la
+            # tienen. El panel lo necesita para saber si «sin rutina» señala un pendiente o
+            # está describiendo el estado normal de la casa (227 de 228), en cuyo caso deja
+            # de ocupar una columna. Sin el total no se puede distinguir una cosa de la otra.
+            con_rutina_en_plan += 1
+            if p["id"] not in active_routine_clients:
+                sin_rutina.append(base)
 
         # Sin contacto: cuántos días lleva sin que nadie del equipo le hable. Solo para
         # los planes que incluyen chat -- al de autogestión no se le acompaña por ahí, así
@@ -1564,6 +1587,7 @@ async def get_todo_semana(user = Depends(get_admin_user)):
     return {
         "sin_macros": sin_macros,
         "sin_rutina": sin_rutina,
+        "con_rutina_en_plan": con_rutina_en_plan,
         "reporte_pendiente": reporte_pendiente,
         # De más abandonado a menos: el que lleva más tiempo sin que nadie le hable va
         # arriba, que es donde hay que mirar primero.
@@ -1708,6 +1732,23 @@ async def approve_food_suggestion(suggestion_id: str, user = Depends(get_admin_u
         raise HTTPException(status_code=404, detail="Sugerencia no encontrada")
     if doc.get("status") == "approved":
         raise HTTPException(status_code=409, detail="Esta sugerencia ya está aprobada")
+
+    # SIN CATEGORIA NO SE APRUEBA.
+    #
+    # La categoria no es una etiqueta de adorno: es la que decide que excepcion del filtro del
+    # tercio se le aplica -- cereales y panes, tuberculos y frutas, aceites y frutos secos --,
+    # o sea QUE MACROS LE CUENTAN al cliente. Un alimento aprobado sin ella entra al catalogo
+    # sin que nadie sepa como debe contar, y eso no se ve: se ve meses despues, en las cuentas
+    # de alguien que no cuadra.
+    #
+    # Aqui se aprobaba sin mirarlo, y la ficha pendiente lo decia a la cara: «Categorias: sin
+    # asignar». Lo encontro Jesus el 11-08 y es el hallazgo mas fino de su repaso.
+    if not str(doc.get("categorias") or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Ponle una categoría antes de aprobarlo: de ella depende qué macros le "
+                   "cuentan al cliente. Edítalo y vuelve a intentarlo.",
+        )
 
     food_doc = _food_doc_from_fields(doc.get("food") or {}, doc.get("categorias"))
     await db.foods.insert_one(food_doc)
