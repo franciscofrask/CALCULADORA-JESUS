@@ -50,7 +50,7 @@ const DETALLE = {
         chat: false, llamadaInicial: false, videollamada: false, seguimiento: null,
     },
     nivel2: {
-        gancho: 'Con un entrenador encima de tus números',
+        gancho: 'Con nosotros encima de tus números',
         macros: 'Los revisa el equipo',
         ajuste: 'Cada 2 semanas',
         chat: true, llamadaInicial: false, videollamada: false, seguimiento: 'Quincenal',

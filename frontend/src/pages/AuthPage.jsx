@@ -95,12 +95,16 @@ const AuthPage = () => {
                 </div>
                 
                 {/* Title */}
+                {/* «Login» era la única palabra en inglés que le quedaba a la app. Y el
+                    subtítulo del acceso sobraba: hay dos campos y un botón, se ve solo
+                    (Jesús, 11-08). En el registro sí se mantiene, que ahí dice algo. */}
                 <h1 className="text-white text-3xl font-bold mb-2 tracking-tight">
-                    {isRegister ? 'Registro' : 'Login'}
+                    {isRegister ? 'Registro' : 'Entrar'}
                 </h1>
-                <p className="text-white/60 text-sm mb-8">
-                    {isRegister ? 'Crea tu cuenta para empezar' : 'Completa tus datos para acceder'}
-                </p>
+                {isRegister && (
+                    <p className="text-white/60 text-sm mb-8">Crea tu cuenta para empezar</p>
+                )}
+                {!isRegister && <div className="mb-8" />}
                 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="w-full space-y-4">

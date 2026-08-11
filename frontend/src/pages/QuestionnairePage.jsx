@@ -316,7 +316,11 @@ const STEPS_NIVEL1 = [
     // Sin el «estas ya no cambian tus macros» del final (punto 4.18, decisión de Jesús): el
     // cliente no tiene por qué saber qué pregunta mueve qué número, y decírselo solo invita
     // a contestar a la ligera lo que él cree que no cuenta.
-    { type: 'statement', title: 'Ahora, tu perfil completo', desc: 'Unas preguntas más para el equipo: le sirven para tu estrategia, tu rutina y tus menús.', cta: 'Seguir' },
+    // «Para el equipo» suena a departamento; al cliente se le habla de nosotros. Y el número
+    // de preguntas se dice: sin él, «tu perfil completo» deja la sensación de que puede ser
+    // eterno, y eso cuesta altas (Jesús, 11-08). El número se cuenta abajo sobre la lista de
+    // verdad, para que no se quede viejo en cuanto alguien añada o quite una.
+    { type: 'statement', title: 'Ahora, tu perfil completo', desc: '', cta: 'Seguir' },
     { type: 'date', key: 'birthdate', title: 'Fecha de nacimiento', desc: 'La verdadera, no me engañes.', required: true },
     // La experiencia entrenando SE FUE DE AQUÍ al test de entrada (pantalla 3 del documento
     // de textos de Jesús), y con sus cuatro opciones, no con los cinco tramos por años que
@@ -539,6 +543,15 @@ const STEPS_NIVEL1 = [
     { type: 'text', key: 'alergias', title: '¿Alguna otra alergia o intolerancia?', desc: 'Frutos secos, marisco, huevo... Si no tienes, escribe "no".', textarea: true },
     { type: 'final1', title: 'Perfil completo.', desc: 'El equipo usará todo esto para tu estrategia. Las fotos de progreso te las pedirán por el chat. Si quieres revisar algo, ve hacia atrás.' },
 ];
+
+// CUÁNTAS SON, CONTADAS DE LA PROPIA LISTA.
+// El aviso de arriba deja su `desc` vacía a propósito y se rellena aquí: si el número se
+// escribiera a mano, se quedaría viejo el día que alguien añada una pregunta, y entonces el
+// aviso mentiría, que es peor que no decir nada. Los `statement` no cuentan: son pantallas de
+// texto, no preguntas.
+STEPS_NIVEL1[0].desc =
+    `Son ${STEPS_NIVEL1.filter(s => s.type !== 'statement').length} preguntas más y con ellas `
+    + 'montamos tu estrategia, tu rutina y tus menús.';
 
 // A nivel de módulo para que los inputs conserven el FOCO al teclear: definidos
 // dentro del componente de la página se recrean en cada render (tipo nuevo para

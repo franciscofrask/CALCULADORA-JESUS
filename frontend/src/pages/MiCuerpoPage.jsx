@@ -188,7 +188,7 @@ const MiCuerpoPage = () => {
                     Cuánto músculo tienes
                 </h1>
                 <p className="text-muted-foreground mb-8">
-                    Tres datos y te lo digo. Nada más.
+                    Tres datos y te lo decimos. Nada más.
                 </p>
 
                 <form onSubmit={calcular} className="space-y-6">
