@@ -1183,6 +1183,77 @@ class NutritionChatbot:
             items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad})
         return items
 
+    def precargar_desde_dieta(self, comidas: dict) -> int:
+        """Trae a la sesion lo que el cliente YA tiene montado ese dia en Nutricion.
+
+        El asistente vivia en su burbuja: montaba el dia desde cero sin mirar la dieta
+        guardada. Con las cuatro comidas hechas y 127 g de proteina encima, su resumen decia
+        «llevas 0 g» y «0/4 comidas», y a partir de ahi te ofrecia montar lo que ya tenias.
+        Quien lo abriera a media tarde se arriesgaba a que le pisara el trabajo. Lo encontro
+        Jesus en el repaso del 11-08 y es lo unico de su lista que hace PERDER trabajo.
+
+        Las claves de comida son las mismas en los dos sitios (C1, Intra, Post, C2...), asi
+        que la traida es directa. Solo entran las comidas que existen en la configuracion de
+        ahora: si el dia se monto con cuatro comidas y ahora se piden tres, lo que sobra no
+        se cuela por la puerta de atras.
+
+        Devuelve cuantas comidas se han traido.
+        """
+        vivas = set(self.state.get("meal_order") or [])
+        traidas = 0
+        for key, datos in (comidas or {}).items():
+            if key not in vivas:
+                continue
+            alimentos = (datos or {}).get("alimentos") or []
+            if not alimentos:
+                continue
+            entradas = []
+            totales = {"P": 0.0, "H": 0.0, "G": 0.0}
+            for a in alimentos:
+                m = a.get("macros_efectivos") or a.get("macros") or {}
+                cantidad = float(a.get("cantidad_g") or 0)
+                entradas.append({
+                    "nombre": a.get("nombre", ""),
+                    "cantidad_g": cantidad,
+                    "cantidad_display": a.get("cantidad_display") or f"{int(round(cantidad))} g",
+                    "macros": {k: float(m.get(k) or 0) for k in ("P", "H", "G")},
+                })
+                for k in ("P", "H", "G"):
+                    totales[k] += float(m.get(k) or 0)
+                # Los acumulados del dia mandan sobre lo que cuenta cada alimento nuevo
+                # (calibracion progresiva). Si se traen 300 g de arroz sin sumarlos, el
+                # siguiente alimento se calcula como si el dia estuviera vacio.
+                cats = str(a.get("categorias") or "")
+                principal = cats.split("|")[0].strip()
+                if principal.startswith(("7", "8")):
+                    self.state["acumulado_cereales_panes"] += cantidad
+                if principal.startswith(("17.2.1", "17.2.3", "17.2.4", "17.2.6")):
+                    self.state["acumulado_frutos_secos"] += cantidad
+            self.state["comidas_completadas"][key] = {
+                "alimentos": entradas,
+                "macros": {k: round(v, 1) for k, v in totales.items()},
+            }
+            traidas += 1
+
+        if traidas:
+            self._situarse_en_la_primera_sin_montar()
+        return traidas
+
+    def _situarse_en_la_primera_sin_montar(self) -> None:
+        """Deja `comida_actual` en la primera comida que aun no tiene nada.
+
+        Si estan todas hechas se queda en la ultima, que es donde tiene sentido seguir
+        hablando: por ahi se cambia o se ajusta lo que ya hay.
+        """
+        orden = self.state.get("meal_order") or []
+        hechas = self.state.get("comidas_completadas") or {}
+        for i, key in enumerate(orden, start=1):
+            if not (hechas.get(key) or {}).get("alimentos"):
+                self.state["comida_actual"] = i
+                return
+        if orden:
+            self.state["comida_actual"] = len(orden)
+
     def get_day_overview(self) -> dict:
         """Objetivo total del día + consumido + restante, y la comida actual."""
         dist = self.state.get("distribucion") or {}

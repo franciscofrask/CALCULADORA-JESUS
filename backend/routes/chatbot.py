@@ -119,6 +119,20 @@ async def chatbot_configure(
         single_meal=config.single_meal
     )
 
+    # LO QUE YA TIENE MONTADO ESE DIA ENTRA EN LA CONVERSACION.
+    #
+    # Hasta ahora el asistente empezaba en blanco aunque la dieta estuviera hecha: con las
+    # cuatro comidas puestas decia «llevas 0 g» y «0/4», y desde ahi te ofrecia montar lo que
+    # ya tenias. Abrirlo a media tarde era arriesgarse a perder el trabajo de la manana.
+    #
+    # Va DESPUES de configure_day a proposito: esa llamada rehace el orden de comidas y
+    # limpia el estado, asi que precargar antes seria tirarlo. Y va aqui y no en /start
+    # porque hasta este momento no se sabe que dia se esta montando.
+    fecha_dieta = chatbot.state.get("fecha_objetivo") or datetime.now().strftime("%Y-%m-%d")
+    user_id = current_user.get("id") or current_user.get("user_id")
+    dieta = await db.diets.find_one({"user_id": user_id, "fecha": fecha_dieta}, {"_id": 0, "comidas": 1})
+    comidas_traidas = chatbot.precargar_desde_dieta((dieta or {}).get("comidas") or {})
+
     key = chatbot.current_meal_key()
     label = chatbot.meal_label(key)
     objetivo = chatbot.get_current_meal_macros()
@@ -131,10 +145,29 @@ async def chatbot_configure(
         mensaje = f"Perfecto, día de {config.tipo_dia} en bloque único (1 comida){extra}."
     else:
         mensaje = f"Perfecto, día de {config.tipo_dia} con {base_n} comidas{extra}."
-    mensaje += (f"\n\nVamos con {label}. Tu objetivo es:\n"
-                f"• Proteína: {objetivo['P']} g\n"
-                f"• Hidratos: {objetivo['H']} g\n"
-                f"• Grasa: {objetivo['G']} g")
+
+    # SI YA TIENE TRABAJO HECHO, LO PRIMERO ES DECIRSELO.
+    # Arrancar con «vamos con la Comida 1» a quien ya tiene tres puestas es invitarle a
+    # rehacerlas. Se dice por donde va y se sigue por la primera que le falta.
+    if comidas_traidas:
+        v = chatbot.get_day_overview()
+        r = v["restante"]
+        hechas = f"{comidas_traidas} de {total}" if total else str(comidas_traidas)
+        mensaje += f"\n\nYa tienes {hechas} comidas montadas de ese día."
+        falta = [f"{abs(round(r[k]))} {k}" for k in ("P", "H", "G") if round(r[k]) > 0]
+        if falta:
+            mensaje += f" Te faltan {' · '.join(falta)}."
+        else:
+            mensaje += " El día ya te cuadra."
+
+    if comidas_traidas:
+        mensaje += (f"\n\nSeguimos por {label}. Tu objetivo son "
+                    f"{objetivo['P']} P · {objetivo['H']} H · {objetivo['G']} G.")
+    else:
+        mensaje += (f"\n\nVamos con {label}. Tu objetivo es:\n"
+                    f"• Proteína: {objetivo['P']} g\n"
+                    f"• Hidratos: {objetivo['H']} g\n"
+                    f"• Grasa: {objetivo['G']} g")
     # Si el cambio se ha llevado por delante alguna comida (el intra y el post al pasar a
     # descanso, la Comida 4 al bajar a 3), lo que había ahí se ha traspasado a otra: hay
     # que DECIRLO. Antes se borraba en silencio y el cliente perdía el trabajo sin enterarse.
@@ -147,7 +180,9 @@ async def chatbot_configure(
     return {
         "session_id": session_id,
         "distribucion": distribucion,
-        "comida_actual": 1,
+        # La de verdad, no un 1 fijo: con la dieta ya empezada se arranca en la primera
+        # comida que le falta, y el front tiene que saber en cuál está.
+        "comida_actual": chatbot.state["comida_actual"],
         "meal_order": chatbot.state["meal_order"],
         "meal_nombre": label,
         "objetivo": objetivo,

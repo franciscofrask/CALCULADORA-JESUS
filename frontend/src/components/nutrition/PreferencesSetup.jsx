@@ -184,9 +184,15 @@ const PreferencesSetup = ({
         </label>
     );
 
+    // EL PIE NO PUEDE QUEDAR DEBAJO DE LA BARRA DE NAVEGACIÓN.
+    // La ventana se centra a 90vh, así que en un móvil de 844 px su borde inferior cae a unos
+    // 42 px del fondo, y la barra fija de abajo mide 64: la cuenta de categorías y el botón de
+    // guardar quedaban tapados. Con treinta categorías y scroll dentro, si el botón se tapa
+    // nadie guarda y la pantalla entera deja de servir. Lo vio Jesús el 11-08.
+    // En escritorio no hay barra y todo se queda igual.
     return (
-        <div className="min-h-screen bg-bg-dark flex items-center justify-center p-4">
-            <div className="bg-card rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
+        <div className="min-h-screen bg-bg-dark flex items-center justify-center p-4 pb-24 lg:pb-4">
+            <div className="bg-card rounded-2xl shadow-xl max-w-md w-full max-h-[85vh] lg:max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="p-6 border-b flex-shrink-0">
                     <div className="flex items-center gap-3 mb-2">
@@ -250,7 +256,9 @@ const PreferencesSetup = ({
                         <>
                             <div className="flex items-center justify-between mb-3">
                                 <p className="text-muted-foreground text-sm flex-1 pr-2">
-                                    La calculadora te sugerirá estos alimentos en los últimos toques de cada comida.
+                                    {/* «Los últimos toques» suena a que queda trabajo cuando lo
+                                        que pasa es que ya está (Jesús, 11-08). */}
+                                    Te sugeriremos estos alimentos al terminar de cuadrar cada comida.
                                 </p>
                                 <button
                                     type="button"
