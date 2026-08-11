@@ -21,7 +21,6 @@ import DayHeader from '../components/nutrition/DayHeader';
 import MealCard, { MealSelectorItem, MealTab } from '../components/nutrition/MealCard';
 import { VistaComidasSelector, leerVista, guardarVista } from '../components/nutrition/VistaComidas';
 import { ModoMacrosSelector, AvisoMacrosReales, leerModoMacros, guardarModoMacros } from '../components/nutrition/ModoMacros';
-import { SearchFoodModal } from '../components/nutrition/SearchFoodModal';
 import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
 
@@ -219,7 +218,6 @@ const NutritionPage = () => {
     const [loading, setLoading] = useState(true);
     
     // Modal states
-    const [addFoodModal, setAddFoodModal] = useState({ open: false, mealKey: null });
     const [menuOptionsModal, setMenuOptionsModal] = useState({ open: false, mealKey: null });
     const [copyModalOpen, setCopyModalOpen] = useState(false);
     const [favoritesModalOpen, setFavoritesModalOpen] = useState(false);
@@ -232,10 +230,6 @@ const NutritionPage = () => {
     const [editingQuantity, setEditingQuantity] = useState({ mealKey: null, foodIndex: null });
     
     // Search state
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchCategory, setSearchCategory] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-    const [searchLoading, setSearchLoading] = useState(false);
     
     // Menu options
     
@@ -825,27 +819,6 @@ const NutritionPage = () => {
         api('/api/user/diet-config', { method: 'PATCH', body: JSON.stringify({ num_comidas: v }) }).catch(() => {});
     };
 
-    // Search foods
-    useEffect(() => {
-        if (!addFoodModal.open) return;
-        const timer = setTimeout(async () => {
-            setSearchLoading(true);
-            try {
-                const params = new URLSearchParams();
-                if (searchQuery) params.set('q', searchQuery);
-                if (searchCategory) params.set('category', searchCategory);
-                const mealKey = addFoodModal.mealKey;
-                if (mealKey === 'Intra' || mealKey === 'Post') {
-                    params.set('tipo_comida', mealKey.toLowerCase());
-                }
-                params.set('limit', '30');
-                const result = await api(`/api/calculator/search?${params}`);
-                setSearchResults(result.alimentos || []);
-            } catch (err) { console.error('Search error:', err); }
-            setSearchLoading(false);
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [searchQuery, searchCategory, addFoodModal.open, addFoodModal.mealKey, api]);
 
     // Navigation
     const changeDate = (days) => {
@@ -1090,81 +1063,8 @@ const NutritionPage = () => {
     };
 
     // Food operations
-    const handleAddFood = async (food) => {
-        const mealKey = addFoodModal.mealKey;
-        const alreadyInMeal = (mealsData[mealKey]?.alimentos || []).some(f => f.alimento_id === food.id);
-        if (alreadyInMeal) {
-            toast.error(`${food.nombre} ya está en esta comida - ajusta su cantidad directamente.`);
-            return;
-        }
-        const remaining = getMealRemaining(mealKey);
-        try {
-            const result = await api('/api/calculator/adjust', {
-                method: 'POST',
-                body: JSON.stringify({
-                    alimento_id: food.id,
-                    macros_restantes: remaining,
-                    es_vegano: false
-                })
-            });
-
-            // Por debajo de su cantidad mínima el alimento se descarta, no entra a cero. Sin
-            // esto, la comida acababa con líneas tipo "Queso Havarti · 0 ud": el backend
-            // devolvía 0 para decir "no cabe" y aquí ese 0, al no tener macros, se tomaba por
-            // un alimento libre y se colaba igual.
-            if (result.cabe === false || !(result.cantidad_g > 0)) {
-                const min = result.cantidad_minima_g;
-                toast.error(min
-                    ? `${food.nombre} no cabe: lo mínimo son ${min} g y no queda hueco.`
-                    : `${food.nombre} no cabe en esta comida.`);
-                return;
-            }
-
-            // Free foods (all zeros: konjac, salsas zero, verduras libres) always pass
-            const ef = result.macros_efectivos || {};
-            const isFreeFood = !ef.P && !ef.H && !ef.G;
-            if (!isFreeFood) {
-                const mealStatus = getMealStatus(mealKey);
-                if (mealStatus === 'cuadrada' || mealStatus === 'sobra') {
-                    toast.error('Esta comida ya está completa - no hay espacio para más alimentos.');
-                    return;
-                }
-                const target = getMealTarget(mealKey);
-                const served = calculateMealMacros(mealKey);
-                const margin = 0;
-                if ((ef.P > 0 && served.P + ef.P > target.P + margin) ||
-                    (ef.H > 0 && served.H + ef.H > target.H + margin) ||
-                    (ef.G > 0 && served.G + ef.G > target.G + margin)) {
-                    toast.error(`${food.nombre} no cabe - superaría los macros de esta comida.`);
-                    return;
-                }
-            }
-
-            const newFood = {
-                alimento_id: food.id,
-                nombre: food.nombre,
-                cantidad_g: result.cantidad_g,
-                macros_efectivos: result.macros_efectivos,
-                macros_brutos: result.macros_brutos,
-                que_cuenta: result.que_cuenta,
-                categorias: food.categorias,
-                racion: food.racion,
-                unidades: food.unidades || false,
-                url: food.url || null,   // para que el enlace salga ya, sin esperar a recargar el dia
-            };
-            setMealsData(prev => ({
-                ...prev,
-                [mealKey]: { alimentos: [...(prev[mealKey]?.alimentos || []), newFood] }
-            }));
-            setAddFoodModal({ open: false, mealKey: null });
-            setSearchQuery('');
-            setSearchCategory('');
-            toast.success(`${food.nombre} añadido`);
-            notify('nutrition-add-food'); // auto-avanza el tour si está en ese paso
-        } catch (err) {
-            toast.error('Error añadiendo alimento');
-        }
-    };
+    // Aquí vivía handleAddFood, que solo lo llamaba ese buscador. Lo que hacía -- resolver
+    // las unidades del alimento y añadirlo a la comida -- lo hace hoy BuildMealModal.
 
     /**
      * Cambia la cantidad de un alimento y reajusta sus macros, sin llamar al servidor.
@@ -2186,22 +2086,17 @@ const NutritionPage = () => {
                     )}
                 </div>
 
-            {/* Search Food Modal */}
-            <SearchFoodModal
-                open={addFoodModal.open}
-                mealKey={addFoodModal.mealKey}
-                onClose={() => setAddFoodModal({ open: false, mealKey: null })}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                searchCategory={searchCategory}
-                setSearchCategory={setSearchCategory}
-                searchLoading={searchLoading}
-                searchResults={searchResults}
-                onAddFood={handleAddFood}
-                getFoodEmoji={getFoodEmoji}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
-            />
+            {/* AQUÍ SE MONTABA UN BUSCADOR DE ALIMENTOS QUE NADIE PODÍA ABRIR.
+                `addFoodModal` se inicializaba cerrado y se cerraba en dos sitios, pero en toda
+                la aplicación no había una sola línea que lo pusiera en abierto: estaba escrito,
+                montado y muerto. Salió al hacer el catálogo de pantallas del 10-08, intentando
+                retratarlo.
+                No se le ha puesto una puerta porque lo que hacía ya existe y mejor: el modal
+                «Lo hago yo» busca alimentos y los añade a la comida, con categorías y
+                preparaciones. Un segundo camino a lo mismo solo añade ruido.
+                Se va con él su `useEffect` de búsqueda y sus cuatro estados. El fichero
+                SearchFoodModal.jsx SE QUEDA: de él salen `FOOD_FAVORITES_UI`, que usa
+                BuildMealModal, y `FoodFilterBar`, que usa la ficha del cliente. */}
 
             {/* "Sugiéreme un menú": biblioteca REAL por cercanía, sin reescalar */}
             <LibraryMenusModal

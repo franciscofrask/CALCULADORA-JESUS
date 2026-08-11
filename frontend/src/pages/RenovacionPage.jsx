@@ -70,9 +70,17 @@ const RenovacionPage = () => {
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto pb-24" data-testid="renovacion-page">
             <header className="mb-8">
+                {/* SIN FECHA DE FIN NO SE INVENTAN DÍAS.
+                    A los clientes anteriores al calendario de arranque no se les guardó el fin
+                    de ciclo, y el servidor lo dice con `conocido: false` y manda
+                    `dias_restantes: null`. Aquí no se miraba, así que el titular salía literal:
+                    «TE QUEDAN NULL DÍAS». Lo vio Francisco el 10-08.
+                    Lo que sí se sabe siempre es la semana, y con eso se sitúa igual. */}
                 <p className="caption text-brand mb-1">
                     {ciclo.ya_vencido ? 'Tu ciclo ha terminado'
-                        : `Te queda${ciclo.dias_restantes === 1 ? '' : 'n'} ${ciclo.dias_restantes} día${ciclo.dias_restantes === 1 ? '' : 's'}`}
+                        : ciclo.dias_restantes == null
+                            ? `Vas por la semana ${ciclo.semana}`
+                            : `Te queda${ciclo.dias_restantes === 1 ? '' : 'n'} ${ciclo.dias_restantes} día${ciclo.dias_restantes === 1 ? '' : 's'}`}
                 </p>
                 <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none">
                     Mira lo que has cambiado

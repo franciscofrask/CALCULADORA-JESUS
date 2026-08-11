@@ -37,32 +37,50 @@ export const AuthProvider = ({ children }) => {
         catch { return null; }
     })();
 
-    const api = axios.create({
-        baseURL: API,
-        headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(actuandoComo?.userId ? { 'X-Actuar-Como': actuandoComo.userId } : {}),
-        },
-    });
+    // EL CLIENTE HTTP SE CREA UNA VEZ, NO EN CADA RENDER.
+    //
+    // Esto era un `axios.create` suelto en el cuerpo del componente, así que cada vez que el
+    // proveedor se repintaba nacía un cliente nuevo. Media aplicación pide sus datos con
+    // `useEffect(..., [api])`, y con un `api` distinto cada vez esos efectos se vuelven a
+    // disparar: «Mis macros» pedía su historial TRES veces al abrirse, y el perfil, los planes
+    // y los contadores de avisos, dos cada uno. Dieciséis peticiones para pintar una pantalla,
+    // y 6,1 segundos con la rueda girando. Medido el 10-08 al hacer el catálogo.
+    //
+    // Las dependencias son las dos cosas que de verdad cambian la petición: el token y el
+    // usuario que se está suplantando. `actuandoComo` es un objeto que se reconstruye en cada
+    // render, así que se depende de su id, que es un texto y sí se puede comparar.
+    const actuandoComoId = actuandoComo?.userId || null;
+    const api = useMemo(() => {
+        const instancia = axios.create({
+            baseURL: API,
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...(actuandoComoId ? { 'X-Actuar-Como': actuandoComoId } : {}),
+            },
+        });
 
-    api.interceptors.response.use(
-        (response) => response,
-        (error) => {
-            if (error.response?.status === 401) {
-                const url = error.config?.url || '';
-                const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
-                const hadToken = !!localStorage.getItem('token');
-                // Solo avisar de sesión expirada si el usuario estaba logueado y no es un
-                // intento de login/registro (esos muestran su propio error). El id evita
-                // que varios 401 simultáneos apilen el mismo aviso.
-                if (hadToken && !isAuthEndpoint) {
-                    toast.error('Tu sesión ha expirado. Vuelve a iniciar sesión.', { id: 'session-expired' });
+        instancia.interceptors.response.use(
+            (response) => response,
+            (error) => {
+                if (error.response?.status === 401) {
+                    const url = error.config?.url || '';
+                    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+                    const hadToken = !!localStorage.getItem('token');
+                    // Solo avisar de sesión expirada si el usuario estaba logueado y no es un
+                    // intento de login/registro (esos muestran su propio error). El id evita
+                    // que varios 401 simultáneos apilen el mismo aviso.
+                    if (hadToken && !isAuthEndpoint) {
+                        toast.error('Tu sesión ha expirado. Vuelve a iniciar sesión.', { id: 'session-expired' });
+                    }
+                    logout();
                 }
-                logout();
+                return Promise.reject(error);
             }
-            return Promise.reject(error);
-        }
-    );
+        );
+        return instancia;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `logout` se resuelve al
+        // ejecutarse el interceptor, no al crearlo; meterlo aquí volvería a recrear el cliente.
+    }, [token, actuandoComoId]);
 
     const fetchUser = useCallback(async () => {
         if (!token) {
