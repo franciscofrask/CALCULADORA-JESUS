@@ -953,9 +953,14 @@ const BuildMealModal = ({
 
                     {/* Category + Preparation Rails - hidden for intra (Calma: chips hidden) */}
                     {(isManual || !isCuadrada) && !isIntraMode && <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b bg-card space-y-2">
-                        {/* Dos filas visibles y el resto tras "Mostrar más": con el nombre dentro
-                            de cada pill entran unas 3 por fila en móvil, y una sola fila dejaba
-                            casi todas las categorías escondidas. */}
+                        {/* Dos filas visibles y el resto tras "Mostrar más".
+                            Las categorías son círculos con icono, y el nombre sale al pasar por
+                            encima y SE QUEDA abierto en la que está marcada -- en un móvil no hay
+                            ratón, así que sin eso no habría forma de saber qué es cada dibujo.
+                            El 09-08 se cambiaron por pastillas con el nombre dentro y se quitó ese
+                            comportamiento; Francisco pidió volver atrás el 11-08. Los campos
+                            `short` que se añadieron para aquello siguen en las listas de abajo,
+                            sin usarse. */}
                         <CategoryRail
                             label="Categorías"
                             categories={categories}

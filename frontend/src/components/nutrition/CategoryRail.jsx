@@ -13,10 +13,10 @@ const renderIcon = (icon, className) => {
 };
 
 /**
- * Filtro de categorías/preparaciones en forma de pills con icono y nombre.
+ * Filtro de categorías/preparaciones en forma de pills con iconos.
  * value string  -> single-select (click activo = deselecciona)
  * value array   -> multi-select  (click toggle in/out)
- * Cada entry: { value, label, short? (nombre corto visible), icon? (FA/Lucide), emoji? }
+ * Cada entry: { value, label, icon? (FA/Lucide), emoji? }
  *
  * collapsible: si hay más categorías de las que caben en `maxRows` filas, se recortan
  * y aparece un botón "Mostrar más / Mostrar menos".
@@ -31,35 +31,48 @@ const CategoryRail = ({
     collapsible = false,
     maxRows = 2,
 }) => {
-    // Alto fijo (36/41 px) para conservar el area de toque que tenian los iconos solos;
-    // el ancho lo marca el nombre, que ya no cabe en un circulo.
-    const btn = size === 'sm' ? 'h-8 pl-2 pr-2.5 gap-1.5' : 'h-9 pl-2.5 pr-3 gap-1.5';
+    const btn = size === 'sm' ? 'w-8 h-8' : 'w-9 h-9';
 
     const isArray = Array.isArray(value);
     const isSelected = (catValue) =>
         isArray ? value.includes(catValue) : value === catValue;
 
+    // Cuando se pueden marcar varias categorias, tener el nombre abierto en todas las marcadas
+    // llenaba la pantalla de cajitas superpuestas. Solo se queda abierta la ultima que has tocado.
+    const [ultima, setUltima] = useState(null);
+
     const handleClick = (catValue) => {
         if (isArray) {
-            if (catValue === '' || catValue == null) { onChange?.([]); return; }
-            const next = value.includes(catValue)
+            if (catValue === '' || catValue == null) { onChange?.([]); setUltima(null); return; }
+            const quitando = value.includes(catValue);
+            const next = quitando
                 ? value.filter((v) => v !== catValue)
                 : [...value, catValue];
+            setUltima(quitando ? null : catValue);
             onChange?.(next);
         } else {
             onChange?.(value === catValue ? '' : catValue);
         }
     };
 
+    // Cual lleva el nombre visible. En seleccion simple, la unica marcada (como hasta ahora).
+    // En multiple, la ultima tocada; si se quito, la ultima que quede marcada, para que al
+    // volver a la pantalla con filtros ya puestos siga viendose uno.
+    const destacada = !isArray
+        ? (value || null)
+        : (ultima && value.includes(ultima)
+            ? ultima
+            : (value.length ? value[value.length - 1] : null));
+
     // Recorte a `maxRows` filas: altura = filas*altoPill + (filas-1)*gap.
-    // La pill se mide en el DOM (h-8/h-9 son rem y el html usa font-size 17/18px,
+    // La pill se mide en el DOM (w-8/w-9 son rem y el html usa font-size 17/18px,
     // así que hardcodear 32/36px cortaba el anillo de la seleccionada por abajo).
     const wrapRef = useRef(null);
     const [expanded, setExpanded] = useState(false);
     const [overflowing, setOverflowing] = useState(false);
     const fallbackBtnPx = size === 'sm' ? 36 : 41;
     // +8: deja aire para el anillo (ring) de la pill seleccionada, que se dibuja FUERA del
-    // borde; sin este margen el overflow:hidden del recorte lo cortaba por arriba/abajo.
+    // círculo; sin este margen el overflow:hidden del recorte lo cortaba por arriba/abajo.
     const [collapsedMaxH, setCollapsedMaxH] = useState(maxRows * fallbackBtnPx + (maxRows - 1) * 7 + 8);
 
     useEffect(() => {
@@ -82,13 +95,22 @@ const CategoryRail = ({
 
     const clampStyle = (collapsible && !expanded) ? { maxHeight: collapsedMaxH, overflow: 'hidden' } : undefined;
 
+    // El nombre de la categoría marcada se queda visible: en tablet y móvil no hay ratón, así
+    // que sin esto no se puede saber qué categoría está aplicada. El resto se abren y cierran
+    // con el ratón como siempre (`abierta` guarda cuál lo está).
+    const [abierta, setAbierta] = useState(null);
+
     const pills = (
         <div ref={wrapRef} style={clampStyle} className="flex items-center gap-1.5 flex-wrap py-1">
             {categories.map((cat) => {
                 const selected = isSelected(cat.value);
-                const iconNode = renderIcon(cat.icon, 'w-4 h-4 flex-shrink-0');
+                const iconNode = renderIcon(cat.icon, 'w-4 h-4');
                 return (
-                    <Tooltip key={cat.value || '__all__'}>
+                    <Tooltip
+                        key={cat.value || '__all__'}
+                        open={destacada === cat.value || abierta === cat.value}
+                        onOpenChange={(o) => setAbierta(o ? cat.value : null)}
+                    >
                         <TooltipTrigger asChild>
                             <button
                                 type="button"
@@ -96,7 +118,7 @@ const CategoryRail = ({
                                 aria-label={cat.label}
                                 aria-pressed={selected}
                                 className={cn(
-                                    'inline-flex items-center justify-center rounded-full transition-all max-w-full',
+                                    'flex items-center justify-center rounded-full transition-all',
                                     btn,
                                     selected
                                         ? 'bg-brand-orange/10 text-brand-orange ring-2 ring-brand-orange shadow-sm'
@@ -104,20 +126,12 @@ const CategoryRail = ({
                                 )}
                             >
                                 {iconNode || (
-                                    <span className="text-base leading-none flex-shrink-0" aria-hidden>
+                                    <span className="text-base leading-none" aria-hidden>
                                         {cat.emoji || '·'}
                                     </span>
                                 )}
-                                {/* Nombre siempre visible: en móvil no hay hover, así que el tooltip
-                                    no servía para saber qué es cada icono. 11px fijos (no rem) para
-                                    que la tipografía base de 18px no dispare el ancho de la pill. */}
-                                <span className="text-[11px] font-semibold leading-none whitespace-nowrap">
-                                    {cat.short || cat.label}
-                                </span>
                             </button>
                         </TooltipTrigger>
-                        {/* El tooltip ya solo amplía el nombre completo con el ratón; la información
-                            imprescindible está en la propia pill. */}
                         <TooltipContent
                             side="top"
                             sideOffset={6}
@@ -133,27 +147,36 @@ const CategoryRail = ({
 
     return (
         <TooltipProvider delayDuration={120} skipDelayDuration={120}>
-            {/* El rótulo va encima y no al lado: con el nombre dentro de cada pill, los 70 px
-                que ocupaba a la izquierda le hacían falta a las pills en pantallas de 390 px. */}
-            <div className={cn('min-w-0', className)}>
-                {label && (
-                    <span className="block text-xs font-bold text-muted-foreground">
-                        {label}
-                    </span>
-                )}
-                {pills}
-                {collapsible && overflowing && (
-                    <button
-                        type="button"
-                        onClick={() => setExpanded((e) => !e)}
-                        className="mt-1 text-xs font-semibold text-brand-orange hover:underline"
-                    >
-                        {/* Con el número delante se sabe que hay más debajo: en móvil solo caben
-                            unas seis pills en las dos filas visibles. */}
-                        {expanded ? 'Ver menos' : `Ver todas (${categories.length})`}
-                    </button>
-                )}
-            </div>
+            {collapsible ? (
+                <div className={cn('flex items-start gap-2', className)}>
+                    {label && (
+                        <span className="text-xs font-bold text-muted-foreground mr-1 flex-shrink-0 mt-1.5">
+                            {label}
+                        </span>
+                    )}
+                    <div className="flex-1 min-w-0">
+                        {pills}
+                        {overflowing && (
+                            <button
+                                type="button"
+                                onClick={() => setExpanded((e) => !e)}
+                                className="mt-1.5 text-xs font-semibold text-brand-orange hover:underline"
+                            >
+                                {expanded ? 'Mostrar menos' : 'Mostrar más'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                <div className={cn('flex items-center gap-2 flex-wrap', className)}>
+                    {label && (
+                        <span className="text-xs font-bold text-muted-foreground mr-1 flex-shrink-0">
+                            {label}
+                        </span>
+                    )}
+                    {pills}
+                </div>
+            )}
         </TooltipProvider>
     );
 };
