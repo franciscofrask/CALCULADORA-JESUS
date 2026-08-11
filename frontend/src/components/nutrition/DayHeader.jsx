@@ -170,13 +170,41 @@ const DayHeader = ({
                                     <div key={key} className="text-center" data-testid={`dia-${key}`}>
                                         <p className="font-data font-bold leading-none text-foreground text-[30px] sm:text-[34px]">{grande}</p>
                                         <p className="text-sm font-bold mt-1" style={{ color: over ? '#EF4444' : color }}>{label}</p>
-                                        <p className="text-xs text-muted-foreground font-data">
-                                            {cuadrado || over ? `de ${tgt.toFixed(0)}` : `de ${tgt.toFixed(0)} en total`}
-                                        </p>
+                                        {/* Con el día a cero, el número grande YA ES el total:
+                                            «235 · de 235 en total» lo dice dos veces. La línea
+                                            solo aporta cuando ya has comido algo (Jesús, 11-08). */}
+                                        {!nadaPuesto && (
+                                            <p className="text-xs text-muted-foreground font-data">
+                                                {cuadrado || over ? `de ${tgt.toFixed(0)}` : `de ${tgt.toFixed(0)} en total`}
+                                            </p>
+                                        )}
                                     </div>
                                 );
                             })}
                         </div>
+                        {/* LO QUE YA ESTÁ CUBIERTO, DICHO.
+                            Saber lo que falta no basta: si te quedan 60 g de grasa y la
+                            proteína ya está, ponerte a buscar proteína es perder el rato.
+                            «Saber lo que ya está cubierto evita ponerse a buscar proteína
+                            cuando lo que falta son hidratos» (Jesús, 11-08).
+                            Solo cuando hay algo puesto y algo pendiente: con el día entero
+                            cuadrado ya lo dice el titular, y a cero no hay nada que cubrir. */}
+                        {(() => {
+                            if (nadaPuesto || cuadrado) return null;
+                            const NOMBRE = { P: 'la proteína', H: 'los hidratos', G: 'la grasa' };
+                            const cubiertos = macros.filter(m => m.tgt > 0 && m.val >= m.tgt - 4);
+                            if (!cubiertos.length || cubiertos.length === macros.filter(m => m.tgt > 0).length) return null;
+                            const nombres = cubiertos.map(m => NOMBRE[m.key]).filter(Boolean);
+                            const texto = nombres.length === 1
+                                ? `${nombres[0].charAt(0).toUpperCase()}${nombres[0].slice(1)} ya la tienes cubierta.`
+                                : `Ya tienes cubiertos ${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}.`;
+                            return (
+                                <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400" data-testid="dia-cubierto">
+                                    {texto}
+                                </p>
+                            );
+                        })()}
+
                         {/* LA CONFIGURACIÓN DEL DÍA, DEBAJO DE LOS NÚMEROS y en una línea
                             (documento del 10-08, pantalla 9): «se toca una vez al mes;
                             verla, se ve siempre». Estaba arriba, al lado de la fecha,

@@ -537,8 +537,15 @@ const ClientDashboard = () => {
                                     {/* «Perientreno», no «Peri» (punto 4.18). */}
                                     {mp && getP(mp) > 0 && <span>Perientreno {getP(mp)}/{getH(mp)}</span>}
                                 </div>
+                                {/* LA ETIQUETA DICE QUÉ ES, NO CÓMO SE LLAMA POR DENTRO.
+                                    Aquí salía la palabra cruda del dato -- «MANUAL» o «AUTO» --
+                                    en mayúsculas y en naranja, que es el color de lo importante.
+                                    Nadie sabe qué es «manual» al lado de su perientreno.
+                                    Jesús, 11-08: «o se explica, o se quita de Inicio». */}
                                 {source && (
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${source === 'auto' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400'}`}>{source}</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${source === 'auto' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400'}`}>
+                                        {source === 'auto' ? 'te lo cuadramos' : 'lo ajustas tú'}
+                                    </span>
                                 )}
                             </div>
                         </div>
@@ -624,7 +631,7 @@ const ClientDashboard = () => {
                         desc: 'Tus macros los sacamos contigo en la llamada. No tienes que rellenar nada.' }
                     : conCoach
                         ? { titulo: 'Completa tu cuestionario inicial',
-                            desc: 'Unas preguntas más y tus números pasan a tu entrenador.' }
+                            desc: 'Unas preguntas más y nos ponemos con tus números.' }
                         : { titulo: 'Termina de ajustar tus macros iniciales',
                             desc: 'Unas preguntas más y los tienes finos.' };
                 return (
@@ -698,7 +705,7 @@ const ClientDashboard = () => {
                     <div>
                         <p className="font-bold text-foreground text-sm uppercase tracking-wide">Revisión en marcha</p>
                         <p className="text-muted-foreground text-sm">
-                            Un entrenador está revisando tus macros. Te avisamos en cuanto los tenga.
+                            Estamos revisando tus macros. Te avisamos en cuanto estén.
                         </p>
                     </div>
                 </div>
@@ -721,9 +728,11 @@ const ClientDashboard = () => {
                             <ClipboardCheck className="w-5 h-5 text-brand" />
                         </div>
                         <div className="text-left">
-                            {/* «entrenador», no «coach», y sin el «no cambian tus macros»:
-                                las dos son decisiones de Jesús (punto 4.18). */}
-                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">Completa tu perfil para tu entrenador</p>
+                            {/* NI «COACH» NI «ENTRENADOR»: HABLAMOS EN PLURAL.
+                                El 4.18 cambió «coach» por «entrenador»; el repaso del 11-08 va
+                                un paso más allá y quita los dos de todo lo que lee el cliente.
+                                Y de paso el aviso dice qué gana él, no a quién le llega. */}
+                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">Completa tu perfil y te afinamos los macros</p>
                             <p className="text-muted-foreground text-sm">Te quedan unas preguntas: biotipo, salud, entreno...</p>
                         </div>
                     </div>
