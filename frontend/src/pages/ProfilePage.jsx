@@ -114,9 +114,14 @@ const ProfilePage = () => {
                                     </AvatarFallback>
                                 </Avatar>
                             </div>
-                            <div className="flex-1">
-                                <h2 className="font-bold text-foreground text-lg">{user?.name?.toUpperCase()}</h2>
-                                <p className="text-foreground/50 text-sm">{user?.email}</p>
+                            {/* `min-w-0` y `truncate`, que si no el correo manda.
+                                Un flex hijo no encoge por debajo de su contenido salvo que se
+                                le diga, así que «clientedemo@test.com» fijaba el ancho de esta
+                                columna y empujaba el lápiz de editar FUERA de la pantalla: a
+                                320 px el botón no existía para el cliente. Medido el 10-08. */}
+                            <div className="flex-1 min-w-0">
+                                <h2 className="font-bold text-foreground text-lg truncate">{user?.name?.toUpperCase()}</h2>
+                                <p className="text-foreground/50 text-sm truncate">{user?.email}</p>
                                 {profile && <div className="mt-1"><PlanBadge plan={planUnpaid ? null : profile.plan} /></div>}
                             </div>
                             <Button

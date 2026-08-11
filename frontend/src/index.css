@@ -93,6 +93,29 @@
         transition: background-color 0.2s ease, color 0.2s ease;
     }
 
+    /* EN EL TELÉFONO LA PÁGINA NO SE MUEVE DE LADO. NUNCA.
+     *
+     * Sin esto, basta con que UN elemento se pase de ancho -- un botón que no encoge, un
+     * nombre de alimento largo, una tabla -- para que la página entera se pueda arrastrar en
+     * horizontal. Y entonces pasa lo que contó Francisco el 10-08: «tiene scroll a los lados,
+     * y los menús y el header también se mueven». El header móvil es `sticky`, y un `sticky`
+     * se pega arriba pero SÍ se desplaza de lado con la página; la barra de abajo es `fixed`
+     * y se queda quieta. Por eso se ve todo descuadrado y moviéndose por su cuenta.
+     *
+     * Se usa `clip` y no `hidden` a propósito: `hidden` convierte al elemento en un
+     * contenedor de scroll y eso rompe el `position: sticky` de los hijos -- se arreglaría el
+     * desplazamiento lateral cargándose la cabecera pegada --. `clip` recorta sin crear
+     * contenedor de scroll, así que el sticky sigue funcionando.
+     *
+     * Es una red, no una excusa: lo que se salga hay que arreglarlo igual, porque recortado
+     * sigue sin verse. Pero al menos deja de arrastrar la pantalla entera.
+     */
+    @media (max-width: 1023px) {
+        html, body {
+            overflow-x: clip;
+        }
+    }
+
     h1, h2, h3, h4, h5, h6 {
         font-family: 'Barlow Condensed', 'Impact', sans-serif;
         letter-spacing: 0.005em;

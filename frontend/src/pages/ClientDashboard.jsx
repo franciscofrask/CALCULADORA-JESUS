@@ -1011,11 +1011,14 @@ const ClientLayout = () => {
                 <div className="flex items-stretch h-16">
                     {bottomItems.map(item => (
                         <NavLink key={item.path} to={item.path} end={item.end}
-                            className={({ isActive }) => `flex flex-col items-center justify-center flex-1 gap-1 transition-colors ${isActive ? 'text-brand' : 'text-white/55'}`}
+                            className={({ isActive }) => `flex flex-col items-center justify-center flex-1 min-w-0 gap-1 px-0.5 transition-colors ${isActive ? 'text-brand' : 'text-white/55'}`}
                             data-testid={`bottomnav-${slug(item.label)}`}>
                             {({ isActive }) => (<>
-                                <item.icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 2} />
-                                <span className={`text-[10px] ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
+                                <item.icon className="w-[22px] h-[22px] flex-shrink-0" strokeWidth={isActive ? 2.5 : 2} />
+                                {/* `min-w-0` y `truncate`: sin eso, «Seguimiento» marca el ancho
+                                    mínimo de su cuarto de barra y en un móvil estrecho la barra
+                                    entera se pasa de la pantalla. Medido a 280 px. */}
+                                <span className={`text-[10px] max-w-full truncate ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
                             </>)}
                         </NavLink>
                     ))}

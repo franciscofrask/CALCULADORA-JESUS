@@ -224,8 +224,13 @@ const FoodSearchPage = () => {
         <div className="min-h-screen bg-background p-4 md:p-6">
             <div className="max-w-3xl mx-auto">
                 <div className="bg-card border border-border rounded-xl p-4 mb-4">
-                    <div className="flex items-start justify-between gap-3 mb-1">
-                        <h1 className="text-xl font-bold text-foreground">Buscador de alimentos</h1>
+                    {/* EL TÍTULO Y EL BOTÓN, UNO DEBAJO DE OTRO SI NO CABEN.
+                        Iban en una fila con el botón `flex-shrink-0`, o sea que no encogía
+                        nunca: en un móvil estrecho se salía 27 px de la pantalla y arrastraba
+                        la página entera de lado. Con `flex-wrap` baja de línea en vez de
+                        empujar, y el título puede encoger porque ya no tiene el ancho tomado. */}
+                    <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
+                        <h1 className="text-xl font-bold text-foreground min-w-0">Buscador de alimentos</h1>
                         <button
                             onClick={() => setSuggestOpen(true)}
                             className="flex-shrink-0 inline-flex items-center gap-1.5 bg-brand-orange hover:bg-brand-orange/90 text-white text-sm font-medium rounded-lg px-3 py-2 transition-colors"

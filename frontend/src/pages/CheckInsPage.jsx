@@ -353,11 +353,17 @@ const CheckInsPage = () => {
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1100px] mx-auto space-y-5 animate-fade-in" data-testid="checkins-page">
             {/* LA VUELTA. En el teléfono esta pantalla ya no está en el menú: se llega desde
                 la tarjeta «Hoy» de Seguimiento, así que tiene que haber una puerta de vuelta
-                a mano. En escritorio no hace falta: ahí sigue en la barra lateral. */}
-            <button onClick={() => navigate('/dashboard/reports')} data-testid="volver-a-seguimiento"
-                className="lg:hidden flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
-                <ChevronLeft className="w-4 h-4" /> Seguimiento
-            </button>
+                a mano. En escritorio no hace falta: ahí sigue en la barra lateral.
+                Va con `enTelefono` y no con `lg:hidden` a propósito: oculto con CSS el nodo
+                sigue en el árbol, y el `space-y-5` del contenedor le da su margen al hermano
+                de al lado igualmente. Eran 21 px que aparecían en la vista de escritorio sin
+                que nada se viera. */}
+            {enTelefono && (
+                <button onClick={() => navigate('/dashboard/reports')} data-testid="volver-a-seguimiento"
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
+                    <ChevronLeft className="w-4 h-4" /> Seguimiento
+                </button>
+            )}
 
             <header className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-brand/10">
