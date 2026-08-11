@@ -947,6 +947,28 @@ const NutritionPage = () => {
         return 'falta';
     };
 
+    // LO QUE YA ESTÁ HECHO SE ABRE SOLO; LO QUE FALTA, NO.
+    //
+    // Jesús pedía que la fila dijera lo que hay dentro y no solo el estado: «lo que decide a
+    // las nueve de la noche es qué comí, no en qué estado está la fila». Se probó metiendo los
+    // alimentos en la propia fila y quedaban cortados, así que Francisco lo mandó quitar.
+    // Esto lo resuelve por el otro lado: si la comida está cuadrada, se despliega y se leen
+    // sus alimentos enteros, con sus cantidades y sin cortar nada.
+    //
+    // Solo al cargar el día, y una vez: después mandan los dedos del cliente. Si abre o cierra
+    // algo, se respeta hasta que cambie de día. Por eso la marca lleva la fecha.
+    const diaYaDesplegado = useRef(null);
+    useEffect(() => {
+        if (diaYaDesplegado.current === currentDate) return;
+        if (!Object.keys(mealsData || {}).length) return;      // aún no ha llegado la dieta
+        const hechas = getMealOrder().filter(k => getMealStatus(k) === 'cuadrada');
+        diaYaDesplegado.current = currentDate;
+        if (!hechas.length) return;
+        setExpandedMeals(previo => ({ ...previo, ...Object.fromEntries(hechas.map(k => [k, true])) }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- se dispara al cambiar el día
+        // o al llegar sus datos; meter las funciones de cálculo lo relanzaría en cada render.
+    }, [currentDate, mealsData]);
+
     // ── Calibración progresiva (proteína vegetal por acumulado del DÍA) ─────────
     // Spec 17-07-2026: tras CUALQUIER cambio de composición (añadir, quitar, editar
     // cantidades, aplicar menú, repetir, cuadrar...), el backend recalcula los macros
