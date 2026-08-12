@@ -366,16 +366,13 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
 
 
 def _sanea_peso(w):
-    """Corrige errores de coma en el peso (819 -> 81.9, 51400 -> 51.4)."""
-    try:
-        w = float(w)
-    except (TypeError, ValueError):
-        return None
-    while w > 1000:
-        w /= 1000.0
-    if 300 < w <= 1000:
-        w /= 10.0
-    return round(w, 1) if 25 < w < 300 else None
+    """Corrige errores de coma en el peso (819 -> 81.9, 51400 -> 51.4).
+
+    La regla vive en `core.series_cliente`, con el rango del peso. Estaba copiada aqui y en
+    `macro_casos.py`, y la pantalla del cliente no tenia ninguna de las dos: por eso el coach
+    veia la curva saneada y el cliente veia sus 0 kg (Jesus, 12-08)."""
+    from core.series_cliente import sanea_peso
+    return sanea_peso(w)
 
 
 def _refrescar_casos():

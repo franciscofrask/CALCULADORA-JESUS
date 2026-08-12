@@ -29,6 +29,11 @@ from calculator import (
 )
 from macro_distribution import distribuir_macros
 
+# Palabras que son una unidad y no un alimento. Ver `NutritionChatbot._sacar_cantidad`.
+_SOLO_UNIDAD = {"g", "gr", "grs", "gramo", "gramos", "kg", "kgs", "kilo", "kilos",
+                "ml", "mls", "mililitro", "mililitros", "l", "litro", "litros",
+                "ud", "uds", "unidad", "unidades"}
+
 
 # =====================================================
 # NOTA (F3, 06-08-2026): el router de intenciones, sus 30 regex, los 17 interceptores
@@ -81,6 +86,9 @@ class NutritionChatbot:
             "acumulado_frutos_secos": 0,
             "last_options": [],  # Últimas opciones ofrecidas (sugerencias/desambiguación) para elegir por texto
             "saved_meals": [],  # Claves de comidas guardadas con "guardar y siguiente"
+            # Las que YA venian montadas de Nutricion al abrir el chat. No se tocan sin
+            # decirselo al cliente: es trabajo suyo de antes de esta conversacion.
+            "comidas_traidas": [],
             "seen_sugg": {},  # Sugerencias ya ofrecidas por comida (para no repetirlas)
             "last_termino": None,  # De qué tipo de alimento iba la última lista ("tostadas")
             "termino_vistos": [],  # Ids ya enseñados de ese término, para no repetirlos
@@ -161,6 +169,8 @@ class NutritionChatbot:
 
         self.state["comidas_completadas"] = {k: v for k, v in completadas.items() if k in vivas}
         self.state["saved_meals"] = [k for k in (self.state.get("saved_meals") or []) if k in vivas]
+        self.state["comidas_traidas"] = [k for k in (self.state.get("comidas_traidas") or [])
+                                         if k in vivas]
 
         reubicado = []
         for k in caidas:
@@ -1183,7 +1193,7 @@ class NutritionChatbot:
             items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad})
         return items
 
-    def precargar_desde_dieta(self, comidas: dict) -> int:
+    def precargar_desde_dieta(self, comidas: dict, catalogo: dict = None) -> int:
         """Trae a la sesion lo que el cliente YA tiene montado ese dia en Nutricion.
 
         El asistente vivia en su burbuja: montaba el dia desde cero sin mirar la dieta
@@ -1197,21 +1207,37 @@ class NutritionChatbot:
         ahora: si el dia se monto con cuatro comidas y ahora se piden tres, lo que sobra no
         se cuela por la puerta de atras.
 
+        LOS MACROS SE RECALCULAN CON EL MOTOR (12-08). Traerlos y creerse el
+        `macros_efectivos` guardado dejaba el dia a CERO: medido contra produccion, de 55.323
+        alimentos guardados solo 411 (el 0,7 %) lo traen con algo dentro. El resto son dias
+        montados en Nutricion o venidos de la migracion, que nunca escribieron ese campo. Es
+        el mismo agujero que dejaba el PDF a cero (`routes/diets.py::_macros_de`, 11-08), solo
+        que aqui salia como «llevas 0 g» con el dia entero puesto. En una dieta real de
+        produccion: leia 0/0/0 donde el motor dice 192 P / 149 H / 21 G.
+
+        Por eso hace falta el `catalogo` ({id: ficha}): sin la ficha no hay con que contar. Si
+        no se pasa, se usa lo guardado y el que llame se queda como estaba.
+
         Devuelve cuantas comidas se han traido.
         """
-        vivas = set(self.state.get("meal_order") or [])
+        catalogo = catalogo or {}
+        vivas = self.state.get("meal_order") or []
         traidas = 0
-        for key, datos in (comidas or {}).items():
-            if key not in vivas:
-                continue
+        # EN ORDEN DE COMIDA, no en el del diccionario: la calibracion progresiva depende de
+        # los gramos acumulados ANTES de cada alimento, asi que contar la cena antes del
+        # desayuno da otro numero.
+        for key in vivas:
+            datos = (comidas or {}).get(key)
             alimentos = (datos or {}).get("alimentos") or []
             if not alimentos:
                 continue
             entradas = []
             totales = {"P": 0.0, "H": 0.0, "G": 0.0}
             for a in alimentos:
-                m = a.get("macros_efectivos") or a.get("macros") or {}
+                ficha = catalogo.get(a.get("alimento_id") if a.get("alimento_id") is not None
+                                     else a.get("id"))
                 cantidad = float(a.get("cantidad_g") or 0)
+                m = self._macros_del_guardado(a, ficha, cantidad)
                 entradas.append({
                     "nombre": a.get("nombre", ""),
                     "cantidad_g": cantidad,
@@ -1223,7 +1249,7 @@ class NutritionChatbot:
                 # Los acumulados del dia mandan sobre lo que cuenta cada alimento nuevo
                 # (calibracion progresiva). Si se traen 300 g de arroz sin sumarlos, el
                 # siguiente alimento se calcula como si el dia estuviera vacio.
-                cats = str(a.get("categorias") or "")
+                cats = str((ficha or {}).get("categorias") or a.get("categorias") or "")
                 principal = cats.split("|")[0].strip()
                 if principal.startswith(("7", "8")):
                     self.state["acumulado_cereales_panes"] += cantidad
@@ -1233,11 +1259,53 @@ class NutritionChatbot:
                 "alimentos": entradas,
                 "macros": {k: round(v, 1) for k, v in totales.items()},
             }
+            # Una comida que viene de la dieta guardada ESTA guardada. Sin esto, el resumen
+            # decia «0 de 4 comidas hechas» con las cuatro puestas (ChatbotPage lo pinta desde
+            # `completas`, que cuenta `saved_meals`), y «guardar y siguiente» volvia a pasar
+            # por comidas que el cliente ya tenia montadas.
+            saved = self.state.setdefault("saved_meals", [])
+            if key not in saved:
+                saved.append(key)
+            # Y APARTE, que viene de fuera de esta conversacion. Es lo que no se puede
+            # tocar sin decirselo al cliente: lo que monto el en Nutricion esta manana.
+            # Medido: sin esta marca, «montame el dia» le rehacia una comida ya puesta
+            # 1 de cada 4 veces. Ver `AgentTools._protegida`.
+            traidas_de_fuera = self.state.setdefault("comidas_traidas", [])
+            if key not in traidas_de_fuera:
+                traidas_de_fuera.append(key)
             traidas += 1
 
         if traidas:
             self._situarse_en_la_primera_sin_montar()
         return traidas
+
+    def _macros_del_guardado(self, a: dict, ficha: dict, cantidad_g: float) -> dict:
+        """Lo que le cuenta a un alimento ya guardado en la dieta.
+
+        Lo guardado solo vale de atajo: la mayoria de los dias no lo tienen (ver
+        `precargar_desde_dieta`). Cuando no vale, cuenta el mismo motor que usa el chat al
+        anadir a mano (`macros_item_por_acumulado`), con los gramos que ya lleva el dia: asi
+        el pan que entra el cuarto cuenta lo que le toca por tramo, y no lo que contaria si
+        fuera el primero. De paso, el filtro del tercio y las excepciones por categoria las
+        resuelve el motor, no quien lea esto.
+
+        Un cero legitimo -- la lechuga, o el macro que el filtro del tercio descarta -- sigue
+        saliendo cero, porque lo dice el motor y no la ausencia del campo.
+        """
+        guardado = a.get("macros_efectivos") or a.get("macros") or {}
+        if guardado and any((guardado.get(k) or 0) > 0 for k in ("P", "H", "G")):
+            return guardado
+        if not ficha:
+            return guardado or {}
+        try:
+            return macros_item_por_acumulado(
+                ficha, cantidad_g,
+                acum_cp=self.state["acumulado_cereales_panes"],
+                acum_fs=self.state["acumulado_frutos_secos"],
+            )
+        except Exception:
+            # Un alimento raro del catalogo no puede impedir que se recupere el dia.
+            return guardado or {}
 
     def _situarse_en_la_primera_sin_montar(self) -> None:
         """Deja `comida_actual` en la primera comida que aun no tiene nada.
@@ -2330,6 +2398,16 @@ class NutritionChatbot:
         key = self.current_meal_key()
         added, not_found, avisos = [], [], []
 
+        # La cantidad, fuera del nombre, ANTES de buscar nada (ver `_sacar_cantidad`). Va
+        # aqui y no en `_normalize_food_items` porque la herramienta del agente llama
+        # derecha a `add_foods`: puesto alli, esta ruta -- la que usan los clientes -- se
+        # quedaba sin el arreglo y «500 ml de leche entera» seguia metiendo leche de
+        # almendras.
+        items = [dict(it, **dict(zip(("nombre", "cantidad", "unidad"),
+                                     self._sacar_cantidad(it.get("nombre"), it.get("cantidad"),
+                                                          it.get("unidad")))))
+                 for it in (items or [])]
+
         def tiene_cantidad(it):
             return it.get("cantidad") is not None and it.get("cantidad") > 0
 
@@ -3017,10 +3095,63 @@ class NutritionChatbot:
             busq = (f.get("busqueda") or "").strip() if isinstance(f.get("busqueda"), str) else ""
             if busq.lower() == nombre.lower():
                 busq = ""
+            # LA CANTIDAD, FUERA DEL NOMBRE. Al modelo se le pide que la mande aparte, y a
+            # veces no lo hace: manda nombre="500 ml de leche entera". Ese texto entero se
+            # va a la busqueda semantica, y los numeros y las unidades arrastran el vector:
+            # medido, «leche entera» encuentra Leche entera la primera, y «500 ml de leche
+            # entera» devuelve **leche de almendras** la primera. El cliente pedia leche y
+            # se le apuntaba otra cosa (caso J10 del banco).
+            #
+            # Se quita en codigo y no pidiendoselo mejor al prompt: es gramatica, no
+            # vocabulario, asi que no choca con la regla de no meter comida en el prompt.
+            nombre, cant, unidad = NutritionChatbot._sacar_cantidad(nombre, cant, unidad)
             items.append({"nombre": nombre, "cantidad": cant, "unidad": unidad,
                           "sumar": bool(f.get("sumar")),
                           "busqueda": busq or None})
         return items
+
+    # «300 g de arroz», «2 huevos», «500 ml de leche»: numero, unidad opcional y «de».
+    _CANTIDAD_DELANTE = re.compile(
+        r"^\s*(\d+(?:[.,]\d+)?)\s*"
+        r"(kg|kgs|kilos?|gramos?|grs?|g|mililitros?|mls?|ml|litros?|l|unidades?|uds?|ud)?"
+        r"\s*(?:de\s+)?(?=\S)", re.IGNORECASE)
+
+    @staticmethod
+    def _sacar_cantidad(nombre: str, cant, unidad):
+        """Separa la cantidad que venga pegada al nombre. Devuelve (nombre, cantidad, unidad).
+
+        Solo actua si el nombre EMPIEZA por un numero y queda texto detras: «2 huevos» si,
+        «leche entera 3,8% MG» no. Y no pisa la cantidad que ya venga puesta aparte.
+
+        Los mililitros cuentan como gramos. Para la leche eso son 515 g de verdad frente a
+        500 (un 3%, 0,45 g de proteina en medio litro), y para todo lo demas que se bebe la
+        densidad es practicamente 1. Pendiente de que Jesus diga si le vale.
+        """
+        m = NutritionChatbot._CANTIDAD_DELANTE.match(nombre or "")
+        if not m:
+            return nombre, cant, unidad
+        resto = nombre[m.end():].strip()
+        # Lo que queda tiene que ser un alimento. Con «500 g» a secas, la unidad se queda
+        # sin consumir y el alimento pasaria a llamarse «g».
+        if not resto or resto.lower() in _SOLO_UNIDAD:
+            return nombre, cant, unidad
+        if cant is not None:
+            return resto, cant, unidad          # la cantidad buena ya venia aparte
+        try:
+            n = float(m.group(1).replace(",", "."))
+        except ValueError:
+            return nombre, cant, unidad
+        u = (m.group(2) or "").lower()
+        if u.startswith(("kg", "kilo")):
+            return resto, n * 1000, "g"
+        if u.startswith(("litro", "l")):
+            return resto, n * 1000, "g"
+        if u.startswith(("g", "gr", "gramo", "ml", "mililitro")):
+            return resto, n, "g"
+        if u.startswith(("ud", "unidad")):
+            return resto, n, "ud"
+        # Sin unidad («2 huevos») es un conteo de piezas: que lo resuelva el motor.
+        return resto, n, "ud"
 
     # Matices que cambian lo que te vas a comer y que, si no los has pedido tú, hay que
     # decirlos: pides "cerveza" y te ponen la 0%, o "leche" y te ponen la desnatada.

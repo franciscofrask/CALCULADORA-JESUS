@@ -36,16 +36,10 @@ def _num(x) -> Optional[float]:
 
 
 def _sanea_peso(w) -> Optional[float]:
-    """Mismo criterio que las rutas: arregla el error de coma (819 -> 81.9)."""
-    try:
-        w = float(w)
-    except (TypeError, ValueError):
-        return None
-    while w > 1000:
-        w /= 1000.0
-    if 300 < w <= 1000:
-        w /= 10.0
-    return round(w, 1) if 25 < w < 300 else None
+    """Mismo criterio que las rutas: arregla el error de coma (819 -> 81.9).
+    La regla vive en `core.series_cliente`, con el rango del peso."""
+    from core.series_cliente import sanea_peso
+    return sanea_peso(w)
 
 
 def _dias(f0: str, f1: str) -> Optional[int]:

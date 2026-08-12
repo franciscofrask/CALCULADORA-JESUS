@@ -41,6 +41,15 @@ MARGEN_BORRADOR = 12.0
 
 _ROL_A_MACRO = {"proteina": "P", "hidrato": "H", "grasa": "G"}
 _MACRO_LBL = {"P": "proteína", "H": "hidratos", "G": "grasa"}
+# Con artículo, para la frase de qué cuenta: «te cuenta la grasa; la proteína no».
+_MACRO_ART = {"P": "la proteína", "H": "los hidratos", "G": "la grasa"}
+
+
+def _y(palabras: list) -> str:
+    """«la proteína y la grasa», no «proteína, grasa»."""
+    if len(palabras) <= 1:
+        return "".join(palabras)
+    return ", ".join(palabras[:-1]) + " y " + palabras[-1]
 
 # El bote, detrás del plato a igualdad de distancia (punto 78 del documento del 07-08).
 # NO son categorías prohibidas: el cliente las busca y las mete cuando quiere, y en el intra
@@ -195,7 +204,45 @@ class AgentTools:
             "medida": (f"unidades de {int(config['peso_unidad'])} g"
                        if config.get("por_unidad") and config.get("peso_unidad")
                        else "gramos (NO tiene unidades)"),
+            "que_cuenta": self._frase_que_cuenta(food),
         }
+
+    def _anotar_ofrecidos(self, items: List[dict]) -> None:
+        """Apunta que estos alimentos ya se le han enseñado en esta comida.
+
+        Misma memoria que el botón de sugerir (`seen_sugg`), para que las dos vías cuenten
+        lo mismo. Se limpia sola al vaciar la comida, que es donde ya se limpiaba.
+        """
+        key = self.bot.current_meal_key()
+        vistos = self.bot.state.setdefault("seen_sugg", {}).setdefault(key, [])
+        for it in items:
+            if it.get("id") not in vistos:
+                vistos.append(it["id"])
+
+    def _frase_que_cuenta(self, food: dict) -> str:
+        """El filtro del tercio y las excepciones por categoría, ya resueltos y en palabras.
+
+        Jesús, 12-08-2026: «Si le mandas "almendras: te cuenta la grasa, la proteína no", no
+        tiene que razonar la regla y no la puede fallar. Si le mandas la regla y los macros
+        crudos, la fallará algunas veces. Y basta una para que el cliente deje de fiarse».
+
+        La regla ya era determinista (`_que_cuenta`, el mismo motor que la calculadora), pero
+        solo se alcanzaba llamando a la herramienta `explicar`, o sea cuando al modelo se le
+        ocurría preguntarla. Aquí pasa a venir puesta en CADA alimento que el asistente ve --
+        búsquedas, borradores de menú y lo que ya hay en la comida --, porque `_item_de` es
+        la única puerta por la que entran todos.
+        """
+        try:
+            cuenta, _brutos, _cat, _base = self.bot._que_cuenta(food)
+        except Exception:
+            return ""   # un alimento raro no puede tumbar una búsqueda
+        si = [_MACRO_ART[m] for m in ("P", "H", "G") if cuenta[m]]
+        no = [_MACRO_ART[m] for m in ("P", "H", "G") if not cuenta[m]]
+        if not si:
+            return "no cuenta ningún macro (es libre)"
+        if not no:
+            return "cuenta los tres macros"
+        return f"te cuenta {_y(si)}; {_y(no)} no"
 
     # ============================================================ 1. buscar_alimentos
     async def buscar_alimentos(self, texto: str = "", para_macro: str = None,
@@ -278,7 +325,9 @@ class AgentTools:
         marca_norm = self.bot._norm_text(marca) if marca else None
         etiquetas = {e.upper() for e in (etiquetas or [])}
         vetados_momento = vetados_solos = 0
-        items, no_caben = [], []
+        items, no_caben, repetidos = [], [], []
+        ya_ofrecidos = set(self.bot.state.setdefault("seen_sugg", {})
+                           .get(self.bot.current_meal_key()) or [])
         # Lo que ya hay en el plato: decide si un acompañamiento tiene a quién acompañar.
         # `acompanando_a` lo pasa quien está MONTANDO un menú, donde el plato todavía está
         # vacío pero las piezas ya están elegidas; sin eso, un menú compuesto de cero nunca
@@ -348,7 +397,19 @@ class AgentTools:
                 pass
             elif para_macro in ("P", "H", "G") and macros.get(para_macro, 0) <= 0:
                 continue
-            items.append(self._item_de(food, cantidad_g, macros))
+            # LO QUE YA SE LE ENSEÑÓ, AL FINAL DE LA COLA.
+            #
+            # Caso 7 de los diez de Jesús: «alguien que dice "esto no me gusta" tres veces
+            # seguidas». Sin esto, el ranking es el mismo cada vez y a la tercera le salen
+            # los mismos tres alimentos; medido, fallaba las tres pasadas del banco. La
+            # memoria es la de siempre (`seen_sugg`, por comida), la misma que ya usaba el
+            # botón de sugerir: así el chat y el botón no se pisan.
+            #
+            # Se aparta, no se descarta: si al filtrar no queda nada nuevo, mejor repetir
+            # que decirle que no hay. Y lo que ha pedido POR SU NOMBRE nunca se aparta:
+            # quien escribe «lechuga» quiere lechuga, se la hayan ofrecido antes o no.
+            (repetidos if (aid in ya_ofrecidos and aid not in pedidos_por_nombre)
+             else items).append(self._item_de(food, cantidad_g, macros))
             # Con texto se corta ya: el orden lo manda lo que pidió el cliente y los
             # primeros son los suyos. Sin texto NO se corta, porque el orden bueno es por
             # distancia y esa solo se sabe con el alimento dimensionado: quedarse con los
@@ -356,8 +417,15 @@ class AgentTools:
             if texto and len(items) >= limite:
                 break
 
-        if not texto and items:
-            items = self._ordenar_por_distancia(items, restante)[:limite]
+        if not texto:
+            if items:
+                items = self._ordenar_por_distancia(items, restante)
+            if repetidos:
+                repetidos = self._ordenar_por_distancia(repetidos, restante)
+        if len(items) < limite:
+            items = items + repetidos[:limite - len(items)]
+        items = items[:limite]
+        self._anotar_ofrecidos(items)
 
         out = {"items": items,
                "comida": describe_comida(self.bot.current_meal_key(),
@@ -594,12 +662,22 @@ class AgentTools:
                 avoid = set()
                 for cid in self.bot.state.get("avoided_categories", []):
                     avoid.update(AVOIDABLE_PREFIXES.get(cid, []))
+                # Las recetas ya enseñadas en esta conversación van detrás, dentro de su
+                # mismo escalón de error: pedir otra opción tiene que traer otra cosa.
+                # `menus_vistos` de la sesión ya guarda la firma de lo aplicado; aquí manda
+                # la lista de plantillas propuestas, que es lo que se compara.
+                ya = set(self.bot.state.get("recetas_ofrecidas") or [])
                 recetas = await generar_opciones_menu(
                     self.db, momento, restante,
                     avoided_prefixes=avoid,
                     avoided_keywords=self.bot.state.get("avoided_keywords", []),
                     max_opciones=n,
-                    semilla=self._semilla_variedad())
+                    semilla=self._semilla_variedad(),
+                    vistos=ya)
+                ofrecidas = self.bot.state.setdefault("recetas_ofrecidas", [])
+                for r in recetas:
+                    if r.get("plantilla_id") and r["plantilla_id"] not in ofrecidas:
+                        ofrecidas.append(r["plantilla_id"])
             except Exception:
                 recetas = []
             for r in recetas:
@@ -1101,12 +1179,43 @@ class AgentTools:
         return {"ok": True, "borrador": b}
 
     # ============================================================ 5. aplicar_borrador
+    def _protegida(self, forzar: bool = False) -> Optional[dict]:
+        """El error a devolver si la comida actual la trajo montada el cliente. None si no.
+
+        Jesús, 12-08-2026: «Si alguien lo abre a media tarde, le monta el día otra vez y le
+        pisa lo que ya tenía». Medido contra la app con dos comidas puestas y «móntame el
+        día»: el agente rehacía una de ellas 1 de cada 4 veces (`navegar` a la Comida 1 y
+        `editar_comida` encima). Que la comida estuviera montada y guardada no lo paraba,
+        porque nada se lo impedía: solo el criterio del modelo, que unas veces acierta y
+        otras no.
+
+        Esto no prohíbe cambiar una comida hecha -- el cliente pide eso a menudo --, obliga a
+        que sea a petición suya: con `forzar=True`, que el agente solo pone cuando el cliente
+        ha nombrado esa comida. Es la misma puerta que ya tenía `aplicar_borrador`.
+        """
+        if forzar:
+            return None
+        key = self.bot.current_meal_key()
+        if key not in (self.bot.state.get("comidas_traidas") or []):
+            return None
+        return {
+            "ok": False,
+            "error": f"{self._nombre_comida_actual()} ya la tenía montada el cliente antes de "
+                     f"abrir el chat. No la toques por tu cuenta: enséñale lo que hay y "
+                     f"pregúntale si quiere cambiarla. Si te lo pide, vuelve con forzar=true. "
+                     f"Para montar lo que le falta, ve a una comida vacía.",
+            "comida_ya_montada": self.ver_estado("comida"),
+        }
+
     async def aplicar_borrador(self, borrador_id: str, forzar: bool = False) -> dict:
         """Vuelca un borrador a la comida actual. REVISA antes: con problemas no aplica
         (salvo forzar=True explícito tras contárselo al cliente)."""
         b = (self.bot.state.get("borradores") or {}).get(borrador_id)
         if not b:
             return {"ok": False, "error": f"no hay borrador {borrador_id}"}
+        protegida = self._protegida(forzar)
+        if protegida:
+            return protegida
         revision = await self.revisar_borrador(borrador_id)
         if not revision["ok"] and not forzar:
             return {"ok": False, "bloqueado_por": revision["problemas"],
@@ -1120,11 +1229,16 @@ class AgentTools:
         return {"ok": True, "comida": self.ver_estado("comida")}
 
     # ============================================================ 6. editar_comida
-    async def editar_comida(self, operaciones: List[dict]) -> dict:
+    async def editar_comida(self, operaciones: List[dict], forzar: bool = False) -> dict:
         """Todas las mutaciones de la comida actual en una llamada, en orden.
         Ops: {op:'añadir', texto|alimento_id, cantidad?, unidad?}
              {op:'quitar', nombre|alimento_id}
-             {op:'ajustar', nombre, a?|mas?|por?, unidad?}  (fijar / sumar / multiplicar)"""
+             {op:'ajustar', nombre, a?|mas?|por?, unidad?}  (fijar / sumar / multiplicar)
+        `forzar` solo para cambiar una comida que el cliente ya traía montada, y solo si te
+        lo ha pedido él."""
+        protegida = self._protegida(forzar)
+        if protegida:
+            return protegida
         hechos, fallos = [], []
         for op in operaciones or []:
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")

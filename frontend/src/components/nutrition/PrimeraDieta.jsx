@@ -24,9 +24,16 @@ const PrimeraDieta = ({ momentoEntreno, numComidas, onIrAConfig, onListo }) => {
     const comoEntrena = COMO_ENTRENA[momentoEntreno] ?? COMO_ENTRENA[1];
 
     return (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" data-testid="primera-dieta">
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-            <div className="relative bg-card rounded-2xl shadow-xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-6">
+        // EN EL ORDENADOR NO TAPA LA PANTALLA (Jesus, 12-08-2026: «que la bienvenida no salga
+        // tapando la pantalla»). En el movil sigue siendo lo que era -- alli no cabe otra cosa
+        // y lo que hay detras no se lee igual --, pero a partir de xl se aparta a un lado, sin
+        // fondo negro: se lee lo que le cuenta Y se ve la dieta de la que le esta hablando.
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4
+                        xl:left-auto xl:w-[27rem] xl:justify-end xl:p-6"
+            data-testid="primera-dieta">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm xl:hidden" />
+            <div className="relative bg-card rounded-2xl shadow-xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-6
+                            xl:border xl:border-border">
                 <p className="caption text-brand mb-1">Antes de tu primera dieta</p>
                 <h2 className="font-heading text-2xl font-bold uppercase text-foreground leading-tight mb-4">
                     Así está repartido tu día

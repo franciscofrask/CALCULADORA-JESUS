@@ -46,6 +46,23 @@ async def elegir_entrada(db, profile: dict, fecha: Optional[str]) -> Optional[di
             if aplicables else min(entries, key=lambda e: (eff(e), e.get("created_at", ""))))
 
 
+async def ultima_vigente(db, client_id: str, fecha: Optional[str] = None) -> Optional[dict]:
+    """El ajuste de macros que MANDA hoy (o en `fecha`). Para «el último ajuste» de alguien.
+
+    Existe porque media app lo pedía con `find_one(sort=[("created_at", -1)])`, y eso está
+    mal desde que se importó Calma: en las 3.446 filas migradas `created_at` es el día en que
+    se importaron -- todas el 05-08-2026, muchas en el mismo milisegundo --, así que «la
+    última» sale a suertes entre toda la historia del cliente. Uno con 176 ajustes entre 2022
+    y 2029 podía recibir como «sus macros nuevos» los de hace cuatro años.
+
+    La fecha buena es `effective_date`, que sí viajó bien (3.495 de 3.504 filas la tienen).
+    Y se corta en hoy: un ajuste programado para dentro de tres semanas todavía no se le ha
+    hecho.
+    """
+    from datetime import date as _date
+    return await elegir_entrada(db, {"id": client_id}, fecha or _date.today().isoformat())
+
+
 async def resolver(db, profile: dict, fecha: Optional[str]) -> Tuple[dict, dict, dict]:
     """Los macros (entreno, descanso, peri) vigentes para esa fecha.
 

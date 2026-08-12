@@ -28,6 +28,13 @@ from agent_tools import AgentTools
 logger = logging.getLogger("agente")
 
 MAX_LLAMADAS = 8   # componer + revisar + arreglar + responder necesita aire (medido 06-08)
+
+# Cuanto de un resultado de herramienta ve el modelo. El corte es a lo bruto, a mitad de
+# JSON, asi que pasarse no es "ver menos": es ver un objeto roto por el final.
+# La cuenta (12-08): una busqueda devuelve como mucho 15 alimentos y cada uno ocupa unos
+# 325 caracteres desde que lleva la frase de que cuenta -> 4.900. Estaba en 4.000, y con 15
+# resultados ya rozaba el tope ANTES de esa frase (3.851 medidos).
+TOPE_RESULTADO = 6000
 MODELO_AGENTE = os.environ.get("OPENAI_AGENT_MODEL", "gpt-5.1")
 
 # ------------------------------------------------------------------ esquemas
@@ -116,7 +123,9 @@ _ESQUEMAS = [
                      "numero seguido del nombre del alimento y SIN unidad de peso, del tipo "
                      "'ponme 3 de X' o 'dos X' --, pasalo con unidad='ud' y deja que la "
                      "herramienta lo resuelva. NO conviertas tu a gramos por tu cuenta ni "
-                     "supongas lo que pesa una pieza."),
+                     "supongas lo que pesa una pieza. "
+                     "Las comidas que el cliente ya traia montadas estan protegidas: para "
+                     "cambiar una, forzar=true, y solo si te lo ha pedido el."),
      "parameters": {"type": "object", "properties": {
          "operaciones": {"type": "array", "items": {"type": "object", "properties": {
              "op": {"type": "string", "enum": ["añadir", "quitar", "ajustar"]},
@@ -124,7 +133,8 @@ _ESQUEMAS = [
              "nombre": {"type": "string"}, "cantidad": {"type": "number"},
              "unidad": {"type": "string", "enum": ["g", "ud"]},
              "a": {"type": "number"}, "mas": {"type": "number"}, "por": {"type": "number"},
-             "sumar": {"type": "boolean"}}}}},
+             "sumar": {"type": "boolean"}}}},
+         "forzar": {"type": "boolean"}},
          "required": ["operaciones"]}},
     {"name": "ver_estado",
      "description": "Qué hay y qué falta, en la comida actual ('comida') o en el día entero ('dia'). Para responder cuánto falta, cómo va, qué comidas hay.",
@@ -626,7 +636,7 @@ class AgentLoop:
                 if nombre == "guardar_comida" and resultado.get("ok"):
                     comida_guardada = True
                 mensajes.append({"role": "tool", "tool_call_id": tc.id,
-                                 "content": json.dumps(resultado, ensure_ascii=False)[:4000]})
+                                 "content": json.dumps(resultado, ensure_ascii=False)[:TOPE_RESULTADO]})
 
             # LA VERDAD, PEGADA AL MOMENTO DE ESCRIBIR (punto 10.5). Las reglas del prompt
             # quedan doscientas líneas por encima y con el turno lleno de resultados de

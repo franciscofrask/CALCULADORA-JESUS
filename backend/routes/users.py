@@ -65,9 +65,9 @@ async def get_client_profile(user = Depends(get_current_user)):
     # que le falta terminar de ajustarlos, y en produccion se lo estaba diciendo a 169 de los
     # 174 activos -- gente que lleva meses con Jesus y a la que el mismo les pone los numeros.
     from core.macros_de_quien import de_una_persona
-    ultimo = await db.macro_history.find_one(
-        {"client_id": profile.get("id")}, {"_id": 0, "origen": 1, "changed_by": 1},
-        sort=[("created_at", -1)])
+    # Por `effective_date`, no por `created_at`: ver `macros_por_fecha.ultima_vigente`.
+    from macros_por_fecha import ultima_vigente
+    ultimo = await ultima_vigente(db, profile.get("id"))
     datos["macros_puestos_por_alguien"] = de_una_persona(ultimo)
     # Y si PUEDE ajustarselos el (punto 4.10). Lo decide el servidor y viaja al front para que
     # la pantalla no le enseñe un formulario y un boton de Guardar que van a devolver un 403:
@@ -1197,18 +1197,23 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
     # le suman los que viajaron con un ajuste y no llegaron a la serie -- los importados de
     # Calma son de 2022 en adelante --, porque si no la curva empieza el dia que estrenamos la
     # serie y se pierde justo el recorrido que le da sentido.
+    # SANEADO, como el panel del entrenador (`_sanea_peso`). El de aqui era el unico camino
+    # que pintaba el peso crudo, y en produccion los ajustes viejos traen 0,0 kg, un 0,433 (un
+    # porcentaje de grasa metido donde va el peso) y errores de coma de tres cifras. El coach
+    # veia la curva limpia y el cliente, en «Mis macros», veia la sucia. Jesus, 12-08.
+    from core.series_cliente import sanea_peso
     hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     pesos: Dict[str, float] = {}
     for p in (profile.get("pesos") or []):
-        fecha, valor = str(p.get("fecha") or "")[:10], p.get("valor")
+        fecha, valor = str(p.get("fecha") or "")[:10], sanea_peso(p.get("valor"))
         if fecha and fecha <= hoy and valor is not None:
-            pesos[fecha] = float(valor)
+            pesos[fecha] = valor
     for e in entradas:
-        if e["peso"] is not None and e["fecha"] and e["fecha"] not in pesos:
-            try:
-                pesos[e["fecha"]] = float(e["peso"])
-            except (TypeError, ValueError):
-                pass
+        limpio = sanea_peso(e["peso"])
+        # Tambien en la FILA, no solo en la curva: la tabla enseña el peso de cada ajuste.
+        e["peso"] = limpio
+        if limpio is not None and e["fecha"] and e["fecha"] not in pesos:
+            pesos[e["fecha"]] = limpio
 
     # «HOY · ENTRENO»: si tiene el dia montado en su calculadora, ya dijo si entrena o descansa,
     # y entonces la tarjeta puede decirle cual de los tres bloques le toca. Si no lo ha montado

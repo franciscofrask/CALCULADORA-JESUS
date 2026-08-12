@@ -6,7 +6,7 @@ Rutas de facturación con Stripe (suscripciones, test mode).
 """
 import os
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Body
 from typing import Any, Dict, List
@@ -148,6 +148,54 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     return CheckoutSessionResponse(checkout_url=session["url"], session_id=session["id"], profile_id=profile["id"])
 
 
+async def _dias_con_ajuste(client_id: str, desde) -> int:
+    """Cuantas veces le han tocado los macros EN ESTE CICLO. Por dias y hasta hoy.
+
+    Jesus, 12-08-2026: «En la renovacion sigue poniendo AJUSTES 176». Contaba filas de
+    `macro_history` de toda la vida del cliente, en una tarjeta que resume el ciclo.
+
+    LA FECHA BUENA ES `effective_date`, NO `created_at`. En las 3.446 filas que vinieron de
+    Calma, `created_at` es el dia en que se importaron (todas el 05-08-2026, muchas en el
+    mismo milisegundo) y `effective_date` es el dia en que el ajuste entro en vigor. En la
+    cuenta de Jesus: 176 filas, 176 fechas de verdad repartidas entre 2022 y 2029, y por
+    `created_at` una sola. O sea, los dos numeros que se pueden sacar de ahi -- 176 y 1 --
+    son igual de falsos, cada uno por su lado.
+
+    Contado como toca (dentro de su ciclo y hasta hoy): 11. El resto de clientes, entre 0 y 2,
+    que es lo que cabe en doce semanas.
+
+    Hasta hoy, ademas, porque hay ajustes programados con fecha por delante -- las de esa
+    cuenta llegan a 2029 -- y un ajuste que aun no ha empezado no es algo que ya se le haya
+    hecho. Es el mismo criterio que `core.sin_futuro.hasta_hoy` en el resto de la app.
+    """
+    filas = [f async for f in db.macro_history.find(
+        {"client_id": client_id}, {"_id": 0, "effective_date": 1, "created_at": 1})]
+    # Las 9 filas hechas en la app no traen `effective_date`; para esas, el dia en que se
+    # guardaron ES el dia del ajuste.
+    marcas = [f.get("effective_date") or f.get("created_at") for f in filas]
+    return dias_distintos(marcas, desde, date.today())
+
+
+def dias_distintos(marcas, desde=None, hasta=None) -> int:
+    """Cuantos DIAS distintos hay en una lista de marcas de tiempo, entre `desde` y `hasta`.
+
+    Una marca que no sea una fecha se descarta en vez de contarse: comprobar solo el largo
+    dejaba pasar cualquier texto de diez letras.
+    """
+    inicio = desde.isoformat() if desde else None
+    fin = hasta.isoformat() if hasta else None
+    dias = set()
+    for m in marcas:
+        d = str(m or "")[:10]
+        try:
+            date.fromisoformat(d)
+        except ValueError:
+            continue
+        if (inicio is None or d >= inicio) and (fin is None or d <= fin):
+            dias.add(d)
+    return len(dias)
+
+
 @router.get("/renovacion")
 async def get_renovacion(user=Depends(get_current_user)):
     """
@@ -176,7 +224,7 @@ async def get_renovacion(user=Depends(get_current_user)):
         hasta_hoy({"client_id": perfil["id"]}), {"_id": 0}, sort=[("created_at", -1)])
 
     desde = perfil.get("arranque_lunes") or perfil.get("created_at")
-    dias_totales, dias_dieta = 84, 0
+    dias_totales, dias_dieta, d0 = 84, 0, None
     if desde:
         try:
             d0 = datetime.fromisoformat(str(desde).replace("Z", "+00:00")).date()
@@ -185,9 +233,9 @@ async def get_renovacion(user=Depends(get_current_user)):
             dias_dieta = await db.diets.count_documents({
                 "user_id": user["id"], "fecha": {"$gte": d0.isoformat(), "$lte": hoy.isoformat()}})
         except (ValueError, TypeError):
-            pass
+            d0 = None
 
-    ajustes = await db.macro_history.count_documents({"client_id": perfil["id"]})
+    ajustes = await _dias_con_ajuste(perfil["id"], d0)
     catalogo = merged_catalog(await _overrides_by_code())
 
     return montar_renovacion(

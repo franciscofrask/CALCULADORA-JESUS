@@ -555,6 +555,16 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                         <div className="flex items-start justify-between gap-2 mb-1">
                                             <h3 className="font-bold text-foreground text-lg lg:text-sm leading-snug">{receta.nombre}</h3>
                                             <div className="flex items-center gap-1 flex-shrink-0">
+                                                {/* Sin proteína no cubre una comida entera (el «Turrón Crunch
+                                                    de Cacao» son frutos secos y chocolate). Se dice AQUÍ, antes
+                                                    de elegirla: si no, se la lleva el aviso de «te faltan 30 g
+                                                    de proteína» sin saber por qué. Sigue estando y se puede
+                                                    elegir; lo que no hace es proponerse sola. */}
+                                                {receta.completa === false && (
+                                                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-brand-orange/15 text-brand-orange px-2 py-0.5 rounded-full">
+                                                        complemento
+                                                    </span>
+                                                )}
                                                 {(receta.momentos || []).map(m => (
                                                     <span key={m} className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
                                                 ))}

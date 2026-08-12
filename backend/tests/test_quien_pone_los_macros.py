@@ -31,22 +31,47 @@ def correr(coro):
 
 
 class FakeDB:
-    """Lo justo para `puede_ajustarlos`: un `macro_history.find_one` que devuelve el apunte."""
+    """Lo justo para `puede_ajustarlos`: el historial de macros del cliente.
 
-    def __init__(self, ultimo_apunte=None):
-        self.macro_history = self._Col(ultimo_apunte)
+    Es una LISTA y no un solo apunte desde el 12-08-2026: quién puso los macros lo decide el
+    ajuste VIGENTE, y ese se elige por `effective_date` (`macros_por_fecha.ultima_vigente`).
+    Antes se pedía con `find_one(sort=[("created_at", -1)])`, que en los 3.446 apuntes que
+    vinieron de Calma empatan todos --  se importaron el mismo día -- y devolvía uno al azar
+    de toda la historia del cliente.
+    """
+
+    def __init__(self, apuntes=None):
+        if apuntes is None:
+            apuntes = []
+        elif isinstance(apuntes, dict):
+            apuntes = [apuntes]
+        self.macro_history = self._Col(apuntes)
 
     class _Col:
-        def __init__(self, doc):
-            self._doc = doc
+        def __init__(self, docs):
+            self._docs = docs
 
         async def find_one(self, *a, **kw):
-            return self._doc
+            return self._docs[0] if self._docs else None
+
+        def find(self, *a, **kw):
+            return self._Cursor(self._docs)
+
+        class _Cursor:
+            def __init__(self, docs):
+                self._docs = docs
+
+            async def to_list(self, _n=None):
+                return list(self._docs)
 
 
-PUSO_EL_COACH = {"origen": "coach", "changed_by": "Jesus Gallego"}
-PUSO_SU_CALCULADORA = {"origen": "coach_calculadora", "changed_by": "Jesus Gallego"}
-LO_CALCULO_EL_ALTA = {"origen": "quiz_alta", "changed_by": None}
+HOY = "2026-08-12"
+AYER = "2026-08-11"
+
+PUSO_EL_COACH = {"origen": "coach", "changed_by": "Jesus Gallego", "effective_date": HOY}
+PUSO_SU_CALCULADORA = {"origen": "coach_calculadora", "changed_by": "Jesus Gallego",
+                       "effective_date": HOY}
+LO_CALCULO_EL_ALTA = {"origen": "quiz_alta", "changed_by": None, "effective_date": HOY}
 
 
 def perfil(plan="silver", **kw):
@@ -166,3 +191,44 @@ class TestLosCuatroCaminosLoMiran:
         texto = self._fuente("routes/users.py")
         i = texto.index('@router.put("/macros"')
         assert "puede_ajustarlos" in texto[i:i + 4000]
+
+
+# ---------------------------------------------------------------------------
+# EL AJUSTE QUE MANDA ES EL VIGENTE, NO EL DE LA FILA MAS NUEVA (12-08-2026).
+#
+# En los 3.446 apuntes que vinieron de Calma, `created_at` es el dia en que se importaron
+# -- todas el 05-08-2026, muchas en el mismo milisegundo -- y `effective_date` es el dia en
+# que el ajuste entro en vigor. Pedir «el ultimo» por `created_at` devolvia uno al azar de
+# toda la historia del cliente: medido, a 140 de 185 les salia mal.
+#
+# Aqui se nota en quien decide si el cliente puede tocarse los macros.
+# ---------------------------------------------------------------------------
+IMPORTADO = "2026-08-05T01:10:39.707312+00:00"
+
+
+def _apunte(origen, effective_date, changed_by="Jesus Gallego"):
+    return {"origen": origen, "changed_by": changed_by,
+            "effective_date": effective_date, "created_at": IMPORTADO}
+
+
+class TestGanaElVigente:
+    def test_manda_el_de_vigencia_mas_reciente(self):
+        """Su alta es de 2022 y su ultimo ajuste del coach, de julio: manda el del coach."""
+        historial = [_apunte("quiz_alta", "2022-03-06", changed_by=None),
+                     _apunte("coach", "2026-07-31")]
+        puede, _motivo = correr(puede_ajustarlos(FakeDB(historial), perfil()))
+        assert puede is False
+
+    def test_y_al_reves_tambien(self):
+        """Si lo ultimo vigente es el calculo del alta, puede tocarselos."""
+        historial = [_apunte("coach", "2022-03-06"),
+                     _apunte("quiz_alta", "2026-07-31", changed_by=None)]
+        puede, _motivo = correr(puede_ajustarlos(FakeDB(historial), perfil()))
+        assert puede is True
+
+    def test_un_ajuste_programado_todavia_no_manda(self):
+        """Hay ajustes con fecha por delante; los de una cuenta llegan a 2029."""
+        historial = [_apunte("quiz_alta", "2026-07-31", changed_by=None),
+                     _apunte("coach", "2029-01-08")]
+        puede, _motivo = correr(puede_ajustarlos(FakeDB(historial), perfil()))
+        assert puede is True

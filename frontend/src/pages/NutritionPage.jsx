@@ -2121,12 +2121,19 @@ const NutritionPage = () => {
 
                     {/* Todo seguido: el día entero abierto, como la dieta de Calma. Sin
                         seleccionar nada, se edita cualquier comida donde está. */}
+                    {/* EN PANTALLA ANCHA, EN DOS COLUMNAS (Jesus, 12-08-2026: «aprovechar el
+                        ancho para ver las cuatro comidas a la vez»). En una sola columna, un
+                        dia de cuatro comidas son dos pantallas y media de scroll en un monitor
+                        donde sobra la mitad del ancho. A partir de xl caben las cuatro sin
+                        moverse; por debajo se queda como estaba, que es donde tiene sentido. */}
                     {vistaComidas === 'continua' && (
-                        <div className="space-y-4" data-testid="meals-continua">
-                            {getMealOrder().map(mealKey => (
-                                <div key={mealKey}>{renderMealCard(mealKey, true, true)}</div>
-                            ))}
-                            <div className="sm:hidden">{renderActions('-mobile')}</div>
+                        <div data-testid="meals-continua">
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                                {getMealOrder().map(mealKey => (
+                                    <div key={mealKey} className="min-w-0">{renderMealCard(mealKey, true, true)}</div>
+                                ))}
+                            </div>
+                            <div className="sm:hidden mt-4">{renderActions('-mobile')}</div>
                         </div>
                     )}
                 </div>

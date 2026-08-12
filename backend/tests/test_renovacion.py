@@ -167,3 +167,61 @@ class TestLaPantallaEntera:
     def test_al_que_viene_de_un_plan_viejo_se_le_explica_por_que(self):
         r = self._montar(perfil(plan="gold", precio_alta=450.0))
         assert r["motivo_cambio"]
+
+
+# ---------------------------------------------------------------------------
+# «AJUSTES 176»
+#
+# Jesus, 12-08-2026: la tarjeta de la renovacion le decia que le habian ajustado los macros
+# 176 veces, en una tarjeta que resume DOCE SEMANAS.
+#
+# La fecha buena de un ajuste es `effective_date`, no `created_at`: en las 3.446 filas que
+# vinieron de Calma, `created_at` es el dia en que se importaron -- todas el 05-08-2026 --
+# y `effective_date` es el dia en que el ajuste entro en vigor. Sus 176 filas son 176 fechas
+# de verdad repartidas entre 2022 y 2029; por `created_at`, una sola. Los dos numeros que
+# salen de ahi, 176 y 1, son igual de falsos.
+#
+# Contado como toca -- dentro del ciclo y hasta hoy -- son 11.
+# ---------------------------------------------------------------------------
+from datetime import date  # noqa: E402
+
+from routes.billing import dias_distintos  # noqa: E402
+
+
+def test_las_reescrituras_del_mismo_dia_son_un_ajuste():
+    assert dias_distintos(["2026-07-04T10:00:00Z"] * 176) == 1
+
+
+def test_dias_distintos_cuentan_por_separado():
+    marcas = ["2026-07-04T10:00:00Z", "2026-07-04T18:30:00Z", "2026-08-01T09:00:00Z"]
+    assert dias_distintos(marcas) == 2
+
+
+def test_solo_cuenta_lo_del_ciclo():
+    """Lo de antes de arrancar el ciclo no es de este ciclo."""
+    marcas = ["2026-05-01T10:00:00Z", "2026-07-10T10:00:00Z", "2026-08-01T10:00:00Z"]
+    assert dias_distintos(marcas, desde=date(2026, 7, 4)) == 2
+
+
+def test_un_ajuste_que_aun_no_ha_empezado_no_se_ha_hecho():
+    """Hay ajustes programados con fecha por delante; los de una cuenta llegan a 2029."""
+    marcas = ["2026-07-10", "2026-08-01", "2029-01-08"]
+    assert dias_distintos(marcas, desde=date(2026, 7, 4), hasta=date(2026, 8, 12)) == 2
+
+
+def test_el_caso_de_jesus():
+    """176 filas, una sola fecha de importacion, 176 fechas de vigencia entre 2022 y 2029.
+    Dentro de su ciclo (04-07) y hasta hoy (12-08) quedan las de julio y agosto."""
+    reales = ([f"2022-{m:02d}-06" for m in range(1, 13)]      # historia vieja
+              + ["2026-07-10", "2026-07-24", "2026-08-07"]     # las de su ciclo
+              + ["2029-01-08"])                                # una programada
+    assert dias_distintos(reales) == 16
+    assert dias_distintos(reales, desde=date(2026, 7, 4), hasta=date(2026, 8, 12)) == 3
+
+
+def test_una_marca_ilegible_no_cuenta_ni_rompe():
+    assert dias_distintos([None, "", "vete a saber", "2026-07-10T10:00:00Z"]) == 1
+
+
+def test_sin_historial_son_cero():
+    assert dias_distintos([]) == 0

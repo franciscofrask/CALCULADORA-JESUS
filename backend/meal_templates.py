@@ -57,6 +57,7 @@ async def generar_opciones_menu(
     variar_proteinas: bool = True,
     incluir_lejanas: bool = False,
     semilla=None,
+    vistos: set = None,
 ) -> List[Dict]:
     """
     Genera hasta 3 opciones de menú (A, B, C) autoajustadas para un momento.
@@ -90,6 +91,27 @@ async def generar_opciones_menu(
     if not candidatas:
         # Si no hay en rango, usar todas del momento
         candidatas = base
+
+    # UN MENU SIN PROTEINA NO PUEDE CUBRIR UNA COMIDA (12-08-2026).
+    #
+    # El «Turrón Crunch de Cacao» -- almendras, avellanas, dos chocolates, aceite de coco y
+    # arroz inflado -- no lleva ni un ingrediente de proteína, y una merienda pide 25-35 g.
+    # Como el paso 4 descarta lo que acabe a más de 12 g del objetivo, no cuadraba con
+    # NINGÚN cliente: medido, 0 de 48 objetivos. Se colaba en el reparto por familia de
+    # proteína ocupando la familia «None» y no salía jamás.
+    #
+    # Aquí se aparta del sugeridor automático, no del recetario: en «Sugiéreme un menú» el
+    # cliente la sigue viendo y `menu-apply` le dice de cuánto se queda corta, que es lo que
+    # toca con un complemento.
+    #
+    # Solo la proteína, y a propósito: hay 34 plantillas sin ingrediente de grasa y esas SÍ
+    # cuadran, porque la grasa entra de rebote por las proteínas y los frutos secos. La regla
+    # se queda en lo que está medido.
+    if p_obj > 0:
+        completas = [p for p in candidatas
+                     if any(it.get("rol") == "proteina" for it in p.get("items") or [])]
+        if completas:
+            candidatas = completas
 
     # Filtro "con estos alimentos" (buscador coach): la plantilla debe contener
     # todos los alimento_id pedidos entre sus items.
@@ -169,13 +191,33 @@ async def generar_opciones_menu(
     # cliente ve lo mismo si recarga, y otro cliente ve otra cosa.
     # Sin semilla no se baraja: el orden queda como estaba. Quien quiera variedad la pide,
     # y así la calculadora y el buscador del coach siguen dando el mismo orden de siempre.
+    #
+    # Y ANTES DE REPETIR, EL QUE NO HA VISTO (12-08-2026). Las tres opciones llevan
+    # proteínas distintas, o sea un hueco por familia, y en comida hay 22 menús de pollo
+    # peleando por ese hueco: lo ganaba siempre el mismo.
+    #
+    # Dónde entra `vistos` en el orden lo decide `POLITICA_VARIEDAD`, ahí abajo, con los
+    # números medidos al lado. Lo que NO cambia con ninguna política: un menú que no cuadra
+    # jamás adelanta a uno que sí. Eso es lo que hace que la variedad no salga cara.
+    vistos = vistos or set()
+
+    def _clave(x):
+        opcion, err = x[0], x[2]
+        visto = 1 if opcion.get("plantilla_id") in vistos else 0
+        cuadra = not opcion.get("cuadrada", False)
+        escalon = int(err // ESCALON_ERROR)
+        if POLITICA_VARIEDAD == "escalon":
+            return (cuadra, escalon, visto)
+        if POLITICA_VARIEDAD == "cuadradas":
+            return (cuadra, visto, escalon)
+        return (cuadra, escalon)          # "ninguna": como antes de existir `vistos`
+
     if semilla is not None:
         rng = random.Random(semilla)
         rng.shuffle(ajustadas)
-        ajustadas.sort(key=lambda x: (not x[0].get("cuadrada", False),
-                                      int(x[2] // ESCALON_ERROR)))
+        ajustadas.sort(key=_clave)
     else:
-        ajustadas.sort(key=lambda x: (not x[0].get("cuadrada", False), x[2]))
+        ajustadas.sort(key=lambda x: _clave(x) + (x[2],))
 
     # Selección: por defecto hasta max_opciones con proteínas diferentes (variedad);
     # con variar_proteinas=False se devuelven todas las que encajan, en orden.
@@ -216,6 +258,29 @@ def _food_avoided(alimento: dict, avoided_prefixes: set, avoided_keywords: list)
 # de buenos, así que compiten en el mismo tramo y se decide barajando. Es el mismo criterio
 # que ya se usó para ordenar la biblioteca de menús (punto 71 del documento).
 ESCALON_ERROR = 5.0
+
+# CUANTO SE PUEDE APARTAR DEL MEJOR ENCAJE PARA DAR VARIEDAD.
+#
+#   "ninguna"   como antes de que existiera `vistos`.
+#   "escalon"   el no visto adelanta al visto SOLO dentro del mismo escalón de error.
+#   "cuadradas" el no visto adelanta al visto entre todos los que CUADRAN (±4 g en los tres
+#               macros, la definición de «cuadrado» de la propia app).
+#
+# Medido en producción el 12-08-2026 por el camino real (comida, 50P/70H/18G, 30 peticiones
+# de 3 opciones), y el dato que lo explica todo: **con esos macros solo 20 de los 56 menús
+# pueden cuadrar**. Los otros 36 no es que se oculten, es que no encajan con ese cliente.
+#
+#   politica      menús distintos   de los 20 posibles   error medio
+#   ninguna         17                    85 %             2,74 g
+#   escalon         17                    85 %             2,67 g
+#   cuadradas       20                   100 %             2,78 g
+#
+# "escalon" no cambia nada: dentro de un mismo escalón el barajado por semilla YA daba esa
+# variedad. Los tres que faltaban estaban en el escalón de al lado.
+#
+# "cuadradas" los enseña todos por 0,04 g de error medio, y sigue sin enseñar jamás un menú
+# que no cuadre por delante de uno que sí. Por eso es el que queda puesto.
+POLITICA_VARIEDAD = "cuadradas"
 
 MARGEN_MENU = 4.0  # ±4 g por macro para considerar el menú "cuadrado" (badge "Cuadrada")
 # Margen más laxo, SOLO para los menús preestablecidos (no toca la calculadora ni CALMA):

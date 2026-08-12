@@ -116,12 +116,16 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     # `origen` y `changed_by` van en la proyeccion para saber si sus macros los puso ALGUIEN
     # o salieron del calculo del alta. De eso depende que se le diga o no que son
     # provisionales (punto 4.1): si se los puso su coach, no lo son.
-    ultimos_macros = await db.macro_history.find_one(
-        {"client_id": client_id},
-        {"_id": 0, "created_at": 1, "origen": 1, "changed_by": 1},
-        sort=[("created_at", -1)])
+    # Por `effective_date`, no por `created_at`: ver `macros_por_fecha.ultima_vigente`. Aqui
+    # importaba el doble, porque de la fecha sale «lleva X dias sin ajustar»: con la fecha de
+    # importacion, los 185 clientes migrados salian ajustados el 05-08 y el aviso no podia
+    # saltar nunca.
+    from macros_por_fecha import ultima_vigente
+    ultimos_macros = await ultima_vigente(db, client_id)
 
-    dias_sin_ajustar = _dias_desde((ultimos_macros or {}).get("created_at"), ahora)
+    dias_sin_ajustar = _dias_desde(
+        (ultimos_macros or {}).get("effective_date") or (ultimos_macros or {}).get("created_at"),
+        ahora)
     dias_sin_dieta = None
     if ultima_dieta and ultima_dieta.get("fecha"):
         try:

@@ -88,6 +88,33 @@ async def chatbot_start(current_user: dict = Depends(get_current_user)):
         "message": "¡Hola! Soy tu asistente de nutrición. ¿Hoy es día de entrenamiento o descanso?"
     }
 
+
+async def _dieta_para_precargar(dieta: dict) -> tuple:
+    """Las comidas guardadas de un dia y el catalogo de sus alimentos, listos para el chat.
+
+    Sin la ficha de cada alimento no hay con que contar: lo guardado casi nunca trae
+    `macros_efectivos` (411 de 55.323 en produccion), asi que el asistente leia el dia entero
+    a cero. Y de paso pasan por aqui las cantidades de las dietas migradas, que guardan el
+    CONTEO de piezas en el campo de gramos ("1" por un huevo): leidas como gramos, un huevo
+    cuenta 0,1 de proteina. Es la misma normalizacion que hace Nutricion al abrir el dia
+    (`routes/diets.py`, punto 4.5 del 09-08).
+    """
+    comidas = (dieta or {}).get("comidas") or {}
+    ids = {
+        a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
+        for comida in comidas.values()
+        for a in ((comida or {}).get("alimentos") or [])
+    }
+    ids.discard(None)
+    if not ids:
+        return comidas, {}
+
+    catalogo = {f["id"]: f async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0})}
+    from routes.diets import _normalizar_con_catalogo
+    _normalizar_con_catalogo({"comidas": comidas}, catalogo)
+    return comidas, catalogo
+
+
 @router.post("/configure")
 async def chatbot_configure(
     config: ChatConfigRequest,
@@ -131,7 +158,7 @@ async def chatbot_configure(
     fecha_dieta = chatbot.state.get("fecha_objetivo") or datetime.now().strftime("%Y-%m-%d")
     user_id = current_user.get("id") or current_user.get("user_id")
     dieta = await db.diets.find_one({"user_id": user_id, "fecha": fecha_dieta}, {"_id": 0, "comidas": 1})
-    comidas_traidas = chatbot.precargar_desde_dieta((dieta or {}).get("comidas") or {})
+    comidas_traidas = chatbot.precargar_desde_dieta(*(await _dieta_para_precargar(dieta)))
 
     key = chatbot.current_meal_key()
     label = chatbot.meal_label(key)

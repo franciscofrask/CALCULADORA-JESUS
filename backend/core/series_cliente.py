@@ -46,6 +46,29 @@ def _numero(valor: Any, minimo: float, maximo: float) -> Optional[float]:
     return v if minimo <= v <= maximo else None
 
 
+def sanea_peso(w: Any) -> Optional[float]:
+    """Un peso que se pueda enseñar, o None. Arregla el error de coma (819 -> 81,9).
+
+    Lo de arriba vale para lo que ESCRIBE este modulo, pero el peso tambien se lee de sitios
+    viejos que nunca pasaron por aqui: `macro_history` y lo importado de Calma. Ahi hay 0,0,
+    hay un 0,433 (un porcentaje de grasa metido donde va el peso) y hay saltos de 900 kg.
+
+    Esta funcion existia YA, dos veces copiada (`routes/admin.py` y `macro_casos.py`), y por
+    eso el panel del entrenador enseñaba la curva limpia mientras «Mis macros» le enseñaba al
+    cliente sus 0 kg. Vive aqui, que es donde estan el rango y la regla.
+    """
+    try:
+        w = float(w)
+    except (TypeError, ValueError):
+        return None
+    minimo, maximo = PESO[2], PESO[3]
+    while w > 1000:
+        w /= 1000.0
+    if 300 < w <= 1000:
+        w /= 10.0
+    return round(w, 1) if minimo < w < maximo else None
+
+
 def poner_en_serie(serie: Optional[List[Dict[str, Any]]], fecha: str, valor: float,
                    origen: Optional[str] = None) -> List[Dict[str, Any]]:
     """La serie con `valor` en `fecha`, sustituyendo lo que hubiera ese dia. Ordenada."""

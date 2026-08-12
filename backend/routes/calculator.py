@@ -1503,6 +1503,15 @@ async def get_menu_options(data: dict, user = Depends(get_current_user)):
         profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     avoided_prefixes, avoided_keywords = build_avoided_filter(profile)
 
+    from core.menus_vistos import anotar as _anotar_menus, vistos_de
+
+    async def _anotar_vistos(perfil, momento_, plantillas_):
+        """Lo propuesto queda apuntado para que la próxima vez salgan otros (dentro del
+        mismo escalón de error: la variedad no cuesta precisión)."""
+        total = await db.menu_templates.count_documents({"momento": momento_})
+        await _anotar_menus(db, (perfil or {}).get("id"), momento_,
+                            [p.get("plantilla_id") for p in plantillas_], total)
+
     from meal_library import buscar_en_biblioteca
 
     alimento_ids = data.get("alimento_ids") or []
@@ -1519,10 +1528,12 @@ async def get_menu_options(data: dict, user = Depends(get_current_user)):
             plantillas = await generar_opciones_menu(
                 db, momento, macros_objetivo, es_vegano, excluir_proteinas,
                 avoided_prefixes, avoided_keywords, required_food_ids=alimento_ids,
+                vistos=vistos_de(profile, momento),
             )
             for p in plantillas:
                 p["fuente"] = "recetario"
             opciones += plantillas
+            await _anotar_vistos(profile, momento, plantillas)
         if not opciones and len(alimento_ids) > 1 and "clientes" in fuentes:
             vistos = set()
             for i in range(len(alimento_ids)):
@@ -1623,6 +1634,11 @@ async def menu_catalog(user = Depends(get_current_user)):
             # la tarjeta va sin ella. No se pone una genérica.
             "foto": d.get("foto"),
             "alimentos": [it.get("buscar", "") for it in d.get("items", []) if it.get("buscar")],
+            # Si no lleva proteína no cubre una comida entera, y el sugeridor automático no
+            # la propone (ver `meal_templates.generar_opciones_menu`). En el recetario sigue
+            # estando: se marca para que el cliente sepa por qué se le va a quedar corta en
+            # vez de llevarse el aviso sin explicación.
+            "completa": any(it.get("rol") == "proteina" for it in d.get("items", [])),
         }
     menus = sorted(vistos.values(), key=lambda x: x["nombre"].lower())
     momentos = sorted({m for x in menus for m in x["momentos"]})
@@ -1892,13 +1908,22 @@ async def montar_dia(data: dict, user = Depends(get_current_user)):
                           # el primer día es la peor carta de presentación posible
     montadas, vacias = [], []
 
+    from core.menus_vistos import anotar as _anotar_menus, vistos_de
+    _perfil_dia = await db.client_profiles.find_one(
+        {"user_id": user["id"]}, {"_id": 0, "id": 1, "menus_vistos": 1})
+    _vistos_comida = vistos_de(_perfil_dia, "comida")
+    _propuestos = []
+
     for meal_key, obj in objetivos.items():
         objetivo = {"P": float(obj.get("P") or 0), "H": float(obj.get("H") or 0),
                     "G": float(obj.get("G") or 0)}
         if sum(objetivo.values()) <= 0:
             continue
         try:
-            opciones = await generar_opciones_menu(db, "comida", objetivo)
+            # Los que ya se le propusieron otras veces van detrás, dentro de su mismo
+            # escalón de error: el día que se monta solo no le sale siempre lo mismo.
+            opciones = await generar_opciones_menu(
+                db, "comida", objetivo, vistos=_vistos_comida)
         except Exception:
             opciones = []
         # Primero las que cuadran, y de esas la que no se haya usado ya hoy.
@@ -1909,12 +1934,18 @@ async def montar_dia(data: dict, user = Depends(get_current_user)):
             comidas[meal_key] = {"alimentos": []}
             continue
         usados.add(elegida.get("nombre") or "")
+        _propuestos.append(elegida.get("plantilla_id"))
+        _vistos_comida = _vistos_comida | {elegida.get("plantilla_id")}
         comidas[meal_key] = {
             "alimentos": await _items_a_alimentos(elegida.get("items") or []),
             "menu_nombre": elegida.get("nombre"),
         }
         montadas.append({"comida": meal_key, "menu": elegida.get("nombre"),
                          "cuadrada": bool(elegida.get("cuadrada"))})
+
+    if _propuestos:
+        await _anotar_menus(db, (_perfil_dia or {}).get("id"), "comida", _propuestos,
+                            await db.menu_templates.count_documents({"momento": "comida"}))
 
     # El peri no se monta: son bebidas y geles muy de cada uno, y llenárselo a ciegas el
     # primer día es más ruido que ayuda. Se deja con su objetivo, listo para que lo complete.

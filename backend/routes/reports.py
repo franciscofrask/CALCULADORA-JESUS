@@ -393,8 +393,11 @@ async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
     dias_periodo, dias_dieta, dias_entreno, macros_comidos = await _actividad_del_periodo(
         perfil, desde, reporte.get("created_at"))
 
-    ultimos_macros = await db.macro_history.find_one(
-        {"client_id": reporte["client_id"]}, {"_id": 0}, sort=[("created_at", -1)])
+    # Los macros que MANDAN hoy, por `effective_date` y no por `created_at`: ver
+    # `macros_por_fecha.ultima_vigente`. Con la fecha de importacion, a un cliente migrado el
+    # informe le podia poner como «macros nuevos» unos de hace cuatro años.
+    from macros_por_fecha import ultima_vigente
+    ultimos_macros = await ultima_vigente(db, reporte["client_id"])
 
     from routes.plans import _overrides_by_code
     from models.user import merged_catalog
@@ -418,7 +421,9 @@ async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
         macros_nuevos=({"training": ultimos_macros.get("training"),
                         "rest": ultimos_macros.get("rest"),
                         "periworkout": ultimos_macros.get("periworkout"),
-                        "fecha": ultimos_macros.get("created_at")} if ultimos_macros else None),
+                        # La fecha del AJUSTE, no la de la fila: en lo migrado son distintas.
+                        "fecha": (ultimos_macros.get("effective_date")
+                                  or ultimos_macros.get("created_at"))} if ultimos_macros else None),
         explicacion_equipo=reporte.get("trainer_feedback"),
         # "En los niveles 2 y 3 la explicacion la escribe el equipo. En el 1, el sistema."
         # Aqui eso es: si el plan trae entrenador detras, la escribe una persona.

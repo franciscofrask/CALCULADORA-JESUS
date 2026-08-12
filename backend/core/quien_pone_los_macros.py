@@ -76,9 +76,9 @@ async def puede_ajustarlos(db, perfil: Dict[str, Any]) -> Tuple[bool, Optional[s
     if modo != "personalizado":
         return True, None
 
-    ultimo = await db.macro_history.find_one(
-        {"client_id": perfil.get("id")}, {"_id": 0, "origen": 1, "changed_by": 1},
-        sort=[("created_at", -1)])
+    # Por `effective_date`, no por `created_at`: ver `macros_por_fecha.ultima_vigente`.
+    from macros_por_fecha import ultima_vigente
+    ultimo = await ultima_vigente(db, perfil.get("id"))
     if de_una_persona(ultimo):
         # En plural y sin «entrenador»: al cliente no se le nombra a quien esté detrás ese
         # mes, se le habla de nosotros (repaso de Jesús, 11-08).
