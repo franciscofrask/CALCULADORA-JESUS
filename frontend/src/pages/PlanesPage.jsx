@@ -44,7 +44,11 @@ const DETALLE = {
         // Documento del 06-08-2026: "hay que venderlo como acceso al método... hay gente
         // que no necesita la supervisión de un entrenador para poder cumplir". El titular
         // pasa a ser el acceso, no el hazlo-tú.
-        gancho: 'El método completo, en tus manos',
+        //
+        // Desde el 11-08 el plan se llama «El método», así que el gancho decía dos veces lo
+        // mismo debajo del propio nombre. Se queda el acceso -- «en tus manos» -- sin
+        // repetir la palabra que ya está arriba.
+        gancho: 'Todo el sistema, en tus manos',
         macros: 'Automáticos',
         ajuste: 'Cada 4 semanas',
         chat: false, llamadaInicial: false, videollamada: false, seguimiento: null,
@@ -115,7 +119,9 @@ const PedirLlamada = ({ api, profile, onCerrar }) => {
 
     return (
         <div className="surface p-6 max-w-md mx-auto" data-testid="pedir-llamada">
-            <p className="font-bold text-foreground mb-1">El Nivel 3 se contrata hablando</p>
+            {/* El nombre del plan, no su número interno: «Nivel 3» no dice nada a quien no
+                conoce la casa (Jesús, 11-08). */}
+            <p className="font-bold text-foreground mb-1">El Acompañamiento total se contrata hablando</p>
             <p className="text-sm text-muted-foreground mb-4">
                 Déjanos tu teléfono y cuándo te viene bien, y te llamamos.
             </p>

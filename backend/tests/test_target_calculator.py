@@ -296,7 +296,14 @@ class TestElCerrojoDelPlanConEntrenador(TestTargetCalculatorSetup):
         puede = (antes.get("macros_ajustables") or {}).get("puede")
         if puede is False:
             assert r.status_code == 403, f"deberia cerrarse: {r.status_code} {r.text[:200]}"
-            assert "entrenador" in r.json().get("detail", "").lower()
+            # Pedia la palabra "entrenador", y desde el barrido de voz del 11-08 esa palabra
+            # no aparece en nada que lea el cliente: ahora dice "tus macros los llevamos
+            # nosotros". Se comprueba lo que importa -- que se explica por que no puede -- y
+            # de paso que la regla se cumple, que es lo que se acaba de romper aqui.
+            motivo = r.json().get("detail", "").lower()
+            assert motivo.strip(), "un 403 sin motivo no le dice nada al cliente"
+            assert "entrenador" not in motivo and "coach" not in motivo, \
+                f"al cliente se le habla en plural, sin 'entrenador' ni 'coach': {motivo}"
             despues = requests.get(f"{BASE_URL}/api/clients/profile", headers=auth_headers).json()
             assert despues.get("macros_training") == macros_antes, "le ha tocado los macros igual"
         else:

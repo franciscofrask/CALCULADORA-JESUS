@@ -262,14 +262,14 @@ const QuizVentaPage = () => {
                                 </p>
                                 <p className="text-sm text-muted-foreground mt-1">
                                     {esLlamada
-                                        ? 'Te llamamos al número que nos has dejado para hablar del Nivel 3.'
+                                        ? 'Te llamamos al número que nos has dejado para hablar del Acompañamiento total.'
                                         : 'Te lo hemos guardado. Puedes volver cuando quieras.'}
                                 </p>
                             </div>
                         ) : pidiendo ? (
                             <form onSubmit={guardar} className="surface p-5" data-testid="quiz-form-email">
                                 <p className="font-bold mb-1">
-                                    {esLlamada ? 'El Nivel 3 se contrata hablando' : 'Te lo guardamos'}
+                                    {esLlamada ? 'El Acompañamiento total se contrata hablando' : 'Te lo guardamos'}
                                 </p>
                                 <p className="text-sm text-muted-foreground mb-4">
                                     {esLlamada

@@ -115,6 +115,12 @@ def es_por_llamada(plan: Optional[str]) -> bool:
     return (plan or "").lower().strip() in PLANES_POR_LLAMADA
 
 
+def _en_una_frase(info: Dict[str, Any]) -> str:
+    """Que te llevas con este plan, terminado en punto. Vacio si el catalogo no lo dice."""
+    frase = (info.get("en_una_linea") or "").strip()
+    return f"{frase.rstrip('.')}." if frase else ""
+
+
 def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             catalogo: Dict[str, Dict[str, Any]], precio_alta: Optional[float]) -> List[Dict[str, Any]]:
     """Las tres salidas del documento, en el orden en que se le ofrecen.
@@ -155,9 +161,14 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             "precio_congelado": False,
             "por_llamada": es_por_llamada(code),
             "titulo": "Subir a " + (info.get("name") or code) if sube else "Pasar a " + (info.get("name") or code),
-            "detalle": ("Hablamos antes de entrar." if es_por_llamada(code)
-                        else "Mas gente encima de tus numeros." if sube
-                        else "Menos acompañamiento, mismo metodo."),
+            # La frase la pone el catalogo (`en_una_linea`), que es donde vive el nombre.
+            # Estaban escritas aqui a mano, y ademas sin tildes -- "Mas gente encima de tus
+            # numeros" -- porque este fichero se escribio sin acentos. Al cliente le llegaba
+            # asi. Ahora hay un solo sitio donde dice que es cada plan.
+            "detalle": _en_una_frase(info) or (
+                "Hablamos antes de entrar." if es_por_llamada(code)
+                else "Más gente encima de tus números." if sube
+                else "Menos acompañamiento, mismo método."),
         })
 
     # 3) Salir a la membresia. Es la ultima y se dice como lo que es, sin adornos.

@@ -66,6 +66,14 @@ def validar_dict_macros(v):
 #   quedaban identicos salvo el precio, y eso no habia donde configurarlo.
 #   stripe_price_env  Variable .env con el Price ID de Stripe ("" si no aplica).
 #   billing_cycle_weeks  Longitud del ciclo de cobro recurrente (semanas).
+#   en_una_linea    Que te llevas, en una frase. Va debajo del nombre donde se elige plan.
+#
+#   EL NOMBRE TIENE QUE DECIR QUE TE LLEVAS (Jesus, 11-08-2026).
+#   "Nivel 1 / 2 / 3 funciona por dentro pero no dice nada delante de alguien que no te
+#   conoce". Los tres pasan a llamarse por lo que dan -- El metodo, Con seguimiento,
+#   Acompanamiento total -- y cada uno lleva su frase, que es la que explica en que se
+#   diferencia del de al lado. El codigo del plan NO cambia: por dentro siguen siendo
+#   nivel1/2/3, asi que ni los perfiles ni Stripe ni el historial se enteran de esto.
 
 PLAN_CATALOG = {
     # ---------------- LOS TRES NIVELES (especificacion 31-07-2026, parte 1) ----------
@@ -77,7 +85,8 @@ PLAN_CATALOG = {
     # de .env de abajo estan vacias a proposito: hasta que se creen, el checkout devuelve
     # un 503 con un mensaje claro en vez de cobrar mal.
     "nivel1": {
-        "name": "Nivel 1", "estado": "activo", "asignable": True,
+        "name": "El método", "en_una_linea": "Menos acompañamiento, mismo método",
+        "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 297.0, "precio_nota": "297€ por ciclo de 12 semanas",
         "precios": [{"label": "Ciclo", "importe": 297.0, "periodo": "12 semanas"}],
@@ -91,7 +100,8 @@ PLAN_CATALOG = {
         "pago_unico": True,
     },
     "nivel2": {
-        "name": "Nivel 2", "estado": "activo", "asignable": True,
+        "name": "Con seguimiento", "en_una_linea": "Más gente encima de tus números",
+        "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 897.0, "precio_nota": "897€ por ciclo de 12 semanas",
         "precios": [{"label": "Ciclo", "importe": 897.0, "periodo": "12 semanas"}],
@@ -107,7 +117,8 @@ PLAN_CATALOG = {
     },
     "nivel3": {
         # "Cómo se compra: por llamada". No lleva a un pago, lleva a agendar.
-        "name": "Nivel 3", "estado": "activo", "asignable": True,
+        "name": "Acompañamiento total", "en_una_linea": "Hablamos antes de entrar",
+        "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 1500.0, "precio_nota": "1.500€ por ciclo de 12 semanas · se contrata por llamada",
         "precios": [{"label": "Ciclo", "importe": 1500.0, "periodo": "12 semanas"}],

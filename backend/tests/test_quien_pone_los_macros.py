@@ -57,7 +57,11 @@ class TestLaRegla:
     def test_el_personalizado_con_coach_detras_no_puede(self):
         puede, motivo = correr(puede_ajustarlos(FakeDB(PUSO_EL_COACH), perfil()))
         assert puede is False
-        assert "tu entrenador" in motivo
+        # Pedia "tu entrenador". Desde el barrido de voz del 11-08 al cliente se le habla en
+        # plural y esa palabra no aparece: "tus macros los llevamos nosotros". Lo que hay que
+        # exigir es que el motivo exista y respete la regla, no una redaccion concreta.
+        assert motivo.strip(), "sin motivo, el cliente no sabe por que no puede"
+        assert "entrenador" not in motivo.lower() and "coach" not in motivo.lower(), motivo
 
     def test_tampoco_si_se_los_puso_desde_su_calculadora(self):
         """El agujero de la segunda vuelta: por ahi `macros_source` se queda en "auto"."""
@@ -98,7 +102,9 @@ class TestElCerrojoConMotivo:
         with pytest.raises(HTTPException) as e:
             correr(exigir_que_pueda(FakeDB(PUSO_EL_COACH), perfil()))
         assert e.value.status_code == 403
-        assert "tu entrenador" in e.value.detail
+        assert e.value.detail.strip(), "un 403 sin motivo no le dice nada al cliente"
+        assert "entrenador" not in e.value.detail.lower() and "coach" not in e.value.detail.lower(), \
+            e.value.detail
 
     def test_y_deja_pasar_al_que_puede(self):
         correr(exigir_que_pueda(FakeDB(LO_CALCULO_EL_ALTA), perfil()))  # no levanta
