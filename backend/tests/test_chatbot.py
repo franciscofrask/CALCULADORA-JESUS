@@ -117,8 +117,18 @@ class TestChatbotEndpoints:
         assert "C3" in dist["comidas"], "comidas should contain C3"
         assert "C4" in dist["comidas"], "comidas should contain C4"
         
-        # Verify comida_actual starts at 1
-        assert data["comida_actual"] == 1, f"comida_actual should be 1, got {data['comida_actual']}"
+        # EL ASISTENTE ARRANCA DONDE HAY TRABAJO, NO SIEMPRE EN LA 1.
+        #
+        # Este test exigia comida_actual == 1 siempre, que era el valor fijo que devolvia el
+        # endpoint. Desde el 11-08 el asistente se precarga con la dieta que el cliente ya
+        # tiene montada y se situa en la primera comida SIN montar: si ya tiene hecha la 1,
+        # empezar por la 1 es ofrecerse a rehacer lo que ya esta hecho, que es justo lo que
+        # se queja Jesus de que le pisa el trabajo.
+        #
+        # Asi que lo que hay que exigir es que sea una comida real del dia, no un numero fijo.
+        comidas_del_dia = len(dist["comidas"])
+        assert 1 <= data["comida_actual"] <= comidas_del_dia, \
+            f"comida_actual debe ser una comida del dia (1..{comidas_del_dia}), es {data['comida_actual']}"
         
         print(f"✅ Day configured: {data['mensaje'][:50]}...")
         print(f"   C1 macros: {dist['comidas']['C1']}")
