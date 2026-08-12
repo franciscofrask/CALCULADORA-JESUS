@@ -157,8 +157,10 @@ async def generar_opciones_menu(
         # para exigir variedad entre las 3 opciones.
         prot_principal = None
         for item in plantilla["items"]:
-            if item["rol"] == "proteina":
-                prot_principal = ".".join(item["categoria"].split(".")[:2])
+            # `.get`: las plantillas del recetario traen rol, pero por aqui pasan tambien
+            # listas de alimentos sueltos que no (ver `_rol_por_aporte`).
+            if item.get("rol") == "proteina":
+                prot_principal = ".".join(str(item.get("categoria") or "").split(".")[:2])
                 break
 
         if prot_principal in excluir:
@@ -412,6 +414,21 @@ def _driver_macro(rol: str) -> Optional[str]:
     return {"proteina": "P", "hidrato": "H", "grasa": "G"}.get(rol)
 
 
+def _rol_por_aporte(ef: Dict[str, float]) -> str:
+    """Qué papel hace un alimento en la comida, a partir de lo que CUENTA por 100 g.
+
+    Para las listas que no traen rol (los alimentos sueltos de «Repetir de otro día»). Mismo
+    criterio con el que se clasificó el recetario, pero sobre los macros efectivos en vez de
+    los de la etiqueta: si el método no le cuenta la proteína, no es la proteína del plato.
+    """
+    p, h, g = (float(ef.get(m) or 0) for m in ("P", "H", "G"))
+    if g >= 12 and p < 10:
+        return "grasa"
+    if p >= 8 and p >= h:
+        return "proteina"
+    return "hidrato"
+
+
 def _menu_max(rol: str, cat: str, maximo_base: float) -> float:
     """Tope superior generoso para el autoajuste de menús (el alimento de ajuste
     debe poder crecer; los topes del chatbot son demasiado estrictos aquí)."""
@@ -481,7 +498,18 @@ async def _ajustar_plantilla(
         ef = get_effective_macros_per_100g(alimento)  # {P,H,G,cat,...} efectivos por 100g
         minimo = float(cfg.get("minimo", 5) or 5)
         _, maximo_base = get_food_limits(alimento, cfg)
-        maximo = _menu_max(item["rol"], ef.get("cat", ""), maximo_base)
+        # EL ROL, DEDUCIDO SI NO VIENE (12-08-2026). Las plantillas del recetario lo traen,
+        # pero «Repetir de otro dia» manda una lista de alimentos sueltos sin rol, y este
+        # `item["rol"]` levantaba un KeyError: `POST /calculator/cuadrar-comida` devolvia 500
+        # SIEMPRE. El front se comia el error en su `catch` y caia al escalado por proteina,
+        # que es justo lo que Jesus rechazo, asi que el arreglo del punto 4.9 del 09-08
+        # estaba escrito y no se ejecutaba nunca. Nadie lo vio porque habia plan B silencioso.
+        #
+        # Se deduce de lo que el alimento CUENTA, no de su etiqueta: es el mismo criterio con
+        # el que se clasifico el recetario, pero sobre los macros efectivos.
+        rol = item.get("rol") or _rol_por_aporte(ef)
+        item = dict(item, rol=rol)
+        maximo = _menu_max(rol, ef.get("cat", ""), maximo_base)
         # Alimentos por unidades (huevos, yogures...): se mueven en pasos de SU
         # peso real de unidad (huevo L = 63g), no del paso genérico de la categoría.
         peso_unidad = float(alimento.get("peso_unidad") or alimento.get("racion") or 0)
@@ -489,7 +517,7 @@ async def _ajustar_plantilla(
         foods.append({
             "item": item, "alimento": alimento, "ef": ef, "cat": ef.get("cat", ""),
             "minimo": minimo, "maximo": max(minimo, maximo),
-            "driver": _driver_macro(item["rol"]), "cantidad": minimo,
+            "driver": _driver_macro(rol), "cantidad": minimo,
             "paso_unidad": peso_unidad if (es_unidad and peso_unidad > 0) else None,
         })
 
@@ -590,19 +618,23 @@ async def _ajustar_plantilla(
         fac = f["cantidad"] / 100.0
         items_resultado.append({
             "alimento_id": f["alimento"].get("id"),
-            "nombre": f["alimento"].get("nombre", f["item"]["buscar"]),
+            # `.get`: una lista de alimentos sueltos no trae `buscar` ni `rol`, que son de
+            # las plantillas del recetario (ver `_rol_por_aporte`).
+            "nombre": f["alimento"].get("nombre") or f["item"].get("buscar") or "",
             "cantidad_g": f["cantidad"],
             "macros_efectivos": {
                 "P": round(f["ef"]["P"] * fac, 1),
                 "H": round(f["ef"]["H"] * fac, 1),
                 "G": round(f["ef"]["G"] * fac, 1),
             },
-            "rol": f["item"]["rol"],
+            "rol": f["item"].get("rol"),
         })
 
     return {
-        "plantilla_id": plantilla["id"],
-        "nombre": plantilla["nombre"],
+        "plantilla_id": plantilla.get("id"),
+        # `.get`: por aqui entran tambien listas de alimentos sueltos, que no son una receta
+        # y no tienen nombre ni fuente («Repetir de otro dia», ver `_rol_por_aporte`).
+        "nombre": plantilla.get("nombre") or "",
         "items": items_resultado,
         "macros_totales": {
             "P": round(T["P"], 1),

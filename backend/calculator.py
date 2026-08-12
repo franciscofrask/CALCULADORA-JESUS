@@ -802,10 +802,17 @@ def calcular_cantidad_automatica(
         "cantidad_g": cantidad,
         "macros_efectivos": {"P": p_ef, "H": h_ef, "G": g_ef, "kcal": kcal_ef},
         "macros_brutos": {"P": p_bruta, "H": h_bruta, "G": g_bruta, "kcal": kcal_bruta},
+        # QUE MACROS LE CUENTAN, mirando lo que da por 100 g con el motor.
+        #
+        # Aqui se leian `proteina_cuenta` / `hidratos_cuenta` / `grasa_cuenta`, claves del
+        # motor viejo que `_ef` ya no devuelve: **este return levantaba un KeyError siempre**.
+        # Y `ordenar_por_aporte` se tragaba la excepcion, asi que `POST /calculator/suggest`
+        # solo devolvia los alimentos que NO caben (los que salen por el `return` de arriba),
+        # todos con cantidad 0. Estaba muerto y no lo parecia (caso 22 de la lista del 12-08).
         "que_cuenta": {
-            "P": efectivos_final["proteina_cuenta"],
-            "H": efectivos_final["hidratos_cuenta"],
-            "G": efectivos_final["grasa_cuenta"]
+            "P": p_ef_100 > 0.01,
+            "H": h_ef_100 > 0.01,
+            "G": g_ef_100 > 0.01,
         },
         "cabe": cabe,
         "excede": not cabe,

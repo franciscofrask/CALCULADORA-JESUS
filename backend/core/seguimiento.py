@@ -42,8 +42,21 @@ async def _adelantar(client_id: Optional[str], campo: str, fecha: Optional[str])
 
 
 async def marcar_ajuste(client_id: Optional[str], fecha: Optional[str] = None) -> None:
-    """Se le acaban de mover los macros."""
+    """Se le acaban de mover los macros.
+
+    `fecha` es la de VIGENCIA del ajuste (`effective_date`), no la de la fila. Los que
+    llamaban pasaban `created_at`, y por eso a los 159 clientes migrados les quedo aqui la
+    fecha de la importacion en vez de la de su ultimo ajuste: medido el 12-08, este campo no
+    coincidia con el historial en 184 de 185 perfiles, y en la mayoria estaba vacio. Es el
+    campo por el que el panel ordena «esta semana te tocan estos», o sea que la primera
+    pantalla del lunes senalaba a otros (caso 80 de la lista de Jesus).
+    """
     await _adelantar(client_id, "ultimo_ajuste", fecha)
+
+
+def fecha_de_vigencia(macro_log: dict) -> str:
+    """La fecha con la que se marca un ajuste: la de vigencia, y si no la de guardado."""
+    return _dia((macro_log or {}).get("effective_date") or (macro_log or {}).get("created_at"))
 
 
 async def marcar_reporte(client_id: Optional[str], fecha: Optional[str] = None) -> None:

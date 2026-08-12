@@ -47,7 +47,16 @@ async def register(data: UserRegister):
         "user_id": user_id,
         "plan": None,
         "price": None,
-        "week": None,
+        # SEMANA 1, NO NULO. `ClientProfile.week` es un entero, asi que un `None` aqui hace
+        # reventar la validacion mas adelante: `/clients/questionnaire` devuelve el perfil
+        # validado al terminar, y con el nulo daba un 500 A TODO EL QUE SE REGISTRARA. Y
+        # reventaba DESPUES de guardarlo todo: la persona veia «Error al enviar el
+        # cuestionario», no se le aplicaban los modificadores de las preguntas 5 a 8, no se
+        # le montaba el dia, no llegaba a la bienvenida, y al reintentar le salia un 409
+        # porque el alta ya constaba hecha. Se quedaba con los macros base y sin saber por que.
+        # En produccion hay 5 fichas asi; las de la migracion traen el campo y por eso no
+        # habia saltado antes (caso 04 de la lista del 12-08).
+        "week": 1,
         "status": "registrado",
         "trainer_id": None,
         "macros_training": None,

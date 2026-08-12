@@ -65,13 +65,32 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         cumpl = _cumplimiento(
             huecos_del_periodo(d_per, d_dieta, d_entreno, previstos), respuestas_huecos)
 
+    # LAS FOTOS QUE ACABA DE SUBIR, ENGANCHADAS AL REPORTE.
+    #
+    # El cliente las sube con `POST /reports/photos`, que las guarda en `client_photos`, y el
+    # formulario NO manda el campo `photos`. Nadie las juntaba: medido en produccion, de
+    # 3.151 reportes **ninguno** tiene fotos, y hay 646 fotos huerfanas. Y `montar_informe`
+    # empieza con «sin fotos, no hay informe», asi que **el informe mensual no se le ha
+    # generado nunca a nadie** por la via normal de la app (caso 51 de la lista del 12-08).
+    #
+    # Se recogen aqui y no se le pide nada al front: las fotos ya estan subidas y fechadas, y
+    # lo que faltaba era la costura. Se cogen las de la ventana de este reporte, que es
+    # exactamente lo que el cliente acaba de hacer.
+    fotos = [f for f in (data.photos or []) if f]
+    if not fotos:
+        desde = state["window_open"].isoformat()
+        fotos = [d["id"] async for d in db.client_photos.find(
+            {"client_id": profile["id"], "uploaded_at": {"$gte": desde}},
+            {"_id": 0, "id": 1}).sort("uploaded_at", -1).limit(6)]
+        fotos.reverse()
+
     report_id = str(uuid.uuid4())
     report = {
         "id": report_id,
         "client_id": profile["id"],
         "weight": data.weight,
         "measurements": data.measurements,
-        "photos": data.photos,
+        "photos": fotos or None,
         "huecos": respuestas_huecos or None,
         "cumplimiento": cumpl,
         "training_compliance": (cumpl or {}).get("entreno_pct", data.training_compliance),

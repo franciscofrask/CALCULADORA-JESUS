@@ -25,7 +25,7 @@ from models.user import (
     precio_de_ciclo,
 )
 from core.cycle import enrich_cycle, compute_cycle
-from core.seguimiento import marcar_ajuste, dias_desde
+from core.seguimiento import marcar_ajuste, dias_desde, fecha_de_vigencia
 from core.series_cliente import anotar_peso, anotar_grasa, actual as actual_de_serie
 from core.cambios_macros import marcar_cambios, palancas
 from core.historial_macros import guardar as guardar_en_historial
@@ -934,7 +934,7 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
 
     await guardar_en_historial(macro_log)
     # "¿Quien me toca esta semana?" (punto 29): la fecha se queda tambien en el cliente.
-    await marcar_ajuste(client_id, macro_log["created_at"])
+    await marcar_ajuste(client_id, fecha_de_vigencia(macro_log))
     # Peso y % graso van a sus SERIES, con la fecha del pesaje (puntos 27 y 30). Ni uno ni
     # otro se escriben sueltos en el perfil: el "actual" sale siempre del ultimo de la serie.
     if data.peso is not None:
@@ -1137,7 +1137,7 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await guardar_en_historial(macro_log)
-    await marcar_ajuste(client_id, macro_log["created_at"])   # punto 29
+    await marcar_ajuste(client_id, fecha_de_vigencia(macro_log))   # punto 29
     # Peso y % graso, a sus series con la fecha del ajuste (punto 30).
     await anotar_peso(client_id, peso, macro_log["effective_date"], origen="calculadora del coach")
     await anotar_grasa(client_id, bf, macro_log["effective_date"], origen="calculadora del coach")
@@ -1626,7 +1626,24 @@ async def get_trainers(user = Depends(get_admin_user)):
 # Revisión y aprobación de los alimentos sugeridos por clientes. Al aprobar, el
 # alimento se carga en el catálogo (db.foods) con las categorías asignadas.
 
-def _food_doc_from_fields(f: dict, categorias: Optional[str]) -> dict:
+async def _siguiente_id_de_alimento() -> int:
+    """El siguiente id LIBRE del catalogo, como numero.
+
+    Los 3.211 alimentos tienen id entero, y medio backend cuenta con ello: `agent_tools`
+    hace `int(f["id"])` al cargar el catalogo en tres sitios. Un alimento con id de texto
+    revienta ahi con ValueError y **deja al asistente sin funcionar para todos los
+    clientes**, no solo para quien lo use.
+
+    El alta desde el panel escribia `str(uuid.uuid4())`. En produccion todavia no ha pasado
+    (0 alimentos con id no numerico), pero el primero que diera de alta el equipo tumbaba el
+    chat entero. Lo encontro la tanda de casos del 12-08 cuando un test creo uno.
+    """
+    ultimo = await db.foods.find_one({"id": {"$type": ["int", "long", "double"]}},
+                                     {"_id": 0, "id": 1}, sort=[("id", -1)])
+    return int((ultimo or {}).get("id") or 0) + 1
+
+
+def _food_doc_from_fields(f: dict, categorias: Optional[str], nuevo_id=None) -> dict:
     """Construye un documento de db.foods a partir de los campos de una sugerencia/alta."""
     por_unidad = bool(f.get("por_unidad"))
     racion = float(f.get("racion") or 100) or 100.0
@@ -1635,7 +1652,8 @@ def _food_doc_from_fields(f: dict, categorias: Optional[str]) -> dict:
     grasas = float(f.get("grasas") or 0)
     url = (f.get("url") or "").strip() or None
     return {
-        "id": str(uuid.uuid4()),
+        # Numerico, nunca un UUID: ver `_siguiente_id_de_alimento`.
+        "id": nuevo_id if nuevo_id is not None else str(uuid.uuid4()),
         "nombre": (f.get("nombre") or "").strip(),
         "categorias": (categorias or "").strip() or None,
         "proteinas": proteinas,
@@ -1747,7 +1765,8 @@ async def approve_food_suggestion(suggestion_id: str, user = Depends(get_admin_u
                    "cuentan al cliente. Edítalo y vuelve a intentarlo.",
         )
 
-    food_doc = _food_doc_from_fields(doc.get("food") or {}, doc.get("categorias"))
+    food_doc = _food_doc_from_fields(doc.get("food") or {}, doc.get("categorias"),
+                                     await _siguiente_id_de_alimento())
     await db.foods.insert_one(food_doc)
     invalidate_foods_cache()
 
@@ -1824,9 +1843,19 @@ async def admin_create_food(data: AdminFoodCreate, user = Depends(get_admin_user
     """Alta directa de un alimento en el catálogo desde el panel admin."""
     if not data.nombre.strip():
         raise HTTPException(status_code=400, detail="El nombre es obligatorio")
+    # La categoria decide QUE MACROS le cuentan al cliente. Sin ella el alimento no entra en
+    # ninguna excepcion del filtro y cuenta sus tres macros crudos para siempre. Aprobar una
+    # sugerencia sin categoria ya estaba cerrado (11-08); esta puerta, la del alta a mano, se
+    # quedo abierta, y es la que mas se usa (caso 37 de la lista del 12-08).
+    if not (data.categorias or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Ponle una categoría: de ella depende qué macros le cuentan al cliente.",
+        )
     racion = 100.0 if not data.por_unidad else max(float(data.racion or 0), 1.0)
     food_doc = _food_doc_from_fields(
-        {**data.model_dump(), "racion": racion}, data.categorias
+        {**data.model_dump(), "racion": racion}, data.categorias,
+        await _siguiente_id_de_alimento()
     )
     await db.foods.insert_one(food_doc)
     invalidate_foods_cache()

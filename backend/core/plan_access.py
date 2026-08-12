@@ -137,10 +137,41 @@ def plan_features(plan_code: Optional[str]) -> list:
 
 
 def plan_grants_feature(plan_code: Optional[str], feature: Optional[str]) -> bool:
-    """True si el plan habilita la feature (o si no se exige feature concreta)."""
+    """True si el plan habilita la feature (o si no se exige feature concreta).
+
+    Version SIN overrides: solo para los sitios que no pueden esperar a la base. El cerrojo
+    de verdad es `plan_grants_feature_vivo`.
+    """
     if not feature:
         return True
     return feature in plan_features(plan_code)
+
+
+async def plan_features_vivo(plan_code: Optional[str]) -> list:
+    """Las features del plan CON lo que el equipo haya editado en el panel.
+
+    `PLAN_TYPES` se calcula una sola vez al importar `models/user.py`, desde el catalogo
+    escrito en codigo. Los cambios del panel viven en `db.plan_overrides` y ahi no entraban
+    nunca: quitarle la suplementacion a un plan hacia desaparecer la entrada del menu -- eso
+    lo decide `GET /plans`, que si los lee -- mientras `GET /supplements/current` seguia
+    devolviendo 200 con los datos. O sea que lo que editaba el equipo era cosmetico del lado
+    del servidor (caso 69 de la lista del 12-08).
+    """
+    from models.user import codigo_de_plan, merged_catalog
+    from routes.plans import _overrides_by_code
+    try:
+        catalogo = merged_catalog(await _overrides_by_code())
+    except Exception:
+        # Si la base no contesta, mejor el catalogo del codigo que dejar a todos fuera.
+        return plan_features(plan_code)
+    return (catalogo.get(codigo_de_plan(plan_code)) or {}).get("features", [])
+
+
+async def plan_grants_feature_vivo(plan_code: Optional[str], feature: Optional[str]) -> bool:
+    """True si el plan habilita la feature, mirando tambien los overrides del panel."""
+    if not feature:
+        return True
+    return feature in await plan_features_vivo(plan_code)
 
 
 def modo_calculadora(plan_code: Optional[str]) -> str:
@@ -196,7 +227,7 @@ def require_access(feature: Optional[str] = None):
                 status_code=402,
                 detail="Tu suscripción no está activa. Regulariza el pago para acceder a esta función.",
             )
-        if not plan_grants_feature(profile.get("plan"), feature):
+        if not await plan_grants_feature_vivo(profile.get("plan"), feature):
             raise HTTPException(
                 status_code=403,
                 detail="Tu plan no incluye esta función. Cambia de plan para activarla.",

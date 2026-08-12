@@ -22,7 +22,7 @@ from core.plan_access import tiene_entrenador_detras, dias_hasta_la_revision
 from core.quiz_store import guardar_quiz_respuestas, registrar_revision
 from core.avisos_equipo import avisar_al_equipo
 from core.cycle import enrich_cycle
-from core.seguimiento import marcar_ajuste
+from core.seguimiento import marcar_ajuste, fecha_de_vigencia
 from core.series_cliente import anotar_peso, anotar_grasa
 from core.cambios_macros import marcar_cambios
 from core.historial_macros import guardar as guardar_en_historial
@@ -240,7 +240,7 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
             "created_at": ahora.isoformat(),
         }
         await guardar_en_historial(macro_log)
-        await marcar_ajuste(profile["id"], macro_log["created_at"])
+        await marcar_ajuste(profile["id"], fecha_de_vigencia(macro_log))
 
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
@@ -1171,11 +1171,30 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
     # fecha por delante, y al cliente le tiene que salir arriba el que le aplica HOY, no uno
     # que todavia no ha empezado. Su fecha de vigencia es lo que ordena, y el momento en que se
     # guardo desempata: dos ajustes del mismo dia van del mas nuevo al mas viejo.
+    # UN AJUSTE POR FECHA, Y SIN CORTAR EN 60.
+    #
+    # Cortaba en 60 filas, y hay cuentas con 262: a esos clientes la pantalla les enseñaba
+    # solo el ultimo trozo de su historia. Y como la tarjeta de renovacion cuenta los dias
+    # con ajuste del ciclo entero, los dos numeros no cuadraban -- que es justo lo que pide
+    # el caso 76 de Jesus: «el contador de ajustes coincide con el historico de Mis macros».
+    # Medido: 13 en la tarjeta contra 6 en la pantalla.
+    #
+    # Se agrupa por fecha porque un ajuste ES un dia: guardar dos veces el mismo dia es una
+    # correccion, no dos ajustes (misma regla que `core/historial_macros`, que ya deduplica
+    # al escribir). Al cliente demo le salian 36 filas del 07-08. Manda la mas reciente de
+    # ese dia, que es la que quedo vigente.
     entradas_crudas = []
     if client_id:
-        entradas_crudas = await db.macro_history.find(
+        todas = await db.macro_history.find(
             hasta_hoy({"client_id": client_id}, campo="effective_date"), {"_id": 0}
-        ).sort([("effective_date", -1), ("created_at", -1)]).to_list(60)
+        ).sort([("effective_date", -1), ("created_at", -1)]).to_list(1000)
+        vistas = set()
+        for h in todas:
+            dia = h.get("effective_date") or str(h.get("created_at") or "")[:10]
+            if dia in vistas:
+                continue
+            vistas.add(dia)
+            entradas_crudas.append(h)
 
     entradas = []
     for h in entradas_crudas:
@@ -1360,7 +1379,7 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
             "desglose": (resultado_v2 or {}).get("desglose") or data.desglose,
         }
     await guardar_en_historial(macro_log)
-    await marcar_ajuste(client_id, macro_log.get("created_at"))   # punto 29
+    await marcar_ajuste(client_id, fecha_de_vigencia(macro_log))   # punto 29
     # Peso y % graso, a sus series con la fecha de vigencia del ajuste (punto 30).
     if data.peso is not None:
         await anotar_peso(client_id, data.peso, macro_log.get("effective_date"),
