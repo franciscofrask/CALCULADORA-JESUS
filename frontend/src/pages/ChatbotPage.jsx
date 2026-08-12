@@ -66,9 +66,24 @@ const resumenConfig = ({ tipo_dia, num_comidas, single_meal, momento_entreno, op
 
 // Persistencia de la conversación durante la sesión (sobrevive a navegación y recargas
 // de la pestaña; se limpia al cerrar la pestaña o al reiniciar el chat).
-const PERSIST_KEY = 'chatbot_session_state';
-const loadPersisted = () => {
-  try { return JSON.parse(sessionStorage.getItem(PERSIST_KEY)) || {}; }
+//
+// LA CONVERSACIÓN LLEVA DUEÑO (Francisco, 11-08-2026).
+//
+// Se guardaba en una clave suelta, `chatbot_session_state`, sin decir de quién era. Como el
+// entrenador entra en la cuenta de su cliente desde la misma pestaña (ver core/actuar_como.py),
+// al abrir el asistente allí le salía SU PROPIA conversación dentro de la sesión del cliente.
+// Es el mismo fallo que ya se arregló para el día de Nutrición en el punto 4.7 del 09-08, y el
+// asistente se había quedado fuera: allí se le puso dueño al día, pero no a la conversación.
+//
+// Aquí es sessionStorage y no localStorage, así que no vale `lib/almacenLocal`, pero la regla
+// es la misma: sin id no se guarda nada, que es mejor que guardarlo donde lo vea otro.
+const claveChat = (uid) => (uid ? `u:${uid}:chatbot_session_state` : null);
+const CLAVE_HUERFANA = 'chatbot_session_state';
+
+const loadPersisted = (uid) => {
+  const k = claveChat(uid);
+  if (!k) return {};
+  try { return JSON.parse(sessionStorage.getItem(k)) || {}; }
   catch { return {}; }
 };
 
@@ -94,9 +109,15 @@ export default function ChatbotPage() {
     return () => mq.removeEventListener('change', on);
   }, []);
 
-  // Snapshot persistido leído una sola vez al montar
+  // Snapshot persistido leído una sola vez al montar, el de ESTA persona.
   const persistedRef = useRef(undefined);
-  if (persistedRef.current === undefined) persistedRef.current = loadPersisted();
+  if (persistedRef.current === undefined) {
+    // La clave vieja sin dueño se barre de una vez: si no, la conversación que ya está
+    // guardada en las pestañas abiertas seguiría apareciéndole al cliente hasta que alguien
+    // cerrara el navegador. Es la misma red que HUERFANAS en lib/almacenLocal.
+    try { sessionStorage.removeItem(CLAVE_HUERFANA); } catch { /* nada que hacer */ }
+    persistedRef.current = loadPersisted(uid);
+  }
   const p = persistedRef.current;
 
   const [sessionId, setSessionId] = useState(p.sessionId ?? null);
@@ -136,8 +157,9 @@ export default function ChatbotPage() {
       opcionPeri, momentoEntreno, singleMeal, mealNombre, currentMeal, macrosRestantes, distribucion, daySummary,
       autoSync: autoSyncRef.current,
     };
-    try { sessionStorage.setItem(PERSIST_KEY, JSON.stringify(snapshot)); } catch (e) {}
-  }, [sessionId, messages, step, configStage, targetDate, tipoDia, numComidas,
+    const k = claveChat(uid);
+    if (k) { try { sessionStorage.setItem(k, JSON.stringify(snapshot)); } catch (e) {} }
+  }, [uid, sessionId, messages, step, configStage, targetDate, tipoDia, numComidas,
       opcionPeri, momentoEntreno, singleMeal, mealNombre, currentMeal, macrosRestantes, distribucion, daySummary]);
 
   // Al montar: si retomamos una sesión, verificar que sigue viva en el backend.
@@ -153,7 +175,7 @@ export default function ChatbotPage() {
         });
         const d = await r.json();
         if (!cancelled && !d.exists) {
-          try { sessionStorage.removeItem(PERSIST_KEY); } catch (e) {}
+          try { sessionStorage.removeItem(claveChat(uid) || CLAVE_HUERFANA); } catch (e) {}
           setSessionId(null);
           setMessages([]);
           setStep('init');
@@ -835,7 +857,7 @@ export default function ChatbotPage() {
     setDistribucion(null);
     setDaySummary(null);
     autoSyncRef.current = { decided: false, enabled: true };
-    try { sessionStorage.removeItem(PERSIST_KEY); } catch (e) {}
+    try { sessionStorage.removeItem(claveChat(uid) || CLAVE_HUERFANA); } catch (e) {}
   };
 
   // Renderizar mensaje

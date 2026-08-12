@@ -11,6 +11,17 @@ import { useAuth } from './AuthContext';
 // El progreso se guarda por usuario en el backend (onboarding_step / completed).
 // ============================================================================
 
+// EL RECORRIDO ESTA APAGADO (Francisco, 11-08-2026).
+//
+// Un solo interruptor: mientras esto sea false el recorrido no arranca solo, y los sitios
+// que lo ofrecen (el botón del perfil y el «Continuar recorrido» del checklist de Inicio)
+// no se enseñan, porque un botón que no hace nada es peor que no tenerlo.
+//
+// El código se queda entero a propósito: los pasos, el resaltado y el guardado del progreso
+// siguen aquí, así que volver a encenderlo es cambiar este false por true y nada más. No se
+// borra porque la decisión es de producto y puede darse la vuelta.
+export const RECORRIDO_ACTIVO = false;
+
 // Cada paso: id, ruta donde vive, selector del elemento a resaltar, textos, y
 // opcionalmente `gate` = id de acción que, al ocurrir, auto-avanza el tour, y
 // `cap` = capacidad del plan requerida (los pasos de secciones que el plan no
@@ -206,6 +217,9 @@ export const OnboardingProvider = ({ children }) => {
     }, [active, index, location.pathname, navigate, goNext, renderPopover, persistStep, steps]);
 
     const startTour = useCallback((fromStepId) => {
+        // Con el recorrido apagado no arranca ni aunque alguien llame a mano: es el mismo
+        // interruptor para todas las puertas, y así no queda ninguna abierta por olvido.
+        if (!RECORRIDO_ACTIVO) return;
         let i = 0;
         if (fromStepId) {
             const found = steps.findIndex((s) => s.id === fromStepId);
@@ -234,6 +248,7 @@ export const OnboardingProvider = ({ children }) => {
     // arranca queda registrado, así no reaparece en cada login; luego se retoma
     // desde el checklist ("Continuar recorrido") o el perfil ("Repetir").
     useEffect(() => {
+        if (!RECORRIDO_ACTIVO) return;
         if (!isClient || !profile) return;
         if (active) return;
         if (profile.onboarding_completed) return;
@@ -250,8 +265,11 @@ export const OnboardingProvider = ({ children }) => {
         skipTour,
         notify,
         active,
-        available: !!(isClient && profile && profile.questionnaire_completed),
-        completed: !!profile?.onboarding_completed,
+        // `available` es lo que miran las pantallas para decidir si ofrecen el recorrido.
+        // Apagado, nadie lo ofrece. Y `completed` se da por hecho para que el checklist de
+        // Inicio no enseñe un «Continuar recorrido» que no continuaría nada.
+        available: !!(RECORRIDO_ACTIVO && isClient && profile && profile.questionnaire_completed),
+        completed: RECORRIDO_ACTIVO ? !!profile?.onboarding_completed : true,
     };
 
     return (

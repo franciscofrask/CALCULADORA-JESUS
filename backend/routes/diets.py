@@ -483,6 +483,12 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
     if not diet:
         raise HTTPException(status_code=404, detail="No hay dieta guardada para este día")
 
+    # Las cantidades a gramos ANTES de nada (punto 4.5). En las dietas que vinieron de Calma
+    # los alimentos por unidades guardan el conteo de piezas en `cantidad_g`, y un huevo
+    # aparece como "1". El resto de rutas ya normalizan al leer; el PDF se habia quedado
+    # fuera, asi que para esos alimentos ensenaba "0 ud" y unos macros de un gramo de huevo.
+    await _normalizar_cantidades(diet)
+
     comidas_raw = diet.get("comidas", {})
     if not comidas_raw:
         raise HTTPException(status_code=400, detail="La dieta está vacía")
@@ -545,14 +551,43 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
         return [{"rol": rol, "valor": valor} for rol, valor in items]
 
     # Catalogo de los alimentos de la dieta: hace falta para saber cuales van por unidades
-    # (el campo `unidad` que se guarda en la dieta viene vacio en casi todas las filas).
+    # (el campo `unidad` que se guarda en la dieta viene vacio en casi todas las filas)
+    # y, desde el 11-08, para poder CALCULAR los macros que no se guardaron (ver abajo).
     ids = [a.get("alimento_id") for m in comidas_raw.values()
            for a in (m.get("alimentos") or []) if a.get("alimento_id") is not None]
     catalogo = {}
     if ids:
-        async for f in db.foods.find({"id": {"$in": ids}},
-                                     {"_id": 0, "id": 1, "unidades": 1, "racion": 1}):
+        async for f in db.foods.find({"id": {"$in": ids}}, {"_id": 0}):
             catalogo[f["id"]] = f
+
+    def _macros_de(a: dict) -> dict:
+        """Los macros que le cuentan a este alimento. Guardados si estan, calculados si no.
+
+        EL PDF SALIA CON TODOS LOS ALIMENTOS A CERO (Francisco, 11-08-2026: «puedo ver sus
+        dietas pero no los macros de esos alimentos»).
+
+        Leia `macros_efectivos` de lo guardado y punto. Medido: de 4.166 alimentos guardados,
+        3.731 NO tienen ese campo -- huevos, claras, pan, yogur, whey --, asi que el PDF los
+        escribia a 0 y de paso daba un total del dia que no era el suyo. No es que el dato
+        este mal: es que nunca se llego a escribir en la mayoria de las dietas.
+
+        Asi que se calcula con el motor de conteo unico (`calma_suggest.macros_efectivos`,
+        el mismo que usa la app desde el 31-07), y lo guardado solo se usa como atajo. Un
+        cero legitimo -- la lechuga, o un macro que el filtro del tercio descarta -- sigue
+        saliendo cero, porque lo dice el motor y no la ausencia del campo.
+        """
+        me = a.get("macros_efectivos")
+        if me and any((me.get(r) or 0) > 0 for r in ("P", "H", "G")):
+            return me
+        food = catalogo.get(a.get("alimento_id"))
+        if not food:
+            return me or {}
+        try:
+            from calma_suggest import macros_efectivos as _efectivos
+            return _efectivos(food, float(a.get("cantidad_g") or 0))
+        except Exception:
+            # Si el motor falla por lo que sea, mejor lo guardado que romper la descarga.
+            return me or {}
 
     def _cantidad_de(a):
         """Texto de la cantidad. En los alimentos por unidades, Jesus quiere ver las
@@ -582,7 +617,7 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
         alimentos_pdf = []
         mp, mh, mg = 0, 0, 0
         for a in alimentos_raw:
-            me = a.get("macros_efectivos", {})
+            me = _macros_de(a)
             p = round(me.get("P", 0), 1)
             h = round(me.get("H", 0), 1)
             g = round(me.get("G", 0), 1)

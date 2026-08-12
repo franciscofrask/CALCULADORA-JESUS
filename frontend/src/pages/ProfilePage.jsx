@@ -36,7 +36,7 @@ const UPGRADE_PLAN_UI = false;
 const ProfilePage = () => {
     const navigate = useNavigate();
     const { user, profile, logout, api, refreshUser, myPlan, planUnpaid, can } = useAuth();
-    const { startTour } = useOnboarding();
+    const { startTour, available: recorridoDisponible } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [verIncluye, setVerIncluye] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
@@ -334,8 +334,12 @@ const ProfilePage = () => {
                             // con el mismo peso visual que «Cerrar sesión». Es una fila más de
                             // ajustes, y aquí se lee mejor. En escritorio sigue siendo el botón
                             // de siempre, que es donde estaba.
-                            { icon: Compass, title: 'Repetir recorrido guiado', sub: 'Te volvemos a enseñar la app', soloMovil: true,
-                                onClick: () => { navigate('/dashboard'); startTour(); } },
+                            // El recorrido está apagado (ver RECORRIDO_ACTIVO en
+                            // OnboardingContext): mientras lo esté, esta fila no sale.
+                            ...(recorridoDisponible ? [{
+                                icon: Compass, title: 'Repetir recorrido guiado', sub: 'Te volvemos a enseñar la app', soloMovil: true,
+                                onClick: () => { navigate('/dashboard'); startTour(); },
+                            }] : []),
                         ].map((item, i) => (
                             <React.Fragment key={item.title}>
                                 {i > 0 && <Separator className={`bg-border ${item.soloMovil ? 'lg:hidden' : ''}`} />}
@@ -364,15 +368,18 @@ const ProfilePage = () => {
                 </Card>
 
                 {/* Repetir recorrido guiado. En el teléfono es una fila más de la tarjeta de
-                    arriba; aquí se queda para escritorio, tal cual estaba. */}
-                <Button
-                    variant="outline"
-                    className="hidden lg:inline-flex w-full bg-transparent border-brand/40 text-brand hover:bg-brand/10 hover:border-brand uppercase tracking-wider"
-                    onClick={() => { navigate('/dashboard'); startTour(); }}
-                    data-testid="replay-tour-btn"
-                >
-                    <Compass className="w-4 h-4 mr-2" /> Repetir recorrido guiado
-                </Button>
+                    arriba; aquí se queda para escritorio, tal cual estaba. Con el recorrido
+                    apagado no se enseña (ver RECORRIDO_ACTIVO en OnboardingContext). */}
+                {recorridoDisponible && (
+                    <Button
+                        variant="outline"
+                        className="hidden lg:inline-flex w-full bg-transparent border-brand/40 text-brand hover:bg-brand/10 hover:border-brand uppercase tracking-wider"
+                        onClick={() => { navigate('/dashboard'); startTour(); }}
+                        data-testid="replay-tour-btn"
+                    >
+                        <Compass className="w-4 h-4 mr-2" /> Repetir recorrido guiado
+                    </Button>
+                )}
 
                 {/* Logout */}
                 <Button

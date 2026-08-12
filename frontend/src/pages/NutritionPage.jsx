@@ -26,6 +26,18 @@ import DietCalendar from '../components/nutrition/DietCalendar';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// LOS DOS AVISOS DE BIENVENIDA DE NUTRICION, APAGADOS (Francisco, 11-08-2026).
+//
+// Al entrar por primera vez salian encadenados «Tu primera dieta» (PrimeraDieta) y el tutorial
+// de la pantalla (NutritionIntro), y tapaban justo lo que la persona venia a hacer. Es lo
+// mismo que ya senalo Jesus el 11-08 con la captura de Nutricion: la unica que consiguio hacer
+// fue la de la bienvenida, porque no dejaba ver nada detras.
+//
+// Un solo interruptor, y el codigo se queda entero: volver a encenderlo es poner true.
+// Ojo, no confundir con el gate de PREFERENCIAS (showPreferencesSetup), que es otra cosa y
+// sigue vivo: ese recoge los gustos, que el sugeridor usa de verdad.
+const BIENVENIDA_NUTRICION = false;
+
 // Peri options: intra_post/solo_post (Calma) + solo_intra/sin_peri (custom). Normalize stored
 // values, defaulting unknown to intra_post.
 const PERI_VALUES = ['intra_post', 'solo_post', 'solo_intra', 'sin_peri'];
@@ -161,6 +173,8 @@ const NutritionPage = () => {
     // perderse el tutorial por algo que hizo otro.
     const [showIntro, setShowIntro] = useState(false);
     useEffect(() => {
+        // APAGADO (Francisco, 11-08-2026): ver BIENVENIDA_NUTRICION arriba.
+        if (!BIENVENIDA_NUTRICION) return;
         if (uid) setShowIntro(leerLocal('nutrition-intro-seen', uid) !== '1');
     }, [uid]);
     const dismissIntro = useCallback(() => {
@@ -173,6 +187,8 @@ const NutritionPage = () => {
     // primero se configura lo suyo, y despues se le explica la pantalla.
     const [primeraDieta, setPrimeraDieta] = useState(false);
     useEffect(() => {
+        // APAGADO (Francisco, 11-08-2026): ver BIENVENIDA_NUTRICION arriba.
+        if (!BIENVENIDA_NUTRICION) return;
         if (uid) setPrimeraDieta(leerLocal('primera-dieta-hecha', uid) !== '1');
     }, [uid]);
     const cerrarPrimeraDieta = useCallback(() => {

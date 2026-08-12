@@ -29,7 +29,7 @@ const MacroPill = ({ label, value, color }) => (
 const WelcomePage = () => {
     const navigate = useNavigate();
     const { user, profile } = useAuth();
-    const { startTour, skipTour } = useOnboarding();
+    const { startTour, skipTour, available: recorridoDisponible } = useOnboarding();
 
     const beginTour = () => {
         navigate('/dashboard');
@@ -88,22 +88,36 @@ const WelcomePage = () => {
                         </div>
                     )}
 
-                    <p className="text-muted-foreground mb-5 text-sm">
-                        Te hacemos un recorrido rápido por la app para que sepas dónde está
-                        cada cosa y cómo preparar tu primer día. Son un par de minutos.
-                    </p>
+                    {/* Con el recorrido apagado esta pantalla no puede ofrecerlo, así que en
+                        vez de dos botones deja uno solo: entrar. Ver RECORRIDO_ACTIVO en
+                        OnboardingContext. */}
+                    {recorridoDisponible ? (
+                        <>
+                            <p className="text-muted-foreground mb-5 text-sm">
+                                Te hacemos un recorrido rápido por la app para que sepas dónde está
+                                cada cosa y cómo preparar tu primer día. Son un par de minutos.
+                            </p>
 
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <Button onClick={beginTour} data-testid="welcome-start-btn"
-                            className="bg-brand hover:bg-brand/90 text-white font-bold uppercase tracking-wider px-8 py-6 text-base">
-                            <Compass className="w-5 h-5 mr-2" /> Empezar recorrido guiado
-                        </Button>
-                        <Button onClick={exploreSolo} variant="ghost"
-                            data-testid="welcome-skip-btn"
-                            className="text-muted-foreground hover:text-foreground font-semibold px-6 py-6 text-base">
-                            Explorar por mi cuenta <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                    </div>
+                            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                                <Button onClick={beginTour} data-testid="welcome-start-btn"
+                                    className="bg-brand hover:bg-brand/90 text-white font-bold uppercase tracking-wider px-8 py-6 text-base">
+                                    <Compass className="w-5 h-5 mr-2" /> Empezar recorrido guiado
+                                </Button>
+                                <Button onClick={exploreSolo} variant="ghost"
+                                    data-testid="welcome-skip-btn"
+                                    className="text-muted-foreground hover:text-foreground font-semibold px-6 py-6 text-base">
+                                    Explorar por mi cuenta <ArrowRight className="w-4 h-4 ml-2" />
+                                </Button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex justify-center">
+                            <Button onClick={exploreSolo} data-testid="welcome-skip-btn"
+                                className="bg-brand hover:bg-brand/90 text-white font-bold uppercase tracking-wider px-8 py-6 text-base">
+                                Entrar <ArrowRight className="w-4 h-4 ml-2" />
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
