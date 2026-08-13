@@ -1,24 +1,25 @@
-"""Calibración progresiva de la proteína vegetal por ACUMULADO DEL DÍA.
+"""Calibración progresiva de la proteína vegetal por TOTAL DEL DÍA.
 
 Spec del usuario (17-07-2026): la calculadora ya aplica todas las reglas por
 categoría; esta es LA regla que faltaba en el conteo real de la app.
 
-  - Bloque 1 · cereales + panes (cat 7 y 8, acumulado CONJUNTO):
+  - Bloque 1 · cereales + panes (cat 7 y 8, total CONJUNTO):
       H cuenta siempre. P solo si P > H/3 (por 100 g); cuando aplica, cuenta al
-      0 % / 50 % / 100 % según el acumulado del día (0-50 / 50-100 / >100 g).
+      0 % / 50 % / 100 % según el total del día (0-50 / 50-100 / >100 g).
       Excepción: 7.1.3 y 8.8 (proteicos) -> P siempre al 100 %.
       La grasa sigue su regla de categoría normal (no es calibración).
-  - Bloque 2 · frutos secos naturales (17.2.1/17.2.3/17.2.4/17.2.6, acumulado PROPIO):
+  - Bloque 2 · frutos secos naturales (17.2.1/17.2.3/17.2.4/17.2.6, total PROPIO):
       G cuenta siempre. P y H solo si superan G/3 (por 100 g); cuando aplican,
-      cuentan al 0 % / 50 % / 100 % según su acumulado (0-20 / 20-40 / >40 g).
+      cuentan al 0 % / 50 % / 100 % según su total (0-20 / 20-40 / >40 g).
 
 Reglas críticas:
-  - El acumulador suma GRAMOS de ese tipo de alimento (unidades -> n x ración).
-  - La comida ENTERA se asigna al tramo del acumulado TRAS añadirla (no se
-    fracciona dentro de una comida).
-  - Recorrer las comidas en orden cronológico hace que editar una comida solo
-    afecte a esa y a las POSTERIORES (las anteriores no dependen de ella).
-  - El acumulado nace de las comidas de ESE día: se "reinicia" solo a las 00:00
+  - El contador suma GRAMOS de ese tipo de alimento (unidades -> n x ración).
+  - El tramo lo decide el TOTAL DEL DÍA de esa familia, y es el mismo para todas
+    las comidas: así el resultado depende de lo que se come y no del orden en que
+    se monten las comidas (decisión de Jesús del 13-08-2026, ver `pcts_por_comida`).
+  - Por eso una comida SÍ puede cambiar al editar otra, incluso anterior: el día
+    es uno. Antes no pasaba, y ese era justo el problema.
+  - El total nace de las comidas de ESE día: se "reinicia" solo a las 00:00
     porque cada fecha es su propia dieta.
   - En comidas SUELTAS (biblioteca de menús) esta regla no aplica.
 
@@ -137,26 +138,50 @@ def macros_item_calibrados(food: dict, cantidad_g: float,
     return {"P": round(p_ef, 2), "H": round(h_ef, 2), "G": round(m["grasas"], 2)}
 
 
+def totales_del_dia(meals: List[Tuple[str, List[Tuple[dict, float]]]]) -> Tuple[float, float]:
+    """Gramos de cada familia calibrada en TODO el día: (cereales+panes, frutos secos)."""
+    total_cp = sum(c for _, items in meals for f, c in items
+                   if clasificar_bloque(f) == "cereal_pan")
+    total_fs = sum(c for _, items in meals for f, c in items
+                   if clasificar_bloque(f) == "fruto_seco")
+    return total_cp, total_fs
+
+
 def pcts_por_comida(meals: List[Tuple[str, List[Tuple[dict, float]]]]) -> Dict[str, dict]:
-    """Recorre las comidas EN ORDEN CRONOLÓGICO y asigna a cada una su tramo.
+    """El tramo sale del TOTAL DEL DÍA, y es el mismo para todas las comidas.
 
     `meals`: [(meal_key, [(food, cantidad_g), ...]), ...]
-    La comida entera recibe el tramo del acumulado TRAS sumar sus gramos."""
-    out: Dict[str, dict] = {}
-    acum_cp = 0.0
-    acum_fs = 0.0
-    for key, items in meals:
-        g_cp = sum(c for f, c in items if clasificar_bloque(f) == "cereal_pan")
-        g_fs = sum(c for f, c in items if clasificar_bloque(f) == "fruto_seco")
-        acum_cp += g_cp
-        acum_fs += g_fs
-        out[key] = {
-            "pct_cp": _calibracion_cereales_panes(acum_cp),
-            "pct_fs": _calibracion_frutos_secos(acum_fs),
-            "acum_cp": round(acum_cp, 1),
-            "acum_fs": round(acum_fs, 1),
-        }
-    return out
+
+    ANTES ERA UNA CUENTA CORRIENTE, Y DEPENDÍA DEL ORDEN (13-08-2026). Cada comida cobraba
+    el tramo del acumulado que llevaba el día HASTA ELLA, así que el mismo día montado en
+    distinto orden daba números distintos. Jesús, con su ejemplo: 45 g de almendras, 30 en
+    la comida 3 y 15 en la comida 1.
+
+        montando en orden          C1 lleva 15 g -> 0 %    C3 lleva 45 g -> 100 %
+        empezando por el gimnasio  C3 lleva 30 g -> 50 %   C1 lleva 45 g -> 100 %
+
+    Reproducido con el motor real y las almendras del catálogo (P23/100 g): en el primer
+    caso la Comida 1 cuenta 0,00 g de proteína y en el segundo 3,45 g. Mismos gramos, misma
+    comida, y el cliente no ha hecho nada raro. Y no es solo el reparto: con 25 g en C1 y 5
+    en C3 el TOTAL del día pasa de 3,45 g a 2,88 g solo por cambiar el orden.
+
+    Ahora el porcentaje depende de lo que come, y de nada más: se suman los gramos del día
+    entero de cada familia y ese total decide el tramo, igual para todas las comidas. Se
+    pierde a cambio la propiedad de que editar una comida no tocaba las anteriores -- ahora
+    puede cambiarlas, porque el día es uno --, que era justo lo que producía el problema.
+
+    Los tramos siguen siendo los de siempre (frutos secos 20/40 g, cereales y panes
+    50/100 g) y ninguna otra regla se toca: el filtro del tercio se sigue midiendo antes,
+    sobre los macros de etiqueta.
+    """
+    total_cp, total_fs = totales_del_dia(meals)
+    pct_cp = _calibracion_cereales_panes(total_cp)
+    pct_fs = _calibracion_frutos_secos(total_fs)
+    # `acum_*` pasa a ser el total del día: es el número que se le enseña al cliente en la
+    # línea del alimento («frutos secos hoy: 15 de 20 g») y el que decide el tramo.
+    return {key: {"pct_cp": pct_cp, "pct_fs": pct_fs,
+                  "acum_cp": round(total_cp, 1), "acum_fs": round(total_fs, 1)}
+            for key, _ in meals}
 
 
 def calibrar_dia(meals: List[Tuple[str, List[Tuple[dict, float]]]]):
@@ -173,11 +198,16 @@ def calibrar_dia(meals: List[Tuple[str, List[Tuple[dict, float]]]]):
 
 def macros_item_por_acumulado(food: dict, cantidad_g: float,
                               acum_cp: float = 0.0, acum_fs: float = 0.0) -> Dict[str, float]:
-    """Macros efectivos de UN alimento a partir de los gramos ya acumulados en el día.
+    """Macros efectivos de UN alimento a partir de los gramos que ya lleva el día.
 
-    Para quien lleva la cuenta corriente en vez de las comidas completas (el chat, que va
-    añadiendo alimento a alimento). El tramo se calcula con el acumulado TRAS sumar esta
-    cantidad, igual que hace `pcts_por_comida` con la comida entera.
+    Para quien va añadiendo alimento a alimento (el chat) y todavía no tiene el día
+    completo montado. El tramo sale del total TRAS sumar esta cantidad, que es el mismo
+    criterio de `pcts_por_comida`: lo que decide es el día entero.
+
+    `acum_*` tiene que ser el total del DÍA de esa familia, no el de las comidas
+    anteriores a esta. El chat lo lleva así (`state["acumulado_*"]`) y además vuelve a
+    calibrar el día completo tras cada cambio (`_recalibrar_dia`), que es lo que deja
+    todas las comidas con el mismo tramo cuando el día ya está montado.
 
     Sustituye a `calma_engine.calcular_macros_efectivos_alimento`: por debajo cuenta con
     el motor fiel a Calma (`calma_suggest`) en vez del legado.

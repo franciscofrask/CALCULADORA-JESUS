@@ -1,8 +1,9 @@
-"""Tests de la calibración progresiva por acumulado del DÍA (spec 17-07-2026).
+"""Tests de la calibración progresiva por TOTAL del DÍA (spec 17-07-2026, corregida el
+13-08-2026).
 
-Cubren los dos ejemplos literales de la spec, la asignación de la comida entera
-al tramo tras añadirla, la regla de edición (recalcular esa comida y las
-posteriores, nunca las anteriores), las excepciones proteicas y los gates.
+Cubren los dos ejemplos literales de la spec, las excepciones proteicas, los gates y --
+desde el 13-08 -- la regla que lo cambió todo: el tramo sale del TOTAL del día, así que el
+resultado NO puede depender del orden en que se monten las comidas.
 """
 import pytest
 import sys, os
@@ -32,46 +33,49 @@ class TestEjemploSpecCereales:
     """Ejemplo literal de la spec: cereal P25/H55, comidas de 40/30(pan)/40 g."""
 
     def test_tres_comidas(self):
+        """110 g de cereales y panes en el día: TODAS las comidas al 100 %.
+
+        Antes del 13-08 esta misma prueba esperaba 0 % / 50 % / 100 % -- cada comida cobraba
+        el tramo del acumulado que llevaba el día hasta ella --. Jesús lo cambió: el tramo
+        sale del total del día, así que los 40 g de la Comida 1 cuentan igual que los de la
+        Comida 3, que es lo que espera cualquiera que se coma los mismos gramos."""
         meals = [
             ("C1", [(CEREAL, 40)]),
             ("C2", [(PAN, 30)]),
             ("C3", [(CEREAL, 40)]),
         ]
         macros, pcts = calibrar_dia(meals)
-        # C1: acumulado 40 (0-50) -> 0 %
-        assert pcts["C1"]["pct_cp"] == 0.0
-        assert macros["C1"][0]["P"] == 0
-        assert abs(macros["C1"][0]["H"] - 22.0) < 0.1
-        # C2: acumulado 70 (50-100) -> 50 %
-        assert pcts["C2"]["pct_cp"] == 0.5
-        assert abs(macros["C2"][0]["P"] - 3.75) < 0.05
-        assert abs(macros["C2"][0]["H"] - 16.5) < 0.1
-        # C3: acumulado 110 (>100) -> 100 %
-        assert pcts["C3"]["pct_cp"] == 1.0
+        assert pcts["C1"]["pct_cp"] == pcts["C2"]["pct_cp"] == pcts["C3"]["pct_cp"] == 1.0
+        assert pcts["C1"]["acum_cp"] == 110          # el total del día, igual en todas
+        assert abs(macros["C1"][0]["P"] - 10.0) < 0.05
+        assert abs(macros["C2"][0]["P"] - 7.5) < 0.05
         assert abs(macros["C3"][0]["P"] - 10.0) < 0.05
-        assert abs(macros["C3"][0]["H"] - 22.0) < 0.1
+        # Los hidratos no dependen del tramo: siguen igual que siempre
+        assert abs(macros["C1"][0]["H"] - 22.0) < 0.1
+        assert abs(macros["C2"][0]["H"] - 16.5) < 0.1
 
-    def test_no_recalcula_hacia_atras(self):
-        """C1 queda al 0 % aunque el día acabe >100 g (por construcción: su pct
-        solo depende de las comidas anteriores y de ella misma)."""
-        macros, _ = calibrar_dia([("C1", [(CEREAL, 40)]), ("C2", [(CEREAL, 200)])])
-        assert macros["C1"][0]["P"] == 0
+    def test_el_dia_entero_manda_tambien_hacia_atras(self):
+        """Lo contrario de lo que se probaba antes, y a propósito.
 
-    def test_editar_recalcula_esa_y_posteriores(self):
-        """Regla 4: subir C1 de 40->60 g cambia C1 (cruza tramo) y las
-        posteriores; con C1 intacta, C1 no cambia aunque cambien C2/C3."""
+        Hasta el 13-08 este test se llamaba `test_no_recalcula_hacia_atras` y fijaba que C1
+        se quedaba al 0 % aunque el día acabara con 240 g. Eso es justo lo que Jesús mandó
+        cambiar: si el día lleva más de 100 g, la proteína del cereal cuenta entera, esté en
+        la comida que esté."""
+        macros, pcts = calibrar_dia([("C1", [(CEREAL, 40)]), ("C2", [(CEREAL, 200)])])
+        assert pcts["C1"]["pct_cp"] == 1.0
+        assert abs(macros["C1"][0]["P"] - 25 * 0.4) < 0.05
+
+    def test_editar_una_comida_puede_cambiar_las_demas(self):
+        """Y tiene que poder: el día es uno. Subir C2 cambia lo que cuenta C1, porque el
+        tramo es del total. Antes esto era imposible por construcción y por eso el resultado
+        dependía del orden de montaje."""
         antes, _ = calibrar_dia([("C1", [(CEREAL, 40)]), ("C2", [(CEREAL, 20)])])
-        editado, _ = calibrar_dia([("C1", [(CEREAL, 60)]), ("C2", [(CEREAL, 20)])])
-        assert antes["C1"][0]["P"] == 0            # 40 g -> tramo 0 %
-        assert abs(editado["C1"][0]["P"] - 25 * 0.6 * 0.5) < 0.05  # 60 g -> 50 %
-        # C2 pasa de acum 60 (50 %) a acum 80 (50 %): mismo tramo, y C1 nunca
-        # depende de C2 (cambiar C2 no toca C1)
-        solo_c2, _ = calibrar_dia([("C1", [(CEREAL, 40)]), ("C2", [(CEREAL, 300)])])
-        assert solo_c2["C1"][0]["P"] == antes["C1"][0]["P"]
+        despues, _ = calibrar_dia([("C1", [(CEREAL, 40)]), ("C2", [(CEREAL, 300)])])
+        assert abs(antes["C1"][0]["P"] - 25 * 0.4 * 0.5) < 0.05    # 60 g en el día -> 50 %
+        assert abs(despues["C1"][0]["P"] - 25 * 0.4) < 0.05        # 340 g -> 100 %
 
-    def test_comida_entera_al_tramo_tras_anadirla(self):
-        """Una comida que cruza el umbral se asigna ENTERA al tramo final:
-        dos cereales de 40 g en la misma comida -> acumulado 80 -> ambos al 50 %."""
+    def test_una_comida_que_cruza_el_umbral_va_entera_al_tramo(self):
+        """No se fracciona dentro de una comida: dos cereales de 40 g -> 80 g -> ambos 50 %."""
         macros, pcts = calibrar_dia([("C1", [(CEREAL, 40), (PAN, 40)])])
         assert pcts["C1"]["pct_cp"] == 0.5
         assert abs(macros["C1"][0]["P"] - 25 * 0.4 * 0.5) < 0.05
@@ -100,37 +104,38 @@ class TestEjemploSpecFrutosSecos:
     """Ejemplo literal de la spec: almendras P21/H4/G54, comidas de 15/10/20 g."""
 
     def test_tres_comidas(self):
+        """45 g de almendras en el día -> las tres comidas al 100 %."""
         meals = [("C1", [(ALMENDRAS, 15)]), ("C2", [(ALMENDRAS, 10)]), ("C3", [(ALMENDRAS, 20)])]
         macros, pcts = calibrar_dia(meals)
-        # C1: acum 15 -> 0 %: solo grasa
-        assert macros["C1"][0]["P"] == 0 and macros["C1"][0]["H"] == 0
+        assert pcts["C1"]["pct_fs"] == pcts["C2"]["pct_fs"] == pcts["C3"]["pct_fs"] == 1.0
+        assert pcts["C1"]["acum_fs"] == 45
+        assert abs(macros["C1"][0]["P"] - 21 * 0.15) < 0.05
+        assert abs(macros["C2"][0]["P"] - 21 * 0.10) < 0.05
+        assert abs(macros["C3"][0]["P"] - 21 * 0.20) < 0.05
+        # La grasa nunca calibra: sigue igual comida a comida
         assert abs(macros["C1"][0]["G"] - 8.1) < 0.1
-        # C2: acum 25 -> 50 %
-        assert pcts["C2"]["pct_fs"] == 0.5
-        assert abs(macros["C2"][0]["P"] - 1.05) < 0.05
         assert abs(macros["C2"][0]["G"] - 5.4) < 0.1
-        # C3: acum 45 -> 100 %
-        assert abs(macros["C3"][0]["P"] - 4.2) < 0.05
-        assert abs(macros["C3"][0]["G"] - 10.8) < 0.1
 
     def test_hidratos_tambien_calibran(self):
-        """Anacardos: P y H pasan el gate G/3 y calibran juntos por tramo."""
+        """Anacardos: P y H pasan el gate G/3 y calibran juntos por tramo (25 g -> 50 %)."""
         macros, _ = calibrar_dia([("C1", [(ANACARDOS, 15)]), ("C2", [(ANACARDOS, 10)])])
-        assert macros["C1"][0]["P"] == 0 and macros["C1"][0]["H"] == 0
+        assert abs(macros["C1"][0]["P"] - 18 * 0.15 * 0.5) < 0.05
+        assert abs(macros["C1"][0]["H"] - 27 * 0.15 * 0.5) < 0.05
         assert abs(macros["C2"][0]["P"] - 18 * 0.1 * 0.5) < 0.05
         assert abs(macros["C2"][0]["H"] - 27 * 0.1 * 0.5) < 0.05
 
     def test_gate_g3_por_alimento(self):
-        """Nueces P15 < G65/3: su P no cuenta nunca, pero SÍ suman al acumulado."""
+        """Nueces P15 < G65/3: su P no cuenta nunca, pero SÍ suman al total del día."""
         macros, pcts = calibrar_dia([("C1", [(NUECES, 25)]), ("C2", [(ALMENDRAS, 10)])])
         assert macros["C1"][0]["P"] == 0
         assert pcts["C2"]["acum_fs"] == 35          # 25 de nueces + 10 de almendras
         assert abs(macros["C2"][0]["P"] - 21 * 0.1 * 0.5) < 0.05  # tramo 50 %
 
     def test_17_2_6_es_fruto_seco(self):
+        """45 g en el día -> 100 %, también los 15 g de la primera comida."""
         macros, pcts = calibrar_dia([("C1", [(CACAHUETE_DESG, 15)]), ("C2", [(CACAHUETE_DESG, 30)])])
-        assert macros["C1"][0]["P"] == 0
-        assert pcts["C2"]["pct_fs"] == 1.0          # acum 45 -> 100 %
+        assert pcts["C2"]["pct_fs"] == 1.0
+        assert abs(macros["C1"][0]["P"] - 50 * 0.15) < 0.05
         assert abs(macros["C2"][0]["P"] - 50 * 0.3) < 0.05
 
     def test_acumuladores_independientes(self):
@@ -138,6 +143,56 @@ class TestEjemploSpecFrutosSecos:
         _, pcts = calibrar_dia([("C1", [(CEREAL, 90), (ALMENDRAS, 15)])])
         assert pcts["C1"]["acum_cp"] == 90 and pcts["C1"]["pct_cp"] == 0.5
         assert pcts["C1"]["acum_fs"] == 15 and pcts["C1"]["pct_fs"] == 0.0
+
+
+class TestNoDependeDelOrden:
+    """El caso de Jesús del 13-08, que es el motivo de todo este cambio.
+
+        «45 g de almendras, 30 en la comida 3 y 15 en la comida 1.
+          La que monta el día en orden:      C1 lleva 15 g -> 0 %.  C3 lleva 45 g -> 100 %.
+          La que empieza por la del gimnasio: C3 lleva 30 g -> 50 %. C1 lleva 45 g -> 100 %.
+         Mismos gramos, distinta proteína contada. Y ninguna ha hecho nada raro.»
+
+    Medido con el motor real antes del arreglo: la Comida 1 contaba 0,00 g de proteína
+    montando en orden y 3,45 g empezando por la del gimnasio. Ahora los dos órdenes dan lo
+    mismo, alimento a alimento.
+    """
+
+    def test_el_ejemplo_de_jesus_da_igual_en_los_dos_ordenes(self):
+        en_orden = [("C1", [(ALMENDRAS, 15)]), ("C3", [(ALMENDRAS, 30)])]
+        del_gimnasio = [("C3", [(ALMENDRAS, 30)]), ("C1", [(ALMENDRAS, 15)])]
+        m1, p1 = calibrar_dia(en_orden)
+        m2, p2 = calibrar_dia(del_gimnasio)
+        assert m1["C1"] == m2["C1"], "la Comida 1 cuenta distinto según por dónde se empezó"
+        assert m1["C3"] == m2["C3"]
+        assert p1["C1"]["pct_fs"] == p2["C1"]["pct_fs"] == 1.0   # 45 g en el día
+        assert abs(m1["C1"][0]["P"] - 21 * 0.15) < 0.05
+
+    def test_tampoco_cambia_el_total_del_dia(self):
+        """El reparto 25 g + 5 g es el que hacía bailar el TOTAL, no solo el reparto:
+        3,45 g de proteína montando en un orden y 2,88 g en el otro."""
+        a = [("C1", [(ALMENDRAS, 25)]), ("C3", [(ALMENDRAS, 5)])]
+        b = [("C3", [(ALMENDRAS, 5)]), ("C1", [(ALMENDRAS, 25)])]
+        ma, _ = calibrar_dia(a)
+        mb, _ = calibrar_dia(b)
+        total = lambda m: round(sum(x["P"] for fila in m.values() for x in fila), 2)
+        assert total(ma) == total(mb)
+
+    def test_da_igual_en_que_comida_pongas_los_gramos(self):
+        """Dos personas comen los mismos 45 g de almendras, repartidos distinto: el día
+        cuenta lo mismo. Antes no, y esa era la queja."""
+        uno, _ = calibrar_dia([("C1", [(ALMENDRAS, 15)]), ("C3", [(ALMENDRAS, 30)])])
+        otro, _ = calibrar_dia([("C1", [(ALMENDRAS, 30)]), ("C3", [(ALMENDRAS, 15)])])
+        total = lambda m: round(sum(x["P"] for fila in m.values() for x in fila), 2)
+        assert total(uno) == total(otro)
+
+    def test_el_contador_del_dia_es_el_mismo_en_todas_las_comidas(self):
+        """Lo que se le enseña al cliente («frutos secos hoy: 45 g») no puede cambiar de una
+        comida a otra: es del día."""
+        _, pcts = calibrar_dia([("C1", [(ALMENDRAS, 15)]), ("C2", [(CEREAL, 60)]),
+                                ("C3", [(ALMENDRAS, 30)])])
+        assert {p["acum_fs"] for p in pcts.values()} == {45}
+        assert {p["acum_cp"] for p in pcts.values()} == {60}
 
 
 class TestFueraDeBloques:
@@ -232,18 +287,28 @@ class TestLoQueNoPasaElFiltroSigueGastandoCupo:
         assert macros["C1"][0]["P"] == 0
 
     def test_pero_gasta_cupo_y_empuja_al_siguiente(self):
-        """60 g de ese pan + 100 g de cereal: el cereal llega con 160 g acumulados y cobra el
-        100 %. Sin el pan delante se habría quedado en el 50 %."""
+        """60 g de ese pan + 100 g de cereal: el día suma 160 g y el cereal cobra el 100 %.
+        Sin el pan, el día son 100 g y se queda a medias.
+
+        Desde el 13-08 el cupo es del DÍA, así que da igual si el pan va antes o después:
+        lo que cuenta es que esos 60 g están. Por eso `acum_cp` vale 160 en las dos comidas
+        -- es el total -- y no 60 y 160 como cuando era una cuenta corriente."""
         macros, pcts = calibrar_dia([("C1", [(self.PAN_QUE_NO_PASA, 60)]),
                                      ("C2", [(CEREAL, 100)])])
-        assert pcts["C1"]["acum_cp"] == 60
-        assert pcts["C2"]["acum_cp"] == 160
+        assert pcts["C1"]["acum_cp"] == pcts["C2"]["acum_cp"] == 160
         assert pcts["C2"]["pct_cp"] == 1.0
         assert macros["C2"][0]["P"] == 25.0
 
         solo, p = calibrar_dia([("C2", [(CEREAL, 100)])])
-        assert p["C2"]["pct_cp"] == 0.5, "sin el pan delante se queda a medias"
+        assert p["C2"]["pct_cp"] == 0.5, "sin el pan en el día se queda a medias"
         assert solo["C2"][0]["P"] == 12.5
+
+    def test_el_pan_de_despues_tambien_empuja(self):
+        """La otra cara de lo mismo, que antes era imposible: el pan que va DETRÁS también
+        gasta cupo, porque el día es uno."""
+        _, pcts = calibrar_dia([("C1", [(CEREAL, 100)]),
+                                ("C2", [(self.PAN_QUE_NO_PASA, 60)])])
+        assert pcts["C1"]["pct_cp"] == 1.0
 
 
 class TestEnDobleCategoriaGanaLaMasPermisiva:
