@@ -82,7 +82,26 @@ CATS_POST_PRIORIDAD = [
 # Se siguen buscando y añadiendo a mano: esto solo afecta a las SUGERENCIAS.
 CATS_NO_SUGERIBLES = [
     '8.10',        # masa de pizza, obleas y hojaldre
-    '7.2.1',       # harinas de trigo (las de avena, 7.2.2, sí valen: tortitas y batidos)
+    '7.2.1',       # harinas de trigo
+    # LAS DE AVENA TAMBIEN, PERO POR SOLEDAD, NO POR PROHIBICION (12-08-2026).
+    #
+    # Estaban exceptuadas «porque valen para tortitas y batidos», y es verdad: lo que no
+    # vale es que salgan SOLAS y en seco. A Francisco le propuso «harina de avena de
+    # reposteria + filetes de magro de jamon», que cuadra los numeros y no es una comida.
+    # Su palabras: «se puede consumir sola, pero se sugiere mezclar con liquidos».
+    #
+    # El rescate de `_acompana_a_algo` hace exactamente eso, y el dato de las 154.055
+    # comidas reales lo respalda -- elevacion y veces que aparecen juntas:
+    #
+    #     harina de avena + claras de huevo ....  4,64   978 veces   (las tortitas)
+    #     harina de avena + leche semidesnatada .  4,58    28 veces
+    #     harina de avena + pechuga de pollo ....  0,39    74 veces
+    #     harina de avena + filetes de magro ....  0,58     0 veces
+    #
+    # O sea que con leche o con claras entra, y con el jamon no. Buscarla por su nombre y
+    # anadirla a mano sigue funcionando igual: esto solo afecta a lo que PROPONE el
+    # asistente por su cuenta.
+    '7.2.2',       # harinas de avena
     '7.2.3',       # harinas de maíz y otros cereales, tapioca
     '16',          # salsas, siropes y konjac
     '11.9',        # mermeladas

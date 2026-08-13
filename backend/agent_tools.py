@@ -422,6 +422,17 @@ class AgentTools:
                 items = self._ordenar_por_distancia(items, restante)
             if repetidos:
                 repetidos = self._ordenar_por_distancia(repetidos, restante)
+        # SIN NADA NUEVO, LA RUEDA DA OTRA VUELTA (ver `_semilla_variedad`). Si se le han
+        # enseñado ya todos los candidatos, volver al orden de siempre es lo que hacia que
+        # la sexta sugerencia fuera identica a la primera. Se vacia la memoria de esta
+        # comida y se sube la vuelta, que cambia el barajado: asi insistir trae algo
+        # distinto en vez de lo mismo.
+        if not items and repetidos:
+            key_c = self.bot.current_meal_key()
+            self.bot.state.setdefault("seen_sugg", {})[key_c] = []
+            vueltas = self.bot.state.setdefault("vueltas_sugerencia", {})
+            vueltas[key_c] = int(vueltas.get(key_c, 0)) + 1
+            items, repetidos = self._ordenar_por_distancia(repetidos, restante), []
         if len(items) < limite:
             items = items + repetidos[:limite - len(items)]
         items = items[:limite]
@@ -607,9 +618,18 @@ class AgentTools:
         # `session_id` no existe: con el acceso directo se cae la ordenación entera, que es
         # de lo último que uno quiere que dependa de un atributo opcional. Sin sesión, la
         # semilla es la del día y la comida, que sigue siendo estable.
+        #
+        # Y LA VUELTA. Estable esta bien para recargar la pagina, pero hacia que INSISTIR
+        # devolviera lo mismo: cuando ya se le habian enseñado todos los candidatos, la
+        # memoria de `seen_sugg` se quedaba sin nada nuevo y el orden volvia a ser el de
+        # siempre. Medido el 12-08: pidiendo sugerencias seis veces seguidas, las vueltas
+        # 1, 5 y 6 salian IDENTICAS -- «los copos de avena estan siempre», dijo Francisco.
+        # La vuelta sube cada vez que se agota la lista, asi que la rueda da otro giro en
+        # vez de pararse, y recargar sin pedir nada nuevo sigue enseñando lo mismo.
         partes = (str(getattr(self.bot, "session_id", None) or ""),
                   str(st.get("fecha_objetivo") or ""),
-                  self.bot.current_meal_key())
+                  self.bot.current_meal_key(),
+                  str((st.get("vueltas_sugerencia") or {}).get(self.bot.current_meal_key(), 0)))
         return abs(hash("|".join(partes))) % (2 ** 31)
 
     def _companyia_mala(self, items: List[dict], ids_exentos: set = None):
@@ -649,6 +669,21 @@ class AgentTools:
         restante = self.bot.get_remaining_macros()
         momento = self._momento_actual()
         opciones: List[dict] = []
+
+        # CADA VEZ QUE PIDE OTRA, OTRO BARAJADO (ver `_semilla_variedad`).
+        #
+        # Francisco, 12-08-2026: «repite siempre copos de avena, los copos están siempre que
+        # le pido la sugerencia». Medido pidiendo seis veces seguidas: las vueltas 1, 5 y 6
+        # salían IDÉNTICAS. La semilla es estable por cliente-día-comida a propósito -- para
+        # que recargar la página no cambie lo que está viendo --, pero eso hacía que INSISTIR
+        # tampoco lo cambiara. Aquí sube la vuelta en cada peticion NUEVA de menús, que es lo
+        # que el cliente entiende por «dame otras»; recargar no pasa por aquí.
+        key_comida = self.bot.current_meal_key()
+        pedidas = self.bot.state.setdefault("veces_compuesto", {})
+        if pedidas.get(key_comida):
+            vueltas = self.bot.state.setdefault("vueltas_sugerencia", {})
+            vueltas[key_comida] = int(vueltas.get(key_comida, 0)) + 1
+        pedidas[key_comida] = int(pedidas.get(key_comida, 0)) + 1
 
         # --- 1) Recetario: sin estilo ni filtros que él no sabe respetar, y fuera del peri.
         # `solo_recetario` lo salta a propósito: cuando el cliente PIDE las recetas de
@@ -1046,11 +1081,24 @@ class AgentTools:
         if list(firma) in (self.bot.state.get("menus_vistos") or []):
             problemas.append({"item_id": None, "tipo": "ya_ofrecido",
                               "detalle": "este menú ya se le ofreció antes"})
-        exceso = sum(abs(v) for v in b["desvio"].values())
+        # EL DESVIO, CONTRA EL OBJETIVO DE AHORA (12-08-2026).
+        #
+        # Se guardaba al componer, contra lo que faltaba en la comida en ESE momento. Si
+        # entre medias cambia la configuracion del dia, el objetivo de la comida cambia y el
+        # aviso se queda hablando del viejo: Francisco vio «se desvia 60,1 g de hidratos»
+        # justo encima de un «65,9 / 66» que decia lo contrario. Dos numeros que no pueden
+        # ser verdad a la vez, y el cliente no sabe a cual creer.
+        tot = b.get("macros_totales") or {}
+        ahora = self.bot.get_remaining_macros()
+        desvio = {m: round(float(tot.get(m, 0) or 0) - float(ahora.get(m, 0) or 0), 1)
+                  for m in ("P", "H", "G")}
+        b["desvio"] = desvio
+        b["objetivo"] = dict(ahora)
+        exceso = sum(abs(v) for v in desvio.values())
         if exceso > MARGEN_BORRADOR:
-            peor = max(b["desvio"], key=lambda m: abs(b["desvio"][m]))
+            peor = max(desvio, key=lambda m: abs(desvio[m]))
             problemas.append({"item_id": None, "tipo": "fuera_de_margen",
-                              "detalle": f"se desvía {abs(b['desvio'][peor])} g de "
+                              "detalle": f"se desvía {abs(desvio[peor])} g de "
                                          f"{_MACRO_LBL[peor]} del objetivo"})
 
         sugerencias = []
@@ -1356,6 +1404,25 @@ class AgentTools:
             out["aviso"] = (out.get("aviso", "") + ("; " if out.get("aviso") else "")
                             + "se pasa " + " y ".join(pasan))
         return out
+
+    def guion_del_peri(self, variante: str = "principal") -> dict:
+        """Lo que Jesus dice en el intra y en el post, literal. Se suelta TAL CUAL.
+
+        No esta en el prompt a proposito: un modelo parafrasea, y esto es metodo, no
+        conversacion. Ademas lleva 23 nombres de alimento del catalogo y en el prompt no
+        caben (regla del 8 bis). Ver `core/guion_peri.py`.
+        """
+        from core.guion_peri import guion
+        key = self.bot.current_meal_key()
+        momento = {"Intra": "intra", "Post": "post"}.get(key)
+        if not momento:
+            return {"ok": False, "error": "esto solo aplica al intra y al post; "
+                                          f"ahora estas en {self._nombre_comida_actual()}"}
+        texto = guion(momento, variante)
+        if not texto:
+            return {"ok": False, "error": f"no hay guion de '{variante}' para el {momento}"}
+        return {"ok": True, "momento": momento, "variante": variante, "texto": texto,
+                "instruccion": "Escribe este texto TAL CUAL, sin resumirlo ni reescribirlo."}
 
     async def explicar(self, alimento: str) -> dict:
         """Qué cuenta un alimento en CALMA y por qué (determinista, del motor)."""

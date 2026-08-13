@@ -82,10 +82,20 @@ async def chatbot_start(current_user: dict = Depends(get_current_user)):
         )
     await save_chatbot_session(chatbot)
 
+    # LA PRESENTACION DE MARCO, LITERAL Y UNA SOLA VEZ.
+    #
+    # Es texto de Jesus y va en codigo, no en el prompt: asi sale tal cual la primera vez y
+    # no vuelve a salir nunca, sin depender de que el modelo se acuerde de no repetirla. El
+    # chiste hace gracia una vez.
+    #
+    # Sin «¿empezamos por el desayuno?»: a las comidas se las llama por su numero (decision
+    # del 09-08), y ademas quien ya tiene medio dia montado no empieza por la primera.
     return {
         "session_id": session_id,
         "macros": user_macros,
-        "message": "¡Hola! Soy tu asistente de nutrición. ¿Hoy es día de entrenamiento o descanso?"
+        "message": ("Hola, soy Marco. Y sí: Marco, por Macro. Ya está el chiste hecho, no "
+                    "hace falta que lo hagas tú. Te ayudo a montar tu dieta del día, comida "
+                    "por comida. ¿Hoy es día de entrenamiento o de descanso?")
     }
 
 
