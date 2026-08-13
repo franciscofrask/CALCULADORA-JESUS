@@ -1755,9 +1755,28 @@ class AgentTools:
         return {"borradores": salida}
 
     # ============================================================ 3. revisar_borrador
+    # QUÉ IMPIDE APLICAR UN MENÚ Y QUÉ SOLO SE AVISA (13-08-2026).
+    #
+    # Antes bloqueaba cualquier problema, y con eso el cliente se quedó encerrado en
+    # producción: eligió un menú, se le contestó «no lo he aplicado: pidió genéricos y Copos
+    # de avena instant (VitoBest) es de marca», volvió a decir «Elijo: ese menú» y recibió
+    # la misma frase. Otra vez.
+    #
+    # La marca no puede bloquear, porque el menú SE LE ENSEÑÓ con el nombre del producto
+    # delante y él lo eligió: elegirlo ES la respuesta a la pregunta. Bloquearlo es discutir
+    # con el cliente sobre una preferencia suya. Lo mismo con lo atípico y con lo repetido:
+    # son cosas que se dicen, no que se impiden.
+    #
+    # Lo que sí para la mano es lo que el cliente NO puede haber querido: que el menú se vaya
+    # de sus macros, que lleve algo que él tiene en «evitar» (eso no es un gusto, es una
+    # alergia o un rechazo firmado en su ficha) o que el alimento ya no exista.
+    PROBLEMAS_QUE_BLOQUEAN = {"fuera_de_margen", "restriccion", "no_existe"}
+
     async def revisar_borrador(self, borrador_id: str) -> dict:
         """Auditoría determinista de un borrador: solo lo comprobable con datos.
-        La fidelidad al estilo pedido es responsabilidad de quien llama."""
+        La fidelidad al estilo pedido es responsabilidad de quien llama.
+
+        Cada problema dice si BLOQUEA o solo avisa (`PROBLEMAS_QUE_BLOQUEAN`)."""
         b = (self.bot.state.get("borradores") or {}).get(borrador_id)
         if not b:
             return {"ok": False, "problemas": [{"tipo": "no_existe",
@@ -1830,7 +1849,13 @@ class AgentTools:
                 sugerencias.append({"item_id": it["id"],
                                     "alternativas": [{"id": a["id"], "nombre": a["nombre"]}
                                                      for a in alternativas]})
+        for p in problemas:
+            p["bloquea"] = p.get("tipo") in self.PROBLEMAS_QUE_BLOQUEAN
+        bloqueantes = [p for p in problemas if p["bloquea"]]
         return {"ok": not problemas, "problemas": problemas,
+                # `ok` sigue diciendo si el menú está limpio del todo (lo usa el agente para
+                # contarlo), pero aplicar solo se para con estos.
+                "impide_aplicar": bloqueantes,
                 "sugerencias_de_cambio": sugerencias}
 
     # ============================================================ 3b. ofrecer_sustitutos
@@ -1974,8 +1999,9 @@ class AgentTools:
         }
 
     async def aplicar_borrador(self, borrador_id: str, forzar: bool = False) -> dict:
-        """Vuelca un borrador a la comida actual. REVISA antes: con problemas no aplica
-        (salvo forzar=True explícito tras contárselo al cliente)."""
+        """Vuelca un borrador a la comida actual. REVISA antes: solo lo que de verdad
+        impide aplicarlo lo para (ver `PROBLEMAS_QUE_BLOQUEAN`); el resto se aplica y se
+        cuenta. Con `forzar=True` entra igualmente."""
         b = (self.bot.state.get("borradores") or {}).get(borrador_id)
         if not b:
             return {"ok": False, "error": f"no hay borrador {borrador_id}"}
@@ -1983,8 +2009,13 @@ class AgentTools:
         if protegida:
             return protegida
         revision = await self.revisar_borrador(borrador_id)
-        if not revision["ok"] and not forzar:
-            return {"ok": False, "bloqueado_por": revision["problemas"],
+        impiden = revision.get("impide_aplicar") or []
+        if impiden and not forzar:
+            return {"ok": False, "bloqueado_por": impiden,
+                    "instruccion": "Cuéntale qué pasa y ofrécele arreglarlo. SI YA TE HA "
+                                   "DICHO QUE LO QUIERE IGUAL -- «ese», «ponlo», «me da "
+                                   "igual» --, repite AHORA esta llamada con forzar=true en "
+                                   "vez de volver a preguntar.",
                     "sugerencias_de_cambio": revision.get("sugerencias_de_cambio", [])}
         for it in b["items"]:
             await self.bot.add_food_by_id(it["id"], it["cantidad_g"])
@@ -1992,7 +2023,18 @@ class AgentTools:
         firma = sorted(i["id"] for i in b["items"])
         if firma not in vistos:
             vistos.append(firma)
-        return {"ok": True, "comida": self.ver_estado("comida")}
+        out = {"ok": True, "comida": self.ver_estado("comida")}
+        # Lo que no impedía aplicarlo pero él tiene que saber: la marca cuando había pedido
+        # genéricos, un alimento atípico a esa hora. Se aplica y SE DICE, en vez de no
+        # aplicar y preguntar -- que es lo que le dejaba dando vueltas.
+        avisos = [p["detalle"] for p in (revision.get("problemas") or [])
+                  if not p.get("bloquea") and p.get("detalle")]
+        if avisos:
+            out["avisos"] = avisos
+            out["instruccion"] = ("Ya está puesto. Dile de pasada lo que hay que decirle "
+                                  "(está en `avisos`) y ofrécele cambiarlo si quiere, sin "
+                                  "preguntar si lo aplicas: ya lo has aplicado.")
+        return out
 
     # ============================================================ 6. editar_comida
     async def editar_comida(self, operaciones: List[dict], forzar: bool = False) -> dict:
