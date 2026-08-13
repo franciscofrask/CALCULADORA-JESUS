@@ -661,6 +661,25 @@ class AgentLoop:
                     ya_ids = {s["id"] for s in sugerencias}
                     sugerencias.extend(i for i in resultado["items"]
                                        if i["id"] not in ya_ids)
+                if nombre == "guion_del_peri" and resultado.get("ok"):
+                    # EL GUION DEL PERI VIENE CON SUS TARJETAS (13-08-2026).
+                    #
+                    # Francisco: «me daba las sugerencias por escrito en vez de mostrarme el
+                    # recuadro». El texto del método NOMBRA alimentos -- los aminoácidos, la
+                    # ciclodextrina --, pero detrás no hay ninguna búsqueda, y la app solo
+                    # pinta tarjetas de lo que devuelven las herramientas. Así que el cliente
+                    # leía nombres que no podía pulsar, y si el modelo se acordaba de buscar
+                    # salían y si no, no: la misma pregunta daba recuadro o no según el día.
+                    #
+                    # En el peri el universo ya está acotado a los alimentos permitidos, así
+                    # que una búsqueda sin texto devuelve justo los que nombra el guion.
+                    try:
+                        extra = await self.tools.buscar_alimentos(limite=6)
+                        ya_ids = {s["id"] for s in sugerencias}
+                        sugerencias.extend(i for i in (extra.get("items") or [])
+                                           if i["id"] not in ya_ids)
+                    except Exception:
+                        pass   # sin tarjetas, pero el guion se dice igual
                 if nombre == "ofrecer_sustitutos" and resultado.get("opciones"):
                     sugerencias = resultado["opciones"]
                 if nombre == "componer_menu" and resultado.get("borradores"):
