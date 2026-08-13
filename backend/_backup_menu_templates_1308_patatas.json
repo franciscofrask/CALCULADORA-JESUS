@@ -1,0 +1,414 @@
+{
+  "prod": [
+    {
+      "id": "M74882543",
+      "nombre": "Combo estrella de patatas, huevo y pollo",
+      "momento": "comida",
+      "min_kcal": 0.0,
+      "max_kcal": 99999.0,
+      "tags": [
+        "recetario"
+      ],
+      "items": [
+        {
+          "rol": "proteina",
+          "buscar": "Pechuga de pollo",
+          "categoria": "2.2.1",
+          "proporcion": 1.0,
+          "alimento_id": 498
+        },
+        {
+          "rol": "proteina",
+          "buscar": "Huevos enteros L",
+          "categoria": "1.2.1",
+          "proporcion": 1.0,
+          "alimento_id": 321
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Patatas fritas corte grueso (Hacendado)",
+          "categoria": "9",
+          "proporcion": 1.0,
+          "alimento_id": 1896
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Berenjena",
+          "categoria": "13.1",
+          "proporcion": 1.0,
+          "alimento_id": 89
+        }
+      ],
+      "origen": "custom",
+      "created_by": "import_recetario",
+      "created_at": "2026-07-10T22:39:32.176961+00:00",
+      "fuente": "https://noteconformesconmenos.com/recetas/combo-estrella-de-patatas-huevo-y-pollo/",
+      "macros_web": {
+        "P": "56,2",
+        "H": "66,0",
+        "G": "12,0"
+      },
+      "ingredientes_web": [
+        "200g de pechuga de pollo",
+        "2 huevos enteros (tamaño L)",
+        "330g de patatas fritas corte grueso (Hacendado)",
+        "150g de berenjena"
+      ]
+    },
+    {
+      "id": "M11BD48BD",
+      "nombre": "Combo estrella de patatas, huevo y pollo",
+      "momento": "cena",
+      "min_kcal": 0.0,
+      "max_kcal": 99999.0,
+      "tags": [
+        "recetario"
+      ],
+      "items": [
+        {
+          "rol": "proteina",
+          "buscar": "Pechuga de pollo",
+          "categoria": "2.2.1",
+          "proporcion": 1.0,
+          "alimento_id": 498
+        },
+        {
+          "rol": "proteina",
+          "buscar": "Huevos enteros L",
+          "categoria": "1.2.1",
+          "proporcion": 1.0,
+          "alimento_id": 321
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Patatas fritas corte grueso (Hacendado)",
+          "categoria": "9",
+          "proporcion": 1.0,
+          "alimento_id": 1896
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Berenjena",
+          "categoria": "13.1",
+          "proporcion": 1.0,
+          "alimento_id": 89
+        }
+      ],
+      "origen": "custom",
+      "created_by": "import_recetario",
+      "created_at": "2026-07-10T22:39:32.176991+00:00",
+      "fuente": "https://noteconformesconmenos.com/recetas/combo-estrella-de-patatas-huevo-y-pollo/",
+      "macros_web": {
+        "P": "56,2",
+        "H": "66,0",
+        "G": "12,0"
+      },
+      "ingredientes_web": [
+        "200g de pechuga de pollo",
+        "2 huevos enteros (tamaño L)",
+        "330g de patatas fritas corte grueso (Hacendado)",
+        "150g de berenjena"
+      ]
+    },
+    {
+      "id": "M5CD2DAC2",
+      "nombre": "Hamburguesas estilo zorza gallega con patatas crujientes",
+      "momento": "comida",
+      "min_kcal": 0.0,
+      "max_kcal": 99999.0,
+      "tags": [
+        "recetario"
+      ],
+      "items": [
+        {
+          "rol": "proteina",
+          "buscar": "Hamburguesa de ternera baja en grasa",
+          "categoria": "2.3.2",
+          "proporcion": 1.0,
+          "alimento_id": 1609
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Champiñones",
+          "categoria": "13.1",
+          "proporcion": 1.0,
+          "alimento_id": 139
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Patatas fritas corte grueso (Hacendado)",
+          "categoria": "9",
+          "proporcion": 1.0,
+          "alimento_id": 1896
+        }
+      ],
+      "origen": "custom",
+      "created_by": "import_recetario",
+      "created_at": "2026-07-10T22:39:41.718468+00:00",
+      "fuente": "https://noteconformesconmenos.com/recetas/zorza-gallega-de-hamburguesa/",
+      "macros_web": {
+        "P": "59,8",
+        "H": "45,0",
+        "G": "15,0"
+      },
+      "ingredientes_web": [
+        "300g de hamburguesa de ternera baja en grasa",
+        "100g de champiñones",
+        "225g de patatas fritas corte grueso (Hacendado)"
+      ]
+    },
+    {
+      "id": "MCA739A21",
+      "nombre": "Hamburguesas estilo zorza gallega con patatas crujientes",
+      "momento": "cena",
+      "min_kcal": 0.0,
+      "max_kcal": 99999.0,
+      "tags": [
+        "recetario"
+      ],
+      "items": [
+        {
+          "rol": "proteina",
+          "buscar": "Hamburguesa de ternera baja en grasa",
+          "categoria": "2.3.2",
+          "proporcion": 1.0,
+          "alimento_id": 1609
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Champiñones",
+          "categoria": "13.1",
+          "proporcion": 1.0,
+          "alimento_id": 139
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Patatas fritas corte grueso (Hacendado)",
+          "categoria": "9",
+          "proporcion": 1.0,
+          "alimento_id": 1896
+        }
+      ],
+      "origen": "custom",
+      "created_by": "import_recetario",
+      "created_at": "2026-07-10T22:39:41.718561+00:00",
+      "fuente": "https://noteconformesconmenos.com/recetas/zorza-gallega-de-hamburguesa/",
+      "macros_web": {
+        "P": "59,8",
+        "H": "45,0",
+        "G": "15,0"
+      },
+      "ingredientes_web": [
+        "300g de hamburguesa de ternera baja en grasa",
+        "100g de champiñones",
+        "225g de patatas fritas corte grueso (Hacendado)"
+      ]
+    }
+  ],
+  "dev": [
+    {
+      "id": "M74882543",
+      "nombre": "Combo estrella de patatas, huevo y pollo",
+      "momento": "comida",
+      "min_kcal": 0.0,
+      "max_kcal": 99999.0,
+      "tags": [
+        "recetario"
+      ],
+      "items": [
+        {
+          "rol": "proteina",
+          "buscar": "Pechuga de pollo",
+          "categoria": "2.2.1",
+          "proporcion": 1.0,
+          "alimento_id": 498
+        },
+        {
+          "rol": "proteina",
+          "buscar": "Huevos enteros L",
+          "categoria": "1.2.1",
+          "proporcion": 1.0,
+          "alimento_id": 321
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Patatas fritas corte grueso (Hacendado)",
+          "categoria": "9",
+          "proporcion": 1.0,
+          "alimento_id": 1896
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Berenjena",
+          "categoria": "13.1",
+          "proporcion": 1.0,
+          "alimento_id": 89
+        }
+      ],
+      "origen": "custom",
+      "created_by": "import_recetario",
+      "created_at": "2026-07-10T22:39:32.176961+00:00",
+      "fuente": "https://noteconformesconmenos.com/recetas/combo-estrella-de-patatas-huevo-y-pollo/",
+      "macros_web": {
+        "P": "56,2",
+        "H": "66,0",
+        "G": "12,0"
+      },
+      "ingredientes_web": [
+        "200g de pechuga de pollo",
+        "2 huevos enteros (tamaño L)",
+        "330g de patatas fritas corte grueso (Hacendado)",
+        "150g de berenjena"
+      ]
+    },
+    {
+      "id": "M11BD48BD",
+      "nombre": "Combo estrella de patatas, huevo y pollo",
+      "momento": "cena",
+      "min_kcal": 0.0,
+      "max_kcal": 99999.0,
+      "tags": [
+        "recetario"
+      ],
+      "items": [
+        {
+          "rol": "proteina",
+          "buscar": "Pechuga de pollo",
+          "categoria": "2.2.1",
+          "proporcion": 1.0,
+          "alimento_id": 498
+        },
+        {
+          "rol": "proteina",
+          "buscar": "Huevos enteros L",
+          "categoria": "1.2.1",
+          "proporcion": 1.0,
+          "alimento_id": 321
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Patatas fritas corte grueso (Hacendado)",
+          "categoria": "9",
+          "proporcion": 1.0,
+          "alimento_id": 1896
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Berenjena",
+          "categoria": "13.1",
+          "proporcion": 1.0,
+          "alimento_id": 89
+        }
+      ],
+      "origen": "custom",
+      "created_by": "import_recetario",
+      "created_at": "2026-07-10T22:39:32.176991+00:00",
+      "fuente": "https://noteconformesconmenos.com/recetas/combo-estrella-de-patatas-huevo-y-pollo/",
+      "macros_web": {
+        "P": "56,2",
+        "H": "66,0",
+        "G": "12,0"
+      },
+      "ingredientes_web": [
+        "200g de pechuga de pollo",
+        "2 huevos enteros (tamaño L)",
+        "330g de patatas fritas corte grueso (Hacendado)",
+        "150g de berenjena"
+      ]
+    },
+    {
+      "id": "M5CD2DAC2",
+      "nombre": "Hamburguesas estilo zorza gallega con patatas crujientes",
+      "momento": "comida",
+      "min_kcal": 0.0,
+      "max_kcal": 99999.0,
+      "tags": [
+        "recetario"
+      ],
+      "items": [
+        {
+          "rol": "proteina",
+          "buscar": "Hamburguesa de ternera baja en grasa",
+          "categoria": "2.3.2",
+          "proporcion": 1.0,
+          "alimento_id": 1609
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Champiñones",
+          "categoria": "13.1",
+          "proporcion": 1.0,
+          "alimento_id": 139
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Patatas fritas corte grueso (Hacendado)",
+          "categoria": "9",
+          "proporcion": 1.0,
+          "alimento_id": 1896
+        }
+      ],
+      "origen": "custom",
+      "created_by": "import_recetario",
+      "created_at": "2026-07-10T22:39:41.718468+00:00",
+      "fuente": "https://noteconformesconmenos.com/recetas/zorza-gallega-de-hamburguesa/",
+      "macros_web": {
+        "P": "59,8",
+        "H": "45,0",
+        "G": "15,0"
+      },
+      "ingredientes_web": [
+        "300g de hamburguesa de ternera baja en grasa",
+        "100g de champiñones",
+        "225g de patatas fritas corte grueso (Hacendado)"
+      ]
+    },
+    {
+      "id": "MCA739A21",
+      "nombre": "Hamburguesas estilo zorza gallega con patatas crujientes",
+      "momento": "cena",
+      "min_kcal": 0.0,
+      "max_kcal": 99999.0,
+      "tags": [
+        "recetario"
+      ],
+      "items": [
+        {
+          "rol": "proteina",
+          "buscar": "Hamburguesa de ternera baja en grasa",
+          "categoria": "2.3.2",
+          "proporcion": 1.0,
+          "alimento_id": 1609
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Champiñones",
+          "categoria": "13.1",
+          "proporcion": 1.0,
+          "alimento_id": 139
+        },
+        {
+          "rol": "hidrato",
+          "buscar": "Patatas fritas corte grueso (Hacendado)",
+          "categoria": "9",
+          "proporcion": 1.0,
+          "alimento_id": 1896
+        }
+      ],
+      "origen": "custom",
+      "created_by": "import_recetario",
+      "created_at": "2026-07-10T22:39:41.718561+00:00",
+      "fuente": "https://noteconformesconmenos.com/recetas/zorza-gallega-de-hamburguesa/",
+      "macros_web": {
+        "P": "59,8",
+        "H": "45,0",
+        "G": "15,0"
+      },
+      "ingredientes_web": [
+        "300g de hamburguesa de ternera baja en grasa",
+        "100g de champiñones",
+        "225g de patatas fritas corte grueso (Hacendado)"
+      ]
+    }
+  ]
+}
