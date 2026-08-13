@@ -159,10 +159,13 @@ _ESQUEMAS = [
      # `tests/test_prompt_sin_alimentos.py`). Por eso la tercera variante se llama por lo que
      # hace y no por lo que lleva: al escribirla se colo «ciclodextrina» y el test la cazo.
      "description": ("Lo que recomendamos en el intra y en el post, con las palabras del "
-                     "metodo. LLAMALA SIEMPRE al llegar al intra o al post, ANTES de "
-                     "proponer nada, y escribe su texto TAL CUAL, sin resumirlo ni "
-                     "reescribirlo. Variantes: 'principal'; 'alternativa' si pide otra cosa; "
-                     "en el intra, 'otro_hidrato' si rechaza el que le proponemos."),
+                     "metodo. Llamala al LLEGAR al intra o al post, ANTES de proponer nada, "
+                     "y escribe su texto TAL CUAL, sin resumirlo ni reescribirlo. UNA VEZ: "
+                     "cuando el cliente conteste que si, no la vuelvas a llamar, MONTA la "
+                     "comida con los alimentos que nombra el metodo, que es lo que el texto "
+                     "le acaba de prometer. Variantes: 'principal'; 'alternativa' si pide "
+                     "otra cosa; en el intra, 'otro_hidrato' si rechaza el que le "
+                     "proponemos."),
      "parameters": {"type": "object", "properties": {
          "variante": {"type": "string",
                       "enum": ["principal", "alternativa", "otro_hidrato"]}}}},

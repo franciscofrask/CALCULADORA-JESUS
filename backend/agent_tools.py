@@ -2106,6 +2106,19 @@ class AgentTools:
                              "es_actual": m.get("es_actual", False)}
                             for m in ov.get("meals", [])]}
 
+    def _tirar_borradores_de_otras_comidas(self) -> None:
+        """Los menús propuestos para una comida no valen para la siguiente.
+
+        En producción, con la Comida 1 ya aplicada y guardada, el asistente seguía
+        preguntando «¿opción 1 o opción 2?» estando en el Intra: las opciones viejas
+        seguían vivas en la sesión y cualquier «dale» del cliente las reactivaba. Al
+        cambiar de comida se van, que es lo que pasa en la cabeza de cualquiera.
+        """
+        actual = self.bot.current_meal_key()
+        borradores = self.bot.state.get("borradores") or {}
+        for bid in [k for k, b in borradores.items() if b.get("meal_key") != actual]:
+            borradores.pop(bid, None)
+
     def navegar(self, a) -> dict:
         """Ir a una comida ('2', 'post', 'intra', 'ultima', 'siguiente')."""
         ref = str(a).strip().lower()
@@ -2115,6 +2128,7 @@ class AgentTools:
             ref = ref.replace("comida", "").strip()
             idx = self.bot.resolve_meal_ref(int(ref) if ref.isdigit() else ref)
         if idx and self.bot.go_to_meal(idx):
+            self._tirar_borradores_de_otras_comidas()
             return {"ok": True, "comida": self.ver_estado("comida")}
         return {"ok": False, "error": f"no encuentro la comida '{a}'; el día tiene "
                                       f"{len(self.bot.state['meal_order'])} comidas"}
@@ -2129,6 +2143,9 @@ class AgentTools:
         r = self.bot.complete_current_meal()
         if r.get("vacia"):
             return {"ok": False, "error": r.get("error")}
+        # Guardar avanza a la comida siguiente: los menús que se propusieron para la que se
+        # acaba de cerrar ya no pintan nada (ver `_tirar_borradores_de_otras_comidas`).
+        self._tirar_borradores_de_otras_comidas()
         out = {"ok": True, "dia_completo": self.bot.state.get("step") == "complete",
                "comida": self.ver_estado("comida")}
         if faltan:
@@ -2154,8 +2171,40 @@ class AgentTools:
         texto = guion(momento, variante)
         if not texto:
             return {"ok": False, "error": f"no hay guion de '{variante}' para el {momento}"}
+
+        # EL GUION SE DICE UNA VEZ, Y DESPUES SE MONTA (13-08-2026).
+        #
+        # En produccion el intra se quedo en bucle: el cliente decia «me cuadra», «dale»,
+        # «dale con eso», y el asistente volvia a soltar el mismo parrafo sin poner nada.
+        # La herramienta decia «LLAMALA SIEMPRE al llegar al intra», y eso es lo que hacia:
+        # llamarla siempre. Faltaba la otra mitad, que ademas el propio texto promete --
+        # «eso te lo ajusto yo de forma automatica», «te digo exactamente la cantidad» --.
+        #
+        # Se lleva la cuenta en el estado, no en el prompt: a la segunda, la herramienta
+        # deja de dar texto para repetir y dice lo unico que queda por hacer. Un bucle no
+        # se arregla pidiendole al modelo que no lo haga.
+        dichos = self.bot.state.setdefault("guion_peri_dicho", [])
+        marca = f"{key}:{variante}"
+        ya_dicho = marca in dichos
+        if not ya_dicho:
+            dichos.append(marca)
+        falta = self.bot.get_remaining_macros()
+        pendiente = [f"{falta[m]:.0f} g de {_MACRO_LBL[m]}"
+                     for m in ("P", "H", "G") if falta[m] > 1]
+        siguiente = (
+            "Si el cliente dice que si -- «vale», «dale», «me cuadra» --, NO vuelvas a "
+            "escribir este texto: MONTA la comida ya. Busca lo que nombra el metodo con "
+            "`buscar_alimentos` y metelo con `editar_comida`, o compon el menu; las "
+            "cantidades las pone el motor, que es lo que le has prometido."
+            + (f" Ahora mismo faltan {_y(pendiente)}." if pendiente else ""))
+        if ya_dicho:
+            return {"ok": True, "momento": momento, "variante": variante,
+                    "texto": None, "ya_se_lo_dijiste": True,
+                    "instruccion": "Ya le soltaste este guion en esta comida y te dijo que "
+                                   "si. NO lo repitas: " + siguiente}
         return {"ok": True, "momento": momento, "variante": variante, "texto": texto,
-                "instruccion": "Escribe este texto TAL CUAL, sin resumirlo ni reescribirlo."}
+                "instruccion": "Escribe este texto TAL CUAL, sin resumirlo ni reescribirlo.",
+                "y_despues": siguiente}
 
     async def explicar(self, alimento: str) -> dict:
         """Qué cuenta un alimento en CALMA y por qué (determinista, del motor)."""
