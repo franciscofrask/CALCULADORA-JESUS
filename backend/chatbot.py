@@ -5,6 +5,7 @@ Chatbot conversacional que ayuda al cliente a montar su dieta del día.
 Usa Claude como interfaz y las funciones de calculator.py y calma_engine.py.
 """
 
+import math
 import os
 import json
 import re
@@ -2963,6 +2964,15 @@ class NutritionChatbot:
                 if cuota > 0:
                     hueco_pieza[driver] = min(restante[driver], cuota)
 
+        # Para ordenar por lo que se pone de verdad a esta hora (más abajo): el perfil de
+        # uso, el momento y el catálogo por id. En el peri no aplica -- ahí el polvo es lo
+        # que toca -- y sin perfil minado se queda en None y todo sigue como antes.
+        from meal_moment import momento_de_comida
+        perfil_uso = None if es_peri else await self._perfil_momento()
+        momento_actual = momento_de_comida(key, self.state.get("num_comidas") or 4,
+                                           self.state.get("single_meal", False))
+        por_id = {int(a["id"]): a for a in all_foods if a.get("id") is not None}
+
         # Dimensionar; agrupar por TIPO de alimento (categoría a 2 niveles) para diversificar
         from collections import defaultdict
         buckets = defaultdict(list)  # coarse_cat -> [(aporte, es_pref, item)]
@@ -3006,21 +3016,64 @@ class NutritionChatbot:
             # el mismo tipo hay un aislado que pone 45 g de proteína y otro que pone 3, el
             # azar no puede sacar el de 3 ("5 g de caseína" no es una sugerencia).
             mejor = buckets[b][0][0]
+            # PRIMERO SE FILTRA POR ENCAJE, Y LUEGO MANDA EL USO. Sin cortar por cercanía
+            # antes de tiempo: la «Pechuga de pollo» genérica se queda a 0,5 g de la cuota
+            # y hay docenas de variantes que la clavan, así que cualquier corte previo la
+            # dejaba fuera y el almuerzo lo acababa representando una «pechuga ya cocinada»
+            # que casi nadie pone. Son 6.637 comidas de Jesús con la genérica frente a un
+            # puñado con las otras: el desempate no puede decidirlo medio gramo.
             if objetivo_pieza:
                 margen = abs(mejor - objetivo_pieza) + objetivo_pieza * 0.4
-                head = [x for x in buckets[b][:8]
-                        if abs(x[0] - objetivo_pieza) <= margen]
+                head = [x for x in buckets[b] if abs(x[0] - objetivo_pieza) <= margen]
             else:
-                head = [x for x in buckets[b][:8] if x[0] >= mejor * 0.6]
+                head = [x for x in buckets[b] if x[0] >= mejor * 0.6]
             head = head or buckets[b][:1]
             random.shuffle(head)
+            # Y ENTRE LOS QUE ENCAJAN, LO QUE JESUS PONE A ESA HORA (13-08-2026).
+            #
+            # Encajar en la cuota no basta: en produccion, para una merienda salian mero,
+            # langostino y huevas de caballa, y para un desayuno estofado de pavo y lomo
+            # marinado. Todos ponen sus 19 g de proteina; ninguno se merienda. Francisco:
+            # «no tiene criterio de que se puede comer en cada comida».
+            #
+            # El dato ya estaba guardado y no se usaba aqui: cuantas VECES se ha puesto ese
+            # alimento en ese momento (`moment_profiles`). No es la coherencia -- que es un
+            # ratio y empata a todo lo que «pega» --, es el uso en bruto, que es el que
+            # distingue las claras (miles de desayunos) de un lomo marinado. Se ordena por
+            # tramos logaritmicos para que el barajado siga dando variedad entre los que se
+            # usan parecido. Es el mismo criterio que ya ordena el chat.
+            if perfil_uso and momento_actual:
+                def _tramo_uso(x):
+                    f = por_id.get(x[2]["alimento_id"])
+                    if not f:
+                        return 0
+                    usos = perfil_uso.usos(f, momento_actual)
+                    return min(int(math.log2(usos)) + 1, 15) if usos > 0 else 0
+                # Los más usados delante y, entre los que se usan parecido, el que mejor
+                # encaja. El barajado de arriba sigue decidiendo entre iguales.
+                head.sort(key=lambda x: (-_tramo_uso(x), abs(x[0] - objetivo_pieza)))
+            head = head[:12]
             buckets[b] = ([x for x in head if x[2]["alimento_id"] not in seen]
                           + [x for x in head if x[2]["alimento_id"] in seen])
 
         # Orden de tipos: los que tienen alimentos preferidos primero, luego por mejor aporte
+        # El ORDEN DE LOS TIPOS también mira lo que se come a esa hora, no solo lo que
+        # encaja: ordenar por uso dentro de cada familia no sirve de nada si la primera
+        # familia que sale es la del jamón ibérico. Cada tipo se representa por su
+        # candidato más usado, que es el primero desde el sort de arriba.
+        def _uso_del_tipo(b):
+            if not (perfil_uso and momento_actual):
+                return 0
+            f = por_id.get(buckets[b][0][2]["alimento_id"])
+            if not f:
+                return 0
+            usos = perfil_uso.usos(f, momento_actual)
+            return min(int(math.log2(usos)) + 1, 15) if usos > 0 else 0
+
         cat_order = sorted(
             buckets.keys(),
             key=lambda b: (0 if any(p for _, p, _ in buckets[b]) else 1,
+                           -_uso_del_tipo(b),
                            abs(buckets[b][0][0] - objetivo_pieza) if objetivo_pieza
                            else -buckets[b][0][0])
         )

@@ -1084,6 +1084,32 @@ class AgentTools:
             cache[clave] = res.get("items") or []
         return cache[clave]
 
+    # Cuánto se pueden parecer dos opciones. Por encima de esto son la misma idea con otro
+    # nombre y no son una alternativa.
+    PARECIDO_MAXIMO = 0.6
+
+    def _siguiente_esqueleto(self, esqueletos: List[List[str]], usados: List[List[str]],
+                             desde: int) -> List[str]:
+        """La siguiente forma de comida que NO sea la de al lado otra vez.
+
+        Los esqueletos vienen ordenados por lo que más se repite, y los primeros de un
+        momento suelen ser variaciones del mismo plato: en producción, las tres opciones de
+        un desayuno salieron «copos + proteína + nueces», «queso batido + muesli + proteína
+        + almendras» y «muesli + proteína + pistachos». Cada una es un desayuno de Jesús,
+        pero las tres juntas son una sola propuesta repetida, y Francisco lo leyó como lo
+        que es: no darle a elegir. Se salta el que comparte más del `PARECIDO_MAXIMO` de sus
+        familias con alguno ya propuesto; si no queda ninguno distinto, se sigue por orden,
+        que es mejor que quedarse sin opción.
+        """
+        n = len(esqueletos)
+        for salto in range(n):
+            esq = esqueletos[(desde + salto) % n]
+            fams = set(esq)
+            if all(len(fams & set(u)) / max(len(fams | set(u)), 1) <= self.PARECIDO_MAXIMO
+                   for u in usados):
+                return esq
+        return esqueletos[desde % n]
+
     async def _candidatos_de_familia(self, fam: str, estilo: str, generico: bool,
                                      marca: str, cache: dict) -> List[dict]:
         """Los mejores de esa familia para esta comida, buscados una sola vez.
@@ -1384,6 +1410,7 @@ class AgentTools:
             fams_pedidas = await self._familias_de(estilo, cache_familias)
             esqueletos = self._esqueletos_para(momento, restante, fijos, fams_pedidas)
         vuelta = int((self.bot.state.get("vueltas_sugerencia") or {}).get(key_comida, 0))
+        esqueletos_usados: List[List[str]] = []
         intento = 0
         descartes_bucle = None
         apartadas = []      # descartadas por compañía, por si no queda ninguna otra
@@ -1421,7 +1448,9 @@ class AgentTools:
             # macros, que quedarse en una sola.
             por_esqueleto = []
             if esqueletos and intento < max(len(esqueletos), n):
-                esqueleto = esqueletos[(intento + vuelta) % len(esqueletos)]
+                esqueleto = self._siguiente_esqueleto(esqueletos, esqueletos_usados,
+                                                      intento + vuelta)
+                esqueletos_usados.append(esqueleto)
                 por_esqueleto = await self._elegir_por_esqueleto(
                     esqueleto, estilo, generico, marca, vuelta + intento,
                     ids_opcion, tipos_opcion, cache_familias, fams_pedidas,
@@ -1902,6 +1931,15 @@ class AgentTools:
         b.update({"items": items, "origen": "editado", "nombre": None, "receta_url": None,
                   "macros_totales": tot,
                   "desvio": {m: round(tot[m] - objetivo[m], 1) for m in ("P", "H", "G")}})
+        # LOS AVISOS SON DE LA VERSIÓN ANTERIOR (13-08-2026). Al cambiar el menú, la
+        # revisión que los generó deja de valer, y se quedaban pegados a la tarjeta: en
+        # producción salió «pidió genéricos y Masa para pancake de arroz y avena (Prozis)
+        # es de marca» en un menú de copos de avena, whey, nueces y leche de almendras.
+        # El aviso era CIERTO cuando se escribió -- el compositor habia metido esa marca --
+        # y el propio asistente la sustituyó justo después por el generico; lo que quedó
+        # fue la etiqueta, hablando de un alimento que ya no estaba. Quien quiera saber si
+        # el menú nuevo tiene problemas, que vuelva a revisarlo.
+        b.pop("avisos", None)
         return {"ok": True, "borrador": b}
 
     # ============================================================ 5. aplicar_borrador
