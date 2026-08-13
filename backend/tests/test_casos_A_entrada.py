@@ -14,8 +14,9 @@ Que se fija:
   02  /recuperar deja cambiar la contrasena y no expulsa a nadie.
   03  Al registrarse, el cuestionario inicial queda por hacer y no se puede saltar.
   04  [CRITICO] Al terminar el cuestionario salen los macros y el nombre real de la persona.
-  05  [CRITICO] En /planes salen los tres niveles y la membresia, y el Nivel 3 se agenda por
-      llamada, nunca con un boton de pagar.
+  05  [CRITICO] En /planes salen los tres niveles y el Nivel 3 se agenda por llamada, nunca
+      con un boton de pagar. La membresia NO sale ahi (Jesus, 13-08: se come la entrada del
+      Nivel 1; es para quien acaba un ciclo, no para quien llega de la calle).
   06  Una direccion que no existe no echa al login al que ya esta dentro.
   07  [CRITICO] El banner de "Instala 12EN12" no tapa el boton de Entrar.
 
@@ -394,21 +395,25 @@ class TestCaso05LaPantallaDePlanes:
         for code in ("nivel1", "nivel2", "nivel3"):
             assert code in pintados, f"/planes no ensena «{code}»"
 
-    def test_en_la_pantalla_sale_tambien_la_membresia(self, api_disponible, catalogo):
-        """Caso 05, tal cual: «salen los tres niveles y la membresia».
+    def test_la_membresia_no_sale_en_la_pantalla_de_planes(self, api_disponible, catalogo):
+        """Caso 05, DESEMPATADO POR JESUS el 13-08-2026.
 
-        La pantalla pinta solo `ORDEN = ['nivel1','nivel2','nivel3']` y lo dice con todas las
-        letras en un comentario: «La membresia no sale aqui: es la salida del que no renueva,
-        no algo que se compre». En el catalogo la membresia esta activa y marcada
-        `solo_salida`. O sea que esto no es un olvido, es una decision escrita -- y choca con
-        el caso. Se deja en rojo a proposito: lo tiene que desempatar Jesus.
+        El caso pedia «los tres niveles y la membresia», y el codigo la escondia a proposito
+        («es la salida del que no renueva, no algo que se compre»). Se dejo en rojo esperando
+        a que el decidiera, y decidio que NO sale, con su motivo:
+
+            «El Nivel 1 es tu puerta de entrada. Una membresia mas barata al lado se lo come:
+            el que iba a pagar 297 paga la membresia y se queda ahi. Es para quien ya ha
+            terminado un ciclo y quiere quedarse con la app, no para quien llega de la calle.»
+
+        Sigue activa en el catalogo y marcada `solo_salida`: se vende, pero no desde aqui.
         """
         assert catalogo.get("membresia", {}).get("estado") == "activo"
         planes = fuente("pages/PlanesPage.jsx")
         pintados = re.findall(r"'([^']+)'", re.search(r"const ORDEN = \[([^\]]*)\]", planes).group(1))
-        assert "membresia" in pintados, (
-            "/planes no ensena la membresia: hoy solo se ofrece como salida del que no "
-            "renueva (ver el comentario de ORDEN en PlanesPage.jsx)")
+        assert "membresia" not in pintados, (
+            "/planes ensena la membresia al lado de los niveles, y Jesus decidio que no: "
+            "se come la entrada del Nivel 1")
 
     def test_el_nivel3_se_agenda_por_llamada(self, api_disponible):
         planes = fuente("pages/PlanesPage.jsx")

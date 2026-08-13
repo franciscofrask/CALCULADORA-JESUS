@@ -1112,7 +1112,14 @@ export default function ChatbotPage() {
             {/* MIENTRAS MONTA, MANDA LO QUE ESTÁ HACIENDO, NO EL NOMBRE DE LA PANTALLA.
                 En el teléfono ponía «Asistente de Nutrición» en grande -- que ya lo sabe:
                 acaba de entrar desde ahí -- y debajo, pequeño, lo único que de verdad
-                necesita: en qué comida va y cuánto le falta. Se cambian de sitio. */}
+                necesita: en qué comida va y cuánto le falta. Se cambian de sitio.
+
+                Y AQUÍ NO VA «MARCO». Se preguntó (punto 6 del repaso del 13-08-2026) y
+                Jesús dijo que no: «El nombre en el saludo, una vez, y la cabecera para lo
+                que cambia. Esa cabecera es donde va "Comida 1 · 0 de 4 hechas · te faltan
+                59 P · 66 H · 12 G", que es lo que miras veinte veces; un nombre fijo ahí
+                arriba ocupa el sitio de lo que sí se mueve». El asistente se presenta como
+                Marco en el saludo (ver `core/guion_peri.py` y el prompt del agente). */}
             <h1 className={`font-bold truncate ${montando ? 'hidden sm:block' : ''}`} data-testid="chatbot-heading">Asistente de Nutrición</h1>
             {montando && (
               <p className="sm:hidden font-bold truncate" data-testid="chatbot-comida">
