@@ -310,6 +310,14 @@ const MealCard = ({
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
     const info = mealInfo[mealKey];
     const status = getMealStatus(mealKey);
+    // En qué punto está la comida, con su frase. Se calcula aquí arriba porque el titular
+    // del teléfono depende de ella: cuando la comida se pasa, el texto es largo («Te pasas
+    // 29 g de hidratos y 12 g de grasa») y OCUPA EL SITIO DEL NOMBRE en vez de pelearse con
+    // él. Francisco, 13-08: «ese texto tapa el título de Comida 1, Comida 2... haz que lo
+    // reemplace si se pasa». Los otros estados son cortos («Válida», «Te falta») y caben al
+    // lado, así que esos no se tocan.
+    const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri);
+    const excesoTapaElNombre = status === 'sobra' && foods.length > 0;
 
     const HeaderInner = (
         <>
@@ -324,7 +332,7 @@ const MealCard = ({
                     a 15, que es el tamaño del texto normal. */}
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-xl lg:text-base' : 'text-2xl lg:text-lg'}`}>{info.name}</h3>
+                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-xl lg:text-base' : 'text-2xl lg:text-lg'} ${excesoTapaElNombre ? 'hidden lg:block' : ''}`}>{info.name}</h3>
                         {/* El punto de color, solo en escritorio: en el teléfono el estado se
                             pide con «ver detalles», dentro de la comida. */}
                         <StatusDot status={status} className="hidden lg:inline-block flex-shrink-0" />
@@ -344,17 +352,15 @@ const MealCard = ({
                 lista se lee de arriba abajo como algo que se va tachando, y para eso cada
                 fila tiene que decir en qué punto está. Solo en el teléfono: en escritorio
                 está el punto de color de siempre. */}
-            {(() => {
-                // Una sola llamada: antes se calculaba dos veces (clase y texto) y ahora
-                // ademas monta la frase con los gramos.
-                const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri);
-                return (
-                    <span className={`lg:hidden text-[15px] font-bold flex-shrink-0 ml-auto text-right ${estado.cls}`}
-                        data-testid={`estado-comida-${mealKey}`}>
-                        {estado.texto}
-                    </span>
-                );
-            })()}
+            {/* Cuando se pasa, este texto ES el titular de la fila: se le deja encoger
+                (`min-w-0` y sin `flex-shrink-0`) y alinearse a la izquierda, en el hueco
+                que deja el nombre escondido. En los demás estados se queda como estaba,
+                a la derecha y sin encoger. */}
+            <span className={`lg:hidden text-[15px] font-bold text-right ${estado.cls} ${
+                excesoTapaElNombre ? 'min-w-0 flex-1 text-left' : 'flex-shrink-0 ml-auto'}`}
+                data-testid={`estado-comida-${mealKey}`}>
+                {estado.texto}
+            </span>
             {/* Con el día entero desplegado el modo va aquí, en pequeño: la banda de
                 "Modo de cálculo" repetida seis veces no cabía, pero esconderla dejaba
                 sin Automático/Manual a las comidas que aún no tienen alimentos. */}
