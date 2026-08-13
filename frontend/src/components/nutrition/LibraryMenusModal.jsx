@@ -1,13 +1,32 @@
 /**
- * LibraryMenusModal - "Elige tu menú", con dos pestañas:
+ * LibraryMenusModal - "Elige tu menú": UNA sola lista con todo lo que se puede elegir.
  *
- * 1. Biblioteca: menús REALES (266k comidas de clientes ya cuadradas con el
- *    método). Filosofía (nota 2026-07-16): cercanía, no exactitud. El objetivo lo
- *    define la calculadora (reparto del día) y NO se puede editar aquí; el menú
- *    elegido se vuelca tal cual (o ajustado con las palancas del propio menú).
- * 2. Recetario: las recetas de la membresía ELM (menu_templates). Aquí no hay
- *    cantidades cerradas: al elegir una receta, el motor la cuadra a tus macros
- *    (POST /calculator/menu-apply).
+ * Hasta el 13-08-2026 esto eran dos pestañas, Biblioteca y Recetario, y Francisco pidió
+ * juntarlas: «unifica el recetario con la biblioteca, que ya no estén separados». Para
+ * quien elige la comida son lo mismo -- menús que puede meterse en el plato --, y la
+ * diferencia era nuestra, no suya:
+ *
+ * 1. Recetas del recetario ELM (`menu_templates`): no traen cantidades cerradas, así que
+ *    al elegir una el motor la cuadra a tus macros (POST /calculator/menu-apply). Traen
+ *    foto y nombre de plato.
+ * 2. Menús reales (`meal_library`, 266k comidas de clientes ya cuadradas con el método):
+ *    vienen con las cantidades puestas y se vuelcan tal cual. Filosofía (nota 2026-07-16):
+ *    cercanía, no exactitud.
+ *
+ * Esa diferencia sigue existiendo por dentro -- cada tarjeta hace lo suyo al pulsarla --,
+ * pero ya no se le pide al cliente que elija primero de qué cajón quiere sacar la comida.
+ *
+ * EL ORDEN: primero las recetas, después los menús reales. No es capricho ni es alfabético:
+ * las recetas son material terminado de Jesús (con su foto y su enlace) y los menús reales
+ * son comidas de relleno sacadas de dietas. Ordenar los dos juntos por lo bien que encajan
+ * habría sido mejor, y se midió: cuadrar las 159 recetas contra un objetivo cuesta 52 s,
+ * así que no se puede hacer mientras el cliente espera. Los menús reales sí llegan ya
+ * ordenados por cercanía, porque eso lo hace el servidor.
+ *
+ * Y LA CARGA VA EN PARALELO. Antes la biblioteca solo se pedía al entrar en su pestaña y
+ * podía tardar más de 30 segundos (Jesús se quedó mirándola). Ahora se pide al abrir, a la
+ * vez que el recetario: la lista se puede usar desde el primer segundo con las recetas, y
+ * los menús reales se suman abajo cuando llegan.
  */
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
@@ -63,14 +82,6 @@ const MacroTrio = ({ macros, size = 'lg' }) => (
 );
 
 const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayConfig, onApply }) => {
-    // ABRE EN EL RECETARIO, SIEMPRE.
-    // La cabecera de este fichero ya lo dice: el recetario «es material terminado de Jesús y
-    // va primero», mientras que la biblioteca son comidas de relleno sacadas de dietas de
-    // clientes. Y aun así se abría en la biblioteca. Jesús la dejó más de 30 segundos en
-    // «Buscando en la biblioteca…» sin respuesta, y esta es la puerta de entrada de la
-    // pantalla: si se queda cargando, no se vuelve a pulsar. La biblioteca sigue ahí, en su
-    // pestaña, para quien quiera rebuscar.
-    const [tab, setTab] = React.useState('recetario');
     const [margen, setMargen] = React.useState(5);
     const [orden, setOrden] = React.useState('cuadrado');
     const [verReales, setVerReales] = React.useState(false);
@@ -95,7 +106,6 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
 
     React.useEffect(() => {
         if (open) {
-            setTab('recetario');   // ver el porqué donde se declara `tab`
             setTextFilter('');
             setVerReales(false);
             setError(null);
@@ -151,10 +161,11 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, mealKey, margen, orden]);
 
-    // El catálogo del recetario no depende de la comida ni del objetivo: se pide
-    // una sola vez, la primera vez que se entra en la pestaña.
+    // El catálogo del recetario no depende de la comida ni del objetivo: se pide una sola
+    // vez, al abrir. Ya no espera a que nadie entre en una pestaña -- no hay pestañas --,
+    // así que llega a la vez que la biblioteca y es lo primero que se puede leer.
     React.useEffect(() => {
-        if (!open || tab !== 'recetario' || recetario !== null || recetarioLoading) return;
+        if (!open || recetario !== null || recetarioLoading) return;
         let cancelado = false;
         const cargar = async () => {
             setRecetarioLoading(true);
@@ -172,7 +183,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
         cargar();
         return () => { cancelado = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, tab]);
+    }, [open]);
 
     const filtrados = textFilter.trim()
         ? menus.filter(menu => menu.items.some(it => normalizar(it.nombre).includes(normalizar(textFilter))))
@@ -253,9 +264,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                         se quedan las dos líneas, como estaban. */}
                     <DialogDescription className="hidden lg:block text-muted-foreground">
                         {mealKey && (mealInfo?.[mealKey]?.name || mealKey)}
-                        {tab === 'biblioteca'
-                            ? ' - menús reales que ya cuadran con tu objetivo'
-                            : ' - recetas del recetario, cuadradas a tu objetivo'}
+                        {' - recetas y menús que cuadran con tu objetivo'}
                     </DialogDescription>
                     <div className="hidden lg:flex items-center gap-2 mt-1">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-white/60">Tu objetivo</span>
@@ -267,39 +276,44 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                     </div>
                 </DialogHeader>
 
-                {/* Pestañas: biblioteca real / recetario ELM. Con la biblioteca apagada
-                    (06-08-2026) no hay dos fuentes que elegir: sobra la barra entera. */}
-                {BIBLIOTECA_DE_CLIENTES && (
-                    <div className="px-4 pt-3 pb-2 bg-card flex-shrink-0">
-                        <div className="inline-flex w-full rounded-lg bg-muted p-0.5 border border-border">
-                            <button className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${tab === 'biblioteca' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
-                                onClick={() => setTab('biblioteca')} data-testid="menus-tab-biblioteca">Biblioteca</button>
-                            <button className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${tab === 'recetario' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
-                                onClick={() => setTab('recetario')} data-testid="menus-tab-recetario">Recetario</button>
-                        </div>
+                {/* UNOS SOLOS CONTROLES PARA TODA LA LISTA. El buscador filtra las dos
+                    cosas a la vez (por nombre de receta o por alimento) y los chips de
+                    momento acotan las recetas; los menús reales ya vienen del momento de
+                    esta comida, que lo decide el servidor con `mealKey`. */}
+                <div className="px-4 pt-3 pb-3 border-b bg-card flex-shrink-0 space-y-2.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {chips.map(m => (
+                            <button key={m}
+                                className={`px-2.5 py-1 text-xs font-bold rounded-full border transition-colors ${momento === m ? 'bg-brand text-white border-brand' : 'bg-muted text-muted-foreground border-border'}`}
+                                onClick={() => setMomento(m)} data-testid={`recetario-momento-${m}`}>
+                                {m === 'todos' ? 'Todas' : (MOMENTO_LABEL[m] || m)}
+                            </button>
+                        ))}
                     </div>
-                )}
-
-                {tab === 'biblioteca' ? (
-                    /* Controles de la biblioteca: margen, orden, método/reales */
-                    <div className="px-4 pb-3 border-b bg-card flex-shrink-0 space-y-2.5">
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <Input value={textFilter} onChange={(e) => setTextFilter(e.target.value)}
+                            placeholder="Buscar receta o alimento (pollo, avena...)"
+                            className="pl-8 h-9 text-sm" data-testid="recetario-filter" />
+                    </div>
+                    {/* Las palancas de los menús reales: solo tienen sentido sobre ellos, y
+                        por eso van detrás y en pequeño. En el teléfono no salen -- ahí se
+                        está eligiendo comida, no afinando una búsqueda -- salvo el margen,
+                        que es el que de verdad cambia cuántos hay. */}
+                    {BIBLIOTECA_DE_CLIENTES && (
+                        <div className="flex items-center justify-between gap-3 flex-wrap pt-0.5">
                             <div className="flex items-center gap-2">
                                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Margen ±{margen} g</span>
                                 <input type="range" min="2" max="10" step="1" value={margen}
                                     onChange={(e) => setMargen(Number(e.target.value))}
                                     className="w-24 accent-orange-500" data-testid="library-margen" />
                             </div>
-                            <div className="inline-flex rounded-lg bg-muted p-0.5 border border-border">
+                            <div className="hidden lg:inline-flex rounded-lg bg-muted p-0.5 border border-border">
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${orden === 'cuadrado' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setOrden('cuadrado')} data-testid="library-orden-cuadrado">Más cuadrado</button>
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${orden === 'usado' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setOrden('usado')} data-testid="library-orden-usado">Lo que más gente monta</button>
                             </div>
-                            {/* El conmutador Método/Reales sale del teléfono: ahí está
-                                eligiendo un menú, y los dos juegos de números para el mismo
-                                plato en el momento de decidir son ruido. En escritorio se
-                                queda. */}
                             <div className="hidden lg:inline-flex rounded-lg bg-muted p-0.5 border border-border">
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${!verReales ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setVerReales(false)} data-testid="library-ver-metodo">Método</button>
@@ -307,92 +321,152 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                     onClick={() => setVerReales(true)} data-testid="library-ver-reales">Reales</button>
                             </div>
                         </div>
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                            <Input value={textFilter} onChange={(e) => setTextFilter(e.target.value)}
-                                placeholder="Filtrar por alimento (avena, batido, arroz...)"
-                                className="pl-8 h-9 text-sm" data-testid="library-food-filter" />
-                        </div>
-                    </div>
-                ) : (
-                    /* Controles del recetario: momento + buscador por receta o alimento */
-                    <div className="px-4 pb-3 border-b bg-card flex-shrink-0 space-y-2.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                            {chips.map(m => (
-                                <button key={m}
-                                    className={`px-2.5 py-1 text-xs font-bold rounded-full border transition-colors ${momento === m ? 'bg-brand text-white border-brand' : 'bg-muted text-muted-foreground border-border'}`}
-                                    onClick={() => setMomento(m)} data-testid={`recetario-momento-${m}`}>
-                                    {m === 'todos' ? 'Todas' : (MOMENTO_LABEL[m] || m)}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                            <Input value={textFilter} onChange={(e) => setTextFilter(e.target.value)}
-                                placeholder="Buscar receta o alimento (pollo, avena...)"
-                                className="pl-8 h-9 text-sm" data-testid="recetario-filter" />
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto bg-muted">
-                    {tab === 'biblioteca' ? (
-                        loading ? (
-                            <div className="flex flex-col items-center justify-center py-16">
-                                <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent mb-4" />
-                                <p className="text-muted-foreground">Buscando en la biblioteca...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="text-center py-14 px-6">
-                                <span className="text-4xl mb-3 block">⚠️</span>
-                                <p className="font-semibold text-foreground mb-1.5">{error}</p>
-                                <p className="text-sm text-muted-foreground">Inténtalo de nuevo en unos segundos.</p>
-                            </div>
-                        ) : menus.length === 0 && sinCosechar ? (
-                            /* El cero no es del margen: la biblioteca no está preparada
-                               todavía (punto 10.3). Decirle que suba el margen sería
-                               mandarle a mover una palanca que no puede cambiar nada. */
-                            <div className="text-center py-14 px-6" data-testid="biblioteca-sin-cosechar">
-                                <span className="text-4xl mb-3 block">🧰</span>
-                                <p className="font-semibold text-foreground mb-1.5">La biblioteca todavía no está lista</p>
-                                <p className="text-sm text-muted-foreground">
-                                    No es tu objetivo ni el margen: los menús están sin preparar. Usa el{' '}
-                                    <button className="font-semibold text-brand-orange underline" onClick={() => setTab('recetario')}>recetario</button>{' '}
-                                    mientras tanto.
+                    {confirmacion ? (
+                        <div className="p-6" data-testid="recetario-confirmar-desvio">
+                                <span className="text-4xl mb-3 block text-center">⚠️</span>
+                                <p className="font-bold text-foreground text-center leading-snug mb-1">
+                                    {confirmacion.menu.nombre}
+                                </p>
+                                <p className="text-sm text-muted-foreground text-center mb-4">
+                                    Cuadrada a tus macros, esta receta se te va del objetivo de esta comida:
+                                </p>
+                                <div className="space-y-1.5 mb-4">
+                                    {confirmacion.fuera.map(({ m, diff }) => (
+                                        <p key={m} className={`text-center text-sm font-black ${MACRO_STYLE[m]}`}>
+                                            {diff > 0
+                                                ? `Te sobran ${diff} g de ${MACRO_NOMBRE[m]}`
+                                                : `Te faltan ${Math.abs(diff)} g de ${MACRO_NOMBRE[m]}`}
+                                        </p>
+                                    ))}
+                                </div>
+                                <div className="flex items-start justify-center gap-6 bg-muted/50 rounded-2xl py-3 mb-5">
+                                    <div className="text-center">
+                                        <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Tu objetivo</span>
+                                        <MacroTrio macros={confirmacion.menu.macros_objetivo || obj} size="sm" />
+                                    </div>
+                                    <div className="text-center">
+                                        <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">La receta</span>
+                                        <MacroTrio macros={confirmacion.menu.macros_totales} size="sm" />
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setConfirmacion(null)}
+                                        className="flex-1 py-3 rounded-xl bg-muted text-foreground font-bold text-sm hover:bg-muted/70 transition-colors"
+                                        data-testid="recetario-elegir-otra">
+                                        Elegir otra
+                                    </button>
+                                    <button onClick={confirmarReceta}
+                                        className="flex-1 py-3 rounded-xl bg-brand-orange text-white font-bold text-sm hover:opacity-90 transition-opacity"
+                                        data-testid="recetario-meter-igual">
+                                        Meterla igual
+                                    </button>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground text-center mt-3">
+                                    Si la metes igual, tendrás que ajustar las cantidades a mano.
                                 </p>
                             </div>
-                        ) : menus.length === 0 ? (
-                            <div className="text-center py-14 px-6">
-                                <span className="text-4xl mb-3 block">🍽️</span>
-                                <p className="font-semibold text-foreground mb-1.5">No hay menús a ±{margen} g de tu objetivo</p>
-                                <p className="text-sm text-muted-foreground">
-                                    Sube el margen, mira el <button className="font-semibold text-brand-orange underline" onClick={() => setTab('recetario')}>recetario</button> o
-                                    monta la comida con "Lo hago yo".
-                                </p>
-                            </div>
-                        ) : filtrados.length === 0 ? (
-                            <div className="text-center py-14 px-6">
-                                <span className="text-4xl mb-3 block">🔍</span>
-                                <p className="font-semibold text-foreground mb-1.5">Ningún menú lleva "{textFilter}"</p>
-                                <p className="text-sm text-muted-foreground">Prueba con otro alimento o borra el filtro.</p>
-                            </div>
-                        ) : (
-                            <div className="p-4 space-y-3">
-                                {/* Solo el recuento. Lo de «y aquí tienes los 120 que mejor te
-                                    encajan» y «las cantidades vienen ajustadas a tu objetivo»
-                                    se va: lo segundo ya se lee en cada tarjeta, que trae los
-                                    gramos puestos.
-                                    Queda apuntado que, cuando la lista se recorta, ya no se
-                                    dice: se enseñan 120 de 207 sin avisar. */}
-                                <p className="text-xs text-muted-foreground">
-                                    Hay <span className="font-bold text-foreground">{total}</span> menús que cuadran (±{margen} g)
-                                    {textFilter.trim() ? ` · ${filtrados.length} con "${textFilter.trim()}"` : ''}
-                                    <span className="hidden lg:inline">
-                                        {menus.length < total ? `, y aquí tienes los ${menus.length} que mejor te encajan` : ''}
-                                        . Las cantidades vienen ajustadas a tu objetivo.
-                                    </span>
-                                </p>
-                                {filtrados.map((menu, index) => (
+                    ) : recetarioLoading && !(recetario || []).length ? (
+                        <div className="flex flex-col items-center justify-center py-16">
+                            <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent mb-4" />
+                            <p className="text-muted-foreground">Cargando los menús...</p>
+                        </div>
+                    ) : (recetasFiltradas.length + filtrados.length) === 0 && !loading ? (
+                        /* Vacío de verdad: no hay ni recetas ni menús que enseñar. Se
+                           distingue el porqué, que no es lo mismo «no hay nada con esa
+                           palabra» que «la biblioteca no está preparada» (punto 10.3). */
+                        <div className="text-center py-14 px-6" data-testid={sinCosechar ? 'biblioteca-sin-cosechar' : undefined}>
+                            <span className="text-4xl mb-3 block">{textFilter.trim() ? '🔍' : '🍽️'}</span>
+                            <p className="font-semibold text-foreground mb-1.5">
+                                {textFilter.trim()
+                                    ? `Nada con "${textFilter.trim()}"`
+                                    : 'No hay menús para esta comida'}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                                {textFilter.trim()
+                                    ? 'Prueba con otro alimento, otro momento del día, o borra el filtro.'
+                                    : 'Sube el margen o monta la comida con "Lo hago yo".'}
+                            </p>
+                            {(error || recetarioError) && (
+                                <p className="text-xs text-amber-500 font-medium mt-3">{error || recetarioError}</p>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="p-4 space-y-3">
+                            {/* UN SOLO RECUENTO PARA LAS DOS COSAS. Antes cada pestaña
+                                contaba lo suyo, y el cliente no tenía forma de saber
+                                cuántas opciones tenía en total. */}
+                            <p className="text-xs text-muted-foreground" data-testid="menus-recuento">
+                                <span className="font-bold text-foreground">{recetasFiltradas.length + filtrados.length}</span>
+                                {' '}para elegir
+                                {recetasFiltradas.length > 0 && filtrados.length > 0
+                                    ? ` · ${recetasFiltradas.length} recetas y ${filtrados.length} menús ya cuadrados`
+                                    : ''}
+                                {loading ? ' · buscando más...' : ''}
+                            </p>
+                            {(error || recetarioError) && (
+                                <p className="text-xs text-amber-500 font-medium">{error || recetarioError}</p>
+                            )}
+
+                            {recetasFiltradas.map((receta, index) => (
+                                    <button key={receta.id}
+                                        className="w-full text-left bg-card rounded-2xl shadow-md hover:shadow-lg hover:ring-1 hover:ring-brand-orange/40 transition-all disabled:opacity-60 overflow-hidden"
+                                        onClick={() => aplicarReceta(receta)} disabled={!!aplicandoId}
+                                        data-testid={`recetario-menu-${index}`}>
+                                        {/* La foto de la receta. Si no hay, la tarjeta va sin ella y sin
+                                            hueco: nada de imagen genérica ni de plato de relleno. Los menús
+                                            que salgan de los PDFs y de la cosecha no van a tener. */}
+                                        {receta.foto && (
+                                            <img src={receta.foto} alt="" loading="lazy"
+                                                className="w-full h-36 object-cover bg-muted"
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                        )}
+                                        <div className="p-4">
+                                        <div className="flex items-start justify-between gap-2 mb-1">
+                                            <h3 className="font-bold text-foreground text-lg lg:text-sm leading-snug">{receta.nombre}</h3>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                                {/* Sin proteína no cubre una comida entera (el «Turrón Crunch
+                                                    de Cacao» son frutos secos y chocolate). Se dice AQUÍ, antes
+                                                    de elegirla: si no, se la lleva el aviso de «te faltan 30 g
+                                                    de proteína» sin saber por qué. Sigue estando y se puede
+                                                    elegir; lo que no hace es proponerse sola. */}
+                                                {receta.completa === false && (
+                                                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-brand-orange/15 text-brand-orange px-2 py-0.5 rounded-full">
+                                                        complemento
+                                                    </span>
+                                                )}
+                                                {(receta.momentos || []).map(m => (
+                                                    <span key={m} className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {/* Los alimentos de la receta, igual que en la
+                                            biblioteca: es lo que se lee para elegir. Van
+                                            justificados porque aquí sí es un párrafo -- los
+                                            alimentos van seguidos separados por puntos -- y
+                                            en un ancho de móvil el borde derecho en zigzag es
+                                            lo que hace que un bloque de texto se lea peor. */}
+                                        <p className="text-[17px] lg:text-xs text-foreground/70 lg:text-muted-foreground leading-relaxed text-justify lg:text-left hyphens-auto">
+                                            {(receta.alimentos || []).join(' · ')}
+                                        </p>
+                                        <p className="text-[11px] text-brand-orange font-semibold mt-1.5 flex items-center gap-1">
+                                            {aplicandoId === receta.id ? (
+                                                <>
+                                                    <span className="animate-spin rounded-full h-3 w-3 border-2 border-brand-orange border-t-transparent" />
+                                                    Cuadrando a tus macros...
+                                                </>
+                                            ) : (
+                                                <><Check className="w-3 h-3" /> Se cuadra a tus macros al elegirla</>
+                                            )}
+                                        </p>
+                                        </div>
+                                    </button>
+                                ))}
+
+                            {filtrados.map((menu, index) => (
                                     <button key={menu.biblioteca_id}
                                         className="w-full text-left p-4 bg-card rounded-2xl shadow-md hover:shadow-lg hover:ring-1 hover:ring-brand-orange/40 transition-all disabled:opacity-60"
                                         onClick={() => aplicar(menu)} disabled={applying}
@@ -461,139 +535,16 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                         </div>
                                     </button>
                                 ))}
-                            </div>
-                        )
-                    ) : (
-                        confirmacion ? (
-                            <div className="p-6" data-testid="recetario-confirmar-desvio">
-                                <span className="text-4xl mb-3 block text-center">⚠️</span>
-                                <p className="font-bold text-foreground text-center leading-snug mb-1">
-                                    {confirmacion.menu.nombre}
-                                </p>
-                                <p className="text-sm text-muted-foreground text-center mb-4">
-                                    Cuadrada a tus macros, esta receta se te va del objetivo de esta comida:
-                                </p>
-                                <div className="space-y-1.5 mb-4">
-                                    {confirmacion.fuera.map(({ m, diff }) => (
-                                        <p key={m} className={`text-center text-sm font-black ${MACRO_STYLE[m]}`}>
-                                            {diff > 0
-                                                ? `Te sobran ${diff} g de ${MACRO_NOMBRE[m]}`
-                                                : `Te faltan ${Math.abs(diff)} g de ${MACRO_NOMBRE[m]}`}
-                                        </p>
-                                    ))}
+
+                            {/* La biblioteca llega después que las recetas y puede tardar:
+                                se dice al pie, sin tapar lo que ya se puede elegir. */}
+                            {loading && (
+                                <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
+                                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-brand-orange border-t-transparent" />
+                                    <span className="text-xs">Buscando más menús que te cuadren...</span>
                                 </div>
-                                <div className="flex items-start justify-center gap-6 bg-muted/50 rounded-2xl py-3 mb-5">
-                                    <div className="text-center">
-                                        <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Tu objetivo</span>
-                                        <MacroTrio macros={confirmacion.menu.macros_objetivo || obj} size="sm" />
-                                    </div>
-                                    <div className="text-center">
-                                        <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">La receta</span>
-                                        <MacroTrio macros={confirmacion.menu.macros_totales} size="sm" />
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setConfirmacion(null)}
-                                        className="flex-1 py-3 rounded-xl bg-muted text-foreground font-bold text-sm hover:bg-muted/70 transition-colors"
-                                        data-testid="recetario-elegir-otra">
-                                        Elegir otra
-                                    </button>
-                                    <button onClick={confirmarReceta}
-                                        className="flex-1 py-3 rounded-xl bg-brand-orange text-white font-bold text-sm hover:opacity-90 transition-opacity"
-                                        data-testid="recetario-meter-igual">
-                                        Meterla igual
-                                    </button>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground text-center mt-3">
-                                    Si la metes igual, tendrás que ajustar las cantidades a mano.
-                                </p>
-                            </div>
-                        ) : recetarioLoading ? (
-                            <div className="flex flex-col items-center justify-center py-16">
-                                <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent mb-4" />
-                                <p className="text-muted-foreground">Cargando el recetario...</p>
-                            </div>
-                        ) : recetarioError && !(recetario || []).length ? (
-                            <div className="text-center py-14 px-6">
-                                <span className="text-4xl mb-3 block">⚠️</span>
-                                <p className="font-semibold text-foreground mb-1.5">{recetarioError}</p>
-                                <p className="text-sm text-muted-foreground">Inténtalo de nuevo en unos segundos.</p>
-                            </div>
-                        ) : recetasFiltradas.length === 0 ? (
-                            <div className="text-center py-14 px-6">
-                                <span className="text-4xl mb-3 block">🔍</span>
-                                <p className="font-semibold text-foreground mb-1.5">
-                                    {(recetario || []).length === 0
-                                        ? 'No hay recetas en el recetario'
-                                        : `Ninguna receta con "${textFilter.trim()}"`}
-                                </p>
-                                <p className="text-sm text-muted-foreground">Prueba con otro momento del día o borra el filtro.</p>
-                            </div>
-                        ) : (
-                            <div className="p-4 space-y-3">
-                                {recetarioError && (
-                                    <p className="text-xs text-amber-500 font-medium">{recetarioError}</p>
-                                )}
-                                <p className="text-xs text-muted-foreground">
-                                    <span className="font-bold text-foreground">{recetasFiltradas.length}</span> recetas del recetario.
-                                    Al elegir una, las cantidades se cuadran a tu objetivo.
-                                </p>
-                                {recetasFiltradas.map((receta, index) => (
-                                    <button key={receta.id}
-                                        className="w-full text-left bg-card rounded-2xl shadow-md hover:shadow-lg hover:ring-1 hover:ring-brand-orange/40 transition-all disabled:opacity-60 overflow-hidden"
-                                        onClick={() => aplicarReceta(receta)} disabled={!!aplicandoId}
-                                        data-testid={`recetario-menu-${index}`}>
-                                        {/* La foto de la receta. Si no hay, la tarjeta va sin ella y sin
-                                            hueco: nada de imagen genérica ni de plato de relleno. Los menús
-                                            que salgan de los PDFs y de la cosecha no van a tener. */}
-                                        {receta.foto && (
-                                            <img src={receta.foto} alt="" loading="lazy"
-                                                className="w-full h-36 object-cover bg-muted"
-                                                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                                        )}
-                                        <div className="p-4">
-                                        <div className="flex items-start justify-between gap-2 mb-1">
-                                            <h3 className="font-bold text-foreground text-lg lg:text-sm leading-snug">{receta.nombre}</h3>
-                                            <div className="flex items-center gap-1 flex-shrink-0">
-                                                {/* Sin proteína no cubre una comida entera (el «Turrón Crunch
-                                                    de Cacao» son frutos secos y chocolate). Se dice AQUÍ, antes
-                                                    de elegirla: si no, se la lleva el aviso de «te faltan 30 g
-                                                    de proteína» sin saber por qué. Sigue estando y se puede
-                                                    elegir; lo que no hace es proponerse sola. */}
-                                                {receta.completa === false && (
-                                                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-brand-orange/15 text-brand-orange px-2 py-0.5 rounded-full">
-                                                        complemento
-                                                    </span>
-                                                )}
-                                                {(receta.momentos || []).map(m => (
-                                                    <span key={m} className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        {/* Los alimentos de la receta, igual que en la
-                                            biblioteca: es lo que se lee para elegir. Van
-                                            justificados porque aquí sí es un párrafo -- los
-                                            alimentos van seguidos separados por puntos -- y
-                                            en un ancho de móvil el borde derecho en zigzag es
-                                            lo que hace que un bloque de texto se lea peor. */}
-                                        <p className="text-[17px] lg:text-xs text-foreground/70 lg:text-muted-foreground leading-relaxed text-justify lg:text-left hyphens-auto">
-                                            {(receta.alimentos || []).join(' · ')}
-                                        </p>
-                                        <p className="text-[11px] text-brand-orange font-semibold mt-1.5 flex items-center gap-1">
-                                            {aplicandoId === receta.id ? (
-                                                <>
-                                                    <span className="animate-spin rounded-full h-3 w-3 border-2 border-brand-orange border-t-transparent" />
-                                                    Cuadrando a tus macros...
-                                                </>
-                                            ) : (
-                                                <><Check className="w-3 h-3" /> Se cuadra a tus macros al elegirla</>
-                                            )}
-                                        </p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        )
+                            )}
+                        </div>
                     )}
                 </div>
             </DialogContent>
