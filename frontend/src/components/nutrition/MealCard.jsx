@@ -2,6 +2,7 @@ import React from 'react';
 import { StatusDot } from './DaySummary';
 import { macrosDeVista } from './ModoMacros';
 import { seExcede, textoExceso } from '../../lib/exceso';
+import ContadorFamilia from './ContadorFamilia';
 import {
     ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download
 } from 'lucide-react';
@@ -193,7 +194,7 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
 const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
     moveFoodUp, removeFood, updateFoodQuantity, updateFoodQuantityDirect,
     setEditingQuantity, formatFoodQuantity, modoMacros = 'metodo',
-    esPorUnidad, pesoUnidad }) => {
+    esPorUnidad, pesoUnidad, acumFamilias }) => {
     const macros = macrosDeVista(food, modoMacros);
     // Los alimentos por unidades se escriben en unidades ("2 huevos"), no en gramos.
     const porUnidad = esPorUnidad ? esPorUnidad(food) : false;
@@ -226,6 +227,11 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                 ) : (
                     <span className="block text-[17px] lg:text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
                 )}
+                {/* Lo que llevas hoy de su familia, si es de las que se calibran. Jesús,
+                    13-08: «un contador en la línea del alimento desde el primer gramo».
+                    Va debajo del nombre y no en su propia fila: en un móvil de 335 px la
+                    fila ya está repartida al milímetro (ver el comentario de arriba). */}
+                <ContadorFamilia bloque={food.bloque} gramos={acumFamilias?.[food.bloque]?.gramos} />
             </div>
 
             {/* Macros: en movil comparten linea con los controles, para no gastar una fila
@@ -293,6 +299,10 @@ const MealCard = ({
     // Solo cambia lo que pone en la LISTA de ingredientes. Los totales de la comida,
     // su estado y las cantidades siguen siendo del metodo, pase lo que pase.
     modoMacros = 'metodo',
+    // Lo que lleva el DIA de cada familia que se calibra, para el contador de la linea del
+    // alimento. Viene de `mealCardProps` y es el mismo para todas las comidas: desde el
+    // 13-08 el tramo lo decide el total del dia, no la comida (ver `ContadorFamilia`).
+    acumFamilias = null,
 }) => {
     const isExpanded = forceExpanded ? true : expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
@@ -485,7 +495,8 @@ const MealCard = ({
                                             moveFoodUp={moveFoodUp} removeFood={removeFood}
                                             updateFoodQuantity={updateFoodQuantity} updateFoodQuantityDirect={updateFoodQuantityDirect}
                                             setEditingQuantity={setEditingQuantity} formatFoodQuantity={formatFoodQuantity}
-                                            modoMacros={modoMacros} esPorUnidad={esPorUnidad} pesoUnidad={pesoUnidad} />
+                                            modoMacros={modoMacros} esPorUnidad={esPorUnidad} pesoUnidad={pesoUnidad}
+                                            acumFamilias={acumFamilias} />
                                     ))}
                                 </div>
                             </div>
