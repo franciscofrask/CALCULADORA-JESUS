@@ -87,6 +87,25 @@ class PerfilMomento:
             return self._ratio(c, momento)
         return 1.0   # lo que no se sabe no se penaliza
 
+    def usos(self, food: dict, momento: str) -> int:
+        """Cuántas VECES se ha puesto este alimento en ese momento, en bruto.
+
+        `coherencia` responde a «¿pega esto a esta hora?» y lo hace en relativo, que es lo
+        que hace falta para no proponer callos a las 8:00. Pero en relativo un yogur de
+        marca rara que se usó tres veces empata con las claras pasteurizadas, que están en
+        media base: los dos son «cosa de desayuno». Para ELEGIR entre ellos hace falta el
+        número absoluto, que es el que dice cuál usa Jesús de verdad.
+
+        Sin datos propios devuelve 0 a propósito: aquí no se hereda de la categoría. La
+        pregunta es por ESTE alimento, y heredar volvería a empatar a todo el mundo.
+        """
+        if momento not in MOMENTOS_PERFIL:
+            return 0
+        p = self.alimentos.get(str(int(food.get("id", 0) or 0)))
+        if not p:
+            return 0
+        return int(p["conteos"].get(momento, 0))
+
     def tiene_datos(self, food: dict) -> bool:
         p = self.alimentos.get(str(int(food.get("id", 0) or 0)))
         if p and p["total"] >= MIN_EVIDENCIA_ALIMENTO:

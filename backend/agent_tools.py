@@ -20,7 +20,9 @@ cabe), pensados para gastar pocos tokens y enseñar cuando fallan: "no hay gené
 cubran 39 g de proteína; el más cercano cubre 22" en vez de una lista vacía.
 """
 import logging
+import math
 import re
+import zlib
 from typing import Dict, List, Optional
 
 from calculator import (
@@ -74,9 +76,12 @@ class AgentTools:
     _FOODS = None          # id -> doc del catálogo
 
     _COMPANYIA = None      # qué va con qué, aprendido de las dietas
+    _FORMA = None          # de cuántas piezas se compone una comida, y de qué papeles
+    _ROLES = {}            # id -> papel del alimento (P/H/G/V), calculado una vez
+    _EF100 = {}            # id -> macros efectivos por 100 g, calculados una vez
 
     def __init__(self, bot, semantica, corrector, perfil, foods: Dict[int, dict],
-                 companyia=None):
+                 companyia=None, forma=None):
         self.bot = bot
         self.db = bot.db
         self.semantica = semantica
@@ -84,6 +89,7 @@ class AgentTools:
         self.perfil = perfil
         self.foods = foods
         self.companyia = companyia
+        self.forma = forma
 
     @classmethod
     async def _cargar_catalogo(cls, db) -> Dict[int, dict]:
@@ -135,9 +141,16 @@ class AgentTools:
             # Sin la colección generada (entorno nuevo) se sigue como siempre: el perfil
             # de compañía afina, no es imprescindible para montar una comida.
             cls._COMPANYIA = perfil_c if perfil_c.comidas else False
+        if cls._FORMA is None:
+            from meal_shape import PerfilForma
+            forma = await PerfilForma.cargar(bot.db)
+            # Sin `meal_shapes` minado (hay que correr `_perfil_forma.py` en cada base) el
+            # asistente se comporta como antes: las sugerencias vuelven a ordenarse contra
+            # el hueco entero y los menús se componen por macros. Se degrada, no se rompe.
+            cls._FORMA = forma if forma.hay_datos else False
         perfil = await bot._perfil_momento()
         return cls(bot, cls._SEMANTICA or None, cls._CORRECTOR, perfil, cls._FOODS,
-                   cls._COMPANYIA or None)
+                   cls._COMPANYIA or None, cls._FORMA or None)
 
     # ------------------------------------------------------------ contexto común
     def _momento_actual(self) -> str:
@@ -187,6 +200,74 @@ class AgentTools:
 
     def _etiquetas_de(self, food: dict) -> set:
         return {t for t in parse_categories(food.get("categorias")) if t and not t[0].isdigit()}
+
+    # ---------------------------------------------------- de qué se compone una comida
+    def _rol_de(self, food: dict) -> str:
+        """Qué papel hace este alimento en el plato: P, H, G o V.
+
+        El mismo `classify_food_role` con el que se montan las comidas, con los mixtos
+        llevados a su macro dominante (un lácteo proteico y unos huevos son la proteína
+        del desayuno). Se calcula una vez por alimento y por proceso: entra en el bucle
+        que recorre los 3.211 del catálogo en cada búsqueda sin texto.
+        """
+        aid = int(food.get("id") or 0)
+        rol = AgentTools._ROLES.get(aid)
+        if rol is None:
+            from meal_builder import classify_food_role
+            try:
+                bruto = classify_food_role(food, self._ef100(food))
+            except Exception:
+                bruto = "H"
+            rol = {"P": "P", "PH": "P", "PG": "P", "H": "H", "G": "G", "V": "V"}.get(bruto, "H")
+            AgentTools._ROLES[aid] = rol
+        return rol
+
+    def _ef100(self, food: dict) -> dict:
+        """Los macros que CUENTAN de este alimento por 100 g, calculados una vez.
+
+        Se consultan para cada alimento del catálogo en cada búsqueda sin texto (para el
+        papel y para saber si aporta el macro que se busca), y calcularlos cuesta: la
+        primera búsqueda del proceso tardaba 5,8 s y las siguientes 0,66."""
+        aid = int(food.get("id") or 0)
+        ef = AgentTools._EF100.get(aid)
+        if ef is None:
+            from meal_builder import get_effective_macros_per_100g
+            try:
+                ef = get_effective_macros_per_100g(food)
+            except Exception:
+                ef = {"P": 0.0, "H": 0.0, "G": 0.0, "cat": ""}
+            AgentTools._EF100[aid] = ef
+        return ef
+
+    def _piezas_por_cubrir(self, restante: dict) -> int:
+        """Cuántos alimentos le faltan a esta comida para parecerse a una comida real.
+
+        De aquí sale la diferencia entre MONTAR y REMATAR, que es el fondo de lo que
+        Francisco vio el 12-08 (doce batidos seguidos para un desayuno vacío):
+
+          - montando (faltan 2 piezas o más), ninguna pieza tiene que cubrir el hueco
+            entero, así que juzgar cada alimento contra ese hueco entero premia justo a
+            los que sí lo cubren solos, que son los sustitutivos de comida;
+          - rematando (falta 1), el hueco sí es de una pieza y vuelve a mandar «lo que
+            menos desajusta», que es lo que pidió Jesús en el punto 76 del 07-08.
+
+        Sin `meal_shapes` minado se responde 1 y todo sigue como estaba.
+        """
+        if not self.forma:
+            return 1
+        # UN SOLO MACRO PENDIENTE NO ES UNA COMIDA, ES UN REMATE. Si a la comida solo le
+        # falta proteína -- ya tiene su pan y su aceite --, lo que se pide es algo que
+        # cierre esa proteína, no tres trozos que la repartan. Es el caso 39 de Jesús:
+        # «faltan 40,5 g de proteína: todas las opciones los cierran».
+        if sum(1 for m in ("P", "H", "G") if float(restante.get(m, 0) or 0) > 4) < 2:
+            return 1
+        momento = self._momento_actual()
+        kcal = sum(max(float(restante.get(m, 0) or 0), 0) * (9 if m == "G" else 4)
+                   for m in ("P", "H", "G"))
+        tipicas = self.forma.piezas_tipicas(momento, kcal)
+        puestas = len(((self.bot.state.get("comidas_completadas") or {})
+                       .get(self.bot.current_meal_key()) or {}).get("alimentos", []))
+        return max(1, tipicas - puestas)
 
     def _item_de(self, food: dict, cantidad_g: float, macros: dict) -> dict:
         config = get_food_config(food)
@@ -252,12 +333,19 @@ class AgentTools:
                                limite: int = 8,
                                heredar_estilo: bool = True,
                                acompanando_a: List[dict] = None,
-                               hueco: dict = None) -> dict:
+                               hueco: dict = None,
+                               familia: str = None,
+                               anotar: bool = True,
+                               como_pieza: bool = False) -> dict:
         """Busca en el catálogo con el texto TAL CUAL lo dijo el cliente (la traducción
         coloquial→catálogo es semántica, no una tabla). Sin texto, ordena por lo que más
         aporta al macro pedido (o al que más falta). Devuelve cada alimento ya
         dimensionado a lo que cabe en la comida actual."""
-        limite = max(1, min(int(limite or 8), 15))
+        # El tope de 15 es para lo que ve el cliente (una tarjeta por resultado, y tokens).
+        # Las búsquedas internas del compositor (`anotar=False`) no se enseñan y necesitan
+        # de dónde elegir: con 15 resultados repartidos entre familias, a cada hueco del
+        # menú le llegaban uno o dos candidatos y las tres opciones salían casi iguales.
+        limite = max(1, min(int(limite or 8), 15 if anotar else 30))
         # El hueco contra el que se dimensiona y se ordena. Normalmente es lo que le falta
         # a la comida, pero quien está MONTANDO un menú tiene que pasar lo que le falta al
         # menú ya empezado: si no, al buscar el complemento se mide contra la comida entera
@@ -321,6 +409,33 @@ class AgentTools:
             # el modelo en contestar.
             orden = list(universo)
 
+        # MONTAR NO ES REMATAR (13-08-2026).
+        #
+        # Sin texto, la petición es «algo para esta comida», y con la comida vacía el hueco
+        # es el de la comida ENTERA. Ordenar por lo que menos la desajusta premia entonces
+        # al que la cubre él solo, que es la definición de sustitutivo de comida. Medido en
+        # la Comida 1 con 50P/30H/10G: de 15 sugerencias, 6 batidos, 4 yogures proteicos, 3
+        # levaduras y 2 pancakes. Cuatro familias, ningún huevo, ningún pan, ninguna fruta.
+        # Francisco, 12-08: «me ofreció todo yogur o batidos pero nada de proteína real como
+        # huevos, u otros acompañamientos, tostadas, palta, frutas». En las dietas reales un
+        # desayuno de solo batidos y polvos es el 0,3 % (5 de 1.441).
+        #
+        # Montando, cada alimento se mide y se dimensiona contra LA PARTE que le toca a una
+        # pieza de su papel: en un desayuno real la proteína la ponen 3 piezas, los hidratos
+        # 1 y la grasa 1 (medianas de `meal_shapes`). Rematando (falta una pieza), no cambia
+        # nada: sigue mandando «lo que menos desajusta», que es el punto 76 de Jesús.
+        # Con texto manda la petición del cliente y el hueco es el de la comida: quien pide
+        # «pechuga de pollo» quiere la que le cierre lo que falta. `como_pieza` lo fuerza
+        # igualmente, y lo usa el compositor: ahí el texto es el estilo del menú, no una
+        # pieza suelta, y sin esto el batido de un «menú con batido» se dimensionaba contra
+        # los 50 g de proteína de la comida entera y salían 176 g que se pasaban 13.
+        piezas_por_cubrir = self._piezas_por_cubrir(restante) if (como_pieza or not texto) else 1
+        montando = piezas_por_cubrir > 1 and bool(self.forma)
+        cuotas = {}
+        if montando:
+            cuotas = {m: self.forma.cuota(momento, m, max(float(restante.get(m, 0) or 0), 0))
+                      for m in ("P", "H", "G")}
+
         # --- filtros duros (datos del catálogo, nunca juicios)
         marca_norm = self.bot._norm_text(marca) if marca else None
         etiquetas = {e.upper() for e in (etiquetas or [])}
@@ -358,9 +473,22 @@ class AgentTools:
                 continue
             if marca_norm and marca_norm not in self.bot._norm_text(food.get("nombre", "")):
                 continue
+            # Familia (cat2) exacta: la usa el compositor para pedir «el pan de este menú»
+            # o «la grasa de este menú» siguiendo un esqueleto real, en vez de pedir «algo
+            # que dé hidratos» y que le toque lo que sea.
+            if familia and cat2_de(food) != familia:
+                continue
             if etiquetas and not etiquetas <= self._etiquetas_de(food):
                 continue
             if self._es_evitado(food):
+                continue
+            # Quien no lleva ese macro no puede aportarlo: se descarta ANTES de calcular su
+            # cantidad, que es lo caro. Es el mismo filtro que ya había debajo sobre el
+            # alimento ya dimensionado, adelantado con los macros por 100 g; sin él, cada
+            # búsqueda por macro dimensionaba los 3.211 alimentos del catálogo para tirar
+            # 2.400. Solo cuando no hay texto: con texto manda lo que ha pedido el cliente.
+            if not texto and para_macro in ("P", "H", "G") \
+                    and float(self._ef100(food).get(para_macro, 0) or 0) <= 0:
                 continue
             # La coherencia con el momento no descarta lo que se ha pedido POR SU NOMBRE.
             #
@@ -375,7 +503,8 @@ class AgentTools:
                     and self.perfil.coherencia(food, momento) < COHERENCIA_MINIMA:
                 vetados_momento += 1
                 continue
-            sized = self.bot._size_food(food, restante)
+            sized = self.bot._size_food(
+                food, self._hueco_de_pieza(restante, food, cuotas) if montando else restante)
             if not sized:
                 if len(no_caben) < 3:
                     no_caben.append({"id": aid, "nombre": food.get("nombre"),
@@ -419,9 +548,9 @@ class AgentTools:
 
         if not texto:
             if items:
-                items = self._ordenar_por_distancia(items, restante)
+                items = self._ordenar_sugerencias(items, restante, momento, cuotas)
             if repetidos:
-                repetidos = self._ordenar_por_distancia(repetidos, restante)
+                repetidos = self._ordenar_sugerencias(repetidos, restante, momento, cuotas)
         # SIN NADA NUEVO, LA RUEDA DA OTRA VUELTA (ver `_semilla_variedad`). Si se le han
         # enseñado ya todos los candidatos, volver al orden de siempre es lo que hacia que
         # la sexta sugerencia fuera identica a la primera. Se vacia la memoria de esta
@@ -432,11 +561,18 @@ class AgentTools:
             self.bot.state.setdefault("seen_sugg", {})[key_c] = []
             vueltas = self.bot.state.setdefault("vueltas_sugerencia", {})
             vueltas[key_c] = int(vueltas.get(key_c, 0)) + 1
-            items, repetidos = self._ordenar_por_distancia(repetidos, restante), []
+            items, repetidos = self._ordenar_sugerencias(repetidos, restante, momento, cuotas), []
         if len(items) < limite:
             items = items + repetidos[:limite - len(items)]
+        if not texto:
+            items = self._topar_por_familia(items)
         items = items[:limite]
-        self._anotar_ofrecidos(items)
+        # `anotar=False` lo pasa el compositor: mira decenas de alimentos por cada menú que
+        # monta y el cliente no ve ninguno. Apuntarlos como enseñados dejaba la memoria de
+        # sugerencias llena de cosas que nadie vio, y luego el chat las apartaba por
+        # repetidas.
+        if anotar:
+            self._anotar_ofrecidos(items)
 
         out = {"items": items,
                "comida": describe_comida(self.bot.current_meal_key(),
@@ -554,6 +690,162 @@ class AgentTools:
     # tener el sugeridor que da lo mismo a todo el mundo.
     ESCALON_DISTANCIA = 3.0
 
+    # Cuántas veces puede repetirse una misma familia (cat2) en una lista de sugerencias.
+    # Seis batidos distintos no son seis opciones, son una: el cliente no elige entre
+    # Barebells y Valio, elige entre desayunar un batido o desayunar huevos con pan.
+    MAX_POR_FAMILIA = 2
+
+    # Hasta qué escalón de desvío se considera que un alimento «entra» en su cuota. Con
+    # ESCALON_DISTANCIA = 3 g, son 9 g: lo que se puede recolocar moviendo cantidades en el
+    # resto del plato. Por encima, el alimento no está haciendo el papel que se le pide.
+    ESCALONES_QUE_ENTRAN = 3
+
+    def _hueco_de_pieza(self, restante: dict, food: dict, cuotas: dict) -> dict:
+        """El hueco contra el que se mide UNA pieza: su macro topado a lo que le toca, y
+        los demás como están (nadie puede pasarse de lo que le falta a la comida)."""
+        h = {m: max(float(restante.get(m, 0) or 0), 0) for m in ("P", "H", "G")}
+        rol = self._rol_de(food)
+        if rol in h and cuotas.get(rol):
+            h[rol] = min(h[rol], cuotas[rol])
+        return h
+
+    def _topar_por_familia(self, items: List[dict]) -> List[dict]:
+        """Deja como mucho `MAX_POR_FAMILIA` de la misma familia por delante; el resto va
+        detrás sin perderse. Es lo que evita la lista de doce variantes de lo mismo."""
+        cabeza, cola, vistas = [], [], {}
+        for it in items:
+            fam = cat2_de(self.foods.get(it["id"]) or {})
+            vistas[fam] = vistas.get(fam, 0) + 1
+            (cabeza if vistas[fam] <= self.MAX_POR_FAMILIA else cola).append(it)
+        return cabeza + cola
+
+    def _ordenar_sugerencias(self, items: List[dict], restante: dict, momento: str,
+                             cuotas: dict = None) -> List[dict]:
+        """Rematando, lo que menos desajusta (punto 76). Montando, una lista con la forma
+        de una comida (ver `_mezclar_por_papel`)."""
+        if not cuotas:
+            return self._ordenar_por_distancia(items, restante)
+        return self._mezclar_por_papel(items, momento, cuotas)
+
+    def _mezclar_por_papel(self, items: List[dict], momento: str, cuotas: dict) -> List[dict]:
+        """Una lista que se parece a una comida: proteínas, hidratos y grasas mezclados.
+
+        Repartir el hueco entre las piezas NO bastaba, y está medido: con la comida vacía
+        y el hueco dividido entre cinco seguían saliendo doce lácteos proteicos seguidos.
+        La razón es que la distancia se mide sobre los TRES macros a la vez, así que
+        siempre gana el alimento que los cubre todos en la proporción justa, y las piezas
+        de una comida de verdad son especializadas: los huevos ponen proteína y no traen
+        hidratos, el pan pone hidratos y no trae proteína.
+
+        Así que cada alimento compite SOLO con los de su papel y SOLO por su macro, y la
+        lista se compone después mezclándolos en la proporción de una comida real de ese
+        momento (3 proteínas por 1 hidrato y 1 grasa en un desayuno). Los papeles cuyo
+        macro ya está cubierto van al final: siguen estando, pero no ocupan la cabeza.
+        """
+        import random
+        from meal_shape import MACRO_DE_ROL
+
+        rng = random.Random(self._semilla_variedad())
+        colas: Dict[str, List[dict]] = {}
+        for it in items:
+            colas.setdefault(self._rol_de(self.foods.get(it["id"]) or {}), []).append(it)
+
+        en_peri = self.bot.current_meal_key() in ("Intra", "Post")
+        for rol, lista in colas.items():
+            rng.shuffle(lista)
+            macro = MACRO_DE_ROL.get(rol)
+            cuota = cuotas.get(macro) if macro else None
+            if not cuota:
+                continue
+            # Dentro del papel: primero lo que más se acerca a su cuota (por escalones,
+            # para que dos alimentos parecidos no queden siempre en el mismo orden), y a
+            # igualdad de encaje lo que de verdad se come a esa hora.
+            #
+            # El desempate por momento no sobraba: sin él, la cuota de grasa de un desayuno
+            # la ganaban la morcilla oreada, el paté de hígado y la galta de cerdo, que
+            # encajan en 10 g de grasa tan bien como el aceite de oliva. El filtro de
+            # coherencia no los quita porque no tienen datos propios y lo que no se sabe no
+            # se penaliza (1.0 neutro); lo que hace falta aquí no es vetarlos, es que el
+            # aceite, el aguacate y los frutos secos -- que están en el 26 % de los
+            # desayunos reales -- salgan antes. Y a igualdad, la comida real por delante
+            # del bote (punto 78).
+            # Primero lo que ENTRA en su cuota, y entre lo que entra, lo que Jesús pone de
+            # verdad a esa hora. El encaje se satura en `ESCALONES_QUE_ENTRAN` para que sea
+            # una puerta y no una regla de tres: dentro de esa tolerancia manda el uso real,
+            # y lo que se aleja más se va al final por mucho que se use. Así los huevos, que
+            # se quedan a 8 g de su cuota porque su grasa topa antes, siguen saliendo (son
+            # la mitad de los desayunos), y un alimento que no pinta nada no se cuela por
+            # ser popular. A igualdad, la comida real antes que el bote (punto 78).
+            lista.sort(key=lambda it: (
+                min(int(abs(float(it["macros"].get(macro, 0) or 0) - cuota)
+                        // self.ESCALON_DISTANCIA), self.ESCALONES_QUE_ENTRAN),
+                -self._tipico_en(it, momento),
+                0 if en_peri else self._es_bote(it)))
+
+        # Cuántas de cada papel: las que lleva una comida real de ese momento. Un papel
+        # cuyo macro ya está cubierto no entra en el reparto y se queda para el final.
+        pesos = {}
+        for rol, lista in colas.items():
+            macro = MACRO_DE_ROL.get(rol)
+            if lista and macro and cuotas.get(macro):
+                pesos[rol] = max(1, self.forma.piezas_de_rol(momento, rol))
+        if not pesos:
+            return items
+
+        # Reparto proporcional: cada papel acumula su peso y sale el que más crédito tiene,
+        # así la cabeza lleva uno de cada y el conjunto respeta la proporción de la comida.
+        total = sum(pesos.values())
+        credito = {rol: 0.0 for rol in pesos}
+        salida = []
+        while any(colas[rol] for rol in pesos):
+            for rol in pesos:
+                credito[rol] += pesos[rol]
+            rol = max((r for r in pesos if colas[r]), key=lambda r: credito[r])
+            credito[rol] -= total
+            salida.append(colas[rol].pop(0))
+        for rol, lista in colas.items():
+            salida.extend(lista)
+        return salida
+
+    def _tipico_en(self, item: dict, momento: str) -> int:
+        """Cuánto se pone ESTO a esa hora, en tramos: 3 = a diario, 0 = casi nunca.
+
+        Es el uso REAL del alimento en ese momento, no su coherencia. La coherencia es un
+        ratio y sirve para vetar lo que no pega (callos a las 8:00), pero para ELEGIR entre
+        lo que sí pega empata a todo el mundo: una crema de yogur de marca rara hereda de
+        «yogures» y compite de tú a tú con las claras pasteurizadas. Probado en la Comida 1:
+        ordenando por coherencia salían Yeo Valley, Wow cereals y Naturli, y no salía ni un
+        huevo, ni pan, ni las claras, que son la mitad de los desayunos de Jesús.
+
+        En tramos logarítmicos y no en bruto para que el desempate no se coma el barajado:
+        entre dos alimentos que se usan a diario decide el encaje de macros, y el orden de
+        los que empatan cambia cada día.
+        """
+        if not self.perfil or momento == PERI:
+            return 0
+        food = self.foods.get(item.get("id"))
+        if not food:
+            return 0
+        try:
+            usos = self.perfil.usos(food, momento)
+        except Exception:
+            return 0
+        if usos <= 0:
+            return 0
+        # En log2 y no en log10: con tres tramos empataban ciento y pico alimentos y el
+        # desempate acababa siendo el barajado, así que las claras (9.998 usos en desayuno)
+        # competían de igual a igual con un jamón serrano de 120. Doblar los usos sube un
+        # escalón, que separa lo suficiente sin dejar de agrupar a los parecidos.
+        return min(int(math.log2(usos)) + 1, 15)
+
+    def _es_bote(self, item: dict) -> int:
+        """1 si el alimento es de las categorías de suplemento (punto 78)."""
+        for c in parse_categories(item.get("categorias")):
+            for p in CATS_SUPLEMENTO:
+                if c == p or c.startswith(p + "."):
+                    return 1
+        return 0
+
     def _ordenar_por_distancia(self, items: List[dict], restante: dict) -> List[dict]:
         """Los que menos desajustan la comida, primero (`diferenciaDeMacros` de Calma).
 
@@ -591,13 +883,7 @@ class AgentTools:
         en_peri = self.bot.current_meal_key() in ("Intra", "Post")
 
         def es_polvo(it):
-            if en_peri:
-                return 0
-            for c in parse_categories(it.get("categorias")):
-                for p in CATS_SUPLEMENTO:
-                    if c == p or c.startswith(p + "."):
-                        return 1
-            return 0
+            return 0 if en_peri else self._es_bote(it)
 
         import random
         rng = random.Random(self._semilla_variedad())
@@ -630,7 +916,12 @@ class AgentTools:
                   str(st.get("fecha_objetivo") or ""),
                   self.bot.current_meal_key(),
                   str((st.get("vueltas_sugerencia") or {}).get(self.bot.current_meal_key(), 0)))
-        return abs(hash("|".join(partes))) % (2 ** 31)
+        # `crc32` y no `hash()`: el hash de las cadenas en Python lleva una sal ALEATORIA
+        # POR PROCESO, así que la semilla «estable por cliente, día y comida» cambiaba en
+        # cada arranque del backend. El cliente veía otras sugerencias tras cada despliegue
+        # sin haber tocado nada, y en los tests salía como fallo intermitente (el del punto
+        # 78 pasaba o fallaba según la corrida, sin tocar el código).
+        return zlib.crc32("|".join(partes).encode("utf-8"))
 
     def _companyia_mala(self, items: List[dict], ids_exentos: set = None):
         """¿Hay en esta comida un par que en las dietas reales no se pone junto? Devuelve
@@ -652,6 +943,288 @@ class AgentTools:
         elev, a, b = malo
         return (f"un intento juntaba {a.get('nombre')} con {b.get('nombre')}, y en las "
                 f"dietas reales casi no coinciden (elevación {elev:.2f})", elev)
+
+    # ------------------------------------------------- menús con forma de comida real
+    def _rol_de_familia(self, familia: str) -> str:
+        """Qué papel hace una familia entera (cat2) en el plato: el de la mayoría de sus
+        alimentos. '8.1' (panes) es H, '1.2' (huevos) es P, '17.1' (aceites) es G."""
+        rol = AgentTools._ROLES.get(f"fam:{familia}")
+        if rol is None:
+            votos: Dict[str, int] = {}
+            for f in self.foods.values():
+                if cat2_de(f) == familia:
+                    r = self._rol_de(f)
+                    votos[r] = votos.get(r, 0) + 1
+            rol = max(votos, key=votos.get) if votos else "H"
+            AgentTools._ROLES[f"fam:{familia}"] = rol
+        return rol
+
+    def _esqueletos_para(self, momento: str, restante: dict, fijos: list,
+                         fams_pedidas: set = None) -> List[List[str]]:
+        """Las formas de comida reales que sirven para lo que falta, de más a menos usada.
+
+        Un esqueleto es la lista de familias de una comida que Jesús montó de verdad
+        ('1.1', '1.2', '2.1', '8.1', '17.1' son claras, huevos, fiambre de pavo, pan y
+        aceite). Se descartan los que no traen el papel de un macro que falta -- un
+        esqueleto sin hidratos no puede cubrir 30 g de hidratos -- y las familias de los
+        alimentos que el cliente ha exigido se quitan del esqueleto, porque su sitio ya
+        está ocupado por lo suyo.
+        """
+        if not self.forma:
+            return []
+        faltan = {m for m in ("P", "H", "G") if float(restante.get(m, 0) or 0) > 4}
+        roles_fijos = {self._rol_de(food) for _, food in fijos}
+        fams_fijas = {cat2_de(food) for _, food in fijos}
+        # Una comida entera no se cubre con dos cosas. Los esqueletos de dos familias
+        # existen (el 7,5 % de las comidas reales llevan uno o dos alimentos) pero son la
+        # excepción, y es justo lo que Francisco señaló: «no tiene sentido que solo tenga
+        # esas dos cosas». Cuando lo que falta es poco -- una comida ya empezada -- el
+        # mínimo baja solo, porque ahí dos piezas sí son una comida.
+        minimo_familias = min(3, self._piezas_por_cubrir(restante))
+        # Y un techo, por el otro lado: hay comidas reales de ocho y nueve alimentos, pero
+        # son la cola. Una merienda de Jesús tiene 3 piezas de mediana y salían menús de 9,
+        # que no son cómodos de preparar aunque cuadren. Se deja un margen de una pieza
+        # sobre lo típico, que es donde está el 85 % de las comidas.
+        maximo_familias = self._piezas_por_cubrir(restante) + 1
+        salida = []
+        for familias, _n in self.forma.formas(momento):
+            # LO QUE PIDE EL CLIENTE MANDA SOBRE LA FORMA. Si ha dicho «avena», solo valen
+            # las comidas reales que llevan avena; el resto no son una alternativa suya,
+            # son otra cosa. Sin esto el esqueleto se comía la petición: pidiendo «avena»
+            # salía un desayuno de huevos, pan y pavo, y pidiendo «pollo» tampoco había
+            # pollo. Cuando ninguna forma real lleva lo pedido se devuelve vacío a
+            # propósito, y compone el camino de siempre, que sí parte del texto.
+            if fams_pedidas and not (fams_pedidas & set(familias)):
+                continue
+            fams = [f for f in familias
+                    if f not in fams_fijas and self._rol_de_familia(f) not in roles_fijos]
+            roles = {self._rol_de_familia(f) for f in fams} | roles_fijos
+            if not faltan <= roles:
+                continue
+            if minimo_familias <= len(fams) + len(fijos) <= maximo_familias:
+                salida.append(fams)
+        if not salida and fams_pedidas:
+            salida = self._esqueleto_alrededor_de(fams_pedidas, faltan, roles_fijos,
+                                                  fams_fijas, minimo_familias)
+        return salida
+
+    def _esqueleto_alrededor_de(self, fams_pedidas: set, faltan: set, roles_fijos: set,
+                                fams_fijas: set, minimo: int) -> List[List[str]]:
+        """Cuando lo pedido no sale en ninguna comida entera, se le monta una alrededor.
+
+        Pasa con lo que Jesús casi nunca pone como plato: pidiendo «batido» no había ni un
+        esqueleto real con esa familia, así que se caía al camino por macros -- el que
+        montaba «batido + proteína de soja + cacahuete frito con miel» -- y encima con
+        ocho intentos y quince cuadres, que son 21 de los 29 s que tardaba.
+
+        Con qué se acompaña no lo decide nadie a mano: son las familias que más veces
+        coinciden con la pedida en las 147.820 comidas reales (`company_profiles`), y solo
+        las que hacen el papel de un macro que todavía falta.
+        """
+        if not self.companyia:
+            return []
+        salida = []
+        for pedida in sorted(fams_pedidas):
+            perfil = self.companyia.categorias.get(pedida)
+            if not perfil:
+                continue
+            fams = [pedida]
+            roles = {self._rol_de_familia(pedida)} | roles_fijos
+            for otra, _veces in sorted((perfil.get("con") or {}).items(),
+                                       key=lambda kv: -kv[1]):
+                if faltan <= roles and len(fams) >= minimo:
+                    break
+                rol = self._rol_de_familia(otra)
+                if otra in fams or otra in fams_fijas or rol in roles:
+                    continue
+                if rol not in faltan and len(fams) >= minimo:
+                    continue
+                fams.append(otra)
+                roles.add(rol)
+            if faltan <= roles and len(fams) + len(fams_fijas) >= minimo:
+                salida.append(fams)
+        return salida
+
+    async def _familias_de(self, texto: str, cache: dict = None) -> set:
+        """Las familias a las que apunta lo que ha pedido el cliente ('avena' -> 7.1).
+
+        Se resuelve con la misma búsqueda que usa el chat, así que vale cualquier forma de
+        decirlo; solo se miran los primeros resultados, que son los que de verdad son eso.
+
+        De paso deja en el caché lo encontrado, repartido por familia: es la MISMA lista
+        que necesita después cada hueco del esqueleto, y buscarla una vez por familia
+        costaba una búsqueda semántica por cada una (medido: 15,6 s en montar tres menús
+        con estilo, contra 2,4 s sin estilo).
+        """
+        if not texto:
+            return set()
+        res = await self.buscar_alimentos(texto=texto, limite=30, anotar=False,
+                                          como_pieza=True)
+        items = res.get("items") or []
+        if cache is not None:
+            por_familia: Dict[str, List[dict]] = {}
+            for it in items:
+                por_familia.setdefault(cat2_de(self.foods.get(it["id"]) or {}), []).append(it)
+            for fam, lista in por_familia.items():
+                cache[(fam, texto)] = lista
+        return {cat2_de(self.foods.get(i["id"]) or {}) for i in items[:4]}
+
+    async def _candidatos_de_macro(self, macro: str, estilo: str, generico: bool,
+                                   marca: str, cache: dict) -> List[dict]:
+        """Los mejores para ese macro, sin atarse a una familia. Es el respaldo cuando la
+        familia que pedía el esqueleto no da nada aquí."""
+        # La clave NO lleva el estilo: la búsqueda es sin texto (el estilo ya se ha puesto
+        # en su pieza), así que meterlo en la clave solo servía para repetir la misma
+        # búsqueda una vez por estilo. Eran 7 de los 21 s que tardaba «menús con batido».
+        clave = (f"macro:{macro}", "")
+        if clave not in cache:
+            res = await self.buscar_alimentos(
+                texto="", para_macro=macro, generico=generico, marca=marca,
+                limite=8, heredar_estilo=False, anotar=False, como_pieza=True)
+            cache[clave] = res.get("items") or []
+        return cache[clave]
+
+    async def _candidatos_de_familia(self, fam: str, estilo: str, generico: bool,
+                                     marca: str, cache: dict) -> List[dict]:
+        """Los mejores de esa familia para esta comida, buscados una sola vez.
+
+        El caché no es un adorno: cada opción mira 4 o 6 familias, los esqueletos comparten
+        casi todas, y sin él la misma búsqueda sobre los 3.211 alimentos se repetía hasta
+        cuarenta veces por petición (medido: 14 s en montar tres menús).
+        """
+        clave = (fam, estilo or "")
+        if clave in cache:
+            return cache[clave]
+        # Con estilo NO se vuelve a buscar: lo que hay es lo que dejó `_familias_de` de su
+        # única búsqueda, repartido por familias. Cada búsqueda con texto pasa por la
+        # semántica y cuesta 2 s; repetirla por familia era la mitad de los 12 s que
+        # tardaba montar tres menús con estilo. Si de esa familia no salió nada, la pieza
+        # se elige sin estilo: «avena» no dice nada sobre el aceite del desayuno.
+        items = []
+        if not estilo:
+            res = await self.buscar_alimentos(
+                texto="", generico=generico, marca=marca, familia=fam,
+                limite=8, heredar_estilo=False, anotar=False, como_pieza=True)
+            items = res.get("items") or []
+        else:
+            items = await self._candidatos_de_familia(fam, "", generico, marca, cache)
+        cache[clave] = items
+        return items
+
+    async def _elegir_por_esqueleto(self, esqueleto: List[str], estilo: str,
+                                    generico: bool, marca: str, salto: int,
+                                    ids_puestos: List[int], tipos_puestos: set,
+                                    cache: dict, fams_pedidas: set = None,
+                                    faltan: set = None, objetivo: dict = None,
+                                    ya_en_otras: set = None) -> List[dict]:
+        """Un alimento por familia del esqueleto, el que Jesús pondría ahí.
+
+        La elección de cada hueco es la misma búsqueda de siempre (ya ordena por lo que
+        entra en su cuota y por lo que se usa de verdad a esa hora), acotada a esa familia.
+        `salto` rota el elegido dentro de cada familia para que dos opciones del mismo
+        esqueleto no salgan idénticas.
+
+        EL ESTILO SOLO PINTA EN SU PIEZA. Pedir «avena» dice qué hidrato quiere el cliente,
+        no cómo tiene que ser el resto del plato; arrastrarlo a todas las familias es lo que
+        montaba «leche de avena + Colacao avenacao + 250 g de fiambre de pavo», donde lo
+        único que unía las tres piezas era la palabra. En las demás manda lo de siempre: lo
+        que se pone de verdad a esa hora.
+        """
+        fams_pedidas = fams_pedidas or set()
+        ya_en_otras = ya_en_otras or set()
+        def _antes_los_nuevos(lista):
+            """El mismo alimento no puede salir en las tres opciones.
+
+            Las familias SÍ se repiten entre opciones -- dos meriendas distintas pueden
+            llevar las dos su lácteo --, pero el alimento concreto no: en la app salieron
+            las opciones 11, 12 y 13 las tres con «Queso fresco batido 0 %», que es la
+            misma queja de siempre con otra cara. Se ORDENA, no se descarta: si de esa
+            familia no queda nada más, mejor repetir que dejar el hueco sin cubrir.
+            """
+            if not ya_en_otras:
+                return lista
+            return ([c for c in lista if c["id"] not in ya_en_otras]
+                    + [c for c in lista if c["id"] in ya_en_otras])
+
+        def _casan(lista):
+            """Los que además pegan con lo que ya está puesto en este menú.
+
+            El esqueleto acierta con las FAMILIAS, pero dentro de una familia caben cosas
+            que no se ponen juntas: montado el menú entero salían «patatas fritas con
+            pechuga de pollo» o «queso batido con kaki», y entonces el filtro de compañía
+            tumbaba la opción ENTERA y había que enseñarla con un aviso al pie. Mirar la
+            compañía aquí, pieza a pieza, sale mucho más barato: se elige otro alimento de
+            la misma familia y el menú nace bien.
+
+            Si ninguno casa se devuelve la lista tal cual: mejor un menú con un par flojo
+            (que el aviso explicará) que un hueco sin cubrir.
+            """
+            if not self.companyia or not ids_puestos:
+                return lista
+            puestos = [self.foods[i] for i in ids_puestos if i in self.foods]
+            buenos = []
+            for c in lista:
+                food = self.foods.get(c["id"])
+                if not food:
+                    continue
+                if self.companyia.discordante(puestos + [food]):
+                    continue
+                buenos.append(c)
+            return buenos or lista
+
+        def _valen(lista):
+            # UN BOTE POR MENÚ COMO MUCHO. En las comidas reales de Jesús el 36 % lleva
+            # algún suplemento, casi siempre uno y rodeado de comida: yogur, copos, aislado
+            # y crema de cacahuete. Sin este tope salían dos y tres por menú -- «batido +
+            # proteína de soja + cacahuete», que es la queja del 12-08 -- y el 69 % de los
+            # menús acababa con bote, el doble de lo que él hace.
+            ya_hay_bote = any(self._es_bote({"categorias": (self.foods.get(i) or {}).get("categorias")})
+                              for i in ids_puestos)
+            return [c for c in lista
+                    if c["id"] not in ids_puestos
+                    and cat2_de(self.foods.get(c["id"]) or {}) not in tipos_puestos
+                    and not (ya_hay_bote and self._es_bote(c))]
+
+        elegidos = []
+        for fam in esqueleto:
+            texto_fam = estilo if fam in fams_pedidas else ""
+            cands = _antes_los_nuevos(_casan(_valen(await self._candidatos_de_familia(
+                fam, texto_fam, generico, marca, cache))))
+            if not cands:
+                # Esa familia no da nada aquí (o su sitio ya está ocupado): se busca otra
+                # pieza del MISMO papel, que es lo que el plato necesita. Sin esto el menú
+                # se quedaba sin grasa y luego lo descartaba la puerta de calidad por
+                # quedarse corto, con lo que la forma real se perdía por el camino.
+                macro = {"P": "P", "H": "H", "G": "G"}.get(self._rol_de_familia(fam))
+                if macro:
+                    cands = _antes_los_nuevos(_casan(_valen(await self._candidatos_de_macro(
+                        macro, texto_fam, generico, marca, cache))))
+            if not cands:
+                continue
+            elegido = cands[salto % len(cands)]
+            elegidos.append(elegido)
+            ids_puestos.append(elegido["id"])
+            tipos_puestos.add(cat2_de(self.foods.get(elegido["id"]) or {}))
+
+        # NINGÚN MACRO SE QUEDA SIN QUIEN LO PONGA. El esqueleto se elige mirando el papel
+        # de cada FAMILIA, pero el alimento concreto que sale de ella puede no hacerlo: de
+        # los panes proteicos (papel de proteína en su familia) salió una tostada, y con
+        # «tostadas» se montó un desayuno de dos tostadas y cacahuetes al que le faltaban
+        # los 50 g de proteína enteros. Se comprueba sobre lo elegido, que es lo único que
+        # no engaña, y si falta el que lo pone, se añade.
+        for macro in sorted(faltan or ()):
+            puesto = sum(float(c["macros"].get(macro, 0) or 0) for c in elegidos)
+            if puesto >= 0.25 * float((objetivo or {}).get(macro, 0) or 0):
+                continue
+            cands = _antes_los_nuevos(_casan(_valen(await self._candidatos_de_macro(
+                "" if macro == "V" else macro, "", generico, marca, cache))))
+            if not cands:
+                continue
+            elegido = cands[salto % len(cands)]
+            elegidos.append(elegido)
+            ids_puestos.append(elegido["id"])
+            tipos_puestos.add(cat2_de(self.foods.get(elegido["id"]) or {}))
+        return elegidos
 
     # ============================================================ 2. componer_menu
     async def componer_menu(self, incluir_ids: List[int] = None, estilo: str = "",
@@ -755,9 +1328,15 @@ class AgentTools:
 
         candidatos_por_rol: Dict[str, List[dict]] = {}
         import random
-        for rol in roles_necesarios:
-            if any(r == rol for r, _ in fijos):
-                continue
+
+        async def _candidatos_del_rol(rol: str) -> List[dict]:
+            """Los candidatos de un papel, buscados la primera vez que hacen falta.
+
+            Antes se buscaban los tres papeles siempre, al entrar: tres búsquedas de vez y
+            media cada una que, cuando el menú se monta sobre un esqueleto, no se usan
+            nunca. Medido en «menús con batido»: 6,4 s de los 23 que tardaba."""
+            if rol in candidatos_por_rol:
+                return candidatos_por_rol[rol]
             res = await self.buscar_alimentos(
                 texto=estilo, para_macro=_ROL_A_MACRO[rol],
                 generico=generico, marca=marca, limite=max(n + 6, 10))
@@ -776,16 +1355,54 @@ class AgentTools:
                     cola.append(c)
             random.shuffle(cabeza)
             candidatos_por_rol[rol] = cabeza + cola
+            return candidatos_por_rol[rol]
 
         # Subfamilias ya usadas EN CUALQUIER opción anterior (también las del recetario):
         # mientras haya alternativas, ninguna se repite entre opciones. Antes solo rotaba
         # la proteína y salían tres menús idénticos con la grasa cambiada (visto 07-08).
         usadas_entre_opciones = {_cat2_de_id(i["id"]) for o in opciones
                                  for i in o.get("items", []) if i.get("id") in self.foods}
+        # LA FORMA DE LA COMIDA, ANTES QUE LOS MACROS (13-08-2026).
+        #
+        # Debajo, la composición de siempre elige UN alimento por macro que falta, y de ahí
+        # salían menús que cuadran y que nadie se come: «copos de avena 50 g + 218 g de
+        # fiambre de magro de jamón» para desayunar, o «batido + proteína de soja +
+        # cacahuete frito con miel». Francisco, 12-08: «no tiene sentido que solo tenga esas
+        # dos cosas, los menús deben de tener sentido».
+        #
+        # Un menú no es un macro por pieza: es una FORMA. En las dietas reales el 87,6 % de
+        # los desayunos llevan de 3 a 6 alimentos, y sus combinaciones se repiten (claras +
+        # huevos + pan + fiambre de pavo + aceite, o avena + proteína + frutos secos). Esas
+        # combinaciones están minadas en `meal_shapes`, y aquí cada opción se monta sobre
+        # una de ellas: el esqueleto dice QUÉ lleva el plato y `build_meal` sigue diciendo
+        # CUÁNTO. Si no hay esqueletos (base sin minar, o ninguno sirve para lo que falta),
+        # se sigue por el camino de siempre.
+        esqueletos = []
+        fams_pedidas: set = set()
+        cache_familias: Dict[tuple, List[dict]] = {}
+        if momento != PERI:
+            fams_pedidas = await self._familias_de(estilo, cache_familias)
+            esqueletos = self._esqueletos_para(momento, restante, fijos, fams_pedidas)
+        vuelta = int((self.bot.state.get("vueltas_sugerencia") or {}).get(key_comida, 0))
         intento = 0
         descartes_bucle = None
         apartadas = []      # descartadas por compañía, por si no queda ninguna otra
-        while not solo_recetario and len(opciones) < n and intento < n + 5:
+        # Los intentos cuestan: cada uno monta un menú entero (una búsqueda por pieza más
+        # el cuadre) y con estilo se llegaba a 29 s. Con esqueletos hacen falta menos, y de
+        # sobra: cada uno sale ya con forma de comida en vez de a la primera que cuadre.
+        # Los intentos cuestan: cada uno monta un menú entero (una búsqueda por pieza más el
+        # cuadre). Con esqueletos hacen falta menos y salen mejor, así que se recortan; el
+        # número está medido sobre siete peticiones distintas, no elegido a ojo:
+        #
+        #   tope    opciones   menús con bote   desvío medio   segundos (total / peor)
+        #    n         15            7              4,0            22,1 / 4,8
+        #    n+1       18            8              5,4            33,4 / 7,7
+        #    n+2       20            9              5,5            44,2 / 11,5
+        #
+        # n+1 es donde se recuperan las opciones que se pierden por descartar más (una por
+        # petición) sin volver a los tiempos de antes, que eran de 16 a 21 s en el peor caso.
+        tope_intentos = (n + 1) if esqueletos else (n + 5)
+        while not solo_recetario and len(opciones) < n and intento < tope_intentos:
             nombres, ids_opcion, repetida = [], [], False
             for rol, food in fijos:
                 nombres.append(food.get("nombre"))
@@ -796,10 +1413,31 @@ class AgentTools:
             # "queso batido 300 g + queso batido 300 g" no es una comida de nadie.
             tipos_opcion = {_cat2_de_id(i) for i in ids_opcion}
 
-            for rol in roles_necesarios:
+            # Una forma real por opción, rotando con el intento y con las veces que ya ha
+            # pedido otras: «dame otras» tiene que traer otra comida, no la misma con la
+            # grasa cambiada.
+            # Cuando ya se han probado todas las formas que servían, los intentos que
+            # quedan van por el camino de siempre: mejor una opción más, montada por
+            # macros, que quedarse en una sola.
+            por_esqueleto = []
+            if esqueletos and intento < max(len(esqueletos), n):
+                esqueleto = esqueletos[(intento + vuelta) % len(esqueletos)]
+                por_esqueleto = await self._elegir_por_esqueleto(
+                    esqueleto, estilo, generico, marca, vuelta + intento,
+                    ids_opcion, tipos_opcion, cache_familias, fams_pedidas,
+                    faltan={m for m in ("P", "H", "G") if restante[m] > 4},
+                    objetivo=restante,
+                    ya_en_otras={i["id"] for o in opciones for i in o.get("items", [])})
+                for c in por_esqueleto:
+                    nombres.append(c["nombre"])
+                    usadas_entre_opciones.add(_cat2_de_id(c["id"]))
+
+            # Sin esqueleto, o cuando el que tocaba no dio ni para un plato, el camino de
+            # siempre: un alimento por cada macro que falta.
+            for rol in ([] if len(por_esqueleto) >= 2 else roles_necesarios):
                 if any(r == rol for r, _ in fijos):
                     continue
-                cands = candidatos_por_rol.get(rol) or []
+                cands = await _candidatos_del_rol(rol)
                 # Todos los roles rotan con el intento: da variedad entre opciones y
                 # además sirve de REINTENTO cuando un intento se descartó por pasarse
                 # (el coco rallado dispara la grasa: el siguiente suele cuadrar).
@@ -810,6 +1448,15 @@ class AgentTools:
                 for salto in range(len(cands)):
                     c = cands[min(idx + salto, len(cands) - 1)]
                     if c["id"] in ids_opcion or _cat2_de_id(c["id"]) in tipos_opcion:
+                        continue
+                    # QUIEN HACE DE PROTEÍNA TIENE QUE DAR PROTEÍNA. Con texto del cliente
+                    # el filtro por macro se levanta a propósito (quien pide lechuga quiere
+                    # lechuga), pero aquí no se está resolviendo una petición: se está
+                    # rellenando el hueco de proteína de un menú. Sin esto, pidiendo
+                    # «tostadas» salía un desayuno de dos tostadas y cacahuetes al que le
+                    # faltaban los 50 g de proteína enteros, y con «avena» la proteína la
+                    # ponía la avena.
+                    if float(c["macros"].get(_ROL_A_MACRO[rol], 0) or 0) <= 0:
                         continue
                     # Subfamilia ya enseñada en otra opción: se salta, salvo que sea el
                     # último recurso (mejor repetir que dejar el rol sin cubrir).
@@ -842,7 +1489,11 @@ class AgentTools:
             # almendras, pan, tomate, fiambre de pavo y atún, todo en el mismo desayuno).
             # El número lo dicen las dietas, no una constante escrita a mano.
             tope_piezas = self.companyia.tamano_habitual() if self.companyia else 5
-            for _ in range(2):   # hasta DOS complementos: lácteo+fruta topan sus máximos
+            # Hasta DOS complementos (lácteo+fruta topan sus máximos), pero uno solo cuando
+            # el menú viene de un esqueleto: ese ya trae sus piezas y su papel para cada
+            # macro, así que el segundo remate no arreglaba nada y costaba otra búsqueda
+            # más otro cuadre por intento.
+            for _ in range(1 if por_esqueleto else 2):
                 if len(nombres) >= tope_piezas:
                     break
                 rem = resultado.get("remaining") or {}
@@ -850,20 +1501,34 @@ class AgentTools:
                 if float(rem.get(peor, 0) or 0) <= 8:
                     break
                 extra = None
-                textos = [estilo] if estilo else []
+                # Con el menú montado sobre un esqueleto, el estilo ya está puesto en la
+                # pieza a la que le tocaba, así que el remate se busca sin él: repetir aquí
+                # la búsqueda con texto costaba una semántica (2 s) por intento y por
+                # complemento, que es de donde salían los 27 s de montar tres menús.
+                textos = [estilo] if (estilo and not por_esqueleto) else []
                 textos.append("")
                 for txt in textos:
-                    rx = await self.buscar_alimentos(
-                        texto=txt, para_macro=peor, generico=generico, marca=marca,
-                        limite=6, heredar_estilo=False,
-                        # Lo que le falta AL MENÚ, no a la comida entera: el complemento
-                        # se pone encima de lo que ya se ha elegido.
-                        hueco={m: max(float(rem.get(m, 0) or 0), 0) for m in ("P", "H", "G")},
-                        # El complemento SÍ puede ser un acompañamiento (la mermelada de
-                        # las tostadas), porque a estas alturas ya hay piezas a las que
-                        # acompañar aunque el plato del cliente siga vacío.
-                        acompanando_a=[self.foods[i] for i in ids_opcion if i in self.foods])
-                    extra = next((i for i in rx["items"]
+                    if por_esqueleto:
+                        # Del caché: la lista de quién puede poner ese macro es la misma en
+                        # todos los intentos, y de lo que devuelve solo se usa el NOMBRE
+                        # (la cantidad la vuelve a calcular `build_meal` sobre el menú
+                        # entero). Repetir la búsqueda en cada intento eran 1,5 s por
+                        # intento y de ahí salían los 23 s de montar tres menús con estilo.
+                        items_extra = await self._candidatos_de_macro(
+                            peor, txt, generico, marca, cache_familias)
+                    else:
+                        rx = await self.buscar_alimentos(
+                            texto=txt, para_macro=peor, generico=generico, marca=marca,
+                            limite=6, heredar_estilo=False,
+                            # Lo que le falta AL MENÚ, no a la comida entera: el complemento
+                            # se pone encima de lo que ya se ha elegido.
+                            hueco={m: max(float(rem.get(m, 0) or 0), 0) for m in ("P", "H", "G")},
+                            # El complemento SÍ puede ser un acompañamiento (la mermelada de
+                            # las tostadas), porque a estas alturas ya hay piezas a las que
+                            # acompañar aunque el plato del cliente siga vacío.
+                            acompanando_a=[self.foods[i] for i in ids_opcion if i in self.foods])
+                        items_extra = rx["items"]
+                    extra = next((i for i in items_extra
                                   if i["id"] not in ids_opcion
                                   and _cat2_de_id(i["id"]) not in tipos_opcion), None)
                     if extra:
@@ -1020,6 +1685,19 @@ class AgentTools:
             salida.append(borrador)
         # Si TODAS se quedaban cortas, se rescata la que menos, con su aviso. Un menú corto
         # se puede rematar; quedarse sin nada que enseñar, no.
+        #
+        # PERO PRIMERO LA MENOS MALA DE VERDAD. Pidiendo «tostadas» se rescataba un
+        # desayuno de dos tostadas y cacahuetes al que le faltaban los 50 g de proteína
+        # ENTEROS, habiendo otras opciones cortas mucho más completas. Así que si alguna
+        # cubre al menos la mitad de cada macro, el rescate sale de entre esas.
+        #
+        # Y si NINGUNA llega, se rescata igual: quedarse sin nada que enseñar es peor, que
+        # es la decisión de Francisco del 07-08 y lo que protegen `test_menus_cortos` y
+        # `test_companyia_y_variedad`. Para eso va el aviso, que dice cuánto falta.
+        decentes = [c for c in cortos
+                    if all(c[1] and sum(i["macros"][m] for i in c[1]["items"]) >= 0.5 * restante[m]
+                           for m in ("P", "H", "G") if restante[m] > 4)]
+        cortos = decentes or cortos
         if not salida and cortos:
             cortos.sort(key=lambda x: x[0])
             _, op, motivo = cortos[0]
@@ -1250,7 +1928,9 @@ class AgentTools:
             "ok": False,
             "error": f"{self._nombre_comida_actual()} ya la tenía montada el cliente antes de "
                      f"abrir el chat. No la toques por tu cuenta: enséñale lo que hay y "
-                     f"pregúntale si quiere cambiarla. Si te lo pide, vuelve con forzar=true. "
+                     f"pregúntale si quiere cambiarla. SI YA TE HA DICHO QUE SÍ EN ESTE CHAT, "
+                     f"repite AHORA esta misma llamada con forzar=true y hazlo: no se lo "
+                     f"vuelvas a preguntar, que es lo que le deja dando vueltas. "
                      f"Para montar lo que le falta, ve a una comida vacía.",
             "comida_ya_montada": self.ver_estado("comida"),
         }
@@ -1282,8 +1962,16 @@ class AgentTools:
         Ops: {op:'añadir', texto|alimento_id, cantidad?, unidad?}
              {op:'quitar', nombre|alimento_id}
              {op:'ajustar', nombre, a?|mas?|por?, unidad?}  (fijar / sumar / multiplicar)
+             {op:'vaciar'}   deja la comida a cero, con todo lo que tenga dentro
         `forzar` solo para cambiar una comida que el cliente ya traía montada, y solo si te
-        lo ha pedido él."""
+        lo ha pedido él.
+
+        VACIAR ES UNA OPERACIÓN, NO UNA LISTA DE «QUITAR» (13-08-2026). Francisco pidió
+        «vacía la comida 1» y confirmó tres veces -- «vaciala», «si», «vacia la comida 1
+        entera» -- y el asistente siguió pidiendo permiso en bucle sin vaciar nada. La
+        protección de las comidas que el cliente ya traía montadas es correcta y se queda;
+        lo que faltaba era la forma de obedecer cuando dice que sí: había que adivinar que
+        se hacía mandando un `quitar` por cada alimento, y encima con `forzar`."""
         protegida = self._protegida(forzar)
         if protegida:
             return protegida
@@ -1327,6 +2015,13 @@ class AgentTools:
                     q = self.bot.remove_food_by_name(nombre)
                     (hechos if q else fallos).append(
                         {"op": op, "detalle": q or f"no veo '{nombre}' en la comida"})
+                elif tipo == "vaciar":
+                    cuantos = len(((self.bot.state.get("comidas_completadas") or {})
+                                   .get(self.bot.current_meal_key()) or {}).get("alimentos", []))
+                    nombre = self.bot.clear_meal()
+                    (hechos if nombre else fallos).append(
+                        {"op": op, "detalle": (f"{nombre} vaciada ({cuantos} alimentos fuera)"
+                                               if nombre else "no se pudo vaciar")})
                 elif tipo == "ajustar":
                     if op.get("por") is not None:
                         r = await self.bot.aplicar_multiplicador(float(op["por"]), op.get("nombre") or "")

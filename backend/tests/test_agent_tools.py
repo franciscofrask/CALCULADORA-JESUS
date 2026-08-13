@@ -161,8 +161,12 @@ class TestBorradores:
             tools = await _tools()
             r = await tools.componer_menu(n=1)
             b = r["borradores"][0]
-            # provocar un problema comprobable: desvío enorme
-            b["desvio"] = {"P": 50, "H": 0, "G": 0}
+            # Provocar un problema comprobable: desvío enorme. Se toca `macros_totales`,
+            # que es de donde `revisar_borrador` saca el desvío; escribir `desvio` a mano
+            # no valía, porque el revisor lo recalcula y machaca lo escrito, así que el
+            # test solo pasaba cuando el menú ya salía torcido de fábrica.
+            b["macros_totales"] = dict(b["macros_totales"],
+                                       P=float(b["macros_totales"]["P"]) + 50)
             res = await tools.aplicar_borrador(b["id"])
             assert not res["ok"] and res.get("bloqueado_por")
             assert not tools.ver_estado()["alimentos"]   # nada entró en la comida

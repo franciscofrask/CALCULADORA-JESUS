@@ -341,6 +341,10 @@ class NutritionChatbot:
     # las sugerencias se comportan como siempre.
     _PERFIL_MOMENTO = None
 
+    # Perfil de forma (db.meal_shapes): de cuántas piezas se compone una comida de ese
+    # momento y qué parte del macro pone cada una. Mismo trato que el de arriba.
+    _PERFIL_FORMA = None
+
     async def _perfil_momento(self):
         if NutritionChatbot._PERFIL_MOMENTO is None:
             try:
@@ -350,6 +354,20 @@ class NutritionChatbot:
             except Exception:
                 NutritionChatbot._PERFIL_MOMENTO = False
         return NutritionChatbot._PERFIL_MOMENTO or None
+
+    async def _perfil_forma(self):
+        """De cuántas piezas se compone una comida real de cada momento (db.meal_shapes).
+
+        Sin la colección minada (`_perfil_forma.py`) devuelve None y todo sigue como antes:
+        cada sugerencia se mide contra el hueco entero de la comida."""
+        if NutritionChatbot._PERFIL_FORMA is None:
+            try:
+                from meal_shape import PerfilForma
+                forma = await PerfilForma.cargar(self.db)
+                NutritionChatbot._PERFIL_FORMA = forma if forma.hay_datos else False
+            except Exception:
+                NutritionChatbot._PERFIL_FORMA = False
+        return NutritionChatbot._PERFIL_FORMA or None
 
     async def _vocabulario_catalogo(self) -> set:
         if NutritionChatbot._VOCAB_CATALOGO is None:
@@ -1243,6 +1261,23 @@ class NutritionChatbot:
                     "cantidad_g": cantidad,
                     "cantidad_display": a.get("cantidad_display") or f"{int(round(cantidad))} g",
                     "macros": {k: float(m.get(k) or 0) for k in ("P", "H", "G")},
+                    # LA FICHA VIAJA CON EL ALIMENTO (caso 46, 13-08-2026).
+                    #
+                    # Sin esto, lo que el cliente traía montado de Nutrición volvía a
+                    # Nutrición SIN `alimento_id`: `export_to_diet_comidas` lo saca de
+                    # `food["alimento"]["id"]` y aquí no se guardaba la ficha, así que
+                    # volcaba None. Con el id se van también las categorías, la ración y
+                    # las unidades, o sea la foto, el «2 ud» y los macros de la etiqueta:
+                    # el alimento volvía a la pantalla convertido en un nombre suelto.
+                    #
+                    # Es la misma forma con la que lo guardan los otros dos caminos que
+                    # meten comida en el estado (`add_food_to_meal` y `_process_build_meal`),
+                    # que por eso no tenían el problema.
+                    "alimento": ficha or {"id": a.get("alimento_id"),
+                                          "nombre": a.get("nombre", ""),
+                                          "categorias": a.get("categorias"),
+                                          "racion": a.get("racion"),
+                                          "unidades": a.get("unidades")},
                 })
                 for k in ("P", "H", "G"):
                     totales[k] += float(m.get(k) or 0)
@@ -2901,13 +2936,40 @@ class NutritionChatbot:
                 if len(tipicos) >= limit * 2:
                     pool = tipicos
 
+        # LO QUE LE TOCA A UNA PIEZA, NO LA COMIDA ENTERA (13-08-2026).
+        #
+        # Aquí se dimensionaba contra lo que falta de toda la comida, así que la lista salía
+        # llena de alimentos que la cubren ELLOS SOLOS: con 47 g de proteína pendientes,
+        # «Yogur +Proteínas 470 g», «Batido proteico 130 g», «Jamón serrano 130 g». Francisco,
+        # 12-08: «me ofreció todo yogur o batidos pero nada de proteína real como huevos, u
+        # otros acompañamientos, tostadas, palta, frutas».
+        #
+        # Una comida real de ese momento reparte su proteína entre varias piezas (`meal_shapes`,
+        # medido sobre las dietas de Jesús), así que cada alimento se mide contra ESA parte.
+        # El yogur pasa a salir en su ración normal y los huevos, el pan o la fruta dejan de
+        # quedar fuera por «no llegar». En el peri no se toca: ahí una pieza sí es la comida.
+        hueco_pieza = dict(restante)
+        # Con un solo macro pendiente no hay comida que montar, hay que rematarla: ahí la
+        # sugerencia tiene que CERRAR lo que falta (caso 39 de Jesús). El reparto por
+        # piezas es para cuando queda comida por delante.
+        pendientes = sum(1 for m in ("P", "H", "G") if restante[m] > 4)
+        if not es_peri and pendientes >= 2:
+            forma = await self._perfil_forma()
+            if forma:
+                from meal_moment import momento_de_comida
+                momento = momento_de_comida(key, self.state.get("num_comidas") or 4,
+                                            self.state.get("single_meal", False))
+                cuota = forma.cuota(momento, driver, max(restante[driver], 0))
+                if cuota > 0:
+                    hueco_pieza[driver] = min(restante[driver], cuota)
+
         # Dimensionar; agrupar por TIPO de alimento (categoría a 2 niveles) para diversificar
         from collections import defaultdict
         buckets = defaultdict(list)  # coarse_cat -> [(aporte, es_pref, item)]
         mejor_bucket = {}            # coarse_cat -> mejor aporte real (antes de barajar)
         prio_bucket = {}             # coarse_cat -> puesto en el orden del post
         for a in pool:
-            sized = self._size_food(a, restante)
+            sized = self._size_food(a, hueco_pieza)
             if not sized:
                 continue
             cantidad_g, macros = sized
@@ -2933,12 +2995,24 @@ class NutritionChatbot:
         # Dentro de cada tipo: mejores primero, baraja los top para variedad, y pon al final
         # lo YA ofrecido antes en esta comida ("no me gusta ninguna, dame otras").
         seen = set(self.state.setdefault("seen_sugg", {}).get(key, []))
+        objetivo_pieza = max(float(hueco_pieza.get(driver, 0) or 0), 0)
         for b in buckets:
-            buckets[b].sort(key=lambda x: -x[0])
+            # El que MEJOR se acerca a lo que le toca poner a una pieza, no el que más
+            # pone: con «más es mejor» la lista la encabezaban siempre los concentrados,
+            # que es de lo que venía la queja. Sin reparto por piezas (peri, o base sin
+            # minar) `objetivo_pieza` es el hueco entero y esto se comporta como antes.
+            buckets[b].sort(key=lambda x: abs(x[0] - objetivo_pieza) if objetivo_pieza else -x[0])
             # Barajar para dar variedad, pero solo entre los que resuelven parecido: si en
             # el mismo tipo hay un aislado que pone 45 g de proteína y otro que pone 3, el
             # azar no puede sacar el de 3 ("5 g de caseína" no es una sugerencia).
-            head = [x for x in buckets[b][:8] if x[0] >= buckets[b][0][0] * 0.6] or buckets[b][:1]
+            mejor = buckets[b][0][0]
+            if objetivo_pieza:
+                margen = abs(mejor - objetivo_pieza) + objetivo_pieza * 0.4
+                head = [x for x in buckets[b][:8]
+                        if abs(x[0] - objetivo_pieza) <= margen]
+            else:
+                head = [x for x in buckets[b][:8] if x[0] >= mejor * 0.6]
+            head = head or buckets[b][:1]
             random.shuffle(head)
             buckets[b] = ([x for x in head if x[2]["alimento_id"] not in seen]
                           + [x for x in head if x[2]["alimento_id"] in seen])
@@ -2946,7 +3020,9 @@ class NutritionChatbot:
         # Orden de tipos: los que tienen alimentos preferidos primero, luego por mejor aporte
         cat_order = sorted(
             buckets.keys(),
-            key=lambda b: (0 if any(p for _, p, _ in buckets[b]) else 1, -buckets[b][0][0])
+            key=lambda b: (0 if any(p for _, p, _ in buckets[b]) else 1,
+                           abs(buckets[b][0][0] - objetivo_pieza) if objetivo_pieza
+                           else -buckets[b][0][0])
         )
         # En el POST el orden lo marca el método, no el que más macro lleve: primero la
         # proteína rápida y el hidrato de asimilación rápida (crema de arroz, cereales,
@@ -2988,10 +3064,20 @@ class NutritionChatbot:
             message = ""
             motivo = "marca" if marca else ("pedido" if macro else "falta")
             # Honestidad: si ninguna opción cubre por sí sola lo que falta, decirlo.
+            #
+            # Con las cantidades repartidas por piezas eso pasa casi siempre, y a propósito:
+            # son piezas de una comida, no sustitutivos. Así que el aviso cambia de tono en
+            # vez de sonar a que el catálogo se queda corto.
             mejor = max((s["macros"].get(driver, 0) for s in chosen), default=0)
             if mejor < restante[driver] - 4:
-                message = (f"Ninguna cubre sola los {restante[driver]} g de {MACRO_LBL[driver]} "
-                           "que faltan: combina un par, o añade otro alimento después.")
+                reparte = objetivo_pieza and objetivo_pieza < restante[driver] - 4
+                message = (
+                    f"Van pensadas para combinarse: cada una pone una parte de los "
+                    f"{restante[driver]} g de {MACRO_LBL[driver]} que faltan, así que coge "
+                    f"un par y completamos."
+                    if reparte else
+                    f"Ninguna cubre sola los {restante[driver]} g de {MACRO_LBL[driver]} "
+                    "que faltan: combina un par, o añade otro alimento después.")
         else:
             motivo = "vacio"
             # Un "no encuentro nada" a secas deja al usuario parado sin saber qué hacer.

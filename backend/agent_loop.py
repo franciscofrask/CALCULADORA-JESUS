@@ -124,11 +124,15 @@ _ESQUEMAS = [
                      "'ponme 3 de X' o 'dos X' --, pasalo con unidad='ud' y deja que la "
                      "herramienta lo resuelva. NO conviertas tu a gramos por tu cuenta ni "
                      "supongas lo que pesa una pieza. "
+                     "Para dejar una comida a cero usa op='vaciar', que la vacia entera; "
+                     "no mandes un 'quitar' por alimento. "
                      "Las comidas que el cliente ya traia montadas estan protegidas: para "
-                     "cambiar una, forzar=true, y solo si te lo ha pedido el."),
+                     "cambiar una, forzar=true, y solo si te lo ha pedido el. Si ya te lo "
+                     "ha confirmado en este chat, ESO ES PEDIRLO: vuelve a llamar con "
+                     "forzar=true y hazlo, no se lo preguntes otra vez."),
      "parameters": {"type": "object", "properties": {
          "operaciones": {"type": "array", "items": {"type": "object", "properties": {
-             "op": {"type": "string", "enum": ["añadir", "quitar", "ajustar"]},
+             "op": {"type": "string", "enum": ["añadir", "quitar", "ajustar", "vaciar"]},
              "texto": {"type": "string"}, "alimento_id": {"type": "integer"},
              "nombre": {"type": "string"}, "cantidad": {"type": "number"},
              "unidad": {"type": "string", "enum": ["g", "ud"]},

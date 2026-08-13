@@ -166,20 +166,37 @@ class TestLoQueCompone:
         assert not malas, f"compone combinaciones que nadie come: {malas[:3]}"
 
     def test_si_todo_discorda_no_deja_al_cliente_sin_nada(self):
-        """Pidiendo «tostadas» todo lo que cuadra son tres tostadas distintas juntas y las
-        tres se descartaban. Se rescata la menos mala, con su aviso."""
+        """Pidiendo «tostadas» todo lo que cuadraba eran tres tostadas distintas juntas y
+        las tres se descartaban. No puede quedarse sin nada que ofrecer; y lo que ofrezca,
+        o casa, o lo dice.
+
+        El aviso ya NO se exige siempre. Desde el 13-08 las piezas se eligen mirando la
+        compañía una a una (`_casan`), así que el caso que hacía falta rescatar dejó de
+        producirse: «tostadas» sale hoy como queso de Burgos + pan tostado + frutos secos +
+        claras, con peor pareja 0,81. Exigir el aviso era exigir que el menú siguiera
+        saliendo mal."""
         async def _correr():
             from chatbot import NutritionChatbot
             from agent_tools import AgentTools
+            from company_profile import PerfilCompanyia
             bot = NutritionChatbot("rescate", _db())
             bot.set_user_macros(MACROS)
             bot.configure_day("entrenamiento", 4, momento_entreno=1, opcion_peri="intra_post")
             tools = await AgentTools.crear(bot)
-            return await tools.componer_menu(estilo="tostadas", n=3)
-        r = asyncio.run(_correr())
+            r = await tools.componer_menu(estilo="tostadas", n=3)
+            perfil = await PerfilCompanyia.cargar(_db())
+            return r, tools, perfil
+        from company_profile import ELEVACION_MINIMA
+        r, tools, perfil = asyncio.run(_correr())
         bs = r.get("borradores") or []
         assert bs, f"se queda sin nada que ofrecer: {r.get('sin_resultados_porque')}"
-        assert any(b.get("avisos") for b in bs), "rescata y no dice que la opción es rara"
+        mudas = []
+        for b in bs:
+            foods = [tools.foods[i["id"]] for i in b["items"] if i["id"] in tools.foods]
+            peor = perfil.peor_pareja(foods)
+            if peor and peor[0] < ELEVACION_MINIMA and not b.get("avisos"):
+                mudas.append((peor[0], peor[1]["nombre"], peor[2]["nombre"]))
+        assert not mudas, f"ofrece una combinación rara y no lo dice: {mudas[:2]}"
 
 
 # ----------------------------------------------------------------- la variedad
