@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { seExcede, fmtGramos } from '../../lib/exceso';
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
@@ -172,15 +173,20 @@ const DaySummary = ({
             {/* Macro bars - vertical en móvil, 3 columnas en desktop */}
             <div className="px-4 sm:px-5 pb-3 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-2">
                 {macros.map(({ key, label, val, tgt, color }) => {
-                    const over = val > (tgt || 0) + 4;
+                    // Solo hidratos y grasa se pintan en rojo por arriba (Jesús, 13-08).
+                    const over = seExcede(key, val, tgt || 0);
                     return (
                         <div key={key} className="flex items-center gap-2">
                             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                             <span className="text-[11px] font-bold w-3 flex-shrink-0" style={{ color }}>{key}</span>
-                            <div className="flex-1 min-w-0"><ProgressBar value={val} max={tgt || 0} color={color} height={7} /></div>
+                            <div className="flex-1 min-w-0">
+                                <ProgressBar value={val} max={tgt || 0} color={color} height={7}
+                                    statusColor={over ? '#EF4444' : color} />
+                            </div>
                             <span className={`font-data text-[11px] w-[72px] text-right ${over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
                                 {val.toFixed(0)}/{(tgt || 0).toFixed(0)}g
                             </span>
+                            {over && <span className="font-data text-[11px] text-red-500 font-bold flex-shrink-0">+{fmtGramos(val - (tgt || 0))}g</span>}
                         </div>
                     );
                 })}

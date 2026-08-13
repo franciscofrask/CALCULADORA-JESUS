@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { leer as leerLocal, escribir as escribirLocal, borrar as borrarLocal } from '../lib/almacenLocal';
+import { excesos, textoExceso } from '../lib/exceso';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -219,6 +220,14 @@ const NutritionPage = () => {
     // Sube al pulsar "Reintentar": el efecto de calibración se dispara con la firma del día,
     // que al reintentar es la misma, así que hace falta algo que sí cambie.
     const [calibracionIntento, setCalibracionIntento] = useState(0);
+    // Lo que lleva el día de cada familia calibrada y en qué tramo va. Sale de la misma
+    // llamada de calibración (que ya lo devolvía y se tiraba), y es lo que se le enseña al
+    // cliente: «frutos secos hoy: 15 de 20 g». Jesús, 13-08: que se vea desde el primer
+    // gramo, no cuando ya ha cruzado.
+    const [acumFamilias, setAcumFamilias] = useState(null);
+    // El último tramo por el que se avisó, para no repetir el aviso en cada tecla. Es un
+    // ref y no un estado a propósito: cambiarlo no tiene que repintar nada.
+    const tramoAvisado = useRef({ cereal_pan: null, fruto_seco: null });
     // Calma comidaConMacrosVolcadas: the meal key that absorbs the day's remaining macros.
     // When set, every OTHER meal is locked (target = its served = cuadrada). null = no volcado.
     const [volcadoMeal, setVolcadoMeal] = useState(null);
@@ -954,12 +963,16 @@ const NutritionPage = () => {
         // a 0.2 g overshoot as "sobra".)
         const margin = 4;
         const isPeriMeal = mealKey === 'Intra' || mealKey === 'Post';
-        const pOk = Math.abs(target.P - served.P) < margin;
+        // La proteína, cubierta basta (ver `getDayStatus`): pasarse no es un fallo, así que
+        // tampoco puede dejar la comida en «te falta».
+        const pOk = served.P - target.P > -margin;
         const hOk = Math.abs(target.H - served.H) < margin;
         const gOk = isPeriMeal || Math.abs(target.G - served.G) < margin;
         if (pOk && hOk && gOk) return 'cuadrada';
-        if (served.P - target.P >= margin || served.H - target.H >= margin ||
-            (!isPeriMeal && served.G - target.G >= margin)) return 'sobra';
+        // PASARSE DE PROTEÍNA NO ES PASARSE (Jesús, 13-08). El criterio vive en
+        // `lib/exceso`; aquí antes se contaba también `served.P - target.P`, y con eso una
+        // comida bien montada salía en rojo por hacer lo que se le pedía.
+        if (excesos(served, target, { margen: margin, esPeri: isPeriMeal }).length) return 'sobra';
         return 'falta';
     };
 
@@ -985,13 +998,47 @@ const NutritionPage = () => {
         // o al llegar sus datos; meter las funciones de cálculo lo relanzaría en cada render.
     }, [currentDate, mealsData]);
 
-    // ── Calibración progresiva (proteína vegetal por acumulado del DÍA) ─────────
-    // Spec 17-07-2026: tras CUALQUIER cambio de composición (añadir, quitar, editar
-    // cantidades, aplicar menú, repetir, cuadrar...), el backend recalcula los macros
-    // de TODO el día con los acumulados de cereales+panes y frutos secos en orden
-    // cronológico. Editar una comida solo cambia esa y las posteriores (las
-    // anteriores no dependen de ella). La firma solo mira ids+cantidades, así que
-    // cuando vuelven los macros recalibrados la firma no cambia y no hay bucle.
+    // Familias que se calibran, con sus tramos y cómo se llaman para el cliente. Los
+    // gramos son los de la spec (17-07) y los mismos que aplica el backend.
+    const FAMILIAS_CALIBRADAS = {
+        fruto_seco: { etiqueta: 'frutos secos', tramos: [20, 40], campo: 'acum_fs' },
+        cereal_pan: { etiqueta: 'cereales y pan', tramos: [50, 100], campo: 'acum_cp' },
+    };
+
+    /** Guarda lo que lleva el día de cada familia y avisa UNA vez al cruzar cada tramo.
+     *
+     * Jesús, 13-08: «un aviso una sola vez al cruzar cada tramo, sin preguntar nada». Es
+     * informativo: se dice lo que acaba de pasar (a partir de ahí su proteína cuenta) y se
+     * sigue. El tramo avisado se recuerda para no repetirlo mientras el día siga ahí, y
+     * baja solo si el cliente quita gramos y vuelve al tramo anterior. */
+    const anotarCalibracion = (pcts) => {
+        if (!pcts) return;
+        const una = Object.values(pcts)[0];       // el tramo es del día: todas las comidas igual
+        if (!una) return;
+        setAcumFamilias({
+            fruto_seco: { gramos: una.acum_fs ?? 0, pct: una.pct_fs ?? 0 },
+            cereal_pan: { gramos: una.acum_cp ?? 0, pct: una.pct_cp ?? 0 },
+        });
+        for (const [bloque, cfg] of Object.entries(FAMILIAS_CALIBRADAS)) {
+            const g = (bloque === 'fruto_seco' ? una.acum_fs : una.acum_cp) ?? 0;
+            const tramo = g > cfg.tramos[1] ? 2 : g > cfg.tramos[0] ? 1 : 0;
+            const previo = tramoAvisado.current[bloque];
+            if (previo !== null && tramo > previo) {
+                toast.info(tramo === 2
+                    ? `Has pasado de ${cfg.tramos[1]} g de ${cfg.etiqueta} hoy: su proteína ya te cuenta entera`
+                    : `Has pasado de ${cfg.tramos[0]} g de ${cfg.etiqueta} hoy: su proteína empieza a contarte a la mitad`);
+            }
+            tramoAvisado.current[bloque] = tramo;
+        }
+    };
+
+    // ── Calibración progresiva (proteína vegetal por TOTAL del DÍA) ─────────────
+    // Spec 17-07-2026, con la corrección de Jesús del 13-08: tras CUALQUIER cambio de
+    // composición (añadir, quitar, editar cantidades, aplicar menú, repetir, cuadrar...),
+    // el backend recalcula los macros de TODO el día. El tramo lo decide el total del día
+    // de cada familia, así que es el mismo para todas las comidas y editar una comida
+    // puede cambiar cualquier otra. La firma solo mira ids+cantidades, así que cuando
+    // vuelven los macros recalibrados la firma no cambia y no hay bucle.
     const calibracionSig = JSON.stringify(getMealOrder().map(k => [k,
         (mealsData[k]?.alimentos || []).map(a => [a.alimento_id ?? null, a.cantidad_g ?? 0])]));
     useEffect(() => {
@@ -1022,6 +1069,7 @@ const NutritionPage = () => {
                 }
                 if (cancelado || !res?.comidas) return;
                 setCalibracionFallida(false);
+                anotarCalibracion(res.pcts);
                 setMealsData(prev => {
                     const next = { ...prev };
                     for (const k of order) {
@@ -1037,6 +1085,9 @@ const NutritionPage = () => {
                                     macros_efectivos: r.macros_efectivos,
                                     macros_brutos: r.macros_brutos || a.macros_brutos,
                                     que_cuenta: r.que_cuenta || a.que_cuenta,
+                                    // De qué familia calibrada es (o null): lo necesita el
+                                    // contador de la línea para saber qué cuenta enseñar.
+                                    bloque: r.bloque ?? null,
                                 };
                             }),
                         };
@@ -1683,16 +1734,20 @@ const NutritionPage = () => {
         const hDiff = dayMacros.H - (dayTarget.H_total || 0);
         const gDiff = comidasG - (dayTarget.G_total || 0);  // peri grasas excluded from comidas G
 
-        const pOver = pDiff > margin;
-        const hOver = hDiff > margin;
-        const gOver = gDiff > margin;
-        
-        if (pOver || hOver || gOver) return 'sobra';
-        
-        const pOk = Math.abs(pDiff) <= margin;
+        // Solo hidratos y grasa: pasarse de proteína no es un fallo (Jesús, 13-08). El día
+        // entero se juzga con el mismo criterio que cada comida, en `lib/exceso`.
+        if (excesos({ H: dayMacros.H, G: comidasG },
+                    { H: dayTarget.H_total || 0, G: dayTarget.G_total || 0 },
+                    { margen: margin }).length) return 'sobra';
+
+        // La proteína cuenta como hecha en cuanto está CUBIERTA, no solo cuando se clava.
+        // Es la otra cara de la decisión de Jesús: si pasarse de proteína no es un fallo,
+        // tampoco puede dejar el día en «te falta» -- que es donde caía al quitarle el
+        // rojo, y decirle que le falta algo a quien va sobrado es el mismo error al revés.
+        const pOk = pDiff >= -margin;
         const hOk = Math.abs(hDiff) <= margin;
         const gOk = Math.abs(gDiff) <= margin;
-        
+
         if (pOk && hOk && gOk) return 'cuadrado';
         return 'falta';
     };
@@ -1815,6 +1870,10 @@ const NutritionPage = () => {
         updateFoodQuantity, updateFoodQuantityDirect, editingQuantity, setEditingQuantity,
         getQuantityIncrement, clearMeal, getFoodEmoji, formatFoodQuantity, setMealMode,
         modoMacros, esPorUnidad, pesoUnidad,
+        // Lo que lleva el día de cada familia calibrada, para el contador de la línea del
+        // alimento (`ContadorFamilia`). Va en los props comunes porque el contador es el
+        // mismo en todas las comidas: el tramo lo decide el día entero.
+        acumFamilias,
     };
     const renderMealCard = (mealKey, forceExpanded, denso = false) => (
         <MealCard

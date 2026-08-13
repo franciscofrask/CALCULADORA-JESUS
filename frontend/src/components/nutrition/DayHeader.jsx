@@ -17,6 +17,7 @@ import React from 'react';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import ConfigSection, { MOMENTO_OPTIONS, PERI_OPTIONS } from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
+import { seExcede, textoExceso, fmtGramos } from '../../lib/exceso';
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
@@ -148,18 +149,32 @@ const DayHeader = ({
                 la app no distinguía «sin empezar» de «a medias» ni de «terminado». */}
             {(() => {
                 const nadaPuesto = macros.every(m => m.val === 0);
-                const pasado = macros.some(m => m.tgt > 0 && m.val > m.tgt + 4);
-                const cuadrado = !nadaPuesto && macros.every(m => m.tgt > 0 && Math.abs(m.tgt - m.val) < 4);
+                // Pasarse SOLO cuenta en hidratos y grasa (Jesús, 13-08): el criterio es el
+                // de `lib/exceso`, el mismo que usan las tarjetas de comida y el chat.
+                const pasados = macros.filter(m => m.tgt > 0 && seExcede(m.key, m.val, m.tgt));
+                const pasado = pasados.length > 0;
+                // Cuadrado: hidratos y grasa dentro de margen, y la proteína al menos
+                // cubierta. Si pasarse de proteína no es un fallo, tampoco puede impedir que
+                // el día se dé por bueno.
+                const cuadrado = !nadaPuesto && macros.every(m => m.tgt > 0 && (
+                    m.key === 'P' ? m.val > m.tgt - 4 : Math.abs(m.tgt - m.val) < 4));
                 const titular = cuadrado ? 'Día cuadrado'
                     : nadaPuesto ? 'Hoy tienes que comer'
                     : pasado ? 'Te has pasado' : 'Te queda por comer';
                 return (
                     <div className="mt-5 lg:hidden" data-testid="dia-resumen">
                         <p className={`text-sm font-bold ${cuadrado ? 'text-emerald-600 dark:text-emerald-400' : pasado ? 'text-red-500' : 'text-muted-foreground'}`}
-                            data-testid="dia-titular">{titular}</p>
+                            data-testid="dia-titular">
+                            {titular}
+                            {/* POR CUÁNTO. «Te has pasado» a secas obliga a restar de cabeza
+                                mirando los tres números de abajo (Jesús, 13-08). */}
+                            {pasado && <span className="font-semibold"> · {textoExceso(
+                                Object.fromEntries(macros.map(m => [m.key, m.val])),
+                                Object.fromEntries(macros.map(m => [m.key, m.tgt])))}</span>}
+                        </p>
                         <div className="grid grid-cols-3 gap-3 max-w-md mt-2">
                             {macros.map(({ key, label, val, tgt, color }) => {
-                                const over = tgt > 0 && val > tgt + 4;
+                                const over = tgt > 0 && seExcede(key, val, tgt);
                                 // Cuadrado o pasado, el número que importa es el total, no un
                                 // «te quedan 0» repetido tres veces.
                                 const grande = (cuadrado || over) ? Math.round(val) : Math.max(0, Math.round(tgt - val));
@@ -226,7 +241,7 @@ const DayHeader = ({
                 vista todavía no ha empezado. */}
             <div className="hidden lg:block mt-5 max-w-2xl space-y-2">
                 {macros.map(({ key, label, val, tgt, color }) => {
-                    const over = tgt > 0 && val > tgt + 4;
+                    const over = tgt > 0 && seExcede(key, val, tgt);
                     return (
                         <div key={key} className="flex items-center gap-3">
                             <span className="text-[13px] text-muted-foreground w-[64px] flex-shrink-0">{label}</span>
@@ -236,6 +251,11 @@ const DayHeader = ({
                             </span>
                             <span className={`font-data text-[13px] text-right w-[92px] flex-shrink-0 ${over ? 'text-red-500 font-bold' : 'text-foreground'}`}>
                                 {val.toFixed(0)} <span className="text-muted-foreground">/ {tgt.toFixed(0)}</span>
+                            </span>
+                            {/* Cuánto sobra, escrito. En escritorio los dos números estaban
+                                uno al lado del otro y aun así había que restarlos. */}
+                            <span className="font-data text-[13px] text-red-500 w-[92px] flex-shrink-0">
+                                {over ? `+${fmtGramos(val - tgt)} g` : ''}
                             </span>
                         </div>
                     );

@@ -8,6 +8,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
+import { seExcede } from '../../lib/exceso';
 import { FOOD_FAVORITES_UI } from './SearchFoodModal';
 import {
     faStopwatch20,
@@ -329,15 +330,22 @@ const BuildMealModal = ({
     //                  at the SAME moment Calma shows it: only once that macro has something served.
     const MARGEN_VALIDO = 4;
     const fmt1 = (v) => { const r = Math.round((v || 0) * 10) / 10; return r % 1 === 0 ? String(r) : r.toFixed(1); };
-    const macroCell = (servedVal, tgtVal) => {
+    // `key` (P/H/G) para el rojo: pasarse de proteína no es un fallo y no se pinta (Jesús,
+    // 13-08). El «sobran X g» se sigue diciendo, en el color de siempre.
+    const macroCell = (servedVal, tgtVal, key) => {
         if (!(servedVal > 0)) return { num: `${fmtHalf(tgtVal)}g`, status: null, over: false };
         const r = tgtVal - servedVal;
         let status, cls;
         if (Math.round(r) === 0) { status = 'Cuadrado'; cls = 'text-green-600'; }
         else if (Math.abs(r) < MARGEN_VALIDO) { status = 'Válido'; cls = 'text-amber-500'; }
         else if (r > 0) { status = `faltan ${fmt1(r)}g`; cls = 'text-red-500'; }
-        else { status = `sobran ${fmt1(-r)}g`; cls = 'text-red-500'; }
-        return { num: `${fmt1(servedVal)}/${fmtHalf(tgtVal)}g`, status, cls, over: r < 0 };
+        else {
+            const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeriMode });
+            status = `sobran ${fmt1(-r)}g`;
+            cls = enRojo ? 'text-red-500' : 'text-muted-foreground';
+        }
+        return { num: `${fmt1(servedVal)}/${fmtHalf(tgtVal)}g`, status, cls,
+                 over: seExcede(key, servedVal, tgtVal, { esPeri: isPeriMode }) };
     };
 
     const isCuadrada = Math.abs(target.P - served.P) <= 0 &&
@@ -906,21 +914,21 @@ const BuildMealModal = ({
                         <div className="text-xs font-medium text-muted-foreground mb-1.5 leading-tight">{getPasoLabel()}</div>
                         {/* Peri (intra/post) carry only P+H - Calma shows no Grasas column for them. */}
                         <div className={`grid ${isPeriMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-center leading-tight`}>
-                            {(() => { const c = macroCell(served.P, target.P); return (
+                            {(() => { const c = macroCell(served.P, target.P, "P"); return (
                                 <div>
                                     <div className="text-xs text-muted-foreground">Proteína</div>
                                     <div className={`text-lg font-bold ${c.over ? 'text-red-500' : 'text-orange-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
-                            {(() => { const c = macroCell(served.H, target.H); return (
+                            {(() => { const c = macroCell(served.H, target.H, "H"); return (
                                 <div>
                                     <div className="text-xs text-muted-foreground">Hidratos</div>
                                     <div className={`text-lg font-bold ${c.over ? 'text-red-500' : 'text-blue-500'}`}>{c.num}</div>
                                     {c.status && <div className={`text-[10px] font-semibold ${c.cls}`}>{c.status}</div>}
                                 </div>
                             ); })()}
-                            {!isPeriMode && (() => { const c = macroCell(served.G, target.G); return (
+                            {!isPeriMode && (() => { const c = macroCell(served.G, target.G, "G"); return (
                                 <div>
                                     <div className="text-xs text-muted-foreground">Grasas</div>
                                     <div className={`text-lg font-bold ${c.over ? 'text-red-500' : 'text-yellow-500'}`}>{c.num}</div>

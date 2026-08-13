@@ -1,6 +1,7 @@
 import React from 'react';
 import { StatusDot } from './DaySummary';
 import { macrosDeVista } from './ModoMacros';
+import { seExcede, textoExceso } from '../../lib/exceso';
 import {
     ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download
 } from 'lucide-react';
@@ -22,9 +23,15 @@ const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
  *
  * En el perientreno la grasa no cuenta, igual que en el resto del cálculo.
  */
-const estadoDeLaComida = (status, target, served, cuantosAlimentos) => {
+const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = false) => {
     if (!cuantosAlimentos) return { texto: 'Sin hacer', cls: 'text-muted-foreground' };
-    if (status === 'sobra') return { texto: 'Te pasas', cls: 'text-red-500' };
+    // POR CUÁNTO TE PASAS, no solo que te pasas (Jesús, 13-08): «la app enseña los dos
+    // números pero no la diferencia; el cliente tiene que restar». El texto sale de
+    // `lib/exceso`, el mismo que usa el chat, para que la app no hable de dos maneras.
+    if (status === 'sobra') {
+        const cuanto = textoExceso(served, target, { esPeri });
+        return { texto: cuanto ? `Te pasas ${cuanto}` : 'Te pasas', cls: 'text-red-500' };
+    }
     if (status === 'falta') return { texto: 'Te falta', cls: 'text-amber-600 dark:text-amber-400' };
     const dif = ['P', 'H', 'G'].map(m => Math.abs((target[m] || 0) - (served[m] || 0)));
     const clavada = dif.every(d => d < 0.5);
@@ -133,21 +140,25 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     const served = calculateMealMacros(mealKey);
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
 
-    const macroState = (servedVal, tgtVal) => {
+    // `key` para saber DE QUÉ macro se habla: pasarse de proteína no se pinta en rojo
+    // (Jesús, 13-08). El «sobran X g» se sigue diciendo -- el dato no se esconde --, pero
+    // en el color de siempre, porque no es un fallo que haya que corregir.
+    const macroState = (servedVal, tgtVal, key) => {
         if (!(servedVal > 0)) return { label: null, cls: '', over: false };
         const r = tgtVal - servedVal;
         if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false };
         if (Math.abs(r) < 4) return { label: 'Válido', cls: 'text-amber-500', over: false };
-        return r > 0
-            ? { label: `faltan ${fmt1(r)}g`, cls: 'text-red-500', over: false }
-            : { label: `sobran ${fmt1(-r)}g`, cls: 'text-red-500', over: true };
+        if (r > 0) return { label: `faltan ${fmt1(r)}g`, cls: 'text-red-500', over: false };
+        const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeri });
+        return { label: `sobran ${fmt1(-r)}g`,
+                 cls: enRojo ? 'text-red-500' : 'text-muted-foreground', over: enRojo };
     };
 
     const bars = [
-        { label: 'P', name: 'Proteína', val: served.P, tgt: target.P, color: MACRO.P, st: macroState(served.P, target.P) },
-        { label: 'H', name: 'Hidratos', val: served.H, tgt: target.H, color: MACRO.H, st: macroState(served.H, target.H) },
+        { label: 'P', name: 'Proteína', val: served.P, tgt: target.P, color: MACRO.P, st: macroState(served.P, target.P, 'P') },
+        { label: 'H', name: 'Hidratos', val: served.H, tgt: target.H, color: MACRO.H, st: macroState(served.H, target.H, 'H') },
     ];
-    if (!isPeri) bars.push({ label: 'G', name: 'Grasas', val: served.G, tgt: target.G, color: MACRO.G, st: macroState(served.G, target.G) });
+    if (!isPeri) bars.push({ label: 'G', name: 'Grasas', val: served.G, tgt: target.G, color: MACRO.G, st: macroState(served.G, target.G, 'G') });
 
     // Sin barras: los tres macros en una sola linea (servido/objetivo + cuanto falta
     // o sobra). El color del texto ya dice como va cada uno.
@@ -323,10 +334,17 @@ const MealCard = ({
                 lista se lee de arriba abajo como algo que se va tachando, y para eso cada
                 fila tiene que decir en qué punto está. Solo en el teléfono: en escritorio
                 está el punto de color de siempre. */}
-            <span className={`lg:hidden text-[15px] font-bold flex-shrink-0 ml-auto ${estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length).cls}`}
-                data-testid={`estado-comida-${mealKey}`}>
-                {estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length).texto}
-            </span>
+            {(() => {
+                // Una sola llamada: antes se calculaba dos veces (clase y texto) y ahora
+                // ademas monta la frase con los gramos.
+                const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri);
+                return (
+                    <span className={`lg:hidden text-[15px] font-bold flex-shrink-0 ml-auto text-right ${estado.cls}`}
+                        data-testid={`estado-comida-${mealKey}`}>
+                        {estado.texto}
+                    </span>
+                );
+            })()}
             {/* Con el día entero desplegado el modo va aquí, en pequeño: la banda de
                 "Modo de cálculo" repetida seis veces no cabía, pero esconderla dejaba
                 sin Automático/Manual a las comidas que aún no tienen alimentos. */}
