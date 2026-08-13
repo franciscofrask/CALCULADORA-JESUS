@@ -452,14 +452,26 @@ def test_el_entrenador_si_ve_el_panel(cab_entrenador):
 def test_el_entrenador_ve_todos_los_clientes(cab_entrenador, cab_admin):
     """Caso 83 tal y como lo escribio Jesus: "ve todos los clientes".
 
-    Es la decision del 21-07. El codigo (routes/admin.get_all_clients) aplica la del
-    06-08, que la revierte: el entrenador ve LOS SUYOS y los que no tienen coach, no los
-    de otro coach. Se deja el test como lo pidio Jesus para que la contradiccion este a la
-    vista y la decida el, en vez de quedar enterrada en un comentario.
+    YA NO ES UNA CONTRADICCION, ES UNA DECISION TOMADA. Hubo dos: la del 21-07 («ven y
+    gestionan a todos») y la del 06-08, que la revertia (cada coach los suyos y los libres).
+    Este test se dejo en rojo a proposito, con la contradiccion a la vista, para que la
+    desempatara Jesus. Lo hizo el 13-08-2026: *«los entrenadores ven a todos los clientes.
+    Es lo que decidi el 21 de julio»*, y el motivo, que es lo que hay que recordar antes de
+    "arreglarlo" de vuelta: *«con 177 clientes y el equipo que tienes, separas: el dia que
+    uno se va de vacaciones, los suyos se quedan sin nadie que los mire»*.
+
+    Contradice a proposito el hallazgo de la auditoria de seguridad sobre el acceso del
+    trainer a clientes ajenos: no es un fallo, es como quiere que trabaje su equipo. Lo que
+    sigue cerrado -- y lo fijan los tres tests de aqui arriba -- es la pantalla de Usuarios,
+    que es de admin.
     """
     del_admin = json_ok(pedir("get", "/admin/clients", headers=cab_admin), "/admin/clients")
     del_coach = json_ok(pedir("get", "/admin/clients", headers=cab_entrenador), "/admin/clients")
-    ocultos = {c["id"] for c in del_admin if c.get("id")} - {c["id"] for c in del_coach if c.get("id")}
+    # Sin las fichas propias: cada uno del equipo ve la SUYA y no la de los demas (13-08),
+    # asi que la del admin sale en su lista y no en la del coach sin que eso sea un cliente
+    # escondido. Es la unica diferencia legitima entre las dos listas.
+    ids_admin = {c["id"] for c in del_admin if c.get("id") and not c.get("es_tu_ficha")}
+    ocultos = ids_admin - {c["id"] for c in del_coach if c.get("id")}
     assert not ocultos, (
         f"el entrenador ve {len(del_coach)} clientes y el admin {len(del_admin)}: "
         f"{len(ocultos)} son de otro coach y no le salen ni en la lista")

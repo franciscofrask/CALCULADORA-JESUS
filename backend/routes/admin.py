@@ -200,17 +200,23 @@ async def get_all_clients(
     # son de donde puede coger (documento del 06-08-2026, que revierte la decisión del
     # 21-07). Los de otro coach no salen ni en la lista: no es solo que no pueda
     # entrar, es que no tiene por qué verlos.
+    # EL ENTRENADOR VE A TODOS LOS CLIENTES (Jesús, 13-08-2026, caso 83).
+    #
+    # Es su decisión del 21-07, que él mismo reafirma hoy con el motivo: *«con 177 clientes
+    # y el equipo que tienes, separas: el día que uno se va de vacaciones, los suyos se
+    # quedan sin nadie que los mire»*. Entre el 06-08 y hoy el código hizo lo contrario --
+    # cada coach veía los suyos y los libres --, y el caso 83 llevaba en rojo esperando
+    # precisamente a que él desempatara. Ya está: ven y gestionan a todos.
+    #
+    # Esto contradice A PROPÓSITO un hallazgo de la auditoría de seguridad («un trainer
+    # accede a clientes ajenos»): no es un fallo, es cómo quiere que trabaje su equipo. Lo
+    # que sigue cerrado es la pestaña Usuarios, que es de admin (casos 83 y siguientes), y
+    # un cliente sigue sin ver a otro cliente.
+    #
     # Las reglas de VISIBILIDAD van aparte de los filtros que pide quien busca (plan,
     # estado, coach): así se puede hacer una excepción con las primeras -- tu propia ficha
     # -- sin saltarse las segundas.
     visibilidad: Dict[str, Any] = {}
-    if es_trainer:
-        if not trainer_id:
-            visibilidad["trainer_id"] = {"$in": [user["id"], None, ""]}
-        elif trainer_id == user["id"]:
-            visibilidad["trainer_id"] = user["id"]  # "solo los míos", sin los libres
-        else:
-            return []                               # los de otro coach no son cosa suya
 
     # El equipo fuera de la lista de clientes. Jesús, 09-08: los 13 usuarios del equipo
     # figuraban como clientes con plan Gold, él y el admin incluidos, y salían mezclados

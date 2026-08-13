@@ -155,18 +155,21 @@ async def get_admin_only_user(user: dict = Depends(get_current_user)) -> dict:
 def assert_client_access(user: dict, profile: Optional[dict]) -> None:
     """Autorización a nivel de recurso para endpoints staff que operan sobre un cliente.
 
-    - admin: cualquier cliente.
-    - trainer: los SUYOS y los que no tienen coach.
+    - admin y trainer: cualquier cliente.
     - resto: denegado.
 
-    Los que no tienen coach quedan a la vista de todos a propósito: son de donde
-    cualquiera puede coger (y al cogerlo se lo asigna, ver PUT /clients/{id}/trainer).
-    Lo que no se puede es entrar en el cliente de otro: si hay que cubrir a un
-    compañero, se reasigna el cliente, no se abre el acceso.
+    JESÚS, 13-08-2026: *«los entrenadores ven a todos los clientes. Es lo que decidí el 21
+    de julio»*, y el motivo: *«con 177 clientes y el equipo que tienes, separas: el día que
+    uno se va de vacaciones, los suyos se quedan sin nadie que los mire»*.
 
-    Documento de Jesús del 06-08-2026, que revierte a propósito la decisión del 21-07
-    ("los entrenadores ven y gestionan a todos"): hasta hoy un coach podía abrir la
-    ficha de un cliente de otro y cambiarle los macros sin que su coach se enterase.
+    Entre el 06-08 y hoy esto hacía lo contrario -- un coach solo entraba en los SUYOS y en
+    los que no tenían coach --, y el caso 83 de sus 85 llevaba en rojo esperando a que él
+    desempatara las dos decisiones. Ya lo ha hecho, y la que vale es la suya del 21-07.
+
+    Contradice A PROPÓSITO un hallazgo de la auditoría de seguridad («un trainer accede a
+    clientes ajenos»): no es un fallo, es cómo quiere que trabaje su equipo. Lo que NO se
+    abre con esto es la pestaña Usuarios (roles y contraseñas), que sigue siendo solo de
+    admin, ni el acceso de un cliente a otro cliente.
 
     `profile` es el documento de client_profiles del cliente objetivo (o None si no existe).
     Lanza 404 si el perfil no existe y 403 si no le corresponde.
@@ -174,14 +177,6 @@ def assert_client_access(user: dict, profile: Optional[dict]) -> None:
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     role = (user or {}).get("role")
-    if role == "admin":
+    if role in ("admin", "trainer"):
         return
-    if role == "trainer":
-        de_quien_es = profile.get("trainer_id") or None
-        if de_quien_es is None or de_quien_es == (user or {}).get("id"):
-            return
-        raise HTTPException(
-            status_code=403,
-            detail="Este cliente lo lleva otro entrenador. Si tienes que cubrirle, que te lo reasignen.",
-        )
     raise HTTPException(status_code=403, detail="No tienes acceso a este cliente")
