@@ -436,6 +436,19 @@ def _menu_max(rol: str, cat: str, maximo_base: float) -> float:
         return 30.0
     if cat.startswith("17"):                             # frutos secos, aguacate, cremas
         return 60.0
+    # UNA SALSA NUNCA ES EL PLATO (13-08-2026). Francisco, viendo un menú en producción:
+    # «Kétchup light 160 g». Sale de que en la receta va con rol «hidrato» -- el editor
+    # solo ofrece proteína, hidrato y grasa, así que para meter una salsa hay que elegir
+    # uno -- y con 12 g de hidratos por 100 el motor lo toma por fuente y lo estira hasta
+    # cubrir el objetivo. El filtro de guarnición (`MINIMO_PARA_TIRAR`) no lo caza porque
+    # 12 pasa de sobra el umbral de 6.
+    #
+    # El número no es nuevo ni es mío: es el que ya usa el chatbot para la categoría 16
+    # («salsas y condimentos: nunca son el plato»), y el mismo criterio que aquí arriba
+    # aparta los aceites en 30 g. Lo que faltaba era que el recetario lo respetara: el
+    # chat te ponía 30 g de kétchup y el menú 160 del mismo bote.
+    if cat.startswith("16"):                             # salsas y condimentos
+        return 30.0
     return max(maximo_base, 60.0)
 
 
