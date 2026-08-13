@@ -121,14 +121,20 @@ def test_el_total_del_panel_es_el_de_la_tabla_de_clientes(panel):
     stats, lista = panel
     # Los "registro_incompleto" son usuarios sin perfil y solo salen si se piden aparte,
     # asi que no deberian aparecer, pero se descuentan por si acaso.
-    filas = [c for c in lista if c.get("status") != "registro_incompleto"]
+    #
+    # Y `es_tu_ficha`: desde el 13-08 cada uno del equipo ve SU propia ficha en la tabla
+    # (Francisco: «usan la app de las dos formas»), pero el equipo no es negocio y los
+    # contadores siguen sin contarla. Es UNA fila y viene marcada justo para esto.
+    filas = [c for c in lista
+             if c.get("status") != "registro_incompleto" and not c.get("es_tu_ficha")]
     assert stats["total_clients"] == len(filas), (
         f"el panel dice {stats['total_clients']} clientes y la tabla trae {len(filas)}")
 
 
 def test_los_activos_se_cuentan_igual_en_las_dos_pantallas(panel):
     stats, lista = panel
-    activos = [c for c in lista if c.get("status") == "activo"]
+    activos = [c for c in lista
+               if c.get("status") == "activo" and not c.get("es_tu_ficha")]
     assert stats["active_clients"] == len(activos), (
         f"el panel dice {stats['active_clients']} activos y en la tabla hay {len(activos)}")
 
@@ -537,3 +543,68 @@ def test_cada_conversacion_trae_con_quien_es_y_el_ultimo_mensaje(cab_admin):
             f"conversacion con {c['user_id']} sin nombre: en pantalla sale «Usuario eliminado»")
         assert (c.get("last_message") or {}).get("created_at")
         assert c["unread"] >= 0
+
+
+# ------------------------------------------------------- el equipo, tambien como cliente
+# Peticion de Francisco del 13-08-2026: *«necesito que los entrenadores y administradores
+# puedan buscar su propia ficha como clientes porque ellos usan la app de las dos formas, y
+# hoy ya no pueden modificar sus propios macros»*.
+#
+# Sacar al equipo de la lista (`_fuera_el_equipo`, 09-08) era para que no contara como
+# negocio -- 13 usuarios con plan Gold inflando los contadores y el MRR --, pero de paso se
+# quedaron sin poder abrir su ficha, que es por donde se tocan los macros. Medido el 13-08:
+# 12 de los 16 del equipo tienen ficha de cliente y ninguno se encontraba.
+def test_el_del_equipo_se_encuentra_a_si_mismo(cab_admin):
+    yo = json_ok(pedir("get", "/auth/me", headers=cab_admin), "/auth/me")
+    clientes = json_ok(pedir("get", "/admin/clients", headers=cab_admin), "/admin/clients")
+    mio = [c for c in clientes if (c.get("user") or {}).get("id") == yo.get("id")]
+    if not mio:
+        # Sin ficha de cliente no hay nada que enseñar, y eso es correcto: aparece quien
+        # TIENE ficha, no cualquiera del equipo por el hecho de existir.
+        perfil = pedir("get", "/clients/profile", headers=cab_admin)
+        if perfil.status_code != 200:
+            pytest.skip("este admin no tiene ficha de cliente")
+        assert False, "tiene ficha de cliente y no se encuentra en la lista"
+    assert len(mio) == 1, "sale mas de una vez"
+
+
+def test_pero_no_ve_al_resto_del_equipo(cab_admin):
+    """La excepcion es de UNA fila: cada cual se ve a si mismo, no al equipo entero."""
+    yo = json_ok(pedir("get", "/auth/me", headers=cab_admin), "/auth/me")
+    clientes = json_ok(pedir("get", "/admin/clients", headers=cab_admin), "/admin/clients")
+    otros = [(c.get("user") or {}).get("email") for c in clientes
+             if (c.get("user") or {}).get("role") in ("admin", "trainer")
+             and (c.get("user") or {}).get("id") != yo.get("id")]
+    assert not otros, f"tambien salen otros del equipo: {otros[:3]}"
+
+
+def test_el_del_equipo_puede_tocar_sus_propios_macros(cab_admin):
+    """La otra mitad de la queja: encontrarse no sirve de nada si no puedes editarte."""
+    yo = json_ok(pedir("get", "/auth/me", headers=cab_admin), "/auth/me")
+    clientes = json_ok(pedir("get", "/admin/clients", headers=cab_admin), "/admin/clients")
+    mio = [c for c in clientes if (c.get("user") or {}).get("id") == yo.get("id")]
+    if not mio:
+        pytest.skip("este admin no tiene ficha de cliente")
+    cid = mio[0]["id"]
+    ficha = json_ok(pedir("get", f"/admin/clients/{cid}", headers=cab_admin), "ficha propia")
+    perfil = ficha.get("profile") or ficha
+    antes = (perfil.get("macros_training") or {}).get("protein")
+    if antes is None:
+        pytest.skip("la ficha no tiene macros todavia")
+    entreno = dict(perfil.get("macros_training") or {})
+    descanso = dict(perfil.get("macros_rest") or {})
+
+    def guardar(p):
+        return pedir("put", f"/admin/clients/{cid}/macros", headers=cab_admin, json={
+            "training": {"protein": p, "carbs": entreno.get("carbs", 0), "fat": entreno.get("fat", 0)},
+            "rest": {"protein": descanso.get("protein", p), "carbs": descanso.get("carbs", 0),
+                     "fat": descanso.get("fat", 0)}})
+
+    r = guardar(float(antes) + 1)
+    assert r.status_code == 200, f"no deja guardar sus propios macros: {r.status_code} {r.text[:150]}"
+    ficha2 = json_ok(pedir("get", f"/admin/clients/{cid}", headers=cab_admin), "ficha propia")
+    p2 = ficha2.get("profile") or ficha2
+    try:
+        assert (p2.get("macros_training") or {}).get("protein") == float(antes) + 1
+    finally:
+        guardar(antes)   # se deja como estaba, igual que el caso 82

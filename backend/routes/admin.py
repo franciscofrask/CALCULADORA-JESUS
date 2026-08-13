@@ -156,7 +156,7 @@ def precio_mensual(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> float:
     return precio_de_ciclo(perfil, catalogo) / max(meses, 1)
 
 
-async def _fuera_el_equipo() -> Dict[str, Any]:
+async def _fuera_el_equipo(salvo: Optional[str] = None) -> Dict[str, Any]:
     """Filtro de `client_profiles` que deja fuera los perfiles del equipo.
 
     Jesús, 09-08-2026: *«los 13 usuarios figuran con plan Gold (legacy), incluidos Admin y
@@ -166,8 +166,14 @@ async def _fuera_el_equipo() -> Dict[str, Any]:
 
     Los perfiles no se tocan: hacen falta para que el equipo pueda usar la app en modo
     cliente y probar las pantallas. Lo que se quita es que cuenten como negocio.
+
+    `salvo` deja fuera del filtro a un usuario: se usa para que cada uno pueda encontrar SU
+    propia ficha (ver `get_all_clients`). En los contadores del panel no se pasa nunca,
+    porque ahí la pregunta es cuánto negocio hay y el equipo sigue sin ser negocio.
     """
     del_equipo = await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}})
+    if salvo:
+        del_equipo = [uid for uid in del_equipo if uid != salvo]
     return {"user_id": {"$nin": del_equipo}} if del_equipo else {}
 
 
@@ -194,18 +200,38 @@ async def get_all_clients(
     # son de donde puede coger (documento del 06-08-2026, que revierte la decisión del
     # 21-07). Los de otro coach no salen ni en la lista: no es solo que no pueda
     # entrar, es que no tiene por qué verlos.
+    # Las reglas de VISIBILIDAD van aparte de los filtros que pide quien busca (plan,
+    # estado, coach): así se puede hacer una excepción con las primeras -- tu propia ficha
+    # -- sin saltarse las segundas.
+    visibilidad: Dict[str, Any] = {}
     if es_trainer:
         if not trainer_id:
-            query["trainer_id"] = {"$in": [user["id"], None, ""]}
+            visibilidad["trainer_id"] = {"$in": [user["id"], None, ""]}
         elif trainer_id == user["id"]:
-            query["trainer_id"] = user["id"]        # "solo los míos", sin los libres
+            visibilidad["trainer_id"] = user["id"]  # "solo los míos", sin los libres
         else:
             return []                               # los de otro coach no son cosa suya
 
     # El equipo fuera de la lista de clientes. Jesús, 09-08: los 13 usuarios del equipo
     # figuraban como clientes con plan Gold, él y el admin incluidos, y salían mezclados
     # con los de verdad y contando en todos los números del panel.
-    query.update(await _fuera_el_equipo())
+    visibilidad.update(await _fuera_el_equipo())
+
+    # PERO CADA UNO SE VE A SÍ MISMO (13-08-2026). Francisco: *«necesito que los
+    # entrenadores y administradores puedan buscar su propia ficha como clientes porque
+    # ellos usan la app de las dos formas, y hoy ya no pueden modificar sus propios
+    # macros»*. Sacar al equipo de la lista era para que no contara como negocio -- lo dice
+    # la propia `_fuera_el_equipo`: «los perfiles hacen falta para que el equipo pueda usar
+    # la app en modo cliente» --, pero de paso se quedaron sin poder abrir su ficha, que es
+    # por donde se tocan los macros. Medido: 12 de los 16 del equipo tienen ficha de
+    # cliente, y ninguno se encontraba.
+    #
+    # Es una excepción de UNA fila: cada cual se ve a sí mismo, nadie ve al resto del
+    # equipo, y los contadores del panel siguen contando solo clientes de verdad. Los
+    # filtros que pida quien busca (plan, estado) se aplican también a su ficha: si filtras
+    # por «gold» y tú eres nivel 2, no sales, que es lo que se espera de un filtro.
+    if visibilidad:
+        query["$or"] = [visibilidad, {"user_id": user["id"]}]
 
     # Proyección mínima para el listado (los detalles van por /clients/{id}) y usuarios en
     # UNA consulta batch en vez de una por perfil (N+1 que hacía lenta la lista).
@@ -251,10 +277,18 @@ async def get_all_clients(
     for profile in profiles:
         user_data = umap.get(profile["user_id"])
         if user_data:
-            result.append({**enrich_cycle(profile), "user": user_data,
-                           "price": precio_de_ciclo(profile, catalogo),
-                           "precio_mensual": round(precio_mensual(profile, catalogo), 2),
-                           "semaforo": _semaforo_del_cliente(profile, hablado, ahora)})
+            fila = {**enrich_cycle(profile), "user": user_data,
+                    "price": precio_de_ciclo(profile, catalogo),
+                    "precio_mensual": round(precio_mensual(profile, catalogo), 2),
+                    "semaforo": _semaforo_del_cliente(profile, hablado, ahora)}
+            # TU PROPIA FICHA VA MARCADA. Es la única que entra por la excepción de arriba,
+            # y no es negocio: los contadores del panel (clientes totales, activos, MRR)
+            # siguen sin contarla, así que quien compare la tabla con un contador tiene que
+            # poder descontarla. Sin la marca, el caso 77 de Jesús -- «los contadores y la
+            # tabla dan el mismo número» -- salía en rojo por una fila que es tuya.
+            if profile["user_id"] == user["id"]:
+                fila["es_tu_ficha"] = True
+            result.append(fila)
 
     # Registros incompletos: solo el admin sin filtros (no tienen plan/estado/coach que filtrar)
     if include_incomplete and not es_trainer and not (plan or status or trainer_id):
