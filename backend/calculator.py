@@ -107,6 +107,22 @@ CATS_NO_SUGERIBLES = [
     '11.9',        # mermeladas
     '37',          # cacao en polvo, azúcares, chucherías y miel
     '19',          # bebidas energéticas, refrescos y cafés
+    # LAS CREMAS DE UNTAR, POR LO MISMO (13-08-2026).
+    #
+    # Francisco pidio opciones para la Comida 2 y le llegaron «paella + pechuga de pavo +
+    # Nocilla noir» y «tortilla de patata + pollo + Nocilla sticks». Los macros cuadran
+    # -- una crema de cacao cubre hidratos y grasa de una vez, que es justo lo que el
+    # compositor busca --, pero eso no es una comida.
+    #
+    # La categoria entera son 19 alimentos y no hay ni uno que sea un plato: Nutella, las
+    # nueve Nocillas y las cremas proteicas de Prozis, Protella y Foodspring. Medido en
+    # las comidas reales: 0 veces sola, igual que las mermeladas (0 de 126) y el cacao en
+    # polvo (0 de 495), que ya estaban aqui por la misma razon.
+    #
+    # No es una prohibicion: es soledad. Con tostadas o con tortitas, `_acompana_a_algo`
+    # la deja entrar; sola, con la paella, no. Y buscarla por su nombre y anadirla a mano
+    # sigue funcionando igual.
+    '17.5',        # cremas de cacao y cremas proteicas de untar
 ]
 
 # Excepción a lo anterior: el hidrato de entrenar (dextrosa, ciclodextrina, palatinosa)

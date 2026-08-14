@@ -933,6 +933,28 @@ class AgentTools:
         # 78 pasaba o fallaba según la corrida, sin tocar el código).
         return zlib.crc32("|".join(partes).encode("utf-8"))
 
+    def _acompanamiento_suelto(self, items: List[dict], ids_exentos: set = None):
+        """¿Lleva este menú algo que nunca es el plato, sin nada a lo que acompañar?
+
+        Mismo criterio que en las sugerencias (`es_sugerible` + `_acompana_a_algo`), pero
+        mirando el menú YA MONTADO en vez de la comida: al componer, la comida está vacía y
+        cualquier acompañamiento quedaba huérfano por definición. Devuelve el motivo o None.
+
+        Lo que el cliente fijó por su nombre no se juzga: si quiere la crema de cacao, es
+        suya. Esto solo corrige lo que el asistente monta por su cuenta.
+        """
+        from calculator import es_sugerible
+        ids_exentos = ids_exentos or set()
+        foods = [self.foods[i["id"]] for i in items if i.get("id") in self.foods]
+        for f in foods:
+            if int(f.get("id", 0)) in ids_exentos or es_sugerible(f):
+                continue
+            otros = [o for o in foods if o.get("id") != f.get("id")]
+            if not self._acompana_a_algo(f, otros):
+                return (f"un intento ponía {f.get('nombre')} sin nada a lo que acompañar, "
+                        f"y eso no se come solo")
+        return None
+
     def _companyia_mala(self, items: List[dict], ids_exentos: set = None):
         """¿Hay en esta comida un par que en las dietas reales no se pone junto? Devuelve
         el motivo, o None si la comida es normal (o si no hay datos para juzgarla).
@@ -1705,6 +1727,20 @@ class AgentTools:
             #
             # Lo que el cliente ha pedido por su nombre no se juzga: si quiere yogur con
             # atún, es su comida.
+            # UN ACOMPAÑAMIENTO NECESITA A QUIÉN ACOMPAÑAR, TAMBIÉN DENTRO DEL MENÚ.
+            #
+            # `es_sugerible` y su rescate ya vetan esto en las SUGERENCIAS, pero ahí el
+            # rescate mira lo que hay en la comida, y cuando se compone un menú la comida
+            # está vacía: la crema de cacao no acompañaba a nada porque todavía no había
+            # nada. Se comprueba otra vez con el menú entero montado, que es cuando ya se
+            # sabe con qué iba a ir.
+            #
+            # Sin esto, «paella + pechuga de pavo + Nocilla noir»: cuadra los macros -- una
+            # crema de untar cubre hidratos y grasa de una vez -- y no es una comida.
+            suelto = self._acompanamiento_suelto(items, ids_fijos)
+            if suelto:
+                descartes_bucle = suelto
+                continue
             discordante = self._companyia_mala(items, ids_fijos)
             if discordante:
                 descartes_bucle = discordante[0]

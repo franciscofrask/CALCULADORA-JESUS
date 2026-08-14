@@ -165,6 +165,59 @@ class TestLoQueCompone:
             pytest.skip("sin db.company_profiles")
         assert not malas, f"compone combinaciones que nadie come: {malas[:3]}"
 
+    def test_lo_que_nunca_es_el_plato_no_entra_solo_en_un_menu(self):
+        """Francisco, 13-08-2026, pidiendo opciones para la Comida 2: le llegaron «paella +
+        pechuga de pavo + Nocilla noir» y «tortilla de patata + pollo + Nocilla sticks».
+
+        Los macros cuadran -- una crema de untar cubre hidratos y grasa de una vez, que es
+        justo lo que busca el compositor -- pero eso no es una comida. `es_sugerible` ya
+        vetaba esto en las sugerencias; al COMPONER no servía de nada, porque su rescate
+        mira lo que hay en la comida y al montar un menú la comida está vacía: el
+        acompañamiento quedaba huérfano por definición y el veto no llegaba a aplicarse.
+
+        Se comprueba con el menú entero montado, que es cuando ya se sabe con qué iba.
+        """
+        async def _correr():
+            from chatbot import NutritionChatbot
+            from agent_tools import AgentTools
+            from calculator import es_sugerible
+            db = _db()
+            sueltos = []
+            for comida in ("Comida 1", "Comida 2", "Comida 3"):
+                bot = NutritionChatbot(f"suelto_{comida}", db)
+                bot.set_user_macros(MACROS)
+                bot.configure_day("entrenamiento", 4, momento_entreno=1, opcion_peri="intra_post")
+                tools = await AgentTools.crear(bot)
+                tools.navegar(comida)
+                r = await tools.componer_menu(n=3)
+                for b in (r.get("borradores") or []):
+                    if b.get("origen") != "compuesto":
+                        continue        # el recetario es de Jesús y no se juzga
+                    foods = [tools.foods[i["id"]] for i in b["items"] if i["id"] in tools.foods]
+                    for f in foods:
+                        if es_sugerible(f):
+                            continue
+                        otros = [o for o in foods if o.get("id") != f.get("id")]
+                        if not tools._acompana_a_algo(f, otros):
+                            sueltos.append((comida, f.get("nombre"),
+                                            [o.get("nombre") for o in otros]))
+            return sueltos
+        sueltos = asyncio.run(_correr())
+        assert not sueltos, f"pone lo que no se come solo, sin nada que lo acompañe: {sueltos[:3]}"
+
+    def test_las_cremas_de_untar_no_se_proponen_solas(self):
+        """La categoría entera son 19 alimentos y ninguno es un plato: Nutella, las nueve
+        Nocillas y las cremas proteicas. Medido: 0 veces sola en las comidas reales, igual
+        que las mermeladas (0 de 126) y el cacao en polvo (0 de 495).
+
+        La crema de cacahuete NO entra aquí: vive en los frutos secos (17.2.x) y se sigue
+        proponiendo como cualquier otra grasa.
+        """
+        from calculator import es_sugerible
+        assert not es_sugerible({"categorias": "17.5"})
+        assert es_sugerible({"categorias": "17.2.1"})
+        assert es_sugerible({"categorias": "17.1.1"})
+
     def test_si_todo_discorda_no_deja_al_cliente_sin_nada(self):
         """Pidiendo «tostadas» todo lo que cuadraba eran tres tostadas distintas juntas y
         las tres se descartaban. No puede quedarse sin nada que ofrecer; y lo que ofrezca,
