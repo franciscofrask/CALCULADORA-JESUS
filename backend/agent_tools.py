@@ -1517,12 +1517,20 @@ class AgentTools:
         from meal_builder import build_meal
         from meal_library import buscar_en_biblioteca
 
+        # SOLO EN COMIDA Y CENA (14-08-2026, medido): la biblioteca es de tipo "comida",
+        # y en el desayuno el filtro de coherencia de momento tumbaba TODOS los
+        # candidatos... despues de traerse 500 menus enteros por la red. 19,5 segundos
+        # para devolver cero. El desayuno ya lo cubren el historial, el recetario y el
+        # compositor; aqui ni se entra.
+        from meal_moment import CENA, COMIDA
+        if momento not in (COMIDA, CENA):
+            return []
         tipo = "peri" if momento == PERI else "comida"
         try:
             reales = await buscar_en_biblioteca(
                 self.db, restante,
                 alimento_ids=[int(x) for x in incluir_ids] if incluir_ids else None,
-                tipo=tipo, limit=n + offset + 12)
+                tipo=tipo, limit=n + offset + 12, max_candidatos=120)
         except Exception:
             return []
         ya = set(ya or [])
@@ -1573,18 +1581,24 @@ class AgentTools:
             # de 51, todos cortos y todos con aviso. Se recuadran con build_meal y el
             # resolvedor exacto, como el historial; si ni recuadrado entra en margen,
             # ese menu no es para este dia y se salta.
+            # El juez ANTES del recuadre (14-08): con la biblioteca ya barrida el juicio
+            # es una lectura de cache, y el recuadre es un build_meal entero. Recuadrar
+            # candidatos que el juez iba a tumbar era donde se iban los segundos.
+            clientes = int(((r.get("popularidad") or {}).get("clientes")) or 0)
+            items_previos = [{"id": int(i["alimento_id"]), "nombre": i.get("nombre", ""),
+                              "cantidad_g": float(i.get("cantidad_g") or 0)}
+                             for i in (r.get("items") or [])]
+            if not await self._pasa_coherencia(tipo, items_previos,
+                                               clientes=clientes, juicios=juicios):
+                continue
             items = await self._recuadrar_a_hoy(foods, restante)
             if items is None:
                 continue
-            clientes = int(((r.get("popularidad") or {}).get("clientes")) or 0)
             # El juicio de un menu de biblioteca va POR SU TIPO (comida/peri), no por el
             # momento en que asoma: si no, el mismo menu se juzgaria una vez para la
             # comida, otra para la cena... y el "entrenamiento" en bloque no serviria de
             # cache. Si pega o no con el momento ya lo decide el filtro mecanico de
             # arriba (coherencia del perfil); el juez decide si ES una comida.
-            if not await self._pasa_coherencia(tipo, items,
-                                               clientes=clientes, juicios=juicios):
-                continue
             ya.add(firma)
             familias_ya.append(fams)
             salida.append({"items": items, "origen": "biblioteca",
@@ -1750,6 +1764,20 @@ class AgentTools:
                     max_opciones=n,
                     semilla=self._semilla_variedad(),
                     vistos=ya)
+                # REPETIR ANTES QUE QUEDARSE CORTO (14-08-2026). Una sesión larga agota
+                # el recetario: cada receta ofrecida se apunta para no repetirse, y tras
+                # una tarde de pruebas ya no quedaba NINGUNA para el desayuno, así que
+                # todo caía al compositor y salía una opción única. Si el filtro de
+                # vistas lo dejó a cero, se vuelve a empezar la rueda: una receta buena
+                # repetida gana a un compuesto flojo.
+                if not recetas and ya:
+                    recetas = await generar_opciones_menu(
+                        self.db, momento, restante,
+                        avoided_prefixes=avoid,
+                        avoided_keywords=self.bot.state.get("avoided_keywords", []),
+                        max_opciones=n,
+                        semilla=self._semilla_variedad(),
+                        vistos=set())
                 ofrecidas = self.bot.state.setdefault("recetas_ofrecidas", [])
                 for r in recetas:
                     if r.get("plantilla_id") and r["plantilla_id"] not in ofrecidas:

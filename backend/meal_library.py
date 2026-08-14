@@ -102,6 +102,7 @@ async def buscar_en_biblioteca(
     tipo: str = "comida",
     limit: int = 5,
     excluir_ids: Optional[set] = None,
+    max_candidatos: int = 500,
 ) -> List[dict]:
     """Busca menús de la biblioteca real que contengan TODOS los alimentos pedidos
     y cuadren (o se ajusten) a los macros objetivo. Devuelve items listos para
@@ -133,7 +134,10 @@ async def buscar_en_biblioteca(
     q["macros.G"] = {"$gte": objetivo["G"] - AJUSTE_MAX["G"] - MARGEN_APROX,
                      "$lte": objetivo["G"] + AJUSTE_MAX["G"] + MARGEN_APROX}
 
-    candidatos = await db.meal_library.find(q, {"_id": 0}).to_list(500)
+    # El tope viene de fuera: el flujo del coach quiere el barrido ancho (500), pero el
+    # chat pide 3 opciones y traerse 500 menus enteros por la red eran 19 s medidos en
+    # dev para luego tirar casi todos.
+    candidatos = await db.meal_library.find(q, {"_id": 0}).to_list(max_candidatos)
 
     # Cache de alimentos del catálogo para macros efectivos actuales
     ids_necesarios = {a["alimento_id"] for c in candidatos for a in c["alimentos"]}
