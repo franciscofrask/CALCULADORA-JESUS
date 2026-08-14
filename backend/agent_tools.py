@@ -190,6 +190,26 @@ class AgentTools:
             return filtrar_por_tipo_comida(todos, "intra" if key == "Intra" else "post")
         return todos
 
+    def _es_preferido(self, food: dict) -> bool:
+        """Los gustos de la pestaña de Nutrición: PRIORIZAN, nunca excluyen.
+
+        Es la misma regla que ya aplica el flujo guiado: si el cliente no marcó
+        «arroces», el arroz se le sigue enseñando; si marcó «frutos secos», los frutos
+        secos salen antes a igualdad de encaje. Aquí faltaba: las tarjetas del chat y la
+        biblioteca ignoraban los gustos que él mismo configuró.
+        """
+        prefs = self.bot.state.get("food_preferences") or []
+        if not food or not prefs:
+            return False
+        from routes.calculator import AVOIDABLE_PREFIXES
+        cats = parse_categories(food.get("categorias"))
+        for cid in prefs:
+            for p in AVOIDABLE_PREFIXES.get(cid, []):
+                for c in cats:
+                    if c == p or c.startswith(p + "."):
+                        return True
+        return False
+
     def _es_evitado(self, food: dict) -> Optional[str]:
         """Evitados del perfil (categorías y palabras) + restricciones de la sesión."""
         from routes.calculator import AVOIDABLE_PREFIXES
@@ -366,6 +386,9 @@ class AgentTools:
         # 40 g. Se veía como «pidiendo algo con avena no sale ninguna opción».
         restante = dict(hueco) if hueco else self.bot.get_remaining_macros()
         momento = self._momento_actual()
+        # El repertorio del cliente, una vez por herramienta: ordena sus tarjetas igual
+        # que ya ordena las sugerencias del bot (lo suyo delante, en tramos).
+        self._mios = await self.bot.usos_propios()
         universo = {int(f["id"]): f for f in self._universo()}
 
         # --- candidatos en orden de relevancia
@@ -788,9 +811,20 @@ class AgentTools:
             # se quedan a 8 g de su cuota porque su grasa topa antes, siguen saliendo (son
             # la mitad de los desayunos), y un alimento que no pinta nada no se cuela por
             # ser popular. A igualdad, la comida real antes que el bote (punto 78).
+            # Dentro de la puerta del encaje: primero SUS gustos (los de la pestaña de
+            # Nutrición), luego SU repertorio (lo que él come de verdad), luego lo típico
+            # del momento. Igual que en el flujo guiado: el gusto prioriza, no excluye.
+            def _gusto(it):
+                return 0 if self._es_preferido(self.foods.get(it["id"])) else 1
+            mios = getattr(self, "_mios", None) or {}
+            def _mio(it):
+                usos = mios.get(it["id"], 0)
+                return min(int(math.log2(usos)) + 1, 15) if usos > 0 else 0
             lista.sort(key=lambda it: (
                 min(int(abs(float(it["macros"].get(macro, 0) or 0) - cuota)
                         // self.ESCALON_DISTANCIA), self.ESCALONES_QUE_ENTRAN),
+                _gusto(it),
+                -_mio(it),
                 -self._tipico_en(it, momento),
                 0 if en_peri else self._es_bote(it)))
 
@@ -897,10 +931,21 @@ class AgentTools:
         def es_polvo(it):
             return 0 if en_peri else self._es_bote(it)
 
+        # Y dentro del escalón, SUS gustos y SU repertorio por delante (14-08-2026): los
+        # de la pestaña de Nutrición priorizan aquí igual que en el flujo guiado, y lo que
+        # este cliente come de verdad gana a lo estadísticamente típico. El barajado sigue
+        # decidiendo entre iguales de verdad.
+        def _gusto(it):
+            return 0 if self._es_preferido(self.foods.get(it["id"])) else 1
+        mios = getattr(self, "_mios", None) or {}
+        def _mio(it):
+            usos = mios.get(it["id"], 0)
+            return min(int(math.log2(usos)) + 1, 15) if usos > 0 else 0
         import random
         rng = random.Random(self._semilla_variedad())
         rng.shuffle(items)
-        return sorted(items, key=lambda it: (int(distancia(it) // self.ESCALON_DISTANCIA), es_polvo(it)))
+        return sorted(items, key=lambda it: (int(distancia(it) // self.ESCALON_DISTANCIA),
+                                             _gusto(it), -_mio(it), es_polvo(it)))
 
     def _semilla_variedad(self) -> int:
         """Con qué se baraja: estable por CLIENTE, DÍA y COMIDA.
@@ -1482,6 +1527,14 @@ class AgentTools:
             return []
         ya = set(ya or [])
         familias_ya = [set(f) for f in (familias_ya or [])]
+        # Los gustos de la pestaña de Nutrición también ordenan aquí: entre dos menús
+        # reales que cuadran, primero el que lleva algo de lo que marcó que le gusta.
+        # Orden estable: dentro de cada grupo sigue mandando el criterio de la biblioteca
+        # (cuadradas primero, la que más gente distinta montó).
+        def _con_gusto(r):
+            return 0 if any(self._es_preferido(self.foods.get(int(i["alimento_id"])))
+                            for i in (r.get("items") or [])) else 1
+        reales.sort(key=_con_gusto)
         salida, saltadas = [], 0
         for r in reales:
             if len(salida) >= n:
