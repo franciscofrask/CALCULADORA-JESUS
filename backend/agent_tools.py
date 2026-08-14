@@ -2048,6 +2048,21 @@ class AgentTools:
                     "items": items, "origen": "compuesto", "nombre": None,
                     "receta_url": None, "aviso_companyia": discordante[0]}))
                 continue
+            # LA MISMA TANDA NO REPITE COMIDA (14-08-2026). El candado de familias que ya
+            # tienen la biblioteca y el historial vale igual aquí: en una tanda salieron
+            # tres opciones con «pollo tikka + arroz congelado» dentro de las tres,
+            # cambiando solo el acompañante. Si comparte más del 60 % de familias con una
+            # opción ya puesta, es la misma comida con otro adorno.
+            fams_op = {_cat2_de_id(i["id"]) for i in items}
+            repetida = False
+            for o in opciones:
+                fo = {_cat2_de_id(x["id"]) for x in o["items"] if x["id"] in self.foods}
+                if fo and len(fams_op & fo) / max(1, min(len(fams_op), len(fo))) > 0.6:
+                    repetida = True
+                    break
+            if repetida:
+                descartes_bucle = "un intento repetía casi la misma comida y se descartó"
+                continue
             # EL COMPOSITOR TAMBIÉN PASA POR EL JUEZ (14-08-2026). Era la única fuente
             # sin juzgar, y por ahí llegó «cereal de maíz con polvo de suero y cacahuete
             # frito» servido como comida. Francisco: «yo no le veo mucho sentido». Lo
@@ -2468,7 +2483,15 @@ class AgentTools:
         firma = sorted(i["id"] for i in b["items"])
         if firma not in vistos:
             vistos.append(firma)
-        out = {"ok": True, "comida": self.ver_estado("comida")}
+        # APLICAR NO ES CERRAR (14-08-2026). El cliente eligió «1», se le aplicó la
+        # opción... y el asistente guardó la comida y le plantó el guion del intra sin
+        # que nadie se lo pidiera: «me mandó al intra sin que se lo pida, ni había
+        # cerrado la comida 1». Elegir un menú monta la comida; cerrarla y avanzar es
+        # decisión suya, y el modelo necesita que se lo diga el resultado, no el prompt.
+        out = {"ok": True, "comida": self.ver_estado("comida"),
+               "instruccion": ("La comida queda MONTADA, no cerrada: NO llames a "
+                               "guardar_comida por tu cuenta. Enséñale cómo quedó y, si "
+                               "acaso, ofrécele guardar; se guarda cuando ÉL lo diga.")}
         # Lo que no impedía aplicarlo pero él tiene que saber: la marca cuando había pedido
         # genéricos, un alimento atípico a esa hora. Se aplica y SE DICE, en vez de no
         # aplicar y preguntar -- que es lo que le dejaba dando vueltas.
@@ -2478,7 +2501,8 @@ class AgentTools:
             out["avisos"] = avisos
             out["instruccion"] = ("Ya está puesto. Dile de pasada lo que hay que decirle "
                                   "(está en `avisos`) y ofrécele cambiarlo si quiere, sin "
-                                  "preguntar si lo aplicas: ya lo has aplicado.")
+                                  "preguntar si lo aplicas: ya lo has aplicado. Y NO lo "
+                                  "guardes ni avances de comida: eso lo decide él.")
         return out
 
     # ============================================================ 6. editar_comida
