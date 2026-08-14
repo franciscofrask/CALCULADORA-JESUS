@@ -81,7 +81,7 @@ _ESQUEMAS = [
          "generico": {"type": "boolean", "description": "SOLO si el cliente ha hablado de marcas: true = sin marcas, false = de marca. Si no ha dicho nada, OMÍTELO: el menú va con todo el catálogo y poner esto lo estrecha sin motivo"},
          "marca": {"type": "string", "description": "SOLO si el cliente pidió una marca concreta"},
          "filtro_porque": {"type": "string", "description": "obligatorio si mandas 'generico' o 'marca': las palabras EXACTAS con que el cliente lo pidió. Se comprueban contra lo que escribió; si no aparecen, el filtro se ignora"},
-         "n": {"type": "integer"}}}},
+         "n": {"type": "integer", "description": "cuántas opciones montar. Con «dame opciones», «qué me propones» o cualquier plural: 3. Solo 1 si pidió expresamente UNA («móntame un menú», «hazme una opción»)"}}}},
     {"name": "revisar_borrador",
      "description": "Audita un borrador de menú: restricciones, marcas no pedidas, momento, margen. Llámala SIEMPRE antes de enseñar o aplicar un borrador.",
      "parameters": {"type": "object", "properties": {"borrador_id": {"type": "string"}},

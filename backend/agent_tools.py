@@ -1563,7 +1563,12 @@ class AgentTools:
                 logger.warning("historial de comidas no disponible", exc_info=True)
             # La biblioteca rellena, pero deja UNA plaza libre: la última la pelean el
             # recetario y el compositor, para que siempre asome algo distinto.
-            cupo_biblio = max(0, (n - 1) - len(opciones))
+            #
+            # SALVO con n=1: ahí no hay variedad que proteger, y reservar la única plaza
+            # dejaba a la biblioteca con cupo CERO. Se vio en dev el 14-08: «dame
+            # opciones», el modelo pidió una sola, y salió el compositor con la
+            # biblioteca sin consultar siquiera.
+            cupo_biblio = max(0, (n if n == 1 else n - 1) - len(opciones))
             if cupo_biblio:
                 try:
                     opciones += await self._menus_de_la_biblioteca(
