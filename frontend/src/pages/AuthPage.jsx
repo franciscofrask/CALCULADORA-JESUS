@@ -5,33 +5,12 @@ import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
-import BrandArrow from '../components/BrandArrow';
+import Logo12EN12 from '../components/Logo12EN12';
 import { dejarDestino, leerDestino } from '../lib/navegacion';
 
-// 12EN12 Logo Component
-const Logo12EN12 = ({ size = 'lg' }) => {
-    const sizeClasses = {
-        sm: 'text-2xl',
-        md: 'text-3xl',
-        lg: 'text-5xl',
-        xl: 'text-6xl'
-    };
-    const arrowSizes = {
-        sm: 'w-5 h-5',
-        md: 'w-7 h-7',
-        lg: 'w-10 h-10',
-        xl: 'w-12 h-12'
-    };
-    
-    return (
-        <div className={`flex items-center justify-center ${sizeClasses[size]} font-bold tracking-tight`}>
-            <span className="text-white">12</span>
-            <span className="text-white">EN</span>
-            <span className="text-white">12</span>
-            <BrandArrow className="text-brand h-[1em] w-[1em] -ml-0.5" />
-        </div>
-    );
-};
+// Aquí había una copia del logo hecha a mano, con la flecha colgando por encima del suelo de
+// las letras. Se usa el de siempre (14-08-2026): así el logo es uno solo y se arregla en un
+// sitio. `tone="dark"` porque esta pantalla es negra siempre, no sigue al tema.
 
 const AuthPage = () => {
     const navigate = useNavigate();
@@ -91,7 +70,7 @@ const AuthPage = () => {
             <div className="relative z-10 w-full max-w-sm flex flex-col items-center">
                 {/* Logo */}
                 <div className="mb-10">
-                    <Logo12EN12 size="lg" />
+                    <Logo12EN12 size="lg" tone="dark" />
                 </div>
                 
                 {/* Title */}

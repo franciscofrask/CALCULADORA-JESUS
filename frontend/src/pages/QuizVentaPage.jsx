@@ -338,7 +338,8 @@ const QuizVentaPage = () => {
                 <div className="absolute -top-32 -right-24 w-[420px] h-[420px] bg-brand/25 rounded-full blur-[140px]" />
 
                 <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-12 text-center max-w-xl mx-auto">
-                    <Logo12EN12 size="md" />
+                    {/* Esta portada es negra siempre (foto del gimnasio), no sigue al tema. */}
+                    <Logo12EN12 size="md" tone="dark" />
 
                     <h1 className="font-heading text-3xl sm:text-5xl font-bold uppercase leading-[1.05] mt-10">
                         ¿Cuánto tiempo llevas<br />intentándolo solo?

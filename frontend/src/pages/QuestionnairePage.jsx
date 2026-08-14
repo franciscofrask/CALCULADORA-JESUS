@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { CAP } from '../lib/planAccess';
 import { plural } from '../lib/labels';
 import { seLeOfreceLaRevision } from '../lib/revision';
+import { verComo } from '../lib/modoRevision';
 import { MEDIDAS, VIDEO_MEDIDAS } from '../lib/medidas';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -624,7 +625,8 @@ const Shell = ({ progress, children, tramo, cabecera }) => (
         {/* Cabecera: logo, en qué tramo va y los macros en vivo */}
         <div className="relative z-10 flex items-center justify-between gap-4 min-h-16 px-6 md:px-10 py-2 flex-wrap">
             <div className="flex items-center gap-4">
-                <Logo12EN12 size="sm" tone="dark" />
+                {/* Fondo de tema: el logo va del color del texto, no blanco fijo. */}
+                <Logo12EN12 size="sm" />
                 {tramo && <span className="text-[11px] uppercase tracking-wider text-foreground/40 font-semibold">{tramo}</span>}
             </div>
             {cabecera}
@@ -686,16 +688,24 @@ const QuestionnairePage = () => {
     // Si ha pulsado "Ajustar macros" manda eso y nada más: sin esta comprobación, un cliente con
     // coach que le diera al botón acababa en el perfil largo en vez de en el cuestionario.
     const pidioAjustar = new URLSearchParams(location.search).get('ajustar') === '1';
+    // Modo revisión (solo equipo): `?ver=alta`, `?ver=ajuste` o `?ver=perfil` abren el tramo
+    // que se pida aunque el cuestionario ya esté hecho. Sin esto no hay forma de mirar el
+    // alta una vez pasada, y es justo la que más textos tiene.
+    const revision = verComo(user);
     // Retomar: Nivel 0 hecho en otra sesión pero Nivel 1 pendiente.
-    const retomandoNivel1 = !pidioAjustar && !!profile?.questionnaire_completed && !nivel0Enviado
-        && tieneCoach && !profile?.questionnaire_nivel1_completed;
+    const retomandoNivel1 = revision
+        ? revision === 'perfil'
+        : (!pidioAjustar && !!profile?.questionnaire_completed && !nivel0Enviado
+           && tieneCoach && !profile?.questionnaire_nivel1_completed);
 
     // Dos modos, como pide el doc del 29-07:
     //   ALTA   -> cuatro preguntas y macros provisionales. Es lo que ve quien acaba de entrar.
     //   AJUSTE -> el cuestionario que ajusta, detras del boton "Ajustar macros". Se llega con
     //             ?ajustar=1, o solo con el alta ya hecha (por si vuelve por el enlace).
-    const modoAjuste = pidioAjustar
-        || (!!profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1);
+    const modoAjuste = revision
+        ? revision === 'ajuste'
+        : (pidioAjustar
+           || (!!profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1));
 
     // Un solo recorrido (punto 15 del doc del 07-08). Quien se da de alta contesta los datos
     // de la tabla y sigue de largo con lo que ajusta los hidratos, sin cortes y sin un segundo
@@ -820,6 +830,10 @@ const QuestionnairePage = () => {
     // Retomar el cuestionario de ajuste donde lo dejó, y arrancar la cabecera con los macros
     // que tiene ahora mismo (los provisionales del alta) para que se vea de dónde parte.
     useEffect(() => {
+        // En modo revisión NO se retoma nada: se viene a ver el cuestionario desde el
+        // principio, y reanudarlo por la mitad deja fuera justo las pantallas que se quieren
+        // repasar. Las respuestas guardadas siguen intactas: aquí solo no se cargan.
+        if (revision) return;
         if (!modoAjuste || progresoCargadoRef.current || !profile) return;
         progresoCargadoRef.current = true;
         const guardado = profile.ajuste_macros_progreso;
@@ -929,7 +943,7 @@ const QuestionnairePage = () => {
 
     // El ALTA no se puede repetir (ni por el enlace). El cuestionario de AJUSTE sí: si cambia de
     // trabajo o empieza a hacer otro deporte, lo vuelve a pasar y sus macros se recalculan.
-    if (profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1 && !pidioAjustar) {
+    if (!revision && profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1 && !pidioAjustar) {
         return (
             <Shell progress={100}>
                 <div className="text-center">
@@ -1358,13 +1372,15 @@ const QuestionnairePage = () => {
         body = (
             <div className="text-center">
                 <div className="flex justify-center mb-8">
-                    <Logo12EN12 size="xl" tone="dark" />
+                    <Logo12EN12 size="xl" />
                 </div>
                 <h2 className="font-heading font-bold text-4xl md:text-5xl uppercase tracking-tight text-foreground mb-3">{step.title}</h2>
                 {step.desc && <p className="text-foreground/60 mb-10 text-base max-w-md mx-auto">{step.desc}</p>}
                 <Button onClick={goNext}
                     className="bg-brand hover:bg-brand/90 text-white font-bold uppercase tracking-wider px-10 py-6 text-lg">
-                    Empezar <BrandArrow className="w-5 h-5 ml-2 text-white" />
+                    {/* w-4: la flecha ya no trae aire dentro, así que con el tamaño de antes
+                        se veía más grande que el texto del botón. */}
+                    Empezar <BrandArrow className="w-4 h-4 ml-2 text-white" />
                 </Button>
             </div>
         );

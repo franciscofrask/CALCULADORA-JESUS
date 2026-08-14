@@ -11,6 +11,7 @@ import {
 import InformeMensual from '../components/reports/InformeMensual';
 import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import TresFotos from '../components/reports/TresFotos';
+import { verComo } from '../lib/modoRevision';
 
 const ORANGE = '#FF671F';
 
@@ -46,6 +47,14 @@ const _fmtCorta = (iso) => iso ? new Date(iso).toLocaleDateString('es-ES', { day
 // Estado de la ventana de envío (viernes 00:00 -> lunes 06:00).
 const WindowBanner = ({ w }) => {
     const base = "rounded-2xl p-4 border text-sm flex items-center gap-2";
+    if (w?.revision) {
+        return (
+            <div className={`${base} border-brand/40 bg-brand/5 text-foreground`}>
+                <Calendar className="w-4 h-4 text-brand flex-shrink-0" />
+                Modo revisión: estás viendo el {w.tipo_label?.toLowerCase()} fuera de su semana. Enviarlo no funcionará.
+            </div>
+        );
+    }
     if (!w || !w.due) {
         return (
             <div className={`${base} border-border bg-muted text-foreground/60`}>
@@ -129,6 +138,20 @@ const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial,
     // formulario en gris con «se abre el viernes». Prometía algo que no se podía hacer, que
     // es de lo que se queja Jesús el 11-08 sobre esta pantalla. Con `is_open` la tarjeta
     // dice lo que hay: cuando abra, en naranja; hasta entonces, en gris y con la fecha.
+    // EL PERIODO ES EL DEL REPORTE QUE TOCA, NO SIEMPRE «ESTE MES» (14-08-2026).
+    //
+    // Esta tarjeta ponía «Este mes» a pelo, tocara lo que tocara. Un cliente del Nivel 2 en la
+    // semana 2 leía «Este mes · te toca / Reporte quincenal»: dos periodos distintos en dos
+    // renglones seguidos, y la sensación de que la app se ha equivocado de cliente.
+    //
+    // Y lo de debajo igual: prometía «unas fotos, tus medidas y unas preguntas» siempre,
+    // cuando las medidas SOLO se piden en el mensual. En el quincenal se le anunciaba sacar la
+    // cinta métrica para luego no pedírsela.
+    const proximo = windowState?.proximo;
+    const tipoDeAhora = (windowState?.tipos || [])[0];
+    const esMensualLaTarjeta = tipoDeAhora === 'mensual';
+    const periodo = { mensual: 'Este mes', quincenal: 'Esta quincena', semanal: 'Esta semana' }[tipoDeAhora]
+        || 'Este mes';
     const yaPuede = windowState?.is_open !== false;
     const tocaRevision = !!windowState?.due && !windowState?.submitted && yaPuede;
     const yaMandado = !!windowState?.submitted;
@@ -138,12 +161,10 @@ const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial,
         <div className="space-y-3" data-testid="portada-seguimiento">
             <TarjetaSeguimiento
                 testid="seg-revision"
-                cuando={tocaRevision ? 'Este mes · te toca'
-                    : yaMandado ? 'Este mes · hecho'
-                        : aunNoAbre ? 'Este mes · aún no' : 'Este mes'}
+                cuando={`${periodo} · ${tocaRevision ? 'te toca' : yaMandado ? 'hecho' : aunNoAbre ? 'aún no' : ''}`.trim().replace(/ ·$/, '')}
                 titulo={windowState?.tipo_label || 'Tu revisión'}
                 sub={tocaRevision
-                    ? `Unas fotos, tus medidas y unas preguntas. Y tienes tus macros nuevos.${
+                    ? `${esMensualLaTarjeta ? 'Unas fotos, tus medidas y unas preguntas' : 'Unas fotos y unas preguntas'}. Y tienes tus macros nuevos.${
                         // `closes_label` trae «lunes 10 ago a las 6:00»: la hora sobra en una
                         // tarjeta que solo tiene que decir cuánto margen queda.
                         windowState?.closes_label ? ` Hasta el ${String(windowState.closes_label).split(' a las ')[0]}.` : ''}`
@@ -151,10 +172,28 @@ const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial,
                         ? 'Ya lo mandaste. Lo estamos mirando.'
                         : windowState?.opens_label
                             ? `Todavía no toca. Se abre el ${windowState.opens_label}.`
-                            : 'Todavía no toca. Te avisamos cuando abra.'}
+                            : proximo
+                                // SU CALENDARIO, NO SOLO EL DÍA DE HOY. La semana que no le
+                                // toca nada ponía «te avisamos cuando abra» y ya: el del
+                                // Nivel 2 en la semana 2 no tenía forma de saber que existe
+                                // un reporte mensual, ni cuándo le llega. Y el mensual pide
+                                // fotos y medidas, así que enterarse el mismo viernes es
+                                // enterarse tarde.
+                                ? `Lo próximo es tu ${proximo.tipo_label.toLowerCase()}, el ${proximo.abre_label}.`
+                                : 'Todavía no toca. Te avisamos cuando abra.'}
                 cta={tocaRevision ? 'Empezar' : 'Ver'}
                 tono={tocaRevision ? 'ahora' : 'gris'}
                 onClick={onRevision} />
+
+            {/* Y detrás del que toca, el siguiente. Va pegada a su tarjeta porque habla de
+                ella. Con esto el cliente ve su calendario y no solo el día de hoy: el del
+                Nivel 2 sabe que después de este quincenal le llega el mensual, que es el que
+                pide fotos y medidas y con el que hay que contar antes. */}
+            {proximo && (tocaRevision || yaMandado) && (
+                <p className="text-[13px] text-muted-foreground px-1 -mt-1" data-testid="seg-proximo">
+                    Después de este: tu {proximo.tipo_label.toLowerCase()}, el {proximo.abre_label}.
+                </p>
+            )}
 
             <TarjetaSeguimiento
                 testid="seg-hoy"
@@ -222,8 +261,23 @@ const PREGUNTAS_REPORTE = [
     },
 ];
 
+// Modo revisión (solo equipo): `?ver=mensual`, `?ver=quincenal` o `?ver=semanal` abren el
+// formulario aunque no sea su semana ni su fin de semana. Es la única forma de repasar los
+// textos del reporte un martes, o de ver el mensual (con las diez medidas) el mes que toca
+// quincenal. Enviarlo sigue pasando por el servidor, que no sabe nada de esto y lo rechaza
+// fuera de plazo: se puede MIRAR, no colar.
+const VENTANA_DE_MENTIRA = (tipo) => ({
+    due: true, is_open: true, submitted: false, revision: true,
+    tipo_label: { mensual: 'Reporte mensual', quincenal: 'Reporte quincenal',
+                  semanal: 'Reporte semanal' }[tipo],
+    tipos: [tipo],
+    opens_label: 'modo revisión', closes_label: 'modo revisión',
+});
+
 const ReportsPage = () => {
-    const { api, token, profile } = useAuth();
+    const { api, token, profile, user } = useAuth();
+    const revision = verComo(user);
+    const tipoRevision = ['mensual', 'quincenal', 'semanal'].includes(revision) ? revision : null;
     // Cuánto espera este cliente por sus macros nuevos (puntos 46 y 47): 24 horas en el
     // Nivel 2, 48 en el resto. Sale del plan, no de un número escrito a mano, porque es una
     // de las cosas que el cliente tiene que notar entre un nivel y otro.
@@ -244,7 +298,8 @@ const ReportsPage = () => {
     // ventana se cerró» encima: se le enseñaba todo lo que no podía hacer (Jesús, 11-08).
     // Es el mismo cliente y el mismo trámite, así que es la misma solución.
     const navigate = useNavigate();
-    const [seccionAbierta, setSeccionAbierta] = useState(null);
+    // En modo revisión se entra directamente al formulario: es lo que se viene a mirar.
+    const [seccionAbierta, setSeccionAbierta] = useState(tipoRevision ? 'form' : null);
     const vista = seccionAbierta;
     const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
     const [prev, setPrev] = useState(null);                 // último reporte (referencia de medidas)
@@ -305,7 +360,7 @@ const ReportsPage = () => {
             setReports(reportsRes.data);
             setHasMore(reportsRes.data.length === 50);
             setEvolution(evolutionRes.data);
-            setWindowState(dueRes.data?.window || null);
+            setWindowState(tipoRevision ? VENTANA_DE_MENTIRA(tipoRevision) : (dueRes.data?.window || null));
             setPrev(prevRes.data && Object.keys(prevRes.data).length ? prevRes.data : null);
             setHuecos(huecosRes.data || null);
         } catch (error) {

@@ -739,7 +739,20 @@ async def payment_issues(user=Depends(get_admin_user)):
 
 @admin_router.get("/alerts", response_model=List[AlertResponse])
 async def list_alerts(resolved: bool = False, user=Depends(get_admin_user)):
-    alerts = await db.alerts.find({"resolved": resolved}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    """Los avisos del sistema: cobros fallidos, bajas y reportes vencidos.
+
+    UN ENTRENADOR SOLO VE LOS DE SUS CLIENTES (14-08-2026). Puede abrir y tocar la ficha de
+    cualquiera -- eso no cambia --, pero los avisos son otra cosa: son la lista de lo que
+    tiene que atender él. Con los de toda la casa dentro, la suya no se encuentra.
+
+    El administrador los ve todos, que es su trabajo.
+    """
+    query = {"resolved": resolved}
+    if user.get("role") == "trainer":
+        mios = await db.client_profiles.find(
+            {"trainer_id": user["id"]}, {"_id": 0, "id": 1}).to_list(2000)
+        query["client_id"] = {"$in": [p["id"] for p in mios]}
+    alerts = await db.alerts.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     return [AlertResponse(**a) for a in alerts]
 
 

@@ -75,12 +75,38 @@ def _due_date_in_window(window_start: datetime, due_weekday: int) -> datetime:
     return window_start + timedelta(days=offset)
 
 
+# Cuánto vive un aviso de «reporte vencido» antes de caerse solo.
+DIAS_QUE_VIVE_UN_VENCIDO = 21
+
+
+async def _caducar_vencidos_viejos(now: datetime) -> int:
+    """Cierra los avisos de reporte vencido que ya no sirven de nada.
+
+    UN AVISO QUE NO SE PUEDE APAGAR DEJA DE SER UN AVISO (14-08-2026). Este se quitaba
+    marcando el reporte como enviado, y ese botón vive en la tarjeta «Reportes de esta
+    semana» del panel, que está apagada desde el 20 de julio. Resultado: se encendían y se
+    quedaban encendidos para siempre, amontonándose semana tras semana.
+
+    Y aunque el botón volviera, tampoco tiene sentido guardarlos: nadie va a mandar el
+    reporte quincenal de hace tres semanas. Pasado ese tiempo el aviso ya no pide nada, solo
+    ocupa sitio, así que se cierra solo.
+    """
+    corte = (now - timedelta(days=DIAS_QUE_VIVE_UN_VENCIDO)).isoformat()
+    r = await db.alerts.update_many(
+        {"type": "report_overdue", "resolved": False, "created_at": {"$lt": corte}},
+        {"$set": {"resolved": True, "resolved_at": now.isoformat(),
+                  "resolved_by": "caducado solo: el reporte de esa semana ya no se va a mandar"}},
+    )
+    return r.modified_count
+
+
 @router.get("")
 async def get_report_cadence(user=Depends(get_admin_user)):
     """Reportes de coach que tocan esta semana (por cliente activo y tipo), con su
     estado: pendiente / enviado / vencido. Genera alertas report_overdue al detectar
-    vencidos (deduplicadas a 7 días)."""
+    vencidos (deduplicadas a 7 días) y caduca las de semanas pasadas."""
     now = datetime.now(timezone.utc)
+    await _caducar_vencidos_viejos(now)
     catalog = merged_catalog(await _overrides_by_code())
 
     profiles = await db.client_profiles.find(
@@ -148,12 +174,21 @@ async def get_report_cadence(user=Depends(get_admin_user)):
             item["sent_by"] = sent.get("sent_by_name")
         elif item["due_date"] < today_iso:
             item["status"] = "vencido"
+            # El de la semana pasada se cierra: lo sustituye este. Si no, un cliente que se
+            # retrasa tres semanas acumula tres avisos abiertos que dicen lo mismo.
+            await db.alerts.update_many(
+                {"client_id": item["client_id"], "type": "report_overdue", "resolved": False,
+                 "related_data.due_date": {"$lt": item["due_date"]}},
+                {"$set": {"resolved": True, "resolved_at": now.isoformat(),
+                          "resolved_by": "lo sustituye el de esta semana"}},
+            )
             await create_alert(
                 item["client_id"], "report_overdue",
                 f"{item['tipo_label']} vencido",
                 f"El {item['tipo_label'].lower()} de {item['client_name'] or 'cliente'} "
                 f"tocaba el {item['due_label']} {item['due_date']} y no está marcado como enviado.",
                 severity="warning",
+                related_data={"due_date": item["due_date"], "tipo": item["tipo"]},
             )
         else:
             item["status"] = "pendiente"
@@ -211,6 +246,41 @@ def _principal_label(tipos: List[str]) -> str:
     return "reporte"
 
 
+def _proximo_reporte(cal: Dict[str, Any], semana_actual: int, window_start: datetime,
+                     limite: int = 16) -> Optional[Dict[str, Any]]:
+    """El siguiente reporte que le toca, mirando hacia delante en su patrón.
+
+    EL CLIENTE TIENE QUE PODER VER LO QUE VIENE (14-08-2026). Hasta ahora, la semana que no
+    le tocaba nada solo se le decía «todavía no toca», y el que está en la semana 2 de un
+    plan con mensual no tenía forma de saber que el mensual existe ni cuándo le llega. Saber
+    que el viernes 28 le toca sacar la cinta métrica es parte de poder organizarse.
+
+    Se mira semana a semana desde la siguiente, hasta `limite` (cuatro ciclos del patrón de
+    cuatro semanas: de sobra para cualquier plan, y con tope para no buscar sin fin en un
+    plan que no lleve reportes).
+    """
+    patron = cal.get("patron") or []
+    if not patron:
+        return None
+    for salto in range(1, limite + 1):
+        semana = semana_actual + salto
+        tipo = reporte_de_la_semana(cal, semana)
+        if not tipo:
+            continue
+        # Su ventana: el viernes de la semana de ciclo en la que caiga.
+        arranque = window_start + timedelta(days=7 * salto)
+        abre, _ = _submission_window(arranque)
+        return {
+            "tipo": tipo,
+            "tipo_label": LABEL.get(tipo, tipo),
+            "semana": semana,
+            "abre": abre.isoformat(),
+            "abre_label": _fecha_es(abre),
+            "faltan_semanas": salto,
+        }
+    return None
+
+
 def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any], now: datetime) -> Dict[str, Any]:
     """Estado del reporte del cliente esta semana de ciclo: qué tipos tocan y la
     ventana de envío (abierta/cerrada). Compartido por /reports/due y POST /reports."""
@@ -222,6 +292,7 @@ def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any]
     tipos = [tipo] if tipo else []
     win_open, win_close = _submission_window(window_start)
     return {
+        "proximo": _proximo_reporte(cal, cycle["week"], window_start),
         "cycle": cycle,
         "window_start": window_start,
         "tipos": tipos,
@@ -252,8 +323,11 @@ async def get_my_due_report(user=Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     state = compute_client_report_state(profile, catalog, now)
 
+    # Aunque esta semana no le toque nada, se le dice QUÉ VIENE Y CUÁNDO: es su calendario,
+    # y hasta ahora solo veía «todavía no toca».
     if not state["due"]:
-        return {"items": [], "window": {"due": False, "is_open": False}}
+        return {"items": [], "window": {"due": False, "is_open": False,
+                                        "proximo": state.get("proximo")}}
 
     win_open, win_close = state["window_open"], state["window_close"]
     # ¿Ya subió un reporte dentro de esta semana de ciclo?
@@ -276,6 +350,8 @@ async def get_my_due_report(user=Depends(get_current_user)):
         # Los tipos en crudo: el formulario los necesita porque no pide lo mismo en el
         # quincenal que en el mensual (las medidas solo van en el mensual, parte 7.3).
         "tipos": state["tipos"],
+        # Lo que viene después de este, para que vea su calendario y no solo el de hoy.
+        "proximo": state.get("proximo"),
     }
 
     items = []
@@ -303,6 +379,28 @@ async def get_my_due_report(user=Depends(get_current_user)):
             }, {"_id": 0, "id": 1})
             if not already:
                 await notify(user["id"], "reporte", title, "/dashboard/reports")
+
+            # EL SEGUNDO AVISO, ANTES DE QUE SE CIERRE (14-08-2026). Solo había uno, el del
+            # viernes al abrir; el que lo leía el viernes y no podía en ese momento no volvía
+            # a oír nada y el lunes a las 6:00 se le cerraba la puerta. La ventana son cuatro
+            # días: un recordatorio a menos de 24 horas del cierre no es insistir, es la
+            # diferencia entre que el reporte llegue o no llegue.
+            #
+            # Va aquí y no en los avisos condicionados a propósito: es de calendario, o sea
+            # que no gasta el cupo de uno por semana. Y una sola vez, como el de abrir.
+            if win_close - now <= timedelta(hours=24):
+                ya_recordado = await db.notifications.find_one({
+                    "user_id": user["id"], "type": "reporte",
+                    "created_at": {"$gte": state["window_start"].isoformat()},
+                    "title": {"$regex": "^Último día"},
+                }, {"_id": 0, "id": 1})
+                if not ya_recordado:
+                    await notify(
+                        user["id"], "reporte",
+                        f"Último día para tu {label.lower()}",
+                        "/dashboard/reports",
+                        body="Se cierra mañana a las 6:00 y sin él no podemos ajustarte los macros.",
+                    )
 
     return {"items": items, "window": window}
 

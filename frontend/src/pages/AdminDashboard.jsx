@@ -247,6 +247,11 @@ const AdminDashboard = () => {
     const [soloAlCorriente, setSoloAlCorriente] = useState(false);
     // Nivel 3: piden llamada desde el test de nivel y esperan a que alguien marque.
     const [llamadas, setLlamadas] = useState([]);
+    // Avisos del sistema: cobros fallidos, bajas automáticas y reportes vencidos. Se venían
+    // guardando desde marzo y NO SE ENSEÑABAN EN NINGUNA PANTALLA (14-08-2026): el endpoint
+    // existía, el panel no lo pedía, y lo único que veía el equipo de un cobro fallido era
+    // que el cliente dejaba de estar activo.
+    const [avisos, setAvisos] = useState([]);
 
     const marcarLlamadaAtendida = async (l) => {
         try {
@@ -280,6 +285,25 @@ const AdminDashboard = () => {
             toast.error(e?.response?.data?.detail || 'No se pudo crear el enlace de pago');
         } finally {
             setGenerandoEnlace(null);
+        }
+    };
+
+    // Los que van uno a uno (cuestan dinero, los mira una persona) y los que van contados.
+    // Los graves primero: un cobro fallido antes que una tarjeta que caduca el mes que viene.
+    const avisosDeReportes = avisos.filter(a => a.type === 'report_overdue');
+    const avisosSueltos = avisos
+        .filter(a => a.type !== 'report_overdue')
+        .sort((a, b) => (a.severity === 'critical' ? 0 : 1) - (b.severity === 'critical' ? 0 : 1));
+
+    // Dar por visto un aviso. Desaparece de la lista en cuanto se pulsa: la respuesta del
+    // servidor no cambia nada en pantalla y esperarla solo hace que el botón parezca roto.
+    const cerrarAviso = async (aviso) => {
+        setAvisos(prev => prev.filter(a => a.id !== aviso.id));
+        try {
+            await api.post(`/admin/stripe/alerts/${aviso.id}/resolve`);
+        } catch {
+            toast.error('No se pudo cerrar el aviso');
+            setAvisos(prev => [aviso, ...prev]);   // se devuelve a su sitio
         }
     };
 
@@ -318,7 +342,7 @@ const AdminDashboard = () => {
     useEffect(() => {
         const fetchAll = async () => {
             try {
-                const [statsRes, upcomingRes, clientsRes, cadenceRes, revisionesRes, todoRes, llamadasRes] = await Promise.all([
+                const [statsRes, upcomingRes, clientsRes, cadenceRes, revisionesRes, todoRes, llamadasRes, avisosRes] = await Promise.all([
                     api.get('/admin/dashboard-stats'),
                     api.get('/admin/upcoming-payments'),
                     api.get('/admin/clients'),
@@ -334,6 +358,15 @@ const AdminDashboard = () => {
                 setRevisiones(revisionesRes.data.items || []);
                 setTodo(todoRes.data || null);
                 setLlamadas(llamadasRes.data?.llamadas || []);
+
+                // Los avisos del sistema (cobros fallidos, bajas, reportes vencidos) se piden
+                // DESPUÉS y no dentro del grupo de arriba: es la llamada a la cadencia la que
+                // crea los de reporte vencido y la que caduca los de semanas pasadas, así que
+                // pedidos a la vez se enseñaría la lista de antes de ese repaso.
+                try {
+                    const avisosRes = await api.get('/admin/stripe/alerts', { params: { resolved: false } });
+                    setAvisos(Array.isArray(avisosRes.data) ? avisosRes.data : []);
+                } catch { /* sin avisos: la tarjeta se queda vacía, no rompe el panel */ }
             } catch (error) {
                 console.error('Error fetching dashboard:', error);
                 toast.error('Error al cargar dashboard');
@@ -604,6 +637,72 @@ const AdminDashboard = () => {
                                 </div>
                             ))}
                         </div>
+                    )}
+                </CardContent>
+            </Card>
+            )}
+
+            {/* AVISOS DEL SISTEMA. Solo sale si hay alguno: una tarjeta que pone «todo bien»
+                todos los días acaba siendo invisible el día que pone otra cosa.
+
+                LOS DE REPORTE VENCIDO VAN CONTADOS, NO EN LISTA. Se crea uno por cliente y por
+                semana, así que aquí eran 95 de 99 avisos, todos con el mismo texto, tapando los
+                cuatro que de verdad hay que mirar. Quién va con retraso ya se ve en «Por hacer
+                esta semana», y estos se cierran solos a las tres semanas.
+
+                Lo que sí va uno a uno es lo que cuesta dinero y necesita a una persona: un
+                cobro que ha fallado, una baja automática o una tarjeta caducada. */}
+            {avisos.length > 0 && (
+            <Card className="bg-[#111111] border-[#222]" data-testid="avisos-sistema">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="text-base text-white uppercase tracking-wider flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-[#FF671F]" />
+                            Avisos
+                        </span>
+                        <Badge className={`border-0 text-xs ${avisosSueltos.length > 0 ? 'bg-[#FF671F]/20 text-[#FF671F]' : 'bg-green-500/10 text-green-500'}`}>
+                            {avisosSueltos.length > 0
+                                ? (avisosSueltos.length === 1 ? '1 por mirar' : `${avisosSueltos.length} por mirar`)
+                                : 'Nada urgente'}
+                        </Badge>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    <div className="space-y-2">
+                        {avisosSueltos
+                            .map((aviso, i) => {
+                                const grave = aviso.severity === 'critical';
+                                const cliente = clients.find(c => c.id === aviso.client_id);
+                                return (
+                                    <div key={aviso.id} data-testid={`aviso-${i}`}
+                                        className={`flex items-start justify-between gap-3 p-3 bg-[#0A0A0A] rounded-lg border transition-colors ${
+                                            grave ? 'border-red-500/40 hover:border-red-500/70' : 'border-[#222] hover:border-[#FF671F]/30'}`}>
+                                        <div className="min-w-0 cursor-pointer"
+                                            onClick={() => aviso.client_id && navigate(`/admin/clients/${aviso.client_id}`)}>
+                                            <p className="text-white text-sm font-medium truncate">
+                                                {aviso.title}
+                                                {cliente?.name && <span className="text-white/40 font-normal"> · {cliente.name}</span>}
+                                            </p>
+                                            <p className="text-white/40 text-xs">{aviso.message}</p>
+                                            <p className="text-white/25 text-[11px] mt-0.5">
+                                                {new Date(aviso.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                                            </p>
+                                        </div>
+                                        <Button size="sm" variant="ghost" data-testid={`aviso-cerrar-${i}`}
+                                            className="text-white/50 hover:text-white hover:bg-white/10 text-xs uppercase flex-shrink-0"
+                                            onClick={() => cerrarAviso(aviso)}>
+                                            Visto
+                                        </Button>
+                                    </div>
+                                );
+                            })}
+                    </div>
+
+                    {avisosDeReportes.length > 0 && (
+                        <p className="text-white/35 text-xs pt-3" data-testid="avisos-reportes-contados">
+                            Y {avisosDeReportes.length} reporte{avisosDeReportes.length === 1 ? '' : 's'} de coach
+                            sin marcar como enviado{avisosDeReportes.length === 1 ? '' : 's'}. Se cierran solos a las tres semanas.
+                        </p>
                     )}
                 </CardContent>
             </Card>

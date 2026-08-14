@@ -10,7 +10,6 @@ import { toast } from 'sonner';
 import {
     Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle, Settings, UserCheck
 } from 'lucide-react';
-import BrandArrow from '../components/BrandArrow';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 import NutritionIntro from '../components/nutrition/NutritionIntro';
 import PrimeraDieta from '../components/nutrition/PrimeraDieta';
@@ -51,13 +50,8 @@ const fechaDeEdicion = (iso) => {
     return isNaN(d) ? '' : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 };
 
-// 12EN12 Logo Component
-const Logo12EN12 = () => (
-    <div className="flex items-center text-xl font-bold tracking-tight">
-        <span className="text-white">12EN12</span>
-        <BrandArrow className="text-brand-orange h-[1em] w-[1em] -ml-0.5" />
-    </div>
-);
+// Aquí había otra copia del logo, con las letras en blanco fijo. No la pintaba nadie: esta
+// pantalla no lleva logo. Fuera (14-08-2026).
 
 // Food emojis for categories
 const FOOD_EMOJIS = {

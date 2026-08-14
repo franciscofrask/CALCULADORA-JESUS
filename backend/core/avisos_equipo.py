@@ -11,10 +11,20 @@ La regla, que es la que ya usaba el pago de la revision suelta y que aqui se cen
 para que no vuelva a haber dos versiones de lo mismo:
 
     si el cliente tiene entrenador  -> se avisa a su entrenador,
-    si no tiene                     -> se avisa a TODO el staff, para que lo coja alguien.
+    si no tiene                     -> se avisa a los ADMINISTRADORES, que son los que
+                                       reparten, para que se lo asignen a alguien.
 
 Un aviso que no se envia a nadie es peor que no tener avisos: hace creer que el circuito
 funciona.
+
+CADA ENTRENADOR SOLO OYE LO DE SUS CLIENTES (14-08-2026). Antes, el cliente sin entrenador
+avisaba a TODO el staff -- administradores y entrenadores --, y como en produccion casi nadie
+tiene entrenador puesto, en la practica cada entrenador recibia los avisos de todos los
+clientes de la casa. Un buzon con cosas que no son tuyas se deja de mirar, y entonces el dia
+que llega la tuya tampoco la ves.
+
+Ver la ficha de cualquier cliente y tocarla se sigue pudiendo, que es otra cosa: eso es un
+permiso y esto es a quien se le da un toque.
 """
 import uuid
 from datetime import datetime, timezone
@@ -33,8 +43,9 @@ async def avisar_al_equipo(
 ) -> int:
     """Deja el aviso en la campanita de quien tenga que verlo.
 
-    Devuelve a cuanta gente se le ha dejado (0 solo si no hay ni entrenador ni staff,
-    que en una base sana no pasa; quien llame puede registrarlo si le importa).
+    Devuelve a cuanta gente se le ha dejado (0 solo si no hay ni entrenador ni
+    administradores, que en una base sana no pasa; quien llame puede registrarlo si le
+    importa).
     """
     base = {
         "type": tipo,
@@ -50,8 +61,9 @@ async def avisar_al_equipo(
         await db.notifications.insert_one({**base, "id": str(uuid.uuid4()), "user_id": trainer_id})
         return 1
 
+    # Sin entrenador asignado el aviso es de quien reparte, no de todos.
     enviados = 0
-    async for u in db.users.find({"role": {"$in": ["admin", "trainer"]}}, {"_id": 0, "id": 1}):
+    async for u in db.users.find({"role": "admin"}, {"_id": 0, "id": 1}):
         await db.notifications.insert_one({**base, "id": str(uuid.uuid4()), "user_id": u["id"]})
         enviados += 1
     return enviados

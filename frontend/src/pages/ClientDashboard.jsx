@@ -16,6 +16,7 @@ import {
     CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone, Clock, TrendingUp
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
+import { verComo } from '../lib/modoRevision';
 import ThemeToggle from '../components/ThemeToggle';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import LimiteDeError from '../components/LimiteDeError';
@@ -294,7 +295,9 @@ const ClientDashboard = () => {
     // pantalla que el que acaba de registrarse: "Bienvenido a 12EN12, selecciona un plan".
     // No es lo mismo no haber empezado que haber terminado. El servidor dice cuál de los
     // tres casos es (profile.acceso.motivo).
-    if (profile?.acceso?.motivo === 'caducado') {
+    // `?ver=caducado` (solo equipo) enseña esta pantalla sin tener que caducarle el plan a
+    // nadie: es la salida del que no renueva y hasta ahora no había forma de repasarla.
+    if (profile?.acceso?.motivo === 'caducado' || verComo(user) === 'caducado') {
         return <PlanCaducado navigate={navigate} nombre={user?.name} api={api} email={user?.email} />;
     }
     if (!profile || planUnpaid) {

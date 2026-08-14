@@ -36,7 +36,8 @@ const Marco = ({ children }) => {
     return (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6">
             <div className="w-full max-w-sm flex flex-col items-center">
-                <div className="mb-10"><Logo12EN12 size="lg" /></div>
+                {/* Fondo negro fijo, no de tema. */}
+                <div className="mb-10"><Logo12EN12 size="lg" tone="dark" /></div>
                 {children}
                 <button onClick={() => navigate('/auth')}
                     className="mt-8 inline-flex items-center gap-1.5 text-white/50 hover:text-white text-sm transition-colors">

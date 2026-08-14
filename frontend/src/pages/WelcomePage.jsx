@@ -54,7 +54,7 @@ const WelcomePage = () => {
 
             {/* Cabecera */}
             <div className="relative z-10 flex items-center h-16 px-6 md:px-10">
-                <Logo12EN12 size="sm" tone="dark" />
+                <Logo12EN12 size="sm" />
             </div>
 
             <div className="flex-1 flex items-center justify-center p-6 relative z-10">

@@ -397,7 +397,9 @@ const PlanesPage = () => {
                             ¿No sabes cuál elegir?
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Cuatro preguntas y te decimos por dónde empezar. Un minuto, y no hace
+                            {/* SEIS, que es lo que tiene el test. Ponía «cuatro» desde la
+                                versión anterior, que tenía cuatro preguntas (14-08-2026). */}
+                            Seis preguntas y te decimos por dónde empezar. Un minuto, y no hace
                             falta que dejes el correo para ver el resultado.
                         </p>
                     </div>
