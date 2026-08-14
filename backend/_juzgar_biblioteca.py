@@ -75,8 +75,12 @@ async def main():
             hechos["pasan" if vale else "fuera"] += 1
 
     lote, n = [], 0
+    # --invertir: para correr DOS barredores a la vez sin pisarse. Uno empieza por el
+    # principio y otro por el final; se encuentran en el medio y a partir de ahi todo son
+    # aciertos de cache. Mas barato que coordinar colas, e igual de efectivo.
+    sentido = -1 if "--invertir" in sys.argv else 1
     cursor = db.meal_library.find({**filtro, "clientes": {"$lt": 2}},
-                                  {"_id": 0, "alimentos": 1})
+                                  {"alimentos": 1}).sort("_id", sentido)
     async for doc in cursor:
         n += 1
         if LIMITE and n > LIMITE:
