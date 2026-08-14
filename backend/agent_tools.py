@@ -53,6 +53,16 @@ def _y(palabras: list) -> str:
         return "".join(palabras)
     return ", ".join(palabras[:-1]) + " y " + palabras[-1]
 
+
+def _sin_tildes(t: str) -> str:
+    """Minúsculas y sin acentos, para comparar con lo que escribió el cliente.
+
+    Nadie teclea las tildes en el chat, y aquí se cotejan citas contra sus mensajes.
+    """
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", (t or "").lower())
+                   if unicodedata.category(c) != "Mn")
+
 # El bote, detrás del plato a igualdad de distancia (punto 78 del documento del 07-08).
 # NO son categorías prohibidas: el cliente las busca y las mete cuando quiere, y en el intra
 # y el post son justo lo que toca. Es solo el desempate de las SUGERENCIAS en una comida
@@ -1252,10 +1262,70 @@ class AgentTools:
             tipos_puestos.add(cat2_de(self.foods.get(elegido["id"]) or {}))
         return elegidos
 
+    # ---------------------------------------------------------- filtros que dice el cliente
+    # UN FILTRO QUE HABLA DEL CLIENTE TIENE QUE PODER DEMOSTRARLO (13-08-2026).
+    #
+    # Francisco: «siempre me dice que pedí genéricos, y solo le pedí opciones, nunca
+    # mencioné ni genéricos ni marcas». En la sesión de producción estaba escrito negro
+    # sobre blanco: `filtros = {'generico': True, 'marca': None, 'estilo': 'Comida 1'}`
+    # después de un «para la comida dos dame opciones». El modelo rellenaba un booleano que
+    # en el esquema no tenía ni descripción, y el revisor lo repetía como un hecho: «pidió
+    # genéricos y Nocilla noir es de marca».
+    #
+    # Y no era solo un cartel molesto: con `generico=True` el compositor deja fuera TODAS
+    # las marcas del catálogo en cada opción, o sea que estaba estrechando el catálogo por
+    # su cuenta en todas las composiciones. Justo lo contrario de la variedad que se pide.
+    #
+    # No se arregla pidiéndole al modelo que no lo haga: se le pide la CITA. Si el filtro
+    # viene de lo que dijo el cliente, sus palabras están en la conversación; si no están,
+    # el filtro no se aplica y se le dice por qué. Comprobarlo es mirar el historial, no
+    # adivinar intenciones, y el cliente solo tiene que copiar.
+    def _lo_dijo_el_cliente(self, cita: str) -> bool:
+        cita = _sin_tildes((cita or "").strip().strip('"«»“”'))
+        if len(cita) < 3:
+            return False
+        dicho = [_sin_tildes(str(h.get("content") or ""))
+                 for h in (self.bot.messages_history or [])
+                 if h.get("role") == "user"]
+        # Lo que él mismo mandó apuntar cuenta igual: lo escribió el cliente, solo que en
+        # otro turno («no me compro marcas» dicho el lunes vale el martes).
+        dicho += [_sin_tildes(str(n)) for n in (self.bot.state.get("notas_cliente") or [])]
+        return any(cita in d for d in dicho)
+
+    def _filtro_de_marca(self, generico, marca, porque):
+        """(generico, marca, nota). Sin cita del cliente que lo respalde, no hay filtro."""
+        if generico is None and not marca:
+            return generico, marca, None
+        if self._lo_dijo_el_cliente(porque):
+            return generico, marca, None
+        pedido = "genéricos" if generico is True else ("de marca" if generico is False
+                                                       else f"solo {marca}")
+        return None, None, (
+            f"NO he filtrado por {pedido}: no consta que el cliente lo pidiera. Si lo dijo, "
+            "vuelve a llamarme con `filtro_porque` = sus palabras exactas. Si no lo dijo, "
+            "no se lo atribuyas: el menú va con todo el catálogo.")
+
+    def _estilo_limpio(self, estilo: str) -> str:
+        """El estilo es cómo quiere la comida, no cuál es.
+
+        Llegaba `estilo="Comida 1"` desde el modelo, y eso se va a la búsqueda semántica a
+        buscar alimentos que se parezcan a la frase «Comida 1»: ni es lo que el cliente
+        pidió ni significa nada de comida. Los nombres de las comidas del día salen del
+        propio estado, así que esto no es una lista de palabras que haya que mantener.
+        """
+        e = (estilo or "").strip()
+        if not e:
+            return ""
+        nombres = {_sin_tildes(str(k)) for k in (self.bot.state.get("meal_order") or [])}
+        nombres |= {f"comida {i}" for i in range(1, 9)}
+        nombres |= {"intra", "post", "peri", "pre", "pre entreno", "postentreno"}
+        return "" if _sin_tildes(e) in nombres else e
+
     # ============================================================ 2. componer_menu
     async def componer_menu(self, incluir_ids: List[int] = None, estilo: str = "",
                             generico: bool = None, marca: str = None,
-                            n: int = 3, solo_recetario: bool = False) -> dict:
+                            n: int = 3, solo_recetario: bool = False,
+                            filtro_porque: str = None) -> dict:
         """Monta hasta `n` menús completos para la comida actual con el catálogo entero.
         `incluir_ids` son obligatorios (van en todas las opciones); `estilo` es el texto
         libre del cliente y guía la elección por semántica. El recetario (153 recetas de
@@ -1265,6 +1335,9 @@ class AgentTools:
 
         n = max(1, min(int(n or 3), 4))
         incluir_ids = [int(x) for x in (incluir_ids or []) if int(x) in self.foods]
+        # Los filtros que hablan del cliente, solo con sus palabras detrás (ver arriba).
+        generico, marca, nota_filtro = self._filtro_de_marca(generico, marca, filtro_porque)
+        estilo = self._estilo_limpio(estilo)
         restante = self.bot.get_remaining_macros()
         momento = self._momento_actual()
         opciones: List[dict] = []
@@ -1751,8 +1824,13 @@ class AgentTools:
             notas.append("no salió ningún menú que cuadre con esos filtros y lo que "
                          "falta; fija los imprescindibles con incluir_ids o móntalo "
                          "alimento a alimento")
+            if nota_filtro:
+                notas.append(nota_filtro)
             return {"borradores": [], "sin_resultados_porque": notas}
-        return {"borradores": salida}
+        out = {"borradores": salida}
+        if nota_filtro:
+            out["nota"] = nota_filtro
+        return out
 
     # ============================================================ 3. revisar_borrador
     # QUÉ IMPIDE APLICAR UN MENÚ Y QUÉ SOLO SE AVISA (13-08-2026).

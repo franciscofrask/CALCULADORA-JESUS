@@ -23,7 +23,8 @@ def correr(coro):
     return asyncio.run(coro)
 
 
-async def _tools(num_comidas=4, ir_a=None, tipo_dia="entrenamiento"):
+async def _tools(num_comidas=4, ir_a=None, tipo_dia="entrenamiento", dijo=None):
+    """`dijo`: lo que el cliente ha escrito en la conversación, para los filtros con cita."""
     from motor.motor_asyncio import AsyncIOMotorClient
     from chatbot import NutritionChatbot
     from agent_tools import AgentTools
@@ -31,6 +32,7 @@ async def _tools(num_comidas=4, ir_a=None, tipo_dia="entrenamiento"):
     bot = NutritionChatbot("test_agent_tools", db)
     bot.configure_day(tipo_dia=tipo_dia, num_comidas=num_comidas,
                       momento_entreno=1, opcion_peri="intra_post")
+    bot.messages_history = [{"role": "user", "content": d} for d in (dijo or [])]
     tools = await AgentTools.crear(bot)
     if ir_a:
         tools.navegar(ir_a)
@@ -117,11 +119,62 @@ class TestComponerMenu:
         correr(t())
 
     def test_generico_respetado(self):
+        """Pedido POR EL CLIENTE y citado, el filtro se aplica y no entra ni una marca."""
         async def t():
-            tools = await _tools()
-            r = await tools.componer_menu(generico=True, n=1)
+            tools = await _tools(dijo=["dame opciones pero sin marcas"])
+            r = await tools.componer_menu(generico=True, filtro_porque="sin marcas", n=1)
             assert r["borradores"]
             assert all(not i["es_marca"] for i in r["borradores"][0]["items"])
+            assert not r.get("nota")
+        correr(t())
+
+    def test_sin_cita_no_hay_filtro_de_marca(self):
+        """El modelo no puede atribuirle al cliente una preferencia que no dijo.
+
+        Francisco, 13-08-2026: «siempre me dice que pedí genéricos, y solo le pedí
+        opciones, nunca mencioné ni genéricos ni marcas». En la sesión de producción los
+        borradores llevaban `generico: True` después de un «para la comida dos dame
+        opciones», y el revisor lo repetía en la tarjeta como un hecho del cliente. De
+        paso estrechaba el catálogo a genéricos en TODAS las composiciones, que es lo
+        contrario de la variedad que se le pide.
+        """
+        async def t():
+            tools = await _tools(dijo=["para la comida dos dame opciones"])
+            r = await tools.componer_menu(generico=True, n=1)
+            assert r["borradores"]
+            assert r["borradores"][0]["filtros"]["generico"] is None
+            assert r.get("nota"), "tiene que decirle por qué no lo ha aplicado"
+            rev = await tools.revisar_borrador(r["borradores"][0]["id"])
+            assert all(p["tipo"] != "marca_no_pedida" for p in rev.get("problemas", []))
+        correr(t())
+
+    def test_una_cita_inventada_no_cuela(self):
+        """La cita se comprueba contra lo que el cliente escribió, no se cree."""
+        async def t():
+            tools = await _tools(dijo=["dame opciones"])
+            r = await tools.componer_menu(generico=True, n=1,
+                                          filtro_porque="el cliente prefiere genéricos")
+            assert r["borradores"][0]["filtros"]["generico"] is None
+        correr(t())
+
+    def test_lo_apuntado_en_otro_turno_vale(self):
+        """Lo que el cliente dijo antes y quedó apuntado sigue siendo suyo."""
+        async def t():
+            tools = await _tools(dijo=["dame opciones"])
+            tools.bot.state.setdefault("notas_cliente", []).append("no compra marcas")
+            r = await tools.componer_menu(generico=True, filtro_porque="no compra marcas", n=1)
+            assert r["borradores"][0]["filtros"]["generico"] is True
+        correr(t())
+
+    def test_el_nombre_de_la_comida_no_es_un_estilo(self):
+        """Llegaba `estilo='Comida 1'` desde el modelo, y eso se va a la búsqueda
+        semántica a buscar alimentos que se parezcan a la frase «Comida 1»."""
+        async def t():
+            tools = await _tools()
+            assert tools._estilo_limpio("Comida 1") == ""
+            assert tools._estilo_limpio("comida 2") == ""
+            assert tools._estilo_limpio("Intra") == ""
+            assert tools._estilo_limpio("algo rápido sin cocinar") == "algo rápido sin cocinar"
         correr(t())
 
 
