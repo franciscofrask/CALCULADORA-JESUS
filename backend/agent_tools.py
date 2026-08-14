@@ -1412,6 +1412,7 @@ class AgentTools:
     async def _menus_de_la_biblioteca(self, restante: dict, momento: str, n: int = 2,
                                       offset: int = 0, incluir_ids: List[int] = None,
                                       ya: List[tuple] = None,
+                                      familias_ya: List[set] = None,
                                       juicios: dict = None) -> List[dict]:
         """Comidas reales de la biblioteca (266k), ya cuadradas por su ajustador.
 
@@ -1420,6 +1421,7 @@ class AgentTools:
         mediodía no se ofrece de desayuno) y la puerta del juez para lo que solo montó
         una persona.
         """
+        from meal_builder import build_meal
         from meal_library import buscar_en_biblioteca
 
         tipo = "peri" if momento == PERI else "comida"
@@ -1427,10 +1429,11 @@ class AgentTools:
             reales = await buscar_en_biblioteca(
                 self.db, restante,
                 alimento_ids=[int(x) for x in incluir_ids] if incluir_ids else None,
-                tipo=tipo, limit=n + offset + 8)
+                tipo=tipo, limit=n + offset + 12)
         except Exception:
             return []
         ya = set(ya or [])
+        familias_ya = [set(f) for f in (familias_ya or [])]
         salida, saltadas = [], 0
         for r in reales:
             if len(salida) >= n:
@@ -1445,13 +1448,49 @@ class AgentTools:
             if self.perfil and any(self.perfil.coherencia(f, momento) < COHERENCIA_MINIMA
                                    for f in foods):
                 continue
+            # DOS OPCIONES CASI IGUALES NO SON DOS OPCIONES (14-08-2026). Francisco:
+            # «muy repetitivo», con cuatro variantes del mismo desayuno (huevos + pan +
+            # flan proteico + fiambre) cambiando solo la marca del flan. La firma las
+            # distinguia porque el id cambia; las FAMILIAS no: si comparte mas del 60 %
+            # de familias con una opcion ya puesta, es la misma comida con otra etiqueta.
+            fams = {cat2_de(f) for f in foods}
+            if any(len(fams & fy) / max(1, min(len(fams), len(fy))) > 0.6
+                   for fy in familias_ya):
+                continue
             if saltadas < offset:
                 saltadas += 1
                 continue
-            items = [self._item_de(self.foods[int(i["alimento_id"])],
-                                   float(i.get("cantidad_g") or 0),
-                                   i.get("macros_efectivos", {}))
-                     for i in r["items"]]
+            # RECUADRE AL DIA DE HOY (14-08-2026). La biblioteca trae cada menu con SU
+            # cuadre de origen, y el ajustador propio solo toca drivers limpios: los
+            # desayunos reales de ~30 g de hidratos salian tal cual contra un objetivo
+            # de 51, todos cortos y todos con aviso. Se recuadran con build_meal y el
+            # resolvedor exacto, como el historial; si ni recuadrado entra en margen,
+            # ese menu no es para este dia y se salta.
+            por_nombre = {f["nombre"]: f for f in foods}
+            async def _exacto(q, *a, **k):
+                f = por_nombre.get(q)
+                return [f] if f else []
+            items = None
+            try:
+                rb = await build_meal(self.db, list(por_nombre.keys()), restante,
+                                      _exacto, forzar=True)
+                cand = [self._item_de(por_nombre[x["nombre"]],
+                                      float(x.get("cantidad", 0) or 0), x.get("macros", {}))
+                        for x in (rb.get("foods_added") or []) if x.get("nombre") in por_nombre]
+                if len(cand) == len(foods):
+                    items = cand
+            except Exception:
+                items = None
+            if items is None:
+                items = [self._item_de(self.foods[int(i["alimento_id"])],
+                                       float(i.get("cantidad_g") or 0),
+                                       i.get("macros_efectivos", {}))
+                         for i in r["items"]]
+            tot = {m: sum(i["macros"][m] for i in items) for m in ("P", "H", "G")}
+            if sum(max(tot[m] - restante[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
+                continue
+            if sum(max(restante[m] - tot[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
+                continue
             clientes = int(((r.get("popularidad") or {}).get("clientes")) or 0)
             # El juicio de un menu de biblioteca va POR SU TIPO (comida/peri), no por el
             # momento en que asoma: si no, el mismo menu se juzgaria una vez para la
@@ -1462,6 +1501,7 @@ class AgentTools:
                                                clientes=clientes, juicios=juicios):
                 continue
             ya.add(firma)
+            familias_ya.append(fams)
             salida.append({"items": items, "origen": "biblioteca",
                            "nombre": r.get("nombre"), "receta_url": None})
         return salida
@@ -1595,6 +1635,8 @@ class AgentTools:
                         restante, momento, n=cupo_biblio,
                         offset=vuelta, incluir_ids=incluir_ids,
                         ya=[tuple(sorted(i["id"] for i in o["items"])) for o in opciones],
+                        familias_ya=[{cat2_de(self.foods[i["id"]]) for i in o["items"]
+                                      if i["id"] in self.foods} for o in opciones],
                         juicios=juicios)
                 except Exception:
                     logger.warning("biblioteca de comidas no disponible", exc_info=True)
