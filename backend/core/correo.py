@@ -6,14 +6,22 @@ sirve para quien ya está dentro. La recuperación de contraseña no puede serlo
 puedes entrar, no ves la campanita -- y por eso existe esto.
 
 CÓMO SE CONFIGURA
-Cinco variables de entorno. Valen las de cualquier proveedor (el correo del propio
-dominio, Brevo, Resend, SendGrid...), porque esto habla SMTP a secas y no ata a ninguno:
+Variables de entorno. Valen las de cualquier proveedor (el correo del propio dominio,
+Postmark, Brevo, Resend, SendGrid...), porque esto habla SMTP a secas y no ata a ninguno:
 
     SMTP_HOST       smtp.tuproveedor.com
     SMTP_PORT       587 (STARTTLS) o 465 (SSL directo)
     SMTP_USER       usuario
     SMTP_PASSWORD   contraseña
-    SMTP_FROM       "12EN12 <hola@jesusgallegopt.com>"
+    SMTP_FROM       "12EN12 <noreply@jesusgallegopt.com>"
+    SMTP_REPLY_TO   a dónde contesta el cliente si le da a Responder (opcional)
+
+POR QUÉ EL REMITENTE Y EL «RESPONDER A» SON DISTINTOS (13-08-2026)
+Quien manda de verdad es el proveedor transaccional, y su dirección tiene que ser una
+que el dominio tenga verificada con él: si no, el correo se firma mal y acaba en spam,
+que en un aviso de recuperar contraseña es lo mismo que no mandarlo. Pero al cliente que
+le da a Responder no se le puede tragar el mensaje un buzón que nadie lee. Así que el
+sobre lo pone el proveedor y la respuesta va al buzón del negocio.
 
 SIN CONFIGURAR NO SE ENVÍA NADA, y es a propósito: en vez de fallar en silencio, el
 correo se guarda en `db.correos_pendientes` con su cuerpo entero. Así se ve qué se habría
@@ -44,6 +52,9 @@ def _enviar_sincrono(destinatario: str, asunto: str, cuerpo: str) -> None:
     msg["Subject"] = asunto
     msg["From"] = os.environ["SMTP_FROM"]
     msg["To"] = destinatario
+    responder_a = os.environ.get("SMTP_REPLY_TO")
+    if responder_a:
+        msg["Reply-To"] = responder_a
     msg.set_content(cuerpo)
 
     contexto = ssl.create_default_context()
