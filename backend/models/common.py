@@ -141,6 +141,15 @@ class CheckInResponse(BaseModel):
     goals_progress: Optional[str] = None
     challenges: Optional[str] = None
     notes: Optional[str] = None
+    # Las dos respuestas del reporte mensual de Calma, cada una en su campo.
+    #
+    # Venian pegadas dentro de `notes` en forma de "Importado de Calma. suplementacion=...
+    # cumplimiento=...", que es el campo que el panel del entrenador pinta como "Comentario
+    # cliente", asi que en 1.585 check-ins migrados esa columna enseñaba la cadena cruda en
+    # vez de lo que escribio el cliente. Se separaron con _sync_reportes_medidas.py; aqui
+    # salen a la respuesta para que la informacion no se pierda de vista al sacarla de ahi.
+    calma_suplementacion: Optional[str] = None
+    calma_cumplimiento_dieta: Optional[str] = None
     trainer_feedback: Optional[str] = None
     created_at: str
 

@@ -53,6 +53,12 @@ const MONTHLY_COLS = [
     } },
     { key: 'goals', label: 'Progreso objetivos', r: e => ({ v: txt(e.goals_progress), t: e.goals_progress ? 'green' : 'muted' }) },
     { key: 'chal', label: 'Retos', r: e => ({ v: txt(e.challenges), t: e.challenges ? 'amber' : 'muted' }) },
+    // Las dos respuestas de los reportes de Calma, cada una en su columna. Antes venian
+    // dentro de "Comentario cliente" en forma de "Importado de Calma. suplementacion=...
+    // cumplimiento=...", o sea que esa columna enseñaba una cadena de la migracion en lugar
+    // de lo que escribio el cliente, que ahora es lo unico que sale ahi.
+    { key: 'supl', label: 'Suplementación', r: e => ({ v: txt(e.calma_suplementacion), t: e.calma_suplementacion ? 'none' : 'muted' }) },
+    { key: 'cdieta', label: 'Cumplimiento dieta', r: e => ({ v: txt(e.calma_cumplimiento_dieta), t: e.calma_cumplimiento_dieta ? 'none' : 'muted' }) },
     { key: 'notes', label: 'Comentario cliente', r: e => ({ v: txt(e.notes), t: e.notes ? 'amber' : 'muted' }) },
 ];
 

@@ -38,6 +38,24 @@ router = APIRouter(prefix="/admin/pagos", tags=["admin-pagos"])
 # consulta sin filtros no se traiga 3.000 cobros al navegador.
 POR_PAGINA = 50
 
+# EL MISMO DINERO LLEGA POR DOS CAMINOS, Y HAY QUE CONTARLO UNA VEZ (13-08-2026).
+#
+# Holded no es una pasarela: es la facturacion. Cada cobro de ThriveCart o de Stripe se
+# factura ademas en Holded, asi que el mismo euro esta en las dos puntas. Medido al
+# importar: de 1.611 filas, 353 son copias. Sumandolas todas salen 416.196 EUR; el dinero
+# que entro de verdad son 332.022. Un panel que enseñe el bruto se equivoca en 84.174 EUR,
+# que es justo el total de Holded entero.
+#
+# El importador marca la copia con `duplicado_de` (apuntando a la factura, que manda por
+# ser el documento fiscal) y NO borra nada, para que se pueda auditar de donde sale cada
+# cobro. Aqui se filtran siempre, salvo que se pidan a proposito.
+SIN_COPIAS = {"duplicado_de": {"$exists": False}}
+
+# Y hay eventos que no son dinero: cancelaciones, pausas y cobros fallidos. Cuentan la
+# historia del cliente, asi que se guardan, pero no son un cobro y no pueden sumar. El
+# importador los marca con `es_dinero: false`.
+SOLO_DINERO = {"es_dinero": {"$ne": False}}
+
 
 def _limpio(p: dict) -> dict:
     """Lo que sale al navegador. Nada de `_id` ni del volcado original del proveedor."""
@@ -54,6 +72,12 @@ def _limpio(p: dict) -> dict:
         "origen": p.get("origen"),
         "referencia": p.get("referencia"),
         "tipo": p.get("tipo"),
+        # Un aviso sin dinero (cancelacion, pausa, cobro fallido) se pinta distinto y no
+        # suma. `importe_evento` es lo que se intentaba cobrar: 2.859 EUR de cobros
+        # fallidos y 4.165 EUR de suscripciones canceladas, que dicen algo aunque no
+        # entraran en caja.
+        "es_dinero": p.get("es_dinero") is not False,
+        "importe_evento": p.get("importe_evento"),
     }
 
 
@@ -64,6 +88,8 @@ async def listar_pagos(
     desde: Optional[str] = Query(None, description="fecha inicial, AAAA-MM-DD"),
     hasta: Optional[str] = Query(None, description="fecha final, AAAA-MM-DD"),
     pagina: int = Query(1, ge=1),
+    incluir_eventos: bool = Query(False, description="ademas de los cobros, los avisos sin dinero (cancelaciones, pausas, cobros fallidos)"),
+    ver_copias: bool = Query(False, description="para auditar: enseña tambien la copia de cada cobro facturado dos veces"),
     user=Depends(get_admin_only_user),
 ):
     """El historial de cobros, del mas reciente al mas antiguo.
@@ -72,6 +98,10 @@ async def listar_pagos(
     sirve para buscar un cobro concreto, y la suma para saber cuanto ha dejado un cliente.
     """
     filtro = {}
+    if not ver_copias:
+        filtro.update(SIN_COPIAS)
+    if not incluir_eventos:
+        filtro.update(SOLO_DINERO)
     if email:
         filtro["email"] = {"$regex": email.strip(), "$options": "i"}
     if origen:
@@ -115,24 +145,35 @@ async def resumen(user=Depends(get_admin_only_user)):
     Si la coleccion todavia no existe -- la llena `_sync_membresias_cobros.py` --, esto
     responde con ceros y un aviso, en vez de romper la pantalla.
     """
-    total = await db.pagos_historicos.count_documents({})
-    if not total:
+    if not await db.pagos_historicos.count_documents({}):
         return {"hay_datos": False, "total": 0, "por_origen": [], "por_ano": [],
                 "aviso": "Todavía no se ha importado el histórico de cobros."}
 
+    # Todo lo de aqui abajo cuenta DINERO, asi que va sin copias y sin los avisos que no
+    # son un cobro. Ver `SIN_COPIAS` arriba: la diferencia son 84.174 EUR.
+    base = {**SIN_COPIAS, **SOLO_DINERO}
+    total = await db.pagos_historicos.count_documents(base)
+
     por_origen = await db.pagos_historicos.aggregate([
+        {"$match": base},
         {"$group": {"_id": "$origen", "n": {"$sum": 1}, "importe": {"$sum": "$importe"}}},
         {"$sort": {"importe": -1}},
     ]).to_list(10)
 
     por_ano = await db.pagos_historicos.aggregate([
+        {"$match": base},
         {"$group": {"_id": {"$substr": ["$fecha", 0, 4]}, "n": {"$sum": 1},
                     "importe": {"$sum": "$importe"}}},
         {"$sort": {"_id": 1}},
     ]).to_list(20)
 
-    clientes = await db.pagos_historicos.distinct("email")
-    ultimo = await db.pagos_historicos.find_one({}, {"_id": 0, "fecha": 1}, sort=[("fecha", -1)])
+    clientes = await db.pagos_historicos.distinct("email", base)
+    ultimo = await db.pagos_historicos.find_one(base, {"_id": 0, "fecha": 1}, sort=[("fecha", -1)])
+
+    # Lo que se deja fuera, dicho en voz alta. Un panel que esconde filas sin explicarlo
+    # obliga a fiarse; diciendo cuantas y por que, se puede comprobar.
+    copias = await db.pagos_historicos.count_documents({"duplicado_de": {"$exists": True}})
+    eventos = await db.pagos_historicos.count_documents({**SIN_COPIAS, "es_dinero": False})
 
     return {
         "hay_datos": True,
@@ -143,15 +184,22 @@ async def resumen(user=Depends(get_admin_only_user)):
                         "importe": round(o["importe"] or 0, 2)} for o in por_origen],
         "por_ano": [{"ano": a["_id"], "n": a["n"], "importe": round(a["importe"] or 0, 2)}
                     for a in por_ano if a["_id"]],
+        "fuera": {"copias": copias, "eventos_sin_dinero": eventos},
     }
 
 
 @router.get("/cliente/{email}")
 async def pagos_de_un_cliente(email: str, user=Depends(get_admin_only_user)):
-    """Todo lo que ha pagado una persona, para abrirlo desde su ficha."""
-    cursor = db.pagos_historicos.find({"email": email.lower().strip()}, {"_id": 0}).sort("fecha", -1)
+    """Todo lo que ha pagado una persona, para abrirlo desde su ficha.
+
+    Aqui van tambien los avisos sin dinero -- una cancelacion o un cobro fallido cuentan
+    su historia --, pero el TOTAL solo suma cobros de verdad y sin copias.
+    """
+    filtro = {"email": email.lower().strip(), **SIN_COPIAS}
+    cursor = db.pagos_historicos.find(filtro, {"_id": 0}).sort("fecha", -1)
     pagos = [_limpio(p) async for p in cursor]
-    total = round(sum(float(p.get("importe") or 0) for p in pagos), 2)
+    total = round(sum(float(p.get("importe") or 0) for p in pagos
+                      if p.get("es_dinero") is not False), 2)
     return {"pagos": pagos, "n": len(pagos), "total": total,
             "primero": pagos[-1]["fecha"] if pagos else None,
             "ultimo": pagos[0]["fecha"] if pagos else None}

@@ -158,6 +158,20 @@ const AdminPagosPage = () => {
                 </div>
             )}
 
+            {/* QUÉ NO SE ESTÁ CONTANDO, dicho en voz alta.
+                Holded no es una pasarela: es la facturación, así que cada cobro de Stripe
+                o ThriveCart aparece además como factura. Contándolo todo salían 416.196 €
+                cuando el dinero que entró de verdad son 332.022. Un panel que esconde
+                filas sin explicarlo obliga a fiarse; diciendo cuántas y por qué, se puede
+                comprobar. */}
+            {resumen?.hay_datos && (resumen.fuera?.copias > 0 || resumen.fuera?.eventos_sin_dinero > 0) && (
+                <p className="text-xs text-muted-foreground" data-testid="pagos-excluidos">
+                    No se cuentan {resumen.fuera.copias} cobros que Holded factura y la pasarela
+                    ya cobró (el mismo dinero por dos caminos)
+                    {resumen.fuera.eventos_sin_dinero > 0 && `, ni ${resumen.fuera.eventos_sin_dinero} avisos sin cobro (cancelaciones, pausas y pagos fallidos)`}.
+                </p>
+            )}
+
             {resumen?.hay_datos && resumen.por_origen?.length > 0 && (
                 <div className="surface p-4">
                     <p className="caption mb-3 flex items-center gap-1.5">
