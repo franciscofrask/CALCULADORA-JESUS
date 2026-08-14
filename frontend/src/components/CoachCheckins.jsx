@@ -53,12 +53,15 @@ const MONTHLY_COLS = [
     } },
     { key: 'goals', label: 'Progreso objetivos', r: e => ({ v: txt(e.goals_progress), t: e.goals_progress ? 'green' : 'muted' }) },
     { key: 'chal', label: 'Retos', r: e => ({ v: txt(e.challenges), t: e.challenges ? 'amber' : 'muted' }) },
-    // Las dos respuestas de los reportes de Calma, cada una en su columna. Antes venian
-    // dentro de "Comentario cliente" en forma de "Importado de Calma. suplementacion=...
-    // cumplimiento=...", o sea que esa columna enseñaba una cadena de la migracion en lugar
-    // de lo que escribio el cliente, que ahora es lo unico que sale ahi.
-    { key: 'supl', label: 'Suplementación', r: e => ({ v: txt(e.calma_suplementacion), t: e.calma_suplementacion ? 'none' : 'muted' }) },
-    { key: 'cdieta', label: 'Cumplimiento dieta', r: e => ({ v: txt(e.calma_cumplimiento_dieta), t: e.calma_cumplimiento_dieta ? 'none' : 'muted' }) },
+    // AQUÍ IBAN DOS COLUMNAS con la suplementación y el cumplimiento de dieta de los
+    // reportes de Calma, y se han quitado a la espera de que Jesús decida (Francisco,
+    // 14-08: «olvida ese campo nuevo, luego lo miramos, los datos mantenlos»).
+    //
+    // Los DATOS siguen: la migración escribía en «Comentario cliente» la cadena cruda
+    // «Importado de Calma. suplementacion=... cumplimiento=...», y eso ya está partido en
+    // `calma_suplementacion` y `calma_cumplimiento_dieta` en la base, con el comentario
+    // limpio. O sea que esa columna vuelve a enseñar lo que escribió el cliente y nada
+    // más; los dos datos están guardados y listos para cuando se decida dónde van.
     { key: 'notes', label: 'Comentario cliente', r: e => ({ v: txt(e.notes), t: e.notes ? 'amber' : 'muted' }) },
 ];
 
