@@ -24,6 +24,7 @@ import ChatbotPage from "./pages/ChatbotPage";
 import SupplementsCatalogPage from "./pages/SupplementsCatalogPage";
 import AdminMenusPage from "./pages/AdminMenusPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
+import AdminPagosPage from "./pages/AdminPagosPage";
 import AdminMessagesPage from "./pages/AdminMessagesPage";
 import AdminRoutinesPage from "./pages/AdminRoutinesPage";
 import SupplementsPage from "./pages/SupplementsPage";
@@ -252,6 +253,14 @@ function AppRoutes() {
                 <Route path="usuarios" element={
                     <ProtectedRoute allowedRoles={['admin']}>
                         <AdminUsersPage />
+                    </ProtectedRoute>
+                } />
+                {/* Lo que ha pagado cada cliente NO es información de entrenamiento, es del
+                    negocio: mismo candado que Usuarios, y el backend lo vuelve a comprobar
+                    con `get_admin_only_user` por si alguien llama al endpoint a mano. */}
+                <Route path="pagos" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminPagosPage />
                     </ProtectedRoute>
                 } />
             </Route>

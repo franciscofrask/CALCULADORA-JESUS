@@ -32,6 +32,7 @@ from routes import (
 )
 from routes.leads import router as leads_router
 from routes.menu_templates import router as menu_templates_router
+from routes.pagos_historicos import router as pagos_historicos_router
 from routes.notifications import router as notifications_router
 from routes.audit import router as audit_router
 from routes.plans import router as plans_router, admin_router as plans_admin_router
@@ -129,6 +130,7 @@ api_router.include_router(billing_webhook_router)
 api_router.include_router(billing_admin_router)
 api_router.include_router(leads_router)
 api_router.include_router(menu_templates_router)
+api_router.include_router(pagos_historicos_router)
 api_router.include_router(notifications_router)
 api_router.include_router(audit_router)
 api_router.include_router(plans_router)

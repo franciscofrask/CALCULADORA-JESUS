@@ -15,7 +15,7 @@ import {
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
     AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple, Layers,
-    Menu, X, Phone
+    Menu, X, Phone, Receipt
 } from 'lucide-react';
 
 // Colores para el desglose por plan (cualquier plan sin color cae en el gris).
@@ -1100,6 +1100,7 @@ const AdminLayout = () => {
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
         { path: '/admin/planes', icon: Layers, label: 'Planes' },
         { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios', adminOnly: true },
+        { path: '/admin/pagos', icon: Receipt, label: 'Cobros', adminOnly: true },
         { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
         { path: '/admin/messages', icon: MessageCircle, label: 'Mensajes' },
         { path: '/admin/routines', icon: Dumbbell, label: 'Rutinas' },
