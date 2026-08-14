@@ -1437,7 +1437,12 @@ class AgentTools:
                                    i.get("macros_efectivos", {}))
                      for i in r["items"]]
             clientes = int(((r.get("popularidad") or {}).get("clientes")) or 0)
-            if not await self._pasa_coherencia(momento, items,
+            # El juicio de un menu de biblioteca va POR SU TIPO (comida/peri), no por el
+            # momento en que asoma: si no, el mismo menu se juzgaria una vez para la
+            # comida, otra para la cena... y el "entrenamiento" en bloque no serviria de
+            # cache. Si pega o no con el momento ya lo decide el filtro mecanico de
+            # arriba (coherencia del perfil); el juez decide si ES una comida.
+            if not await self._pasa_coherencia(tipo, items,
                                                clientes=clientes, juicios=juicios):
                 continue
             ya.add(firma)
