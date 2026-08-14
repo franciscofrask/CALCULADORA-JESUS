@@ -73,6 +73,50 @@ _GUIONES = {
     ("post", "sin_batido"): POST_SIN_BATIDO,
 }
 
+# LO QUE NOMBRA CADA GUION, para que las tarjetas digan lo mismo que el texto.
+#
+# Francisco, 13-08-2026: «me hace una recomendación, luego una sugerencia, y no veo el MAP
+# que él mismo me ofrece en un principio». Tenía razón: el texto recomendaba MAP con
+# ciclodextrina y debajo salían Powerade, Aquarius y amilopectina. Todo eso vale para un
+# intra -- son del universo del peri --, pero no es lo que se acaba de recomendar, y el
+# cliente se queda buscando en la lista lo que le han dicho.
+#
+# Van AQUÍ y no en el prompt por lo mismo que los textos: la regla del 8 bis prohíbe nombres
+# de comida en el prompt, y además así el día que Jesús cambie su recomendación, el texto y
+# los alimentos se cambian en el mismo sitio y no se pueden desparejar.
+#
+# Son términos de BÚSQUEDA, no ids: resolverlos contra el catálogo de cada base ya es
+# trabajo del buscador de siempre.
+#
+# UNA LISTA POR PIEZA, y dentro los nombres de ESA pieza por orden de preferencia. Importa:
+# «MAP -aminoácidos esenciales-» es una aposición, un mismo polvo con dos nombres, y en
+# plano se convertía en dos piezas -- dos proteínas en un intra que solo pide una --. Así
+# son dos piezas, la proteína y el hidrato, que es lo que dice el texto; y el segundo nombre
+# queda de respaldo para cuando el primero no está en el catálogo de ese cliente.
+ALIMENTOS_DEL_GUION = {
+    ("intra", "principal"): [["MAP", "aminoácidos esenciales"], ["ciclodextrina"]],
+    ("intra", "alternativa"): [["MAP", "aminoácidos esenciales"], ["bebida isotónica"]],
+    ("intra", "otro_hidrato"): [["dextrosa"], ["MAP", "aminoácidos esenciales"]],
+    ("post", "principal"): [["aislado de suero", "whey isolate"], ["crema de arroz"],
+                            ["arándanos"]],
+    ("post", "alternativa"): [["queso batido"], ["plátano"]],
+    ("post", "sin_batido"): [["queso batido"], ["plátano"]],
+}
+
+
+def piezas_del_guion(momento: str, variante: str = "principal") -> list:
+    """Las piezas que nombra ese guion, en el orden en que las dice.
+
+    Cada pieza es una lista de nombres de la MISMA cosa, el preferido primero.
+    """
+    clave = ((momento or "").strip().lower(), (variante or "principal").strip().lower())
+    return [list(p) for p in (ALIMENTOS_DEL_GUION.get(clave) or [])]
+
+
+def alimentos_del_guion(momento: str, variante: str = "principal") -> list:
+    """El nombre principal de cada pieza: lo que hay que montar, una cosa por pieza."""
+    return [p[0] for p in piezas_del_guion(momento, variante) if p]
+
 
 def guion(momento: str, variante: str = "principal") -> Optional[str]:
     """El texto de Jesus para ese momento, o None si no hay guion escrito.

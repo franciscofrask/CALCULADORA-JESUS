@@ -287,6 +287,30 @@ class NutritionChatbot:
             return {"P": 0, "H": 0, "G": 0}
         return self._target_for_key(self.current_meal_key())
 
+    @staticmethod
+    def margen_de(objetivo: float) -> float:
+        """Cuánto se puede desviar un macro para que la comida siga estando «cuadrada».
+
+        El margen de Calma son 4 g y en una comida normal está bien: sobre 47 g de proteína
+        es un 8 %. Pero el intra pide 9 g de proteína, y ahí esos mismos 4 g son el 44 %:
+        Francisco vio en producción «Comida cuadrada. Pulsa Guardar y siguiente» debajo de
+        un «5 / 9» de proteína, y con el propio asistente diciendo en el mensaje de al lado
+        que faltaban 4 g. Dos cosas contradictorias en la misma pantalla, y la que manda es
+        la que le invita a guardar y pasar a otra cosa.
+
+        Así que el margen se estrecha cuando el objetivo es pequeño -- una cuarta parte de
+        lo que se pide -- y nunca baja de 1,5 g, que es lo que se puede afinar con cucharas
+        y básculas de casa. En una comida normal no cambia nada: el 25 % de 47 es 11, así
+        que sigue mandando el 4 de siempre.
+        """
+        return min(4.0, max(1.5, 0.25 * abs(float(objetivo or 0)))) if objetivo else 4.0
+
+    def comida_cuadrada(self, restante: dict, objetivo: dict = None) -> bool:
+        """¿Está cuadrada? Con el margen que le toca a cada macro (ver `margen_de`)."""
+        objetivo = objetivo or self.get_current_meal_macros()
+        return all(abs(restante.get(m, 0)) <= self.margen_de(objetivo.get(m, 0))
+                   for m in ("P", "H", "G"))
+
     def get_remaining_macros(self) -> dict:
         """Calcula los macros restantes de la comida actual."""
         objetivo = self.get_current_meal_macros()
@@ -1403,7 +1427,7 @@ class NutritionChatbot:
                 "objetivo": obj,
                 "actual": {m: round(act.get(m, 0), 1) for m in ("P", "H", "G")},
                 "restante": rem,
-                "cuadrado": all(abs(rem[m]) <= 4 for m in ("P", "H", "G")),
+                "cuadrado": self.comida_cuadrada(rem, obj),
                 "tiene_alimentos": len(comida.get("alimentos", [])) > 0,
                 "guardada": key in self.state.get("saved_meals", []),
                 "es_actual": idx == self.state["comida_actual"],
@@ -2332,7 +2356,7 @@ class NutritionChatbot:
                     fa["macros"] = f.get("macros", fa.get("macros"))
                     break
         restante = self.get_remaining_macros()
-        cuadrado = all(abs(restante[m]) <= 4 for m in ("P", "H", "G"))
+        cuadrado = self.comida_cuadrada(restante)
         return {
             "action": "meal_updated",
             "foods_added": foods_added,
@@ -2842,7 +2866,7 @@ class NutritionChatbot:
 
         MACRO_LBL = {"P": "proteína", "H": "hidratos", "G": "grasa"}
         restante = self.get_remaining_macros()
-        if all(abs(restante[m]) <= 4 for m in ("P", "H", "G")):
+        if self.comida_cuadrada(restante):
             return {"action": "suggestions", "suggestions": [],
                     "message": "Esta comida ya está cuadrada. Pulsa \"Guardar y siguiente\".",
                     "day_overview": self.get_day_overview()}

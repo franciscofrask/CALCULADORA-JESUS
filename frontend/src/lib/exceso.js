@@ -19,6 +19,24 @@
 // Es el mismo número que ya usaban `getMealStatus` y las tarjetas de comida.
 export const MARGEN = 4;
 
+/**
+ * El margen que le toca a un macro según lo que se le pide.
+ *
+ * Los 4 g de Calma están bien en una comida normal -- sobre 47 g de proteína son un 8 % --,
+ * pero el intra pide 9 g y ahí son el 44 %. Francisco lo vio en producción: «Comida
+ * cuadrada. Pulsa Guardar y siguiente» debajo de un «5 / 9» de proteína, con el asistente
+ * diciendo al lado que faltaban 4 g. La pantalla le estaba invitando a guardar una comida a
+ * la que le faltaba casi la mitad de la proteína.
+ *
+ * Se estrecha a una cuarta parte de lo que se pide y nunca baja de 1,5 g, que es lo que se
+ * puede afinar con una cuchara y una báscula de casa. En una comida normal no cambia nada.
+ * Mismo criterio que `NutritionChatbot.margen_de` en el backend.
+ */
+export const margenDe = (objetivo) => {
+    const o = Math.abs(Number(objetivo) || 0);
+    return o ? Math.min(MARGEN, Math.max(1.5, 0.25 * o)) : MARGEN;
+};
+
 export const NOMBRE_MACRO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
 
 // LOS MACROS EN LOS QUE PASARSE ES UN FALLO. La proteína no está, y esa es toda la

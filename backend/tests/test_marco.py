@@ -27,7 +27,14 @@ sys.path.insert(0, _RAIZ)
 import pytest  # noqa: E402
 
 from agent_loop import _PIDE_LAS_INSTRUCCIONES, _PROMPT, _RESPUESTA_INSTRUCCIONES  # noqa: E402
-from core.guion_peri import INTRA, MARCA, POST, guion  # noqa: E402
+from core.guion_peri import (ALIMENTOS_DEL_GUION, INTRA, MARCA, POST,  # noqa: E402
+                             alimentos_del_guion, guion)
+
+
+def _sin_tildes(t):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", (t or "").lower())
+                   if unicodedata.category(c) != "Mn")
 
 
 @pytest.mark.parametrize("mensaje", [
@@ -111,6 +118,60 @@ def test_la_alternativa_del_intra_lleva_la_marca():
     """La recomendación de marca va con la alternativa, que es donde la puso Jesús."""
     assert MARCA in guion("intra", "alternativa")
     assert MARCA not in guion("intra")
+
+
+def test_lo_que_se_ofrece_es_lo_que_dice_el_texto():
+    """Las tarjetas del peri salen de `ALIMENTOS_DEL_GUION`, y cada nombre tiene que estar
+    en el guion que dice ese momento.
+
+    Es el test que impide repetir el 13-08: el texto recomendaba MAP con ciclodextrina y
+    debajo salían Powerade, Aquarius y amilopectina, porque las tarjetas se sacaban del
+    universo del peri ordenado por macros y no de lo que se acababa de decir. Francisco:
+    «no veo el MAP que él mismo me ofrece en un principio».
+
+    Va al revés a propósito -- del alimento al texto --: si alguien cambia el guion de
+    Jesús y quita un alimento, aquí salta, en vez de seguir ofreciendo lo que ya no se
+    recomienda. El nombre principal de cada pieza puede ser más específico que la palabra
+    del texto («aislado de suero» por «el aislado»), así que basta con que alguno de los
+    nombres de la pieza aparezca.
+
+    Se mira contra la variante MÁS el guion principal, porque las variantes son la
+    contestación a un «esa no» y solo cambian lo que se rechazó: el «otro hidrato» del
+    intra habla de la dextrosa y da por dicha la proteína de antes. La comida sigue
+    necesitando las dos piezas.
+    """
+    for (momento, variante), piezas in ALIMENTOS_DEL_GUION.items():
+        texto = _sin_tildes((guion(momento, variante) or "") + " " +
+                            (guion(momento, "principal") or ""))
+        assert texto.strip(), f"{momento}/{variante} no tiene guion"
+        for pieza in piezas:
+            assert any(any(p in texto for p in _sin_tildes(n).split())
+                       for n in pieza), \
+                f"{momento}/{variante} ofrece {pieza[0]!r} y su guion no lo nombra"
+
+
+def test_cada_pieza_del_peri_es_UNA_cosa():
+    """«MAP -aminoácidos esenciales-» es una aposición: el mismo polvo con dos nombres.
+
+    En plano eran dos piezas, y el intra acababa con dos proteínas cuando solo pide una.
+    Los nombres de dentro de una pieza son respaldo (si el primero no está en el catálogo
+    de ese cliente), nunca una segunda tarjeta ni un segundo ingrediente.
+    """
+    for (momento, variante), piezas in ALIMENTOS_DEL_GUION.items():
+        principales = alimentos_del_guion(momento, variante)
+        assert len(principales) == len(piezas)
+        vistos = set()
+        for pieza in piezas:
+            for nombre in pieza:
+                assert nombre not in vistos, \
+                    f"{nombre!r} está en dos piezas de {momento}/{variante}"
+                vistos.add(nombre)
+
+
+def test_el_intra_pide_una_proteina_y_un_hidrato():
+    """Lo que dice el método: aminoácidos con un hidrato rápido. Dos piezas, ni una más."""
+    for variante in ("principal", "alternativa", "otro_hidrato"):
+        assert len(alimentos_del_guion("intra", variante)) == 2, variante
 
 
 def test_los_textos_del_peri_NO_estan_en_el_prompt():

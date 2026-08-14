@@ -2204,7 +2204,7 @@ class AgentTools:
         conversacion. Ademas lleva 23 nombres de alimento del catalogo y en el prompt no
         caben (regla del 8 bis). Ver `core/guion_peri.py`.
         """
-        from core.guion_peri import guion
+        from core.guion_peri import guion, alimentos_del_guion
         key = self.bot.current_meal_key()
         momento = {"Intra": "intra", "Post": "post"}.get(key)
         if not momento:
@@ -2233,18 +2233,31 @@ class AgentTools:
         falta = self.bot.get_remaining_macros()
         pendiente = [f"{falta[m]:.0f} g de {_MACRO_LBL[m]}"
                      for m in ("P", "H", "G") if falta[m] > 1]
+        # CON QUE SE MONTA: lo que nombra ESTE guion, no lo que primero encaje.
+        #
+        # Decia «busca lo que nombra el metodo», y el modelo buscaba a ojo: en el intra
+        # acabo montando amilopectina con aminoacidos despues de haber recomendado MAP con
+        # ciclodextrina. Los dos entran en un intra, pero el cliente habia dicho «cuadra» a
+        # OTRA cosa. Los terminos van aqui, junto al texto que los dice (`core/guion_peri`),
+        # para que no se puedan desparejar.
+        busca = alimentos_del_guion(momento, variante)
         siguiente = (
             "Si el cliente dice que si -- «vale», «dale», «me cuadra» --, NO vuelvas a "
-            "escribir este texto: MONTA la comida ya. Busca lo que nombra el metodo con "
-            "`buscar_alimentos` y metelo con `editar_comida`, o compon el menu; las "
-            "cantidades las pone el motor, que es lo que le has prometido."
+            "escribir este texto: MONTA la comida ya con lo que acabas de recomendar. "
+            + (f"Busca EXACTAMENTE estos terminos, uno por uno, con `buscar_alimentos`: "
+               f"{', '.join(busca)}. " if busca else
+               "Busca lo que nombra el metodo con `buscar_alimentos`. ")
+            + "Metelos con `editar_comida`; las cantidades las pone el motor, que es lo "
+              "que le has prometido. Si alguno no esta en su catalogo, dilo y ofrece la "
+              "alternativa -- no lo cambies por otro en silencio."
             + (f" Ahora mismo faltan {_y(pendiente)}." if pendiente else ""))
         if ya_dicho:
             return {"ok": True, "momento": momento, "variante": variante,
-                    "texto": None, "ya_se_lo_dijiste": True,
+                    "texto": None, "ya_se_lo_dijiste": True, "monta_con": busca,
                     "instruccion": "Ya le soltaste este guion en esta comida y te dijo que "
                                    "si. NO lo repitas: " + siguiente}
         return {"ok": True, "momento": momento, "variante": variante, "texto": texto,
+                "monta_con": busca,
                 "instruccion": "Escribe este texto TAL CUAL, sin resumirlo ni reescribirlo.",
                 "y_despues": siguiente}
 

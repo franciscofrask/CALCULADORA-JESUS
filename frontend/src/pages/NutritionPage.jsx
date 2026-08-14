@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { leer as leerLocal, escribir as escribirLocal, borrar as borrarLocal } from '../lib/almacenLocal';
-import { excesos, textoExceso } from '../lib/exceso';
+import { excesos, textoExceso, margenDe } from '../lib/exceso';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -963,11 +963,17 @@ const NutritionPage = () => {
         // a 0.2 g overshoot as "sobra".)
         const margin = 4;
         const isPeriMeal = mealKey === 'Intra' || mealKey === 'Post';
+        // EL MARGEN, PROPORCIONAL A LO QUE SE PIDE (13-08). Los 4 g fijos daban por
+        // «cuadrado» un intra con 5 de 9 g de proteína, porque 4 sobre 9 es el 44 %. En una
+        // comida normal no cambia nada; ver `margenDe` en lib/exceso.
+        const mP = margenDe(target.P);
+        const mH = margenDe(target.H);
+        const mG = margenDe(target.G);
         // La proteína, cubierta basta (ver `getDayStatus`): pasarse no es un fallo, así que
         // tampoco puede dejar la comida en «te falta».
-        const pOk = served.P - target.P > -margin;
-        const hOk = Math.abs(target.H - served.H) < margin;
-        const gOk = isPeriMeal || Math.abs(target.G - served.G) < margin;
+        const pOk = served.P - target.P > -mP;
+        const hOk = Math.abs(target.H - served.H) < mH;
+        const gOk = isPeriMeal || Math.abs(target.G - served.G) < mG;
         if (pOk && hOk && gOk) return 'cuadrada';
         // PASARSE DE PROTEÍNA NO ES PASARSE (Jesús, 13-08). El criterio vive en
         // `lib/exceso`; aquí antes se contaba también `served.P - target.P`, y con eso una

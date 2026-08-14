@@ -671,13 +671,41 @@ class AgentLoop:
                     # leía nombres que no podía pulsar, y si el modelo se acordaba de buscar
                     # salían y si no, no: la misma pregunta daba recuadro o no según el día.
                     #
-                    # En el peri el universo ya está acotado a los alimentos permitidos, así
-                    # que una búsqueda sin texto devuelve justo los que nombra el guion.
+                    # Y LAS PRIMERAS SON LAS QUE NOMBRA EL TEXTO (13-08-2026).
+                    #
+                    # Lo de arriba lo dejaba en manos del universo del peri: «acotado a los
+                    # permitidos, así que una búsqueda sin texto devuelve justo los que
+                    # nombra el guion». No. Acotado sí está, pero el orden lo pone el hueco
+                    # de macros, y en el intra salían Amilopectina, Evopept, Aquarius,
+                    # Powerade... y ni MAP ni ciclodextrina, que es exactamente lo que se
+                    # le acaba de recomendar. Francisco: «no veo el MAP que él mismo me
+                    # ofrece en un principio». Todas valen para un intra, pero la lista
+                    # tiene que empezar por lo que dice el texto: si no, la recomendación
+                    # y las tarjetas parecen de dos conversaciones distintas.
+                    #
+                    # El orden del guion se respeta (`piezas_del_guion` las da tal como las
+                    # nombra) y va UNA tarjeta por pieza -- los otros nombres de la pieza
+                    # son respaldo por si el primero no está en ese catálogo, no una
+                    # segunda tarjeta de lo mismo --. Detrás se completa hasta 6 con el
+                    # resto del universo, que sigue siendo lo que había: las alternativas.
                     try:
-                        extra = await self.tools.buscar_alimentos(limite=6)
+                        from core.guion_peri import piezas_del_guion
                         ya_ids = {s["id"] for s in sugerencias}
-                        sugerencias.extend(i for i in (extra.get("items") or [])
-                                           if i["id"] not in ya_ids)
+                        for pieza in piezas_del_guion(resultado.get("momento"),
+                                                      resultado.get("variante")):
+                            for nombre in pieza:
+                                r = await self.tools.buscar_alimentos(texto=nombre, limite=1)
+                                item = next((i for i in (r.get("items") or [])
+                                             if i["id"] not in ya_ids), None)
+                                if item:
+                                    ya_ids.add(item["id"])
+                                    sugerencias.append(item)
+                                    break   # esta pieza ya tiene su tarjeta
+                        if len(sugerencias) < 6:
+                            extra = await self.tools.buscar_alimentos(
+                                limite=6 - len(sugerencias))
+                            sugerencias.extend(i for i in (extra.get("items") or [])
+                                               if i["id"] not in ya_ids)
                     except Exception:
                         pass   # sin tarjetas, pero el guion se dice igual
                 if nombre == "ofrecer_sustitutos" and resultado.get("opciones"):

@@ -45,6 +45,13 @@ _LENGUAJE_NORMAL = {
     # "origen" es una clave de datos del borrador (origen='recetario'), no un alimento.
     # Entraba en el vocabulario por productos con "denominacion de origen" en el nombre.
     "origen",
+    # "alimento" es la palabra con la que la app habla de esto: está en el prompt y en
+    # media docena de descripciones de herramientas, y tiene que estar. Entró en el
+    # vocabulario por dos nombres del catálogo -- "Hamburguesa Angus (Confialiments)", una
+    # marca, y un "Alimento de prueba caso 37" que se coló de un test interrumpido -- y
+    # tumbó los dos tests a la vez. Un producto que lleve la palabra genérica en el nombre
+    # no puede prohibir la palabra genérica.
+    "alimento", "alimentos",
 }
 
 
