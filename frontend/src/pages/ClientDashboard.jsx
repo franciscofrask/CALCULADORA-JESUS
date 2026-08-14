@@ -300,8 +300,8 @@ const ClientDashboard = () => {
 
     const mt = macros?.training || profile?.macros_training;
     const mr = macros?.rest || profile?.macros_rest;
-    const mp = macros?.periworkout || profile?.macros_periworkout;
-    const source = macros?.source || profile?.macros_source;
+    // El perientreno y de dónde salen los macros ya no se leen aquí: se quitó el pie de la
+    // tarjeta el 13-08 y no queda nadie en esta pantalla que los use.
     const hasMacros = mt && (mt.protein || mt.proteinas);
 
     const getP = (m) => m?.protein || m?.proteinas || 0;
@@ -449,7 +449,12 @@ const ClientDashboard = () => {
                             <div className="px-5 pt-5 pb-1">
                                 <p className="text-sm font-semibold text-foreground first-letter:uppercase" data-testid="hoy-fecha">
                                     {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-                                    <span className="text-muted-foreground font-normal"> · {isRestDay ? 'descanso' : 'entreno'}</span>
+                                    {/* «DÍA DE ENTRENO», no «entreno» (Francisco, 13-08-2026).
+                                        Suelto detrás de la fecha, «entreno» se lee como si
+                                        fuera la hora del entrenamiento y no lo que es: el tipo
+                                        de día del que salen estos macros. El descanso va igual,
+                                        que si no la misma línea dice una cosa de dos maneras. */}
+                                    <span className="text-muted-foreground font-normal"> · {isRestDay ? 'día de descanso' : 'día de entreno'}</span>
                                 </p>
                             </div>
                             <div className="px-5 pb-5 pt-3">
@@ -478,22 +483,20 @@ const ClientDashboard = () => {
                                     <MacroGrande valor={todayConsumed.G} objetivo={getG(activeTarget)} label="Grasa" color={MACRO.fat} />
                                 </div>
                             </div>
-                            <div className="border-t border-border px-5 py-3 flex items-center justify-between">
-                                <div className="flex items-center gap-4 text-[11px] text-muted-foreground uppercase tracking-wider font-data">
-                                    {/* «Perientreno», no «Peri» (punto 4.18). */}
-                                    {mp && getP(mp) > 0 && <span>Perientreno {getP(mp)}/{getH(mp)}</span>}
-                                </div>
-                                {/* LA ETIQUETA DICE QUÉ ES, NO CÓMO SE LLAMA POR DENTRO.
-                                    Aquí salía la palabra cruda del dato -- «MANUAL» o «AUTO» --
-                                    en mayúsculas y en naranja, que es el color de lo importante.
-                                    Nadie sabe qué es «manual» al lado de su perientreno.
-                                    Jesús, 11-08: «o se explica, o se quita de Inicio». */}
-                                {source && (
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${source === 'auto' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400'}`}>
-                                        {source === 'auto' ? 'te lo cuadramos' : 'lo ajustas tú'}
-                                    </span>
-                                )}
-                            </div>
+                            {/* AQUÍ IBA EL PIE DEL PERIENTRENO, y se ha quitado entero
+                                (Francisco, 13-08-2026): «lo de perientreno lo ajustas tú, eso
+                                sobra».
+
+                                Eran dos datos que no pintan nada en Inicio. El perientreno ya
+                                está sumado en los tres números grandes de arriba, así que
+                                repetirlo suelto solo invita a restar. Y el «lo ajustas tú» era
+                                el último resto de la palabra cruda del dato («MANUAL»/«AUTO»),
+                                que el 11-08 se tradujo a algo legible en vez de quitarse: al
+                                cliente le da igual quién le cuadró los macros, y en Inicio no
+                                puede hacer nada con esa información.
+
+                                Donde sí vive esto es en Nutrición (DaySummary y DayHeader),
+                                que es la pantalla donde se reparten las comidas. */}
                         </div>
                     ) : (
                         <button onClick={() => navigate('/dashboard/macro-calculator')} data-testid="setup-macros-card"
@@ -678,7 +681,11 @@ const ClientDashboard = () => {
                                 El 4.18 cambió «coach» por «entrenador»; el repaso del 11-08 va
                                 un paso más allá y quita los dos de todo lo que lee el cliente.
                                 Y de paso el aviso dice qué gana él, no a quién le llega. */}
-                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">Completa tu perfil y te afinamos los macros</p>
+                            {/* «TERMINAMOS DE AJUSTAR», no «te afinamos» (Francisco, 13-08).
+                                Afinar suena a retoque fino de algo que ya está bien; lo que
+                                pasa de verdad es que los macros están a medias hasta que
+                                conteste, y la frase tiene que decir eso. */}
+                            <p className="font-bold text-foreground text-sm uppercase tracking-wide">Completa tu perfil y terminamos de ajustar tus macros</p>
                             <p className="text-muted-foreground text-sm">Te quedan unas preguntas: biotipo, salud, entreno...</p>
                         </div>
                     </div>
