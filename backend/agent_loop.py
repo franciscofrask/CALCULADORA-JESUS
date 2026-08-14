@@ -658,6 +658,16 @@ class AgentLoop:
                     resultado = await self._despachar(nombre, args)
                 if nombre in _TOCAN_LA_COMIDA_DEL_DIA and resultado.get("ok"):
                     toco_la_comida = True
+                    # CUANDO LA COMIDA SE TOCA, LAS TARJETAS ANTERIORES CADUCAN (14-08).
+                    #
+                    # «Quiero algo con pollo y fideos» montaba la comida clavada... y
+                    # debajo salían cuatro pollos y cuatro fideos como «sugerencias»: los
+                    # ANDAMIOS de la construcción, las búsquedas que el modelo hizo para
+                    # elegir cada pieza. Y pulsar una AÑADE encima de una comida ya
+                    # cuadrada (+8,3 g de hidratos por un segundo fideo). Lo buscado PARA
+                    # montar no se enseña DESPUÉS de montar; solo sobreviven las búsquedas
+                    # posteriores a la última mutación, que esas sí son deliberadas.
+                    sugerencias = []
                 self.traza.append({"herramienta": nombre, "args": args,
                                    "resultado_resumen": str(resultado)[:300]})
                 if nombre == "buscar_alimentos" and resultado.get("items"):
