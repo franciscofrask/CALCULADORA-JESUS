@@ -250,6 +250,55 @@ class NutritionChatbot:
         """Número total de comidas a montar (principales + peri)."""
         return len(self.state["meal_order"]) or self.state["num_comidas"]
 
+    @property
+    def usuario_id(self) -> str:
+        """El id del usuario detrás de esta sesión.
+
+        Las sesiones del chat se llaman `chat_<user_id>_<fecha-hora>` (routes/chatbot) y
+        el historial de dietas está guardado por user_id: para leer LO SUYO hay que
+        quitar el envoltorio. Una sesión sin ese formato (tests, lectura-dieta) usa su id
+        tal cual, que es también lo que esos harneses escriben en `diets.user_id`.
+        """
+        sid = self.session_id or ""
+        if sid.startswith("chat_"):
+            resto = sid[len("chat_"):]
+            if "_" in resto:
+                return resto.rsplit("_", 1)[0]
+        if sid.startswith("lectura-dieta-"):
+            return sid[len("lectura-dieta-"):]
+        return sid
+
+    async def usos_propios(self) -> dict:
+        """Cuantas veces ha comido ESTE cliente cada alimento, contado de sus dietas.
+
+        Francisco, 14-08-2026: «tengo una base de datos de todas las dietas de los
+        usuarios, ¿por qué no la entrenas con eso?». Esto es la mitad de esa respuesta:
+        las sugerencias se ordenan primero por lo que este cliente come de verdad, y el
+        perfil global del momento queda de desempate. Desde la sincronización del 13-08
+        el historial está completo en producción, así que el dato existe para todos.
+
+        Un solo agregado por sesión (se cachea en la instancia): ~400 dietas × 4 comidas
+        se recorren en decenas de milisegundos. Se cuenta por alimento, sin separar por
+        comida: la coherencia con el momento ya la pone el filtro de siempre, y lo que
+        se busca aquí es el repertorio de la persona.
+        """
+        cache = getattr(self, "_usos_propios_cache", None)
+        if cache is not None:
+            return cache
+        cuenta: dict = {}
+        try:
+            async for d in self.db.diets.find({"user_id": self.usuario_id},
+                                              {"_id": 0, "comidas": 1}).limit(400):
+                for comida in (d.get("comidas") or {}).values():
+                    for a in (comida or {}).get("alimentos") or []:
+                        fid = a.get("alimento_id")
+                        if fid is not None:
+                            cuenta[int(fid)] = cuenta.get(int(fid), 0) + 1
+        except Exception:
+            cuenta = {}
+        self._usos_propios_cache = cuenta
+        return cuenta
+
     def current_meal_key(self) -> str:
         """Clave de la comida actual (C1/Intra/Post/...) según meal_order."""
         order = self.state["meal_order"]
@@ -3066,8 +3115,19 @@ class NutritionChatbot:
             # distingue las claras (miles de desayunos) de un lomo marinado. Se ordena por
             # tramos logaritmicos para que el barajado siga dando variedad entre los que se
             # usan parecido. Es el mismo criterio que ya ordena el chat.
-            if perfil_uso and momento_actual:
+            # LO QUE COME ESTE CLIENTE VA POR DELANTE DE LO QUE COME LA GENTE (14-08).
+            # «Tengo una base de datos de todas las dietas de los usuarios, ¿por qué no
+            # la entrenas con eso?»: sus propias comidas son la mejor señal que existe de
+            # qué sugerirle. Su repertorio primero (tramos log2, como el global, para que
+            # el barajado siga dando variedad entre iguales), el uso global de desempate.
+            mios = await self.usos_propios()
+            if (perfil_uso and momento_actual) or mios:
+                def _tramo_mio(x):
+                    usos = mios.get(x[2]["alimento_id"], 0)
+                    return min(int(math.log2(usos)) + 1, 15) if usos > 0 else 0
                 def _tramo_uso(x):
+                    if not (perfil_uso and momento_actual):
+                        return 0
                     f = por_id.get(x[2]["alimento_id"])
                     if not f:
                         return 0
@@ -3075,7 +3135,8 @@ class NutritionChatbot:
                     return min(int(math.log2(usos)) + 1, 15) if usos > 0 else 0
                 # Los más usados delante y, entre los que se usan parecido, el que mejor
                 # encaja. El barajado de arriba sigue decidiendo entre iguales.
-                head.sort(key=lambda x: (-_tramo_uso(x), abs(x[0] - objetivo_pieza)))
+                head.sort(key=lambda x: (-_tramo_mio(x), -_tramo_uso(x),
+                                         abs(x[0] - objetivo_pieza)))
             head = head[:12]
             buckets[b] = ([x for x in head if x[2]["alimento_id"] not in seen]
                           + [x for x in head if x[2]["alimento_id"] in seen])
@@ -3094,9 +3155,18 @@ class NutritionChatbot:
             usos = perfil_uso.usos(f, momento_actual)
             return min(int(math.log2(usos)) + 1, 15) if usos > 0 else 0
 
+        # Y el orden de FAMILIAS también empieza por las suyas: si esta persona desayuna
+        # huevos, su familia de huevos sale antes que la del yogur aunque el global diga
+        # otra cosa. El tramo lo pone su candidato más comido.
+        mios_tipo = getattr(self, "_usos_propios_cache", None) or {}
+        def _mio_del_tipo(b):
+            usos = max((mios_tipo.get(x[2]["alimento_id"], 0) for x in buckets[b]), default=0)
+            return min(int(math.log2(usos)) + 1, 15) if usos > 0 else 0
+
         cat_order = sorted(
             buckets.keys(),
             key=lambda b: (0 if any(p for _, p, _ in buckets[b]) else 1,
+                           -_mio_del_tipo(b),
                            -_uso_del_tipo(b),
                            abs(buckets[b][0][0] - objetivo_pieza) if objetivo_pieza
                            else -buckets[b][0][0])

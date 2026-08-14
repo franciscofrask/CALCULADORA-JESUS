@@ -178,6 +178,149 @@ class TestComponerMenu:
         correr(t())
 
 
+# ------------------------------------------------------------ comidas reales
+class TestComidasReales:
+    """Las opciones salen de comidas que alguien comió, no de inventar (14-08-2026).
+
+    Francisco: «tengo una base de datos de todas las dietas de los usuarios, ¿por qué no
+    la entrenas con eso?» y «un usuario puede armar un día sin sentido porque hizo una
+    prueba, y esos menús no pueden pasar». Estos tests fijan las dos mitades: que el
+    historial y la biblioteca alimentan las opciones, y que lo no repetido no pasa sin
+    juez.
+    """
+
+    def test_la_puerta_mecanica_del_juez(self):
+        """Lo repetido pasa solo; lo de una sola vez, no. Sin llamar a ningún modelo."""
+        from core.juez_menus import pasa_sin_juicio
+        assert pasa_sin_juicio(clientes_distintos=2)
+        assert pasa_sin_juicio(fechas_distintas=2)
+        assert not pasa_sin_juicio(clientes_distintos=1, fechas_distintas=1)
+        assert not pasa_sin_juicio()
+
+    def test_la_firma_ignora_cantidades_y_orden(self):
+        """La coherencia es de la combinación: 100 g o 300 g del mismo trío es el mismo
+        juicio, y el orden de los ids no puede crear firmas distintas."""
+        from core.juez_menus import firma_de
+        assert firma_de("comida", [3, 1, 2]) == firma_de("comida", [2, 3, 1, 1])
+        assert firma_de("desayuno", [1, 2]) != firma_de("comida", [1, 2])
+
+    def test_el_historial_del_cliente_vuelve_como_opcion(self):
+        """Dos días iguales en su historial → esa comida sale como opción, con SUS
+        alimentos exactos y las cantidades recuadradas a lo que falta hoy. Dos fechas
+        para que pase la puerta mecánica sin gastar juez (un día suelto es una prueba)."""
+        async def t():
+            from motor.motor_asyncio import AsyncIOMotorClient
+            db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+            tools = await _tools()
+            tools.navegar("Comida 2")
+            # Tres piezas reales del catálogo, buscadas como las buscaría la app.
+            pollo = (await tools.buscar_alimentos("pechuga de pollo", limite=1))["items"][0]
+            arroz = (await tools.buscar_alimentos("arroz", limite=1))["items"][0]
+            aceite = (await tools.buscar_alimentos("aceite de oliva", limite=1))["items"][0]
+            firma = sorted([pollo["id"], arroz["id"], aceite["id"]])
+            key = tools.bot.current_meal_key()
+            docs = [{"user_id": "test_agent_tools", "fecha": f"2099-01-0{i}",
+                     "comidas": {key: {"alimentos": [
+                         {"alimento_id": fid, "cantidad_g": 100} for fid in firma]}}}
+                    for i in (1, 2)]
+            await db.diets.insert_many(docs)
+            try:
+                restante = tools.bot.get_remaining_macros()
+                ops = await tools._menus_del_historial(restante, tools._momento_actual(),
+                                                       n=2, juicios={"n": 0})
+                assert ops, "el historial del cliente no volvió como opción"
+                assert ops[0]["origen"] == "historial"
+                assert sorted(i["id"] for i in ops[0]["items"]) == firma, \
+                    "la opción no lleva SUS alimentos exactos"
+                tot = {m: sum(i["macros"][m] for i in ops[0]["items"]) for m in ("P", "H", "G")}
+                assert all(abs(tot[m] - restante[m]) <= 24 for m in ("P", "H", "G")), \
+                    f"no se recuadró a lo que falta hoy: {tot} vs {restante}"
+            finally:
+                await db.diets.delete_many({"user_id": "test_agent_tools",
+                                            "fecha": {"$in": ["2099-01-01", "2099-01-02"]}})
+        correr(t())
+
+    def test_un_dia_de_prueba_no_pasa_sin_juez(self):
+        """Una sola fecha en el historial: la puerta mecánica no la deja pasar, y con el
+        cupo de juicios agotado la opción NO se ofrece. Es la mitad que protege de los
+        días sin sentido: sin veredicto no hay tarjeta."""
+        async def t():
+            from motor.motor_asyncio import AsyncIOMotorClient
+            db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+            tools = await _tools()
+            tools.navegar("Comida 2")
+            pollo = (await tools.buscar_alimentos("pechuga de pollo", limite=1))["items"][0]
+            arroz = (await tools.buscar_alimentos("arroz", limite=1))["items"][0]
+            key = tools.bot.current_meal_key()
+            await db.diets.insert_one({"user_id": "test_agent_tools", "fecha": "2099-02-01",
+                                       "comidas": {key: {"alimentos": [
+                                           {"alimento_id": pollo["id"], "cantidad_g": 100},
+                                           {"alimento_id": arroz["id"], "cantidad_g": 100}]}}})
+            try:
+                restante = tools.bot.get_remaining_macros()
+                # Cupo de juicios ya gastado: el candidato de una sola fecha no puede pasar.
+                from core.juez_menus import JUICIOS_POR_PETICION
+                ops = await tools._menus_del_historial(
+                    restante, tools._momento_actual(), n=2,
+                    juicios={"n": JUICIOS_POR_PETICION})
+                assert not ops, "una comida de UNA sola fecha pasó sin juez"
+            finally:
+                await db.diets.delete_many({"user_id": "test_agent_tools",
+                                            "fecha": "2099-02-01"})
+        correr(t())
+
+    def test_la_biblioteca_vuelve_como_opcion(self):
+        """Un menú real de la biblioteca (montado por 2+ personas, con el filtro de
+        calidad puesto) sale como opción cuando el objetivo es alcanzable. El objetivo se
+        toma de un menú real, así que siempre hay al menos un candidato posible."""
+        async def t():
+            from motor.motor_asyncio import AsyncIOMotorClient
+            db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+            doc = await db.meal_library.find_one(
+                {"tipo": "comida", "calidad.pasa": True, "clientes": {"$gte": 2},
+                 "repetido_de": {"$exists": False}}, {"_id": 0})
+            if not doc:
+                pytest.skip("la biblioteca de este entorno no tiene menús de 2+ clientes")
+            tools = await _tools()
+            tools.navegar("Comida 2")
+            objetivo = {m: float(doc["macros"][m]) for m in ("P", "H", "G")}
+            ops = await tools._menus_de_la_biblioteca(objetivo, tools._momento_actual(),
+                                                      n=2, juicios={"n": 0})
+            assert ops, "la biblioteca no dio ninguna opción para un objetivo alcanzable"
+            assert all(o["origen"] == "biblioteca" for o in ops)
+            assert all(o.get("nombre") for o in ops), "la opción de biblioteca va con nombre"
+        correr(t())
+
+    def test_los_evitados_del_cliente_no_vuelven_por_el_historial(self):
+        """Su historial trae lo que comía ANTES de sus restricciones de ahora: si hoy
+        evita una palabra, esa comida suya ya no se le ofrece."""
+        async def t():
+            from motor.motor_asyncio import AsyncIOMotorClient
+            db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+            tools = await _tools()
+            tools.navegar("Comida 2")
+            pollo = (await tools.buscar_alimentos("pechuga de pollo", limite=1))["items"][0]
+            arroz = (await tools.buscar_alimentos("arroz", limite=1))["items"][0]
+            key = tools.bot.current_meal_key()
+            docs = [{"user_id": "test_agent_tools", "fecha": f"2099-03-0{i}",
+                     "comidas": {key: {"alimentos": [
+                         {"alimento_id": pollo["id"], "cantidad_g": 100},
+                         {"alimento_id": arroz["id"], "cantidad_g": 100}]}}}
+                    for i in (1, 2)]
+            await db.diets.insert_many(docs)
+            tools.bot.state.setdefault("avoided_keywords", []).append("pollo")
+            try:
+                ops = await tools._menus_del_historial(
+                    tools.bot.get_remaining_macros(), tools._momento_actual(),
+                    n=2, juicios={"n": 0})
+                assert all(all("pollo" not in i["nombre"].lower() for i in o["items"])
+                           for o in ops), "volvió un alimento que el cliente evita hoy"
+            finally:
+                await db.diets.delete_many({"user_id": "test_agent_tools",
+                                            "fecha": {"$in": ["2099-03-01", "2099-03-02"]}})
+        correr(t())
+
+
 # ------------------------------------------------------------ revisar / editar / aplicar
 class TestBorradores:
     def test_revisar_detecta_marca_no_pedida(self):

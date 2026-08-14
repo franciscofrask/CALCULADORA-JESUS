@@ -41,6 +41,8 @@ COHERENCIA_MINIMA = 0.25
 # Un borrador con más desvío total que esto no puede aplicarse sin arreglo.
 MARGEN_BORRADOR = 12.0
 
+logger = logging.getLogger(__name__)
+
 _ROL_A_MACRO = {"proteina": "P", "hidrato": "H", "grasa": "G"}
 _MACRO_LBL = {"P": "proteína", "H": "hidratos", "G": "grasa"}
 # Con artículo, para la frase de qué cuenta: «te cuenta la grasa; la proteína no».
@@ -1284,6 +1286,165 @@ class AgentTools:
             tipos_puestos.add(cat2_de(self.foods.get(elegido["id"]) or {}))
         return elegidos
 
+    # ------------------------------------------------------------ comidas reales
+    # LAS OPCIONES SALEN DE COMIDAS QUE ALGUIEN COMIÓ, NO DE INVENTAR (14-08-2026).
+    #
+    # Francisco: «la IA no sabe montar menús... tengo una base de datos de todas las
+    # dietas de los usuarios, ¿por qué no la entrenas con eso?». Tenía razón en el fondo:
+    # el compositor INVENTA combinaciones pieza a pieza y luego filtra con estadísticas, y
+    # inventar-y-filtrar deja pasar tonterías (la crema de cacao con la paella salió por
+    # ahí). Una comida que una persona real comió es coherente por construcción: el
+    # trabajo bueno no es inventar, es encontrarla y reajustar las cantidades.
+    #
+    # Dos fuentes, por este orden, y el compositor queda de último recurso:
+    #   1. El HISTORIAL del propio cliente en esa misma comida (desde el 13-08 está
+    #      completo en producción). Nada le encaja mejor que lo suyo.
+    #   2. La BIBLIOTECA de comidas reales (266k, con su filtro de calidad de la cosecha).
+    #
+    # Y la puerta de coherencia, que es la otra mitad de lo que pidió: «un usuario puede
+    # armar un día sin sentido porque hizo una prueba, y esos menús no pueden pasar».
+    # Lo repetido pasa solo (2+ clientes distintos, o 2+ fechas en el historial propio:
+    # nadie repite un experimento); lo que una persona montó UNA vez lo juzga el modelo
+    # del chat una única vez en la vida, con el veredicto guardado (`core/juez_menus`).
+    # Si el juez no contesta, ese menú no se ofrece: mejor una opción menos.
+
+    async def _pasa_coherencia(self, momento: str, items: List[dict],
+                               clientes: int = 0, fechas: int = 0,
+                               juicios: dict = None) -> bool:
+        from core.juez_menus import (JUICIOS_POR_PETICION, firma_de, juzgar,
+                                     pasa_sin_juicio, veredicto_cacheado)
+        if pasa_sin_juicio(clientes, fechas):
+            return True
+        firma = firma_de(momento, [i["id"] for i in items])
+        visto = await veredicto_cacheado(self.db, firma)
+        if visto is not None:
+            return visto
+        if juicios is not None:
+            if juicios.get("n", 0) >= JUICIOS_POR_PETICION:
+                return False        # el resto de candidatos, a la próxima petición
+            juicios["n"] = juicios.get("n", 0) + 1
+        etiqueta = [f"{i['nombre']} ({float(i.get('cantidad_g') or 0):.0f} g)" for i in items]
+        return await juzgar(self.db, momento, etiqueta, firma)
+
+    async def _menus_del_historial(self, restante: dict, momento: str, n: int = 2,
+                                   offset: int = 0, incluir_ids: List[int] = None,
+                                   juicios: dict = None) -> List[dict]:
+        """Las comidas que ESTE cliente ya se monta en ESTA comida, recuadradas a hoy.
+
+        Mismo hueco del día (C1 con C1): su desayuno no se le ofrece de cena. Solo entran
+        las firmas comidas en dos fechas o más -- un día de prueba no se repite -- o las
+        que apruebe el juez. Las cantidades se recalculan siempre contra lo que falta HOY,
+        así que da igual cómo cuadrara aquel día.
+        """
+        from meal_builder import build_meal
+
+        key = self.bot.current_meal_key()
+        firmas: Dict[tuple, set] = {}
+        async for d in self.db.diets.find({"user_id": self.bot.usuario_id},
+                                          {"_id": 0, "comidas": 1, "fecha": 1}
+                                          ).sort("fecha", -1).limit(400):
+            comida = (d.get("comidas") or {}).get(key) or {}
+            ids = sorted({int(a["alimento_id"]) for a in (comida.get("alimentos") or [])
+                          if a.get("alimento_id") is not None})
+            if 2 <= len(ids) <= 7:
+                firmas.setdefault(tuple(ids), set()).add(str(d.get("fecha")))
+
+        pedidos = set(int(x) for x in (incluir_ids or []))
+        candidatas = sorted(firmas.items(), key=lambda kv: -len(kv[1]))
+        salida, saltadas = [], 0
+        for firma, fechas in candidatas:
+            if len(salida) >= n:
+                break
+            if pedidos and not pedidos <= set(firma):
+                continue
+            foods = [self.foods.get(i) for i in firma]
+            if any(f is None or self._es_evitado(f) for f in foods):
+                continue
+            if list(firma) in (self.bot.state.get("menus_vistos") or []):
+                continue
+            if saltadas < offset:                      # «dame otras»: rota el escaparate
+                saltadas += 1
+                continue
+            # Recuadre con LOS MISMOS alimentos: el resolvedor devuelve el alimento
+            # exacto, no el mejor parecido, que es el fallo clásico de buscar por nombre.
+            por_nombre = {f["nombre"]: f for f in foods}
+            async def _exacto(q, *a, **k):
+                f = por_nombre.get(q)
+                return [f] if f else []
+            try:
+                r = await build_meal(self.db, list(por_nombre.keys()), restante,
+                                     _exacto, forzar=True)
+            except Exception:
+                continue
+            items = [self._item_de(por_nombre[f["nombre"]],
+                                   float(f.get("cantidad", 0) or 0), f.get("macros", {}))
+                     for f in (r.get("foods_added") or []) if f.get("nombre") in por_nombre]
+            if len(items) != len(firma):
+                continue
+            tot = {m: sum(i["macros"][m] for i in items) for m in ("P", "H", "G")}
+            if sum(max(tot[m] - restante[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
+                continue
+            if sum(max(restante[m] - tot[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
+                continue
+            if not await self._pasa_coherencia(momento, items,
+                                               fechas=len(fechas), juicios=juicios):
+                continue
+            salida.append({"items": items, "origen": "historial", "nombre": None,
+                           "receta_url": None})
+        return salida
+
+    async def _menus_de_la_biblioteca(self, restante: dict, momento: str, n: int = 2,
+                                      offset: int = 0, incluir_ids: List[int] = None,
+                                      ya: List[tuple] = None,
+                                      juicios: dict = None) -> List[dict]:
+        """Comidas reales de la biblioteca (266k), ya cuadradas por su ajustador.
+
+        El filtro de calidad de la cosecha viene puesto de fábrica; aquí se añaden las
+        restricciones de ESTE cliente, la coherencia con el momento (una comida de
+        mediodía no se ofrece de desayuno) y la puerta del juez para lo que solo montó
+        una persona.
+        """
+        from meal_library import buscar_en_biblioteca
+
+        tipo = "peri" if momento == PERI else "comida"
+        try:
+            reales = await buscar_en_biblioteca(
+                self.db, restante,
+                alimento_ids=[int(x) for x in incluir_ids] if incluir_ids else None,
+                tipo=tipo, limit=n + offset + 8)
+        except Exception:
+            return []
+        ya = set(ya or [])
+        salida, saltadas = [], 0
+        for r in reales:
+            if len(salida) >= n:
+                break
+            ids = [int(i["alimento_id"]) for i in (r.get("items") or [])]
+            firma = tuple(sorted(ids))
+            if firma in ya or list(firma) in (self.bot.state.get("menus_vistos") or []):
+                continue
+            foods = [self.foods.get(i) for i in ids]
+            if any(f is None or self._es_evitado(f) for f in foods):
+                continue
+            if self.perfil and any(self.perfil.coherencia(f, momento) < COHERENCIA_MINIMA
+                                   for f in foods):
+                continue
+            if saltadas < offset:
+                saltadas += 1
+                continue
+            items = [self._item_de(self.foods[int(i["alimento_id"])],
+                                   float(i.get("cantidad_g") or 0),
+                                   i.get("macros_efectivos", {}))
+                     for i in r["items"]]
+            clientes = int(((r.get("popularidad") or {}).get("clientes")) or 0)
+            if not await self._pasa_coherencia(momento, items,
+                                               clientes=clientes, juicios=juicios):
+                continue
+            ya.add(firma)
+            salida.append({"items": items, "origen": "biblioteca",
+                           "nombre": r.get("nombre"), "receta_url": None})
+        return salida
+
     # ---------------------------------------------------------- filtros que dice el cliente
     # UN FILTRO QUE HABLA DEL CLIENTE TIENE QUE PODER DEMOSTRARLO (13-08-2026).
     #
@@ -1378,6 +1539,35 @@ class AgentTools:
             vueltas = self.bot.state.setdefault("vueltas_sugerencia", {})
             vueltas[key_comida] = int(vueltas.get(key_comida, 0)) + 1
         pedidas[key_comida] = int(pedidas.get(key_comida, 0)) + 1
+
+        # --- 0) COMIDAS REALES ANTES DE INVENTAR NADA (14-08-2026, ver el bloque de
+        # arriba). Primero lo que este cliente ya se monta en esta comida (tope 2 de n:
+        # lo suyo abre, pero las otras plazas traen cosas nuevas), luego la biblioteca.
+        # Con estilo o filtros de marca no se entra: una comida recuperada no sabe
+        # respetarlos, y ofrecer «lo de siempre» a quien pidió «algo ligero» es no
+        # escuchar. El peri tampoco: ahí manda el guion del método.
+        if momento != PERI and not solo_recetario and not estilo \
+                and generico is None and not marca:
+            vuelta = int(self.bot.state.get("vueltas_sugerencia", {}).get(key_comida, 0))
+            juicios = {"n": 0}
+            try:
+                opciones += await self._menus_del_historial(
+                    restante, momento, n=min(2, n), offset=vuelta,
+                    incluir_ids=incluir_ids, juicios=juicios)
+            except Exception:
+                logger.warning("historial de comidas no disponible", exc_info=True)
+            # La biblioteca rellena, pero deja UNA plaza libre: la última la pelean el
+            # recetario y el compositor, para que siempre asome algo distinto.
+            cupo_biblio = max(0, (n - 1) - len(opciones))
+            if cupo_biblio:
+                try:
+                    opciones += await self._menus_de_la_biblioteca(
+                        restante, momento, n=cupo_biblio,
+                        offset=vuelta, incluir_ids=incluir_ids,
+                        ya=[tuple(sorted(i["id"] for i in o["items"])) for o in opciones],
+                        juicios=juicios)
+                except Exception:
+                    logger.warning("biblioteca de comidas no disponible", exc_info=True)
 
         # --- 1) Recetario: sin estilo ni filtros que él no sabe respetar, y fuera del peri.
         # `solo_recetario` lo salta a propósito: cuando el cliente PIDE las recetas de
