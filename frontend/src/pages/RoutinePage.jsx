@@ -10,6 +10,16 @@ const DAYS_ES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'
 const DAY_LABELS = { lunes: 'L', martes: 'M', 'miércoles': 'X', jueves: 'J', viernes: 'V', 'sábado': 'S', domingo: 'D' };
 const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+// Fuera del componente a propósito, por lo mismo que el marco de RecuperarPage (13-08):
+// definido dentro, cada render creaba una función nueva y React remontaba la página entera
+// en vez de actualizarla. Aquí no hay ningún campo que escribir, así que no se pierde el
+// foco, pero ExerciseCard sí perdía su useState: al cambiar de día se cerraban todos los
+// ejercicios que tuvieras desplegados, y el animate-fade-in se relanzaba solo.
+// No usa nada del ámbito del componente, así que sube tal cual.
+const Wrap = ({ children }) => (
+    <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1200px] mx-auto animate-fade-in" data-testid="routine-page">{children}</div>
+);
+
 const RoutinePage = () => {
     const { api } = useAuth();
     const [routine, setRoutine] = useState(null);
@@ -43,10 +53,6 @@ const RoutinePage = () => {
     const dayRoutine = getDayData(selectedDay);
     const trainingDays = routine?.days?.filter(d => !d.is_rest).length || 0;
     const totalExercises = routine?.days?.reduce((sum, d) => sum + (d.exercises?.length || 0), 0) || 0;
-
-    const Wrap = ({ children }) => (
-        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1200px] mx-auto animate-fade-in" data-testid="routine-page">{children}</div>
-    );
 
     if (loading) {
         return <Wrap><div className="animate-pulse space-y-4">

@@ -20,6 +20,33 @@ import Logo12EN12 from '../components/Logo12EN12';
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
 
+/**
+ * El marco (logo, centrado y el "Volver a entrar") vive FUERA de RecuperarPage a propósito.
+ *
+ * Cuando estaba definido dentro, cada render creaba una función Marco nueva; React la veía
+ * como otro tipo de componente y desmontaba y volvía a montar el formulario entero. Como el
+ * formulario es controlado, eso pasaba en cada tecla: el input se quedaba sin foco y solo
+ * entraba una letra por clic. Medido el 13-08 escribiendo "prueba@correo.com": quedaba "p".
+ *
+ * Definido aquí arriba la identidad no cambia entre renders, así que el input es el mismo
+ * nodo del DOM de principio a fin y conserva el foco.
+ */
+const Marco = ({ children }) => {
+    const navigate = useNavigate();
+    return (
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6">
+            <div className="w-full max-w-sm flex flex-col items-center">
+                <div className="mb-10"><Logo12EN12 size="lg" /></div>
+                {children}
+                <button onClick={() => navigate('/auth')}
+                    className="mt-8 inline-flex items-center gap-1.5 text-white/50 hover:text-white text-sm transition-colors">
+                    <ArrowLeft className="w-4 h-4" /> Volver a entrar
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const RecuperarPage = () => {
     const navigate = useNavigate();
     const [params] = useSearchParams();
@@ -62,19 +89,6 @@ const RecuperarPage = () => {
             setCargando(false);
         }
     };
-
-    const Marco = ({ children }) => (
-        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6">
-            <div className="w-full max-w-sm flex flex-col items-center">
-                <div className="mb-10"><Logo12EN12 size="lg" /></div>
-                {children}
-                <button onClick={() => navigate('/auth')}
-                    className="mt-8 inline-flex items-center gap-1.5 text-white/50 hover:text-white text-sm transition-colors">
-                    <ArrowLeft className="w-4 h-4" /> Volver a entrar
-                </button>
-            </div>
-        </div>
-    );
 
     if (listo) {
         return (

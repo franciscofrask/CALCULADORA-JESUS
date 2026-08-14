@@ -71,6 +71,33 @@ const withObligatory = (ids) => {
     return s;
 };
 
+// A nivel de módulo a propósito (mismo repaso del 13-08 que el marco de RecuperarPage):
+// definida dentro de PreferencesSetup, cada render creaba una función nueva y React
+// desmontaba y volvía a montar las treinta filas de categorías enteras. Pasaba con cada
+// tecla del campo de palabras clave. Aquí no se perdía el foco porque ese campo es hermano
+// de la lista, no descendiente, pero tiraba y rehacía todo ese DOM por pulsación.
+// Todo lo que necesita entra por props, así que sube sin tocar nada más.
+const CategoryCheckbox = ({ cat, checked, onToggle, colorClass, locked = false }) => (
+    <label
+        className={`flex items-center gap-3 p-3 rounded-lg transition-all ${locked ? 'cursor-default' : 'cursor-pointer'} ${
+            checked
+                ? `${colorClass} border`
+                : 'bg-muted border border-transparent hover:bg-muted'
+        }`}
+        onClick={() => !locked && onToggle(cat.id)}
+    >
+        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
+            checked ? `${colorClass.includes('orange') ? 'bg-brand-orange border-brand-orange' : 'bg-red-500 border-red-500'}` : 'border-border'
+        }`}>
+            {checked && <Check className="w-3 h-3 text-white" />}
+        </div>
+        <span className={`text-sm flex-1 ${checked ? 'text-foreground font-medium' : 'text-foreground'}`}>
+            {cat.label}
+        </span>
+        {locked && <span className="text-xs text-muted-foreground flex-shrink-0">Obligatorio</span>}
+    </label>
+);
+
 const PreferencesSetup = ({
     api,
     initialPreferences = [],
@@ -161,28 +188,6 @@ const PreferencesSetup = ({
             setSaving(false);
         }
     };
-
-    const CategoryCheckbox = ({ cat, checked, onToggle, colorClass, locked = false }) => (
-        <label
-            key={cat.id}
-            className={`flex items-center gap-3 p-3 rounded-lg transition-all ${locked ? 'cursor-default' : 'cursor-pointer'} ${
-                checked
-                    ? `${colorClass} border`
-                    : 'bg-muted border border-transparent hover:bg-muted'
-            }`}
-            onClick={() => !locked && onToggle(cat.id)}
-        >
-            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
-                checked ? `${colorClass.includes('orange') ? 'bg-brand-orange border-brand-orange' : 'bg-red-500 border-red-500'}` : 'border-border'
-            }`}>
-                {checked && <Check className="w-3 h-3 text-white" />}
-            </div>
-            <span className={`text-sm flex-1 ${checked ? 'text-foreground font-medium' : 'text-foreground'}`}>
-                {cat.label}
-            </span>
-            {locked && <span className="text-xs text-muted-foreground flex-shrink-0">Obligatorio</span>}
-        </label>
-    );
 
     // EL PIE NO PUEDE QUEDAR DEBAJO DE LA BARRA DE NAVEGACIÓN.
     // La ventana se centra a 90vh, así que en un móvil de 844 px su borde inferior cae a unos
