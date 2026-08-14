@@ -11,7 +11,7 @@ import bcrypt
 from pymongo.errors import DuplicateKeyError
 
 from core.database import db
-from core.security import get_admin_user, generate_temp_password
+from core.security import get_admin_user, get_current_user, generate_temp_password
 from core.notion_sync import upsert_lead_to_notion
 from models.user import PLAN_CATALOG, planes_contratables
 from routes.audit import audit
@@ -19,7 +19,7 @@ from routes.audit import audit
 router = APIRouter(prefix="/leads", tags=["leads"])
 
 LEAD_STATUSES = ["nuevo", "contactado", "llamada_agendada", "propuesta_enviada", "convertido", "descartado"]
-LEAD_SOURCES = ["instagram", "web", "referido", "ghl", "whatsapp", "otro"]
+LEAD_SOURCES = ["instagram", "web", "referido", "ghl", "whatsapp", "renovacion", "otro"]
 DISCARD_REASONS = ["precio", "no_responde", "no_interesado", "competencia", "no_encaja", "otro"]
 
 
@@ -54,6 +54,63 @@ async def list_leads(
 
     leads = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return {"leads": leads, "total": len(leads)}
+
+
+@router.post("/quiero-volver")
+async def quiero_volver(data: dict, user=Depends(get_current_user)):
+    """El cliente al que se le acabo la membresia deja su correo para que le escriban.
+
+    Francisco, 14-08-2026: «el hablar con nosotros, que deje su mail y queda como lead».
+
+    Antes, la pantalla de caducado ofrecia escribir por WhatsApp y el numero nunca se
+    puso, asi que decia «escribenos y lo vemos» sin decir a quien: el que queria volver
+    se quedaba sin puerta. Ahora deja el correo aqui y aparece en Leads.
+
+    Esto no puede pasar por `POST /leads`: ese exige ser admin y ademas rechaza a quien
+    ya es cliente de la app, que es justo esta gente. Y no se crea un lead nuevo cada vez
+    que le da al boton: si ya escribio, se le anota otra vez encima del mismo.
+    """
+    email = (data.get("email") or user.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Escribe un correo para que podamos avisarte")
+
+    ahora = datetime.now(timezone.utc).isoformat()
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]},
+                                               {"_id": 0, "plan": 1, "current_period_end": 1}) or {}
+    nota = (f"Pidió seguir desde la app. Tenía el plan {perfil.get('plan') or 'sin plan'}"
+            f"{', hasta el ' + str(perfil.get('current_period_end'))[:10] if perfil.get('current_period_end') else ''}.")
+    if (data.get("mensaje") or "").strip():
+        nota += " Dice: " + str(data["mensaje"]).strip()[:400]
+
+    ya = await db.leads.find_one({"email": email}, {"_id": 0, "id": 1})
+    if ya:
+        await db.leads.update_one({"id": ya["id"]}, {
+            "$set": {"status": "nuevo", "updated_at": ahora, "notes": nota},
+            "$push": {"activity": {"fecha": ahora, "texto": "Volvió a pedir contacto desde la app"}},
+        })
+        return {"ok": True, "mensaje": "Ya te teníamos anotado. Te escribimos enseguida."}
+
+    lead = {
+        "id": str(uuid.uuid4()),
+        "name": user.get("name") or email.split("@")[0],
+        "email": email,
+        "phone": (user.get("phone") or "").strip(),
+        "source": "renovacion",
+        "status": "nuevo",
+        "notes": nota,
+        "assigned_to": None,
+        "next_action_date": None,
+        "created_at": ahora,
+        "updated_at": ahora,
+        "created_by": "el propio cliente",
+        "activity": [{"fecha": ahora, "texto": "Dejó su correo desde la pantalla de caducado"}],
+    }
+    await db.leads.insert_one(lead)
+    try:
+        await upsert_lead_to_notion(lead)
+    except Exception:
+        pass          # que Notion falle no puede tumbar la peticion del cliente
+    return {"ok": True, "mensaje": "Hecho. Te escribimos enseguida."}
 
 
 @router.post("")

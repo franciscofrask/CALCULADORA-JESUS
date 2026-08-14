@@ -133,21 +133,34 @@ const OnboardingChecklist = ({ steps, onDismiss, navigate, onResume, showResume 
 // EL PLAN SE ACABÓ (punto 41 del doc del 07-08).
 //
 // La calculadora antigua ya lo tenía resuelto y es lo que se copia: se corta el acceso, se
-// dice que la suscripción ha caducado y se le da a quién escribir - con el chat de WhatsApp
-// ya abierto y el mensaje escrito, porque si hay que redactarlo la mitad no escribe. Y se
-// añade la salida de la que se habló: la Membresía, que es donde cae el que no renueva.
+// dice que la suscripción ha caducado y se le da salida. Y la salida de la que se habló:
+// la Membresía, que es donde cae el que no renueva.
 //
-// OJO: el número de soporte hay que ponerlo. No estaba en ninguna parte del código y no me
-// lo puedo inventar, así que hasta que Francisco lo diga se enseña el bloque sin el botón de
-// WhatsApp en vez de un enlace que no lleva a nadie.
-const WHATSAPP_SOPORTE = '';   // ← el número con prefijo y sin signos: "34600111222"
-const MENSAJE_SOPORTE = 'Hola, soy {nombre}. Se me ha caducado la suscripción de 12EN12 y quiero saber cómo seguir.';
+// EL «PONTE EN CONTACTO» ERA UNA PUERTA PINTADA (14-08-2026). Ofrecía escribir por
+// WhatsApp y el número nunca llegó a ponerse, así que lo que salía era «escríbenos y lo
+// vemos» sin decir a quién ni dónde. Ahora deja su correo y entra en Leads, que es donde
+// alguien lo va a ver: «que deje su mail y queda como lead».
+const PlanCaducado = ({ navigate, nombre, api, email }) => {
+    const [correo, setCorreo] = useState(email || '');
+    const [enviando, setEnviando] = useState(false);
+    const [hecho, setHecho] = useState('');
 
-const PlanCaducado = ({ navigate, nombre }) => {
-    const texto = MENSAJE_SOPORTE.replace('{nombre}', nombre || '');
-    const enlace = WHATSAPP_SOPORTE
-        ? `https://wa.me/${WHATSAPP_SOPORTE}?text=${encodeURIComponent(texto)}`
-        : null;
+    const pedirContacto = async (e) => {
+        e.preventDefault();
+        setEnviando(true);
+        try {
+            const r = await api.post('/leads/quiero-volver', { email: correo.trim() });
+            setHecho(r.data?.mensaje || 'Hecho. Te escribimos enseguida.');
+        } catch (err) {
+            // Al cliente no se le enseña el detalle del backend: frase humana aquí y el
+            // porqué a la consola, que es donde sirve.
+            console.error('[caducado] no se pudo registrar el contacto', err);
+            toast.error('No hemos podido apuntarlo. Inténtalo en un momento.');
+        } finally {
+            setEnviando(false);
+        }
+    };
+
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto animate-fade-in" data-testid="plan-caducado">
             <div className="surface p-8 text-center">
@@ -156,16 +169,23 @@ const PlanCaducado = ({ navigate, nombre }) => {
                 </div>
                 <h2 className="heading-2 text-foreground mb-2">Tu suscripción ha caducado</h2>
                 <p className="text-muted-foreground mb-6 text-sm">
-                    Ponte en contacto con nosotros y vemos cómo sigues.
+                    Déjanos tu correo y te escribimos para ver cómo sigues.
                 </p>
-                {enlace ? (
-                    <a href={enlace} target="_blank" rel="noopener noreferrer"
-                        className="btn-brand inline-flex items-center gap-2" data-testid="soporte-whatsapp">
-                        Escribir por WhatsApp <ChevronRight className="w-4 h-4" />
-                    </a>
+
+                {hecho ? (
+                    <p className="text-brand font-medium text-sm" data-testid="caducado-hecho">{hecho}</p>
                 ) : (
-                    <p className="text-muted-foreground text-sm mb-2">Escríbenos y lo vemos.</p>
+                    <form onSubmit={pedirContacto} className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+                        <input type="email" required value={correo} onChange={(e) => setCorreo(e.target.value)}
+                            placeholder="tu@correo.com" data-testid="caducado-email"
+                            className="flex-1 bg-muted border border-border rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand/40" />
+                        <button type="submit" disabled={enviando} className="btn-brand whitespace-nowrap disabled:opacity-60"
+                            data-testid="caducado-enviar">
+                            {enviando ? 'Enviando...' : 'Que me escriban'}
+                        </button>
+                    </form>
                 )}
+
                 {/* La alternativa de la que se habló: seguir con la Membresía en vez de irse. */}
                 <div className="mt-6 pt-6 border-t border-border">
                     <p className="text-sm text-foreground font-medium mb-1">¿Prefieres seguir por tu cuenta?</p>
@@ -275,7 +295,7 @@ const ClientDashboard = () => {
     // No es lo mismo no haber empezado que haber terminado. El servidor dice cuál de los
     // tres casos es (profile.acceso.motivo).
     if (profile?.acceso?.motivo === 'caducado') {
-        return <PlanCaducado navigate={navigate} nombre={user?.name} />;
+        return <PlanCaducado navigate={navigate} nombre={user?.name} api={api} email={user?.email} />;
     }
     if (!profile || planUnpaid) {
         return (
