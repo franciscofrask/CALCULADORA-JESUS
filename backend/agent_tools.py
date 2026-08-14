@@ -1308,23 +1308,39 @@ class AgentTools:
     # del chat una única vez en la vida, con el veredicto guardado (`core/juez_menus`).
     # Si el juez no contesta, ese menú no se ofrece: mejor una opción menos.
 
-    async def _pasa_coherencia(self, momento: str, items: List[dict],
-                               clientes: int = 0, fechas: int = 0,
-                               juicios: dict = None) -> bool:
+    async def _veredicto_menu(self, momento: str, items: List[dict],
+                              clientes: int = 0, fechas: int = 0,
+                              juicios: dict = None) -> str:
+        """'pasa', 'fuera' o 'sin_veredicto' (cupo agotado o el juez caído, sin cachear).
+
+        La diferencia entre 'fuera' y 'sin_veredicto' importa: lo juzgado malo se tira
+        siempre; lo no juzgado se tira salvo que no quede NADA que enseñar, y entonces
+        sale con su aviso (quedarse sin nada es peor, decisión del 07-08).
+        """
         from core.juez_menus import (JUICIOS_POR_PETICION, firma_de, juzgar,
                                      pasa_sin_juicio, veredicto_cacheado)
         if pasa_sin_juicio(clientes, fechas):
-            return True
+            return "pasa"
         firma = firma_de(momento, [i["id"] for i in items])
         visto = await veredicto_cacheado(self.db, firma)
         if visto is not None:
-            return visto
+            return "pasa" if visto else "fuera"
         if juicios is not None:
             if juicios.get("n", 0) >= JUICIOS_POR_PETICION:
-                return False        # el resto de candidatos, a la próxima petición
+                return "sin_veredicto"   # el resto de candidatos, a la próxima petición
             juicios["n"] = juicios.get("n", 0) + 1
         etiqueta = [f"{i['nombre']} ({float(i.get('cantidad_g') or 0):.0f} g)" for i in items]
-        return await juzgar(self.db, momento, etiqueta, firma)
+        vale = await juzgar(self.db, momento, etiqueta, firma)
+        if not vale and await veredicto_cacheado(self.db, firma) is None:
+            return "sin_veredicto"       # el juez no contestó; no es lo mismo que un no
+        return "pasa" if vale else "fuera"
+
+    async def _pasa_coherencia(self, momento: str, items: List[dict],
+                               clientes: int = 0, fechas: int = 0,
+                               juicios: dict = None) -> bool:
+        """Para las fuentes recuperadas (historial, biblioteca): solo el 'pasa' vale."""
+        return await self._veredicto_menu(momento, items, clientes=clientes,
+                                          fechas=fechas, juicios=juicios) == "pasa"
 
     async def _menus_del_historial(self, restante: dict, momento: str, n: int = 2,
                                    offset: int = 0, incluir_ids: List[int] = None,
@@ -1551,10 +1567,14 @@ class AgentTools:
         # Con estilo o filtros de marca no se entra: una comida recuperada no sabe
         # respetarlos, y ofrecer «lo de siempre» a quien pidió «algo ligero» es no
         # escuchar. El peri tampoco: ahí manda el guion del método.
+        # El cupo de juicios de ESTA petición lo comparten las fuentes recuperadas y el
+        # compositor (4 llamadas al juez como mucho; el resto lo pone el cache). Se crea
+        # AQUÍ y no dentro del if: con estilo o filtros no hay recuperación, pero el
+        # compositor sigue necesitando su juez.
+        juicios = {"n": 0}
         if momento != PERI and not solo_recetario and not estilo \
                 and generico is None and not marca:
             vuelta = int(self.bot.state.get("vueltas_sugerencia", {}).get(key_comida, 0))
-            juicios = {"n": 0}
             try:
                 opciones += await self._menus_del_historial(
                     restante, momento, n=min(2, n), offset=vuelta,
@@ -1709,6 +1729,8 @@ class AgentTools:
         intento = 0
         descartes_bucle = None
         apartadas = []      # descartadas por compañía, por si no queda ninguna otra
+        sin_juicio = []     # compuestas que el juez no llegó a ver (cupo o caída)
+        rechazadas_juez = []   # compuestas que el juez tumbó, por si no queda NADA
         # Los intentos cuestan: cada uno monta un menú entero (una búsqueda por pieza más
         # el cuadre) y con estilo se llegaba a 29 s. Con esqueletos hacen falta menos, y de
         # sobra: cada uno sale ya con forma de comida en vez de a la primera que cuadre.
@@ -1952,6 +1974,24 @@ class AgentTools:
                     "items": items, "origen": "compuesto", "nombre": None,
                     "receta_url": None, "aviso_companyia": discordante[0]}))
                 continue
+            # EL COMPOSITOR TAMBIÉN PASA POR EL JUEZ (14-08-2026). Era la única fuente
+            # sin juzgar, y por ahí llegó «cereal de maíz con polvo de suero y cacahuete
+            # frito» servido como comida. Francisco: «yo no le veo mucho sentido». Lo
+            # juzgado malo se tira y el bucle reintenta otra combinación; lo que el juez
+            # no llegó a ver (cupo agotado, API caída) solo sale si no queda NADA más, y
+            # con su aviso. El peri queda fuera: ahí las piezas las nombra el método.
+            if momento != PERI:
+                v = await self._veredicto_menu(momento, items, juicios=juicios)
+                if v == "fuera":
+                    descartes_bucle = "un intento no parecía una comida de verdad y se descartó"
+                    if len(rechazadas_juez) < 3:
+                        rechazadas_juez.append({"items": items, "origen": "compuesto",
+                                                "nombre": None, "receta_url": None})
+                    continue
+                if v == "sin_veredicto":
+                    sin_juicio.append({"items": items, "origen": "compuesto",
+                                       "nombre": None, "receta_url": None})
+                    continue
             opciones.append({"items": items, "origen": "compuesto", "nombre": None,
                              "receta_url": None})
 
@@ -1961,6 +2001,23 @@ class AgentTools:
         if not opciones and apartadas:
             apartadas.sort(key=lambda x: -x[0])
             opciones = [op for _, op in apartadas[:n]]
+        # Y si lo único que quedó fue lo que el juez no llegó a ver, sale UNA con su
+        # aviso: quedarse sin nada que enseñar es peor (decisión del 07-08), pero decir
+        # que no está comprobada es obligatorio.
+        if not opciones and sin_juicio:
+            op = sin_juicio[0]
+            op["aviso_companyia"] = ("no he podido comprobar esta combinación contra el "
+                                     "método: revísala antes de darla por buena")
+            opciones = [op]
+        # Último peldaño: todo lo compuesto fue tumbado por el juez. Antes que una
+        # pantalla vacía (regla del 07-08: nadie se queda sin opciones), sale la menos
+        # mala DICIENDO que el método no la daría por buena. El cliente decide informado,
+        # que es la misma lógica del rescate de compañía.
+        if not opciones and rechazadas_juez:
+            op = rechazadas_juez[0]
+            op["aviso_companyia"] = ("esta combinación no la daría por buena el método: "
+                                     "revísala o pídeme otra cosa")
+            opciones = [op]
 
         # --- 3) A borrador, con totales, desvío y PUERTA DE CALIDAD del motor: un menú
         # que se va a lo loco del objetivo (49 g de grasa sobre 12 se vio en real) no
