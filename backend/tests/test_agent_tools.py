@@ -271,24 +271,32 @@ class TestComidasReales:
 
     def test_la_biblioteca_vuelve_como_opcion(self):
         """Un menú real de la biblioteca (montado por 2+ personas, con el filtro de
-        calidad puesto) sale como opción cuando el objetivo es alcanzable. El objetivo se
-        toma de un menú real, así que siempre hay al menos un candidato posible."""
+        calidad puesto y 5 piezas o menos) sale como opción cuando el objetivo es
+        alcanzable. Se prueban varios objetivos tomados de menús reales: alguno tiene
+        que volver; que uno concreto caiga por coherencia de momento o recuadre es
+        legítimo, que caigan todos no."""
         async def t():
             from motor.motor_asyncio import AsyncIOMotorClient
             db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
-            doc = await db.meal_library.find_one(
+            docs = [d async for d in db.meal_library.find(
                 {"tipo": "comida", "calidad.pasa": True, "clientes": {"$gte": 2},
-                 "repetido_de": {"$exists": False}}, {"_id": 0})
-            if not doc:
-                pytest.skip("la biblioteca de este entorno no tiene menús de 2+ clientes")
+                 "repetido_de": {"$exists": False}}, {"_id": 0}).limit(12)
+                if len(d.get("alimentos") or []) <= 5]
+            if not docs:
+                pytest.skip("la biblioteca de este entorno no tiene menús de 2+ clientes y ≤5 piezas")
             tools = await _tools()
             tools.navegar("Comida 2")
-            objetivo = {m: float(doc["macros"][m]) for m in ("P", "H", "G")}
-            ops = await tools._menus_de_la_biblioteca(objetivo, tools._momento_actual(),
-                                                      n=2, juicios={"n": 0})
-            assert ops, "la biblioteca no dio ninguna opción para un objetivo alcanzable"
-            assert all(o["origen"] == "biblioteca" for o in ops)
-            assert all(o.get("nombre") for o in ops), "la opción de biblioteca va con nombre"
+            encontrado = []
+            for doc in docs[:8]:
+                objetivo = {m: float(doc["macros"][m]) for m in ("P", "H", "G")}
+                ops = await tools._menus_de_la_biblioteca(objetivo, tools._momento_actual(),
+                                                          n=2, juicios={"n": 0})
+                if ops:
+                    encontrado = ops
+                    break
+            assert encontrado, "la biblioteca no dio ninguna opción para ningún objetivo real"
+            assert all(o["origen"] == "biblioteca" for o in encontrado)
+            assert all(o.get("nombre") for o in encontrado), "la opción de biblioteca va con nombre"
         correr(t())
 
     def test_los_evitados_del_cliente_no_vuelven_por_el_historial(self):

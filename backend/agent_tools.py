@@ -1342,6 +1342,72 @@ class AgentTools:
         return await self._veredicto_menu(momento, items, clientes=clientes,
                                           fechas=fechas, juicios=juicios) == "pasa"
 
+    async def _recuadrar_a_hoy(self, foods: List[dict], restante: dict):
+        """Recuadra un menu REAL al hueco de hoy. Devuelve los items, o None si no da.
+
+        Tres pasos, y el porque de cada uno (14-08-2026, del repaso de Francisco):
+
+        1. `build_meal` con el resolvedor EXACTO: los mismos alimentos, cantidades de hoy.
+        2. Si UN macro queda corto mas alla del margen, se remata con UNA pieza, igual
+           que hace el compositor: su desayuno de siempre mas un poco de pan es un
+           servicio; «elige y ya lo retocamos» es trabajo a medias.
+        3. Y si ni rematado entra SIN avisos, no se ofrece. Un menu recuperado sale
+           limpio o no sale: los rescates con aviso son del compositor, que es el ultimo
+           recurso y ahi se justifican.
+        """
+        from meal_builder import build_meal
+
+        por_nombre = {f["nombre"]: f for f in foods}
+
+        async def _exacto(q, *a, **k):
+            f = por_nombre.get(q)
+            return [f] if f else []
+
+        def _items_de(rb):
+            out = [self._item_de(por_nombre[x["nombre"]],
+                                 float(x.get("cantidad", 0) or 0), x.get("macros", {}))
+                   for x in (rb.get("foods_added") or []) if x.get("nombre") in por_nombre]
+            return out if len(out) == len(por_nombre) else None
+
+        try:
+            items = _items_de(await build_meal(self.db, list(por_nombre.keys()), restante,
+                                               _exacto, forzar=True))
+        except Exception:
+            return None
+        if items is None:
+            return None
+
+        def _tot(its):
+            return {m: sum(i["macros"][m] for i in its) for m in ("P", "H", "G")}
+
+        tot = _tot(items)
+        cortos = [m for m in ("P", "H", "G") if restante[m] - tot[m] > MARGEN_BORRADOR]
+        if len(cortos) == 1 and len(por_nombre) <= 5:
+            try:
+                res = await self.buscar_alimentos(texto="", para_macro=cortos[0], limite=3,
+                                                  heredar_estilo=False, anotar=False,
+                                                  como_pieza=True)
+                for extra in (res.get("items") or []):
+                    f2 = self.foods.get(extra["id"])
+                    if not f2 or f2["nombre"] in por_nombre or self._es_evitado(f2):
+                        continue
+                    por_nombre[f2["nombre"]] = f2
+                    nuevo = _items_de(await build_meal(self.db, list(por_nombre.keys()),
+                                                       restante, _exacto, forzar=True))
+                    if nuevo:
+                        items, tot = nuevo, _tot(nuevo)
+                    else:
+                        por_nombre.pop(f2["nombre"], None)
+                    break
+            except Exception:
+                pass
+
+        if sum(max(tot[m] - restante[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
+            return None
+        if any(restante[m] - tot[m] > MARGEN_BORRADOR for m in ("P", "H", "G")):
+            return None
+        return items
+
     async def _menus_del_historial(self, restante: dict, momento: str, n: int = 2,
                                    offset: int = 0, incluir_ids: List[int] = None,
                                    juicios: dict = None) -> List[dict]:
@@ -1381,26 +1447,8 @@ class AgentTools:
             if saltadas < offset:                      # «dame otras»: rota el escaparate
                 saltadas += 1
                 continue
-            # Recuadre con LOS MISMOS alimentos: el resolvedor devuelve el alimento
-            # exacto, no el mejor parecido, que es el fallo clásico de buscar por nombre.
-            por_nombre = {f["nombre"]: f for f in foods}
-            async def _exacto(q, *a, **k):
-                f = por_nombre.get(q)
-                return [f] if f else []
-            try:
-                r = await build_meal(self.db, list(por_nombre.keys()), restante,
-                                     _exacto, forzar=True)
-            except Exception:
-                continue
-            items = [self._item_de(por_nombre[f["nombre"]],
-                                   float(f.get("cantidad", 0) or 0), f.get("macros", {}))
-                     for f in (r.get("foods_added") or []) if f.get("nombre") in por_nombre]
-            if len(items) != len(firma):
-                continue
-            tot = {m: sum(i["macros"][m] for i in items) for m in ("P", "H", "G")}
-            if sum(max(tot[m] - restante[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
-                continue
-            if sum(max(restante[m] - tot[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
+            items = await self._recuadrar_a_hoy(foods, restante)
+            if items is None:
                 continue
             if not await self._pasa_coherencia(momento, items,
                                                fechas=len(fechas), juicios=juicios):
@@ -1439,6 +1487,12 @@ class AgentTools:
             if len(salida) >= n:
                 break
             ids = [int(i["alimento_id"]) for i in (r.get("items") or [])]
+            # El techo de piezas que ya usa el compositor: el 84,5 % de las comidas
+            # reales llevan 5 alimentos o menos. Un menu de seis o mas es picoteo de
+            # alguien (salio uno con un aperitivo frito y salado en pleno desayuno), no
+            # una comida que ofrecer.
+            if len(ids) > 5:
+                continue
             firma = tuple(sorted(ids))
             if firma in ya or list(firma) in (self.bot.state.get("menus_vistos") or []):
                 continue
@@ -1466,30 +1520,8 @@ class AgentTools:
             # de 51, todos cortos y todos con aviso. Se recuadran con build_meal y el
             # resolvedor exacto, como el historial; si ni recuadrado entra en margen,
             # ese menu no es para este dia y se salta.
-            por_nombre = {f["nombre"]: f for f in foods}
-            async def _exacto(q, *a, **k):
-                f = por_nombre.get(q)
-                return [f] if f else []
-            items = None
-            try:
-                rb = await build_meal(self.db, list(por_nombre.keys()), restante,
-                                      _exacto, forzar=True)
-                cand = [self._item_de(por_nombre[x["nombre"]],
-                                      float(x.get("cantidad", 0) or 0), x.get("macros", {}))
-                        for x in (rb.get("foods_added") or []) if x.get("nombre") in por_nombre]
-                if len(cand) == len(foods):
-                    items = cand
-            except Exception:
-                items = None
+            items = await self._recuadrar_a_hoy(foods, restante)
             if items is None:
-                items = [self._item_de(self.foods[int(i["alimento_id"])],
-                                       float(i.get("cantidad_g") or 0),
-                                       i.get("macros_efectivos", {}))
-                         for i in r["items"]]
-            tot = {m: sum(i["macros"][m] for i in items) for m in ("P", "H", "G")}
-            if sum(max(tot[m] - restante[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
-                continue
-            if sum(max(restante[m] - tot[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
                 continue
             clientes = int(((r.get("popularidad") or {}).get("clientes")) or 0)
             # El juicio de un menu de biblioteca va POR SU TIPO (comida/peri), no por el
