@@ -30,7 +30,12 @@ TIPO = "peri" if "--tipo" in sys.argv and "peri" in sys.argv else "comida"
 LIMITE = 0
 if "--limite" in sys.argv:
     LIMITE = int(sys.argv[sys.argv.index("--limite") + 1])
-PARALELO = 8      # llamadas a la vez; con mas, el limite de la API empieza a devolver 429
+# Llamadas a la vez. El 14-08 dos barridos a 8 en paralelo se bebieron el saldo de la
+# cuenta y tumbaron el chat de los clientes: el freno ya no es opcional. A 3, el barrido
+# gasta despacio y deja la API libre para Marco; se puede subir a mano si urge.
+PARALELO = 3
+if "--paralelo" in sys.argv:
+    PARALELO = max(1, min(8, int(sys.argv[sys.argv.index("--paralelo") + 1])))
 
 
 async def main():
