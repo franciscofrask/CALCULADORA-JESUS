@@ -22,6 +22,12 @@ export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(localStorage.getItem('token'));
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState(null);
+    // NO ES LO MISMO NO TENER PERFIL QUE NO PODER CARGARLO.
+    // Los dos acababan en `setProfile(null)`, así que un 500 del servidor dejaba al cliente
+    // navegando como si nunca hubiera contratado nada: sin plan, sin acceso y sin una sola
+    // pista de que algo había fallado. En producción le pasaba a un cliente en las 15 cargas
+    // seguidas (QA del 15-08). Un 404 sí es «todavía no tiene perfil», y ese es normal.
+    const [perfilNoCargado, setPerfilNoCargado] = useState(false);
     const [planCatalog, setPlanCatalog] = useState({});
 
     // ACTUAR COMO UN CLIENTE (punto 4.11). Cuando el entrenador abre la calculadora de un
@@ -107,9 +113,15 @@ export const AuthProvider = ({ children }) => {
             try {
                 const profileRes = await api.get('/clients/profile');
                 setProfile(profileRes.data);
+                setPerfilNoCargado(false);
             } catch (e) {
-                // No profile yet
                 setProfile(null);
+                // 404 = todavía no tiene perfil. Cualquier otra cosa es que no se ha podido
+                // traer, y eso hay que decirlo en vez de seguir como si no tuviera plan.
+                setPerfilNoCargado(e?.response?.status !== 404);
+                if (e?.response?.status !== 404) {
+                    console.error('No se pudo cargar el perfil del cliente:', e?.response?.status, e?.message);
+                }
             }
         } catch (error) {
             // UN FALLO DE RED NO ES UNA SESIÓN CADUCADA.
@@ -213,8 +225,10 @@ export const AuthProvider = ({ children }) => {
             try {
                 const profileRes = await api.get('/clients/profile');
                 setProfile(profileRes.data);
+                setPerfilNoCargado(false);
             } catch (e) {
                 setProfile(null);
+                setPerfilNoCargado(e?.response?.status !== 404);
             }
         }
     };
@@ -266,6 +280,7 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         profile,
+        perfilNoCargado,
         loading,
         login,
         register,

@@ -211,12 +211,33 @@ async def chatbot_configure(
         # leyó en el vídeo 1 del 15-08, y no lo dice nadie.
         falta = [f"{_gr(abs(round(r[k])))} g de {_NOMBRE_MACRO[k]}"
                  for k in ("P", "H", "G") if round(r[k]) > 0]
+        # LO QUE SOBRA TAMBIÉN SE DICE. Con 303 g de hidratos sobre un objetivo de 65, el
+        # resumen era «te faltan 105 g de proteína y 7 g de grasa» y se callaba los 238 g
+        # de hidratos de más, que es EL problema de ese día (QA del 15-08 en producción).
+        # La proteína no entra: pasarse de proteína el método lo tolera.
+        sobra = [f"{_gr(abs(round(r[k])))} g de {_NOMBRE_MACRO[k]}"
+                 for k in ("H", "G") if round(r[k]) < 0]
         if falta:
-            mensaje += f" Te faltan {', '.join(falta[:-1]) + ' y ' + falta[-1] if len(falta) > 1 else falta[0]}."
-        else:
+            mensaje += f" Te faltan {_enumerar(falta)}."
+        if sobra:
+            mensaje += f" Y te pasas de {_enumerar(sobra)}."
+        elif not falta:
             mensaje += " El día ya te cuadra."
 
-    if comidas_traidas:
+    # UNA COMIDA LLENA NO SE PRESENTA COMO VACÍA. Se aterrizaba en la Comida 3 con 300 g
+    # de arroz dentro y el mensaje era «Seguimos por Comida 3 ... ¿Qué quieres tomar?»,
+    # como si no hubiera nada: el cliente añade encima de lo que ya tiene sin saberlo (QA
+    # del 15-08 en producción). Si hay algo puesto, se dice qué hay y se ofrece tocarlo.
+    ya_puesto = (chatbot.state["comidas_completadas"].get(key) or {}).get("alimentos", [])
+    if ya_puesto:
+        nombres = _enumerar([a.get("nombre", "") for a in ya_puesto if a.get("nombre")])
+        mensaje += f"\n\nSeguimos por {label}, que ya tiene {nombres}."
+        rc = chatbot.get_remaining_macros()
+        pasa = [f"{_gr(abs(round(rc[k])))} g de {_NOMBRE_MACRO[k]}"
+                for k in ("H", "G") if round(rc[k]) < 0]
+        if pasa:
+            mensaje += f" Ahí te pasas de {_enumerar(pasa)}."
+    elif comidas_traidas:
         mensaje += f"\n\nSeguimos por {label}. Tu objetivo son {_frase_objetivo(objetivo)}."
     else:
         mensaje += (f"\n\nVamos con {label}. Tu objetivo es:\n"
@@ -229,7 +250,10 @@ async def chatbot_configure(
     reubicado = chatbot.state.get("reubicado_al_reconfigurar") or []
     if reubicado:
         mensaje += "\n\n" + _texto_reubicado(reubicado)
-    mensaje += "\n\n¿Qué quieres tomar?"
+    # A quien llega a una comida ya montada no se le pregunta qué quiere tomar: se le
+    # pregunta si la deja o la cambia.
+    mensaje += ("\n\n¿La dejamos así o le cambiamos algo?" if ya_puesto
+                else "\n\n¿Qué quieres tomar?")
 
     await save_chatbot_session(chatbot)
     return {
@@ -241,6 +265,12 @@ async def chatbot_configure(
         "meal_order": chatbot.state["meal_order"],
         "meal_nombre": label,
         "objetivo": objetivo,
+        # LO QUE FALTA, QUE NO ES LO MISMO QUE EL OBJETIVO. La cabecera del chat pinta
+        # «faltan ...» y se le estaba dando el objetivo entero: con la Comida 3 llena de
+        # arroz -- 240 g de hidratos sobre 16,7 -- decía «faltan 17 g de hidratos» cuando
+        # sobraban 223 (QA del 15-08 en producción). En una comida vacía los dos números
+        # coinciden, que es por lo que había pasado desapercibido.
+        "restante": chatbot.get_remaining_macros(),
         "day_overview": chatbot.get_day_overview(),
         "reubicado": reubicado,
         # Lo que ya hay montado en la comida a la que se llega: el front vaciaba su lista
@@ -267,6 +297,15 @@ def _gr(x) -> str:
 _NOMBRE_MACRO = {"P": "proteína", "H": "hidratos", "G": "grasa"}
 
 
+def _enumerar(partes: list) -> str:
+    """«A», «A y B», «A, B y C». Como lo diría una persona, no una lista separada por comas."""
+    if not partes:
+        return ""
+    if len(partes) == 1:
+        return partes[0]
+    return ", ".join(partes[:-1]) + " y " + partes[-1]
+
+
 def _frase_objetivo(objetivo: dict) -> str:
     return (f"{_gr(objetivo['P'])} g de proteína, {_gr(objetivo['H'])} de hidratos "
             f"y {_gr(objetivo['G'])} de grasa")
@@ -286,7 +325,22 @@ def _texto_reubicado(reubicado: list) -> str:
 # Los mensajes van por el bucle del agente (agent_loop) con sus herramientas. El router
 # de intenciones anterior se borró en F3 (06-08) tras validar el agente con el banco de
 # casos (48/60 del router frente a 59-60/60 del agente); volver atrás es git revert.
+SIN_MACROS = (
+    "Todavía no tienes macros asignados, así que no puedo montarte el día: cualquier "
+    "cantidad que te diera me la estaría inventando. Habla con tu entrenador para que te "
+    "los asigne y vuelve por aquí, que lo montamos en un momento."
+)
+"""Lo mismo que le dice Nutrición («aún no tienes macros asignados»), en la voz de Marco.
+
+El asistente era la única pantalla que NO lo comprobaba: con el cliente sin macros tiraba
+del relleno de `macros_por_fecha` (160 P de entreno), le montaba un día de 195 P y se lo
+guardaba en su dieta. En producción son 4 clientes activos, y ninguno debería comer eso.
+"""
+
+
 async def _procesar_mensaje(chatbot, texto: str, progreso=None):
+    if chatbot.sin_macros_asignados():
+        return {"action": "message", "message": SIN_MACROS, "sin_macros": True}
     from agent_loop import AgentLoop
     loop = await AgentLoop.crear(chatbot, progreso=progreso)
     return await loop.procesar(texto)
@@ -658,8 +712,26 @@ async def chatbot_save_to_diet(
     if fecha_sesion and fecha_sesion != fecha:
         return {"skipped": "cambio_de_dia", "fecha": fecha, "fecha_sesion": fecha_sesion}
 
-    # Chequeo de sobrescritura: ¿el día ya tiene alimentos?
+    # DOS PESTAÑAS NO SE PISAN EL DÍA (QA 15-08 en prod, el más caro de todos). Cada
+    # pestaña abre su sesión, y la que llevaba el estado viejo volcaba con overwrite=true
+    # y BORRABA el intra, la Comida 2 y la Comida 3 que la otra acababa de montar, además
+    # de devolver la configuración a la de antes. Nadie se enteraba.
+    #
+    # La última sesión que toca un día se apunta en la propia dieta: si el volcado viene
+    # de otra sesión distinta, no se escribe y se dice, que es lo que pidió Jesús («al
+    # menos debe avisar»). Volcar a mano con overwrite explícito sigue pudiendo.
     existing = await db.diets.find_one({"user_id": user_id, "fecha": fecha})
+    dueno = (existing or {}).get("sesion_chat")
+    if existing and dueno and dueno != session_id and not overwrite:
+        return {
+            "skipped": "otra_sesion",
+            "fecha": fecha,
+            "message": ("Este día lo estás montando en otra pestaña o en otro dispositivo. "
+                        "Para no pisar lo que hay allí, no lo he guardado desde aquí: sigue "
+                        "en la otra o recarga esta para trabajar con lo último."),
+        }
+
+    # Chequeo de sobrescritura: ¿el día ya tiene alimentos?
     if existing and not overwrite:
         tiene_alimentos = any(
             len((m or {}).get("alimentos", [])) > 0
@@ -682,6 +754,8 @@ async def chatbot_save_to_diet(
         "momento_entreno": chatbot.state.get("momento_entreno"),
         "opcion_peri": chatbot.state.get("opcion_peri"),
         "comidas": comidas,
+        # Quién ha escrito este día por última vez, para que la otra pestaña no lo pise.
+        "sesion_chat": session_id,
         "macros_snapshot": chatbot.state.get("macros_usuario"),
         "distribution_targets": targets,
         "is_cuadrado": False,

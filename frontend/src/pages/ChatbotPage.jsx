@@ -129,7 +129,19 @@ export default function ChatbotPage() {
   const p = persistedRef.current;
 
   const [sessionId, setSessionId] = useState(p.sessionId ?? null);
-  const [messages, setMessages] = useState(p.messages ?? []);
+  // LAS TARJETAS DE ANTES DE LA RECARGA SE QUEDAN, PERO SIN BOTÓN.
+  //
+  // Recargar a media respuesta dejaba en pantalla unas opciones que el servidor ya había
+  // tirado: enseñaban brócoli cuando la sesión iba por las espinacas, y el botón seguía
+  // ahí invitando a aplicar un menú que ya no existe (QA del 15-08 en producción). La
+  // conversación se conserva -- es su historia -- y lo que se quita es lo único que podía
+  // hacer daño: poder pulsarlas.
+  const [messages, setMessages] = useState(() => (p.messages ?? []).map(m => (
+    Array.isArray(m?.data?.borradores)
+      ? { ...m, data: { ...m.data,
+          borradores: m.data.borradores.map(b => ({ ...b, no_aplicable: true })) } }
+      : m
+  )));
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   // Qué está haciendo el asistente ahora mismo ("Montando el menú..."), del SSE.
@@ -429,7 +441,9 @@ export default function ChatbotPage() {
         setDistribucion(data.distribucion);
         setCurrentMeal(data.comida_actual);
         setMealNombre(data.meal_nombre || 'Comida 1');
-        setMacrosRestantes(data.objetivo || data.distribucion.comidas.C1);
+        // Lo que FALTA (ver la nota del backend): con la comida ya llena el objetivo y el
+        // restante no son el mismo número, y la cabecera habla de lo que falta.
+        setMacrosRestantes(data.restante || data.objetivo || data.distribucion.comidas.C1);
         if (data.day_overview) setDayOverview(data.day_overview);
         // Lo que ya hubiera montado en esa comida, no una lista vacía: al cambiar de
         // configuración, lo que estaba en una comida que desaparece (el intra al pasar a
@@ -619,6 +633,18 @@ export default function ChatbotPage() {
         `${API_URL}/api/chatbot/apply-draft?session_id=${sessionId}&borrador_id=${encodeURIComponent(borrador.id)}`,
         { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } });
       const data = await res.json();
+      // LA TARJETA APLICADA SE MARCA EN EL HILO (QA 15-08 en prod). El backend marca el
+      // borrador, pero la tarjeta que ya esta pintada es una copia dentro del mensaje y
+      // no se vuelve a renderizar: seguia con su boton "Elegir este menu" invitando a
+      // pulsarla otra vez. Se marca aqui, en el mensaje donde vive.
+      if (!data?.response?.action || data.response.action !== 'no_foods') {
+        setMessages(prev => prev.map(m => {
+          const bs = m?.data?.borradores;
+          if (!Array.isArray(bs) || !bs.some(b => b.id === borrador.id)) return m;
+          return { ...m, data: { ...m.data,
+            borradores: bs.map(b => (b.id === borrador.id ? { ...b, aplicado: true } : b)) } };
+        }));
+      }
       syncEstado(data);
       await handleBotResponse(data.response);
     } catch (e) {
@@ -900,7 +926,14 @@ export default function ChatbotPage() {
       const data = await res.json();
       // Volcado saltado a proposito: la sesion ya esta en otra fecha (ventana del cambio
       // de dia). Ni "guardado" ni aviso: el dia nuevo arranca con su propia carga.
-      if (res.ok && data.skipped) return;
+      if (res.ok && data.skipped === 'cambio_de_dia') return;
+      // Pero si lo ha frenado OTRA pestaña, el cliente tiene que saberlo: si no, cree
+      // que guardo y lo que ve aqui no es lo que hay en su dieta.
+      if (res.ok && data.skipped === 'otra_sesion') {
+        addMessage(data.message || 'Este día lo estás montando en otro sitio y no lo he '
+          + 'guardado desde aquí para no pisarlo.', false);
+        return;
+      }
       if (res.ok && !data.needs_confirmation) {
         recordarDia(dia);
         addMessage(`✅ Guardado en tu pestaña de nutrición (${formatDateLabel(dia)}).`, false);
@@ -1258,6 +1291,15 @@ export default function ChatbotPage() {
             )}
             {/* En movil el detalle va abreviado y en una sola linea: la version larga
                 ocupaba tres y dejaba la conversacion en un tercio de la pantalla. */}
+            {/* QUÉ DÍA SE ESTÁ MONTANDO. No salía en ningún sitio de la pantalla: se podía
+                estar montando el jueves que viene creyendo que era hoy, y solo se descubría
+                al volcar (QA del 15-08 en producción). Solo cuando NO es hoy: poner «Hoy»
+                fijo ahí arriba gasta la línea sin decir nada. */}
+            {targetDate && targetDate !== todayLocal() && (
+              <p className="text-xs font-medium text-orange-500 truncate" data-testid="chatbot-dia-activo">
+                Montando {formatDateLabel(targetDate)}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground truncate">
               {step === 'building_meal' && (
                 <>
@@ -1268,7 +1310,7 @@ export default function ChatbotPage() {
                   <span className="sm:hidden">{loQueQueda}</span>
                   <span className="hidden sm:inline">
                     {mealNombre} • {loQueQuedaLargo}
-                    {dayOverview && ` · Día: ${dayOverview.completas} de ${dayOverview.total_comidas} comidas`}
+                    {dayOverview && ` · Día: ${dayOverview.completas} de ${dayOverview.total_comidas} ${dayOverview.total_comidas === 1 ? 'comida' : 'comidas'}`}
                   </span>
                 </>
               )}

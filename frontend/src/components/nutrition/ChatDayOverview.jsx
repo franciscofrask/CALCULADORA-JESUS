@@ -18,7 +18,7 @@ const CLAVES = ['P', 'H', 'G'];
 
 const fmt = (x) => {
     const n = Math.round((x || 0) * 10) / 10;
-    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 };
 
 /** Barras finas de los tres macros, en horizontal, para ver la comida de un vistazo. */

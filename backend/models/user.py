@@ -33,6 +33,23 @@ def validar_dict_macros(v):
         limpio[k] = num
     return limpio
 
+
+def lista_desde_texto(v):
+    """Un campo de lista con un texto suelto dentro no puede tumbar la pantalla entera.
+
+    Un perfil de producción tenía `injuries: "no"` -- alguien escribió la respuesta en vez
+    de marcar la casilla -- y eso convertía GET /clients/profile en un 500 EN CADA CARGA:
+    el front se lo tragaba y ese cliente navegaba sin perfil, sin plan y sin acceso, sin que
+    nada se lo dijera (QA del 15-08 en producción). La respuesta correcta a «no» es una
+    lista vacía.
+    """
+    if isinstance(v, str):
+        limpio = v.strip()
+        if not limpio or limpio.lower() in ("no", "ninguna", "ninguno", "nada", "n/a", "-"):
+            return []
+        return [limpio]
+    return v
+
 # =========================================================
 # CATÁLOGO DE PLANES (fuente única)
 # =========================================================
@@ -744,6 +761,11 @@ class ClientProfile(BaseModel):
     # webhook de leads) que nunca lo escribieron.
     created_at: Optional[str] = None
 
+    @field_validator("injuries", "equipment", mode="before")
+    @classmethod
+    def _texto_suelto_es_una_lista(cls, v):
+        return lista_desde_texto(v)
+
 class ClientProfileCreate(BaseModel):
     plan: str
     price: Optional[float] = None
@@ -803,6 +825,11 @@ class ClientProfileUpdate(BaseModel):
     @classmethod
     def _macros_en_rango(cls, v):
         return validar_dict_macros(v)
+
+    @field_validator("injuries", "equipment", mode="before")
+    @classmethod
+    def _texto_suelto_es_una_lista(cls, v):
+        return lista_desde_texto(v)
 
 # Asignación de coach (trainer_id=None quita el coach)
 class TrainerAssign(BaseModel):

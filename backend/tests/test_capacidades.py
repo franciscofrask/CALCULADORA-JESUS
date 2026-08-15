@@ -64,9 +64,13 @@ def test_el_recetario_existe_y_lo_dice(pregunta):
     texto = str(r.get("message") or "").lower()
     del_recetario = [b for b in (r.get("borradores") or []) if b.get("origen") == "recetario"]
     assert del_recetario, f"no trae ninguna receta de Jesús: {texto[:160]}"
-    assert all(b.get("receta_url") for b in del_recetario), (
-        "las trae sin enlace: el cliente no puede ver la receta entera")
     assert all(b.get("nombre") for b in del_recetario), "las trae sin nombre"
+    # SIN ENLACE, Y ESO ES LO QUE SE QUIERE. Este test exigía `receta_url` hasta el
+    # 15-08-2026, cuando Francisco pidió quitar los enlaces de las tarjetas del chat: la
+    # receta se monta aquí, y mandar al cliente fuera de la app a media conversación es
+    # perderlo. Queda al revés para que nadie los devuelva sin darse cuenta.
+    assert not any(b.get("receta_url") for b in del_recetario), (
+        "las tarjetas del chat volvieron a traer enlace a la receta")
 
 
 def test_no_niega_tener_recetario():

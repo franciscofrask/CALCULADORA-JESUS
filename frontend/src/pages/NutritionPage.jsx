@@ -869,8 +869,24 @@ const NutritionPage = () => {
         if (dateStr === hoyISO()) return 'Hoy';
         const [y, m, d] = dateStr.split('-').map(Number);
         const local = new Date(y, m - 1, d);
-        return local.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+        // CON EL AÑO SI NO ES ESTE (QA 15-08). Se podía acabar montando la dieta en enero
+        // de 2020 y la cabecera solo decía «Mié, 1 Ene»: nada en pantalla te sacaba del
+        // error. El año solo aparece cuando hace falta, para no ensuciar el día a día.
+        const esteAno = new Date().getFullYear();
+        return local.toLocaleDateString('es-ES', {
+            weekday: 'short', day: 'numeric', month: 'short',
+            ...(y !== esteAno ? { year: 'numeric' } : {}),
+        });
     };
+
+    // Un día fuera de temporada no tiene plan: los macros que se pintan son los de hoy
+    // proyectados, y eso hay que decirlo. Sesenta días es margen de sobra para repasar
+    // atrás y planificar adelante sin que salte el aviso.
+    const diasDesdeHoy = (() => {
+        const [y, m, d] = (currentDate || hoyISO()).split('-').map(Number);
+        return Math.round((new Date(y, m - 1, d) - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000);
+    })();
+    const fechaFueraDePlan = Math.abs(diasDesdeHoy) > 60;
 
     // Meal order based on config
     // Calma esModoSinRepartoDeMacrosPorComidas (coach-set quiereRepartoDeComidas=false):
@@ -2150,6 +2166,22 @@ const NutritionPage = () => {
                         <p className="caption mb-1.5">Cómo ver las comidas</p>
                         <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
                     </div>
+                </div>
+            )}
+
+            {/* UN DIA MUY LEJOS DE HOY NO TIENE PLAN, Y SE DICE (QA 15-08). Se podia abrir
+                el 1 de enero de 2020 y salia un dia entero con sus objetivos repartidos,
+                como si el metodo hubiera estado ahi: eran los macros de hoy proyectados.
+                Sin aviso, el cliente monta en una fecha que no le sirve de nada. */}
+            {fechaFueraDePlan && (
+                <div className="surface mb-4 flex items-start gap-2 border-l-4 border-amber-500 p-3 text-sm"
+                    data-testid="aviso-fuera-de-plan">
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+                    <span>
+                        Este día queda {diasDesdeHoy < 0 ? 'muy atrás' : 'muy lejos'} de hoy y no tiene
+                        un plan propio: los objetivos que ves son los de tus macros de ahora. Si querías
+                        otro día, vuelve con la flecha o el calendario.
+                    </span>
                 </div>
             )}
 

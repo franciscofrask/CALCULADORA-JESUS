@@ -18,7 +18,7 @@ const FASE_MACRO = { proteina: 'P', hidratos: 'H', grasa: 'G' };
 
 const fmt = (x) => {
     const n = Math.round((x || 0) * 10) / 10;
-    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 };
 
 export const ChatSuggestions = ({ data, onElegir, disabled }) => {

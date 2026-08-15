@@ -37,10 +37,12 @@ import { num1 } from '../../lib/numeros';
 
 const normalizar = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+// Tono oscuro en claro y claro en oscuro: los 500 sobre blanco se quedan por debajo de
+// 3:1 y a este tamaño no se leen (QA del 15-08 en producción).
 const MACRO_STYLE = {
-    P: 'text-red-500',
-    H: 'text-blue-500',
-    G: 'text-yellow-500',
+    P: 'text-red-700 dark:text-red-400',
+    H: 'text-blue-700 dark:text-blue-400',
+    G: 'text-yellow-700 dark:text-yellow-400',
 };
 
 const MACRO_NOMBRE = {

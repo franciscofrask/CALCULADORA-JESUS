@@ -225,6 +225,15 @@ _ESQUEMAS = [
      "parameters": {"type": "object", "properties": {
          "fecha": {"type": "string", "description": "YYYY-MM-DD ya resuelta a fecha real"}},
          "required": ["fecha"]}},
+    {"name": "copiar_de_otro_dia",
+     "description": ("«Ponme lo mismo que comí ayer», «repíteme la cena del lunes»: trae "
+                     "esa MISMA comida de otra fecha suya y la deja como una opción para "
+                     "que la elija. NO cambia el día que se está montando (para eso está "
+                     "cambiar_de_dia) y NO la aplica sola. Las cantidades salen ajustadas a "
+                     "lo que le falta hoy, y eso hay que decírselo."),
+     "parameters": {"type": "object", "properties": {
+         "fecha": {"type": "string", "description": "YYYY-MM-DD del día del que se copia, ya resuelta"}},
+         "required": ["fecha"]}},
 ]
 TOOLS_OPENAI = [{"type": "function", "function": e} for e in _ESQUEMAS]
 
@@ -257,6 +266,9 @@ CÓMO TRABAJAS:
 - Si te nombra las piezas de una comida por montar («quiero A con B»), eso es un encargo, no una consulta: móntala ENTERA con eso dentro y lo que falte para cuadrarla, en UNA propuesta. Un abanico de opciones es para cuando pide opciones; y una opción que no cuadra no se enseña como si valiera.
 - Si el cliente veta algo o cuenta una alergia, respétalo en lo que propongas a partir de ahí.
 - Si una herramienta no devuelve nada, di por qué (viene en el resultado) y ofrece la alternativa; no rellenes con inventos.
+- «Ponme lo mismo que comí ayer» o «repíteme la cena del lunes» SÍ se puede: `copiar_de_otro_dia` con esa fecha resuelta. No digas que no ves otros días. Cuando la traiga, cuéntale de qué día viene y que los gramos van ajustados a lo que le falta hoy, no son los de aquel día.
+- LO QUE DICES Y LO QUE ENSEÑAS TIENEN QUE DECIR LO MISMO. Si vas a contarle que lo que ha salido NO es lo que te pidió («esto no es una pizza de verdad»), no se lo dejes en pantalla con su botón de elegir: descarta esas opciones (editar_comida con op='descartar_opciones') y ofrécele rehacerlas o buscar las piezas a mano. Una tarjeta pulsable debajo de un texto que dice que no vale es la app contradiciéndose.
+- LOS SUPLEMENTOS NO LOS PAUTAS TÚ. Si te pregunta por creatina, proteína en polvo, vitaminas o cualquier suplemento, no le recomiendes ninguno ni le des dosis ni horarios: los suyos están en su pestaña de Suplementación, que es la que manda, y lo que no esté ahí se lo ajustamos nosotros. Dilo en una línea y sigue con la comida. (Sí puedes MONTAR con un batido de proteína si él lo pide: eso es comida del catálogo, no una pauta.)
 
 CÓMO HABLAS:
 - Cercano, claro y directo, como alguien del equipo que está al lado. Nada de tono de robot ni de manual.
@@ -522,7 +534,16 @@ class AgentLoop:
             f"Hoy es {dias[hoy.weekday()]} {hoy.isoformat()}. "
             f"Estás montando la dieta del {dias[d_montando.weekday()]} {montando}. "
             f"Si el cliente dice «mañana» se refiere al día siguiente al que estáis "
-            f"montando: {siguiente}. «Pasado mañana» es el de después.",
+            f"montando: {siguiente}. «Pasado mañana» es el de después. "
+            # «HOY» ES HOY Y NO SE PREGUNTA (QA del 15-08 en producción). Montando el 20,
+            # a un «vamos con hoy» contestaba «estamos montando el jueves 20/08, no el de
+            # hoy real; si quieres que trabajemos sobre hoy, dímelo» -- que es justo lo que
+            # el cliente acababa de decir. Pedir permiso para lo que ya te han pedido es el
+            # bucle de siempre.
+            f"«Hoy» es SIEMPRE {hoy.isoformat()}, la fecha del calendario, aunque estéis "
+            f"montando otra: si lo dice, llama a cambiar_de_dia con {hoy.isoformat()} y "
+            f"sigue, sin volver a preguntárselo. «Ayer» es "
+            f"{(hoy - timedelta(days=1)).isoformat()}.",
             f"Día de {estado.get('tipo_dia') or 'entrenamiento'}. "
             f"Comida actual: {actual['comida']}.",
             f"Objetivo de esta comida: P={actual['objetivo'].get('P')} "
@@ -625,6 +646,8 @@ class AgentLoop:
                 return t.configurar_dia(**args)
             if nombre == "cambiar_de_dia":
                 return t.cambiar_de_dia(**args)
+            if nombre == "copiar_de_otro_dia":
+                return await t.copiar_de_otro_dia(**args)
             if nombre == "recordar":
                 return t.recordar(**args)
             return {"error": f"herramienta desconocida '{nombre}'"}
@@ -1115,7 +1138,7 @@ class AgentLoop:
                         pass   # sin tarjetas, pero el guion se dice igual
                 if nombre == "ofrecer_sustitutos" and resultado.get("opciones"):
                     sugerencias = resultado["opciones"]
-                if nombre == "componer_menu" and resultado.get("borradores"):
+                if nombre in ("componer_menu", "copiar_de_otro_dia") and resultado.get("borradores"):
                     # ACUMULAR, no pisar: el asistente numera las opciones según las va
                     # componiendo entre varias llamadas; si cada llamada sustituyera las
                     # tarjetas, "elige la opción 2" apuntaría a una tarjeta invisible.

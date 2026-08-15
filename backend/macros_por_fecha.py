@@ -103,24 +103,53 @@ async def resolver(db, profile: dict, fecha: Optional[str]) -> Tuple[dict, dict,
     return training, rest, peri
 
 
+def en_castellano(m: Optional[dict]) -> dict:
+    """Los tres macros con los nombres de la app, vengan como vengan.
+
+    Un mismo `macros_training` puede estar guardado en castellano (`proteinas`), en inglés
+    (`protein`) o con las dos parejas: 184 perfiles de producción llevan ambas, uno solo el
+    inglés y el historial de ese cliente, también. Leer solo `proteinas` con un `.get(...,
+    160)` detrás convertía ese caso en silencio en «este cliente no tiene macros»: el
+    asistente le montaba el día con el relleno de 160 P mientras Nutrición le enseñaba los
+    suyos, 40 g de proteína más (QA del 15-08 en producción).
+    """
+    m = m or {}
+    return {
+        "proteinas": m.get("proteinas", m.get("protein")),
+        "hidratos": m.get("hidratos", m.get("carbs")),
+        "grasas": m.get("grasas", m.get("fat")),
+    }
+
+
+POR_DEFECTO = {"p_entreno": 160, "h_entreno": 50, "g_entreno": 40,
+               "p_peri": 35, "h_peri": 15,
+               "p_descanso": 140, "h_descanso": 40, "g_descanso": 40}
+"""Relleno para que las cuentas no revienten. NO SON LOS MACROS DE NADIE: quien los reciba
+tiene que mirar `propios` antes de montarle el día a alguien con ellos."""
+
+
 async def para_el_chat(db, profile: Optional[dict], fecha: Optional[str]) -> dict:
     """Lo mismo, con los nombres que usa el asistente (`p_entreno`, `h_peri`...).
 
-    Los valores por defecto son los que ya había en `/chatbot/start` para un usuario sin
-    perfil, y se conservan tal cual para no cambiar ese caso de paso.
+    Devuelve además `propios`: False cuando el cliente no tiene macros asignados y lo que
+    van dentro es el relleno de `POR_DEFECTO`. Nutrición a ese cliente le corta con «aún no
+    tienes macros asignados», mientras que el asistente le montaba y le GUARDABA un día de
+    195 P que no era suyo (QA del 15-08 en producción). Los defaults se quedan porque hay
+    cuentas que se hacen igual; lo que cambia es que ahora se sabe que son un relleno.
     """
     if not profile:
-        return {"p_entreno": 160, "h_entreno": 50, "g_entreno": 40,
-                "p_peri": 35, "h_peri": 15,
-                "p_descanso": 140, "h_descanso": 40, "g_descanso": 40}
-    mt, mr, mp = await resolver(db, profile, fecha)
+        return {**POR_DEFECTO, "propios": False}
+    mt, mr, mp = (en_castellano(x) for x in await resolver(db, profile, fecha))
+    def v(m, k, defecto):
+        return defecto if m.get(k) is None else m[k]
     return {
-        "p_entreno": mt.get("proteinas", 160),
-        "h_entreno": mt.get("hidratos", 50),
-        "g_entreno": mt.get("grasas", 40),
-        "p_peri": mp.get("proteinas", 35),
-        "h_peri": mp.get("hidratos", 15),
-        "p_descanso": mr.get("proteinas", 140),
-        "h_descanso": mr.get("hidratos", 40),
-        "g_descanso": mr.get("grasas", 40),
+        "p_entreno": v(mt, "proteinas", 160),
+        "h_entreno": v(mt, "hidratos", 50),
+        "g_entreno": v(mt, "grasas", 40),
+        "p_peri": v(mp, "proteinas", 35),
+        "h_peri": v(mp, "hidratos", 15),
+        "p_descanso": v(mr, "proteinas", 140),
+        "h_descanso": v(mr, "hidratos", 40),
+        "g_descanso": v(mr, "grasas", 40),
+        "propios": bool(mt.get("proteinas") or mr.get("proteinas")),
     }

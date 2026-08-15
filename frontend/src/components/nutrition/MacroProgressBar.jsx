@@ -3,6 +3,12 @@
  */
 import React from 'react';
 
+// Coma decimal y sin ceros de relleno, como el resto de la casa (QA 15-08).
+const gr = (x) => {
+    const n = Math.round((Number(x) || 0) * 10) / 10;
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+};
+
 export const MacroProgressBar = ({ 
     label, 
     current, 
@@ -18,7 +24,7 @@ export const MacroProgressBar = ({
             <div className="flex justify-between text-xs">
                 <span className="text-zinc-400">{label}</span>
                 <span className={isOver ? 'text-red-400' : 'text-zinc-300'}>
-                    {current.toFixed(1)}g / {target}g
+                    {gr(current)} g / {gr(target)} g
                     {showPercentage && <span className="text-zinc-500 ml-1">({Math.round(percentage)}%)</span>}
                 </span>
             </div>

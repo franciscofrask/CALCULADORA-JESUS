@@ -815,7 +815,7 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
 // =============== CLIENT LAYOUT ===============
 
 const ClientLayout = () => {
-    const { user, logout, profile, api, can, planUnpaid, myPlan } = useAuth();
+    const { user, logout, profile, perfilNoCargado, api, can, planUnpaid, myPlan } = useAuth();
     // «Ajustar macros» solo si de verdad puede ajustarlos (punto 6.2). Al cliente al que se los
     // lleva su entrenador la pantalla se llama «Mis macros», y el menú tiene que decir lo mismo:
     // un enlace que promete ajustar y lleva a una pantalla de solo lectura es la misma promesa
@@ -986,6 +986,18 @@ const ClientLayout = () => {
                 </header>
 
                 <main className="flex-1 pb-20 lg:pb-0">
+                    {/* Si el perfil no ha podido cargarse, DECIRLO. Sin esto la app se
+                        comporta como si el cliente no tuviera plan -- sin macros, sin
+                        acceso -- y él no tiene forma de saber que lo que ve es un fallo
+                        y no su cuenta. */}
+                    {perfilNoCargado && (
+                        <div data-testid="aviso-perfil-no-cargado"
+                            className="mx-4 mt-4 rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+                            No hemos podido cargar tus datos ahora mismo, así que puede que
+                            veas la app incompleta. Vuelve a entrar en un momento y, si sigue
+                            igual, escríbenos.
+                        </div>
+                    )}
                     {/* Igual que en el panel del coach: un fallo de una pantalla no puede
                         dejar al cliente sin app. Ver LimiteDeError. */}
                     <LimiteDeError clave={location.pathname}>

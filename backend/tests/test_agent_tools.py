@@ -526,3 +526,67 @@ class TestEstadoYNavegacion:
             assert len([c for c in r["dia"]["comidas"] if c["momento"] != "peri"]) == 3
             assert r["dia"]["tipo_dia"] == "descanso"
         correr(t())
+
+
+# ------------------------------------------------------- copiar_de_otro_dia
+# «Ponme lo mismo que comí ayer» no lo cubría NADA: el asistente contestaba «no puedo ver
+# lo que comiste ayer, solo tengo el día de hoy» (vídeo de Jesús del 15-08 y QA del mismo
+# día en producción). Estos tests fijan la puerta nueva y sus tres noes.
+class TestCopiarDeOtroDia:
+    def test_la_fecha_tiene_que_ser_una_fecha(self):
+        async def t():
+            tools = await _tools()
+            for mala in (None, "ayer", "12/8", "2026-13-99"):
+                r = await tools.copiar_de_otro_dia(fecha=mala)
+                assert not r["ok"], f"aceptó '{mala}'"
+        correr(t())
+
+    def test_un_dia_sin_nada_se_dice_no_se_inventa(self):
+        async def t():
+            tools = await _tools()
+            r = await tools.copiar_de_otro_dia(fecha="2019-01-01")
+            assert not r["ok"]
+            assert "no tiene nada guardado" in r["error"]
+        correr(t())
+
+    def test_no_se_copia_del_dia_que_se_esta_montando(self):
+        async def t():
+            tools = await _tools()
+            tools.bot.state["fecha_objetivo"] = "2026-08-16"
+            r = await tools.copiar_de_otro_dia(fecha="2026-08-16")
+            assert not r["ok"]
+        correr(t())
+
+    def test_trae_la_comida_de_ese_dia_como_opcion(self):
+        """Con historial de verdad devuelve UNA opción, con nombre que dice de dónde sale
+        y las cantidades recalculadas contra lo que falta HOY (no las de aquel día)."""
+        async def t():
+            from motor.motor_asyncio import AsyncIOMotorClient
+            db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+            tools = await _tools()
+            u = await db.users.find_one({"email": "francisco@test.com"}, {"_id": 0, "id": 1})
+            if not u:
+                pytest.skip("sin cuenta de pruebas en esta base")
+            # `usuario_id` sale del nombre de la sesión, así que se cambia la sesión.
+            tools.bot.session_id = f"chat_{u['id']}_20260815"
+            # Y con SUS macros: con los de relleno el hueco de la Comida 1 es otro y lo de
+            # aquel día no le cabe, que es un no legítimo pero no es lo que se prueba aquí.
+            from macros_por_fecha import para_el_chat
+            perfil = await db.client_profiles.find_one({"user_id": u["id"]}, {"_id": 0})
+            tools.bot.set_user_macros(await para_el_chat(db, perfil, "2026-08-15"))
+            tools.bot.configure_day(tipo_dia="entrenamiento", num_comidas=4,
+                                    momento_entreno=1, opcion_peri="intra_post")
+            d = await db.diets.find_one({"user_id": u["id"],
+                                         "comidas.C1.alimentos.0": {"$exists": True}},
+                                        {"_id": 0, "fecha": 1}, sort=[("fecha", -1)])
+            if not d:
+                pytest.skip("esa cuenta no tiene dietas con comidas")
+            tools.bot.state["fecha_objetivo"] = "2030-01-01"     # cualquiera menos la suya
+            r = await tools.copiar_de_otro_dia(fecha=d["fecha"])
+            assert r["ok"], r.get("error")
+            b = r["borradores"][0]
+            assert b["items"], "la trae vacía"
+            assert d["fecha"] in b["nombre"], "la tarjeta no dice de qué día viene"
+            assert b["copiado_de"] == d["fecha"]
+            assert b["origen"] == "historial"
+        correr(t())

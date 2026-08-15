@@ -730,6 +730,24 @@ class AgentTools:
                 f"acompañamiento y no se ofrece suelto: nadie desayuna un bote de "
                 f"mermelada. NO digas que no lo tienes. Monta antes la base de la comida "
                 f"y vuelve a pedirlo, o dile sobre qué se lo puedes poner.")
+        # LOS GRAMOS DEL CATÁLOGO SON EN CRUDO, Y ESO HAY QUE DECIRLO.
+        #
+        # «100 g de arroz cocido» casaba con el arroz de siempre -- que es el crudo -- y le
+        # contaba 80 g de hidratos en vez de los 28 que lleva ya hervido: casi el triple, y
+        # sin una palabra (QA del 15-08 en producción). Aquí no se convierte nada, que sería
+        # inventarse un factor: se avisa, que es lo que hace falta para que el cliente pese
+        # lo que la app está contando.
+        cocido = {"cocido", "cocida", "cocidos", "cocidas", "hervido", "hervida",
+                  "hervidos", "hervidas", "coccion"}
+        pedido_cocido = [w for w in self.bot._norm_text(texto_buscado or "").split() if w in cocido]
+        if pedido_cocido and items:
+            if not any(any(w in self.bot._norm_text(i.get("nombre", "")) for w in cocido)
+                       for i in items[:4]):
+                out["ojo"] = (out.get("ojo", "") + " " if out.get("ojo") else "") + (
+                    f"El cliente lo ha pedido {pedido_cocido[0]}, pero en el catálogo esos "
+                    f"gramos son EN CRUDO. Dile en una línea que los gramos que le das son "
+                    f"de producto crudo, antes de cocinarlo, para que no pese el doble o el "
+                    f"triple sin darse cuenta.")
         if not items:
             # El error enseña: qué se probó y por qué no salió nada.
             notas = []
@@ -2363,10 +2381,7 @@ class AgentTools:
         # cuenta volvía a empezar: la tarjeta «b2» que seguía en pantalla apuntaba a un
         # menú NUEVO. Pulsar «Puré proteico de garbanzos y pollo» aplicaba un batido de
         # queso batido con corn flakes, con su «Menú aplicado ✓» de propina.
-        def _nuevo_bid():
-            n_id = int(self.bot.state.get("borrador_seq") or 0) + 1
-            self.bot.state["borrador_seq"] = n_id
-            return f"b{n_id}"
+        _nuevo_bid = self._nuevo_bid
         salida, descartes, cortos = [], [], []
         # ANTES de medir nada, los macros con los que la comida va a quedar de verdad
         # (tramos del día para cereales/panes y frutos secos): así la tarjeta, el desvío,
@@ -3577,3 +3592,104 @@ class AgentTools:
         return {"ok": True, "fecha": fecha,
                 "nota": ("La app va a abrir ese día con SU configuración guardada. Confírmaselo "
                          "al cliente en una línea. Lo montado hasta ahora se quedó en su fecha.")}
+
+    def _nuevo_bid(self) -> str:
+        """Un id de borrador que NO SE RECICLA NUNCA (15-08, cazado en vivo).
+
+        Era `b{len(borradores)+1}`, y como al cambiar de comida los borradores se tiran, la
+        cuenta volvía a empezar: la tarjeta «b2» que seguía en pantalla apuntaba a un menú
+        NUEVO. Pulsar «Puré proteico de garbanzos y pollo» aplicaba un batido de queso
+        batido con corn flakes, con su «Menú aplicado ✓» de propina.
+        """
+        n_id = int(self.bot.state.get("borrador_seq") or 0) + 1
+        self.bot.state["borrador_seq"] = n_id
+        return f"b{n_id}"
+
+    # ==================================================== 11. copiar_de_otro_dia
+    async def copiar_de_otro_dia(self, fecha: str = None) -> dict:
+        """«Ponme lo mismo que comí ayer»: trae esa comida de otra fecha suya.
+
+        Esto NO lo cubría nada. El asistente contestaba «no puedo ver lo que comiste ayer,
+        solo tengo el día de hoy» -- honesto pero inútil, y es de las primeras cosas que
+        pide un cliente (vídeo de Jesús del 15-08 y QA del mismo día en producción). El
+        historial sí alimenta las sugerencias, pero por firmas y con umbral: una referencia
+        directa a UN día concreto es otra cosa y necesita su propia puerta.
+
+        Se trae la MISMA comida de esa fecha (la Comida 2 de ayer a la Comida 2 de hoy) y
+        se deja como una opción para que él la elija, no metida a la fuerza. Las cantidades
+        se recalculan contra lo que le falta HOY: los alimentos son los suyos, pero los
+        macros del día pueden no ser los mismos, y servirle los gramos de otro día sería
+        cuadrarle mal el de hoy. Eso se le dice.
+        """
+        import re
+        from datetime import date
+        if not fecha or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", (fecha or "").strip()):
+            return {"ok": False, "error": "la fecha tiene que venir como YYYY-MM-DD"}
+        try:
+            date.fromisoformat(fecha)
+        except ValueError:
+            return {"ok": False, "error": f"'{fecha}' no es una fecha real"}
+        if fecha == (self.bot.state.get("fecha_objetivo") or ""):
+            return {"ok": False, "error": "esa es la fecha que estáis montando ahora mismo"}
+
+        key = self.bot.current_meal_key()
+        d = await self.db.diets.find_one({"user_id": self.bot.usuario_id, "fecha": fecha},
+                                         {"_id": 0, "comidas": 1})
+        comidas = (d or {}).get("comidas") or {}
+        if not comidas:
+            return {"ok": False, "error": f"no tiene nada guardado el {fecha}",
+                    "nota": "Díselo y ofrécele montarlo de cero o mirar otro día."}
+        alimentos = (comidas.get(key) or {}).get("alimentos") or []
+        if not alimentos:
+            con_algo = sorted(k for k, v in comidas.items() if (v or {}).get("alimentos"))
+            return {"ok": False,
+                    "error": f"ese día no tiene nada en {self.bot.meal_label(key)}",
+                    "comidas_de_ese_dia": con_algo,
+                    "nota": ("Ese día sí tiene otras comidas montadas. Dile cuáles y "
+                             "pregúntale de cuál quiere copiar, o navega a esa comida.")}
+
+        foods = [self.foods.get(int(a["alimento_id"])) for a in alimentos
+                 if a.get("alimento_id") is not None]
+        foods = [f for f in foods if f]
+        if not foods:
+            return {"ok": False,
+                    "error": "los alimentos de ese día ya no están en el catálogo",
+                    "nota": "Díselo y ofrécele montar algo parecido buscándolo."}
+
+        restante = self.bot.get_remaining_macros()
+        items = await self._recuadrar_a_hoy(foods, restante)
+        if items is None:
+            return {"ok": False,
+                    "error": (f"lo de ese día ({', '.join(f.get('nombre', '?') for f in foods)}) "
+                              f"no cabe en lo que te falta en {self.bot.meal_label(key)}"),
+                    "nota": ("Díselo con esos nombres y ofrécele quitar alguna pieza o "
+                             "llevarlo a otra comida. NO lo montes a medias.")}
+
+        tot = {m: round(sum(i["macros"][m] for i in items), 1) for m in ("P", "H", "G")}
+        borradores = self.bot.state.setdefault("borradores", {})
+        seq = self.bot.state.setdefault("opcion_seq", {})
+        numero = int(seq.get(key, 0)) + 1
+        seq[key] = numero
+        bid = self._nuevo_bid()
+        borrador = {"id": bid, "numero": numero, "items": items, "origen": "historial",
+                    "nombre": f"Lo que tomaste el {fecha}", "receta_url": None,
+                    "macros_totales": tot, "objetivo": dict(restante),
+                    "desvio": {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")},
+                    "pedidos": [], "filtros": {"generico": None, "marca": None, "estilo": None},
+                    "momento": self._momento_actual(), "meal_key": key,
+                    "copiado_de": fecha}
+        # La misma vara que el compositor: si de aquel día a hoy los macros han cambiado
+        # tanto que la comida se queda corta, se enseña igual (nadie se queda sin opción)
+        # pero DICIENDO cuánto le falta. Copiar no es excusa para colar una comida rota.
+        cortos = [f"{abs(borrador['desvio'][m]):.0f} g de {_MACRO_LBL[m]}"
+                  for m in ("P", "H", "G") if borrador["desvio"][m] < -MARGEN_BORRADOR]
+        if cortos:
+            borrador["avisos"] = [f"de aquel día a hoy tus macros han cambiado: así se "
+                                  f"queda corta de {', '.join(cortos)}. Complétala antes "
+                                  f"de darla por buena."]
+        borradores[bid] = borrador
+        return {"ok": True, "fecha": fecha, "borradores": [borrador],
+                "nota": ("Son los mismos alimentos de ese día con las cantidades ajustadas a "
+                         "lo que te falta hoy. Dile las dos cosas -- de qué día viene y que "
+                         "los gramos no son los de aquel día -- y que elija la opción si la "
+                         "quiere.")}

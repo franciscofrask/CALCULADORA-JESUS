@@ -345,13 +345,16 @@ const BuildMealModal = ({
         if (!(servedVal > 0)) return { num: `${fmtHalf(tgtVal)} g`, status: null, over: false };
         const r = tgtVal - servedVal;
         let status, cls;
-        if (Math.round(r) === 0) { status = 'Cuadrado'; cls = 'text-green-600'; }
-        else if (Math.abs(r) < MARGEN_VALIDO) { status = 'Válido'; cls = 'text-amber-500'; }
-        else if (r > 0) { status = `faltan ${fmt1(r)} g`; cls = 'text-red-500'; }
+        // LOS COLORES, LEGIBLES EN CLARO. A 11 px sobre fondo blanco, `amber-500` da 2,15:1
+        // y `red-500` 3,3:1: por debajo de lo que se lee sin forzar la vista (QA del 15-08).
+        // En oscuro mandan los tonos claros, que ahí son los que contrastan.
+        if (Math.round(r) === 0) { status = 'Cuadrado'; cls = 'text-green-700 dark:text-green-400'; }
+        else if (Math.abs(r) < MARGEN_VALIDO) { status = 'Válido'; cls = 'text-amber-700 dark:text-amber-400'; }
+        else if (r > 0) { status = `faltan ${fmt1(r)} g`; cls = 'text-red-700 dark:text-red-400'; }
         else {
             const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeriMode });
             status = `sobran ${fmt1(-r)} g`;
-            cls = enRojo ? 'text-red-500' : 'text-muted-foreground';
+            cls = enRojo ? 'text-red-700 dark:text-red-400' : 'text-muted-foreground';
         }
         return { num: `${fmt1(servedVal)}/${fmtHalf(tgtVal)} g`, status, cls,
                  over: seExcede(key, servedVal, tgtVal, { esPeri: isPeriMode }) };
@@ -1139,7 +1142,7 @@ const BuildMealModal = ({
                                                                 <div className="text-xs text-muted-foreground">
                                                                     {food._cantidad_sugerida
                                                                         ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
-                                                                            ? `${num1(Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2)} ud (${num1(food.peso_unidad || food.racion)} g/ml)`
+                                                                            ? `${num1(Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2)} ud (${num1(food._cantidad_sugerida)} g/ml)`
                                                                             : `${num1(food._cantidad_sugerida)} g`} → `
                                                                         // Buscando no hay cantidad sugerida (la lista ya no pasa por el motor):
                                                                         // se dice a cuánto equivale una unidad, que es lo que se añadirá.
@@ -1158,9 +1161,11 @@ const BuildMealModal = ({
                                                                         const g = ms?.G ?? (food.grasas || 0) * qty / 100;
                                                                         // Colores P/H/G consistentes con la cabecera del modal: P naranja, H azul, G amarillo.
                                                                         const parts = [
-                                                                            p > 0 ? <span key="p" className="font-semibold text-orange-500">P={fmt(p)} g</span> : null,
-                                                                            h > 0 ? <span key="h" className="font-semibold text-blue-500">H={fmt(h)} g</span> : null,
-                                                                            g > 0 ? <span key="g" className="font-semibold text-yellow-500">G={fmt(g)} g</span> : null,
+                                                                            // Tonos oscuros en claro: a este tamaño el amarillo 500 sobre
+                                                                            // blanco queda en 1,97:1 y no se lee (QA del 15-08).
+                                                                            p > 0 ? <span key="p" className="font-semibold text-orange-600 dark:text-orange-400">P={fmt(p)} g</span> : null,
+                                                                            h > 0 ? <span key="h" className="font-semibold text-blue-700 dark:text-blue-400">H={fmt(h)} g</span> : null,
+                                                                            g > 0 ? <span key="g" className="font-semibold text-yellow-700 dark:text-yellow-400">G={fmt(g)} g</span> : null,
                                                                         ].filter(Boolean);
                                                                         if (parts.length === 0) return 'No aporta macros';
                                                                         return parts.reduce((acc, el, i) => (i === 0 ? [el] : [...acc, ' ', el]), []);
@@ -1199,8 +1204,8 @@ const BuildMealModal = ({
                                 >
                                     <span className="flex items-center gap-2">
                                         <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-black text-white text-xs">{tempFoods.length}</span>
-                                        <span>añadidos</span>
-                                        <span className="text-xs font-normal">· <span className="font-semibold text-orange-500">P {fmt(tot.P)}</span> · <span className="font-semibold text-blue-500">H {fmt(tot.H)}</span> · <span className="font-semibold text-yellow-500">G {fmt(tot.G)}</span></span>
+                                        <span>{tempFoods.length === 1 ? 'añadido' : 'añadidos'}</span>
+                                        <span className="text-xs font-normal">· <span className="font-semibold text-orange-600 dark:text-orange-400">P {fmt(tot.P)}</span> · <span className="font-semibold text-blue-700 dark:text-blue-400">H {fmt(tot.H)}</span> · <span className="font-semibold text-yellow-700 dark:text-yellow-400">G {fmt(tot.G)}</span></span>
                                     </span>
                                     <span className="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand flex-shrink-0">
                                         {addedOpen ? 'Ocultar' : 'Ver'}
@@ -1241,8 +1246,11 @@ const BuildMealModal = ({
                                                                     onFocus={(e) => e.target.select()}
                                                                     className="w-12 text-center text-xs bg-muted rounded px-1 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-[#FF671F]"
                                                                 />
+                                                                {/* Los gramos de LO QUE HAY, no los de una unidad suelta: con medio
+                                                                    plátano en el plato ponía «0,5 ud (100 g)» y quien lo lee entiende
+                                                                    que medio plátano son 100 g (QA del 15-08 en producción). */}
                                                                 <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                                                    {isUnit ? `ud (${num1(food.peso_unidad || food.racion)} g)` : 'g'}
+                                                                    {isUnit ? `ud (${num1(grams)} g)` : 'g'}
                                                                 </span>
                                                             </span>
                                                         );

@@ -5,6 +5,12 @@ import { Check, Star } from 'lucide-react';
 
 // Alimentos favoritos OCULTOS (petición 2026-07-06): la estrella alteraba el orden de los
 // alimentos y no se quiere. Poner a true para reactivar la UI de favoritos.
+// Coma decimal, como el resto de la casa (QA 15-08).
+const gr = (x) => {
+    const n = Math.round((Number(x) || 0) * 10) / 10;
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+};
+
 export const FOOD_FAVORITES_UI = false;
 import { Search, X } from 'lucide-react';
 
@@ -110,9 +116,9 @@ const SearchFoodModal = ({
                                                 <p className="font-semibold text-foreground truncate">{food.nombre}</p>
                                                 <p className="text-xs text-muted-foreground">{racion}g / 1 ración</p>
                                                 <div className="flex flex-wrap gap-1 mt-2">
-                                                    {pEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-protein-yellow text-foreground">{pEf.toFixed(1)}g P</span>}
-                                                    {hEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{hEf.toFixed(1)}g H</span>}
-                                                    {gEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-fat-red text-white">{gEf.toFixed(1)}g G</span>}
+                                                    {pEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-protein-yellow text-foreground">{gr(pEf)} g P</span>}
+                                                    {hEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-carbs-green text-white">{gr(hEf)} g H</span>}
+                                                    {gEf > 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-fat-red text-white">{gr(gEf)} g G</span>}
                                                     {pEf === 0 && hEf === 0 && gEf === 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">Sin macros</span>}
                                                 </div>
                                             </div>

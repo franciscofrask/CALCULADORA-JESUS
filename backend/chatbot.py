@@ -69,6 +69,12 @@ class NutritionChatbot:
             "momento_entreno": 1,  # Después de C1
             "opcion_peri": "intra_post",
             "single_meal": False,  # Bloque único: 1 comida con todo el día
+            # SON UN RELLENO, NO LOS MACROS DE NADIE. Si el cliente no tiene macros
+            # asignados, `macros_propios` se queda en False y el chat NO monta el día con
+            # estos números: Nutrición le dice «aún no tienes macros asignados» mientras
+            # el chat le montaba y le guardaba un día de 195 P que no era suyo (QA 15-08
+            # en producción, fallo 27 de Jesús).
+            "macros_propios": False,
             "macros_usuario": {
                 "p_entreno": 160,
                 "h_entreno": 50,
@@ -108,8 +114,20 @@ class NutritionChatbot:
         self.mensaje_en_curso = ""
     
     def set_user_macros(self, macros: dict):
-        """Establece los macros del usuario desde su perfil."""
+        """Establece los macros del usuario desde su perfil.
+
+        `propios=False` marca que lo que llega es el relleno de `macros_por_fecha`, no los
+        macros de este cliente. Se guarda aparte para que nadie le monte el día con ellos.
+        Por defecto True: quien llama con macros a mano (tests, scripts) los trae de verdad.
+        """
+        macros = dict(macros)
+        propios = macros.pop("propios", True)
         self.state["macros_usuario"].update(macros)
+        self.state["macros_propios"] = bool(propios)
+
+    def sin_macros_asignados(self) -> bool:
+        """El cliente no tiene macros suyos: no se le monta ni se le guarda nada."""
+        return not self.state.get("macros_propios", False)
     
     def configure_day(self, tipo_dia: str, num_comidas: int, momento_entreno: int = 1, opcion_peri: str = "intra_post", single_meal: bool = False):
         """
@@ -3797,9 +3815,16 @@ async def get_or_create_chatbot(session_id: str, db, user_macros: dict = None) -
     chatbot = await create_chatbot(session_id, db, user_macros)
     doc = await db.chatbot_sessions.find_one({"session_id": session_id}, {"_id": 0, "state": 1})
     if doc and doc.get("state"):
+        propios = chatbot.state.get("macros_propios")
         chatbot.state = doc["state"]
+        # Las sesiones abiertas antes de este cambio no traen la marca. Se dan por buenas:
+        # cortarle el día a quien estaba conversando cuando se subió el arreglo sería peor
+        # que el fallo que arregla.
+        chatbot.state.setdefault("macros_propios", True)
         if user_macros:
-            chatbot.state.setdefault("macros_usuario", {}).update(user_macros)
+            frescos = {k: v for k, v in user_macros.items() if k != "propios"}
+            chatbot.state.setdefault("macros_usuario", {}).update(frescos)
+            chatbot.state["macros_propios"] = bool(propios)
     return chatbot
 
 
