@@ -818,6 +818,42 @@ class NutritionChatbot:
     _PALABRAS_DEL_NUCLEO = 4
 
     @classmethod
+    def nombre_corto(cls, nombre: str) -> str:
+        """El alimento en dos palabras, como lo diría alguien: «Claras de huevo».
+
+        Sirve para NOMBRAR una comida compuesta. Las recetas de Jesús llevan nombre («El
+        arroz con pollo de toda la vida», «Revuelto proteico de claras con mozzarella») y
+        por eso se leen como un conjunto: nadie piensa que el yogur va dentro del revuelto.
+        Las que compone la app salían sin nombre, y una lista suelta invita a leer el
+        primer alimento como el plato y el resto como parte de él (Francisco, 15-08: «¿a ti
+        te parece que una tortilla de claras lleva yogur?»).
+
+        Mismas reglas que `_en_nucleo`, que ya sabe de qué va un alimento: fuera la marca,
+        se corta en el matiz («Tortilla de patata CON cebolla» es tortilla de patata), y se
+        conserva la cadena de «de» («Copos DE avena instant» -> «Copos de avena»). Lo que
+        sobra son adjetivos de ficha -- pasteurizadas, enteros, natural, M, L -- que no
+        ayudan a reconocer el plato.
+        """
+        n = (nombre or "").split("(")[0].split(" - ")[0].strip()
+        bajo = f" {n.lower()} "
+        for nexo in cls._NEXOS_DE_MATIZ:
+            i = bajo.find(nexo)
+            if i != -1:
+                n = n[:i]
+        palabras = n.replace(",", " ").split()
+        if not palabras:
+            return (nombre or "").strip()
+        corto = [palabras[0]]
+        i = 1
+        while i + 1 < len(palabras) + 1 and len(corto) < cls._PALABRAS_DEL_NUCLEO:
+            if i < len(palabras) and palabras[i].lower() in cls._NEXOS_DE_NUCLEO and i + 1 < len(palabras):
+                corto += [palabras[i], palabras[i + 1]]
+                i += 2
+            else:
+                break
+        return " ".join(corto)
+
+    @classmethod
     def _en_nucleo(cls, termino: str, nombre: str) -> bool:
         """¿Lo pedido es de lo que va el alimento, o solo algo que lleva?
 

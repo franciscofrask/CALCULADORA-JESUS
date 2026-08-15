@@ -2507,7 +2507,8 @@ class AgentTools:
             numero += 1
             borrador = {"id": bid, "numero": numero,
                         "items": op["items"], "origen": op["origen"],
-                        "nombre": op["nombre"], "receta_url": op.get("receta_url"),
+                        "nombre": op["nombre"] or self._nombre_del_menu(op["items"], incluir_ids),
+                        "receta_url": op.get("receta_url"),
                         "macros_totales": tot, "objetivo": dict(restante), "desvio": desvio,
                         "filtros": {"generico": generico, "marca": marca, "estilo": estilo or None},
                         "pedidos": [int(x) for x in incluir_ids],
@@ -2543,7 +2544,8 @@ class AgentTools:
             numero += 1
             borrador = {"id": bid, "numero": numero,
                         "items": op["items"], "origen": op["origen"],
-                        "nombre": op["nombre"], "receta_url": op.get("receta_url"),
+                        "nombre": op["nombre"] or self._nombre_del_menu(op["items"], incluir_ids),
+                        "receta_url": op.get("receta_url"),
                         "macros_totales": tot, "objetivo": dict(restante),
                         "desvio": {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")},
                         "pedidos": [int(x) for x in incluir_ids],
@@ -2564,7 +2566,8 @@ class AgentTools:
             numero += 1
             borrador = {"id": bid, "numero": numero,
                         "items": op["items"], "origen": op["origen"],
-                        "nombre": op["nombre"], "receta_url": op.get("receta_url"),
+                        "nombre": op["nombre"] or self._nombre_del_menu(op["items"], incluir_ids),
+                        "receta_url": op.get("receta_url"),
                         "macros_totales": tot, "objetivo": dict(restante),
                         "desvio": {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")},
                         "pedidos": [int(x) for x in incluir_ids],
@@ -3669,6 +3672,49 @@ class AgentTools:
         return {"ok": True, "fecha": fecha,
                 "nota": ("La app va a abrir ese día con SU configuración guardada. Confírmaselo "
                          "al cliente en una línea. Lo montado hasta ahora se quedó en su fecha.")}
+
+    def _nombre_del_menu(self, items: List[dict], pedidos: List[int] = None) -> str:
+        """Cómo se llama una comida compuesta: «Claras de huevo con pan de barra y yogur».
+
+        Las recetas de Jesús llevan nombre y por eso se leen como un conjunto; las que
+        compone la app salían sin él, y una lista suelta se lee como si el primer alimento
+        fuera el plato y el resto formara parte de él. De ahí «¿a ti te parece que una
+        tortilla de claras lleva yogur?» (Francisco, 15-08): el yogur estaba bien puesto
+        -- 19 de las 159 recetas suyas llevan uno al lado --, lo que faltaba era el nombre
+        que abarca el conjunto, como su «Revuelto proteico de claras con mozzarella».
+
+        No se imita su voz: eso sería inventarse un nombre comercial. Se describe, que es lo
+        que hace falta para reconocer la comida de un vistazo.
+
+        Manda lo que pidió el cliente: si nombró las claras, la comida se llama por ellas.
+        Detrás, lo que más pesa en el plato (por calorías), hasta tres piezas.
+        """
+        pedidos = set(int(x) for x in (pedidos or []))
+        def kcal(i):
+            m = i.get("macros") or {}
+            return 4 * m.get("P", 0) + 4 * m.get("H", 0) + 9 * m.get("G", 0)
+        orden = sorted(items, key=lambda i: (0 if int(i.get("id") or 0) in pedidos else 1, -kcal(i)))
+        # Nada de «Claras de huevo con huevos»: si dos piezas comparten palabra -- los
+        # huevos y las claras DE HUEVO --, en el nombre solo cabe la primera.
+        vistos, partes = set(), []
+        for i in orden:
+            corto = self.bot.nombre_corto(i.get("nombre", ""))
+            if not corto:
+                continue
+            raices = {w[:-2] if w.endswith("es") else w.rstrip("s")
+                      for w in self.bot._norm_text(corto).split()
+                      if len(w) > 3}
+            if raices & vistos:
+                continue
+            vistos |= raices
+            partes.append(corto if not partes else corto[0].lower() + corto[1:])
+            if len(partes) == 3:
+                break
+        if not partes:
+            return None
+        if len(partes) == 1:
+            return partes[0]
+        return f"{partes[0]} con {' y '.join(partes[1:])}"
 
     def _nuevo_bid(self) -> str:
         """Un id de borrador que NO SE RECICLA NUNCA (15-08, cazado en vivo).
