@@ -2295,6 +2295,7 @@ class AgentTools:
                         "nombre": op["nombre"], "receta_url": op.get("receta_url"),
                         "macros_totales": tot, "objetivo": dict(restante), "desvio": desvio,
                         "filtros": {"generico": generico, "marca": marca, "estilo": estilo or None},
+                        "pedidos": [int(x) for x in incluir_ids],
                         "momento": momento, "meal_key": self.bot.current_meal_key()}
             # Rescatada del filtro de compañía: se enseña, pero diciendo lo que es.
             if op.get("aviso_companyia"):
@@ -2327,6 +2328,7 @@ class AgentTools:
                         "nombre": op["nombre"], "receta_url": op.get("receta_url"),
                         "macros_totales": tot, "objetivo": dict(restante),
                         "desvio": {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")},
+                        "pedidos": [int(x) for x in incluir_ids],
                         "filtros": {"generico": generico, "marca": marca, "estilo": estilo or None},
                         "momento": momento, "meal_key": self.bot.current_meal_key(),
                         "avisos": [f"esta opción se queda corta: {motivo}. Complétala antes "
@@ -2343,9 +2345,41 @@ class AgentTools:
             if nota_filtro:
                 notas.append(nota_filtro)
             return {"borradores": [], "sin_resultados_porque": notas}
+        # EL ENCARGO IMPOSIBLE SE DICE, NO SE MAQUILLA (15-08-2026). "Pollo, fideos de
+        # arroz y zumo" en una comida con 10 g de hidratos de objetivo: los fideos solos ya
+        # la pasan. El modelo, antes que decirlo, le quito al borrador las piezas PEDIDAS
+        # (editar_borrador), recompuso otra y enseno tres opciones donde una traicionaba el
+        # encargo. Si en la MEJOR opcion que lleva todo lo pedido, lo pedido POR SI SOLO ya
+        # se pasa del objetivo mas alla del margen, no hay composicion que lo arregle: es
+        # aritmetica. La nota le da al modelo la frase honesta y le prohibe la trampa.
+        nota_encargo = None
+        if incluir_ids and salida:
+            sobras = []
+            for b in salida:
+                dentro = [i for i in b["items"] if int(i["id"]) in set(incluir_ids)]
+                if len(dentro) < len(incluir_ids):
+                    continue
+                sobra = {m: sum(i["macros"].get(m, 0) for i in dentro)
+                            - float(restante.get(m, 0) or 0) for m in ("P", "H", "G")}
+                m_peor = max(sobra, key=lambda m: sobra[m])
+                sobras.append((sobra[m_peor], m_peor))
+            if sobras:
+                sobra_min, m_min = min(sobras)
+                if sobra_min > MARGEN_BORRADOR:
+                    nombres = " + ".join(self.foods[int(i)].get("nombre", "?")
+                                         for i in incluir_ids if int(i) in self.foods)
+                    nota_encargo = (
+                        f"OJO: lo que pidio ({nombres}) suma por si solo {sobra_min:.0f} g de "
+                        f"{_MACRO_LBL[m_min]} POR ENCIMA del objetivo de esta comida aun en su "
+                        "version mas pequena: no puede cuadrar aqui. Diselo tal cual y dale las "
+                        "salidas de verdad: llevar el encargo a una comida con mas "
+                        f"{_MACRO_LBL[m_min]}, quitar el o una de las piezas (decision SUYA), o "
+                        "dejarlo asumiendo el desvio que marca la tarjeta. NO le quites piezas "
+                        "pedidas por tu cuenta ni lo presentes como si cuadrara.")
         out = {"borradores": salida}
-        if nota_filtro:
-            out["nota"] = nota_filtro
+        nota_junta = " ".join(x for x in (nota_filtro, nota_encargo) if x)
+        if nota_junta:
+            out["nota"] = nota_junta
         return out
 
     # ============================================================ 3. revisar_borrador
@@ -2522,13 +2556,19 @@ class AgentTools:
         if not b:
             return {"ok": False, "error": f"no hay borrador {borrador_id}"}
         ids = [i["id"] for i in b["items"]]
+        pedidos = {int(x) for x in (b.get("pedidos") or [])}
+        tocados_del_encargo = []
         for op in operaciones or []:
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
             if tipo == "quitar" and int(op.get("item_id", 0)) in ids:
+                if int(op["item_id"]) in pedidos:
+                    tocados_del_encargo.append(self.foods.get(int(op["item_id"]), {}).get("nombre", "?"))
                 ids.remove(int(op["item_id"]))
             elif tipo == "sustituir":
                 viejo, nuevo = int(op.get("item_id", 0)), int(op.get("por_id", 0))
                 if viejo in ids and nuevo in self.foods:
+                    if viejo in pedidos and nuevo != viejo:
+                        tocados_del_encargo.append(self.foods.get(viejo, {}).get("nombre", "?"))
                     ids[ids.index(viejo)] = nuevo
             elif tipo == "añadir":
                 nuevo = int(op.get("alimento_id", 0))
@@ -2559,7 +2599,15 @@ class AgentTools:
         # fue la etiqueta, hablando de un alimento que ya no estaba. Quien quiera saber si
         # el menú nuevo tiene problemas, que vuelva a revisarlo.
         b.pop("avisos", None)
-        return {"ok": True, "borrador": b}
+        out = {"ok": True, "borrador": b}
+        if tocados_del_encargo:
+            # La espiral del 15-08: ante un encargo que no cuadraba, el modelo le quito al
+            # borrador las piezas que el cliente habia pedido y siguio como si nada.
+            out["nota"] = ("has quitado o cambiado " + ", ".join(tocados_del_encargo) +
+                           ", que el cliente pidio EXPRESAMENTE. Si ha sido idea tuya para "
+                           "cuadrar macros, no vale: cuentale el conflicto y que decida el. "
+                           "Este borrador ya no cumple su encargo tal cual.")
+        return out
 
     # ============================================================ 5. aplicar_borrador
     def _protegida(self, forzar: bool = False) -> Optional[dict]:
