@@ -2504,6 +2504,20 @@ class NutritionChatbot:
                 for mk in ("P", "H", "G"):
                     tot[mk] += float(m.get(mk, 0) or 0)
             comida["macros"] = {mk: round(v, 1) for mk, v in tot.items()}
+        # Y LOS CONTADORES DEL DÍA SALEN DE LO QUE HAY, NO DE UN CONTADOR PARALELO.
+        # Se incrementaban a mano al añadir, así que cualquier camino que no pasara por
+        # ahí (aplicar un menú, precargar, deshacer) los dejaba desfasados: el asistente
+        # llegó a decir «con 0 g de frutos secos en el día» con 30 g de almendras recién
+        # puestas y contando su proteína a la mitad (prod, 15-08).
+        from calibracion_dia import clasificar_bloque
+        acum = {"cereal_pan": 0.0, "fruto_seco": 0.0}
+        for k in order:
+            for f in ((self.state["comidas_completadas"].get(k) or {}).get("alimentos") or []):
+                bloque = clasificar_bloque(f.get("alimento") or {})
+                if bloque in acum:
+                    acum[bloque] += float(f.get("cantidad_g") or f.get("cantidad") or 0)
+        self.state["acumulado_cereales_panes"] = round(acum["cereal_pan"], 1)
+        self.state["acumulado_frutos_secos"] = round(acum["fruto_seco"], 1)
 
     # Cuando no hay NADA parecido, un "no encontrado" seco deja al usuario sin salida y
     # sin saber si el fallo es suyo o del catálogo. Se le devuelve la pregunta.
