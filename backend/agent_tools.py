@@ -2129,6 +2129,15 @@ class AgentTools:
                     "items": items, "origen": "compuesto", "nombre": None,
                     "receta_url": None, "aviso_companyia": discordante[0]}))
                 continue
+            # UNA COMIDA NO ES UNA ESTANTERIA DE BOTES (14-08-2026, noche). Salio un
+            # "desayuno" de batido + aislado + crema de bote + leche de brik + granola:
+            # cinco productos, dos proteinas en polvo, cantidades testimoniales. El juez
+            # lo dio por bueno (leido rapido parece un batido completo); el candado
+            # mecanico no se lo cree: mas de dos botes en una comida normal, fuera y a
+            # reintentar. En el peri no aplica, alli el bote es lo que toca.
+            if momento != PERI and sum(1 for i in items if self._es_bote(i)) > 2:
+                descartes_bucle = "un intento era casi todo botes y se descartó"
+                continue
             # LA MISMA TANDA NO REPITE COMIDA (14-08-2026). El candado de familias que ya
             # tienen la biblioteca y el historial vale igual aquí: en una tanda salieron
             # tres opciones con «pollo tikka + arroz congelado» dentro de las tres,
@@ -2229,7 +2238,15 @@ class AgentTools:
                 descartes.append(f"una opción se pasaba {desvio[peor_m]:.0f} g de "
                                  f"{_MACRO_LBL[peor_m]} y se descartó")
                 continue
-            if deficit > 2 * MARGEN_BORRADOR:
+            # El liston del corto depende del origen (14-08-2026, noche). Un recuperado
+            # ya viene recuadrado y rematado: si esta aqui, cuadra. Lo COMPUESTO
+            # conservaba una rendija de hasta 2x el margen "con aviso", y por ahi salio
+            # un desayuno de cinco botes al que le faltaban 19,6 g de hidratos con un
+            # "no te la recomiendo usar sin tocarla" de propina. Si el asistente no la
+            # recomienda, no se enseña: corto mas alla del margen -> al rescate, que
+            # solo sale si no queda absolutamente nada.
+            liston = MARGEN_BORRADOR if op.get("origen") == "compuesto" else 2 * MARGEN_BORRADOR
+            if deficit > liston:
                 peor_m = min(desvio, key=lambda m: desvio[m])
                 cortos.append((deficit, op, f"le faltaban {-desvio[peor_m]:.0f} g de "
                                             f"{_MACRO_LBL[peor_m]}"))

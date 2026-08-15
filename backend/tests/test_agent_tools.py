@@ -259,7 +259,13 @@ class TestComidasReales:
             try:
                 restante = tools.bot.get_remaining_macros()
                 # Cupo de juicios ya gastado: el candidato de una sola fecha no puede pasar.
-                from core.juez_menus import JUICIOS_POR_PETICION
+                from core.juez_menus import JUICIOS_POR_PETICION, firma_de
+                # La condición del test hay que CREARLA, no suponerla: desde que la caché
+                # de veredictos se copió de producción, esta pareja puede venir ya
+                # aprobada de un menú real y entonces no necesita juez. Se borra su
+                # veredicto (si lo hay) para que el camino probado sea el del cupo.
+                await db.menu_juicios.delete_one(
+                    {"firma": firma_de(tools._momento_actual(), [pollo["id"], arroz["id"]])})
                 ops = await tools._menus_del_historial(
                     restante, tools._momento_actual(), n=2,
                     juicios={"n": JUICIOS_POR_PETICION})
