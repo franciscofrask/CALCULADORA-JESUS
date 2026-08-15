@@ -67,6 +67,17 @@ async def upsert_diet_doc(user_id: str, data: dict, quien: Optional[dict] = None
         # (the others are locked). null = no volcado.
         "comida_volcada": data.get("comida_volcada", None),
     }
+    # QUÉ SESIÓN DEL CHAT ES LA DUEÑA DE ESTE DÍA. De este campo depende el candado de las
+    # dos pestañas (fallo 18 de Jesús), y esta función lo estaba TIRANDO: monta el
+    # documento con una forma fija y `sesion_chat` no estaba en la lista, así que el
+    # volcado lo mandaba y aquí se perdía. El guardado escribía None y el candado, que
+    # compara con el dueño, no se activaba nunca. Salió al comprobar el volcado a mano en
+    # producción, mirando la pantalla y el dato (15-08).
+    #
+    # Solo se toca si quien escribe lo dice: un guardado desde Nutrición no tiene sesión de
+    # chat y no debe borrar la que hubiera.
+    if data.get("sesion_chat"):
+        diet_doc["sesion_chat"] = data["sesion_chat"]
 
     await db.diets.update_one(
         {"user_id": user_id, "fecha": fecha},
