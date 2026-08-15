@@ -1668,7 +1668,8 @@ class AgentTools:
     async def componer_menu(self, incluir_ids: List[int] = None, estilo: str = "",
                             generico: bool = None, marca: str = None,
                             n: int = 3, solo_recetario: bool = False,
-                            filtro_porque: str = None) -> dict:
+                            filtro_porque: str = None,
+                            solo_una: bool = False) -> dict:
         """Monta hasta `n` menús completos para la comida actual con el catálogo entero.
         `incluir_ids` son obligatorios (van en todas las opciones); `estilo` es el texto
         libre del cliente y guía la elección por semántica. El recetario (153 recetas de
@@ -1676,7 +1677,17 @@ class AgentTools:
         Deja cada opción como BORRADOR: enseñar sí, aplicar solo tras revisar."""
         from meal_builder import build_meal, get_effective_macros_per_100g, classify_food_role
 
-        n = max(1, min(int(n or 3), 4))
+        # "OPCIONES" SON VARIAS, Y ESO YA NO SE LE PIDE AL MODELO: SE IMPONE (14-08,
+        # noche). Cuatro transcripts seguidos de "dame opciones" contestados con UNA, con
+        # la descripcion del parametro diciendo bien claro "plural = 3". Un parametro que
+        # el modelo ignora no es un parametro, es una esperanza. Ahora una sola opcion
+        # sale UNICAMENTE si el modelo marca `solo_una` (el cliente pidio expresamente
+        # una); cualquier otro n por debajo de 2 se corrige a 3.
+        if solo_una:
+            n = 1
+        else:
+            n = int(n or 3)
+            n = 3 if n < 2 else min(n, 4)
         incluir_ids = [int(x) for x in (incluir_ids or []) if int(x) in self.foods]
         # Los filtros que hablan del cliente, solo con sus palabras detrás (ver arriba).
         generico, marca, nota_filtro = self._filtro_de_marca(generico, marca, filtro_porque)
