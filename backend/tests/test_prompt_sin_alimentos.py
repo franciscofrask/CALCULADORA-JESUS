@@ -52,6 +52,11 @@ _LENGUAJE_NORMAL = {
     # tumbó los dos tests a la vez. Un producto que lleve la palabra genérica en el nombre
     # no puede prohibir la palabra genérica.
     "alimento", "alimentos",
+    # "categoria" es como la app organiza el catalogo y el prompt habla de ellas con
+    # todo el derecho; entro al vocabulario por productos con la palabra en el nombre
+    # ("huevos frescos categoria A"). Igual que "alimento": la palabra generica de la
+    # casa no puede quedar vetada por un producto que la lleve.
+    "categoria", "categorias",
 }
 
 
