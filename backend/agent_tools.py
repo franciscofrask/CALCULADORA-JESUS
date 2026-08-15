@@ -732,47 +732,6 @@ class AgentTools:
                     + f". Dile que no tienes '{texto}', enséñale esos y que elija él si "
                       f"quiere alguno."]
                 return out
-        # UN PLATO QUE NO EXISTE NO SE SUSTITUYE POR SUS INGREDIENTES EN SILENCIO.
-        #
-        # «Pon tortillas de claras»: en el catálogo no hay ninguna tortilla de claras -- las
-        # tortillas que hay son de patata, de trigo, de maíz y de avena --, así que la
-        # búsqueda devolvió «Claras de huevo pasteurizadas» y el asistente le plantó 300 g
-        # sin decir nada. Francisco, en la app el 15-08: «no debería cargarme lo que
-        # quiera». Tiene razón: las claras son el INGREDIENTE con el que se hace, no el
-        # plato que pidió, y eso se dice y lo decide él.
-        #
-        # El aviso de arriba no lo cubría: solo mira peticiones de UNA palabra. Aquí se
-        # miran las de varias, y salta cuando NINGÚN resultado lleva todas dentro. Fuera
-        # los conectores, los números y las unidades, que si no «200 g de arroz» se leería
-        # como un plato inexistente.
-        _VACIAS = {"de", "del", "la", "el", "los", "las", "con", "sin", "y", "o", "al",
-                   "un", "una", "unos", "unas", "g", "gr", "gramos", "ml", "kg", "ud",
-                   "uds", "unidad", "unidades", "por"}
-        sig2 = [w for w in sig if w not in _VACIAS and not w.isdigit()]
-
-        def _menciona(palabra: str, nombre: str) -> bool:
-            """La palabra aparece en el nombre, tolerando plural («claras» ~ «clara»)."""
-            n = self.bot._norm_text(nombre or "")
-            raiz = palabra[:-2] if palabra.endswith("es") else palabra.rstrip("s")
-            return len(raiz) > 2 and raiz in n
-
-        if len(sig2) >= 2 and items and not vetados_solos:
-            # La CABEZA (de qué va el plato) tiene que ser el núcleo del alimento, y el
-            # resto de palabras basta con que aparezcan en el nombre: son adjetivos y
-            # complementos («arroz BLANCO», «salmón AHUMADO»), y esos nunca están en el
-            # núcleo. Pedirle núcleo a todas daba por inexistente medio catálogo.
-            cabeza, resto = sig2[0], sig2[1:]
-            nombra_el_plato = any(
-                self.bot._en_nucleo(cabeza, i.get("nombre", ""))
-                and all(_menciona(w, i.get("nombre", "")) for w in resto)
-                for i in items[:6])
-            if not nombra_el_plato:
-                out["ojo"] = (out.get("ojo", "") + " " if out.get("ojo") else "") + (
-                    f"OJO: en el catálogo no hay ningún '{texto}' como tal. Lo que te "
-                    f"devuelvo son los alimentos con los que se hace o lo más parecido: "
-                    + "; ".join(i.get("nombre", "") for i in items[:3])
-                    + f". NO lo añadas por tu cuenta: dile que '{texto}' no lo tienes como "
-                      f"plato, enséñale eso y que elija él.")
         # Lo apartado por soledad se cuenta SIEMPRE, haya items o no: es la diferencia
         # entre «no lo tengo» y «no te lo pongo suelto».
         if vetados_solos and any(self.bot._en_nucleo(w, f.get("nombre", ""))
