@@ -2,6 +2,7 @@ import React from 'react';
 import { StatusDot } from './DaySummary';
 import { macrosDeVista } from './ModoMacros';
 import { seExcede, textoExceso } from '../../lib/exceso';
+import { num1, numMedio } from '../../lib/numeros';
 import ContadorFamilia from './ContadorFamilia';
 import {
     ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download
@@ -41,14 +42,16 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
         : { texto: 'Válida', cls: 'text-emerald-600/70 dark:text-emerald-400/70' };
 };
 
-const fmtHalf = (x) => (Math.round((x || 0) * 2) / 2).toString();
-const fmt1 = (x) => { const r = Math.round((x || 0) * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
+// Los números con coma decimal y sin decimales cuando son cero, en un solo sitio para toda
+// la pantalla (Jesús, 15-08, fallo 43: «34.2/37.5g»).
+const fmtHalf = numMedio;
+const fmt1 = num1;
 
 const macrosLine = (m) => {
     const parts = [
-        (m.P || 0) > 0 && `${fmt1(m.P)}g proteína`,
-        (m.H || 0) > 0 && `${fmt1(m.H)}g hidratos`,
-        (m.G || 0) > 0 && `${fmt1(m.G)}g grasa`,
+        (m.P || 0) > 0 && `${fmt1(m.P)} g proteína`,
+        (m.H || 0) > 0 && `${fmt1(m.H)} g hidratos`,
+        (m.G || 0) > 0 && `${fmt1(m.G)} g grasa`,
     ].filter(Boolean);
     return parts.length ? parts.join(' · ') : 'sin macros';
 };
@@ -149,9 +152,9 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
         const r = tgtVal - servedVal;
         if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false };
         if (Math.abs(r) < 4) return { label: 'Válido', cls: 'text-amber-500', over: false };
-        if (r > 0) return { label: `faltan ${fmt1(r)}g`, cls: 'text-red-500', over: false };
+        if (r > 0) return { label: `faltan ${fmt1(r)} g`, cls: 'text-red-500', over: false };
         const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeri });
-        return { label: `sobran ${fmt1(-r)}g`,
+        return { label: `sobran ${fmt1(-r)} g`,
                  cls: enRojo ? 'text-red-500' : 'text-muted-foreground', over: enRojo };
     };
 
@@ -177,7 +180,7 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
                         <span className="w-2.5 h-2.5 lg:w-2 lg:h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                         <span className="text-[15px] lg:text-[11px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
                         <span className="text-[15px] lg:text-[11px] font-bold sm:hidden" style={{ color }}>{label}</span>
-                        <span className={`font-data text-[15px] lg:text-[11px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{val.toFixed(1)}/{fmtHalf(tgt)}g</span>
+                        <span className={`font-data text-[15px] lg:text-[11px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{fmt1(val)}/{fmtHalf(tgt)} g</span>
                         {hasFoods && st.label && <span className={`font-data text-[15px] lg:text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
                     </div>
                 ))}
@@ -254,7 +257,7 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
             {/* Cantidad (gramos) - stepper conectado. En movil se pega a la derecha (ml-auto),
                 con la prioridad a la izquierda y el nombre encima. */}
             <div className="order-3 ml-auto sm:ml-0 inline-flex items-stretch h-9 rounded-lg border border-border bg-card overflow-hidden flex-shrink-0"
-                title={porUnidad ? 'Cantidad en unidades' : 'Cantidad en gramos'}>
+                title={porUnidad ? `Cantidad en unidades · 1 ud = ${num1(peso)} g` : 'Cantidad en gramos'}>
                 <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, -increment)}
                     aria-label={porUnidad ? 'Menos unidades' : 'Menos gramos'}>
                     <Minus className="w-3.5 h-3.5" />
@@ -267,9 +270,16 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                         onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') updateFoodQuantityDirect(mealKey, idx, e.target.value); if (e.key === 'Escape') setEditingQuantity({ mealKey: null, foodIndex: null }); }} />
                 ) : (
-                    <button className="min-w-[60px] px-2 text-sm font-bold font-data text-center text-foreground border-x border-border hover:text-brand disabled:opacity-50 transition-colors" disabled={isLocked}
+                    <button className="min-w-[60px] px-2 text-sm font-bold font-data text-center text-foreground border-x border-border hover:text-brand disabled:opacity-50 transition-colors whitespace-nowrap" disabled={isLocked}
                         onClick={() => !isLocked && setEditingQuantity({ mealKey, foodIndex: idx })} data-testid={`qty-${mealKey}-${idx}`}>
-                        {formatFoodQuantity ? formatFoodQuantity(food) : `${food.cantidad_g || 0}g`}
+                        {formatFoodQuantity ? formatFoodQuantity(food) : `${num1(food.cantidad_g || 0)} g`}
+                        {/* A CUÁNTO EQUIVALE LA UNIDAD, AL LADO (Jesús, 15-08, fallo 46): «1 ud»
+                            no dice cuánto pesa, y de ahí salía que el mismo alimento valiera una
+                            cosa pulsándolo y otra escribiéndolo. La calculadora de ahora la pone
+                            siempre en la propia línea. */}
+                        {porUnidad && (
+                            <span className="ml-1 text-[10px] font-normal text-muted-foreground">({num1(peso)} g)</span>
+                        )}
                     </button>
                 )}
                 <button className="px-2 flex items-center text-foreground hover:bg-brand hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground transition-colors" disabled={isLocked} onClick={() => updateFoodQuantity(mealKey, idx, increment)}

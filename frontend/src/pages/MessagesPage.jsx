@@ -163,13 +163,20 @@ const MessagesPage = () => {
                         {/* Que diga lo mismo que la cabecera (punto 4.16). Sin entrenador
                             asignado, arriba pone «Soporte JG12» y aquí ponía «envía un mensaje
                             a tu entrenador»: la misma pantalla se contradecía a sí misma, y le
-                            prometía una persona que ese cliente no tiene todavía. */}
+                            prometía una persona que ese cliente no tiene todavía.
+
+                            Y NO SE PROMETE UN ENTRENADOR QUE NO VA A LLEGAR (#50 del 15-08).
+                            Aquí ponía «en cuanto tengas entrenador asignado, hablarás aquí
+                            mismo con él» a un cliente cuyo plan pone «Con entrenador»: el que
+                            paga por llevarlo lee que todavía no lo tiene. El acompañamiento
+                            del plan y el campo `trainer_id` son dos cosas distintas -- de 247
+                            clientes solo 8 lo tienen puesto -- y esta pantalla no es el sitio
+                            para explicarlo. Se dice lo único que es verdad siempre: escribe y
+                            te contesta quien te lleva. */}
                         <p className="text-sm text-foreground/50">
                             {profile?.entrenador?.nombre
                                 ? `Escribe a ${profile.entrenador.nombre} para empezar.`
-                                : profile?.trainer_id
-                                    ? 'Envía un mensaje a tu entrenador para empezar.'
-                                    : 'Escríbenos y te contesta el equipo. En cuanto tengas entrenador asignado, hablarás aquí mismo con él.'}
+                                : 'Escríbenos por aquí: te contesta el equipo que lleva tu seguimiento.'}
                         </p>
                     </div>
                 )}

@@ -72,6 +72,11 @@ async def sincronizar_avisos(user_id: str) -> int:
             reporte_sin_fotos=datos["reporte_sin_fotos"],
         )
 
+        # Antes de mirar si le toca una nueva, se retiran las que ya no tocan: si no, se
+        # acumulan y el cliente lee tres condicionadas a la vez cuando la regla es UNA cada
+        # siete dias (#52 del 15-08).
+        await _caducar_condicionadas(user_id, {a["clave"] for a in condicionados})
+
         # Lo ya enviado, para no repetir. Un mes cubre de sobra cualquier clave viva.
         desde = (ahora - timedelta(days=35)).isoformat()
         previas = await db.notifications.find(
@@ -100,6 +105,38 @@ async def sincronizar_avisos(user_id: str) -> int:
         return 0
 
 
+async def _caducar_condicionadas(user_id: str, claves_vivas: set) -> None:
+    """Retira de la campanita las condicionadas que ya no vienen a cuento.
+
+    Dos cosas, las dos de las pruebas del 15-08:
+
+      - un aviso que dejo de ser verdad -- «llevas 4 semanas con los mismos macros» dos dias
+        despues de ajustarlos -- se quedaba en la lista para siempre (#51),
+      - y como cada semana puede entrar una nueva, se acumulaban: Jesus vio tres a la vez
+        cuando la regla del documento es UNA condicionada cada siete dias (#52).
+
+    Se queda viva la mas reciente que siga cumpliendose; el resto se marcan. NO se borran:
+    el registro es lo que sostiene el tope semanal, y borrandolo le llegaria otra al dia
+    siguiente. Se marcan tambien como leidas para que no dejen la campanita encendida.
+    """
+    pendientes = await db.notifications.find(
+        {"user_id": user_id, "condicionada": True, "read": False, "caducada": {"$ne": True}},
+        {"_id": 0, "id": 1, "clave": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(50)
+
+    fuera, ya_hay_viva = [], False
+    for n in pendientes:            # de la mas nueva a la mas vieja
+        if not ya_hay_viva and n.get("clave") in claves_vivas:
+            ya_hay_viva = True
+            continue
+        fuera.append(n["id"])
+
+    if fuera:
+        await db.notifications.update_many(
+            {"user_id": user_id, "id": {"$in": fuera}},
+            {"$set": {"caducada": True, "read": True}})
+
+
 async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     """Los datos que miran los disparadores. Consultas cortas y contadas."""
     from core.avisos_cliente import _dias_desde
@@ -120,11 +157,20 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     # importaba el doble, porque de la fecha sale «lleva X dias sin ajustar»: con la fecha de
     # importacion, los 185 clientes migrados salian ajustados el 05-08 y el aviso no podia
     # saltar nunca.
-    from macros_por_fecha import ultima_vigente
+    from macros_por_fecha import ultima_vigente, ultimo_cambio
     ultimos_macros = await ultima_vigente(db, client_id)
 
+    # «LLEVAS 4 SEMANAS CON LOS MISMOS MACROS» A LOS DOS DIAS DE AJUSTARLOS (#51 del 15-08).
+    #
+    # La cuenta salia de la entrada VIGENTE HOY, y esa se corta en hoy a proposito. Si el
+    # ajuste se guarda con efecto manana -- que es un cambio ya hecho, solo que programado --
+    # la vigente sigue siendo la vieja y el aviso le decia al cliente que lleva un mes igual
+    # justo despues de que le tocaran los macros. Se cuenta desde el ultimo cambio
+    # REGISTRADO, y como `_dias_desde` no devuelve negativos, un ajuste con fecha futura da
+    # cero dias: no hay nada de lo que avisarle.
+    cambio = await ultimo_cambio(db, client_id)
     dias_sin_ajustar = _dias_desde(
-        (ultimos_macros or {}).get("effective_date") or (ultimos_macros or {}).get("created_at"),
+        (cambio or {}).get("effective_date") or (cambio or {}).get("created_at"),
         ahora)
     dias_sin_dieta = None
     if ultima_dieta and ultima_dieta.get("fecha"):
@@ -168,8 +214,10 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
 async def list_notifications(user = Depends(get_current_user)):
     """Últimas notificaciones del usuario actual."""
     await sincronizar_avisos(user["id"])
+    # Las caducadas no se pintan: son avisos que dejaron de ser verdad (ver
+    # `_caducar_condicionadas`). Se conservan en la base, solo que fuera de la vista.
     items = await db.notifications.find(
-        {"user_id": user["id"]}, {"_id": 0}
+        {"user_id": user["id"], "caducada": {"$ne": True}}, {"_id": 0}
     ).sort("created_at", -1).to_list(30)
     return {"notifications": items}
 
@@ -177,7 +225,8 @@ async def list_notifications(user = Depends(get_current_user)):
 @router.get("/unread-count")
 async def unread_count(user = Depends(get_current_user)):
     await sincronizar_avisos(user["id"])
-    count = await db.notifications.count_documents({"user_id": user["id"], "read": False})
+    count = await db.notifications.count_documents(
+        {"user_id": user["id"], "read": False, "caducada": {"$ne": True}})
     return {"count": count}
 
 

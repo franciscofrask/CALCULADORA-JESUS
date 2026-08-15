@@ -106,10 +106,15 @@ const SupplementsPage = () => {
 
                     El texto anterior hablaba además de 666 clientes pendientes: un dato interno
                     nuestro que no le decía nada a quien lo leía. */}
+                {/* NI «PROTOCOLO» NI «TU ENTRENADOR» (#53 del 15-08: «sigue el lenguaje de
+                    catálogo»). «Protocolo» es como lo llamamos nosotros por dentro; el
+                    cliente compró que le digamos qué tomar. Y «tu entrenador» le habla de
+                    una persona que casi nadie tiene asignada en la app: aquí quien contesta
+                    es el equipo. */}
                 <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Todavía no tienes suplementación</h2>
                 <p className="text-muted-foreground text-sm">
-                    Tu entrenador no te ha puesto ningún protocolo por ahora. Si crees que te
-                    corresponde alguno, díselo por el chat y lo revisa.
+                    De momento no te hemos puesto nada. Si crees que te toca, dínoslo por el
+                    chat y le echamos un ojo.
                 </p>
             </div>
         </Wrap>;

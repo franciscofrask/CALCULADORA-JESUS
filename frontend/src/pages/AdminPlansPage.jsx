@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { Layers, Pencil, RotateCcw, Check, X } from 'lucide-react';
-import { queIncluyeElPlan, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
+import { queIncluyeElPlan, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia, etiquetaCalculadora } from '../lib/planAccess';
 
 // Orden y etiquetas de las categorías (pestañas del catálogo original).
 const ESTADOS = [
@@ -72,7 +72,8 @@ const PlanCard = ({ plan, onEdit }) => {
                 {plan.precio_nota && <p className="text-[11px] text-white/40 -mt-1">{plan.precio_nota}</p>}
 
                 <div className="border-t border-[#222] pt-2 space-y-1">
-                    <HabRow label="Calculadora" value={h.calculadora || '-'} />
+                    {/* Con nombre, no con el código de la casilla («personalizado»). */}
+                    <HabRow label="Calculadora" value={h.calculadora ? etiquetaCalculadora(h.calculadora) : '-'} />
                     <HabRow label="Rutina" value={h.rutina || '-'} />
                     <HabRow label="Reportes" value={(h.reportes && h.reportes.length) ? h.reportes.join(' + ') : 'ninguno'} />
                     <HabRow label="Acompañamiento" value={etiquetaAcompanamiento(h.acompanamiento)} />

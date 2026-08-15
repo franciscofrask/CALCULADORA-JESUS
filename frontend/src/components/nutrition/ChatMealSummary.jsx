@@ -24,15 +24,21 @@ const MACROS = [
 ];
 const NOMBRE = { P: 'proteína', H: 'hidratos', G: 'grasa' };
 
+/** Como lo enumera una persona: "A, B y C" (no "A y B y C"). */
+const enumerar = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}` : xs[0] || '');
+
 const fmt = (x) => {
     const n = Math.round((x || 0) * 10) / 10;
-    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 };
 
 /** Una barra por macro: lo que llevas sobre el objetivo. Si te pasas, se marca en rojo. */
 const BarraMacro = ({ label, color, actual, objetivo }) => {
     const pct = objetivo > 0 ? Math.min((actual / objetivo) * 100, 100) : 0;
-    const pasado = objetivo > 0 && actual > objetivo + 0.05;
+    // El mismo margen que el sello de "Comida cuadrada" (4 g): con el umbral en 0,05 la
+    // barra se ponia roja con 13/12 mientras abajo salia el sello verde, y las dos cosas
+    // a la vez se contradicen (QA 15-08, A1-B2).
+    const pasado = objetivo > 0 && actual > objetivo + 4;
     return (
         <div className="flex items-center gap-2">
             <span className="w-[52px] shrink-0 text-[11px] text-muted-foreground">{label}</span>
@@ -151,9 +157,9 @@ export const ChatMealSummary = ({ data }) => {
                 <div className="flex items-start gap-1.5 border-t border-border pt-2 text-xs text-muted-foreground">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
                     <span>
-                        {faltan.length > 0 && <>Faltan <b className="text-foreground">{faltan.join(' y ')}</b></>}
+                        {faltan.length > 0 && <>Faltan <b className="text-foreground">{enumerar(faltan)}</b></>}
                         {faltan.length > 0 && sobran.length > 0 && ' · '}
-                        {sobran.length > 0 && <>Te pasas <b className="text-foreground">{sobran.join(' y ')}</b></>}
+                        {sobran.length > 0 && <>Te pasas <b className="text-foreground">{enumerar(sobran)}</b></>}
                     </span>
                 </div>
             )}

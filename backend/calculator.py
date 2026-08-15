@@ -123,6 +123,13 @@ CATS_NO_SUGERIBLES = [
     # la deja entrar; sola, con la paella, no. Y buscarla por su nombre y anadirla a mano
     # sigue funcionando igual.
     '17.5',        # cremas de cacao y cremas proteicas de untar
+    # LOS ACEITES, POR SER CONDIMENTO (15-08-2026). El criterio del 05-08 ya decia que
+    # el asistente no propone condimentos por su cuenta, y el compositor seguia colando
+    # «Aceite de oliva... una cucharadita de cafe - 1 ud» como pieza de grasa de un
+    # desayuno (lo señalo Francisco en vivo). Con compañia real (`_acompana_a_algo`:
+    # tostadas, huevos) sigue entrando, y a mano y en los menus recuperados de comidas
+    # reales, tambien: esto solo quita el aceite SUELTO de relleno.
+    '17.1',        # aceites
 ]
 
 # Excepción a lo anterior: el hidrato de entrenar (dextrosa, ciclodextrina, palatinosa)

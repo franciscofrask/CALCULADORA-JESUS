@@ -33,6 +33,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '../ui/input';
 import { Search, X, Check } from 'lucide-react';
 import { BIBLIOTECA_DE_CLIENTES } from '../../lib/menuFuentes';
+import { num1 } from '../../lib/numeros';
 
 const normalizar = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -73,7 +74,7 @@ const MacroTrio = ({ macros, size = 'lg' }) => (
         {['P', 'H', 'G'].map(m => (
             <div key={m} className="text-center leading-none">
                 <span className={`font-black ${size === 'lg' ? 'text-xl' : 'text-sm'} ${MACRO_STYLE[m]}`}>
-                    {Math.round((macros?.[m] || 0) * 10) / 10}
+                    {num1(macros?.[m])}
                 </span>
                 <span className="block text-[9px] font-bold text-muted-foreground mt-0.5">{m}</span>
             </div>
@@ -337,9 +338,10 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 <div className="space-y-1.5 mb-4">
                                     {confirmacion.fuera.map(({ m, diff }) => (
                                         <p key={m} className={`text-center text-sm font-black ${MACRO_STYLE[m]}`}>
+                                            {/* Con coma decimal, como el resto de Nutrición (fallo 43). */}
                                             {diff > 0
-                                                ? `Te sobran ${diff} g de ${MACRO_NOMBRE[m]}`
-                                                : `Te faltan ${Math.abs(diff)} g de ${MACRO_NOMBRE[m]}`}
+                                                ? `Te sobran ${num1(diff)} g de ${MACRO_NOMBRE[m]}`
+                                                : `Te faltan ${num1(Math.abs(diff))} g de ${MACRO_NOMBRE[m]}`}
                                         </p>
                                     ))}
                                 </div>
@@ -509,7 +511,13 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                                 // una cantidad larga empuja el nombre en vez de
                                                 // abrir un claro en todas las demás filas.
                                                 <li key={i} className="flex items-baseline gap-2 lg:gap-2.5 text-[17px] lg:text-xs">
-                                                    <span className="font-data font-bold text-brand-orange whitespace-nowrap min-w-[46px] lg:min-w-0 lg:w-12 lg:text-right flex-shrink-0">{it.cantidad_display}</span>
+                                                    {/* `lg:w-auto`: desde que la unidad lleva su
+                                                        equivalencia al lado («2 ud (10 g)», fallo
+                                                        46) el ancho fijo de 48 px se quedaba
+                                                        corto y el texto se montaba sobre el
+                                                        nombre. El `min-w` mantiene la columna a
+                                                        plomo en los casos normales. */}
+                                                    <span className="font-data font-bold text-brand-orange whitespace-nowrap min-w-[46px] lg:w-auto lg:min-w-[3rem] lg:text-right flex-shrink-0">{it.cantidad_display}</span>
                                                     <span className="text-foreground leading-snug">{it.nombre}</span>
                                                 </li>
                                             ))}

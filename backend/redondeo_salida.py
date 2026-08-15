@@ -48,6 +48,34 @@ def _en_alguna(food: dict, codigos) -> bool:
     return False
 
 
+# ── Lo mínimo que se puede pesar en una cocina ──────────────────────────────────────────
+#
+# Jesús, 15-08-2026 (fallo 29): «Cuadrar» dejó el aguacate en 5 g y el yogur en 30. «5 gramos
+# de aguacate es media cucharadita; 30 g de yogur son dos cucharadas. Nadie pesa eso: el
+# cliente pone "un poco" y el cálculo se va». Redondear de 5 en 5 no bastaba, porque 5 es un
+# múltiplo de 5 perfectamente válido: lo que faltaba era un SUELO.
+#
+# Hay alimentos que sí se usan a cucharaditas y de los que 5 o 10 g es la cantidad normal: el
+# aceite, las salsas, el azúcar y la miel, los polvos (proteína, cacao, crema de arroz) y los
+# suplementos. Esos conservan su mínimo de siempre. Los que se comen a cucharadas o a
+# rodajas -- aguacate, yogur, arroz, carne -- no bajan de 20 g.
+#
+# Los de unidades no entran aquí: su cantidad mínima ya es una unidad, que es lo más pesable
+# que hay ("un huevo").
+CATEGORIAS_DE_CUCHARADITA = ("4", "16", "17.1", "18", "27", "37", "41")
+MINIMO_PESABLE = 20.0
+
+
+def minimo_pesable(food: dict, minimo_config: float = 0.0) -> float:
+    """El mínimo de `food`, subido a una cantidad que alguien pueda pesar de verdad."""
+    minimo = float(minimo_config or 0)
+    if food.get("unidades") or food.get("por_unidad"):
+        return minimo
+    if _en_alguna(food, CATEGORIAS_DE_CUCHARADITA):
+        return minimo
+    return max(minimo, MINIMO_PESABLE)
+
+
 def paso_en_gramos(food: dict) -> float:
     """El múltiplo al que hay que redondear la cantidad de ESTE alimento, en gramos."""
     if food.get("unidades") or food.get("por_unidad"):

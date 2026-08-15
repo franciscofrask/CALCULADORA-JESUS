@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
+import { useConfirm } from '../ui/confirm';
 import { toast } from 'sonner';
 import { Settings, Check, X, Plus, Ban } from 'lucide-react';
 import {
@@ -84,7 +85,9 @@ const CategoryCheckbox = ({ cat, checked, onToggle, colorClass, locked = false }
                 ? `${colorClass} border`
                 : 'bg-muted border border-transparent hover:bg-muted'
         }`}
-        onClick={() => !locked && onToggle(cat.id)}
+        // Las obligatorias también avisan al pulsarlas: antes no pasaba nada de nada y no
+        // había forma de saber por qué (Jesús, 15-08, fallo 40). El aviso lo da `onToggle`.
+        onClick={() => onToggle(cat.id)}
     >
         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
             checked ? `${colorClass.includes('orange') ? 'bg-brand-orange border-brand-orange' : 'bg-red-500 border-red-500'}` : 'border-border'
@@ -115,6 +118,7 @@ const PreferencesSetup = ({
     const [avoidedKeywords, setAvoidedKeywords] = useState(initialAvoidedKeywords);
     const [keywordInput, setKeywordInput] = useState('');
     const [saving, setSaving] = useState(false);
+    const { confirm } = useConfirm();
 
     useEffect(() => {
         setSelected(withObligatory(isEditMode || initialPreferences.length ? initialPreferences : DEFAULT_PREFERENCES));
@@ -129,23 +133,51 @@ const PreferencesSetup = ({
     }, [initialAvoidedKeywords]);
 
     const toggleCategory = (id) => {
-        if (OBLIGATORY_PREFERENCES.includes(id)) return; // obligatoria, no se desmarca
+        if (OBLIGATORY_PREFERENCES.includes(id)) {
+            // Antes esto era un `return` mudo: se pulsaba y no pasaba nada, sin decir por qué
+            // (Jesús, 15-08, fallo 40).
+            toast.info('Las grasas de buena calidad van siempre: el método las necesita en todas las comidas.');
+            return;
+        }
         setSelected(prev => {
             const s = new Set(prev);
             s.has(id) ? s.delete(id) : s.add(id);
             return s;
         });
+        // LO MISMO NO PUEDE ESTAR EN LAS DOS LISTAS (Jesús, 15-08, fallo 34): «Huevos y
+        // derivados» quedó marcado en «Me gusta» y en «Evitar» a la vez, y nada decía cuál
+        // ganaba. Marcarlo aquí lo saca de la otra, y se dice.
+        if (!selected.has(id) && avoidedCats.has(id)) {
+            setAvoidedCats(prev => { const s = new Set(prev); s.delete(id); return s; });
+            toast.info('Lo hemos quitado de "Evitar": no puede gustarte y evitarse a la vez.');
+        }
     };
 
     const toggleAvoidedCat = (id) => {
+        if (OBLIGATORY_PREFERENCES.includes(id) && !avoidedCats.has(id)) {
+            toast.info('Las grasas de buena calidad no se pueden evitar: el método las necesita.');
+            return;
+        }
         setAvoidedCats(prev => {
             const s = new Set(prev);
             s.has(id) ? s.delete(id) : s.add(id);
             return s;
         });
+        if (!avoidedCats.has(id) && selected.has(id)) {
+            setSelected(prev => { const s = new Set(prev); s.delete(id); return s; });
+            toast.info('Lo hemos quitado de "Me gusta": no puede gustarte y evitarse a la vez.');
+        }
     };
 
-    const addKeyword = () => {
+    /**
+     * Añade una palabra a evitar, y avisa si no bloquea nada.
+     *
+     * Jesús, 15-08 (fallo 39): metió «zzzz» y la app lo aceptó tan contenta, dando a
+     * entender que a partir de ahí algo quedaba bloqueado. Se comprueba contra el catálogo
+     * -- el mismo buscador de alimentos -- y, si no casa con nada, se dice; la palabra se
+     * guarda igualmente, porque mañana puede entrar un alimento que sí case.
+     */
+    const addKeyword = async () => {
         const kw = keywordInput.trim().toLowerCase();
         if (!kw) return;
         if (avoidedKeywords.includes(kw)) {
@@ -154,10 +186,50 @@ const PreferencesSetup = ({
         }
         setAvoidedKeywords(prev => [...prev, kw]);
         setKeywordInput('');
+        try {
+            const res = await api(`/api/calculator/search?q=${encodeURIComponent(kw)}&limit=1`);
+            if (!(res?.alimentos || []).length) {
+                toast.warning(`"${kw}" no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.`);
+            }
+        } catch (err) {
+            // Si no se puede comprobar, no se dice nada: la palabra ya está guardada y
+            // asustar con un error de red no ayuda a nadie.
+            console.error('[palabra a evitar] no se pudo comprobar contra el catálogo', err);
+        }
     };
 
     const removeKeyword = (kw) => {
         setAvoidedKeywords(prev => prev.filter(k => k !== kw));
+    };
+
+    /**
+     * Cerrar sin guardar, avisando de lo que se pierde.
+     *
+     * Jesús, 15-08 (fallo 41): «correcto que no guarde, pero debería decir que se van a
+     * perder los cambios». Si no se ha tocado nada se cierra sin preguntar: un diálogo por
+     * abrir y cerrar una pantalla es peor que no tenerlo.
+     */
+    const mismoConjunto = (a, b) => a.size === b.size && [...a].every(x => b.has(x));
+    const hayCambiosSinGuardar = () => {
+        const base = withObligatory(isEditMode || initialPreferences.length ? initialPreferences : DEFAULT_PREFERENCES);
+        if (!mismoConjunto(selected, base)) return true;
+        if (!mismoConjunto(avoidedCats, new Set(initialAvoidedCategories))) return true;
+        return avoidedKeywords.length !== initialAvoidedKeywords.length
+            || avoidedKeywords.some(kw => !initialAvoidedKeywords.includes(kw));
+    };
+
+    const handleCancel = async () => {
+        if (hayCambiosSinGuardar()) {
+            const salir = await confirm({
+                title: 'Tienes cambios sin guardar',
+                description: 'Si cierras ahora, tus preferencias se quedan como estaban.',
+                confirmLabel: 'Cerrar sin guardar',
+                cancelLabel: 'Seguir editando',
+                danger: true,
+            });
+            if (!salir) return;
+        }
+        onCancel();
     };
 
     const handleSave = async () => {
@@ -208,7 +280,8 @@ const PreferencesSetup = ({
                             {isEditMode ? 'Editar preferencias' : 'Configura tus preferencias'}
                         </h1>
                         {isEditMode && onCancel && (
-                            <button onClick={onCancel} className="text-muted-foreground hover:text-muted-foreground transition-colors">
+                            <button onClick={handleCancel} aria-label="Cerrar preferencias"
+                                className="text-muted-foreground hover:text-muted-foreground transition-colors">
                                 <X size={20} />
                             </button>
                         )}
@@ -343,6 +416,9 @@ const PreferencesSetup = ({
                                     {avoidedCats.size === PREFERENCE_CATEGORIES.length ? 'Quitar todos' : 'Seleccionar todos'}
                                 </button>
                             </div>
+                            {/* `bg-red-500/10` y no `bg-red-50`: en modo oscuro el rojo clarito
+                                con la letra blanca encima dejaba la categoría marcada SIN TEXTO
+                                -- se veía la casilla y nada más. Visto al probar el fallo 34. */}
                             <div className="space-y-1">
                                 {PREFERENCE_CATEGORIES.map(cat => (
                                     <CategoryCheckbox
@@ -350,7 +426,7 @@ const PreferencesSetup = ({
                                         cat={cat}
                                         checked={avoidedCats.has(cat.id)}
                                         onToggle={toggleAvoidedCat}
-                                        colorClass="bg-red-50 border-red-400"
+                                        colorClass="bg-red-500/10 border-red-400"
                                     />
                                 ))}
                             </div>
@@ -364,15 +440,22 @@ const PreferencesSetup = ({
                         <p className={`text-sm mb-3 ${selected.size < 3 ? 'text-red-500' : 'text-muted-foreground'}`}>
                             {selected.size < 3
                                 ? `Selecciona al menos 3 categorías (${selected.size}/3)`
-                                : `${selected.size} categorías seleccionadas`
+                                : `${selected.size} categorías marcadas`
                             }
                         </p>
                     )}
+                    {/* «1 categorías + 1 palabras clave bloqueadas» (Jesús, 15-08, fallo 42).
+                        Cada parte con su singular, y las que estén a cero no se nombran. */}
                     {activeTab === 'avoid' && (
                         <p className="text-sm mb-3 text-muted-foreground">
                             {avoidedCats.size + avoidedKeywords.length === 0
-                                ? 'Sin restricciones configuradas'
-                                : `${avoidedCats.size} categorías + ${avoidedKeywords.length} palabras clave bloqueadas`
+                                ? 'No estás evitando nada'
+                                : (() => {
+                                    const partes = [];
+                                    if (avoidedCats.size) partes.push(avoidedCats.size === 1 ? '1 categoría' : `${avoidedCats.size} categorías`);
+                                    if (avoidedKeywords.length) partes.push(avoidedKeywords.length === 1 ? '1 palabra clave' : `${avoidedKeywords.length} palabras clave`);
+                                    return `Estás evitando ${partes.join(' y ')}`;
+                                })()
                             }
                         </p>
                     )}

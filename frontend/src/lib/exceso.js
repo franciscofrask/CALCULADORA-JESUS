@@ -14,6 +14,7 @@
  * Lo que NO cambia: quedarse corto. Jesús solo habló del exceso, así que «faltan 12 g»
  * sigue avisando igual en los tres macros.
  */
+import { num1 } from './numeros';
 
 // El margen de Calma (margenValido = 4): un macro está bien mientras no se pase de 4 g.
 // Es el mismo número que ya usaban `getMealStatus` y las tarjetas de comida.
@@ -43,10 +44,9 @@ export const NOMBRE_MACRO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
 // decisión de Jesús: por arriba solo se corrige lo que sobra de hidratos y de grasa.
 export const MACROS_QUE_SE_PASAN = ['H', 'G'];
 
-export const fmtGramos = (x) => {
-    const n = Math.round((x || 0) * 10) / 10;
-    return Number.isInteger(n) ? String(n) : n.toFixed(1);
-};
+// Con coma decimal, como el resto de los números que se le enseñan a una persona
+// (Jesús, 15-08, fallo 43). El redondeo y el «sin decimales cuando son cero» no cambian.
+export const fmtGramos = (x) => num1(x);
 
 /**
  * ¿Este macro se ha pasado? La única definición de «pasarse» de la app.

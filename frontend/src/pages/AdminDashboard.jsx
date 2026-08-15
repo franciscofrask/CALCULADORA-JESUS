@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { PlanBadge, JG12Logo } from './ClientDashboard';
 import LimiteDeError from '../components/LimiteDeError';
+import { estadoClienteLabel } from '../lib/labels';
+import { contarClientes, contarRegistrosSinTerminar, cuentaComoCliente } from '../lib/cuentaClientes';
 import {
     LayoutDashboard, Users, CreditCard, Dumbbell,
     MessageCircle, LogOut, Search, Bell,
@@ -797,7 +799,7 @@ const AdminDashboard = () => {
                     <CardTitle className="flex items-center justify-between">
                         <span className="text-base text-white uppercase tracking-wider flex items-center gap-2">
                             <Users className="w-4 h-4 text-[#FF671F]" />
-                            Clientes ({clients.length})
+                            Clientes ({contarClientes(clients)})
                         </span>
                         <Button variant="ghost" size="sm" className="text-[#FF671F] hover:bg-[#FF671F]/10 uppercase text-xs" onClick={() => navigate('/admin/clients')}>
                             Ver todos <ChevronRight className="w-3 h-3 ml-1" />
@@ -825,7 +827,7 @@ const AdminDashboard = () => {
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                     <PlanBadge plan={c.plan} />
                                     <Badge className={c.status === 'activo' ? 'bg-green-500/10 text-green-500 border-0 text-[10px]' : 'bg-red-500/10 text-red-400 border-0 text-[10px]'}>
-                                        {c.status || 'sin estado'}
+                                        {estadoClienteLabel(c.status)}
                                     </Badge>
                                 </div>
                             </div>
@@ -949,8 +951,12 @@ const AdminClientsList = () => {
         });
     }
 
-    const cuantos = (cual) => clients.filter(c =>
-        cual === 'sin_coach' ? !c.trainer_id : cual === 'mios' ? c.trainer_id === user?.id : true).length;
+    // Las pestañas cuentan con el MISMO criterio que el contador del panel (#56): sin los
+    // registros a medias y sin la ficha propia. Antes contaban filas a secas y por eso
+    // «Todos» decía 182 donde el panel decía 178.
+    const cuantos = (cual) => clients.filter(c => cuentaComoCliente(c) && (
+        cual === 'sin_coach' ? !c.trainer_id : cual === 'mios' ? c.trainer_id === user?.id : true)).length;
+    const sinTerminar = contarRegistrosSinTerminar(clients);
 
     // LOS QUE NO LLEVA NADIE, PRIMERO.
     // «Sin entrenador: 233 de 247. Esa pestaña debería ser lo primero que se abre, no la
@@ -965,7 +971,23 @@ const AdminClientsList = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="heading-2 text-white">CLIENTES</h1>
-                    <p className="text-white/50 uppercase tracking-wider text-sm">{filteredClients.length} {filteredClients.length === 1 ? 'cliente' : 'clientes'}</p>
+                    {/* EL TOTAL ES EL TOTAL, Y LO QUE SE ESTÁ VIENDO SE DICE APARTE (#56).
+                        Aquí ponía las filas de la pestaña abierta con la etiqueta «clientes»
+                        a secas: con «Sin entrenador» delante salía «180 CLIENTES» y parecía
+                        otro total distinto del panel. */}
+                    <p className="text-white/50 uppercase tracking-wider text-sm" data-testid="clientes-total">
+                        {contarClientes(clients)} {contarClientes(clients) === 1 ? 'cliente' : 'clientes'}
+                        {filteredClients.length !== contarClientes(clients) && (
+                            <span className="text-white/30"> · viendo {filteredClients.length}</span>
+                        )}
+                    </p>
+                    {sinTerminar > 0 && (
+                        <p className="text-white/30 text-xs mt-0.5">
+                            Y {sinTerminar} {sinTerminar === 1 ? 'registro' : 'registros'} sin
+                            terminar: entraron y no eligieron plan, así que no cuentan como clientes.
+                            Salen en la tabla en gris.
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -1114,10 +1136,12 @@ const AdminClientsList = () => {
                                         </TableCell>
                                         <TableCell>
                                             {client.status === 'registro_incompleto' ? (
-                                                <Badge className="bg-yellow-500/15 text-yellow-400 border-0">Registro incompleto</Badge>
+                                                <Badge className="bg-yellow-500/15 text-yellow-400 border-0">Registro sin terminar</Badge>
                                             ) : (
+                                                /* El estado con palabras, no con el código de la base:
+                                                   «pendiente_pago» era lo que leía Jesús en la tabla (#64). */
                                                 <Badge className={client.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-[#333] text-white/50 border-0'}>
-                                                    {client.status || 'sin estado'}
+                                                    {estadoClienteLabel(client.status)}
                                                 </Badge>
                                             )}
                                         </TableCell>

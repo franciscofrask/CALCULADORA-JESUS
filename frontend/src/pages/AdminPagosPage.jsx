@@ -17,6 +17,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Receipt, Search, X, Loader2, TrendingUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { conceptoDeCobro, prettyToken } from '../lib/labels';
 
 const ORIGENES = [
     { id: '', nombre: 'Todos' },
@@ -277,11 +278,15 @@ const AdminPagosPage = () => {
                                         <p className="text-foreground font-medium">{p.nombre || '-'}</p>
                                         <p className="text-xs text-muted-foreground">{p.email}</p>
                                     </td>
+                                    {/* El concepto llega de la pasarela y en inglés: «1 x El Lunes
+                                        Empiezo (at €81.07 / month)» (#64 del 15-08). Se traduce al
+                                        pintarlo; el dato guardado no se toca, que es el que cuadra
+                                        con Stripe si hay que reclamar algo. */}
                                     <td className="px-4 py-3 text-muted-foreground">
-                                        {p.concepto || p.sku || '-'}
+                                        {conceptoDeCobro(p.concepto || p.sku)}
                                         {p.tipo && p.tipo !== 'pago' && (
                                             <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 uppercase tracking-wide font-semibold">
-                                                {p.tipo}
+                                                {prettyToken(p.tipo)}
                                             </span>
                                         )}
                                     </td>

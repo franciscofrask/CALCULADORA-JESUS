@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { leer as leerLocal, escribir as escribirLocal, borrar as borrarLocal } from '../lib/almacenLocal';
 import { excesos, textoExceso, margenDe } from '../lib/exceso';
+import { num1 } from '../lib/numeros';
+import { leerCantidad, TOPE_GRAMOS, AVISO_TOPE, AVISO_NO_ES_NUMERO, AVISO_NEGATIVO } from '../lib/cantidades';
+import { useConfirm } from '../components/ui/confirm';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -140,6 +143,9 @@ const NutritionPage = () => {
     const uid = user?.id;
     const navigate = useNavigate();
     const { notify } = useOnboarding();
+    // Para preguntar antes de hacer algo que no se puede deshacer (copiar sobre un día que
+    // ya tiene dieta, borrar una favorita). El confirm del navegador bloquea la pestaña.
+    const { confirm } = useConfirm();
 
     // Preferences state - for checking if user has configured preferences
     const [showPreferencesSetup, setShowPreferencesSetup] = useState(false);
@@ -192,7 +198,16 @@ const NutritionPage = () => {
     }, [uid]);
 
     // Date & Config state
-    const [currentDate, setCurrentDate] = useState(hoyISO);
+    //
+    // La fecha arranca DE LA URL, no de hoy (QA 15-08). Con hoy de arranque habia una
+    // carrera: el efecto que refleja la fecha en la URL corria con el valor inicial antes
+    // de que el efecto que lee ?date= aterrizara su setState, reescribia ?date= a hoy, y
+    // con el doble montaje de StrictMode la segunda pasada releia la URL ya machacada.
+    // Resultado: ?date=2026-08-16 abria el 15, y recargar en un dia futuro lo perdia.
+    const [currentDate, setCurrentDate] = useState(() => {
+        const pedida = new URLSearchParams(window.location.search).get('date');
+        return (pedida && /^\d{4}-\d{2}-\d{2}$/.test(pedida)) ? pedida : hoyISO();
+    });
     const [tipoDia, setTipoDia] = useState('entrenamiento');
     const [numComidas, setNumComidas] = useState(4);
     const [momentoEntreno, setMomentoEntreno] = useState(1);
@@ -623,8 +638,11 @@ const NutritionPage = () => {
     //
     // Lo único que se conserva es lo útil de aquello: si recargas la página en el mismo día
     // en el que estabas trabajando, vuelves al día que tenías abierto en vez de perderlo. Por
-    // eso se guarda también CUÁNDO se guardó, y la fecha solo se restaura si se guardó hoy y
-    // no es futura.
+    // eso se guarda también CUÁNDO se guardó, y la fecha solo se restaura si se guardó hoy.
+    // El futuro TAMBIÉN se restaura: quien está dejando montado el día de mañana y recarga
+    // (o el chat lo manda a mañana) tiene que seguir en mañana, no rebotar a hoy con el chat
+    // y la pestaña cada uno en un día (ronda 1 del 15-08). El punto 22 queda protegido por
+    // el sello del día: al entrar MAÑANA, lo guardado ayer ya no restaura y se abre en hoy.
     // Y la fecha también va por cliente (punto 4.7): era la otra mitad de lo mismo. Sin el
     // id dentro, el cliente B abría Nutrición en el día que estaba mirando el cliente A, que
     // es justo por donde empezaba el problema.
@@ -642,7 +660,7 @@ const NutritionPage = () => {
         if (!uid) return;
         const stored = leerLocal('nutrition_last_date', uid);
         const guardadoEn = leerLocal('nutrition_last_date_guardado', uid);
-        if (stored && guardadoEn === hoyISO() && stored <= hoyISO()) {
+        if (stored && guardadoEn === hoyISO()) {
             setCurrentDate(stored);
             return;
         }
@@ -857,7 +875,10 @@ const NutritionPage = () => {
     // Meal order based on config
     // Calma esModoSinRepartoDeMacrosPorComidas (coach-set quiereRepartoDeComidas=false):
     // a single comida holds the whole day's macros; peri (intra/post) stays separate.
-    const singleMeal = distribution?.config?.single_meal === true;
+    // num_comidas=1 ES comida unica aunque la bandera no venga: un dia guardado por el
+    // chat como bloque unico se pintaba con cuatro comidas, tres de ellas fantasma a
+    // 0/0/0 (QA 15-08 ronda 3, B3-04).
+    const singleMeal = distribution?.config?.single_meal === true || numComidas === 1;
 
     const getMealOrder = () => {
         const baseMeals = singleMeal ? ['C1'] : (numComidas === 3 ? ['C1', 'C2', 'C3'] : ['C1', 'C2', 'C3', 'C4']);
@@ -1023,10 +1044,19 @@ const NutritionPage = () => {
             const g = (bloque === 'fruto_seco' ? una.acum_fs : una.acum_cp) ?? 0;
             const tramo = g > cfg.tramos[1] ? 2 : g > cfg.tramos[0] ? 1 : 0;
             const previo = tramoAvisado.current[bloque];
+            // EL CARTEL SE VA SOLO, TIENE ASPA Y DEJA DE ESTAR CUANDO DEJA DE SER VERDAD
+            // (Jesús, 15-08, fallo 37): «se quedó minutos en pantalla, siguió visible después
+            // de borrar el alimento que lo provocó, y llegó a tapar el título de un panel».
+            // El id fijo por familia es lo que permite retirarlo al bajar de tramo -- y de
+            // paso evita que se apilen dos avisos de lo mismo.
+            const idAviso = `umbral-${bloque}`;
             if (previo !== null && tramo > previo) {
                 toast.info(tramo === 2
                     ? `Has pasado de ${cfg.tramos[1]} g de ${cfg.etiqueta} hoy: su proteína ya te cuenta entera`
-                    : `Has pasado de ${cfg.tramos[0]} g de ${cfg.etiqueta} hoy: su proteína empieza a contarte a la mitad`);
+                    : `Has pasado de ${cfg.tramos[0]} g de ${cfg.etiqueta} hoy: su proteína empieza a contarte a la mitad`,
+                    { id: idAviso, duration: 7000, closeButton: true });
+            } else if (previo !== null && tramo < previo) {
+                toast.dismiss(idAviso);
             }
             tramoAvisado.current[bloque] = tramo;
         }
@@ -1137,18 +1167,18 @@ const NutritionPage = () => {
     // Lo que pesa una unidad. Nunca 0: dividir por el peso es como se pasa a unidades.
     const pesoUnidad = (food) => (food?.peso_unidad || food?.racion || 100) || 100;
 
-    // Format quantity for display: "2 ud" for unit foods, "120g" for gram foods
+    // Cómo se escribe la cantidad: «2 ud» los de unidades, «120 g» los de peso. La
+    // equivalencia de la unidad («2 ud (53 g)») la pone quien lo pinta, que es el que sabe
+    // el sitio que tiene -- ver `IngredientRow` en MealCard.
     const formatFoodQuantity = (food) => {
-        if (!food) return '0g';
+        if (!food) return '0 g';
         const qty = food.cantidad_g || 0;
         const isPorUnidad = esPorUnidad(food);
         const unitWeight = pesoUnidad(food);
         if (isPorUnidad && unitWeight > 0) {
-            const units = qty / unitWeight;
-            const rounded = Math.round(units * 2) / 2;
-            return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)} ud`;
+            return `${num1(Math.round((qty / unitWeight) * 2) / 2)} ud`;
         }
-        return `${Math.round(qty)}g`;
+        return `${num1(Math.round(qty))} g`;
     };
 
     // Food operations
@@ -1220,6 +1250,12 @@ const NutritionPage = () => {
             if (bruta < minimo) {
                 return { ...prev, [mealKey]: { alimentos: foods.filter((_, i) => i !== foodIndex) } };
             }
+            // El tope de 2000 g también con el «+»: verduras y bebidas suben de 50 en 50 y un
+            // alimento por unidades, de una unidad entera (Jesús, 15-08, fallo 28).
+            if (bruta > TOPE_GRAMOS) {
+                toast.warning(AVISO_TOPE, { id: 'tope-cantidad' });
+                return prev;
+            }
             foods[foodIndex] = scaleFood(food, bruta);
             return { ...prev, [mealKey]: { alimentos: foods } };
         });
@@ -1229,24 +1265,48 @@ const NutritionPage = () => {
      * Cantidad escrita a mano. En los alimentos por unidades se escriben UNIDADES,
      * que es como los piensa el usuario ("2 huevos", no "126 g de huevo"); aqui se
      * pasan a gramos, que es como se guardan. Acepta medias unidades.
+     *
+     * LO QUE NO SE ENTIENDE NO BORRA NADA (Jesús, 15-08, fallo 4). Escribir «-50» o «abc»
+     * eliminaba el ingrediente de la comida: el texto no era un número, el número salía 0 y
+     * el 0 estaba por debajo del mínimo, que significa «quítalo». Un guion puesto sin querer
+     * y el alimento desaparecía sin decir nada y sin forma de recuperarlo. Ahora se rechaza
+     * el valor y se queda el que había. Bajar de verdad del mínimo (escribir 0) sí lo quita,
+     * porque es lo que se está pidiendo, pero se puede deshacer.
      */
     const updateFoodQuantityDirect = (mealKey, foodIndex, valor) => {
+        const food = (mealsData[mealKey]?.alimentos || [])[foodIndex];
+        setEditingQuantity({ mealKey: null, foodIndex: null });
+        if (!food) return;
+
+        const lectura = leerCantidad(valor, {
+            porUnidad: esPorUnidad(food),
+            pesoUnidad: pesoUnidad(food),
+            minimo: cantidadMinima(food),
+        });
+
+        if (lectura.estado === 'no_es_numero') { toast.error(AVISO_NO_ES_NUMERO); return; }
+        if (lectura.estado === 'negativo') { toast.error(AVISO_NEGATIVO); return; }
+
+        if (lectura.estado === 'por_debajo_del_minimo') {
+            const previo = mealsData[mealKey];
+            setMealsData(prev => ({
+                ...prev,
+                [mealKey]: { ...prev[mealKey], alimentos: (prev[mealKey]?.alimentos || []).filter((_, i) => i !== foodIndex) },
+            }));
+            toast.success(`${food.nombre} fuera de la comida`, {
+                duration: 8000,
+                action: { label: 'Deshacer', onClick: () => setMealsData(prev => ({ ...prev, [mealKey]: previo })) },
+            });
+            return;
+        }
+
+        if (lectura.estado === 'pasa_del_tope') toast.warning(AVISO_TOPE);
         setMealsData(prev => {
             const foods = [...(prev[mealKey]?.alimentos || [])];
-            const food = foods[foodIndex];
-            if (!food) return prev;
-            const escrito = parseFloat(String(valor).replace(',', '.'));
-            const porUnidad = esPorUnidad(food);
-            const gramos = Number.isFinite(escrito)
-                ? (porUnidad ? escrito * pesoUnidad(food) : escrito)
-                : 0;
-            if (gramos < cantidadMinima(food)) {
-                return { ...prev, [mealKey]: { alimentos: foods.filter((_, i) => i !== foodIndex) } };
-            }
-            foods[foodIndex] = scaleFood(food, Math.round(gramos));
-            return { ...prev, [mealKey]: { alimentos: foods } };
+            if (!foods[foodIndex]) return prev;
+            foods[foodIndex] = scaleFood(foods[foodIndex], Math.round(lectura.gramos));
+            return { ...prev, [mealKey]: { ...prev[mealKey], alimentos: foods } };
         });
-        setEditingQuantity({ mealKey: null, foodIndex: null });
     };
 
     const removeFood = (mealKey, foodIndex) => {
@@ -1479,6 +1539,14 @@ const NutritionPage = () => {
         } catch (err) { toast.error('Error guardando dieta'); }
     };
 
+    /**
+     * Copiar el día a otra fecha.
+     *
+     * Jesús, 15-08 (fallo 31): copió una dieta a otro día «sin un solo mensaje. Ni "copiado
+     * a...", ni aviso de que ese día ya tenía algo, ni deshacer». Copiar PISA la dieta del
+     * destino, así que antes se pregunta -- y se dice si allí había algo --, y al terminar
+     * se dice qué se ha hecho y dónde.
+     */
     const copyDiet = async () => {
         if (!copyDate) { toast.error('Selecciona una fecha'); return; }
         try {
@@ -1487,6 +1555,26 @@ const NutritionPage = () => {
                 toast.error('No hay dieta guardada para hoy');
                 return;
             }
+
+            // Qué hay en el destino. Si no se puede mirar, se pregunta igual: mejor una
+            // confirmación de más que pisar una dieta en silencio.
+            let destino = null;
+            try { destino = await api(`/api/diets/${copyDate}`); }
+            catch (err) { console.error('[copiar dieta] no se pudo mirar el destino', err); }
+            const destinoConDieta = Boolean(destino?.exists)
+                && Object.values(destino.comidas || {}).some(c => (c?.alimentos || []).length > 0);
+            const cuando = formatDate(copyDate);
+
+            const adelante = await confirm({
+                title: destinoConDieta ? `El ${cuando.toLowerCase()} ya tiene dieta` : `Copiar al ${cuando.toLowerCase()}`,
+                description: destinoConDieta
+                    ? 'Si sigues, la dieta de ese día se sustituye por esta. Eso no se puede deshacer.'
+                    : 'Se copia este día entero: sus comidas, sus cantidades y su tipo de día.',
+                confirmLabel: destinoConDieta ? 'Sustituirla' : 'Copiar',
+                danger: destinoConDieta,
+            });
+            if (!adelante) return;
+
             await api('/api/diets', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -1501,7 +1589,9 @@ const NutritionPage = () => {
                     is_cuadrado: sourceDiet.is_cuadrado,
                 })
             });
-            toast.success(`Copiada a ${formatDate(copyDate)}`);
+            toast.success(destinoConDieta
+                ? `Dieta copiada al ${cuando.toLowerCase()}, sustituyendo la que había`
+                : `Dieta copiada al ${cuando.toLowerCase()}`);
             setCopyModalOpen(false);
             setCopyDate('');
         } catch (err) {
@@ -1587,7 +1677,12 @@ const NutritionPage = () => {
             } else if (!noCaben.length) {
                 toast.success(`Aplicada "${fav.name}" y ajustada a tus macros`);
             }
-            if (noCaben.length) toast.warning(`${noCaben.length} alimento(s) no cabían ni al mínimo y se quitaron.`);
+            // Singular y plural de verdad, no «alimento(s)» (Jesús, 15-08, fallo 42).
+            if (noCaben.length) {
+                toast.warning(noCaben.length === 1
+                    ? 'Un alimento no cabía ni al mínimo y se ha quitado.'
+                    : `${noCaben.length} alimentos no cabían ni al mínimo y se han quitado.`);
+            }
 
             // Descanso -> entreno: la favorita no trae peri; avisar de que queda vacío.
             const trae = (k) => ((fav.comidas?.[k]?.alimentos) || []).length > 0;
@@ -1624,35 +1719,56 @@ const NutritionPage = () => {
             const d = res.desfases?.[mealKey];
             const falla = d && ['P', 'H', 'G'].filter(m => Math.abs(d[m]) > 4);
             const nombre = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+            // Cuando el redondeo a cantidades pesables mueve algo, se dice: los macros no
+            // salen clavados y el cliente tiene derecho a saber por qué (Jesús, 15-08,
+            // fallo 29: «5 g de aguacate es media cucharadita, nadie pesa eso»).
+            const notaRedondeo = d?.redondeado
+                ? ' Las cantidades se han dejado en números que se puedan pesar, así que los macros bailan un poco.'
+                : '';
             if (nEx) {
-                toast.warning(`Comida cuadrada. ${nEx} alimento(s) ya no están en el catálogo y se quitaron.`);
+                toast.warning(`Comida cuadrada. ${nEx === 1 ? 'Un alimento ya no está' : `${nEx} alimentos ya no están`} en el catálogo y se quitó.`);
             } else if (falla?.length) {
                 const texto = falla.map(m => {
                     const v = d[m];
-                    return `${v > 0 ? 'sobran' : 'faltan'} ${Math.abs(v).toFixed(1)}g de ${nombre[m]}`;
+                    return `${v > 0 ? 'sobran' : 'faltan'} ${num1(Math.abs(v))} g de ${nombre[m]}`;
                 }).join(' y ');
                 // Y se dice por dónde empezar, que es lo que hace útil el aviso. Quitar
                 // lo decide el cliente: la app no toca lo que él ha puesto.
                 const s = d.sugerencia;
                 const comoArreglarlo = s?.que_hacer === 'quitar_o_bajar'
-                    ? ` Para cuadrarlo tendrías que quitar o bajar ${s.alimento}, que pone ${s.aporta.toFixed(1)}g de ${nombre[s.macro]}.`
+                    ? ` Para cuadrarlo tendrías que quitar o bajar ${s.alimento}, que pone ${num1(s.aporta)} g de ${nombre[s.macro]}.`
                     : s?.que_hacer === 'anadir'
                         ? ` Para cuadrarlo te falta añadir algo con ${nombre[s.macro]}.`
                         : '';
                 toast.warning(
-                    `No se puede cuadrar sin quitar nada: ${texto}.${comoArreglarlo} No se ha quitado ninguno.`,
+                    `No se puede cuadrar sin quitar nada: ${texto}.${comoArreglarlo} No se ha quitado ninguno.${notaRedondeo}`,
                     { duration: 9000 });
             } else {
-                toast.success('Comida cuadrada a tus macros');
+                toast.success(`Comida cuadrada a tus macros.${notaRedondeo}`);
             }
         } catch { toast.error('No se pudo cuadrar la comida'); }
     };
 
+    // La papelera preguntaba nada y borraba (Jesús, 15-08, fallo 33): un clic y la favorita
+    // desaparecía, sin confirmar y sin deshacer. Es lo único de esta pantalla que no se
+    // puede reconstruir desde el día, así que aquí sí se pregunta antes.
     const deleteDietFavorite = async (id) => {
+        const fav = dietFavorites.find(f => f.id === id);
+        const adelante = await confirm({
+            title: `¿Borrar "${fav?.name || 'esta favorita'}"?`,
+            description: 'La favorita se borra para siempre. Los días que montaste con ella no se tocan.',
+            confirmLabel: 'Borrar',
+            danger: true,
+        });
+        if (!adelante) return;
         try {
             await api(`/api/diets/favorites/${id}`, { method: 'DELETE' });
             setDietFavorites(prev => prev.filter(f => f.id !== id));
-        } catch (err) { toast.error('Error eliminando favorita'); }
+            toast.success('Favorita borrada');
+        } catch (err) {
+            console.error('[borrar favorita]', err);
+            toast.error('No hemos podido borrar la favorita. Inténtalo de nuevo.');
+        }
     };
 
     // Day summary

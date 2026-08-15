@@ -13,7 +13,9 @@ const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
 const fmt = (x) => {
     const n = Math.round((x || 0) * 10) / 10;
-    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    // Coma decimal, como el resto de la casa: la tarjeta decia "47.1 P" mientras el
+    // bloque de la comida de al lado decia "47,1" (QA 15-08 ronda 3, B1).
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 };
 
 export const ChatMenus = ({ data, onAplicar, disabled }) => {
@@ -36,8 +38,12 @@ export const ChatMenus = ({ data, onAplicar, disabled }) => {
                                 <span className="text-sm font-semibold text-foreground">
                                     {/* El numero viene del backend y no se reinicia entre
                                         tandas: la "opción 3" del texto del asistente es
-                                        SIEMPRE la tarjeta "Opción 3". */}
-                                    {b.nombre || `Opción ${b.numero || i + 1}`}
+                                        SIEMPRE la tarjeta "Opción 3". Y el numero se pinta
+                                        SIEMPRE, tambien en las recetas: una tarjeta sin
+                                        numero deja al cliente sin saber cual es "la 2"
+                                        (QA 15-08, A1-A6). */}
+                                    {`Opción ${b.numero || i + 1}`}
+                                    {b.nombre ? ` · ${b.nombre}` : ''}
                                     {b.origen === 'recetario' && (
                                         <span className="ml-1.5 rounded bg-brand/10 px-1 py-0.5 text-[9px] font-bold uppercase text-brand">
                                             receta
@@ -87,13 +93,21 @@ export const ChatMenus = ({ data, onAplicar, disabled }) => {
                                     ⚠ {b.avisos.join('; ')}
                                 </p>
                             )}
-                            {b.receta_url && (
-                                <a href={b.receta_url} target="_blank" rel="noreferrer"
-                                    className="mt-1 inline-block text-[11px] text-brand underline">
-                                    Ver la receta
-                                </a>
-                            )}
+                            {/* Sin enlace a la receta (Francisco, 15-08): la tarjeta trae el
+                                menu entero con sus cantidades y el enlace sacaba al cliente
+                                de la app. El backend ya no manda receta_url. */}
 
+                            {/* Un menu que el revisor tumbo se ve (nadie se queda sin
+                                opciones) pero no se puede elegir: el boton desaparece. */}
+                            {b.aplicado ? (
+                                <p className="mt-2 w-full rounded-lg bg-muted py-1.5 text-center text-[11px] font-semibold text-muted-foreground">
+                                    Ya lo tienes puesto en esta comida
+                                </p>
+                            ) : b.no_aplicable ? (
+                                <p className="mt-2 w-full rounded-lg bg-muted py-1.5 text-center text-[11px] font-semibold text-muted-foreground">
+                                    Solo de referencia: pide otra opción
+                                </p>
+                            ) : (
                             <button
                                 type="button"
                                 disabled={disabled}
@@ -103,6 +117,7 @@ export const ChatMenus = ({ data, onAplicar, disabled }) => {
                             >
                                 Elegir este menú
                             </button>
+                            )}
                         </div>
                     );
                 })}

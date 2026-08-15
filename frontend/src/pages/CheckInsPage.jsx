@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MEDIDAS } from '../lib/medidas';
 import { useEsTelefono } from '../lib/esTelefono';
+import { revisarPeso, PESO_MIN, PESO_MAX } from '../lib/pesoValido';
+import { useConfirm } from '../components/ui/confirm';
 import { toast } from 'sonner';
 import {
     Activity, TrendingUp, CheckCircle2, Smile, Frown, Meh,
@@ -227,6 +229,7 @@ const PhotosSection = ({ api }) => {
 
 const CheckInsPage = () => {
     const { api } = useAuth();
+    const { confirm } = useConfirm();
     const navigate = useNavigate();
     const [checkins, setCheckins] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -277,6 +280,22 @@ const CheckInsPage = () => {
 
     const todayDaily = checkins.find(c => c.type === 'daily' && isSameDay(c.created_at));
 
+    // EL PESO DEL CHECK-IN TAMBIÉN ESCRIBE EN EL HISTÓRICO (#48 del 15-08). Aquí no había
+    // ninguna validación: entraba un 50 detrás de un 94 sin decir nada, y de esa serie
+    // salen la gráfica y el ritmo de cambio. Se compara con el último peso que conocemos
+    // -- el del check-in más reciente que traiga uno -- y si el salto canta, se pregunta.
+    const ultimoPeso = checkins.find(c => c.weight != null)?.weight ?? null;
+    const pesoAceptado = async (valor) => {
+        const chequeo = revisarPeso(valor, ultimoPeso);
+        if (!chequeo.ok) { toast.error(chequeo.error); return false; }
+        if (!chequeo.confirmar) return true;
+        return confirm({
+            title: 'Confírmame el peso',
+            description: chequeo.confirmar,
+            confirmLabel: 'Sí, es correcto', cancelLabel: 'Lo corrijo',
+        });
+    };
+
     const submitDaily = async () => {
         if (daily.energy == null || daily.hunger_anxiety == null) {
             return toast.error('Dinos cómo vas de energía y de hambre');
@@ -296,6 +315,7 @@ const CheckInsPage = () => {
 
     const submitWeekly = async () => {
         if (!weekly.weight) return toast.error('Indica tu peso');
+        if (!await pesoAceptado(weekly.weight)) return;
         setSubmitting(true);
         try {
             await api.post('/checkins', {
@@ -317,6 +337,7 @@ const CheckInsPage = () => {
 
     const submitMonthly = async () => {
         if (!monthly.weight) return toast.error('Indica tu peso');
+        if (!await pesoAceptado(monthly.weight)) return;
         setSubmitting(true);
         try {
             const measurements = {};
@@ -491,7 +512,7 @@ const CheckInsPage = () => {
                 <Collapsible open={openForm === 'weekly'} onToggle={() => setOpenForm(openForm === 'weekly' ? null : 'weekly')}
                     icon={Calendar} title="Check-in semanal" subtitle="Peso + adherencia + sueño">
                     <Field label="Peso (kg)">
-                        <input type="number" step="0.1" value={weekly.weight} onChange={e => setWeekly({ ...weekly, weight: e.target.value })} className={inputCls} />
+                        <input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} value={weekly.weight} onChange={e => setWeekly({ ...weekly, weight: e.target.value })} className={inputCls} />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Adherencia entreno (%)"><input type="number" min="0" max="100" value={weekly.training_compliance} onChange={e => setWeekly({ ...weekly, training_compliance: e.target.value })} className={inputCls} /></Field>
@@ -517,7 +538,7 @@ const CheckInsPage = () => {
                         Se anota desde la comparativa de fotos de su ficha, que es donde el
                         coach lo está mirando. */}
                     <div className="grid grid-cols-2 gap-3">
-                        <Field label="Peso (kg)"><input type="number" step="0.1" value={monthly.weight} onChange={e => setMonthly({ ...monthly, weight: e.target.value })} className={inputCls} /></Field>
+                        <Field label="Peso (kg)"><input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} value={monthly.weight} onChange={e => setMonthly({ ...monthly, weight: e.target.value })} className={inputCls} /></Field>
                     </div>
                     {/* Las MISMAS diez que en el reporte y en el punto de partida. Había
                         tres listas distintas en la app y ninguna era la suya, así que la

@@ -4,6 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { descripcionCategoria, CATEGORIA_NOMBRES } from '../components/nutrition/calmaCategorias';
 import SuggestFoodModal from '../components/nutrition/SuggestFoodModal';
 import { useEsTelefono } from '../lib/esTelefono';
+// La búsqueda por nombre (filtro + relevancia, portada de Calma) vive en lib para que la
+// use también el panel de «Añadir ingrediente» de Nutrición: era el mismo catálogo con dos
+// buscadores distintos, y el de montar la dieta era el roto (Jesús, 15-08).
+import { matchWord, matchAll, relevancia } from '../lib/busquedaAlimentos';
 
 // Calma $() token match: token === code OR token starts with `${code}.<digit>`.
 const tokenMatchesCode = (token, code) =>
@@ -14,37 +18,6 @@ const foodCats = (food) => String(food.categorias || '').split('|').map(t => t.t
 
 // redondeo Calma d(n,1)
 const r1 = (n) => Math.round(Number(n || 0) * 10) / 10;
-
-// ── Búsqueda y orden, portados de Calma (group-home-utils) ──────────────────
-const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase(); // h()
-const lenOk = (e, r) => (r === '' ? true : !(!r || !e.length || ('' + r).length > e.length)); // H()
-const inc = (e, r) => (lenOk(e, r) ? e.includes(r) : false); // L()
-const matchWord = (e, r) => (lenOk(e, r) ? inc(norm(e), norm(r)) : false); // E()
-const matchAll = (nombre, words) => words.every(w => matchWord(nombre, w)); // P(...,true)
-
-// Ie(): puntuación de relevancia (mayor = mejor coincidencia con el nombre)
-const relevancia = (nombre, words) => {
-    let n = 0;
-    const t = nombre.toUpperCase();
-    const s = t.split(' ');
-    const a = norm(nombre);
-    const ia = s.map(norm);
-    for (const f of words) {
-        const l = f.toUpperCase();
-        const p = norm(f);
-        if (t === l) n += 5;
-        if (a === p) n += 5;
-        if (t.startsWith(l)) n += 4;
-        if (a.startsWith(p)) n += 4;
-        if (s.some(u => u === l)) n += 3;
-        if (ia.some(u => u === p)) n += 2;
-        if (s.some(u => u.startsWith(l))) n += 2;
-        if (ia.some(u => u.startsWith(p))) n += 1;
-        if (s.some(u => inc(u, l))) n += 1;
-        if (ia.some(u => matchWord(u, p))) n += 1;
-    }
-    return n;
-};
 
 // ── Filtro de categorías (réplica de Calma ListadoAlimentos) ────────────────
 const inAny = (f, codes) => codes.some(c => foodCats(f).some(t => tokenMatchesCode(t, c)));

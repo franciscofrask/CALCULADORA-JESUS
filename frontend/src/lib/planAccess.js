@@ -1,6 +1,7 @@
 // Acceso y habilitaciones por plan.
 // Fuente de verdad: catálogo del backend (GET /api/plans). Aquí solo traducimos
 // la matriz de "habilitaciones" de un plan a capacidades de UI y a etiquetas legibles.
+import { prettyToken } from './labels';
 
 // Capacidades que la UI consulta para mostrar/ocultar funciones.
 export const CAP = {
@@ -55,20 +56,42 @@ const REPORTE_LABEL = {
     semanal: 'Reporte semanal',
 };
 
+// LO MISMO, PERO CONTADO (#53 del informe del 15-08: «sigue el lenguaje de catálogo»).
+//
+// Las etiquetas de arriba son las del catálogo: sirven para que el equipo configure un plan
+// y por eso nombran la casilla («Con entrenador», «Macros personalizados por tu
+// entrenador»). Al cliente esa lista se le enseña como «Tu plan incluye», y ahí una casilla
+// no es una frase: lo que compró es que alguien le lleve, no un campo marcado. Se traduce
+// solo lo que ve el cliente; el panel del equipo sigue con sus nombres.
+const CLIENTE_CALCULADORA = {
+    personalizado: 'Tus macros te los ajustamos nosotros',
+    autogestion: 'Te calculas los macros tú, con la calculadora',
+    sin_ajuste: 'Calculadora, sin ajustes de seguimiento',
+};
+const CLIENTE_ACOMPANAMIENTO = {
+    con_entrenador: 'Un entrenador te lleva el seguimiento',
+    con_entrenador_y_llamadas: 'Un entrenador te lleva el seguimiento, con llamadas',
+};
+const CLIENTE_CONTACTO = {
+    semanal: 'Hablamos cada semana',
+    quincenal: 'Hablamos cada quince días',
+    mensual: 'Hablamos una vez al mes',
+};
+
 // Lista de "qué incluye el plan" a partir de las habilitaciones (reemplaza las
 // features hardcodeadas antiguas).
 export function habilitacionesToList(habilitaciones) {
     const h = habilitaciones || {};
     const out = [];
-    if (h.calculadora && CALCULADORA_LABEL[h.calculadora]) out.push(CALCULADORA_LABEL[h.calculadora]);
+    if (h.calculadora && CLIENTE_CALCULADORA[h.calculadora]) out.push(CLIENTE_CALCULADORA[h.calculadora]);
     if (h.rutina && h.rutina !== 'ninguna' && RUTINA_LABEL[h.rutina]) out.push(RUTINA_LABEL[h.rutina]);
     (h.reportes || []).forEach((r) => REPORTE_LABEL[r] && out.push(REPORTE_LABEL[r]));
     if (h.suplementacion) out.push('Suplementación personalizada');
     if (h.harbiz) out.push('Rutina en Harbiz (app calendario)');
     if (h.acompanamiento && h.acompanamiento !== 'solo_app') {
-        out.push(ACOMPANAMIENTO_LABEL[h.acompanamiento]);
-        if (h.frecuencia_contacto && h.frecuencia_contacto !== 'ninguna') {
-            out.push(`Contacto ${h.frecuencia_contacto}`);
+        out.push(CLIENTE_ACOMPANAMIENTO[h.acompanamiento] || ACOMPANAMIENTO_LABEL[h.acompanamiento]);
+        if (h.frecuencia_contacto && CLIENTE_CONTACTO[h.frecuencia_contacto]) {
+            out.push(CLIENTE_CONTACTO[h.frecuencia_contacto]);
         }
     }
     return out;
@@ -102,6 +125,9 @@ export const FRECUENCIA_CONTACTO_OPTS = [
 const ACOMPANAMIENTO_LABEL = Object.fromEntries(ACOMPANAMIENTO_OPTS.map(o => [o.value, o.label]));
 const FRECUENCIA_LABEL = Object.fromEntries(FRECUENCIA_CONTACTO_OPTS.map(o => [o.value, o.label]));
 
+// La calculadora del plan, con nombre y no con su código («personalizado»), que es lo que
+// se pintaba en la ficha del plan del panel.
+export const etiquetaCalculadora = (v) => CALCULADORA_LABEL[v] || prettyToken(v);
 export const etiquetaAcompanamiento = (v) => ACOMPANAMIENTO_LABEL[v] || ACOMPANAMIENTO_LABEL.solo_app;
 export const etiquetaFrecuencia = (v) => FRECUENCIA_LABEL[v] || FRECUENCIA_LABEL.ninguna;
 

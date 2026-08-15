@@ -46,13 +46,16 @@ Z_MIN = {
 # asi que de un vistazo se ve que es suyo y que es heredado.
 #
 # 17.2 (frutos secos naturales) = 10 g. En el mapa antiguo heredan el 5 de la 17, y el doc
-# del 07-08 pide 10. Los demas minimos que nombra ese documento (aceites 5, verduras 50,
-# bebidas vegetales 100) ya coincidian y no hace falta tocarlos.
+# del 07-08 pide 10.
+#
+# 13 (verduras) = 100 g. Jesus, video 3 del 15-08, viendo las sugerencias del chat a 50:
+# «los vegetales siempre que sugiera 100 gramos, no 50 por defecto. En Calma estaba asi».
+# Pisa el 50 del mapa portado, que era lo que el doc del 07-08 daba por bueno.
 #
 # El resto del mapa esta PENDIENTE de repasar con Jesus: en el doc queda como "media hora de
 # repasarlas con Jesus". El caso que el pone como ejemplo son los copos de avena, que hoy
 # salen a 10 g (una cucharada) porque la categoria 7 tiene ese minimo.
-MINIMOS_JESUS = {"17.2": 10}
+MINIMOS_JESUS = {"17.2": 10, "13": 100}
 Z_MIN.update(MINIMOS_JESUS)
 
 # ── Granel step map X (utils_) ─────────────────────────────────────────────

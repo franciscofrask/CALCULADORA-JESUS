@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
-import { plural } from '../lib/labels';
+import { plural, nombreDePlan } from '../lib/labels';
 import { useEsTelefono } from '../lib/esTelefono';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
@@ -31,8 +31,14 @@ const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,
 const JG12Logo = ({ size = 'md', tone = 'dark' }) => <Logo12EN12 size={size} tone={tone} />;
 
 const PlanBadge = ({ plan, planName }) => {
+    // EL NOMBRE DEL PLAN, NO SU CÓDIGO (#64 del informe del 15-08: «RETO12EN12_GOLD»).
+    // Donde se pasaba `planName` ya salía bien; donde no -- la tabla de clientes y la de
+    // rutinas -- caía en `plan.toUpperCase()` y el panel gritaba el código de la base. El
+    // nombre está en el catálogo, que ya viaja en el contexto de sesión.
+    const { planCatalog } = useAuth();
     // Quitar el sufijo "(legacy)" de la insignia: es info interna, no de cara al usuario.
-    const label = (planName || plan?.toUpperCase() || '').replace(/\s*\(legacy\)/i, '').trim();
+    const label = (planName || (plan ? nombreDePlan(plan, planCatalog) : '') || '')
+        .replace(/\s*\(legacy\)/i, '').trim();
     if (!label) return <span className="badge-silver opacity-70" data-testid="plan-badge">Sin plan</span>;
     const cls = {
         gold: 'badge-gold', silver: 'badge-silver', bronze: 'badge-bronze', elm: 'badge-elm',

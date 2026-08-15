@@ -136,6 +136,22 @@ async def chatbot_configure(
     chatbot = await get_or_create_chatbot(session_id, db)
 
     if config.fecha:
+        # CAMBIAR DE FECHA ESTRENA DÍA (QA 15-08, A3-01/A3-02). configure_day conserva y
+        # traspasa lo montado a propósito -- reconfigurar EL MISMO día no debe perder
+        # trabajo -- pero entre fechas esa conservación es un arrastre: la comida del 18
+        # viajaba al 19 y el volcado la guardaba allí. Lo que tenga el día nuevo lo trae
+        # `precargar_desde_dieta` unas líneas más abajo, así que aquí se limpia todo lo
+        # que es DEL día viejo, borradores y acumulados incluidos.
+        if chatbot.state.get("fecha_objetivo") and chatbot.state["fecha_objetivo"] != config.fecha:
+            for clave in ("comidas_completadas", "borradores"):
+                chatbot.state[clave] = {}
+            for clave in ("saved_meals", "comidas_traidas", "last_options"):
+                chatbot.state[clave] = []
+            for clave in ("acumulado_cereales_panes", "acumulado_frutos_secos"):
+                chatbot.state[clave] = 0
+            chatbot.state["guion_peri_dicho"] = []
+            chatbot.state["opcion_seq"] = {}
+            chatbot.state["sustitucion_pendiente"] = None
         chatbot.state["fecha_objetivo"] = config.fecha
 
     # Los macros de un cliente cambian con el tiempo, así que se resuelven PARA EL DÍA que
@@ -191,20 +207,22 @@ async def chatbot_configure(
         r = v["restante"]
         hechas = f"{comidas_traidas} de {total}" if total else str(comidas_traidas)
         mensaje += f"\n\nYa tienes {hechas} comidas montadas de ese día."
-        falta = [f"{abs(round(r[k]))} {k}" for k in ("P", "H", "G") if round(r[k]) > 0]
+        # En palabras, no en iniciales: «Te faltan 13 P · 17 H · 1 G» es lo que Jesús
+        # leyó en el vídeo 1 del 15-08, y no lo dice nadie.
+        falta = [f"{_gr(abs(round(r[k])))} g de {_NOMBRE_MACRO[k]}"
+                 for k in ("P", "H", "G") if round(r[k]) > 0]
         if falta:
-            mensaje += f" Te faltan {' · '.join(falta)}."
+            mensaje += f" Te faltan {', '.join(falta[:-1]) + ' y ' + falta[-1] if len(falta) > 1 else falta[0]}."
         else:
             mensaje += " El día ya te cuadra."
 
     if comidas_traidas:
-        mensaje += (f"\n\nSeguimos por {label}. Tu objetivo son "
-                    f"{objetivo['P']} P · {objetivo['H']} H · {objetivo['G']} G.")
+        mensaje += f"\n\nSeguimos por {label}. Tu objetivo son {_frase_objetivo(objetivo)}."
     else:
         mensaje += (f"\n\nVamos con {label}. Tu objetivo es:\n"
-                    f"• Proteína: {objetivo['P']} g\n"
-                    f"• Hidratos: {objetivo['H']} g\n"
-                    f"• Grasa: {objetivo['G']} g")
+                    f"• Proteína: {_gr(objetivo['P'])} g\n"
+                    f"• Hidratos: {_gr(objetivo['H'])} g\n"
+                    f"• Grasa: {_gr(objetivo['G'])} g")
     # Si el cambio se ha llevado por delante alguna comida (el intra y el post al pasar a
     # descanso, la Comida 4 al bajar a 3), lo que había ahí se ha traspasado a otra: hay
     # que DECIRLO. Antes se borraba en silencio y el cliente perdía el trabajo sin enterarse.
@@ -231,6 +249,27 @@ async def chatbot_configure(
         "alimentos": (chatbot.state["comidas_completadas"].get(key) or {}).get("alimentos", []),
         "mensaje": mensaje
     }
+
+
+def _gr(x) -> str:
+    """Un gramaje como lo diría una persona: «40,5», «15» (nunca «15.0» ni «40.5»).
+
+    Los mensajes de esta ruta salían con el número de máquina -- «Tu objetivo son
+    40.5 P · 10 H · 15.0 G», «Te faltan 13 P · 17 H · 1 G» -- y es una de las quejas
+    transversales de los vídeos del 15-08: el cliente no habla en iniciales ni con
+    punto decimal."""
+    v = float(x or 0)
+    if abs(v - round(v)) < 0.05:
+        return str(int(round(v)))
+    return f"{v:.1f}".replace(".", ",")
+
+
+_NOMBRE_MACRO = {"P": "proteína", "H": "hidratos", "G": "grasa"}
+
+
+def _frase_objetivo(objetivo: dict) -> str:
+    return (f"{_gr(objetivo['P'])} g de proteína, {_gr(objetivo['H'])} de hidratos "
+            f"y {_gr(objetivo['G'])} de grasa")
 
 
 def _texto_reubicado(reubicado: list) -> str:
@@ -270,6 +309,11 @@ def _estado_para_front(chatbot) -> dict:
         "meal_nombre": chatbot.meal_label(chatbot.current_meal_key()),
         "restante": chatbot.get_remaining_macros(),
         "fecha_pedida": fecha_pedida,
+        # Consumida de una vez, como la fecha: dice que ESTE turno reconfiguró el día
+        # por chat. El front solo arrastra la config al día nuevo cuando viene esto a
+        # true («mañana descanso»: día y tipo en la misma frase). Sin la bandera, el
+        # descanso dicho AYER para el día viejo se contagiaba a cada día nuevo.
+        "config_tocada": bool(st.pop("config_tocada", False)),
         "config": {
             "tipo_dia": st.get("tipo_dia"),
             "num_comidas": st.get("num_comidas"),
@@ -383,10 +427,19 @@ async def chatbot_apply_draft(
         response["message"] = "Menú aplicado a la comida ✓."
     else:
         detalles = [p.get("detalle") for p in resultado.get("bloqueado_por", []) if p.get("detalle")]
-        response = {"action": "no_foods",
-                    "message": ("No lo he aplicado: " + "; ".join(detalles) + ". "
-                                "Dime si lo cambio o lo pongo igualmente.")
-                    if detalles else "No he podido aplicar ese menú.",
+        # El motivo más común de fallo sin detalles: la tarjeta es de una ronda vieja (el
+        # historial las deja pulsables al hacer scroll) y ese borrador ya no existe.
+        existe = borrador_id in (chatbot.state.get("borradores") or {})
+        if detalles:
+            mensaje = ("No lo he aplicado: " + "; ".join(detalles) +
+                       ". Dime si lo cambio o lo pongo igualmente.")
+        elif not existe:
+            mensaje = ("Ese menú era de una ronda anterior y ya no está activo. "
+                       "Si lo quieres, pídeme opciones otra vez y te lo vuelvo a montar.")
+        else:
+            mensaje = ("No he podido aplicar ese menú. " +
+                       (resultado.get("error") or "Dime si te monto opciones nuevas."))
+        response = {"action": "no_foods", "message": mensaje,
                     "day_overview": chatbot.get_day_overview()}
     return {"session_id": session_id, "response": response}
 
@@ -461,8 +514,8 @@ async def chatbot_complete_meal(
     label_guardada = chatbot.meal_label(chatbot.current_meal_key())
     rem = chatbot.get_remaining_macros()
     nombres_m = {"P": "proteína", "H": "hidratos", "G": "grasa"}
-    faltan = [f"{rem[k]} g de {nombres_m[k]}" for k in ("P", "H", "G") if rem.get(k, 0) > 4]
-    pasan = [f"{abs(rem[k])} g de {nombres_m[k]}" for k in ("P", "H", "G") if rem.get(k, 0) < -4]
+    faltan = [f"{_gr(rem[k])} g de {nombres_m[k]}" for k in ("P", "H", "G") if rem.get(k, 0) > 4]
+    pasan = [f"{_gr(abs(rem[k]))} g de {nombres_m[k]}" for k in ("P", "H", "G") if rem.get(k, 0) < -4]
     aviso = ""
     if faltan:
         aviso += f"\n⚠️ Ojo: {label_guardada} quedó sin cuadrar (faltan {' y '.join(faltan)})."
@@ -470,6 +523,15 @@ async def chatbot_complete_meal(
         aviso += f"\n⚠️ En {label_guardada} te pasas {' y '.join(pasan)}."
 
     resultado = chatbot.complete_current_meal()
+    # Guardar avanza de comida: los menús propuestos para la que se cierra mueren con
+    # ella, igual que en la herramienta del agente (QA 15-08, A4-F04: en el Post seguía
+    # citando «las opciones 3-6» de la Comida 1 porque el botón no las tiraba).
+    st = chatbot.state
+    mk_ahora = chatbot.current_meal_key()
+    bs = st.get("borradores") or {}
+    for bid in [k for k, b in bs.items() if b.get("meal_key") != mk_ahora]:
+        bs.pop(bid, None)
+    st["last_options"] = []
     await save_chatbot_session(chatbot)
 
     if resultado.get("vacia"):
@@ -492,8 +554,33 @@ async def chatbot_complete_meal(
         }
     else:
         siguiente = chatbot.state["comida_actual"]
-        label = chatbot.meal_label(chatbot.current_meal_key())
+        key_sig = chatbot.current_meal_key()
+        label = chatbot.meal_label(key_sig)
         objetivo = chatbot.get_current_meal_macros()
+        # Si el botón «Guardar y siguiente» aterriza en el intra o el post, el guion del
+        # método sale AQUÍ, igual que cuando se llega por chat. Por el botón se recibía
+        # un «¿Qué quieres tomar?» pelado, y el guion de Jesús solo existía para quien
+        # guardaba hablando (ronda 1 del 15-08). Se marca como dicho para que el agente
+        # no lo repita: a la siguiente frase del cliente toca montar, no volver a recitar.
+        guion_txt = None
+        momento_sig = {"Intra": "intra", "Post": "post"}.get(key_sig)
+        if momento_sig:
+            try:
+                from core.guion_peri import guion
+                guion_txt = guion(momento_sig, "principal")
+            except Exception:
+                guion_txt = None
+            if guion_txt:
+                dichos = chatbot.state.setdefault("guion_peri_dicho", [])
+                marca = f"{key_sig}:principal"
+                if marca not in dichos:
+                    dichos.append(marca)
+                await save_chatbot_session(chatbot)
+        mensaje = (f"Comida guardada ✓.{aviso}\nVamos con {label}. Tu objetivo es:\n"
+                   f"• Proteína: {_gr(objetivo['P'])} g\n"
+                   f"• Hidratos: {_gr(objetivo['H'])} g\n"
+                   f"• Grasa: {_gr(objetivo['G'])} g\n\n")
+        mensaje += guion_txt if guion_txt else "¿Qué quieres tomar?"
         return {
             "session_id": session_id,
             "comida_completada": resultado,
@@ -502,10 +589,7 @@ async def chatbot_complete_meal(
             "meal_nombre": label,
             "objetivo": objetivo,
             "day_overview": chatbot.get_day_overview(),
-            "mensaje": (f"Comida guardada ✓.{aviso}\nVamos con {label}. Tu objetivo es:\n"
-                        f"• Proteína: {objetivo['P']} g\n"
-                        f"• Hidratos: {objetivo['H']} g\n"
-                        f"• Grasa: {objetivo['G']} g\n\n¿Qué quieres tomar?")
+            "mensaje": mensaje
         }
 
 @router.get("/summary")
@@ -517,6 +601,19 @@ async def chatbot_summary(
     _assert_session_owner(session_id, current_user)
     chatbot = await get_or_create_chatbot(session_id, db)
     return chatbot.get_day_summary()
+
+@router.get("/day-overview")
+async def chatbot_day_overview(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """El estado del día tal y como está AHORA en la sesión. El botón «Resumen del día»
+    pintaba el estado que React tenía en memoria, que tras un guardado iba una comida por
+    detrás (QA 15-08, A1-M3: «5/6» con las seis guardadas)."""
+    _assert_session_owner(session_id, current_user)
+    chatbot = await get_or_create_chatbot(session_id, db)
+    return {"day_overview": chatbot.get_day_overview()}
+
 
 @router.get("/session-exists")
 async def chatbot_session_exists(
@@ -551,6 +648,15 @@ async def chatbot_save_to_diet(
 
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", fecha or ""):
         raise HTTPException(status_code=400, detail="Fecha inválida. Usa el formato YYYY-MM-DD.")
+
+    # EL VOLCADO SOLO VALE PARA EL DÍA EN EL QUE ESTÁ LA SESIÓN (QA 15-08, A3-01). Al
+    # cambiar de día hay una ventana en la que el front ya apunta a la fecha nueva pero
+    # la sesión todavía lleva las comidas de la vieja: un volcado en esa ventana escribía
+    # la comida del 18 dentro del 19 (235 g de proteína sobre un objetivo de 56). Si la
+    # fecha pedida no es la de la sesión, no se escribe nada y se dice por qué.
+    fecha_sesion = chatbot.state.get("fecha_objetivo")
+    if fecha_sesion and fecha_sesion != fecha:
+        return {"skipped": "cambio_de_dia", "fecha": fecha, "fecha_sesion": fecha_sesion}
 
     # Chequeo de sobrescritura: ¿el día ya tiene alimentos?
     existing = await db.diets.find_one({"user_id": user_id, "fecha": fecha})

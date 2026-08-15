@@ -105,7 +105,10 @@ class CheckInCreate(BaseModel):
     trained: Optional[bool] = None
     nutrition_followed: Optional[bool] = None
     # Weekly
-    weight: Optional[float] = None
+    # El mismo rango que el reporte y que la serie de peso: el check-in tambien escribe en
+    # el historico (`anotar_peso`), asi que sin tope aqui se colaban por la otra puerta los
+    # 50 y los 94 kg seguidos que salieron en las pruebas del 15-08 (#48).
+    weight: Optional[float] = Field(None, ge=25, le=300)
     training_compliance: Optional[int] = None    # 0-100
     nutrition_compliance: Optional[int] = None   # 0-100
     sleep_quality: Optional[int] = None          # 1-10

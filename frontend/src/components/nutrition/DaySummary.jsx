@@ -184,9 +184,9 @@ const DaySummary = ({
                                     statusColor={over ? '#EF4444' : color} />
                             </div>
                             <span className={`font-data text-[11px] w-[72px] text-right ${over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
-                                {val.toFixed(0)}/{(tgt || 0).toFixed(0)}g
+                                {val.toFixed(0)}/{(tgt || 0).toFixed(0)} g
                             </span>
-                            {over && <span className="font-data text-[11px] text-red-500 font-bold flex-shrink-0">+{fmtGramos(val - (tgt || 0))}g</span>}
+                            {over && <span className="font-data text-[11px] text-red-500 font-bold flex-shrink-0">+{fmtGramos(val - (tgt || 0))} g</span>}
                         </div>
                     );
                 })}

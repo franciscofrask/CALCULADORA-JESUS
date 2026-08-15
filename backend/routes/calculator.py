@@ -36,7 +36,7 @@ from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_
 from core.quiz_store import guardar_quiz_respuestas
 from core.series_cliente import anotar_peso, anotar_grasa
 from macro_distribution import distribuir_macros as dist_macros, leer_macro, leer_peri
-from redondeo_salida import redondear_cantidad
+from redondeo_salida import redondear_cantidad, minimo_pesable
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
@@ -1005,6 +1005,9 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
         remaining = _target(meal_key)
         refit_foods = []
         food_docs = []
+        # ¿Se ha movido alguna cantidad al dejarla en algo pesable? Si se ha movido, los
+        # macros ya no son los que salieron del cálculo y hay que decirlo (fallo 29).
+        redondeado = False
 
         # Se REPARTE, no se sirve en cola (Francisco, 08-08-2026).
         #
@@ -1094,12 +1097,18 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             for rf, food in zip(refit_foods, food_docs):
                 cfg = get_food_config(food)
                 ef = get_effective_macros_per_100g(food)
-                minimo = float(cfg.get("minimo", 5) or 5)
+                # CANTIDADES QUE SE PUEDAN PESAR (Jesús, 15-08, fallo 29). El mínimo del
+                # catálogo deja bajar el aguacate a 5 g y el yogur a 30, y eso no es comida:
+                # es «un poco». `minimo_pesable` sube ese suelo a 20 g salvo en lo que de
+                # verdad se usa a cucharaditas (aceites, salsas, polvos, azúcar). Se aplica
+                # también a la cantidad de partida, porque el afinado solo acepta movimientos
+                # DENTRO del rango: si entra por debajo del suelo, se queda ahí.
+                minimo = minimo_pesable(food, float(cfg.get("minimo", 5) or 5))
                 _, maximo_base = get_food_limits(food, cfg)
                 peso_unidad = float(food.get("peso_unidad") or food.get("racion") or 0)
                 es_unidad = bool(food.get("unidades") or food.get("por_unidad") or cfg.get("por_unidad"))
                 opt_foods.append({
-                    "cantidad": float(rf["cantidad_g"]),
+                    "cantidad": max(float(rf["cantidad_g"]), minimo),
                     "minimo": minimo,
                     "maximo": max(minimo, _menu_max("", ef.get("cat", ""), maximo_base)),
                     "ef": ef, "cat": ef.get("cat", ""),
@@ -1131,8 +1140,15 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             for rf, of, food in zip(refit_foods, opt_foods, food_docs):
                 # El afinado trabaja fino y deja cantidades como 182,5 o 120,1: al salir se
                 # bajan al múltiplo redondo, y los macros se recalculan con la cantidad final.
-                of["cantidad"] = redondear_cantidad(food, of["cantidad"], minimo_g=of["minimo"])
+                antes_de_redondear = float(rf["cantidad_g"])
+                of["cantidad"] = max(of["minimo"],
+                                     redondear_cantidad(food, of["cantidad"], minimo_g=of["minimo"]))
+                # Redondear a la baja puede dejar la cantidad por debajo del suelo pesable
+                # (`redondear_a_la_baja` devuelve el número tal cual cuando no le cabe otra):
+                # ahí manda el suelo, que es lo que se puede pesar.
                 fac = of["cantidad"] / 100.0
+                if abs(of["cantidad"] - antes_de_redondear) > 0.5:
+                    redondeado = True
                 rf["cantidad_g"] = round(of["cantidad"], 1)
                 rf["macros_efectivos"] = {
                     "P": round((of["ef"].get("P", 0) or 0) * fac, 1),
@@ -1183,7 +1199,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
         elif falta:
             peor = min(falta, key=lambda m: falta[m])
             sugerencia = {"que_hacer": "anadir", "macro": peor, "falta": -desfase[peor]}
-        desfases[meal_key] = {**desfase, "sugerencia": sugerencia}
+        desfases[meal_key] = {**desfase, "sugerencia": sugerencia, "redondeado": redondeado}
         out_comidas[meal_key] = {**meal, "alimentos": refit_foods}
     return {"comidas": out_comidas, "distribution": dist, "excluidos": excluidos,
             "desfases": desfases}
@@ -1682,7 +1698,10 @@ async def _items_con_macros(opcion: dict):
             "nombre": it.get("nombre") or (food or {}).get("nombre"),
             "cantidad_g": cantidad_g,
             "unidades_n": unidades_n,
-            "cantidad_display": f"{unidades_n:g} ud" if unidades_n else f"{cantidad_g:g} g",
+            # «1 ud» no dice cuánto pesa una unidad, y sin eso el mismo alimento vale una cosa
+            # pulsándolo y otra escribiéndolo (Jesús, 15-08, fallo 46). La equivalencia va
+            # pegada a la unidad, como en la calculadora de ahora.
+            "cantidad_display": f"{unidades_n:g} ud ({racion:g} g)" if unidades_n else f"{cantidad_g:g} g",
             "macros_efectivos": efectivos,
             "macros_brutos": brutos,
             "que_cuenta": cuenta,
@@ -2275,7 +2294,10 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
             for m in ("P", "H", "G"):
                 tot[m] += efectivos[m]
             sin_cambio = abs(cantidad_g - float(a["cantidad_g"])) < 0.5
-            display = (f"{a['unidades_n']} ud" if (a.get("unidades_n") and sin_cambio)
+            # Con la equivalencia al lado de la unidad (fallo 46): «2 ud (10 g)».
+            _racion = float(food.get("racion") or 0)
+            display = (f"{a['unidades_n']} ud" + (f" ({_racion:g} g)" if _racion > 0 else "")
+                       if (a.get("unidades_n") and sin_cambio)
                        else f"{cantidad_g:g} g")
             items.append({
                 "alimento_id": int(a["alimento_id"]),

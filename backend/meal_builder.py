@@ -175,10 +175,23 @@ def get_food_limits(alimento: dict, config: dict) -> Tuple[float, float]:
             minimo = 50
             maximo = 200
     
-    # Cat 13 - Verduras
+    # Cat 13 - Verduras. A 100 por defecto, nunca 50: Jesús, vídeo 3 del 15-08
+    # («los vegetales siempre que sugiera 100 gramos, no 50. En Calma estaba así»).
     elif has_cat("13."):
-        minimo = 50  # Reducido de 100 para verduras pequeñas
+        minimo = 100
         maximo = 300
+
+    # Cat 24 - Bebidas vegetales (leche de almendras, de avena, de coco...)
+    #
+    # No tenían regla y caían al genérico de 500 g, y como apenas traen macros el cuadre
+    # les pedía CUANTO MÁS MEJOR para arañar la grasa que faltaba: en el vídeo 6 del
+    # 15-08 el asistente le plantó a Jesús UN LITRO de leche de almendras en una merienda
+    # («esto sería una barbaridad, no está para hacerlo»). Un vaso van 200-250; en un
+    # batido de shaker, 300-400 como mucho. Ese es el rango de una persona, y si con eso
+    # no llega la grasa, la pone otro alimento, no más litros.
+    elif has_cat("24"):
+        minimo = 100
+        maximo = 400
     
     # Cat 21 - Arroz
     elif has_cat("21."):
@@ -272,6 +285,21 @@ def classify_food_role(alimento: dict, macros_ef: dict) -> str:
         return "G"
 
 
+def minimo_que_no_desborda(minimo: float, macro_per_100: float, hueco: float) -> float:
+    """La ración mínima de la casa, EXCEPTO cuando desborda el hueco.
+
+    El filtro de los carriles («el mínimo no cabe») rechazaba el alimento y `forzar` lo
+    recuperaba después A SU MÍNIMO, desbordando: 25 g de crema de arroz metían 20 g de
+    hidratos en un hueco de 10 (vídeo 6 del 15-08; Jesús lo corrigió a mano a 12-13 g).
+    Si una cantidad menor que la mínima sigue siendo un pellizco con sentido (10 g o
+    más) y así sí cuadra, manda el hueco: por abajo se ajusta, por arriba no se pasa.
+    """
+    if macro_per_100 <= 0 or minimo * macro_per_100 / 100 <= hueco + MARGEN_CALMA:
+        return minimo
+    ideal = hueco / macro_per_100 * 100
+    return max(10.0, min(minimo, ideal)) if ideal >= 10 else minimo
+
+
 def calculate_food_amount(
     alimento: dict,
     config: dict,
@@ -305,9 +333,36 @@ def calculate_food_amount(
     
     # Calcular cantidad para el objetivo
     cantidad_ideal = (target_amount / macro_per_100) * 100
-    
+
     # Aplicar límites
     cantidad_g = max(minimo, min(maximo, cantidad_ideal))
+
+    # POR ARRIBA NO SE PASA, NI POR RACIÓN MÍNIMA (vídeo 6 del 15-08). La ración mínima
+    # de la casa está pensada para que un alimento no entre en cantidades ridículas,
+    # pero cuando esa mínima DESBORDA el hueco más allá del margen, la regla de Jesús
+    # manda: «ajustar metiendo, no pasándose». 25 g de crema de arroz meten 20 g de
+    # hidratos en un hueco de 10; el propio Jesús lo corrigió a mano a 12-13 g en el
+    # vídeo. Si la cantidad que cuadra sigue siendo un pellizco con sentido (10 g o
+    # más), manda el hueco. Por debajo de eso, mejor no forzar: se respeta la mínima y
+    # el desvío se enseña.
+    if (cantidad_g > cantidad_ideal >= 10
+            and (cantidad_g - cantidad_ideal) * macro_per_100 / 100 > MARGEN_CALMA):
+        cantidad_g = cantidad_ideal
+
+    # A UN NÚMERO QUE UNA PERSONA PUEDA PESAR (vídeo 3 del 15-08). Las tarjetas de
+    # sugerencias ya redondean con la política de la casa (`redondeo_salida`, del
+    # 07-08: a la baja, en 0 o en 5, verduras y bebidas de 50 en 50), pero los menús
+    # montados salían de aquí con el gramo crudo: 81 g, 136 g, 206 g de claras.
+    # Jesús: «se acaba en 0 y en 5... que ofrezca 200 aunque no se ajuste del todo».
+    # A la baja a propósito: quedarse 2 g corto lo absorbe el resto del menú; pasarse
+    # descuadra, que es justo lo que este fichero evita.
+    # El suelo del redondeo es 10 g (el «pellizco» de la excepción de arriba): los mínimos
+    # de la casa son ya múltiplos de 5, así que esto solo actúa cuando la excepción bajó la
+    # cantidad por debajo de la ración mínima (12,5 g de crema → 10 g, no 12,5 tal cual).
+    if not config.get("por_unidad", False):
+        from redondeo_salida import redondear_cantidad
+        cantidad_g = redondear_cantidad(alimento, cantidad_g, minimo_g=min(minimo, 10.0)) \
+            or cantidad_g
     
     # Si es por unidad, redondear a unidades completas
     if config.get("por_unidad", False):
@@ -559,7 +614,8 @@ async def build_meal(
             
             if macros_ef["H"] <= 0:
                 continue
-            
+
+            minimo = minimo_que_no_desborda(minimo, macros_ef["H"], h_remaining)
             min_h = macros_ef["H"] * minimo / 100
             if min_h > h_remaining + MARGEN_CALMA:
                 not_found.append({
@@ -656,7 +712,8 @@ async def build_meal(
             if macros_ef["H"] <= 0:
                 continue
             
-            # Verificar que el mínimo cabe
+            # Verificar que el mínimo cabe (con la excepción del que no desborda)
+            minimo = minimo_que_no_desborda(minimo, macros_ef["H"], h_remaining)
             min_h = macros_ef["H"] * minimo / 100
             if min_h > h_remaining + MARGEN_CALMA:
                 not_found.append({
@@ -706,7 +763,8 @@ async def build_meal(
             if macros_ef["P"] <= 0:
                 continue
             
-            # Verificar que el mínimo cabe
+            # Verificar que el mínimo cabe (con la excepción del que no desborda)
+            minimo = minimo_que_no_desborda(minimo, macros_ef["P"], p_remaining)
             min_p = macros_ef["P"] * minimo / 100
             if min_p > p_remaining + MARGEN_CALMA:
                 not_found.append({
@@ -759,6 +817,7 @@ async def build_meal(
                 peso_unidad = config.get("peso_unidad", 0) or float(alimento.get("racion", 10))
                 min_g_efectivo = macros_ef["G"] * peso_unidad / 100
             else:
+                minimo = minimo_que_no_desborda(minimo, macros_ef["G"], g_remaining)
                 min_g_efectivo = macros_ef["G"] * minimo / 100
             
             # Si el mínimo de 1 unidad excede lo que queda + margen, rechazar

@@ -50,8 +50,8 @@ describe('decir POR CUANTO te pasas', () => {
             .toBe('29 g de hidratos y 12 g de grasa');
     });
 
-    test('los decimales solo cuando los hay', () => {
-        expect(textoExceso({ H: 81.2, G: 12 }, { H: 66, G: 12 })).toBe('15.2 g de hidratos');
+    test('los decimales solo cuando los hay, y con coma', () => {
+        expect(textoExceso({ H: 81.2, G: 12 }, { H: 66, G: 12 })).toBe('15,2 g de hidratos');
         expect(textoExceso({ H: 82, G: 12 }, { H: 66, G: 12 })).toBe('16 g de hidratos');
     });
 });

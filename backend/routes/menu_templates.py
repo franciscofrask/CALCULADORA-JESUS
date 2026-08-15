@@ -72,7 +72,7 @@ async def _clean_and_validate(data: dict) -> dict:
             raise HTTPException(400, f"Item {i + 1}: falta el alimento")
         prop = it.get("proporcion")
         if isinstance(prop, str):
-            prop = prop.strip().lower()
+            prop = prop.strip().lower().replace(",", ".")
             if prop != "ajuste":
                 try:
                     prop = float(prop)
@@ -85,6 +85,15 @@ async def _clean_and_validate(data: dict) -> dict:
                 prop = float(prop)
             except (TypeError, ValueError):
                 raise HTTPException(400, f"Item {i + 1}: proporción inválida")
+        # UNA PROPORCIÓN ES UNA PARTE DE ALGO (#59 del informe del 15-08). Jesús escribió 99
+        # en un alimento y el menú se guardó sin decir nada. La proporción es la parte del
+        # macro que cubre ese alimento: 1 es todo, 0,5 es la mitad. Por encima de 1 no
+        # significa nada, y 0 (o negativa) deja al alimento sin papel en el reparto.
+        if prop != "ajuste" and not (0 < float(prop) <= 1):
+            raise HTTPException(
+                400,
+                f"Item {i + 1}: la proporción va de 0 a 1 (1 = ese alimento cubre todo el "
+                f"macro; 0,5 = la mitad). También vale «ajuste» para la grasa.")
         item = {"rol": rol, "buscar": buscar, "categoria": categoria, "proporcion": prop}
         if alimento_id is not None:
             item["alimento_id"] = alimento_id

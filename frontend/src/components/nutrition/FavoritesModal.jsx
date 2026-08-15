@@ -5,6 +5,7 @@
  * (entreno<->descanso) o aplicarla como se guardó (cambia el tipo de día).
  */
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -25,9 +26,19 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
     // Favorita con el panel "adaptar o aplicar como se guardó" desplegado.
     const [confirmId, setConfirmId] = useState(null);
 
+    // DOS FAVORITAS CON EL MISMO NOMBRE NO SIRVEN DE NADA (Jesús, 15-08, fallo 35): «dos
+    // "dieta nueva", una de 4 comidas y otra de 6, sin fecha ni macros que las distingan».
+    // Se pide otro nombre en vez de guardarla y dejar el lío para luego.
+    const nombreRepetido = (n) => (favorites || []).some(
+        f => (f.name || '').trim().toLowerCase() === n.toLowerCase());
+
     const handleSave = async () => {
         const n = name.trim();
         if (!n) return;
+        if (nombreRepetido(n)) {
+            toast.error(`Ya tienes una favorita que se llama "${n}". Ponle otro nombre para distinguirlas.`);
+            return;
+        }
         setSaving(true);
         await onSave(n);
         setSaving(false);
@@ -90,9 +101,11 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                             <div key={fav.id} className="bg-muted rounded-lg p-2">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-foreground truncate">{fav.name}</p>
+                                        {/* El nombre entero al pasar por encima: recortado no
+                                            hay manera de distinguir dos favoritas parecidas. */}
+                                        <p className="text-sm font-semibold text-foreground truncate" title={fav.name}>{fav.name}</p>
                                         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                            {n} comida(s) <TipoDiaBadge tipo={favTipo} />
+                                            {n === 1 ? '1 comida' : `${n} comidas`} <TipoDiaBadge tipo={favTipo} />
                                         </p>
                                     </div>
                                     <Button variant="outline" size="sm" className="rounded-full border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white shrink-0"

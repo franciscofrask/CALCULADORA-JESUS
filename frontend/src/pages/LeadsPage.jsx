@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { plural } from '../lib/labels';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -47,11 +48,70 @@ const discardLabel = (id) => DISCARD_REASONS.find(r => r.id === id)?.label || id
 const getStatusObj = (id) => STATUSES.find(s => s.id === id) || STATUSES[0];
 const getSourceObj = (id) => SOURCES.find(s => s.id === id) || SOURCES[5];
 
+// UN SOLO FORMATO DE FECHA EN TODA LA PANTALLA (#71 del informe del 15-08: «conviven "14
+// ago", "19 jul", "hoy" y "27d aquí" en las mismas tarjetas»). Cada sitio se lo montaba por
+// su cuenta: la tabla con `day/month`, el detalle con la fecha entera en números y las
+// tarjetas con abreviaturas. Aquí hay dos cosas y solo dos, y se distinguen al leerlas:
+//
+//   - una FECHA es «14 ago» (con año cuando no es este: «19 jul 2025»),
+//   - un TIEMPO PARADO se dice con la palabra entera: «hoy», «27 días aquí».
+const fechaCorta = (valor) => {
+    if (!valor) return '-';
+    const d = new Date(String(valor).length === 10 ? `${valor}T00:00:00` : valor);
+    if (Number.isNaN(d.getTime())) return '-';
+    const opciones = { day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== new Date().getFullYear()) opciones.year = 'numeric';
+    return d.toLocaleDateString('es-ES', opciones).replace('.', '');
+};
+
 // Seguimiento vencido: tiene fecha pasada y el lead sigue vivo
 const isOverdue = (lead) => {
     if (!lead.next_action_date) return false;
     if (['convertido', 'descartado'].includes(lead.status)) return false;
     return lead.next_action_date < new Date().toISOString().slice(0, 10);
+};
+
+/**
+ * EL TABLERO, QUE CABE (#62 del informe del 15-08).
+ *
+ * «Hay que arrastrar una barra horizontal para ver las últimas columnas. En un portátil no
+ * se ve el estado final del embudo». Las seis columnas eran fijas de 16 rem (256 px): 1.600
+ * px solo de columnas, más el menú lateral. Ahora se reparten el ancho que haya y solo bajan
+ * hasta 11 rem, que es donde un nombre y un teléfono siguen leyéndose; por debajo de eso el
+ * tablero se desplaza, pero avisando: una sombra en el lado por el que queda algo que ver.
+ * Sin la sombra, la barra de desplazamiento del navegador solo aparece al pasar el ratón y
+ * las últimas columnas parecen no existir, que es justo lo que pasó.
+ */
+const Tablero = ({ children }) => {
+    const caja = useRef(null);
+    const [sombra, setSombra] = useState({ izq: false, der: false });
+
+    const medir = useCallback(() => {
+        const el = caja.current;
+        if (!el) return;
+        setSombra({
+            izq: el.scrollLeft > 4,
+            der: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+        });
+    }, []);
+
+    useEffect(() => {
+        medir();
+        window.addEventListener('resize', medir);
+        return () => window.removeEventListener('resize', medir);
+    }, [medir, children]);
+
+    return (
+        <div className="relative">
+            <div ref={caja} onScroll={medir}
+                className="grid grid-flow-col auto-cols-[minmax(11rem,1fr)] gap-2 overflow-x-auto pb-4"
+                data-testid="kanban-board">
+                {children}
+            </div>
+            {sombra.izq && <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#0A0A0A] to-transparent" />}
+            {sombra.der && <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[#0A0A0A] to-transparent" data-testid="kanban-sombra-derecha" />}
+        </div>
+    );
 };
 
 const LeadsPage = () => {
@@ -291,11 +351,11 @@ const LeadsPage = () => {
 
             {/* ========== KANBAN VIEW ========== */}
             {view === 'kanban' && (
-                <div className="flex gap-3 overflow-x-auto pb-4" data-testid="kanban-board">
+                <Tablero>
                     {STATUSES.map(status => {
                         const columnLeads = filtered.filter(l => l.status === status.id);
                         return (
-                            <div key={status.id} className="flex-shrink-0 w-64" data-testid={`kanban-col-${status.id}`}
+                            <div key={status.id} className="min-w-0" data-testid={`kanban-col-${status.id}`}
                                 onDragOver={e => { e.preventDefault(); if (dragOverCol !== status.id) setDragOverCol(status.id); }}
                                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverCol(null); }}
                                 onDrop={e => handleDrop(e, status.id)}>
@@ -316,7 +376,7 @@ const LeadsPage = () => {
                             </div>
                         );
                     })}
-                </div>
+                </Tablero>
             )}
 
             {/* ========== TABLE VIEW ========== */}
@@ -349,10 +409,10 @@ const LeadsPage = () => {
                                                 </td>
                                                 <td className="px-4 py-3 text-white/50 text-xs hidden sm:table-cell">{staffName(lead.assigned_to) || <span className="text-white/25">Sin asignar</span>}</td>
                                                 <td className={`px-4 py-3 text-xs ${isOverdue(lead) ? 'text-red-400 font-bold' : 'text-white/50'}`}>
-                                                    {lead.next_action_date ? new Date(lead.next_action_date + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'}
+                                                    {fechaCorta(lead.next_action_date)}
                                                     {isOverdue(lead) && ' ⚠'}
                                                 </td>
-                                                <td className="px-4 py-3 text-white/30 text-xs hidden md:table-cell">{new Date(lead.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</td>
+                                                <td className="px-4 py-3 text-white/30 text-xs hidden md:table-cell">{fechaCorta(lead.created_at)}</td>
                                                 <td className="px-4 py-3 text-white/30 text-xs truncate max-w-[150px] hidden md:table-cell">{lead.notes || '-'}</td>
                                             </tr>
                                         );
@@ -536,7 +596,7 @@ const LeadsPage = () => {
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="flex items-center gap-2 text-white/60 text-sm"><Mail className="w-3.5 h-3.5" />{detailLead.email || '-'}</div>
                                 <div className="flex items-center gap-2 text-white/60 text-sm"><Phone className="w-3.5 h-3.5" />{detailLead.phone || '-'}</div>
-                                <div className="flex items-center gap-2 text-white/60 text-sm"><Calendar className="w-3.5 h-3.5" />{new Date(detailLead.created_at).toLocaleDateString('es-ES')}</div>
+                                <div className="flex items-center gap-2 text-white/60 text-sm" title="Cuándo entró"><Calendar className="w-3.5 h-3.5" />{fechaCorta(detailLead.created_at)}</div>
                                 <div className="flex items-center gap-2 text-white/60 text-sm"><Badge className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{getSourceObj(detailLead.source).label}</Badge></div>
                             </div>
 
@@ -592,7 +652,7 @@ const LeadsPage = () => {
                                             <div className="flex-1 min-w-0">
                                                 <p className={`text-xs ${entry.type === 'sistema' ? 'text-white/40 italic' : 'text-white/80'}`}>{entry.text}</p>
                                                 <p className="text-[10px] text-white/25 mt-0.5">
-                                                    {entry.author} · {new Date(entry.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} {new Date(entry.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                                    {entry.author} · {fechaCorta(entry.created_at)} {new Date(entry.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                                                 </p>
                                             </div>
                                             {entry.type === 'nota' && (
@@ -736,20 +796,21 @@ const KanbanCard = ({ lead, onClick, assignedName, dragging, onDragStart, onDrag
                     {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{lead.phone}</span>}
                     <span className="flex items-center gap-1 ml-auto"><SrcIcon className="w-3 h-3" />{src.label}</span>
                 </div>
-                <div className="flex items-center gap-2 mt-1.5">
-                    <p className="text-white/20 text-[10px]">{new Date(lead.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+                    <p className="text-white/20 text-[10px]">Entró {fechaCorta(lead.created_at)}</p>
                     {/* Cuánto lleva quieto en esta columna. Sin esto, el tablero enseña
                         dónde está cada uno pero no cuál se está enfriando. */}
                     {!cerrado && parado !== null && (
                         <span className={`text-[10px] font-semibold ${olvidado ? 'text-red-400' : 'text-white/30'}`}
-                            title={`Lleva ${parado} ${parado === 1 ? 'día' : 'días'} sin cambiar de estado`}>
-                            {parado === 0 ? 'hoy' : `${parado}d aquí`}
+                            title={`Lleva ${plural(parado, 'día')} sin cambiar de estado`}>
+                            {parado === 0 ? 'hoy' : `${plural(parado, 'día')} aquí`}
                         </span>
                     )}
                     {assignedName && <span className="flex items-center gap-1 text-[10px] text-white/40"><Users className="w-3 h-3" />{assignedName}</span>}
                     {lead.next_action_date && (
-                        <span className={`flex items-center gap-1 text-[10px] ml-auto ${overdue ? 'text-red-400 font-bold' : 'text-white/40'}`}>
-                            <Calendar className="w-3 h-3" />{new Date(lead.next_action_date + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                        <span className={`flex items-center gap-1 text-[10px] ml-auto ${overdue ? 'text-red-400 font-bold' : 'text-white/40'}`}
+                            title="Próximo contacto">
+                            <Calendar className="w-3 h-3" />{fechaCorta(lead.next_action_date)}
                         </span>
                     )}
                 </div>

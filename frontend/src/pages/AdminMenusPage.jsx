@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -11,6 +11,28 @@ import { Utensils, Plus, Pencil, Trash2, Loader2, Save, X } from 'lucide-react';
 
 const MOMENTOS = ['desayuno', 'comida', 'merienda', 'cena'];
 const ROLES = ['proteina', 'hidrato', 'grasa'];
+const ROL_LABEL = { proteina: 'Proteína', hidrato: 'Hidratos', grasa: 'Grasa' };
+
+// Coma decimal, y sin decimales cuando son cero: 1 · 0,7 · 2,5.
+const coma = (n) => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
+
+// La proporción de un item: un número entre 0 y 1, o "ajuste" (el alimento que cierra la
+// grasa). Devuelve null si no es ninguna de las dos cosas.
+const leerProporcion = (v) => {
+    const txt = String(v ?? '').trim().toLowerCase().replace(',', '.');
+    if (txt === 'ajuste') return 'ajuste';
+    const n = Number(txt);
+    return Number.isFinite(n) && n > 0 && n <= 1 ? n : null;
+};
+
+// UNA ETIQUETA «NUEVO» QUE SIGNIFIQUE ALGO (#68 del informe del 15-08).
+// Salía en todos los menús porque miraba `origen === 'custom'`, y los 153 del recetario se
+// importaron con ese origen. Nuevo es lo de este mes; lo demás es el catálogo.
+const DIAS_QUE_ES_NUEVO = 30;
+const esReciente = (it) => {
+    const t = new Date(it?.created_at || 0).getTime();
+    return Number.isFinite(t) && t > 0 && (Date.now() - t) < DIAS_QUE_ES_NUEVO * 86400000;
+};
 
 const EMPTY_ITEM = { rol: 'proteina', alimento_id: null, buscar: '', categoria: '', proporcion: '1.0', macros: null };
 const EMPTY = { nombre: '', momento: 'comida', min_kcal: 300, max_kcal: 700, tags: [], items: [{ ...EMPTY_ITEM }] };
@@ -106,6 +128,25 @@ const AdminMenusPage = () => {
         setModal({ open: true, item: it });
     };
 
+    // EL REPARTO POR MACRO, RECALCULADO EN CADA TECLA (#59).
+    // La proporción es la parte del macro que cubre ese alimento, así que los de un mismo
+    // rol suman 1. Antes no se comprobaba nada: dos hidratos con 1 cada uno, o un 99, se
+    // guardaban sin una palabra. Los items en «ajuste» no entran en la suma (no reparten:
+    // cierran lo que falte de grasa).
+    const repartos = useMemo(() => ROLES.map(rol => {
+        const suyos = (form.items || []).filter(it => it.rol === rol && (it.buscar || '').trim());
+        const malo = suyos.find(it => leerProporcion(it.proporcion) === null);
+        const numeros = suyos
+            .map(it => leerProporcion(it.proporcion))
+            .filter(p => typeof p === 'number');
+        const suma = numeros.reduce((a, b) => a + b, 0);
+        return {
+            rol: ROL_LABEL[rol], n: numeros.length, suma,
+            invalida: malo ? (malo.buscar || 'ese alimento') : null,
+            descuadra: numeros.length > 0 && Math.abs(suma - 1) > 0.01,
+        };
+    }).filter(r => r.n > 0 || r.invalida), [form.items]);
+
     // ---- edición de items ----
     const setItem = (idx, field, val) => setForm(f => ({ ...f, items: f.items.map((it, i) => i === idx ? { ...it, [field]: val } : it) }));
     const pickFood = (idx, food) => setForm(f => ({ ...f, items: f.items.map((it, i) => i === idx ? { ...it, alimento_id: food.id, buscar: food.nombre, macros: { P: Math.round(food.proteinas || 0), H: Math.round(food.hidratos || 0), G: Math.round(food.grasas || 0) } } : it) }));
@@ -116,6 +157,27 @@ const AdminMenusPage = () => {
         if (!form.nombre.trim()) { toast.error('El nombre es obligatorio'); return; }
         const validos = (form.items || []).filter(it => it.buscar.trim());
         if (validos.length === 0) { toast.error('Añade al menos un alimento'); return; }
+        // LAS PROPORCIONES TIENEN QUE SUMAR (#59 del informe del 15-08).
+        // Una fuera de rango no se guarda: no significa nada y el servidor la rechaza igual.
+        const fuera = repartos.find(r => r.invalida);
+        if (fuera) {
+            toast.error(`La proporción de ${fuera.invalida} no vale: va de 0 a 1 (1 = ese `
+                + 'alimento cubre todo el macro). También vale «ajuste» para la grasa.');
+            return;
+        }
+        // Que un macro sume 2,0 sí puede ser a propósito mientras se está montando el menú,
+        // así que se avisa con lo que pasaría y se deja decidir. El arroz y los champiñones
+        // con 1 cada uno son el ejemplo de Jesús: para cubrir su parte harían falta medio
+        // kilo de champiñones.
+        const descuadres = repartos.filter(r => r.descuadra);
+        if (descuadres.length && !await confirm({
+            title: 'Las proporciones no suman 1',
+            description: descuadres.map(r => `${r.rol}: suman ${coma(r.suma)} entre ${r.n} `
+                + `${r.n === 1 ? 'alimento' : 'alimentos'}`).join(' · ')
+                + '. Cada macro se reparte entre sus alimentos y ese reparto suma 1. Tal y como '
+                + 'está, la ficha no dice qué parte cubre cada uno.',
+            confirmLabel: 'Guardar igual', cancelLabel: 'Lo reviso',
+        })) return;
         setSaving(true);
         try {
             const body = {
@@ -149,8 +211,18 @@ const AdminMenusPage = () => {
         catch (e) { toast.error('Error al borrar'); }
     };
 
-    const mostrados = filtro === 'todos' ? items : items.filter(i => i.momento === filtro);
-    const cuenta = (m) => items.filter(i => i.momento === m).length;
+    // UN ORDEN, Y SIEMPRE EL MISMO (#68: «con el filtro en TODOS las dieciséis primeras
+    // fichas son cenas: no hay orden ni por tipo ni por nombre»). El servidor las devuelve
+    // ordenadas por (momento, id) y «cena» es la primera por alfabeto. Aquí van por el orden
+    // del día -- desayuno, comida, merienda, cena -- y dentro de cada uno por nombre.
+    const mostrados = useMemo(() => {
+        const lista = filtro === 'todos' ? [...items] : items.filter(i => i.momento === filtro);
+        return lista.sort((a, b) => {
+            const d = MOMENTOS.indexOf(a.momento) - MOMENTOS.indexOf(b.momento);
+            return d !== 0 ? d : (a.nombre || '').localeCompare(b.nombre || '', 'es');
+        });
+    }, [items, filtro]);
+    const cuenta = (m) => (m === 'todos' ? items.length : items.filter(i => i.momento === m).length);
 
     // 153 FILAS SON 99 RECETAS.
     //
@@ -168,10 +240,16 @@ const AdminMenusPage = () => {
                     <h1 className="text-2xl font-bold text-white flex items-center gap-2" style={{ fontFamily: 'Barlow Condensed' }}>
                         <Utensils className="w-6 h-6 text-[#FF671F]" /> MENÚS PREESTABLECIDOS
                     </h1>
-                    {!loading && recetas > 0 && (
+                    {/* EL TÍTULO CUENTA LO MISMO QUE LAS PESTAÑAS (#67 del 15-08: «30 + 56 +
+                        17 + 56 = 159, y arriba pone 103 recetas»). Las pestañas cuentan
+                        fichas, así que el número de delante son fichas; las recetas van
+                        detrás, explicadas. */}
+                    {!loading && items.length > 0 && (
                         <p className="text-white/40 text-sm mt-1">
-                            {recetas} {recetas === 1 ? 'receta' : 'recetas'}
-                            {items.length !== recetas && ` · ${items.length} fichas, porque las que valen para comida y para cena están guardadas dos veces`}
+                            {items.length} {items.length === 1 ? 'ficha' : 'fichas'}
+                            {items.length !== recetas
+                                ? ` · ${recetas} recetas distintas: las que valen para comida y para cena están guardadas dos veces`
+                                : ''}
                         </p>
                     )}
                 </div>
@@ -183,7 +261,7 @@ const AdminMenusPage = () => {
                 {['todos', ...MOMENTOS].map(m => (
                     <button key={m} onClick={() => setFiltro(m)}
                         className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors ${filtro === m ? 'bg-[#FF671F] text-white' : 'bg-[#111] text-white/50 border border-[#222] hover:text-white'}`}>
-                        {m}{m !== 'todos' && ` (${cuenta(m)})`}
+                        {m} ({cuenta(m)})
                     </button>
                 ))}
             </div>
@@ -197,7 +275,7 @@ const AdminMenusPage = () => {
                             <div className="min-w-0">
                                 <p className="text-white font-medium flex items-center gap-2">
                                     {it.nombre}
-                                    {it.origen === 'custom' && <span className="text-[9px] bg-[#FF671F]/20 text-[#FF671F] px-1.5 py-0.5 rounded uppercase font-bold">nuevo</span>}
+                                    {esReciente(it) && <span className="text-[9px] bg-[#FF671F]/20 text-[#FF671F] px-1.5 py-0.5 rounded uppercase font-bold">nuevo</span>}
                                 </p>
                                 <p className="text-white/40 text-xs mt-0.5 capitalize">{it.momento} · {(it.items || []).length} alimentos</p>
                                 <p className="text-white/50 text-xs mt-1 truncate">{(it.items || []).map(x => x.buscar).join(', ')}</p>
@@ -241,7 +319,11 @@ const AdminMenusPage = () => {
                                             <div className="col-span-6">
                                                 <FoodPicker api={api} nombre={it.buscar} onPick={(f) => pickFood(idx, f)} />
                                             </div>
-                                            <Input value={it.proporcion} onChange={e => setItem(idx, 'proporcion', e.target.value)} className="col-span-2 bg-[#0A0A0A] border-[#333] text-white text-xs h-9" placeholder="1.0" />
+                                            {/* En rojo en cuanto deja de ser una proporción: se ve
+                                                al escribirlo, no al guardar (#59). */}
+                                            <Input value={it.proporcion} onChange={e => setItem(idx, 'proporcion', e.target.value)}
+                                                className={`col-span-2 bg-[#0A0A0A] text-white text-xs h-9 ${leerProporcion(it.proporcion) === null && (it.buscar || '').trim() ? 'border-red-500' : 'border-[#333]'}`}
+                                                placeholder="1" title="De 0 a 1, o «ajuste»" />
                                             <button onClick={() => removeItem(idx)} className="col-span-1 text-white/30 hover:text-red-400 flex justify-center"><X className="w-4 h-4" /></button>
                                         </div>
                                         {it.macros && (
@@ -253,16 +335,42 @@ const AdminMenusPage = () => {
                                 ))}
                             </div>
                             <button onClick={addItem} className="mt-2 text-xs font-semibold text-[#FF671F] hover:underline flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Añadir alimento</button>
+
+                            {/* EL REPARTO, A LA VISTA MIENTRAS SE EDITA (#59). Aquí no había
+                                nada: la única forma de saber que los hidratos sumaban 2 era
+                                sumarlos a mano. */}
+                            {repartos.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                                    {repartos.map(r => (
+                                        <span key={r.rol} className={r.invalida || r.descuadra ? 'text-red-400' : 'text-white/40'}>
+                                            {r.rol}: {coma(r.suma)} de 1
+                                            {r.descuadra && ' · no cuadra'}
+                                            {r.invalida && ' · hay una proporción que no vale'}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
                             {(() => {
-                                const tot = form.items.reduce((a, it) => it.macros ? { P: a.P + it.macros.P, H: a.H + it.macros.H, G: a.G + it.macros.G } : a, { P: 0, H: 0, G: 0 });
+                                // LOS MACROS DEL MENÚ SE MUEVEN AL EDITAR (#59: «no se
+                                // recalculan»). Sumaban los 100 g de cada alimento a pelo, así
+                                // que cambiar una proporción no movía el número y parecía que
+                                // la pantalla se había quedado colgada. Cada alimento entra por
+                                // su parte; el de «ajuste» entra entero, que es lo que hace.
+                                const tot = form.items.reduce((a, it) => {
+                                    if (!it.macros) return a;
+                                    const p = leerProporcion(it.proporcion);
+                                    const f = typeof p === 'number' ? p : 1;
+                                    return { P: a.P + it.macros.P * f, H: a.H + it.macros.H * f, G: a.G + it.macros.G * f };
+                                }, { P: 0, H: 0, G: 0 });
                                 return (
-                                    <div className="mt-2 pt-2 border-t border-[#222] text-xs text-white/50 flex items-center justify-between">
-                                        <span>Macros del menú <span className="text-white/30">(guía por 100g, no se edita)</span></span>
-                                        <span className="font-semibold"><span className="text-orange-400">P{tot.P}</span> · <span className="text-blue-400">H{tot.H}</span> · <span className="text-yellow-400">G{tot.G}</span></span>
+                                    <div className="mt-2 pt-2 border-t border-[#222] text-xs text-white/50 flex items-center justify-between gap-2">
+                                        <span>Macros del menú <span className="text-white/30">(guía: 100 g de cada alimento por su proporción)</span></span>
+                                        <span className="font-semibold whitespace-nowrap"><span className="text-orange-400">P{coma(tot.P)}</span> · <span className="text-blue-400">H{coma(tot.H)}</span> · <span className="text-yellow-400">G{coma(tot.G)}</span></span>
                                     </div>
                                 );
                             })()}
-                            <p className="text-[10px] text-white/30 mt-1.5">Busca y elige el alimento. Proporción: número (1.0 = todo el macro) o <b>ajuste</b> para la grasa. Las cantidades se autoajustan a los macros del cliente.</p>
+                            <p className="text-[10px] text-white/30 mt-1.5">Busca y elige el alimento. Proporción: la parte de ese macro que cubre, de 0 a 1 (los alimentos de un mismo rol suman 1), o <b>ajuste</b> para la grasa. Las cantidades se autoajustan a los macros del cliente.</p>
                         </div>
                     </div>
                     <DialogFooter>

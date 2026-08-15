@@ -63,6 +63,28 @@ async def ultima_vigente(db, client_id: str, fecha: Optional[str] = None) -> Opt
     return await elegir_entrada(db, {"id": client_id}, fecha or _date.today().isoformat())
 
 
+async def ultimo_cambio(db, client_id: str) -> Optional[dict]:
+    """El ajuste mas reciente REGISTRADO, aunque su fecha sea de manana.
+
+    No es lo mismo que `ultima_vigente`, que corta en hoy porque contesta «con que macros
+    come hoy». Aqui la pregunta es otra: «cuando fue la ultima vez que alguien le movio los
+    macros». Un ajuste guardado hoy con efecto manana ya es un cambio hecho.
+
+    Sale del informe del 15-08 (#51): «Llevas 4 semanas con los mismos macros» a los dos
+    dias de ajustarlos. Contando con la vigente, el ajuste programado no existia todavia y
+    el aviso seguia saliendo. Y aqui tambien manda `effective_date`, nunca `created_at`:
+    en las 3.446 filas que vinieron de Calma ese campo es el dia de la importacion.
+    """
+    entries = await db.macro_history.find({"client_id": client_id}, {"_id": 0}).to_list(500)
+    if not entries:
+        return None
+
+    def eff(e):
+        return e.get("effective_date") or str(e.get("created_at", ""))[:10]
+
+    return max(entries, key=lambda e: (eff(e), str(e.get("created_at", ""))))
+
+
 async def resolver(db, profile: dict, fecha: Optional[str]) -> Tuple[dict, dict, dict]:
     """Los macros (entreno, descanso, peri) vigentes para esa fecha.
 

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { PlanBadge } from './ClientDashboard';
-import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES, plural } from '../lib/labels';
+import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES, plural, estadoClienteLabel } from '../lib/labels';
 import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
@@ -29,6 +29,7 @@ import {
     Headphones, CalendarClock, Camera
 } from 'lucide-react';
 import { etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
+import { revisarPeso } from '../lib/pesoValido';
 
 const USER_ROLES = [
     { value: 'client', label: 'Cliente' },
@@ -543,9 +544,23 @@ const ClientDetailPage = () => {
     const handleSaveMacros = async () => {
         if (macrosFormIncompleto(macrosForm)) { toast.error('Completa proteína, hidratos y grasa de entrenamiento y descanso'); return; }
         if (!macrosForm.note.trim()) { toast.error('El feedback para el cliente es obligatorio'); return; }
+        const f = macrosForm;
+        // EL PESO DEL AJUSTE TAMBIÉN ENTRA EN EL HISTÓRICO (#48 del 15-08: «77,1 → 94 → 75 →
+        // 94 → 50 kg, saltos de 44 kg entre ajustes seguidos»). El campo ya no acepta
+        // cualquier número, pero 94 y 50 son los dos pesos posibles: lo que canta es el
+        // salto, y eso solo se ve comparando con el ajuste anterior.
+        if (f.peso) {
+            const chequeo = revisarPeso(f.peso, pesoUltimoAjuste);
+            if (!chequeo.ok) { toast.error(chequeo.error); return; }
+            if (chequeo.confirmar && !await confirm({
+                title: 'Ese peso da un salto grande',
+                description: `${chequeo.confirmar} Si es un dedazo, corrígelo: de este peso salen `
+                    + 'la gráfica del cliente y el ritmo con el que se decide el próximo ajuste.',
+                confirmLabel: 'Es correcto', cancelLabel: 'Lo corrijo',
+            })) return;
+        }
         // Confirmación antes de guardar (2.4): "a veces guardo por error y ya me salta como
         // último macro". Se resume lo que se va a guardar para poder repasarlo de un vistazo.
-        const f = macrosForm;
         if (!await confirm({
             title: '¿Guardar estos macros?',
             // La excepción del cliente, la primera línea (punto 39): este es uno de los
@@ -809,7 +824,8 @@ const ClientDetailPage = () => {
                     <div className="flex items-center gap-2 flex-wrap">
                         <h1 className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Barlow Condensed' }}>{user?.name?.toUpperCase()}</h1>
                         <PlanBadge plan={profile?.plan} />
-                        <Badge className={profile?.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-red-500/20 text-red-400 border-0'}>{profile?.status}</Badge>
+                        {/* El estado con palabras: «pendiente_pago» es el código de la base (#64). */}
+                        <Badge className={profile?.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-red-500/20 text-red-400 border-0'}>{estadoClienteLabel(profile?.status)}</Badge>
                     </div>
                     <p className="text-white/40 text-sm truncate">{user?.email}</p>
                 </div>
@@ -845,7 +861,7 @@ const ClientDetailPage = () => {
                             <InfoItem icon={Mail} label="Email" value={user?.email} />
                             <InfoItem icon={Phone} label="Teléfono" value={user?.phone || '-'} />
                             <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} planName={planCatalog?.[profile?.plan]?.name} />} />
-                            <InfoItem icon={Activity} label="Estado" value={profile?.status} />
+                            <InfoItem icon={Activity} label="Estado" value={estadoClienteLabel(profile?.status)} />
                             <InfoItem icon={Calendar} label="Semana" value={(() => {
                                 const sem = planCatalog?.[profile?.plan]?.ciclo?.semanas;
                                 return sem ? `${profile?.week || 1}/${sem}` : `${profile?.week || 1}`;

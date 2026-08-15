@@ -286,7 +286,11 @@ function App() {
                                 donde esté (punto 4.11). */}
                             <BarraActuandoComo />
                             <AppRoutes />
-                            <Toaster position="top-center" richColors />
+                            {/* LOS AVISOS SE CIERRAN, Y SE CIERRAN SOLOS (Jesús, 15-08,
+                                fallo 37): no tenían aspa y alguno se quedó minutos tapando
+                                el título de un panel. Seis segundos y una cruz en todos; el
+                                que necesite más tiempo lo pide en su `duration`. */}
+                            <Toaster position="top-center" richColors closeButton duration={6000} />
                             <InstallPrompt />
                         </OnboardingProvider>
                     </ConfirmProvider>

@@ -9,6 +9,9 @@ import { Input } from '../ui/input';
 import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
 import { seExcede } from '../../lib/exceso';
+import { num1, numMedio } from '../../lib/numeros';
+import { leerCantidad, TOPE_GRAMOS, AVISO_TOPE, AVISO_NEGATIVO } from '../../lib/cantidades';
+import { ordenarPorRelevancia } from '../../lib/busquedaAlimentos';
 import { FOOD_FAVORITES_UI } from './SearchFoodModal';
 import {
     faStopwatch20,
@@ -241,6 +244,12 @@ const BuildMealModal = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
+    // EL TURNO DE LA BÚSQUEDA. Cada tecla lanzaba su petición y ganaba la que llegase
+    // ÚLTIMA, no la última escrita: al teclear «pechuga» la respuesta de «pe» -- que trae
+    // medio catálogo y tarda más -- pisaba a la de «pechuga» y en pantalla quedaban Pepsi
+    // Max y Pepitas. Ese era el fallo 3 de Jesús. Cada búsqueda coge número y solo se pinta
+    // la que sigue siendo la actual.
+    const turnoBusqueda = useRef(0);
 
     const [selectedFood, setSelectedFood] = useState(null);
     const [adjustedQuantity, setAdjustedQuantity] = useState(0);
@@ -320,7 +329,7 @@ const BuildMealModal = ({
     // Calma rounds the per-meal target to the nearest 0.5 g FOR DISPLAY ONLY (stepRedondeo):
     // an internal H target of 46.8 shows as "47". The status math below stays UNROUNDED so
     // "Faltan 10.5g" = 46.8 - 36.3, matching Calma exactly.
-    const fmtHalf = (x) => (Math.round((x || 0) * 2) / 2).toString();
+    const fmtHalf = numMedio;   // coma decimal, como todo lo que se ve en Nutrición
 
     // Calma "Macros para Comida X" per macro (margenValido = 4), r = target - served UNROUNDED:
     //   served > 0  -> num "served/target g" + status:
@@ -329,22 +338,22 @@ const BuildMealModal = ({
     //   served == 0 -> num "targetg" ONLY, NO status (e.g. "Hidratos: 30g"). The status appears
     //                  at the SAME moment Calma shows it: only once that macro has something served.
     const MARGEN_VALIDO = 4;
-    const fmt1 = (v) => { const r = Math.round((v || 0) * 10) / 10; return r % 1 === 0 ? String(r) : r.toFixed(1); };
+    const fmt1 = num1;
     // `key` (P/H/G) para el rojo: pasarse de proteína no es un fallo y no se pinta (Jesús,
     // 13-08). El «sobran X g» se sigue diciendo, en el color de siempre.
     const macroCell = (servedVal, tgtVal, key) => {
-        if (!(servedVal > 0)) return { num: `${fmtHalf(tgtVal)}g`, status: null, over: false };
+        if (!(servedVal > 0)) return { num: `${fmtHalf(tgtVal)} g`, status: null, over: false };
         const r = tgtVal - servedVal;
         let status, cls;
         if (Math.round(r) === 0) { status = 'Cuadrado'; cls = 'text-green-600'; }
         else if (Math.abs(r) < MARGEN_VALIDO) { status = 'Válido'; cls = 'text-amber-500'; }
-        else if (r > 0) { status = `faltan ${fmt1(r)}g`; cls = 'text-red-500'; }
+        else if (r > 0) { status = `faltan ${fmt1(r)} g`; cls = 'text-red-500'; }
         else {
             const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeriMode });
-            status = `sobran ${fmt1(-r)}g`;
+            status = `sobran ${fmt1(-r)} g`;
             cls = enRojo ? 'text-red-500' : 'text-muted-foreground';
         }
-        return { num: `${fmt1(servedVal)}/${fmtHalf(tgtVal)}g`, status, cls,
+        return { num: `${fmt1(servedVal)}/${fmtHalf(tgtVal)} g`, status, cls,
                  over: seExcede(key, servedVal, tgtVal, { esPeri: isPeriMode }) };
     };
 
@@ -439,8 +448,11 @@ const BuildMealModal = ({
             // se sigan viendo (y se puedan editar/quitar) en lugar de empezar vacío.
             const yaGuardados = (mealsData[mealKey]?.alimentos || []).map(f => ({ ...f }));
             setTempFoods(yaGuardados);
-            // Si la comida ya tenía alimentos, abrir la barra "añadidos" para que se vean al entrar.
-            setAddedOpen(yaGuardados.length > 0);
+            // La barra de «añadidos» arranca CERRADA, aunque la comida ya tuviera alimentos.
+            // Abierta se comía media ventana y solo dejaba ver el primer resultado del
+            // buscador, así que el buscador parecía muerto (Jesús, 15-08, fallo 30). Cerrada
+            // sigue diciendo cuántos hay y con qué macros; para verlos, se despliega.
+            setAddedOpen(false);
             // Calma: intra has its category chips hidden and pre-activated (c(e, true)),
             // so foods load immediately. Auto-select the intra categories on open.
             setSelectedCategories(isIntraMode ? INTRA_CATEGORIES.map(c => ({ ...c, value: c.id })) : []);
@@ -560,12 +572,11 @@ const BuildMealModal = ({
                     setAvailablePreps(result.available_preps || []);
                 }
             }).catch(() => {}).finally(() => { if (!cancelled) setLoadingFoods(false); });
-        } else if (isSearching && searchQuery.length >= 2) {
-            const params = new URLSearchParams({ q: searchQuery, limit: '50', ...getMacrosParams() });
-            api(`/api/calculator/search?${params}`).then(result => {
-                if (!cancelled) setSearchResults(result.alimentos || []);
-            }).catch(() => {});
         }
+        // AQUÍ SE RELANZABA LA BÚSQUEDA POR TEXTO cada vez que cambiaba lo que le queda a la
+        // comida, con el hueco de macros dentro. Era la otra mitad del fallo 3: la lista de
+        // resultados se reordenaba sola -- o se vaciaba -- sin que nadie hubiera tocado el
+        // buscador. Lo que se ha escrito no depende de los macros, así que ya no se relanza.
         return () => { cancelled = true; };
     }, [remaining.P, remaining.H, remaining.G, selectedCategories, selectedPreparations, isManual]); // eslint-disable-line
 
@@ -635,10 +646,26 @@ const BuildMealModal = ({
         setCategoryFoods([]);
     };
 
+    /**
+     * BUSCAR POR NOMBRE: MANDA LO QUE HA ESCRITO EL CLIENTE (Jesús, 15-08, fallo 3).
+     *
+     * Antes esta búsqueda viajaba con el hueco de macros de la comida (p_rest/h_rest/g_rest
+     * y `cuadrar`), y el servidor ordenaba por lo que tapaba ese hueco y además quitaba los
+     * alimentos cuya ración mínima se pasase. Buscando «pechuga» eso significaba: primero lo
+     * que da 31,8 g de hidratos, y ninguna pechuga si ya no cabía proteína.
+     *
+     * Ahora se busca como en la pantalla «Alimentos»: filtro por nombre y orden por parecido
+     * con lo escrito (`ordenarPorRelevancia`, el mismo código de Calma que usa aquella
+     * pantalla). El hueco de macros sigue existiendo, pero donde toca: en las CATEGORÍAS,
+     * que es la parte que sugiere. `peri` se mantiene porque no es un hueco de macros, es de
+     * qué alimentos se compone un intra o un post.
+     */
     const handleSearch = async (query) => {
         setSearchQuery(query);
+        const texto = query.trim();
 
-        if (query.length < 2) {
+        if (texto.length < 2) {
+            turnoBusqueda.current += 1;   // invalida lo que estuviera en vuelo
             setIsSearching(false);
             setSearchResults([]);
             return;
@@ -646,19 +673,21 @@ const BuildMealModal = ({
 
         setIsSearching(true);
         setLoadingFoods(true);
+        const miTurno = ++turnoBusqueda.current;
 
         try {
-            const params = new URLSearchParams({
-                q: query,
-                limit: '50',
-                ...getMacrosParams()
-            });
+            const params = new URLSearchParams({ q: texto, limit: '200' });
+            if (isIntraMode || isPostMode) params.set('peri', isIntraMode ? 'intra' : 'post');
             const result = await api(`/api/calculator/search?${params}`);
-            setSearchResults(result.alimentos || []);
+            if (miTurno !== turnoBusqueda.current) return;   // ya se ha escrito otra cosa
+            setSearchResults(ordenarPorRelevancia(result.alimentos || [], texto));
         } catch (err) {
             console.error('Error buscando:', err);
+            if (miTurno === turnoBusqueda.current) {
+                toast.error('No hemos podido buscar ahora mismo. Inténtalo otra vez.');
+            }
         } finally {
-            setLoadingFoods(false);
+            if (miTurno === turnoBusqueda.current) setLoadingFoods(false);
         }
     };
 
@@ -673,18 +702,43 @@ const BuildMealModal = ({
             }
 
             const quantity = food._cantidad_sugerida || food.racion || 100;
-            const macrosEf = food._macros_sugeridos && Object.keys(food._macros_sugeridos).length > 0
-                ? { P: food._macros_sugeridos.P || 0, H: food._macros_sugeridos.H || 0, G: food._macros_sugeridos.G || 0 }
-                : {
-                    P: Math.round((food.proteinas || 0) * quantity / 100 * 10) / 10,
-                    H: Math.round((food.hidratos || 0) * quantity / 100 * 10) / 10,
-                    G: Math.round((food.grasas || 0) * quantity / 100 * 10) / 10
-                };
+            // Los alimentos que vienen de la BÚSQUEDA POR NOMBRE no traen macros calculados
+            // (esa lista ya no pasa por el motor de sugerencias, ver `handleSearch`), así que
+            // se le piden al servidor: escalar aquí los campos crudos contaría lo que dice la
+            // etiqueta y no lo que cuenta el método, y en los alimentos por unidades lo
+            // multiplicaría además por la ración equivocada.
+            let macrosEf;
+            if (food._macros_sugeridos && Object.keys(food._macros_sugeridos).length > 0) {
+                macrosEf = { P: food._macros_sugeridos.P || 0, H: food._macros_sugeridos.H || 0, G: food._macros_sugeridos.G || 0 };
+            } else {
+                try {
+                    const res = await api('/api/calculator/macros-efectivos', {
+                        method: 'POST',
+                        body: JSON.stringify({ alimento_id: foodId, cantidad_g: quantity, es_vegano: false }),
+                    });
+                    const ef = res.efectivos || {};
+                    macrosEf = { P: ef.P || 0, H: ef.H || 0, G: ef.G || 0 };
+                } catch (e) {
+                    console.error('[macros-efectivos]', e);
+                    const isUnit = food.por_unidad ?? food.unidades;
+                    const factor = isUnit ? (quantity / (food.racion || 100)) : (quantity / 100);
+                    macrosEf = {
+                        P: Math.round((food.proteinas || 0) * factor * 10) / 10,
+                        H: Math.round((food.hidratos || 0) * factor * 10) / 10,
+                        G: Math.round((food.grasas || 0) * factor * 10) / 10,
+                    };
+                }
+            }
 
-            const blockReason = isManual ? null : getBlockReason(macrosEf);
-            if (blockReason) {
-                toast.error(blockReason);
-                return;
+            // LO QUE EL CLIENTE HA BUSCADO ENTRA (Jesús, 15-08, punto 2 de las mejoras: «que
+            // lo que el cliente ha nombrado entre sí o sí»). El bloqueo de Calma -- no dejar
+            // meter algo que se pase del objetivo -- se queda para las SUGERENCIAS, que es
+            // donde tiene sentido: allí lo propone la app. Si lo ha escrito él, entra y se le
+            // dice que se pasa, con la cantidad a mano para bajarla.
+            const seVaDeMadre = isManual ? null : getBlockReason(macrosEf);
+            if (seVaDeMadre) {
+                if (!isSearching) { toast.error(seVaDeMadre); return; }
+                toast.warning(`${food.nombre} entra, pero esta comida se pasa. Baja la cantidad si quieres cuadrarla.`);
             }
 
             const foodToAdd = {
@@ -727,6 +781,7 @@ const BuildMealModal = ({
         const unitWeight = selectedFood.peso_unidad || selectedFood.racion || 100;
         const step = isPorUnidad ? unitWeight : 1;
         const newQty = Math.max(step, adjustedQuantity + (delta * step));
+        if (newQty > TOPE_GRAMOS) { toast.warning(AVISO_TOPE, { id: 'tope-cantidad' }); return; }
 
         try {
             const result = await api('/api/calculator/macros-efectivos', {
@@ -800,22 +855,46 @@ const BuildMealModal = ({
             const step = isUnit ? (f.peso_unidad || racion) : 1;
             const currentQty = f.cantidad_g || f.cantidad || 0;
             const newQty = Math.max(step, currentQty + (delta * step));
+            // El tope por arriba también con los botones: llegar a 2000 g de 5 en 5 cuesta,
+            // pero un alimento por unidades sube de 250 en 250 (fallo 28).
+            if (newQty > TOPE_GRAMOS) {
+                toast.warning(AVISO_TOPE, { id: 'tope-cantidad' });
+                return f;
+            }
             return recalcFoodMacros(f, newQty);
         }));
     };
 
-    // Cantidad absoluta tecleada. Para alimentos por unidad el valor es en UNIDADES
-    // (se convierte a gramos con peso_unidad/racion); para granel, en gramos.
+    /**
+     * Cantidad absoluta tecleada. Para alimentos por unidad el valor es en UNIDADES
+     * (se convierte a gramos con peso_unidad/racion); para granel, en gramos.
+     *
+     * Lo que no se entiende se rechaza y la cantidad se queda como estaba (fallo 4): antes
+     * un «abc» o un «-50» la ponían a 0 g, con el alimento dentro de la comida sumando nada.
+     */
     const handleFoodQuantitySet = (index, rawValue) => {
-        setTempFoods(prev => prev.map((f, i) => {
-            if (i !== index) return f;
-            const isUnit = f.por_unidad ?? f.unidades;
-            const racion = f.racion || 100;
-            const factor = isUnit ? (f.peso_unidad || racion) : 1;
-            const parsed = parseFloat(rawValue);
-            if (isNaN(parsed) || parsed < 0) return recalcFoodMacros(f, 0);
-            return recalcFoodMacros(f, parsed * factor);
-        }));
+        const actual = tempFoods[index];
+        if (!actual) return;
+        const isUnit = Boolean(actual.por_unidad ?? actual.unidades);
+        const peso = actual.peso_unidad || actual.racion || 100;
+        const lectura = leerCantidad(rawValue, {
+            porUnidad: isUnit,
+            pesoUnidad: peso,
+            minimo: isUnit ? peso : 1,
+        });
+        if (lectura.estado === 'no_es_numero') {
+            // Sin aviso mientras se escribe: el campo se queda vacío un instante al borrar
+            // para teclear otra cifra, y un cartel por cada tecla sería insufrible. Se ignora
+            // y la cantidad anterior sigue en pie.
+            return;
+        }
+        if (lectura.estado === 'negativo') {
+            toast.error(AVISO_NEGATIVO, { id: 'cantidad-negativa' });
+            return;
+        }
+        if (lectura.estado === 'por_debajo_del_minimo') return;   // aún está escribiendo
+        if (lectura.estado === 'pasa_del_tope') toast.warning(AVISO_TOPE, { id: 'tope-cantidad' });
+        setTempFoods(prev => prev.map((f, i) => (i === index ? recalcFoodMacros(f, lectura.gramos) : f)));
     };
 
     const handleSaveAndClose = () => {
@@ -831,7 +910,7 @@ const BuildMealModal = ({
             }
         }));
 
-        toast.success(`✅ Comida guardada (${tempFoods.length} alimento(s))`);
+        toast.success(`✅ Comida guardada (${tempFoods.length} ${tempFoods.length === 1 ? 'alimento' : 'alimentos'})`);
         onClose();
     };
 
@@ -861,10 +940,14 @@ const BuildMealModal = ({
         ...(mealsData[mealKey]?.alimentos || []).map(f => f.alimento_id),
         ...tempFoods.map(f => f.alimento_id),
     ]);
+    // Buscando NO se reordena alfabéticamente ni en manual: el orden lo manda el parecido
+    // con lo que se ha escrito, que es todo el arreglo del fallo 3.
     const displayFoods = isManual
-        ? [...rawFoods]
-            .filter(f => !addedFoodIds.has(f.id || f._id))
-            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+        ? (isSearching
+            ? rawFoods.filter(f => !addedFoodIds.has(f.id || f._id))
+            : [...rawFoods]
+                .filter(f => !addedFoodIds.has(f.id || f._id))
+                .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')))
         : rawFoods;
 
     // Preparations available for the selected category
@@ -1016,6 +1099,18 @@ const BuildMealModal = ({
                                         </div>
                                     ) : (
                                         <div className="space-y-1">
+                                            {/* DE DÓNDE SALE ESTA LISTA. Jesús, 15-08: «que lo que
+                                                el cliente ha nombrado entre sí o sí, con las
+                                                sugerencias aparte y marcadas como sugerencias».
+                                                Buscando manda el texto; por categorías, lo que le
+                                                falta a la comida -- y así se dice. */}
+                                            <p className="text-[11px] text-muted-foreground mb-1.5" data-testid="origen-lista">
+                                                {isSearching
+                                                    ? <>Resultados de <span className="font-semibold text-foreground">«{searchQuery.trim()}»</span>, por parecido con lo que has escrito</>
+                                                    : isManual
+                                                        ? 'Alimentos de la categoría, por orden alfabético'
+                                                        : 'Sugerencias para lo que le falta a esta comida, con la cantidad que cuadra'}
+                                            </p>
                                             {displayFoods.map((food, idx) => {
                                                 const isFav = favorites.has(String(food.id));
                                                 return (
@@ -1042,19 +1137,30 @@ const BuildMealModal = ({
                                                                     )}
                                                                 </div>
                                                                 <div className="text-xs text-muted-foreground">
-                                                                    {food._cantidad_sugerida ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0 ? `${Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2} ud (${food.peso_unidad || food.racion} g/ml)` : `${food._cantidad_sugerida}g`} → ` : ''}
+                                                                    {food._cantidad_sugerida
+                                                                        ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
+                                                                            ? `${num1(Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2)} ud (${num1(food.peso_unidad || food.racion)} g/ml)`
+                                                                            : `${num1(food._cantidad_sugerida)} g`} → `
+                                                                        // Buscando no hay cantidad sugerida (la lista ya no pasa por el motor):
+                                                                        // se dice a cuánto equivale una unidad, que es lo que se añadirá.
+                                                                        : (food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
+                                                                            ? `1 ud (${num1(food.peso_unidad || food.racion)} g/ml) → `
+                                                                            : `${num1(food.racion || 100)} g → `}
                                                                     {(() => {
-                                                                        const ms = food._macros_sugeridos;
+                                                                        // Sin cantidad sugerida (búsqueda por nombre) se enseñan los
+                                                                        // macros de UNA ración, que es lo que trae el catálogo ya
+                                                                        // pasado por las reglas del método (`macros_efectivos`).
+                                                                        const ms = food._macros_sugeridos || food.macros_efectivos;
                                                                         const qty = food._cantidad_sugerida || food.racion || 100;
-                                                                        const fmt = v => { const r = Math.round(v * 10) / 10; return r % 1 === 0 ? String(r) : r.toFixed(1); };
+                                                                        const fmt = num1;
                                                                         const p = ms?.P ?? (food.proteinas || 0) * qty / 100;
                                                                         const h = ms?.H ?? (food.hidratos || 0) * qty / 100;
                                                                         const g = ms?.G ?? (food.grasas || 0) * qty / 100;
                                                                         // Colores P/H/G consistentes con la cabecera del modal: P naranja, H azul, G amarillo.
                                                                         const parts = [
-                                                                            p > 0 ? <span key="p" className="font-semibold text-orange-500">P={fmt(p)}g</span> : null,
-                                                                            h > 0 ? <span key="h" className="font-semibold text-blue-500">H={fmt(h)}g</span> : null,
-                                                                            g > 0 ? <span key="g" className="font-semibold text-yellow-500">G={fmt(g)}g</span> : null,
+                                                                            p > 0 ? <span key="p" className="font-semibold text-orange-500">P={fmt(p)} g</span> : null,
+                                                                            h > 0 ? <span key="h" className="font-semibold text-blue-500">H={fmt(h)} g</span> : null,
+                                                                            g > 0 ? <span key="g" className="font-semibold text-yellow-500">G={fmt(g)} g</span> : null,
                                                                         ].filter(Boolean);
                                                                         if (parts.length === 0) return 'No aporta macros';
                                                                         return parts.reduce((acc, el, i) => (i === 0 ? [el] : [...acc, ' ', el]), []);
@@ -1105,7 +1211,10 @@ const BuildMealModal = ({
                                     <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 space-y-1">
                                         {tempFoods.map((food, idx) => (
                                             <div key={idx} className="flex items-center gap-2 bg-card rounded p-2 text-sm">
-                                                <span className="flex-1 truncate text-foreground">{food.nombre}</span>
+                                                {/* El nombre entero en el title: recortado con
+                                                    puntos suspensivos no hay forma de saber qué
+                                                    es «Salmón ahumado (Ha…» (Jesús, fallo 44). */}
+                                                <span className="flex-1 truncate text-foreground" title={food.nombre}>{food.nombre}</span>
                                                 <div className="flex items-center gap-1">
                                                     <button
                                                         onClick={() => handleFoodQuantityChange(idx, -1)}
@@ -1133,7 +1242,7 @@ const BuildMealModal = ({
                                                                     className="w-12 text-center text-xs bg-muted rounded px-1 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-[#FF671F]"
                                                                 />
                                                                 <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                                                    {isUnit ? `ud (${food.peso_unidad || food.racion}g)` : 'g'}
+                                                                    {isUnit ? `ud (${num1(food.peso_unidad || food.racion)} g)` : 'g'}
                                                                 </span>
                                                             </span>
                                                         );

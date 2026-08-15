@@ -12,6 +12,8 @@ import InformeMensual from '../components/reports/InformeMensual';
 import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import TresFotos from '../components/reports/TresFotos';
 import { verComo } from '../lib/modoRevision';
+import { revisarPeso, PESO_MIN, PESO_MAX } from '../lib/pesoValido';
+import { useConfirm } from '../components/ui/confirm';
 
 const ORANGE = '#FF671F';
 
@@ -276,6 +278,7 @@ const VENTANA_DE_MENTIRA = (tipo) => ({
 
 const ReportsPage = () => {
     const { api, token, profile, user } = useAuth();
+    const { confirm } = useConfirm();
     const revision = verComo(user);
     const tipoRevision = ['mensual', 'quincenal', 'semanal'].includes(revision) ? revision : null;
     // Cuánto espera este cliente por sus macros nuevos (puntos 46 y 47): 24 horas en el
@@ -390,6 +393,16 @@ const ReportsPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!reportData.weight) { toast.error('El peso es obligatorio'); return; }
+        // EL PESO, ANTES DE NADA (#48 del 15-08). De este número salen la gráfica, el ritmo
+        // y el ajuste del mes: un 50 donde iba un 80 se arrastra durante meses. Fuera de
+        // rango no se guarda; un salto grande sí puede ser verdad, así que se pregunta.
+        const chequeo = revisarPeso(reportData.weight, prev?.weight);
+        if (!chequeo.ok) { toast.error(chequeo.error); return; }
+        if (chequeo.confirmar && !await confirm({
+            title: 'Confírmame el peso',
+            description: chequeo.confirmar,
+            confirmLabel: 'Sí, es correcto', cancelLabel: 'Lo corrijo',
+        })) return;
         // Las diez, siempre. Antes solo se exigía la cintura y el resto iba plegado como
         // opcional; desde el 06-08-2026 se piden todas ("sirvan o no, se piden siempre"),
         // porque media serie de medidas no se puede comparar con nada.
@@ -550,9 +563,11 @@ const ReportsPage = () => {
                             <input
                                 type="number"
                                 step="0.1"
+                                min={PESO_MIN}
+                                max={PESO_MAX}
                                 value={reportData.weight}
                                 onChange={(e) => set('weight', e.target.value)}
-                                placeholder="75.5"
+                                placeholder="75,5"
                                 data-testid="weight-input"
                                 className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors"
                             />

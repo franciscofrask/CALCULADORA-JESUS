@@ -98,7 +98,15 @@ export default function ChatbotPage() {
   const { user } = useAuth();
   const uid = user?.id || null;
   const diaEnNutricion = () => leerLocal('nutrition_last_date', uid);
-  const recordarDia = (dia) => escribirLocal('nutrition_last_date', uid, dia);
+  // El sello del dia va SIEMPRE con la fecha (QA 15-08): Nutricion solo restaura la fecha
+  // guardada si el sello es de hoy, y aqui se escribia la fecha sin sello, asi que salir
+  // del chat abria Nutricion en hoy, vacio, con el dia recien montado en otra fecha.
+  const recordarDia = (dia) => {
+    escribirLocal('nutrition_last_date', uid, dia);
+    const n = new Date();
+    escribirLocal('nutrition_last_date_guardado', uid,
+      `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`);
+  };
 
   // Movil: algunos textos van abreviados para que quepan en una linea.
   const [esMovil, setEsMovil] = useState(() => window.matchMedia('(max-width: 640px)').matches);
@@ -174,6 +182,25 @@ export default function ChatbotPage() {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         const d = await r.json();
+        // EL ASISTENTE SIGUE AL DÍA DE NUTRICIÓN, TAMBIÉN AL VOLVER (vídeo 1 del 15-08).
+        //
+        // La conversación retomada traía su día de cuando se abrió: Jesús se iba al
+        // domingo en Nutrición, volvía al asistente y este seguía en «Hoy» con la
+        // comida 4 de hoy. No había ninguna forma visible de moverlo — acabó borrando
+        // la conversación, que es justo lo que esta pantalla existe para evitar.
+        //
+        // Su regla es literal: «esto tiene que coincidir con el día, siempre». Así que
+        // al retomar, si el día del chat no es el que está mirando en Nutrición, la
+        // MISMA conversación se muda a ese día (reconfigura + precarga lo que tenga
+        // guardado allí), con su mensaje de «Vamos con el domingo...» para que se vea.
+        if (!cancelled && d.exists) {
+          const dia = diaEnNutricion();
+          if (dia && p.targetDate && dia !== p.targetDate) {
+            setTargetDate(dia);
+            arrancarConLaConfigDeNutricion(dia, {}, sid);
+          }
+          return;
+        }
         if (!cancelled && !d.exists) {
           try { sessionStorage.removeItem(claveChat(uid) || CLAVE_HUERFANA); } catch (e) {}
           setSessionId(null);
@@ -197,6 +224,30 @@ export default function ChatbotPage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Y AL VOLVER A LA PESTAÑA, LO MISMO. El caso de la ventana que se queda abierta (el
+  // móvil de Jesús en el vídeo 7): cambias el día en otro sitio, vuelves a esta pestaña
+  // horas después y la conversación sigue en el día viejo. Al recuperar el foco se hace
+  // la misma comprobación que al montar. No se toca nada si está trabajando (loading) o
+  // guardando: mudarse de día a mitad de una respuesta sería pisarla.
+  useEffect(() => {
+    const alVolver = () => {
+      if (document.hidden || loading || saving) return;
+      if (!sessionId || step === 'init') return;
+      const dia = diaEnNutricion();
+      if (dia && targetDate && dia !== targetDate) {
+        setTargetDate(dia);
+        arrancarConLaConfigDeNutricion(dia, {}, sessionId);
+      }
+    };
+    window.addEventListener('focus', alVolver);
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      window.removeEventListener('focus', alVolver);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetDate, sessionId, loading, saving, step]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -411,14 +462,24 @@ export default function ChatbotPage() {
     const cfg = data?.state?.config;
     const otroDia = data?.state?.fecha_pedida;
     if (otroDia && otroDia !== targetDate) {
+      // La config solo viaja al día nuevo si la ha tocado ESTE turno («mañana
+      // descanso»). Sin la bandera, aquí llegaba la config del día viejo -- el
+      // descanso dicho para el lunes -- y se la plantaba al martes, que en
+      // Nutrición era de entreno: el contagio de la ronda 1 del 15-08.
       const encima = {};
-      if (cfg?.tipo_dia) encima.tipo_dia = cfg.tipo_dia;
-      if (cfg?.num_comidas) encima.num_comidas = cfg.num_comidas;
-      if (cfg?.opcion_peri) encima.opcion_peri = cfg.opcion_peri;
-      if (cfg?.momento_entreno !== null && cfg?.momento_entreno !== undefined) {
-        encima.momento_entreno = cfg.momento_entreno;
+      if (data?.state?.config_tocada) {
+        if (cfg?.tipo_dia) encima.tipo_dia = cfg.tipo_dia;
+        if (cfg?.num_comidas) encima.num_comidas = cfg.num_comidas;
+        if (cfg?.opcion_peri) encima.opcion_peri = cfg.opcion_peri;
+        if (cfg?.momento_entreno !== null && cfg?.momento_entreno !== undefined) {
+          encima.momento_entreno = cfg.momento_entreno;
+        }
       }
       setTargetDate(otroDia);
+      // El acuerdo va en los dos sentidos: si por chat se pide «mañana», Nutrición
+      // también se muda. Sin esto, el día guardado con dueño seguía en el viejo y la
+      // comprobación de foco devolvía el chat al día del que acababa de salir.
+      recordarDia(otroDia);
       arrancarConLaConfigDeNutricion(otroDia, encima);
       return;
     }
@@ -714,7 +775,23 @@ export default function ChatbotPage() {
 
   const formatDayOverview = (ov) => {
     if (!ov) return 'Aún no hay datos del día.';
-    return `**Resumen del día**\nObjetivo: ${macrosLinea(ov.objetivo)}\nLlevas: ${macrosLinea(ov.consumido)}\nTe falta: ${macrosLinea(ov.restante)}\nComidas guardadas: ${ov.completas}/${ov.total_comidas}`;
+    // Lo que falta y lo que sobra, por separado: "Te falta: Hidratos -1.7 g" no quiere
+    // decir nada (QA 15-08, A4-F03). Un negativo dentro de "te falta" se lee al reves.
+    const nombres = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+    const r = ov.restante || {};
+    const faltan = ['P', 'H', 'G'].filter(k => Math.round(r[k] || 0) > 0)
+      .map(k => `${Math.round(r[k])} g de ${nombres[k]}`);
+    const sobran = ['P', 'H', 'G'].filter(k => Math.round(r[k] || 0) < 0)
+      .map(k => `${Math.round(-r[k])} g de ${nombres[k]}`);
+    let linea = 'El día ya te cuadra';
+    if (faltan.length || sobran.length) {
+      const partes = [];
+      const enumerar = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}` : xs[0] || '');
+      if (faltan.length) partes.push(`te falta ${enumerar(faltan)}`);
+      if (sobran.length) partes.push(`te pasas ${enumerar(sobran)}`);
+      linea = partes.join(' y ').replace(/^./, c => c.toUpperCase());
+    }
+    return `**Resumen del día**\nObjetivo: ${macrosLinea(ov.objetivo)}\nLlevas: ${macrosLinea(ov.consumido)}\n${linea}\nComidas guardadas: ${ov.completas}/${ov.total_comidas}`;
   };
 
   // Completar comida actual
@@ -797,6 +874,9 @@ export default function ChatbotPage() {
         { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } }
       );
       const data = await res.json();
+      // Volcado saltado a proposito: la sesion ya esta en otra fecha (ventana del cambio
+      // de dia). Ni "guardado" ni aviso: el dia nuevo arranca con su propia carga.
+      if (res.ok && data.skipped) return;
       if (res.ok && !data.needs_confirmation) {
         recordarDia(dia);
         addMessage(`✅ Guardado en tu pestaña de nutrición (${formatDateLabel(dia)}).`, false);
@@ -997,7 +1077,8 @@ export default function ChatbotPage() {
       // 3. Handoff a la pestaña de nutrición en ese día
       addMessage(`✅ Dieta volcada en tu pestaña de nutrición (${formatDateLabel(targetDate)}). Abriéndola…`, false);
       recordarDia(targetDate);
-      setTimeout(() => navigate('/dashboard/nutrition'), 600);
+      // Con el dia explicito en la URL: "Abriendola..." tiene que abrir ESE dia, no hoy.
+      setTimeout(() => navigate(`/dashboard/nutrition?date=${targetDate}`), 600);
     } catch (error) {
       addMessage('Error al volcar la dieta. Inténtalo de nuevo.', false);
     }
@@ -1093,6 +1174,24 @@ export default function ChatbotPage() {
     return partes.join(' · ');
   })();
 
+  // La misma línea para el ordenador, con las palabras enteras. La versión de escritorio
+  // seguía pintando el número crudo con su signo -- «Falta: proteína -9.2 g» -- y es
+  // justo lo que Jesús enseñó en los vídeos del 15-08 (los grabó desde el portátil). Un
+  // negativo no es una cantidad: lo pasado se dice «te pasas».
+  const loQueQuedaLargo = (() => {
+    const nombres = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+    const macros = [['P', macrosRestantes.P], ['H', macrosRestantes.H], ['G', macrosRestantes.G]];
+    const faltan = macros.filter(([, v]) => Math.round(v) > 0)
+      .map(([k, v]) => `${Math.round(v)} g de ${nombres[k]}`);
+    const sobran = macros.filter(([, v]) => Math.round(v) < 0)
+      .map(([k, v]) => `${Math.round(-v)} g de ${nombres[k]}`);
+    if (!faltan.length && !sobran.length) return 'esta comida ya cuadra';
+    const partes = [];
+    if (faltan.length) partes.push(`faltan ${faltan.join(' · ')}`);
+    if (sobran.length) partes.push(`te pasas ${sobran.join(' · ')}`);
+    return partes.join(' · ');
+  })();
+
   return (
     // Altura fija de viewport (en móvil descontando top bar y nav inferior del layout):
     // el header y el input quedan fijos y solo la zona de mensajes hace scroll.
@@ -1138,8 +1237,8 @@ export default function ChatbotPage() {
                       del asistente, que es donde se miran con calma. */}
                   <span className="sm:hidden">{loQueQueda}</span>
                   <span className="hidden sm:inline">
-                    {mealNombre} • Falta: proteína {macrosRestantes.P} g · hidratos {macrosRestantes.H} g · grasa {macrosRestantes.G} g
-                    {dayOverview && ` · Día: ${dayOverview.completas}/${dayOverview.total_comidas} comidas`}
+                    {mealNombre} • {loQueQuedaLargo}
+                    {dayOverview && ` · Día: ${dayOverview.completas} de ${dayOverview.total_comidas} comidas`}
                   </span>
                 </>
               )}
@@ -1211,7 +1310,7 @@ export default function ChatbotPage() {
       </div>
 
       {/* Input + controles de montaje */}
-      {step === 'building_meal' && (
+      {(step === 'building_meal' || step === 'complete') && (
         <div className="border-t border-border p-2 sm:p-3 bg-card relative z-40 space-y-2">
           {/* Aquí iba la lista "En esta comida" con un chip por alimento. Se quitó porque
               repetía lo que ya enseña la tarjeta de la última respuesta del asistente, que
@@ -1219,29 +1318,50 @@ export default function ChatbotPage() {
               chat ("quita el bacon"), que ya lo entiende. */}
 
           {/* Botones de control. En movil se reparten el ancho en UNA fila: envueltos
-              se iban a dos y con el teclado abierto se comian media conversacion. */}
+              se iban a dos y con el teclado abierto se comian media conversacion.
+              Con el día COMPLETO se quedan solo el resumen y el chat vivo: guardar y
+              sugerir hablan de una comida en curso que ya no existe -- pero cortar el
+              input dejaba el día cerrado a cal y canto («vacía la comida 1» tras
+              completar caía en una caja muerta, ronda 1 del 15-08). */}
           <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
+            {montando && (
+              <button
+                onClick={completeMeal}
+                disabled={loading}
+                className="bg-green-600 hover:bg-green-700 text-white px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                data-testid="save-meal-btn"
+              >
+                <Check size={16} className="flex-shrink-0" />
+                <span className="sm:hidden">Guardar</span>
+                <span className="hidden sm:inline">Guardar y siguiente</span>
+              </button>
+            )}
+            {montando && (
+              <button
+                onClick={requestSuggestions}
+                disabled={loading}
+                className="bg-muted hover:bg-accent border border-input text-foreground px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
+                data-testid="suggest-foods-btn"
+              >
+                <span className="sm:hidden">Sugerir</span>
+                <span className="hidden sm:inline">Sugerir alimentos</span>
+              </button>
+            )}
             <button
-              onClick={completeMeal}
-              disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-white px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-              data-testid="save-meal-btn"
-            >
-              <Check size={16} className="flex-shrink-0" />
-              <span className="sm:hidden">Guardar</span>
-              <span className="hidden sm:inline">Guardar y siguiente</span>
-            </button>
-            <button
-              onClick={requestSuggestions}
-              disabled={loading}
-              className="bg-muted hover:bg-accent border border-input text-foreground px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
-              data-testid="suggest-foods-btn"
-            >
-              <span className="sm:hidden">Sugerir</span>
-              <span className="hidden sm:inline">Sugerir alimentos</span>
-            </button>
-            <button
-              onClick={() => addMessage(formatDayOverview(dayOverview), false)}
+              onClick={async () => {
+                // Fresco del backend: el estado de React iba un guardado por detras
+                // y el resumen decia 5/6 con las seis comidas guardadas.
+                let ov = dayOverview;
+                try {
+                  const r = await fetchConTope(`${API_URL}/api/chatbot/day-overview?session_id=${sessionId}`,
+                    { headers: { 'Authorization': `Bearer ${getToken()}` } });
+                  if (r.ok) {
+                    const d = await r.json();
+                    if (d.day_overview) { ov = d.day_overview; setDayOverview(d.day_overview); }
+                  }
+                } catch { /* sin red se ensena lo que hay */ }
+                addMessage(formatDayOverview(ov), false);
+              }}
               disabled={loading || !dayOverview}
               className="bg-muted hover:bg-accent border border-input text-foreground px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
             >
@@ -1267,6 +1387,8 @@ export default function ChatbotPage() {
               // En movil el placeholder largo se corta a mitad de frase y no se entiende.
               placeholder={saving ? 'Guardando la comida y pasándola a Nutrición…'
                 : loading ? 'Un momento, estoy con ello…'
+                : step === 'complete'
+                ? 'El día está completo. ¿Quieres cambiar algo? Dímelo aquí…'
                 : esMovil
                 ? 'Escribe qué quieres comer…'
                 : 'Escribe qué quieres comer, o pídeme cosas como "edita la comida 2" o "vacía el post-entreno"…'}

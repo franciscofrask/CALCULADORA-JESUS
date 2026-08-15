@@ -211,20 +211,34 @@ class AgentTools:
         return False
 
     def _es_evitado(self, food: dict) -> Optional[str]:
-        """Evitados del perfil (categorías y palabras) + restricciones de la sesión."""
+        """Evitados del perfil (categorías y palabras) + restricciones de la sesión.
+
+        El motivo dice DE DÓNDE sale el veto: lo dicho en la conversación no es "del
+        perfil" (el asistente llegó a negar el pescado "de tu perfil" por un simple
+        "sin pescado" sobre una propuesta, QA 15-08). Los "sin X" solo atan la comida
+        en la que se dijeron."""
         from routes.calculator import AVOIDABLE_PREFIXES
         nombre = (food.get("nombre") or "").lower()
+        soft_kw, soft_cats = self.bot._vetos_suaves_actuales()
         for kw in self.bot.state.get("avoided_keywords", []):
             if kw in nombre:
-                return f"evitado del perfil ({kw})"
+                return f"lo descartó el cliente en esta conversación ({kw})"
+        for kw in soft_kw:
+            if kw in nombre:
+                return f"pidió ESTA comida sin {kw} (en otras comidas sí vale)"
         prefijos = set()
         for cid in self.bot.state.get("avoided_categories", []):
             prefijos.update(AVOIDABLE_PREFIXES.get(cid, []))
-        if prefijos:
-            for c in parse_categories(food.get("categorias")):
-                for p in prefijos:
-                    if c == p or c.startswith(p + "."):
-                        return "categoría evitada del perfil"
+        prefijos_soft = set()
+        for cid in soft_cats:
+            prefijos_soft.update(AVOIDABLE_PREFIXES.get(cid, []))
+        for c in parse_categories(food.get("categorias")):
+            for p in prefijos:
+                if c == p or c.startswith(p + "."):
+                    return "familia descartada por el cliente en esta conversación"
+            for p in prefijos_soft:
+                if c == p or c.startswith(p + "."):
+                    return "familia que pidió fuera de ESTA comida (en otras sí vale)"
         motivo = self.bot._choca_con_restriccion(food)
         if motivo:
             return motivo
@@ -303,9 +317,18 @@ class AgentTools:
 
     def _item_de(self, food: dict, cantidad_g: float, macros: dict) -> dict:
         config = get_food_config(food)
+        # «Plátano por gramos» es contabilidad del catálogo (la variante que se pesa,
+        # frente a la de por unidades), no un nombre que decirle a nadie: en la ronda 1
+        # salió tal cual en la tarjeta y en la frase del asistente. Se limpia AQUÍ porque
+        # esta es la puerta única de lo que el modelo y las tarjetas ven; el doc del
+        # catálogo no se toca (los flujos van por id).
+        nombre = re.sub(r"(?i)\s*\(?por gramos\)?\s*$", "", (food.get("nombre") or "")).strip()
+        # Y las coletillas entre corchetes del catálogo ("[Italy Product]"): apuntes de
+        # importación en inglés que el cliente veía en el chat y en Nutrición (QA 15-08).
+        nombre = re.sub(r"\s*\[[^\]]*\]", "", nombre).strip()
         return {
             "id": int(food["id"]),
-            "nombre": food.get("nombre"),
+            "nombre": nombre or food.get("nombre"),
             "es_marca": bool(food.get("url")),
             "cantidad_g": round(cantidad_g, 1),
             "cantidad_display": self.bot._format_cantidad(cantidad_g, food, config),
@@ -319,6 +342,40 @@ class AgentTools:
                        else "gramos (NO tiene unidades)"),
             "que_cuenta": self._frase_que_cuenta(food),
         }
+
+    def _items_como_quedarian(self, items: List[dict]) -> List[dict]:
+        """Los macros de la tarjeta calculados con la MISMA regla que se usará al aplicar.
+
+        Cereales/panes y frutos secos cuentan por TRAMOS según los gramos que ya lleva el
+        día (calibración progresiva). Los compositores dimensionan con los macros planos,
+        y por ahí la tarjeta decía una cosa y la comida aplicada otra (ronda 1 del 15-08:
+        pan a 28 H en la tarjeta, 22 H al aplicar, y el cliente pensando que la app no
+        sabe sumar). Aquí se recorren las piezas EN SU ORDEN arrastrando el acumulado del
+        día, que es exactamente lo que pasará cuando se vuelquen a la comida."""
+        from calibracion_dia import macros_item_por_acumulado, clasificar_bloque
+        acum_cp = float(self.bot.state.get("acumulado_cereales_panes") or 0)
+        acum_fs = float(self.bot.state.get("acumulado_frutos_secos") or 0)
+        out = []
+        for it in items:
+            food = self.foods.get(int(it.get("id") or 0))
+            cant = float(it.get("cantidad_g") or 0)
+            if not food or cant <= 0:
+                out.append(it)
+                continue
+            try:
+                ef = macros_item_por_acumulado(food, cant, acum_cp=acum_cp, acum_fs=acum_fs)
+            except Exception:
+                out.append(it)
+                continue
+            bloque = clasificar_bloque(food)
+            if bloque == "cereal_pan":
+                acum_cp += cant
+            elif bloque == "fruto_seco":
+                acum_fs += cant
+            nuevo = dict(it)
+            nuevo["macros"] = {m: round(float(ef.get(m, 0) or 0), 1) for m in ("P", "H", "G")}
+            out.append(nuevo)
+        return out
 
     def _anotar_ofrecidos(self, items: List[dict]) -> None:
         """Apunta que estos alimentos ya se le han enseñado en esta comida.
@@ -472,6 +529,10 @@ class AgentTools:
                       for m in ("P", "H", "G")}
 
         # --- filtros duros (datos del catálogo, nunca juicios)
+        # ¿La petición es un batido de beber? (ver el corte del queso más abajo)
+        _texto_norm = self.bot._norm_text(texto or "")
+        pide_batido_bebible = bool(texto) and "batido" in _texto_norm \
+            and "queso" not in _texto_norm
         marca_norm = self.bot._norm_text(marca) if marca else None
         etiquetas = {e.upper() for e in (etiquetas or [])}
         vetados_momento = vetados_solos = 0
@@ -516,6 +577,17 @@ class AgentTools:
             if etiquetas and not etiquetas <= self._etiquetas_de(food):
                 continue
             if self._es_evitado(food):
+                continue
+            # UN «BATIDO» ES DE BEBER (vídeo 4 del 15-08). A «un batido de proteínas» la
+            # vecindad semántica subía el «Queso fresco BATIDO 0 %» -- casan por la
+            # palabra -- y el compositor lo plantaba de base: «Opción 1: queso fresco
+            # batido + nueces». Jesús: «esto no es un batido». Quien pide un batido a
+            # secas quiere shaker (proteína en polvo, batido comercial, bebida); el queso
+            # solo entra si lo nombra («queso batido»). Se filtra aquí porque por este
+            # embudo pasan las tarjetas, las familias del estilo y los candidatos del
+            # compositor: un solo corte para los tres.
+            if (pide_batido_bebible
+                    and "queso" in self.bot._norm_text(food.get("nombre", ""))):
                 continue
             # Quien no lleva ese macro no puede aportarlo: se descarta ANTES de calcular su
             # cantidad, que es lo caro. Es el mismo filtro que ya había debajo sobre el
@@ -1453,6 +1525,9 @@ class AgentTools:
             return None
         return items
 
+    # Días distintos con esa comida bien formada para que el historial cuente como fuente.
+    DIAS_MINIMOS_HISTORIAL = 10
+
     async def _menus_del_historial(self, restante: dict, momento: str, n: int = 2,
                                    offset: int = 0, incluir_ids: List[int] = None,
                                    juicios: dict = None) -> List[dict]:
@@ -1462,6 +1537,14 @@ class AgentTools:
         las firmas comidas en dos fechas o más -- un día de prueba no se repite -- o las
         que apruebe el juez. Las cantidades se recalculan siempre contra lo que falta HOY,
         así que da igual cómo cuadrara aquel día.
+
+        Y SOLO SI HAY HISTORIAL DE VERDAD (Francisco, 15-08): con menos de
+        `DIAS_MINIMOS_HISTORIAL` días distintos de ESTA comida bien formada, el historial
+        no abre el escaparate y su puesto lo ocupa la biblioteca. Un puñado de días de
+        pruebas no es «lo que este cliente come»: es ruido con prioridad. El umbral es por
+        comida, no global: quien lleva 200 comidas pero 4 desayunos tiene historial de
+        comidas y no de desayunos. «Ponme lo de ayer» no pasa por aquí: eso es una
+        referencia directa, no una sugerencia.
         """
         from meal_builder import build_meal
 
@@ -1475,6 +1558,10 @@ class AgentTools:
                           if a.get("alimento_id") is not None})
             if 2 <= len(ids) <= 7:
                 firmas.setdefault(tuple(ids), set()).add(str(d.get("fecha")))
+
+        dias_con_esta_comida = len(set().union(*firmas.values())) if firmas else 0
+        if dias_con_esta_comida < self.DIAS_MINIMOS_HISTORIAL:
+            return []
 
         pedidos = set(int(x) for x in (incluir_ids or []))
         candidatas = sorted(firmas.items(), key=lambda kv: -len(kv[1]))
@@ -1750,9 +1837,16 @@ class AgentTools:
         if momento != PERI and not solo_recetario and not estilo \
                 and generico is None and not marca:
             vuelta = int(self.bot.state.get("vueltas_sugerencia", {}).get(key_comida, 0))
+            # La biblioteca es la fuente 2 del orden de Francisco (15-08) y en comida y
+            # cena tiene que tener sitio: con n=3 el historial llenaba sus 2 plazas y el
+            # cupo de la biblioteca salía (3-1)-2 = 0, o sea NUNCA (medido en la ronda 3:
+            # 0 tarjetas de biblioteca en 30). Donde la biblioteca ni entra (desayuno y
+            # merienda, es de tipo "comida"), el historial conserva sus 2 plazas.
+            from meal_moment import CENA as _CENA, COMIDA as _COMIDA
+            cupo_hist = min(2, max(1, n - 2)) if momento in (_COMIDA, _CENA) else min(2, n)
             try:
                 opciones += await self._menus_del_historial(
-                    restante, momento, n=min(2, n), offset=vuelta,
+                    restante, momento, n=cupo_hist, offset=vuelta,
                     incluir_ids=incluir_ids, juicios=juicios)
             except Exception:
                 logger.warning("historial de comidas no disponible", exc_info=True)
@@ -1786,8 +1880,10 @@ class AgentTools:
                 from meal_templates import generar_opciones_menu
                 from routes.calculator import AVOIDABLE_PREFIXES
                 avoid = set()
-                for cid in self.bot.state.get("avoided_categories", []):
+                soft_kw, soft_cats = self.bot._vetos_suaves_actuales()
+                for cid in list(self.bot.state.get("avoided_categories", [])) + list(soft_cats):
                     avoid.update(AVOIDABLE_PREFIXES.get(cid, []))
+                kw_veto = list(self.bot.state.get("avoided_keywords", [])) + list(soft_kw)
                 # Las recetas ya enseñadas en esta conversación van detrás, dentro de su
                 # mismo escalón de error: pedir otra opción tiene que traer otra cosa.
                 # `menus_vistos` de la sesión ya guarda la firma de lo aplicado; aquí manda
@@ -1796,7 +1892,7 @@ class AgentTools:
                 recetas = await generar_opciones_menu(
                     self.db, momento, restante,
                     avoided_prefixes=avoid,
-                    avoided_keywords=self.bot.state.get("avoided_keywords", []),
+                    avoided_keywords=kw_veto,
                     max_opciones=n,
                     semilla=self._semilla_variedad(),
                     vistos=ya)
@@ -1810,7 +1906,7 @@ class AgentTools:
                     recetas = await generar_opciones_menu(
                         self.db, momento, restante,
                         avoided_prefixes=avoid,
-                        avoided_keywords=self.bot.state.get("avoided_keywords", []),
+                        avoided_keywords=kw_veto,
                         max_opciones=n,
                         semilla=self._semilla_variedad(),
                         vistos=set())
@@ -1831,9 +1927,12 @@ class AgentTools:
                     items.append(self._item_de(food, float(it.get("cantidad", it.get("cantidad_g", 0)) or 0),
                                                it.get("macros", it.get("macros_efectivos", {}))))
                 if items:
+                    # Sin enlace a la receta (Francisco, 15-08): la tarjeta enseña el
+                    # menú entero con sus cantidades, y el «Ver la receta» sacaba al
+                    # cliente de la app hacia el recetario web viejo.
                     opciones.append({"items": items, "origen": "recetario",
                                      "nombre": r.get("nombre") or r.get("titulo"),
-                                     "receta_url": r.get("fuente"),
+                                     "receta_url": None,
                                      "receta_foto": r.get("foto")})
 
         # --- 2) Composición propia hasta n, con proteínas distintas entre opciones.
@@ -2232,6 +2331,10 @@ class AgentTools:
             op = rechazadas_juez[0]
             op["aviso_companyia"] = ("esta combinación no la daría por buena el método: "
                                      "revísala o pídeme otra cosa")
+            # Se enseña para que el cliente no se quede a ciegas, pero SIN botón de
+            # aplicar (QA 15-08, A1-M4: un «menú» de 5 g de whey tumbado por el juez
+            # salía con su «Elegir este menú» perfectamente pulsable).
+            op["no_aplicable"] = True
             opciones = [op]
 
         # --- 3) A borrador, con totales, desvío y PUERTA DE CALIDAD del motor: un menú
@@ -2242,10 +2345,34 @@ class AgentTools:
         # nunca se reinicia dentro de ella. La tarjeta lo pinta y el asistente lo usa;
         # sin esto, "dame otra variante" enseñaba "Opción 1" mientras el texto decía
         # "la opción 3" (cada uno numeraba por su lado).
+        #
+        # Y LA CUENTA SOBREVIVE A LOS BORRADORES (vídeo 4 del 15-08). Se arrancaba del
+        # máximo de los borradores VIVOS, y los borradores mueren al salir de la comida:
+        # al volver a ella, la ronda nueva empezaba otra vez en «Opción 1» con las
+        # tarjetas viejas aún a la vista en el hilo. Dos «opción 2» delante, y a «la 2,
+        # pero ajustada» el asistente respondió preguntando cuál de las dos — el «se
+        # lía» exacto que enseñó Jesús. La cuenta vive aparte en `opcion_seq` y solo
+        # avanza: un número de opción no se reutiliza NUNCA dentro de la misma comida.
         mk = self.bot.current_meal_key()
-        numero = max((b.get("numero") or 0 for b in borradores.values()
-                      if b.get("meal_key") == mk), default=0)
+        seq = self.bot.state.setdefault("opcion_seq", {})
+        numero = max(int(seq.get(mk) or 0),
+                     max((b.get("numero") or 0 for b in borradores.values()
+                          if b.get("meal_key") == mk), default=0))
+        # Y EL ID TAMPOCO SE RECICLA NUNCA (15-08, cazado en vivo). Era
+        # `b{len(borradores)+1}`, y como al cambiar de comida los borradores se tiran, la
+        # cuenta volvía a empezar: la tarjeta «b2» que seguía en pantalla apuntaba a un
+        # menú NUEVO. Pulsar «Puré proteico de garbanzos y pollo» aplicaba un batido de
+        # queso batido con corn flakes, con su «Menú aplicado ✓» de propina.
+        def _nuevo_bid():
+            n_id = int(self.bot.state.get("borrador_seq") or 0) + 1
+            self.bot.state["borrador_seq"] = n_id
+            return f"b{n_id}"
         salida, descartes, cortos = [], [], []
+        # ANTES de medir nada, los macros con los que la comida va a quedar de verdad
+        # (tramos del día para cereales/panes y frutos secos): así la tarjeta, el desvío,
+        # la puerta de calidad y lo que se aplica dicen EL MISMO número.
+        for op in opciones:
+            op["items"] = self._items_como_quedarian(op["items"])
         for op in opciones[:n]:
             tot = {m: round(sum(i["macros"][m] for i in op["items"]), 1) for m in ("P", "H", "G")}
             desvio = {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")}
@@ -2288,7 +2415,7 @@ class AgentTools:
                                             f"{_MACRO_LBL[peor_m]}"))
                 descartes.append(f"una opción se quedaba {deficit:.0f} g corta y se descartó")
                 continue
-            bid = f"b{len(borradores) + 1}"
+            bid = _nuevo_bid()
             numero += 1
             borrador = {"id": bid, "numero": numero,
                         "items": op["items"], "origen": op["origen"],
@@ -2300,6 +2427,9 @@ class AgentTools:
             # Rescatada del filtro de compañía: se enseña, pero diciendo lo que es.
             if op.get("aviso_companyia"):
                 borrador["avisos"] = [op["aviso_companyia"].replace("un intento", "esta opción")]
+            # Tumbada por el juez: se ve, no se aplica (el botón desaparece en el front).
+            if op.get("no_aplicable"):
+                borrador["no_aplicable"] = True
             borradores[bid] = borrador
             salida.append(borrador)
         # Si TODAS se quedaban cortas, se rescata la que menos, con su aviso. Un menú corto
@@ -2321,7 +2451,7 @@ class AgentTools:
             cortos.sort(key=lambda x: x[0])
             _, op, motivo = cortos[0]
             tot = {m: round(sum(i["macros"][m] for i in op["items"]), 1) for m in ("P", "H", "G")}
-            bid = f"b{len(borradores) + 1}"
+            bid = _nuevo_bid()
             numero += 1
             borrador = {"id": bid, "numero": numero,
                         "items": op["items"], "origen": op["origen"],
@@ -2335,6 +2465,8 @@ class AgentTools:
                                    f"de dársela por buena."]}
             borradores[bid] = borrador
             salida.append(borrador)
+        # La cuenta consumida se apunta, se haya enseñado lo que se haya enseñado.
+        seq[mk] = numero
         if not salida:
             notas = descartes or []
             if descartes_bucle:
@@ -2451,8 +2583,12 @@ class AgentTools:
         exceso = sum(abs(v) for v in desvio.values())
         if exceso > MARGEN_BORRADOR:
             peor = max(desvio, key=lambda m: abs(desvio[m]))
+            # Como lo diría una persona: "8 g", no "8.0 g" (este aviso sale en la tarjeta).
+            v_peor = abs(desvio[peor])
+            v_txt = str(int(round(v_peor))) if abs(v_peor - round(v_peor)) < 0.05 \
+                else f"{v_peor:.1f}".replace(".", ",")
             problemas.append({"item_id": None, "tipo": "fuera_de_margen",
-                              "detalle": f"se desvía {abs(desvio[peor])} g de "
+                              "detalle": f"se desvía {v_txt} g de "
                                          f"{_MACRO_LBL[peor]} del objetivo"})
 
         sugerencias = []
@@ -2516,6 +2652,13 @@ class AgentTools:
             generico=b.get("filtros", {}).get("generico"),
             limite=max(limite * 3, 12))
         candidatas = [i for i in res["items"] if i["id"] not in en_menu]
+        # Del MISMO papel que el saliente: sustituto de un lácteo es otra proteína, no un
+        # «Pan de molde de centeno» colado entre los kéfires porque el ranking por macro
+        # lo subió (QA 15-08, A1-B5). Si el filtro barre con todo, se deja como estaba.
+        mismo_rol = [i for i in candidatas
+                     if self._rol_de(self.foods.get(i["id"], {})) ==
+                     self._rol_de(self.foods.get(int(item_id), {}))]
+        candidatas = mismo_rol or candidatas
         # "Cámbialo por otra cosa" no puede contestar con cuatro variantes de lo mismo:
         # fuera la subfamilia del saliente (al final, de relleno), y la lista se
         # diversifica: máximo una opción por subfamilia mientras haya donde elegir.
@@ -2577,7 +2720,20 @@ class AgentTools:
         if not ids:
             return {"ok": False, "error": "el borrador se quedaría vacío"}
         nombres = [self.foods[i]["nombre"] for i in ids]
-        objetivo = b.get("objetivo") or self.bot.get_remaining_macros()
+        # EL RECUADRE VA CONTRA EL HUECO VIVO, NO CONTRA EL CONGELADO (vídeo 6 del 15-08).
+        #
+        # El objetivo se congelaba en el borrador al crearlo, y un borrador puede editarse
+        # varios turnos después, con la comida ya cambiada por medio: el recuadre entonces
+        # dimensionaba contra un hueco que ya no existía y salían menús doblados (whey a
+        # 47,9 g de proteína sobre 24 de objetivo, y «te pasas 23,9 P · 30 H · 15 G» en la
+        # tarjeta). Si el borrador es de la comida en la que estamos, manda lo que le falta
+        # AHORA; el congelado queda solo para el caso raro de editar un borrador de otra
+        # comida.
+        if b.get("meal_key") == self.bot.current_meal_key():
+            objetivo = self.bot.get_remaining_macros()
+            b["objetivo"] = dict(objetivo)
+        else:
+            objetivo = b.get("objetivo") or self.bot.get_remaining_macros()
         resultado = await build_meal(self.db, nombres, objetivo, self.bot.search_foods, forzar=True)
         items = []
         for f in resultado.get("foods_added", []):
@@ -2586,6 +2742,8 @@ class AgentTools:
                 items.append(self._item_de(food, float(f.get("cantidad", 0) or 0), f.get("macros", {})))
         if not items:
             return {"ok": False, "error": "con ese cambio no sale ninguna combinación que cuadre"}
+        # La tarjeta editada también dice el número con el que va a quedar (tramos del día).
+        items = self._items_como_quedarian(items)
         tot = {m: round(sum(i["macros"][m] for i in items), 1) for m in ("P", "H", "G")}
         b.update({"items": items, "origen": "editado", "nombre": None, "receta_url": None,
                   "macros_totales": tot,
@@ -2629,6 +2787,14 @@ class AgentTools:
         key = self.bot.current_meal_key()
         if key not in (self.bot.state.get("comidas_traidas") or []):
             return None
+        # Vacía no se protege: no hay trabajo del cliente que salvaguardar.
+        if not ((self.bot.state.get("comidas_completadas") or {}).get(key) or {}).get("alimentos"):
+            return None
+        # Y si el cliente ha NOMBRADO esa comida en el mensaje que se está atendiendo
+        # («ponme en la comida 1: 200 g de pollo»), la petición ES el permiso: volver a
+        # pedírselo es el bucle que ya conocemos.
+        if self._cliente_nombro_esta_comida():
+            return None
         return {
             "ok": False,
             "error": f"{self._nombre_comida_actual()} ya la tenía montada el cliente antes de "
@@ -2647,6 +2813,17 @@ class AgentTools:
         b = (self.bot.state.get("borradores") or {}).get(borrador_id)
         if not b:
             return {"ok": False, "error": f"no hay borrador {borrador_id}"}
+        if b.get("no_aplicable"):
+            return {"ok": False, "error": ("ese menú lo tumbó el revisor del método y se "
+                                           "enseñó solo de referencia: no se aplica ni "
+                                           "forzando. Monta o pide otro.")}
+        # Pulsar dos veces la misma tarjeta se dice tal cual. Antes pasaba a la revisión y
+        # salía un motivo que no era («no lo he aplicado: se desvía 50,2 g de hidratos»,
+        # cazado el 15-08): el hueco ya estaba lleno con ESE menú, claro.
+        if b.get("aplicado") and not forzar:
+            return {"ok": False, "ya_aplicado": True,
+                    "error": ("ese menú ya está puesto en la comida. Si quiere repetirlo "
+                              "otra vez encima, dígalo y repite con forzar=true.")}
         protegida = self._protegida(forzar)
         if protegida:
             return protegida
@@ -2661,6 +2838,11 @@ class AgentTools:
                     "sugerencias_de_cambio": revision.get("sugerencias_de_cambio", [])}
         for it in b["items"]:
             await self.bot.add_food_by_id(it["id"], it["cantidad_g"])
+        b["aplicado"] = True
+        # Tocada en este chat: ya no es el trabajo intocable que traía de Nutrición.
+        mk_ap = self.bot.current_meal_key()
+        if mk_ap in (self.bot.state.get("comidas_traidas") or []):
+            self.bot.state["comidas_traidas"].remove(mk_ap)
         vistos = self.bot.state.setdefault("menus_vistos", [])
         firma = sorted(i["id"] for i in b["items"])
         if firma not in vistos:
@@ -2692,6 +2874,7 @@ class AgentTools:
         """Todas las mutaciones de la comida actual en una llamada, en orden.
         Ops: {op:'añadir', texto|alimento_id, cantidad?, unidad?}
              {op:'quitar', nombre|alimento_id}
+             {op:'sustituir', nombre, texto|alimento_id, cantidad?}  (cambiar X por Y: UNA op)
              {op:'ajustar', nombre, a?|mas?|por?, unidad?}  (fijar / sumar / multiplicar)
              {op:'vaciar'}   deja la comida a cero, con todo lo que tenga dentro
              {op:'vaciar_dia'}  vacia TODAS las comidas del dia y vuelve a la primera
@@ -2708,10 +2891,56 @@ class AgentTools:
         if protegida:
             return protegida
         hechos, fallos = [], []
+
+        # VARIOS AÑADIRES SIN CANTIDAD SE DIMENSIONAN JUNTOS, NO EN FILA (vídeo 2 del
+        # 15-08). Cada operación entraba por separado y el motor le daba al primero el
+        # hueco ENTERO: «tortilla de claras con jamón y pan» ponía las claras a todo el
+        # objetivo de proteína (29,7 g) y el jamón entraba después por su ración mínima,
+        # desbordando 9 g. Y el asistente lo remató con un «no pasa nada, es un ligero
+        # extra» — justo lo contrario de la regla de Jesús: por abajo se ajusta, POR
+        # ARRIBA NO SE PASA. En un solo `add_foods`, el reparto equilibrado de
+        # `meal_builder` da a cada pieza su parte del hueco.
+        #
+        # Solo se agrupan los que van por texto y sin cantidad: una cantidad dicha por el
+        # cliente se respeta tal cual, y un alimento por id lleva su propio camino.
+        sin_cantidad = [op for op in (operaciones or [])
+                        if (op.get("op") or "").strip().lower().replace("anadir", "añadir") == "añadir"
+                        and not op.get("alimento_id") and op.get("cantidad") is None
+                        and (op.get("texto") or "").strip()]
+        lote = None
+        if len(sin_cantidad) >= 2:
+            lote = {id(op) for op in sin_cantidad}
+            r_lote = await self.bot.add_foods([
+                {"nombre": op.get("texto") or "", "cantidad": None,
+                 "unidad": op.get("unidad"), "sumar": bool(op.get("sumar"))}
+                for op in sin_cantidad])
+            for f in (r_lote.get("foods_added") or []):
+                hechos.append({"op": {"op": "añadir", "texto": f.get("nombre")}, "detalle": f})
+            for nf in (r_lote.get("foods_not_found") or []):
+                fallos.append({"op": {"op": "añadir", "texto": nf.get("buscado")}, "detalle": nf})
+            if r_lote.get("message"):
+                hechos.append({"op": {"op": "añadir"}, "detalle": {"aviso": r_lote["message"]}})
+
         for op in operaciones or []:
+            if lote and id(op) in lote:
+                continue
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
             try:
                 if tipo == "añadir":
+                    # La puerta de las barbaridades TAMBIÉN aquí (QA 15-08, A2-2): 700 g
+                    # de arroz y 1 kg de nueces entraban literales por añadir y solo
+                    # ajustar preguntaba. Mismo umbral, misma salida en todo el flujo.
+                    if op.get("cantidad") is not None and not forzar:
+                        nombre_bar = (self.foods.get(int(op.get("alimento_id") or 0), {})
+                                      .get("nombre") or op.get("texto") or "")
+                        des = await self.bot._es_desmedido(
+                            {"nombre": nombre_bar, "cantidad": float(op["cantidad"]),
+                             "unidad": op.get("unidad")})
+                        if des:
+                            fallos.append({"op": op, "detalle": des["texto"] +
+                                           " No lo pongas por tu cuenta: pregúntaselo, y si "
+                                           "ya te ha dicho que sí, repite con forzar=true."})
+                            continue
                     if op.get("alimento_id"):
                         r = await self.bot.add_food_by_id(int(op["alimento_id"]),
                                                           op.get("cantidad"))
@@ -2722,6 +2951,22 @@ class AgentTools:
                                                        "unidad": op.get("unidad"),
                                                        "sumar": bool(op.get("sumar"))}])
                         ok = bool(r.get("foods_added"))
+                        # CON OPCIONES SOBRE LA MESA NO HAY RESPALDO QUE VALGA (ronda 1:
+                        # «pollo» tenía sus opciones de desambiguación y el respaldo
+                        # semántico las pisó metiendo gyozas de pollo sin preguntar).
+                        # Si el motor devuelve elección, la decisión es del cliente.
+                        if not ok and r.get("choices"):
+                            ch = r["choices"][0]
+                            fallos.append({"op": op, "detalle": {
+                                "ambiguo": ch.get("termino") or (op.get("texto") or ""),
+                                "opciones": [{"id": o.get("alimento_id") or o.get("id"),
+                                              "nombre": o.get("nombre")}
+                                             for o in (ch.get("opciones") or [])[:6]],
+                                "instruccion": ("son alimentos distintos y no se adivina: "
+                                                "pregúntale al cliente cuál quiere (con "
+                                                "palabras, sin numerarlos) y repite la "
+                                                "operación con su alimento_id.")}})
+                            continue
                         # El respaldo es para cuando NO SE ENCUENTRA el alimento; no para
                         # cuando se ha encontrado y el problema es la cantidad. Si no, el
                         # aviso se pierde y el motor dimensiona a su gusto: a «3 claras»
@@ -2745,12 +2990,107 @@ class AgentTools:
                 elif tipo == "quitar":
                     nombre = op.get("nombre") or str(op.get("alimento_id") or "")
                     q = self.bot.remove_food_by_name(nombre)
+                    if isinstance(q, dict) and q.get("ambiguo"):
+                        fallos.append({"op": op, "detalle": (
+                            f"'{nombre}' casa con varios de la comida: "
+                            + ", ".join(q["ambiguo"])
+                            + ". No he quitado ninguno: pregúntale al cliente cuál y "
+                              "repite con el nombre completo.")})
+                        continue
                     (hechos if q else fallos).append(
                         {"op": op, "detalle": q or f"no veo '{nombre}' en la comida"})
+                elif tipo == "sustituir":
+                    # «Cambia X por Y» es UNA operación: fuera X y dentro Y, o nada. En la
+                    # ronda 1 de pruebas el cambio se hacía con un añadir suelto y la
+                    # comida acababa con el pollo Y su sustituto a la vez, sumando doble.
+                    saliente = (op.get("nombre") or op.get("quitar") or "").strip()
+                    q = self.bot.remove_food_by_name(saliente)
+                    if isinstance(q, dict) and q.get("ambiguo"):
+                        fallos.append({"op": op, "detalle": (
+                            f"'{saliente}' casa con varios de la comida: "
+                            + ", ".join(q["ambiguo"])
+                            + ". No he tocado nada: pregúntale al cliente cuál sale y "
+                              "repite con el nombre completo.")})
+                        continue
+                    if not q:
+                        fallos.append({"op": op, "detalle": f"no veo '{saliente}' en la comida"})
+                        continue
+                    if op.get("alimento_id"):
+                        r = await self.bot.add_food_by_id(int(op["alimento_id"]),
+                                                          op.get("cantidad"))
+                    else:
+                        r = await self.bot.add_foods([{"nombre": op.get("texto") or op.get("por") or "",
+                                                       "cantidad": op.get("cantidad"),
+                                                       "unidad": op.get("unidad")}])
+                    if r.get("foods_added"):
+                        hechos.append({"op": op, "detalle": {"fuera": q.get("nombre"),
+                                                             "dentro": r["foods_added"][0]}})
+                        continue
+                    # El nuevo no entró: el viejo VUELVE. Nadie pidió quedarse sin nada.
+                    if q.get("alimento_id"):
+                        await self.bot.add_food_by_id(int(q["alimento_id"]), q.get("cantidad_g"))
+                    # LA ELECCIÓN QUE VENGA AHORA SIGUE SIENDO UNA SUSTITUCIÓN. Sin esta
+                    # marca, el «la 3» del cliente sobre las alternativas caía en el atajo
+                    # del pick, que solo sabe añadir: el kéfir entraba Y el yogur se
+                    # quedaba (QA 15-08, A1-A5). La consume el atajo o el siguiente turno.
+                    self.bot.state["sustituir_en_comida"] = {"fuera": q.get("nombre") or saliente}
+                    if r.get("choices"):
+                        ch = r["choices"][0]
+                        fallos.append({"op": op, "detalle": {
+                            "ambiguo": ch.get("termino"),
+                            "opciones": [{"id": o.get("alimento_id") or o.get("id"),
+                                          "nombre": o.get("nombre")}
+                                         for o in (ch.get("opciones") or [])[:6]],
+                            "instruccion": ("hay varios candidatos distintos: pregúntale al "
+                                            "cliente cuál quiere (con palabras, sin numerar) "
+                                            "y repite ESTE sustituir con su alimento_id. El "
+                                            "alimento original sigue en la comida.")}})
+                    else:
+                        fallos.append({"op": op, "detalle": {
+                            "error": f"no encontré '{(op.get('texto') or op.get('por') or '')}' "
+                                     f"para meterlo en su lugar",
+                            "nota": ("el alimento original sigue en la comida; búscalo con "
+                                     "buscar_alimentos y repite el sustituir con alimento_id")}})
+                elif tipo == "descartar_opciones":
+                    # «Olvida los menús / esas opciones no» descarta las PROPUESTAS, no la
+                    # comida (QA 15-08, A3-03: el modelo usó vaciar_dia para "olvida los
+                    # menús" y tiró 11 alimentos montados; le faltaba la herramienta).
+                    bs = self.bot.state.get("borradores") or {}
+                    mk_d = self.bot.current_meal_key()
+                    fuera = [k for k, b in bs.items() if b.get("meal_key") == mk_d]
+                    for bid in fuera:
+                        bs.pop(bid, None)
+                    self.bot.state["last_options"] = []
+                    hechos.append({"op": op, "detalle": f"{len(fuera)} propuestas descartadas; "
+                                                        "la comida no se ha tocado"})
                 elif tipo == "vaciar":
                     cuantos = len(((self.bot.state.get("comidas_completadas") or {})
                                    .get(self.bot.current_meal_key()) or {}).get("alimentos", []))
+                    # Si el CLIENTE ha pedido borrar en este mismo mensaje, se borra y
+                    # punto, sin pregunta (Francisco, 15-08: «si quiero vaciar, vacías»).
+                    # El candado es SOLO para cuando el modelo vacía por iniciativa
+                    # propia, que es como se perdieron 11 alimentos con un «olvida los
+                    # menús» (A3-03): ahí, pregunta o descartar_opciones.
+                    if cuantos and not forzar and not self._cliente_pidio_borrar():
+                        self.bot.state["vaciar_pendiente"] = {
+                            "op": "vaciar", "meal_idx": self.bot.state.get("comida_actual")}
+                        fallos.append({"op": op, "detalle": (
+                            f"la comida tiene {cuantos} alimentos y el cliente no ha "
+                            "pedido borrarla en su mensaje. Si solo quiere descartar "
+                            "menús propuestos, usa descartar_opciones; si de verdad "
+                            "quiere vaciarla, pregúntaselo y, tras su sí, repite con "
+                            "forzar=true.")})
+                        continue
                     nombre = self.bot.clear_meal()
+                    if nombre:
+                        # Vaciada la comida, sus propuestas mueren con ella: un «opción 1»
+                        # vivo tras el vaciado volvía a meter justo lo que se acababa de
+                        # tirar (ronda 1). Y las tarjetas sueltas, lo mismo.
+                        bs = self.bot.state.get("borradores") or {}
+                        mk_v = self.bot.current_meal_key()
+                        for bid in [k for k, b in bs.items() if b.get("meal_key") == mk_v]:
+                            bs.pop(bid, None)
+                        self.bot.state["last_options"] = []
                     (hechos if nombre else fallos).append(
                         {"op": op, "detalle": (f"{nombre} vaciada ({cuantos} alimentos fuera)"
                                                if nombre else "no se pudo vaciar")})
@@ -2760,13 +3100,29 @@ class AgentTools:
                     # el bucle chocaba con su tope de 8 y el cliente recibía la red de
                     # seguridad («no he conseguido cerrarlo») con el trabajo a medias
                     # hecho. Un encargo de una frase merece una herramienta de una frase.
+                    en_el_dia = sum(len((c or {}).get("alimentos") or [])
+                                    for c in (self.bot.state.get("comidas_completadas") or {}).values())
+                    # Pedido por el cliente = se hace sin preguntar (Francisco, 15-08).
+                    # El candado es solo contra la iniciativa propia del modelo (A3-03).
+                    if en_el_dia and not forzar and not self._cliente_pidio_borrar():
+                        self.bot.state["vaciar_pendiente"] = {"op": "vaciar_dia"}
+                        fallos.append({"op": op, "detalle": (
+                            f"el día tiene {en_el_dia} alimentos montados y el cliente no "
+                            "ha pedido borrarlos en su mensaje. Si solo quiere descartar "
+                            "menús propuestos, usa descartar_opciones; si de verdad quiere "
+                            "vaciar el día, pregúntaselo y, tras su sí, repite con "
+                            "forzar=true.")})
+                        continue
                     vaciadas = []
                     for i in range(1, len(self.bot.state.get("meal_order") or []) + 1):
                         nombre = self.bot.clear_meal(i)
                         if nombre:
                             vaciadas.append(nombre)
                     self.bot.go_to_meal(1)
-                    self._tirar_borradores_de_otras_comidas()
+                    # Día vaciado, TODAS las propuestas fuera (no solo las de otras
+                    # comidas: las de la primera también hablan de un plato que ya no está).
+                    (self.bot.state.get("borradores") or {}).clear()
+                    self.bot.state["last_options"] = []
                     hechos.append({"op": op, "detalle": "vaciadas " + ", ".join(vaciadas)
                                    + "; estás en la primera comida"})
                 elif tipo == "ajustar":
@@ -2774,6 +3130,17 @@ class AgentTools:
                         r = await self.bot.aplicar_multiplicador(float(op["por"]), op.get("nombre") or "")
                     else:
                         cantidad = op.get("a", op.get("mas"))
+                        # La puerta de las barbaridades también está aquí: por el chat
+                        # normal «2 kg de arroz» se pregunta, pero por ajustar entraba sin
+                        # rechistar (ronda 1). Mismo umbral, misma salida: preguntar.
+                        des = None if (forzar or cantidad is None) else await self.bot._es_desmedido(
+                            {"nombre": op.get("nombre") or "", "cantidad": float(cantidad),
+                             "unidad": op.get("unidad")})
+                        if des:
+                            fallos.append({"op": op, "detalle": des["texto"] +
+                                           " No lo pongas por tu cuenta: pregúntaselo, y si "
+                                           "ya te ha dicho que sí, repite con forzar=true."})
+                            continue
                         r = await self.bot.set_food_quantity(
                             op.get("nombre") or "", cantidad=float(cantidad),
                             unidad=op.get("unidad"), incrementar=op.get("mas") is not None)
@@ -2782,6 +3149,14 @@ class AgentTools:
                     fallos.append({"op": op, "detalle": f"operación desconocida '{tipo}'"})
             except Exception as e:
                 fallos.append({"op": op, "detalle": f"{type(e).__name__}: {e}"})
+        # Una comida que YA se ha tocado en este chat deja de ser «trabajo que el cliente
+        # traía de antes»: seguir protegiéndola hacía que el siguiente cambio pidiera
+        # permiso otra vez («no puedo tocar la Comida 1 porque la traías montada»), y eso
+        # es el bucle de siempre con otro disfraz (15-08, en vivo).
+        if hechos:
+            mk_t = self.bot.current_meal_key()
+            if mk_t in (self.bot.state.get("comidas_traidas") or []):
+                self.bot.state["comidas_traidas"].remove(mk_t)
         return {"ok": not fallos, "hechos": hechos, "fallos": fallos,
                 "comida": self.ver_estado("comida")}
 
@@ -2793,10 +3168,15 @@ class AgentTools:
         single = bot.state.get("single_meal", False)
         key = bot.current_meal_key()
         comida = bot.state["comidas_completadas"].get(key, {})
+        # Montada y guardada NO son lo mismo, y el modelo lo mezclaba (QA 15-08: «sí, la
+        # Comida 1 está guardada» con la dieta del día en comidas:{}). Guardada = volcada
+        # a la pestaña de Nutrición (saved_meals o traída de allí); montada = solo en el chat.
+        guardadas = set(bot.state.get("saved_meals") or []) | set(bot.state.get("comidas_traidas") or [])
         actual = {
             "comida": describe_comida(key, n, single, bot.meal_label(key)),
             "objetivo": bot.get_current_meal_macros(),
             "falta": bot.get_remaining_macros(),
+            "guardada_en_nutricion": key in guardadas,
             "alimentos": [{"id": a.get("alimento_id"), "nombre": a.get("nombre"),
                            "cantidad": a.get("cantidad_display"),
                            "macros": a.get("macros")} for a in comida.get("alimentos", [])],
@@ -2804,16 +3184,70 @@ class AgentTools:
         if ambito != "dia":
             return actual
         ov = bot.get_day_overview()
+        # Las kcal del día, calculadas aquí (4/4/9): el asistente contestaba «no puedo ver
+        # las kcal exactas» cuando siempre pudo sacarlas de los macros (QA 15-08, A1-M8).
+        _kcal = lambda m: round(4 * float((m or {}).get("P") or 0)
+                                + 4 * float((m or {}).get("H") or 0)
+                                + 9 * float((m or {}).get("G") or 0))
         return {"actual": actual, "tipo_dia": bot.state.get("tipo_dia"),
                 "objetivo_dia": ov.get("objetivo"), "consumido": ov.get("consumido"),
+                "kcal_dia": {"objetivo": _kcal(ov.get("objetivo")),
+                             "consumidas": _kcal(ov.get("consumido"))},
+                # Para poder EXPLICAR la calibración progresiva si preguntan (QA 15-08,
+                # fallo 2 de Jesús: negó que las almendras cuenten proteína cuando en el
+                # tramo de 20 a 40 g cuenta a la mitad). Los números de tarjetas y estado
+                # ya vienen calibrados.
+                "calibracion_dia": {
+                    "cereales_y_panes_g_acumulados": round(float(bot.state.get("acumulado_cereales_panes") or 0)),
+                    "frutos_secos_g_acumulados": round(float(bot.state.get("acumulado_frutos_secos") or 0)),
+                    # La regla LITERAL, con la dirección bien puesta: cuanto más acumula
+                    # el día, MÁS cuenta (0 % -> 50 % -> 100 %). El modelo la contaba al
+                    # revés e incluso negaba que contara (B1 de la ronda 3 y fallo 2 de
+                    # Jesús). Los cortes son los de calibracion_dia, no se inventan.
+                    "regla": ("La proteína incidental de cereales y panes cuenta al 0 % "
+                              "hasta 50 g acumulados en el día, al 50 % entre 50 y 100, y "
+                              "entera pasados 100. La proteína y los hidratos de los "
+                              "frutos secos cuentan al 0 % hasta 20 g del día, al 50 % "
+                              "entre 20 y 40, y enteros pasados 40. Cuantos más gramos "
+                              "lleva el día de esa familia, MÁS cuenta, nunca menos. Las "
+                              "tarjetas ya traen los números calibrados.")},
                 "falta_dia": ov.get("restante"),
                 "comidas": [{"nombre": m.get("nombre"),
                              "momento": momento_de_comida(m.get("key", ""), n, single),
                              "estado": ("cuadrada" if m.get("cuadrado")
                                         else "vacía" if not m.get("tiene_alimentos")
                                         else "incompleta"),
+                             "guardada_en_nutricion": m.get("key") in guardadas,
                              "es_actual": m.get("es_actual", False)}
                             for m in ov.get("meals", [])]}
+
+    def _cliente_nombro_esta_comida(self) -> bool:
+        """¿El mensaje en curso nombra la comida en la que estamos?
+
+        «Ponme en la comida 1...» o «cambia el post» es una orden sobre ESA comida, y una
+        orden no necesita permiso. Se compara con el índice y con los nombres del peri,
+        que es como los nombra el cliente."""
+        t = self.bot._norm_text(self.bot.mensaje_en_curso or "")
+        key = self.bot.current_meal_key()
+        if key.startswith("C") and key[1:].isdigit():
+            return bool(re.search(rf"\bcomida\s*{int(key[1:])}\b", t))
+        if key.lower().startswith("intra"):
+            return "intra" in t
+        if key.lower().startswith("post"):
+            return "post" in t
+        return False
+
+    def _cliente_pidio_borrar(self) -> bool:
+        """¿El mensaje que se está atendiendo pide borrar/vaciar comida?
+
+        Decide si un vaciar ejecuta directo o pide confirmación: lo que el cliente pide
+        con sus palabras se hace sin preguntar (Francisco, 15-08); lo que el modelo
+        decide solo -- un «olvida los menús» traducido a vaciar_dia, que se llevó 11
+        alimentos en la ronda 2 -- se frena. Verbos de acción, no nombres de comida:
+        la regla del 8 bis no pinta aquí."""
+        t = self.bot._norm_text(self.bot.mensaje_en_curso or "")
+        return bool(re.search(r"\b(vaci\w*|borra\w*|elimin\w*|limpia\w*|"
+                              r"quita\w*\s+tod\w*|deja\w*\s+(?:la\s+|el\s+)?\w*\s*(?:a\s+cero|vaci\w*))\b", t))
 
     def _tirar_borradores_de_otras_comidas(self) -> None:
         """Los menús propuestos para una comida no valen para la siguiente.
@@ -2842,13 +3276,34 @@ class AgentTools:
         return {"ok": False, "error": f"no encuentro la comida '{a}'; el día tiene "
                                       f"{len(self.bot.state['meal_order'])} comidas"}
 
-    def guardar_comida(self) -> dict:
-        """Guarda la comida actual y avanza a la siguiente pendiente. Guardar sin
-        cuadrar se permite, pero se avisa (mismo criterio que /complete-meal); el
-        volcado del día a la dieta sigue siendo la acción aparte de siempre."""
+    def guardar_comida(self, forzar: bool = False) -> dict:
+        """Guarda la comida actual y avanza a la siguiente pendiente. Quedarse CORTO se
+        permite con aviso (se puede completar luego); PASARSE frena y pide confirmación:
+        la regla de Jesús es que por arriba no se pasa, y en el vídeo 6 del 15-08 se
+        guardó una comida con +23,9 P · +30 H · +15 G con un simple ⚠ de pasada. El botón
+        «Guardar y siguiente» no pasa por aquí: pulsar es una orden explícita."""
         rem = self.bot.get_remaining_macros()
         faltan = [f"{rem[m]} g de {_MACRO_LBL[m]}" for m in ("P", "H", "G") if rem.get(m, 0) > 4]
         pasan = [f"{abs(rem[m])} g de {_MACRO_LBL[m]}" for m in ("P", "H", "G") if rem.get(m, 0) < -4]
+        if pasan and not forzar:
+            return {"ok": False,
+                    "error": ("esta comida se pasa " + " y ".join(pasan) + ". No la guardes "
+                              "así por tu cuenta: dile al cliente cuánto se pasa y ofrécele "
+                              "arreglarlo (bajar cantidades o quitar una pieza) o guardarla "
+                              "igualmente. SI YA TE HA DICHO QUE LA GUARDE ASÍ, repite AHORA "
+                              "esta llamada con forzar=true y hazlo, sin volver a preguntar.")}
+        # Quedarse un poco corto se permite con aviso (se remata luego); quedarse a MEDIA
+        # comida, no (QA 15-08, A2-1: se cerró el día con una comida a 40 g de proteína de
+        # menos y el asistente lo dio por bueno). Más de 15 g de agujero en un macro no es
+        # «sin rematar»: es media comida, y se dice antes de guardar.
+        muy_cortos = [f"{rem[m]} g de {_MACRO_LBL[m]}" for m in ("P", "H", "G")
+                      if rem.get(m, 0) > 15]
+        if muy_cortos and not forzar:
+            return {"ok": False,
+                    "error": ("a esta comida aún le faltan " + " y ".join(muy_cortos) +
+                              ": eso es media comida, no un remate. Dile al cliente lo que "
+                              "falta y ofrécele completarla o guardarla igualmente. SI YA TE "
+                              "HA DICHO QUE LA GUARDE ASÍ, repite con forzar=true y hazlo.")}
         r = self.bot.complete_current_meal()
         if r.get("vacia"):
             return {"ok": False, "error": r.get("error")}
@@ -2947,6 +3402,23 @@ class AgentTools:
         """Cambia la configuración del día a mitad de conversación ('mejor 3 comidas',
         'hoy descanso', 'en ayunas', 'sin peri'). Lo ya montado se respeta."""
         st = self.bot.state
+        # El método reparte el día en 3 o 4 comidas; la comida única existe, pero es otra
+        # cosa (single_meal). Cualquier otro número se rechaza CON MOTIVO, porque hasta
+        # ahora se recortaba en silencio y el asistente confirmaba «hecho, 5 comidas»
+        # mientras el día seguía en 4: mentir sale peor que decir que no.
+        if num_comidas is not None:
+            try:
+                num_comidas = int(num_comidas)
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "num_comidas tiene que ser un número: 3 o 4 "
+                                              "(o single_meal para todo en una comida)"}
+            if num_comidas == 1:
+                single_meal = True
+            elif num_comidas not in (3, 4):
+                return {"ok": False,
+                        "error": f"el método reparte el día en 3 o 4 comidas, no en "
+                                 f"{num_comidas}. Díselo tal cual al cliente y ofrécele "
+                                 f"3, 4 o dejar todo el día en una sola comida."}
         self.bot.configure_day(
             tipo_dia=tipo_dia or st.get("tipo_dia") or "entrenamiento",
             num_comidas=int(num_comidas or st.get("num_comidas") or 4),
