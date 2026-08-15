@@ -2593,6 +2593,7 @@ class AgentTools:
              {op:'quitar', nombre|alimento_id}
              {op:'ajustar', nombre, a?|mas?|por?, unidad?}  (fijar / sumar / multiplicar)
              {op:'vaciar'}   deja la comida a cero, con todo lo que tenga dentro
+             {op:'vaciar_dia'}  vacia TODAS las comidas del dia y vuelve a la primera
         `forzar` solo para cambiar una comida que el cliente ya traía montada, y solo si te
         lo ha pedido él.
 
@@ -2652,6 +2653,21 @@ class AgentTools:
                     (hechos if nombre else fallos).append(
                         {"op": op, "detalle": (f"{nombre} vaciada ({cuantos} alimentos fuera)"
                                                if nombre else "no se pudo vaciar")})
+                elif tipo == "vaciar_dia":
+                    # «Vacía todas las comidas» en UNA operación (14-08-2026). Antes eran
+                    # navegar + vaciar por cada comida: doce llamadas para un día de seis,
+                    # el bucle chocaba con su tope de 8 y el cliente recibía la red de
+                    # seguridad («no he conseguido cerrarlo») con el trabajo a medias
+                    # hecho. Un encargo de una frase merece una herramienta de una frase.
+                    vaciadas = []
+                    for i in range(1, len(self.bot.state.get("meal_order") or []) + 1):
+                        nombre = self.bot.clear_meal(i)
+                        if nombre:
+                            vaciadas.append(nombre)
+                    self.bot.go_to_meal(1)
+                    self._tirar_borradores_de_otras_comidas()
+                    hechos.append({"op": op, "detalle": "vaciadas " + ", ".join(vaciadas)
+                                   + "; estás en la primera comida"})
                 elif tipo == "ajustar":
                     if op.get("por") is not None:
                         r = await self.bot.aplicar_multiplicador(float(op["por"]), op.get("nombre") or "")
