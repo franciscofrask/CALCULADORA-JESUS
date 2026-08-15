@@ -100,8 +100,10 @@ export const ChatMenus = ({ data, onAplicar, disabled }) => {
                             {/* Un menu que el revisor tumbo se ve (nadie se queda sin
                                 opciones) pero no se puede elegir: el boton desaparece. */}
                             {b.aplicado ? (
+                                /* En pasado: la tarjeta se queda en el hilo y la comida puede
+                                   haberse vaciado despues, asi que "ya lo tienes" mentiria. */
                                 <p className="mt-2 w-full rounded-lg bg-muted py-1.5 text-center text-[11px] font-semibold text-muted-foreground">
-                                    Ya lo tienes puesto en esta comida
+                                    Este menú ya lo aplicaste
                                 </p>
                             ) : b.no_aplicable ? (
                                 <p className="mt-2 w-full rounded-lg bg-muted py-1.5 text-center text-[11px] font-semibold text-muted-foreground">
@@ -115,7 +117,12 @@ export const ChatMenus = ({ data, onAplicar, disabled }) => {
                                 data-testid={`chat-menu-aplicar-${i}`}
                                 className="mt-2 w-full rounded-lg bg-brand py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                             >
-                                Elegir este menú
+                                {/* Si viene con aviso de que se queda corta, el boton lo dice:
+                                    "elegir" a secas encima de "completala antes de darla por
+                                    buena" son dos mensajes que se contradicen (QA 15-08). */}
+                                {(b.avisos || []).some(a => /corta|falta/i.test(a))
+                                    ? 'Elegir y completarlo'
+                                    : 'Elegir este menú'}
                             </button>
                             )}
                         </div>

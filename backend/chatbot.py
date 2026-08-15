@@ -370,15 +370,19 @@ class NutritionChatbot:
 
     def comida_cuadrada(self, restante: dict, objetivo: dict = None) -> bool:
         """¿Está cuadrada? Con el margen que le toca a cada macro (ver `margen_de`), y
-        MÁS ESTRECHO POR ARRIBA: por abajo se ajusta, por arriba no se pasa (regla de
-        Jesús). Con el mismo margen en los dos sentidos salía «Comida cuadrada» sobre una
-        grasa de 15/12 mientras la cabecera decía «te pasas 3 g» (15-08, en vivo): dos
-        frases contradictorias en la misma pantalla, y la que manda invita a guardar."""
+        MÁS ESTRECHO POR ARRIBA EN HIDRATOS Y GRASA: por abajo se ajusta, por arriba no se
+        pasa. Con el mismo margen en los dos sentidos salía «Comida cuadrada» sobre una
+        grasa de 15/12 mientras la cabecera decía «te pasas 3 g» (15-08, en vivo).
+
+        LA PROTEÍNA ES OTRA COSA (mejora 4 de Jesús): pasarse de proteína no es un fallo
+        del método, así que conserva su margen entero por los dos lados. Cuánto es
+        «pasarse demasiado» de proteína lo tiene que fijar él (su punto 22, pendiente);
+        mientras, no se trata como error."""
         objetivo = objetivo or self.get_current_meal_macros()
         for m in ("P", "H", "G"):
             r = restante.get(m, 0)
             margen = self.margen_de(objetivo.get(m, 0))
-            if r < 0:
+            if r < 0 and m != "P":
                 margen = max(1.5, margen / 2)
             if abs(r) > margen:
                 return False
@@ -1085,9 +1089,13 @@ class NutritionChatbot:
         # sirve debe coincidir con lo que se le contabiliza.
         if abs(uds * peso_unidad - cantidad_g) > 0.25 * peso_unidad:
             return f"{int(round(cantidad_g))}g"
+        # LA UNIDAD DICE A CUÁNTO EQUIVALE (fallo 46 de Jesús, y el 11 sale del mismo
+        # sitio): «1 ud» a secas no se puede servir, y el cliente no sabe si su plátano
+        # son 100 g o 175. La calculadora de siempre lo pone en la propia línea.
+        eq = f" ({int(round(uds * peso_unidad))} g)"
         if uds == int(uds):
-            return f"{int(uds)} ud"
-        return f"{uds:.1f} ud"
+            return f"{int(uds)} ud{eq}"
+        return f"{uds:.1f} ud{eq}".replace(".", ",")
     
     def complete_current_meal(self) -> dict:
         """
@@ -1625,6 +1633,47 @@ class NutritionChatbot:
             lines.append("")
         lines.append('Puedes decirme "edita la comida 2", "borra la comida 3" o "vacía el post-entreno".')
         return "\n".join(lines).strip()
+
+    # Cuántos pasos atrás se pueden deshacer. Con tres se cubre el «no, eso no era» de
+    # verdad; guardar más es cargar la sesión de Mongo con copias del día entero.
+    MAX_DESHACER = 3
+
+    def apuntar_para_deshacer(self, que_paso: str) -> None:
+        """Guarda cómo estaba el día ANTES de tocarlo (Francisco, 15-08: «debe poder
+        revertir decisiones por si entendió mal»).
+
+        Se copia el día entero y no solo la comida: una orden puede tocar varias
+        («vacía todo», reconfigurar), y deshacer a medias es peor que no deshacer."""
+        import copy
+        pila = self.state.setdefault("deshacer", [])
+        pila.append({
+            "que_paso": que_paso,
+            "comidas_completadas": copy.deepcopy(self.state.get("comidas_completadas") or {}),
+            "saved_meals": list(self.state.get("saved_meals") or []),
+            "comidas_traidas": list(self.state.get("comidas_traidas") or []),
+            "comida_actual": self.state.get("comida_actual"),
+            "acumulado_cereales_panes": self.state.get("acumulado_cereales_panes", 0),
+            "acumulado_frutos_secos": self.state.get("acumulado_frutos_secos", 0),
+        })
+        del pila[:-self.MAX_DESHACER]
+
+    def deshacer_ultimo(self) -> Optional[str]:
+        """Vuelve al estado anterior. Devuelve qué se ha deshecho, o None si no hay nada."""
+        pila = self.state.get("deshacer") or []
+        if not pila:
+            return None
+        antes = pila.pop()
+        self.state["comidas_completadas"] = antes["comidas_completadas"]
+        self.state["saved_meals"] = antes["saved_meals"]
+        self.state["comidas_traidas"] = antes["comidas_traidas"]
+        self.state["acumulado_cereales_panes"] = antes["acumulado_cereales_panes"]
+        self.state["acumulado_frutos_secos"] = antes["acumulado_frutos_secos"]
+        if antes.get("comida_actual"):
+            self.state["comida_actual"] = antes["comida_actual"]
+        # Si el día había quedado cerrado, se reabre: deshacer devuelve el trabajo a mano.
+        if self.state.get("step") == "complete":
+            self.state["step"] = "building_meal"
+        return antes.get("que_paso") or "el último cambio"
 
     def clear_meal(self, idx=None):
         """Vacía TODA una comida (sus alimentos). Si `idx` viene, navega a esa comida y la vacía;

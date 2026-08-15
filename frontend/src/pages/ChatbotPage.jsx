@@ -847,6 +847,17 @@ export default function ChatbotPage() {
     // pasando.
     const dia = targetDate || diaEnNutricion() || todayLocal();
     try {
+      // LA RESPUESTA SE RECUERDA POR DIA (QA 15-08). El ref se reinicia al recargar o al
+      // cambiar de dia, asi que la misma pregunta volvia a salir una y otra vez, ya
+      // contestada, y una de las veces en mitad de un vaciado. Queda guardada con dueño.
+      const claveSync = `chat_sync_${dia}`;
+      if (!autoSyncRef.current.decided) {
+        const recordada = leerLocal(claveSync, uid);
+        if (recordada === 'si' || recordada === 'no') {
+          autoSyncRef.current.decided = true;
+          autoSyncRef.current.enabled = recordada === 'si';
+        }
+      }
       if (!autoSyncRef.current.decided) {
         const ex = await fetchConTope(`${API_URL}/api/diets/${dia}`, {
           headers: { 'Authorization': `Bearer ${getToken()}` }
@@ -854,12 +865,16 @@ export default function ChatbotPage() {
         const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
         autoSyncRef.current.decided = true;
         if (hasFood) {
+          // "el Hoy" no lo dice nadie: con etiquetas relativas va sin articulo.
+          const etiq = formatDateLabel(dia);
+          const cuando = /^(hoy|mañana|ayer)$/i.test(etiq) ? etiq.toLowerCase() : `el ${etiq}`;
           const ok = await confirm({
-            title: `Ya tienes una dieta el ${formatDateLabel(dia)}`,
+            title: `Ya tienes una dieta guardada ${cuando}`,
             description: '¿Quieres que la vaya actualizando con lo que montemos aquí?',
             confirmLabel: 'Sí, actualizarla', cancelLabel: 'No, dejarla',
           });
           autoSyncRef.current.enabled = ok;
+          escribirLocal(claveSync, uid, ok ? 'si' : 'no');
           if (!ok) {
             addMessage('Vale, no tocaré tu dieta guardada. Podrás volcarla manualmente al terminar.', false);
             return;
@@ -894,8 +909,14 @@ export default function ChatbotPage() {
   // Formatear actualización de comida (siempre con los macros por su nombre:
   // Proteína/Hidratos/Grasa, nunca las iniciales P/H/G)
   const MACRO_NOMBRE = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+  // Coma decimal y sin ceros de relleno, como el resto de la casa: el resumen del dia
+  // salia con "Proteina 47.1 g" al lado de tarjetas que ya decian 47,1 (QA 15-08).
+  const gr = (x) => {
+    const n = Math.round((Number(x) || 0) * 10) / 10;
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+  };
   const macrosLinea = (m) =>
-    `Proteína ${m?.P || 0} g · Hidratos ${m?.H || 0} g · Grasa ${m?.G || 0} g`;
+    `Proteína ${gr(m?.P)} g · Hidratos ${gr(m?.H)} g · Grasa ${gr(m?.G)} g`;
 
   // El texto de la burbuja se queda SOLO con la frase de conversación. Los alimentos, los
   // macros de la comida y los avisos los pinta <ChatMealSummary> a partir de los mismos

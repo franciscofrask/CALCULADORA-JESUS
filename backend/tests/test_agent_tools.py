@@ -205,9 +205,13 @@ class TestComidasReales:
         assert firma_de("desayuno", [1, 2]) != firma_de("comida", [1, 2])
 
     def test_el_historial_del_cliente_vuelve_como_opcion(self):
-        """Dos días iguales en su historial → esa comida sale como opción, con SUS
-        alimentos exactos y las cantidades recuadradas a lo que falta hoy. Dos fechas
-        para que pase la puerta mecánica sin gastar juez (un día suelto es una prueba)."""
+        """Un cliente CON historial de verdad → esa comida sale como opción, con SUS
+        alimentos exactos y las cantidades recuadradas a lo que falta hoy.
+
+        Diez días, que es el umbral que pidió Francisco el 15-08: por debajo, el historial
+        no abre el escaparate y su sitio lo ocupa la biblioteca, porque cuatro días de
+        pruebas no son «lo que este cliente come». Con dos fechas basta además para pasar
+        la puerta mecánica sin gastar juez (un día suelto es una prueba)."""
         async def t():
             from motor.motor_asyncio import AsyncIOMotorClient
             db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
@@ -219,10 +223,11 @@ class TestComidasReales:
             aceite = (await tools.buscar_alimentos("aceite de oliva", limite=1))["items"][0]
             firma = sorted([pollo["id"], arroz["id"], aceite["id"]])
             key = tools.bot.current_meal_key()
-            docs = [{"user_id": "test_agent_tools", "fecha": f"2099-01-0{i}",
+            fechas = [f"2099-01-{i:02d}" for i in range(1, 11)]
+            docs = [{"user_id": "test_agent_tools", "fecha": f,
                      "comidas": {key: {"alimentos": [
                          {"alimento_id": fid, "cantidad_g": 100} for fid in firma]}}}
-                    for i in (1, 2)]
+                    for f in fechas]
             await db.diets.insert_many(docs)
             try:
                 restante = tools.bot.get_remaining_macros()
@@ -237,7 +242,36 @@ class TestComidasReales:
                     f"no se recuadró a lo que falta hoy: {tot} vs {restante}"
             finally:
                 await db.diets.delete_many({"user_id": "test_agent_tools",
-                                            "fecha": {"$in": ["2099-01-01", "2099-01-02"]}})
+                                            "fecha": {"$in": fechas}})
+        correr(t())
+
+    def test_sin_historial_de_verdad_el_historial_no_abre(self):
+        """Y la otra mitad de la misma regla: con dos días sueltos de esa comida, el
+        historial NO propone. Es lo que protege a quien solo tiene basura de pruebas
+        (la cuenta de Francisco tenía justo eso) de que se la ofrezcan como su comida."""
+        async def t():
+            from motor.motor_asyncio import AsyncIOMotorClient
+            db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+            tools = await _tools()
+            tools.navegar("Comida 2")
+            pollo = (await tools.buscar_alimentos("pechuga de pollo", limite=1))["items"][0]
+            arroz = (await tools.buscar_alimentos("arroz", limite=1))["items"][0]
+            key = tools.bot.current_meal_key()
+            fechas = ["2098-02-01", "2098-02-02"]
+            await db.diets.insert_many([
+                {"user_id": "test_agent_tools", "fecha": f,
+                 "comidas": {key: {"alimentos": [
+                     {"alimento_id": pollo["id"], "cantidad_g": 150},
+                     {"alimento_id": arroz["id"], "cantidad_g": 100}]}}}
+                for f in fechas])
+            try:
+                ops = await tools._menus_del_historial(
+                    tools.bot.get_remaining_macros(), tools._momento_actual(),
+                    n=2, juicios={"n": 0})
+                assert ops == [], f"con 2 días el historial no debería proponer: {ops}"
+            finally:
+                await db.diets.delete_many({"user_id": "test_agent_tools",
+                                            "fecha": {"$in": fechas}})
         correr(t())
 
     def test_un_dia_de_prueba_no_pasa_sin_juez(self):

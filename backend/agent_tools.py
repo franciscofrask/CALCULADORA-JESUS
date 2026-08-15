@@ -2373,6 +2373,23 @@ class AgentTools:
         # la puerta de calidad y lo que se aplica dicen EL MISMO número.
         for op in opciones:
             op["items"] = self._items_como_quedarian(op["items"])
+        # RACIONES QUE UNA PERSONA SE COME (QA 15-08). Los topes por familia
+        # (`_max_auto_g`) solo los respetaba el compositor; las recetas y las comidas
+        # recuperadas se recuadran con build_meal y salían con medio kilo de garbanzos
+        # sobre un tope de 250 g. Los números cuadraban y el plato no existía. Se pide el
+        # doble del tope para no barrer la mitad del recetario por un pico.
+        def _racion_imposible(op_):
+            for it in op_.get("items") or []:
+                food = self.foods.get(int(it.get("id") or 0))
+                if not food:
+                    continue
+                tope = self.bot._max_auto_g(food) or 0
+                if tope and float(it.get("cantidad_g") or 0) > 2 * tope:
+                    return True
+            return False
+        creibles = [o for o in opciones if not _racion_imposible(o)]
+        if creibles:
+            opciones = creibles
         for op in opciones[:n]:
             tot = {m: round(sum(i["macros"][m] for i in op["items"]), 1) for m in ("P", "H", "G")}
             desvio = {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")}
@@ -2836,6 +2853,8 @@ class AgentTools:
                                    "igual» --, repite AHORA esta llamada con forzar=true en "
                                    "vez de volver a preguntar.",
                     "sugerencias_de_cambio": revision.get("sugerencias_de_cambio", [])}
+        nombre_menu = b.get("nombre") or f"la opción {b.get('numero')}"
+        self.bot.apuntar_para_deshacer(f"aplicar {nombre_menu}")
         for it in b["items"]:
             await self.bot.add_food_by_id(it["id"], it["cantidad_g"])
         b["aplicado"] = True
@@ -2870,6 +2889,49 @@ class AgentTools:
         return out
 
     # ============================================================ 6. editar_comida
+    async def _desborda_el_peri(self, op: dict) -> Optional[str]:
+        """Si lo que se quiere añadir al intra o al post dispara su objetivo, el texto del
+        aviso; None si cabe. Devuelve None ante cualquier duda: frenar de más en una
+        comida normal seria peor que dejar pasar un caso raro."""
+        try:
+            nombre = (self.foods.get(int(op.get("alimento_id") or 0), {}).get("nombre")
+                      or op.get("texto") or "").strip()
+            if not nombre:
+                return None
+            matches = await self.bot.search_foods(nombre, limit=1)
+            if not matches:
+                return None
+            food = matches[0]
+            cantidad = op.get("cantidad")
+            if cantidad is None:
+                return None                      # sin cantidad, el motor la dimensiona
+            gramos = float(cantidad)
+            if (op.get("unidad") or "").lower() == "ud":
+                gramos *= float(food.get("racion") or 100) or 100.0
+            m = self.bot._macros_at(food, gramos)
+            objetivo = self.bot.get_current_meal_macros()
+            desbordan = [_MACRO_LBL[k] for k in ("P", "H", "G")
+                         if m.get(k, 0) > 2 * max(float(objetivo.get(k, 0) or 0), 1)]
+            if not desbordan:
+                return None
+            etiqueta = self.bot.meal_label(self.bot.current_meal_key())
+            return (f"eso dispara {' y '.join(desbordan)} en {etiqueta}, que en el método "
+                    f"lleva algo muy ligero y específico. NO lo pongas todavía: dile lo que "
+                    f"toca ahí y pregúntale si lo quiere igualmente o lo dejamos para una "
+                    f"comida principal. Si te dice que lo ponga, repite con forzar=true.")
+        except Exception:
+            return None
+
+    @staticmethod
+    def _resumen_ops(operaciones: List[dict]) -> str:
+        """Cómo contarle al cliente lo que se deshace: «quitar el tomate», «vaciar»."""
+        partes = []
+        for op in (operaciones or [])[:3]:
+            tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
+            nombre = op.get("nombre") or op.get("texto") or ""
+            partes.append(f"{tipo} {nombre}".strip() if nombre else tipo)
+        return ", ".join(p for p in partes if p) or "el último cambio"
+
     async def editar_comida(self, operaciones: List[dict], forzar: bool = False) -> dict:
         """Todas las mutaciones de la comida actual en una llamada, en orden.
         Ops: {op:'añadir', texto|alimento_id, cantidad?, unidad?}
@@ -2890,6 +2952,8 @@ class AgentTools:
         protegida = self._protegida(forzar)
         if protegida:
             return protegida
+        # Punto de retorno antes de tocar nada: si entendió mal, «deshaz» lo devuelve.
+        self.bot.apuntar_para_deshacer(self._resumen_ops(operaciones))
         hechos, fallos = [], []
 
         # VARIOS AÑADIRES SIN CANTIDAD SE DIMENSIONAN JUNTOS, NO EN FILA (vídeo 2 del
@@ -2927,6 +2991,16 @@ class AgentTools:
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
             try:
                 if tipo == "añadir":
+                    # EN EL PERI SE AVISA ANTES, NO DESPUÉS (QA 15-08). Un plato de pollo
+                    # con arroz entraba entero en el Intra y el asistente comentaba el
+                    # destrozo a toro pasado («sobran 31 g de proteína, 60 de hidratos»),
+                    # dejando la comida rota. El intra y el post son del método: si lo
+                    # pedido dispara el objetivo, se pregunta primero.
+                    if not forzar and self.bot.current_meal_key() in ("Intra", "Post"):
+                        aviso_peri = await self._desborda_el_peri(op)
+                        if aviso_peri:
+                            fallos.append({"op": op, "detalle": aviso_peri})
+                            continue
                     # La puerta de las barbaridades TAMBIÉN aquí (QA 15-08, A2-2): 700 g
                     # de arroz y 1 kg de nueces entraban literales por añadir y solo
                     # ajustar preguntaba. Mismo umbral, misma salida en todo el flujo.

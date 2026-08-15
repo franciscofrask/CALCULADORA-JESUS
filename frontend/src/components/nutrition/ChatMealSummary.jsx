@@ -32,13 +32,15 @@ const fmt = (x) => {
     return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 };
 
-/** Una barra por macro: lo que llevas sobre el objetivo. Si te pasas, se marca en rojo. */
-const BarraMacro = ({ label, color, actual, objetivo }) => {
+/** Una barra por macro: lo que llevas sobre el objetivo. Si te pasas, se marca en rojo,
+ *  salvo en proteina: pasarse de proteina no es un fallo del metodo (mejora 4 de Jesus),
+ *  asi que se ve el numero pero sin alarma. */
+const BarraMacro = ({ label, color, actual, objetivo, macro }) => {
     const pct = objetivo > 0 ? Math.min((actual / objetivo) * 100, 100) : 0;
     // El mismo margen que el sello de "Comida cuadrada" (4 g): con el umbral en 0,05 la
     // barra se ponia roja con 13/12 mientras abajo salia el sello verde, y las dos cosas
     // a la vez se contradicen (QA 15-08, A1-B2).
-    const pasado = objetivo > 0 && actual > objetivo + 4;
+    const pasado = macro !== 'P' && objetivo > 0 && actual > objetivo + 4;
     return (
         <div className="flex items-center gap-2">
             <span className="w-[52px] shrink-0 text-[11px] text-muted-foreground">{label}</span>
@@ -140,7 +142,7 @@ export const ChatMealSummary = ({ data }) => {
             {ms && (
                 <div className="space-y-1.5 border-t border-border pt-2.5">
                     {MACROS.map(x => (
-                        <BarraMacro key={x.key} label={x.label} color={x.color}
+                        <BarraMacro key={x.key} label={x.label} color={x.color} macro={x.key}
                             actual={ms.actual?.[x.key] || 0} objetivo={ms.objetivo?.[x.key] || 0} />
                     ))}
                 </div>

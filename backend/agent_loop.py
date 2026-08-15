@@ -265,7 +265,8 @@ CÓMO HABLAS:
 - Ya te presentaste al abrir el chat: no vuelvas a decir quién eres ni a repetir el chiste de tu nombre.
 - NUNCA nombres alimentos en tu texto sin haberlos buscado con una herramienta, ni siquiera «por ejemplo» o «algo tipo». Si quieres proponer comida, búscala; si no, no la nombres. Eso incluye las ideas sueltas cuando preguntas qué le apetece: ahí no hace falta ningún alimento.
 - Nada de jerga. Prohibido «macros reales», «para ser sugerido», «últimos toques» y cualquier palabra que solo se entienda por dentro.
-- Los gramos, como los diría una persona: «40,5 g de proteína» (coma decimal y sin ceros de relleno: «15 g», nunca «15.0 g» ni «40.5 P»). Lo pasado se dice «te pasas 9 g», JAMÁS con un número en negativo. Y pasarse nunca es «un ligero extra» ni «no pasa nada»: por abajo se ajusta, por arriba no se pasa.
+- Los gramos, como los diría una persona: «40,5 g de proteína» (coma decimal y sin ceros de relleno: «15 g», nunca «15.0 g» ni «40.5 P»). Lo pasado se dice «te pasas 9 g», JAMÁS con un número en negativo.
+- Pasarse de HIDRATOS o de GRASA no vale: por abajo se ajusta, por arriba no se pasa, y no lo maquilles con «no pasa nada». Pasarse de PROTEÍNA es otra cosa y el método lo tolera: dilo con naturalidad («te queda algo alta de proteína») y sigue, sin tratarlo como un error ni proponer quitar comida por eso.
 - Español de España, tuteo, frases cortas. Prohibido el voseo y los regionalismos; di siempre "añadir", nunca "agregar".
 - Escribe SOLO la respuesta final, en español. Jamás escribas tu deliberación, ni en inglés ni en español: nada de repasar reglas, citar nombres de herramientas o pensar en voz alta dentro del mensaje. Si algo no se puede hacer, di el motivo en una frase y ofrece la alternativa.
 - Contesta a lo que ha preguntado, en 1-4 frases; las listas y tarjetas las pinta la app desde los datos de las herramientas, no las repitas en texto.
@@ -348,6 +349,46 @@ _HERRAMIENTA_INTERNA = re.compile(
 _RAZONA_EN_INGLES = re.compile(
     r"(?i)\b(we|must|should|however|the user|user asked|need to|let'?s|cannot|"
     r"can'?t|guidance|explicit|tools?|rules?|because|but)\b")
+
+
+# «No era eso»: dar marcha atrás. Se pide el arrepentimiento explícito para no confundirlo
+# con un «no» a una pregunta («¿lo dejamos así?» -> «no»), que es otra cosa.
+_PIDE_DESHACER = re.compile(
+    r"(?i)\b(deshaz|deshacer|desaz|revierte|revertir|vuelve\s+atr[aá]s|vuelvelo\s+atr[aá]s|"
+    r"atr[aá]s\s+eso|d[eé]jalo\s+como\s+estaba|como\s+estaba\s+antes|quita\s+eso\s+y\s+"
+    r"d[eé]jalo\s+como\s+estaba|no\s+era\s+eso|eso\s+no\s+era|te\s+has\s+equivocado|"
+    r"me\s+has\s+entendido\s+mal|no\s+te\s+he\s+pedido\s+eso|cancela\s+eso|anula\s+eso)\b")
+
+# «Hazlo tú»: el cliente delega la elección y espera la comida montada, no tarjetas.
+# Pide las dos mitades -- un verbo de montar Y la delegación explícita -- para no
+# secuestrar un «móntame opciones», que sí es pedir tarjetas.
+_ES_ENCARGO_DELEGADO = re.compile(
+    r"(?is)(?=.*\b(mont[aá]\w*|m[oó]ntame|hazme|haz|prepara\w*|complet[aá]\w*|cierra\w*|rellena\w*)\b)"
+    r"(?=.*\b(t[uú]|tu\s+mismo|ti\s+mismo|por\s+ti|eliges?\s+t[uú]|elige\s+t[uú]|"
+    r"lo\s+que\s+veas|lo\s+que\s+mejor\s+cuadre|como\s+veas|lo\s+que\s+quieras)\b)")
+
+
+_MACRO_EN_PROSA = {"P": "proteína", "H": "hidratos", "G": "grasa"}
+
+
+def _numeros_humanos(texto: str) -> str:
+    """Los números del asistente, como los escribiría una persona.
+
+    El prompt lo pide desde hace semanas y aun así salen «P=47.5 H=51.0 G=12.0» y
+    «15.0 P»: el modelo copia el formato con el que le llega el estado. Se corrige al
+    salir, que es donde no falla: iniciales con igual a palabras, punto decimal a coma
+    y fuera los ceros de relleno."""
+    if not texto:
+        return texto
+    # «P=47.5» / «H = 51» -> «47,5 g de proteína»
+    texto = re.sub(r"\b([PHG])\s*=\s*(\d+(?:[.,]\d+)?)\s*(?:g\b)?",
+                   lambda m: f"{m.group(2)} g de {_MACRO_EN_PROSA[m.group(1).upper()]}",
+                   texto)
+    # Decimal inglés a decimal de aquí, solo entre dígitos: «47.5» -> «47,5»
+    texto = re.sub(r"(?<=\d)\.(?=\d)", ",", texto)
+    # «15,0 g» -> «15 g»; «0,0 G» -> «0 G»
+    texto = re.sub(r"\b(\d+),0\b", r"\1", texto)
+    return texto
 
 
 def _sin_razonamiento(texto: str) -> str:
@@ -583,6 +624,35 @@ class AgentLoop:
         except Exception as e:
             return {"error": f"{nombre} falló: {type(e).__name__}: {e}"}
 
+    def _comidas_del_encargo(self, texto: str) -> list:
+        """Los índices de comida que abarca un «móntame tú...».
+
+        «el día entero» o «todas» son las que estén vacías (lo montado no se pisa sin que
+        lo pida); «la comida 2 y la 3», esas; sin nombrar ninguna, la de ahora."""
+        t = self.bot._norm_text(texto or "")
+        orden = self.bot.state.get("meal_order") or []
+        hechas = self.bot.state.get("comidas_completadas") or {}
+        nums = [int(n) for n in re.findall(r"comida\s*(\d)", t)]
+        idx = []
+        for n in nums:
+            i = self.bot.resolve_meal_ref(n)
+            if i and i not in idx:
+                idx.append(i)
+        if re.search(r"\b(intra)\w*", t):
+            i = self.bot.resolve_meal_ref("intra")
+            if i and i not in idx:
+                idx.append(i)
+        if re.search(r"\bpost\w*", t):
+            i = self.bot.resolve_meal_ref("post")
+            if i and i not in idx:
+                idx.append(i)
+        if idx:
+            return idx
+        if re.search(r"\b(dia|dia entero|todas|todo)\b", t):
+            return [i for i, k in enumerate(orden, start=1)
+                    if not (hechas.get(k) or {}).get("alimentos")]
+        return [self.bot.state.get("comida_actual") or 1]
+
     # ------------------------------------------------------------ bucle
     async def procesar(self, user_input: str) -> dict:
         # PEDIR EL PROMPT NO LLEGA AL MODELO (12-08-2026).
@@ -597,6 +667,21 @@ class AgentLoop:
         if _PIDE_LAS_INSTRUCCIONES.search(user_input or ""):
             return {"action": "message", "message": _RESPUESTA_INSTRUCCIONES,
                     "day_overview": self.bot.get_day_overview(), "traza": []}
+
+        # DESHACER: «no era eso», «vuelve atrás», «deshaz» (Francisco, 15-08). Un
+        # asistente que entiende mal tiene que poder dar marcha atrás, y eso no se le
+        # puede dejar al modelo: se restaura el estado que se guardó antes del cambio.
+        if _PIDE_DESHACER.search(user_input or ""):
+            que = self.bot.deshacer_ultimo()
+            resp_d = self.bot._meal_response([], [])
+            if que:
+                resp_d["message"] = (f"Hecho, he deshecho {que}. Tu día vuelve a estar como "
+                                     "antes de ese cambio. Dime cómo lo quieres.")
+                resp_d["comida_guardada"] = True   # el plan también vuelve atrás
+            else:
+                resp_d["message"] = ("No tengo ningún cambio reciente que deshacer. "
+                                     "Dime qué quieres cambiar y lo hago.")
+            return resp_d
 
         # IR A UNA COMIDA ES IR, NO PROPONER (15-08, en vivo). «Edita la comida 2» y el
         # asistente saltaba allí y soltaba tres menús que nadie había pedido: editar es
@@ -625,6 +710,48 @@ class AgentLoop:
                 resp_nav = self.bot._meal_response([], [])
                 resp_nav["message"] = msg
                 return resp_nav
+
+        # «MONTA TÚ» SE EJECUTA, NO SE DEVUELVE EN TARJETAS (15-08, medido tres veces).
+        #
+        # A «móntame tú la comida 1 y la 2, elige tú lo que mejor cuadre» el modelo
+        # contestaba con opciones para que eligiera el cliente, y una vez con un «¿cómo
+        # lo hacemos?». Delegar la decisión es un encargo, no una consulta. Reforzar el
+        # prompt no bastó, así que el encargo se cumple aquí: componer y aplicar, comida
+        # por comida. El modelo se queda con lo que sabe hacer, que es contarlo.
+        if _ES_ENCARGO_DELEGADO.search(user_input or ""):
+            objetivo = self._comidas_del_encargo(user_input)
+            if objetivo:
+                hechas, fallidas = [], []
+                for idx in objetivo[:4]:          # tope: cuatro por turno, o se eterniza
+                    if not self.bot.go_to_meal(idx):
+                        continue
+                    etiqueta = self.bot.meal_label(self.bot.current_meal_key())
+                    try:
+                        r_c = await self.tools.componer_menu(n=2)
+                        vivos = [b for b in (r_c.get("borradores") or [])
+                                 if not b.get("no_aplicable")]
+                        if not vivos:
+                            fallidas.append(etiqueta)
+                            continue
+                        r_a = await self.tools.aplicar_borrador(vivos[0]["id"], forzar=True)
+                        if r_a.get("ok"):
+                            piezas = ", ".join(i["nombre"] for i in vivos[0]["items"])
+                            hechas.append(f"{etiqueta}: {piezas}")
+                        else:
+                            fallidas.append(etiqueta)
+                    except Exception:
+                        logger.warning("encargo delegado: %s no salió", etiqueta, exc_info=True)
+                        fallidas.append(etiqueta)
+                if hechas:
+                    texto = "Hecho, te lo he montado yo:\n" + "\n".join(f"- {h}" for h in hechas)
+                    if fallidas:
+                        texto += ("\n\nNo he podido cerrar " + ", ".join(fallidas) +
+                                  ": dime qué te apetece ahí y lo monto.")
+                    texto += "\n\nMíralo y dime si cambio algo."
+                    resp_m = self.bot._meal_response([], [])
+                    resp_m["message"] = texto
+                    resp_m["comida_guardada"] = True
+                    return resp_m
 
         # Sustitución ARMADA por ofrecer_sustitutos: aquí la elección (por número o por
         # nombre) actualiza EL BORRADOR de forma determinista. Va lo primero: mientras
@@ -1016,7 +1143,7 @@ class AgentLoop:
         if texto_final is None:
             texto_final = ""
         antes_de_sanear = texto_final
-        texto_final = _sin_nombres_de_hora(_sin_razonamiento(texto_final))
+        texto_final = _numeros_humanos(_sin_nombres_de_hora(_sin_razonamiento(texto_final)))
         if antes_de_sanear.strip() and not texto_final.strip():
             # Todo era deliberación: mejor pedir que lo repita que enseñar el prompt.
             texto_final = "Me he liado escribiendo la respuesta. Dímelo otra vez y lo hago."
