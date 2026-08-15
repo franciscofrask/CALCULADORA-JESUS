@@ -174,6 +174,11 @@ export default function ChatbotPage() {
   const inputRef = useRef(null);
   // Decisión (una sola vez) sobre sobrescribir el día al sincronizar con nutrición
   const autoSyncRef = useRef(p.autoSync ?? { decided: false, enabled: true });
+  // La misma decisión, en estado, para poder PINTAR el botón de volcar a mano cuando la
+  // sincronización está apagada. Un ref no repinta nada, y el aviso prometía un botón que
+  // no existía en ninguna pantalla (fallo 21 de Jesús, vivo otra vez el 15-08).
+  const [sincroApagada, setSincroApagada] = useState(
+    !!(p.autoSync && p.autoSync.decided && !p.autoSync.enabled));
 
   // Guardar la conversación en sessionStorage cada vez que cambia algo relevante
   useEffect(() => {
@@ -235,6 +240,7 @@ export default function ChatbotPage() {
           setDistribucion(null);
           setDaySummary(null);
           autoSyncRef.current = { decided: false, enabled: true };
+          setSincroApagada(false);
         }
       } catch (e) {}
     })();
@@ -871,7 +877,7 @@ export default function ChatbotPage() {
       if (autoSyncRef.current.decided && !autoSyncRef.current.enabled) {
         addMessage('Ojo: esto se queda guardado aquí, en el asistente. No lo estoy pasando '
           + 'a tu pestaña de Nutrición porque me dijiste que no tocara la dieta que ya '
-          + 'tenías. Cuando quieras que lo pase, pulsa "Volcar a mi dieta" o dímelo.', false);
+          + 'tenías. Cuando quieras que lo pase, pulsa «Volcar a mi dieta» aquí abajo.', false);
       }
     } catch (error) {
       addMessage('Error al completar la comida.', false);
@@ -898,6 +904,7 @@ export default function ChatbotPage() {
         if (recordada === 'si' || recordada === 'no') {
           autoSyncRef.current.decided = true;
           autoSyncRef.current.enabled = recordada === 'si';
+          setSincroApagada(recordada === 'no');
         }
       }
       if (!autoSyncRef.current.decided) {
@@ -916,9 +923,12 @@ export default function ChatbotPage() {
             confirmLabel: 'Sí, actualizarla', cancelLabel: 'No, dejarla',
           });
           autoSyncRef.current.enabled = ok;
+          setSincroApagada(!ok);
           escribirLocal(claveSync, uid, ok ? 'si' : 'no');
           if (!ok) {
-            addMessage('Vale, no tocaré tu dieta guardada. Podrás volcarla manualmente al terminar.', false);
+            // Y el botón que lo hace posible aparece ahora abajo, junto a los demás.
+            addMessage('Vale, no tocaré tu dieta guardada. Cuando quieras pasarla, pulsa '
+              + '«Volcar a mi dieta» aquí abajo.', false);
             return;
           }
         }
@@ -1014,6 +1024,7 @@ export default function ChatbotPage() {
     setDistribucion(null);
     setDaySummary(null);
     autoSyncRef.current = { decided: false, enabled: true };
+    setSincroApagada(false);
     try { sessionStorage.removeItem(claveChat(uid) || CLAVE_HUERFANA); } catch (e) {}
   };
 
@@ -1456,6 +1467,23 @@ export default function ChatbotPage() {
               <span className="sm:hidden">Resumen</span>
               <span className="hidden sm:inline">Resumen del día</span>
             </button>
+            {/* EL BOTÓN QUE EL CHAT PROMETÍA Y NO EXISTÍA (fallo 21 de Jesús: «promete un
+                volcado manual que no existe»). Cuando el cliente contesta «No, dejarla» al
+                diálogo, lo que monta aquí NO viaja a Nutrición -- correcto, es lo que ha
+                pedido --, y el aviso le decía «pulsa "Volcar a mi dieta"». No había tal
+                botón en ninguna pantalla: su trabajo se quedaba encerrado en el chat. Sale
+                solo en ese caso, que es cuando hace falta. */}
+            {sincroApagada && (
+              <button
+                onClick={() => saveToDiet(true)}
+                disabled={loading || saving}
+                className="bg-brand hover:opacity-90 text-white px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-opacity disabled:opacity-50"
+                data-testid="volcar-a-mi-dieta"
+              >
+                <span className="sm:hidden">Volcar</span>
+                <span className="hidden sm:inline">Volcar a mi dieta</span>
+              </button>
+            )}
           </div>
 
           {/* Escribir alimentos */}
