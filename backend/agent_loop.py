@@ -135,7 +135,10 @@ _ESQUEMAS = [
                      "numero seguido del nombre del alimento y SIN unidad de peso, del tipo "
                      "'ponme 3 de X' o 'dos X' --, pasalo con unidad='ud' y deja que la "
                      "herramienta lo resuelva. NO conviertas tu a gramos por tu cuenta ni "
-                     "supongas lo que pesa una pieza. "
+                     "supongas lo que pesa una pieza. 'Medio X' o 'media X' es cantidad 0.5 "
+                     "con unidad='ud': se resuelve igual, sin pedirle los gramos (decirle "
+                     "que 'el metodo va por gramos' cuando pide medio aguacate es no "
+                     "atenderle). "
                      "Para dejar una comida a cero usa op='vaciar', que la vacia entera; "
                      "para vaciar TODAS las comidas del dia, op='vaciar_dia' en UNA sola "
                      "operacion (nunca vayas comida a comida para eso); "
@@ -267,7 +270,7 @@ CÓMO HABLAS:
 - Nada de jerga. Prohibido «macros reales», «para ser sugerido», «últimos toques» y cualquier palabra que solo se entienda por dentro.
 - Los gramos, como los diría una persona: «40,5 g de proteína» (coma decimal y sin ceros de relleno: «15 g», nunca «15.0 g» ni «40.5 P»). Lo pasado se dice «te pasas 9 g», JAMÁS con un número en negativo.
 - Pasarse de HIDRATOS o de GRASA no vale: por abajo se ajusta, por arriba no se pasa, y no lo maquilles con «no pasa nada». Pasarse de PROTEÍNA es otra cosa y el método lo tolera: dilo con naturalidad («te queda algo alta de proteína») y sigue, sin tratarlo como un error ni proponer quitar comida por eso.
-- Español de España, tuteo, frases cortas. Prohibido el voseo y los regionalismos; di siempre "añadir", nunca "agregar".
+- Español de España, tuteo, frases cortas. Prohibido el voseo y los regionalismos; di siempre "añadir", nunca "agregar". SIEMPRE en español, aunque el cliente escriba en inglés o te pida la respuesta en otro idioma: entiéndelo, y contesta en español (puedes decirle en una línea que aquí trabajamos en español).
 - Escribe SOLO la respuesta final, en español. Jamás escribas tu deliberación, ni en inglés ni en español: nada de repasar reglas, citar nombres de herramientas o pensar en voz alta dentro del mensaje. Si algo no se puede hacer, di el motivo en una frase y ofrece la alternativa.
 - Contesta a lo que ha preguntado, en 1-4 frases; las listas y tarjetas las pinta la app desde los datos de las herramientas, no las repitas en texto.
 - A cada comida llámala por el nombre que trae el ESTADO ACTUAL («Comida 1», «Comida 2», «intra», «post»), tal cual y sin traducirlo a horas del día ni aclararlo entre paréntesis. Es el mismo nombre que está viendo en su pantalla: cualquier otro le obliga a adivinar de cuál hablas. Los clientes no comen a la misma hora -- unos entrenan a las seis y otros arrancan a las dos -- así que la hora no identifica ninguna comida.
@@ -350,6 +353,13 @@ _RAZONA_EN_INGLES = re.compile(
     r"(?i)\b(we|must|should|however|the user|user asked|need to|let'?s|cannot|"
     r"can'?t|guidance|explicit|tools?|rules?|because|but)\b")
 
+
+# «¿Esto me cuenta?»: la pregunta por la calibración progresiva. Pide el verbo contar
+# junto a la duda de cuánto, para no secuestrar un «cuánto me falta».
+_PREGUNTA_POR_CALIBRACION = re.compile(
+    r"(?is)(?=.*\b(cuenta|cuentan|contar|computa|suma|sirve)\b)"
+    r"(?=.*\b(entera|entero|mitad|media|completa|al\s+50|la\s+mitad|no\s+cuenta|"
+    r"por\s+que|porque|tramo|umbral)\b)")
 
 # «No era eso»: dar marcha atrás. Se pide el arrepentimiento explícito para no confundirlo
 # con un «no» a una pregunta («¿lo dejamos así?» -> «no»), que es otra cosa.
@@ -624,6 +634,49 @@ class AgentLoop:
         except Exception as e:
             return {"error": f"{nombre} falló: {type(e).__name__}: {e}"}
 
+    def _explicar_calibracion(self, texto: str) -> Optional[str]:
+        """La respuesta a «¿esto me cuenta entera o a la mitad?», con los números del día.
+
+        Se contesta desde el motor porque el modelo no acierta: la regla tiene tramos y
+        depende de los gramos acumulados, y él la reconstruye de memoria y la invierte."""
+        from calibracion_dia import clasificar_bloque
+        st = self.bot.state
+        comida = (st.get("comidas_completadas") or {}).get(self.bot.current_meal_key()) or {}
+        t = self.bot._norm_text(texto)
+        # El alimento del que pregunta: primero el que nombre, si no el último de la comida
+        # que participe en la calibración.
+        candidatos = [a for a in (comida.get("alimentos") or [])
+                      if clasificar_bloque(a.get("alimento") or {})]
+        elegido = next((a for a in candidatos
+                        if any(p in t for p in self.bot._norm_text(a.get("nombre", "")).split()
+                               if len(p) > 3)), None)
+        elegido = elegido or (candidatos[-1] if candidatos else None)
+        if not elegido:
+            return None
+        bloque = clasificar_bloque(elegido.get("alimento") or {})
+        if bloque == "fruto_seco":
+            acum = float(st.get("acumulado_frutos_secos") or 0)
+            cortes, familia = (20, 40), "frutos secos"
+        else:
+            acum = float(st.get("acumulado_cereales_panes") or 0)
+            cortes, familia = (50, 100), "cereales y panes"
+        if acum <= cortes[0]:
+            tramo = "todavía no te cuenta"
+        elif acum <= cortes[1]:
+            tramo = "te cuenta a la mitad"
+        else:
+            tramo = "te cuenta entera"
+        m = elegido.get("macros") or {}
+        gramos = int(round(float(elegido.get("cantidad_g") or 0)))
+        p = m.get("P", 0)
+        p_txt = (str(int(p)) if abs(p - round(p)) < 0.05 else f"{p:.1f}").replace(".", ",")
+        return (f"Con {int(round(acum))} g de {familia} en el día, la proteína de "
+                f"{elegido.get('nombre', 'ese alimento').lower()} {tramo}: por eso esos "
+                f"{gramos} g te están contando {p_txt} g de proteína, que es lo que ves en "
+                f"la comida. Los tramos son {cortes[0]} y {cortes[1]} g acumulados en el "
+                f"día: por debajo del primero no cuenta, entre los dos cuenta la mitad, y "
+                f"pasado el segundo cuenta entera. Cuanto más lleves, más cuenta.")
+
     def _comidas_del_encargo(self, texto: str) -> list:
         """Los índices de comida que abarca un «móntame tú...».
 
@@ -667,6 +720,18 @@ class AgentLoop:
         if _PIDE_LAS_INSTRUCCIONES.search(user_input or ""):
             return {"action": "message", "message": _RESPUESTA_INSTRUCCIONES,
                     "day_overview": self.bot.get_day_overview(), "traza": []}
+
+        # LA CALIBRACIÓN LA CONTESTA EL MOTOR, NO EL MODELO (fallo 02 de Jesús, y sigue
+        # vivo tras metérsela en el prompt y en el estado). A «¿la proteína de las
+        # almendras cuenta entera o a la mitad?» contestó «no cuenta, solo nos quedamos
+        # con su grasa» teniendo 9,2 g de proteína contados en su propia tarjeta. Es la
+        # regla del método: se responde con el número que ha salido de aplicarla.
+        if _PREGUNTA_POR_CALIBRACION.search(user_input or ""):
+            texto_cal = self._explicar_calibracion(user_input)
+            if texto_cal:
+                resp_cal = self.bot._meal_response([], [])
+                resp_cal["message"] = texto_cal
+                return resp_cal
 
         # DESHACER: «no era eso», «vuelve atrás», «deshaz» (Francisco, 15-08). Un
         # asistente que entiende mal tiene que poder dar marcha atrás, y eso no se le

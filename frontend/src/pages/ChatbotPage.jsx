@@ -831,6 +831,15 @@ export default function ChatbotPage() {
 
       // Sincronizar la dieta en la pestaña de nutrición tras guardar cada comida
       await syncToDiet();
+      // GUARDAR AQUI NO ES GUARDAR ALLI SI EL CLIENTE DIJO QUE NO (fallo 01 de Jesus,
+      // reproducido en prod el 15-08). Al responder "No, dejarla" la sincronizacion se
+      // apaga, que es lo pedido, pero el chat seguia diciendo "Comida guardada ✓" a
+      // secas: el cliente creia que su trabajo estaba en Nutricion y no lo estaba.
+      if (autoSyncRef.current.decided && !autoSyncRef.current.enabled) {
+        addMessage('Ojo: esto se queda guardado aquí, en el asistente. No lo estoy pasando '
+          + 'a tu pestaña de Nutrición porque me dijiste que no tocara la dieta que ya '
+          + 'tenías. Cuando quieras que lo pase, pulsa "Volcar a mi dieta" o dímelo.', false);
+      }
     } catch (error) {
       addMessage('Error al completar la comida.', false);
     }

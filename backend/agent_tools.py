@@ -2991,6 +2991,20 @@ class AgentTools:
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
             try:
                 if tipo == "añadir":
+                    # «PONME 0 G DE X» ES QUITARLO, NO DEJAR QUE EL MOTOR DIMENSIONE
+                    # (QA 15-08, en prod): pedir 0 g de pollo metía 200 g, porque el cero
+                    # se trataba como «sin cantidad». Cero es cero.
+                    if op.get("cantidad") is not None and float(op["cantidad"]) == 0:
+                        nombre_0 = op.get("nombre") or op.get("texto") or ""
+                        q0 = self.bot.remove_food_by_name(nombre_0) if nombre_0 else None
+                        if q0 and not (isinstance(q0, dict) and q0.get("ambiguo")):
+                            hechos.append({"op": op, "detalle": f"{q0.get('nombre')} fuera "
+                                                                "(pidió 0 g)"})
+                        else:
+                            hechos.append({"op": op, "detalle": (
+                                f"0 g de '{nombre_0}' es no ponerlo: no se ha añadido nada. "
+                                "Si quería una cantidad, que la diga.")})
+                        continue
                     # EN EL PERI SE AVISA ANTES, NO DESPUÉS (QA 15-08). Un plato de pollo
                     # con arroz entraba entero en el Intra y el asistente comentaba el
                     # destrozo a toro pasado («sobran 31 g de proteína, 60 de hidratos»),
