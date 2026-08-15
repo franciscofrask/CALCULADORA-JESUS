@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { PlanBadge, JG12Logo } from './ClientDashboard';
 import LimiteDeError from '../components/LimiteDeError';
+import { prettyToken } from '../lib/labels';
 import { estadoClienteLabel } from '../lib/labels';
 import { contarClientes, contarRegistrosSinTerminar, cuentaComoCliente } from '../lib/cuentaClientes';
 import {
@@ -503,8 +504,16 @@ const AdminDashboard = () => {
                     no cuadra con sus partes tira por tierra el panel entero. */}
                 <KpiCard value={stats?.inactive_clients || 0} label="Bajas" icon={UserMinus} color="#EF4444" testId="kpi-bajas"
                     pie={stats?.otros_clients ? (
+                        // Y CON NOMBRE, que la suma ya cuadraba pero «ni activos ni de
+                        // baja» no le dice a nadie qué hacer con ellos (punto 63, QA del
+                        // 15-08). «4 pendientes de pago · 1 registrado» sí.
                         <span className="text-[10px] text-white/50 mt-0.5" data-testid="kpi-otros">
-                            + {stats.otros_clients} ni activos ni de baja
+                            + {stats.otros_clients}{' '}
+                            {stats.otros_por_estado?.length
+                                ? stats.otros_por_estado
+                                    .map((o) => `${o.n} ${prettyToken(o.estado).toLowerCase()}`)
+                                    .join(' · ')
+                                : 'ni activos ni de baja'}
                         </span>
                     ) : null} />
                 <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />

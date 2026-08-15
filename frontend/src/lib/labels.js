@@ -92,6 +92,30 @@ const CICLO_PASARELA = {
     quarter: 'al trimestre',
 };
 
+// Y los que vienen contados: «every 12 weeks», «every 4 weeks», «every 3 months».
+//
+// El diccionario de arriba solo entendía ciclos de UNA palabra, y en producción la mayoría
+// no lo son: 435 filas con «every 12 weeks», 34 con «every 4 weeks», 15 con «every 3
+// months» y una con «every 48 weeks». Todas esas se quedaban en inglés en la pantalla de
+// Cobros (QA del 15-08). Es el ciclo natural del método, que va por bloques de doce
+// semanas, así que era justo el caso más común el que fallaba.
+const UNIDAD_CICLO = {
+    day: ['día', 'días'], week: ['semana', 'semanas'],
+    month: ['mes', 'meses'], year: ['año', 'años'],
+};
+
+const cicloEnCastellano = (ciclo) => {
+    const limpio = String(ciclo || '').trim().toLowerCase();
+    if (CICLO_PASARELA[limpio]) return CICLO_PASARELA[limpio];
+    const contado = /^every\s+(\d+)\s+(day|week|month|year)s?$/.exec(limpio);
+    if (contado) {
+        const n = Number(contado[1]);
+        const [singular, plural] = UNIDAD_CICLO[contado[2]];
+        return n === 1 ? `cada ${singular}` : `cada ${n} ${plural}`;
+    }
+    return null;
+};
+
 /**
  * El concepto de un cobro, en español y sin la letra de la pasarela.
  *
@@ -107,9 +131,9 @@ export const conceptoDeCobro = (txt) => {
     s = s.replace(/^(\d+)\s*[x×]\s*/i, (todo, n) => (Number(n) === 1 ? '' : `${n} × `));
     // «(at €81.07 / month)» -> «(81,07 € al mes)»
     s = s.replace(
-        /\(\s*at\s*([€$£]?)\s*([\d.,]+)\s*([A-Z]{3})?\s*\/\s*([a-z]+)\s*\)/gi,
+        /\(\s*at\s*([€$£]?)\s*([\d.,]+)\s*([A-Z]{3})?\s*\/\s*([a-z0-9 ]+?)\s*\)/gi,
         (todo, simbolo, importe, iso, ciclo) => {
-            const cada = CICLO_PASARELA[String(ciclo).toLowerCase()];
+            const cada = cicloEnCastellano(ciclo);
             if (!cada) return todo;
             const moneda = simbolo || { EUR: '€', USD: '$', GBP: '£' }[String(iso || '').toUpperCase()] || '€';
             // Coma decimal solo cuando el número es un «81.07» de la pasarela; un

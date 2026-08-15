@@ -26,6 +26,9 @@ const ORIGENES = [
     { id: 'stripe', nombre: 'Stripe' },
 ];
 
+// El nombre de un origen tal y como se escribe («thrivecart» -> «ThriveCart»).
+const nombreOrigen = (id) => (ORIGENES.find((o) => o.id === id) || {}).nombre || id;
+
 // El color dice de dónde viene el cobro sin tener que leerlo. Tres orígenes, tres tonos
 // del mismo sitio de la paleta: no compiten con el naranja de la marca.
 const COLOR_ORIGEN = {
@@ -116,7 +119,13 @@ const AdminPagosPage = () => {
         <div className="space-y-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                    {/* BLANCO, NO `text-foreground`. Esta pantalla era la única del panel
+                        escrita con las fichas del tema, y `AdminLayout` fija el fondo
+                        oscuro a mano: en modo claro el título salía en negro sobre negro y
+                        NO SE VEÍA (QA del 15-08 en producción). El resto del panel usa
+                        `text-white` para lo que va directo sobre ese fondo; lo que vive
+                        dentro de una tarjeta `surface` sí puede seguir con el tema. */}
+                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                         <Receipt className="w-6 h-6 text-brand" /> Historial de cobros
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
@@ -167,8 +176,16 @@ const AdminPagosPage = () => {
                 comprobar. */}
             {resumen?.hay_datos && (resumen.fuera?.copias > 0 || resumen.fuera?.eventos_sin_dinero > 0) && (
                 <p className="text-xs text-muted-foreground" data-testid="pagos-excluidos">
-                    No se cuentan {resumen.fuera.copias} cobros que Holded factura y la pasarela
-                    ya cobró (el mismo dinero por dos caminos)
+                    {/* AL REVÉS DE COMO ESTABA. Decía «que Holded factura» y justo debajo
+                        enseñaba «HOLDED (353)»: los de Holded son los que SÍ se cuentan, y
+                        lo que se deja fuera es la fila de la pasarela, que es el mismo
+                        dinero por el otro camino. Que las dos cifras fueran 353 lo hacía
+                        peor (QA del 15-08). Los nombres vienen del backend para que la
+                        frase no se quede vieja si cambian las pasarelas. */}
+                    No se cuentan {resumen.fuera.copias} cobros
+                    {resumen.fuera.origenes?.length
+                        ? ` de ${resumen.fuera.origenes.map(nombreOrigen).join(' y ')}`
+                        : ''} que Holded ya factura (el mismo dinero por dos caminos)
                     {resumen.fuera.eventos_sin_dinero > 0 && `, ni ${resumen.fuera.eventos_sin_dinero} avisos sin cobro (cancelaciones, pausas y pagos fallidos)`}.
                 </p>
             )}
@@ -235,7 +252,8 @@ const AdminPagosPage = () => {
             {/* El total de LO FILTRADO, que es lo que se mira de verdad al buscar un cliente */}
             {datos && totalFiltrado && (
                 <p className="text-sm text-muted-foreground" data-testid="pagos-total">
-                    <span className="text-foreground font-semibold">{datos.total}</span>
+                    {/* Igual que el título: va directo sobre el fondo del panel. */}
+                    <span className="text-white font-semibold">{datos.total}</span>
                     {datos.total === 1 ? ' cobro' : ' cobros'}
                     {hayFiltro ? ' con estos filtros' : ''} · <span className="text-brand font-semibold font-data">{totalFiltrado}</span>
                 </p>

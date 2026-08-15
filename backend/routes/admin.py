@@ -1436,6 +1436,18 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         "inactive_clients": inactive,
         # Los que no son ni activos ni bajas (punto 2.4g): total = activos + bajas + otros.
         "otros_clients": otros,
+        # Y EN QUÉ ESTADO ESTÁN, que la suma ya cuadraba pero la pantalla no los nombraba
+        # (punto 63, QA del 15-08). «+ 5 ni activos ni de baja» no le dice a nadie qué
+        # hacer; «4 pendientes de pago y 1 registrado» sí. En producción son eso.
+        "otros_por_estado": [
+            {"estado": d["_id"] or "sin estado", "n": d["n"]}
+            for d in await db.client_profiles.aggregate([
+                {"$match": {**solo_clientes,
+                            "status": {"$nin": ["activo", "inactivo", "baja", "cancelado"]}}},
+                {"$group": {"_id": "$status", "n": {"$sum": 1}}},
+                {"$sort": {"n": -1}},
+            ]).to_list(10)
+        ],
         "plans": plans,
         "mrr": mrr,
         "total_revenue": total_revenue,

@@ -368,10 +368,20 @@ _RAZONA_EN_INGLES = re.compile(
 
 # «¿Esto me cuenta?»: la pregunta por la calibración progresiva. Pide el verbo contar
 # junto a la duda de cuánto, para no secuestrar un «cuánto me falta».
+# PREGUNTAR POR LA CALIBRACIÓN NO ES SOLO DECIR «ENTERA O A LA MITAD» (QA del 15-08 en
+# producción, punto 02 de Jesús). El cálculo ya era correcto -- 25 g de almendras cuentan
+# 2,9 P y la tarjeta lo enseña --, pero a «esos 25 g de almendras, ¿me suman proteína o
+# no?» el asistente contestaba «solo suman grasa, no proteína» con el 2,9 P al lado. Dos de
+# dos veces. Fallaban dos cosas: «suman» no estaba en la lista (solo «suma»), y la segunda
+# condición exigía la palabra «mitad» o «entera», que es como lo preguntó el vídeo pero no
+# como lo pregunta cualquiera. Ahora también vale nombrar el macro.
+#
+# Ampliar aquí no arriesga: si en la comida no hay nada que participe en la calibración,
+# `_explicar_calibracion` devuelve None y contesta el modelo como siempre.
 _PREGUNTA_POR_CALIBRACION = re.compile(
-    r"(?is)(?=.*\b(cuenta|cuentan|contar|computa|suma|sirve)\b)"
+    r"(?is)(?=.*\b(cuenta|cuentan|contar|computa|suma|suman|sumar|aporta|aportan|sirve)\b)"
     r"(?=.*\b(entera|entero|mitad|media|completa|al\s+50|la\s+mitad|no\s+cuenta|"
-    r"por\s+que|porque|tramo|umbral)\b)")
+    r"por\s+que|porque|tramo|umbral|prote[ií]nas?|hidratos?|grasas?)\b)")
 
 # «No era eso»: dar marcha atrás. Se pide el arrepentimiento explícito para no confundirlo
 # con un «no» a una pregunta («¿lo dejamos así?» -> «no»), que es otra cosa.

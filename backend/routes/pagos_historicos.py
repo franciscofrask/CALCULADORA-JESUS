@@ -174,6 +174,16 @@ async def resumen(user=Depends(get_admin_only_user)):
     # obliga a fiarse; diciendo cuantas y por que, se puede comprobar.
     copias = await db.pagos_historicos.count_documents({"duplicado_de": {"$exists": True}})
     eventos = await db.pagos_historicos.count_documents({**SIN_COPIAS, "es_dinero": False})
+    # DE QUÉ ORIGEN SON LAS QUE SE DEJAN FUERA. La pantalla lo decía al revés -- «353
+    # cobros que Holded factura», y justo debajo enseñaba «HOLDED 84.173,89 € (353)»,
+    # que son precisamente los que SÍ se cuentan (QA del 15-08 en producción). Las
+    # excluidas son las de las pasarelas: 221 de ThriveCart y 132 de Stripe. Viaja el
+    # dato en vez de la frase para que no se vuelva a quedar vieja.
+    origenes_fuera = [d["_id"] for d in await db.pagos_historicos.aggregate([
+        {"$match": {"duplicado_de": {"$exists": True}}},
+        {"$group": {"_id": "$origen", "n": {"$sum": 1}}},
+        {"$sort": {"n": -1}},
+    ]).to_list(10) if d["_id"]]
 
     return {
         "hay_datos": True,
@@ -184,7 +194,8 @@ async def resumen(user=Depends(get_admin_only_user)):
                         "importe": round(o["importe"] or 0, 2)} for o in por_origen],
         "por_ano": [{"ano": a["_id"], "n": a["n"], "importe": round(a["importe"] or 0, 2)}
                     for a in por_ano if a["_id"]],
-        "fuera": {"copias": copias, "eventos_sin_dinero": eventos},
+        "fuera": {"copias": copias, "eventos_sin_dinero": eventos,
+                  "origenes": origenes_fuera},
     }
 
 
