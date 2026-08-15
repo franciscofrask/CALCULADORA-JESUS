@@ -162,6 +162,11 @@ export default function ChatbotPage() {
   const [saving, setSaving] = useState(false);
   const [currentMeal, setCurrentMeal] = useState(p.currentMeal ?? 1);
   const [macrosRestantes, setMacrosRestantes] = useState(p.macrosRestantes ?? { P: 0, H: 0, G: 0 });
+  // SI LA COMIDA CUADRA LO DICE EL MOTOR, no el redondeo de aquí. La tarjeta ponía
+  // «Comida cuadrada. Pulsa Guardar y siguiente» y la cabecera, justo encima, «faltan 1 g
+  // de hidratos»: eran 0,5 g que el front redondeaba hacia arriba y el margen del método
+  // daba por buenos (visto en producción el 15-08).
+  const [comidaCuadrada, setComidaCuadrada] = useState(false);
   const [distribucion, setDistribucion] = useState(p.distribucion ?? null);
   const [daySummary, setDaySummary] = useState(p.daySummary ?? null);
 
@@ -444,6 +449,7 @@ export default function ChatbotPage() {
         // Lo que FALTA (ver la nota del backend): con la comida ya llena el objetivo y el
         // restante no son el mismo número, y la cabecera habla de lo que falta.
         setMacrosRestantes(data.restante || data.objetivo || data.distribucion.comidas.C1);
+        setComidaCuadrada(!!data.cuadrada);
         if (data.day_overview) setDayOverview(data.day_overview);
         // Lo que ya hubiera montado en esa comida, no una lista vacía: al cambiar de
         // configuración, lo que estaba en una comida que desaparece (el intra al pasar a
@@ -463,6 +469,7 @@ export default function ChatbotPage() {
   const syncEstado = (data) => {
     if (data?.day_overview) setDayOverview(data.day_overview);
     if (data?.state?.step) setStep(data.state.step);
+    if (typeof data?.state?.cuadrada === 'boolean') setComidaCuadrada(data.state.cuadrada);
 
     // Montar OTRO día lo decide el agente, no el front.
     //
@@ -1227,6 +1234,7 @@ export default function ChatbotPage() {
    * distintas y se cuentan por separado, como ya hace la tarjeta de la comida.
    */
   const loQueQueda = (() => {
+    if (comidaCuadrada) return 'Esta comida ya cuadra';
     const macros = [['P', macrosRestantes.P], ['H', macrosRestantes.H], ['G', macrosRestantes.G]];
     const faltan = macros.filter(([, v]) => Math.round(v) > 0).map(([k, v]) => `${Math.round(v)} ${k}`);
     const sobran = macros.filter(([, v]) => Math.round(v) < 0).map(([k, v]) => `${Math.round(-v)} ${k}`);
@@ -1242,6 +1250,7 @@ export default function ChatbotPage() {
   // justo lo que Jesús enseñó en los vídeos del 15-08 (los grabó desde el portátil). Un
   // negativo no es una cantidad: lo pasado se dice «te pasas».
   const loQueQuedaLargo = (() => {
+    if (comidaCuadrada) return 'esta comida ya cuadra';
     const nombres = { P: 'proteína', H: 'hidratos', G: 'grasa' };
     const macros = [['P', macrosRestantes.P], ['H', macrosRestantes.H], ['G', macrosRestantes.G]];
     const faltan = macros.filter(([, v]) => Math.round(v) > 0)

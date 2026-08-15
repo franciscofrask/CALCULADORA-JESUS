@@ -403,7 +403,14 @@ def _numeros_humanos(texto: str) -> str:
     if not texto:
         return texto
     # «P=47.5» / «H = 51» -> «47,5 g de proteína»
-    texto = re.sub(r"\b([PHG])\s*=\s*(\d+(?:[.,]\d+)?)\s*(?:g\b)?",
+    #
+    # La «g» se come SOLO si está («P=47.5 g»), y con ella nada más. Antes el `\s*` final
+    # iba fuera del grupo opcional y se tragaba el espacio siguiente aunque no hubiera
+    # ninguna «g»: «P=50.2 H=30 G=10» salía como «50,2 g de proteína30 g de hidratos10 g
+    # de grasa», pegado, en la pantalla de un cliente. Y de rebote se quedaban los ceros de
+    # relleno («51,0»), porque al pegarse la palabra con el número ya no hay frontera de
+    # palabra donde el limpiador de abajo la busca.
+    texto = re.sub(r"\b([PHG])\s*=\s*(\d+(?:[.,]\d+)?)(?:\s*g\b)?",
                    lambda m: f"{m.group(2)} g de {_MACRO_EN_PROSA[m.group(1).upper()]}",
                    texto)
     # Decimal inglés a decimal de aquí, solo entre dígitos: «47.5» -> «47,5»

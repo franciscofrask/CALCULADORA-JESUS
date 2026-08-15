@@ -271,6 +271,7 @@ async def chatbot_configure(
         # sobraban 223 (QA del 15-08 en producción). En una comida vacía los dos números
         # coinciden, que es por lo que había pasado desapercibido.
         "restante": chatbot.get_remaining_macros(),
+        "cuadrada": chatbot.comida_cuadrada(chatbot.get_remaining_macros()),
         "day_overview": chatbot.get_day_overview(),
         "reubicado": reubicado,
         # Lo que ya hay montado en la comida a la que se llega: el front vaciaba su lista
@@ -362,6 +363,12 @@ def _estado_para_front(chatbot) -> dict:
         "comida_actual": st["comida_actual"],
         "meal_nombre": chatbot.meal_label(chatbot.current_meal_key()),
         "restante": chatbot.get_remaining_macros(),
+        # SI ESTÁ CUADRADA LO DICE EL MOTOR, NO EL REDONDEO DEL FRONT. La tarjeta ponía
+        # «Comida cuadrada. Pulsa Guardar y siguiente» y la cabecera, justo encima,
+        # «faltan 1 g de hidratos»: eran 0,5 g redondeados hacia arriba por el front
+        # mientras el margen del método los daba por buenos (visto en producción el
+        # 15-08). Dos criterios para la misma pregunta siempre acaban contradiciéndose.
+        "cuadrada": chatbot.comida_cuadrada(chatbot.get_remaining_macros()),
         "fecha_pedida": fecha_pedida,
         # Consumida de una vez, como la fecha: dice que ESTE turno reconfiguró el día
         # por chat. El front solo arrastra la config al día nuevo cuando viene esto a
