@@ -1490,7 +1490,8 @@ class AgentTools:
         return await self._veredicto_menu(momento, items, clientes=clientes,
                                           fechas=fechas, juicios=juicios) == "pasa"
 
-    async def _recuadrar_a_hoy(self, foods: List[dict], restante: dict):
+    async def _recuadrar_a_hoy(self, foods: List[dict], restante: dict,
+                               rematar: bool = True, exigente: bool = True):
         """Recuadra un menu REAL al hueco de hoy. Devuelve los items, o None si no da.
 
         Tres pasos, y el porque de cada uno (14-08-2026, del repaso de Francisco):
@@ -1541,7 +1542,9 @@ class AgentTools:
 
         tot = _tot(items)
         cortos = [m for m in ("P", "H", "G") if restante[m] - tot[m] > MARGEN_BORRADOR]
-        if len(cortos) == 1 and len(por_nombre) <= 5:
+        # `rematar=False`: cuando lo que hay son LOS ALIMENTOS QUE HA PEDIDO EL CLIENTE, no
+        # se completa con nada. Él decide qué come; si falta, se le dice y él pide.
+        if rematar and len(cortos) == 1 and len(por_nombre) <= 5:
             try:
                 res = await self.buscar_alimentos(texto="", para_macro=cortos[0], limite=3,
                                                   heredar_estilo=False, anotar=False,
@@ -1561,10 +1564,14 @@ class AgentTools:
             except Exception:
                 pass
 
-        if sum(max(tot[m] - restante[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
-            return None
-        if any(restante[m] - tot[m] > MARGEN_BORRADOR for m in ("P", "H", "G")):
-            return None
+        # `exigente=False`: con lo que ha pedido el cliente no se aplica la vara de los
+        # menús que propone la app. Si lo suyo se pasa o se queda corto, se le enseña con
+        # el desvío escrito; no se le esconde su propia comida.
+        if exigente:
+            if sum(max(tot[m] - restante[m], 0) for m in ("P", "H", "G")) > 2 * MARGEN_BORRADOR:
+                return None
+            if any(restante[m] - tot[m] > MARGEN_BORRADOR for m in ("P", "H", "G")):
+                return None
         return items
 
     # Días distintos con esa comida bien formada para que el historial cuente como fuente.
@@ -1849,6 +1856,58 @@ class AgentTools:
         restante = self.bot.get_remaining_macros()
         momento = self._momento_actual()
         opciones: List[dict] = []
+
+        # LO QUE PIDE EL CLIENTE ES LO QUE VA. NI UN ALIMENTO MÁS.
+        #
+        # Francisco, 15-08-2026: «si yo le pido pollo solo debe poner pollo, si le pido dos
+        # alimentos solo debe poner los dos que le pido, porque quizá yo quiero ir cargando
+        # uno a uno; luego quizá le pida alguna sugerencia para completar los macros, pero
+        # yo se lo voy a pedir, no lo va a inventar».
+        #
+        # Hasta aquí el compositor cogía sus alimentos como semilla y seguía rellenando
+        # hasta cuadrar: a «pollo con arroz» le añadió pan de barra, y a «pollo, pan,
+        # huevos y ensalada» -- cinco piezas ya -- le metió carne picada de ternera. Los
+        # macros salían y la comida no era la suya.
+        #
+        # Ahora, con alimentos nombrados, solo se ajustan las CANTIDADES de esos. Y se
+        # enseña aunque no cuadre: si lo que ha pedido se pasa de grasa, se le dice cuánto
+        # y decide él. La vara de «por arriba no se pasa» es para lo que propone la app,
+        # no para lo que pide el cliente.
+        if incluir_ids:
+            suyos = [self.foods[i] for i in incluir_ids if i in self.foods]
+            items = await self._recuadrar_a_hoy(suyos, restante, rematar=False, exigente=False)
+            if items:
+                tot = {m: round(sum(i["macros"][m] for i in items), 1) for m in ("P", "H", "G")}
+                desvio = {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")}
+                seq = self.bot.state.setdefault("opcion_seq", {})
+                numero = int(seq.get(key_comida_pedidos := self.bot.current_meal_key(), 0)) + 1
+                seq[key_comida_pedidos] = numero
+                bid = self._nuevo_bid()
+                borrador = {
+                    "id": bid, "numero": numero, "items": items, "origen": "compuesto",
+                    "nombre": self._nombre_del_menu(items, incluir_ids), "receta_url": None,
+                    "macros_totales": tot, "objetivo": dict(restante), "desvio": desvio,
+                    "pedidos": [int(x) for x in incluir_ids],
+                    "filtros": {"generico": generico, "marca": marca, "estilo": estilo or None},
+                    "momento": momento, "meal_key": key_comida_pedidos,
+                    "solo_lo_pedido": True,
+                }
+                fuera = [f"{abs(desvio[m]):.0f} g de {_MACRO_LBL[m]}"
+                         for m in ("P", "H", "G")
+                         if abs(desvio[m]) > 2 * self.bot.margen_de(restante.get(m, 0))]
+                if fuera:
+                    borrador["avisos"] = [
+                        "montada solo con lo que has pedido: así se queda a "
+                        + " y ".join(fuera) + " del objetivo de la comida"]
+                self.bot.state.setdefault("borradores", {})[bid] = borrador
+                return {"borradores": [borrador],
+                        "nota": ("Va SOLO lo que ha pedido, con las cantidades ajustadas. No "
+                                 "le añadas nada por tu cuenta: si falta para cuadrar, dile "
+                                 "cuánto falta y ofrécele buscar algo, que decida él.")}
+            return {"borradores": [], "sin_resultados_porque": [
+                "con esos alimentos no sale ninguna cantidad que se pueda servir en esta "
+                "comida. Dile cuáles son y pregúntale si quita alguno o los lleva a otra "
+                "comida; NO se los cambies por otros."]}
 
         # CADA VEZ QUE PIDE OTRA, OTRO BARAJADO (ver `_semilla_variedad`).
         #
