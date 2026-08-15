@@ -75,12 +75,12 @@ _ESQUEMAS = [
          "solo_recetario=true y enséñaselas."),
      "parameters": {"type": "object", "properties": {
          "incluir_ids": {"type": "array", "items": {"type": "integer"}},
-         "estilo": {"type": "string", "description": "CÓMO la quiere, con sus palabras ('algo ligero para llevar'). NO el nombre de la comida: 'Comida 1' no es un estilo y estropea la búsqueda"},
+         "estilo": {"type": "string", "description": "CÓMO la quiere, copiado de sus palabras ('algo ligero para llevar'). Se comprueba contra lo que escribió: inventado o arrastrado de otra charla se ignora. NO el nombre de la comida, y a un 'dame opciones' pelado NO le pongas estilo"},
          "solo_recetario": {"type": "boolean",
                             "description": "Solo recetas de Jesús, sin componer nada tuyo"},
          "generico": {"type": "boolean", "description": "SOLO si el cliente ha hablado de marcas: true = sin marcas, false = de marca. Si no ha dicho nada, OMÍTELO: el menú va con todo el catálogo y poner esto lo estrecha sin motivo"},
          "marca": {"type": "string", "description": "SOLO si el cliente pidió una marca concreta"},
-         "filtro_porque": {"type": "string", "description": "obligatorio si mandas 'generico' o 'marca': las palabras EXACTAS con que el cliente lo pidió. Se comprueban contra lo que escribió; si no aparecen, el filtro se ignora"},
+         "filtro_porque": {"type": "string", "description": "obligatorio si mandas 'generico', 'marca' o un 'estilo' con otras palabras que las suyas: la frase EXACTA con que el cliente lo pidió. Se comprueba contra lo que escribió; si no aparece, el filtro se ignora"},
          "n": {"type": "integer", "description": "cuántas opciones montar (2-4; por defecto 3). Pedir 1 aquí NO funciona: para una sola usa 'solo_una'"},
          "solo_una": {"type": "boolean", "description": "true SOLO si el cliente pidió expresamente UNA («móntame un menú», «hazme una opción»). Con «dame opciones» o cualquier plural, ni lo pongas"}}}},
     {"name": "revisar_borrador",
@@ -592,6 +592,9 @@ class AgentLoop:
                     return resp
 
         self.bot._registrar_restricciones(user_input)
+        # Visible para los filtros citados durante TODO el bucle (el historial solo se
+        # escribe al cerrar el turno; ver el porque en NutritionChatbot.__init__).
+        self.bot.mensaje_en_curso = user_input
 
         mensajes = [{"role": "system", "content": _PROMPT},
                     {"role": "system", "content": "ESTADO ACTUAL:\n" + self._contexto()}]

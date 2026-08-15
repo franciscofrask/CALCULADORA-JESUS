@@ -102,6 +102,10 @@ class NutritionChatbot:
         
         # Historial de mensajes para persistencia (lo rellena el agente: solo lo humano)
         self.messages_history = []
+        # El mensaje que se esta atendiendo AHORA. El historial se apunta al final del
+        # turno, asi que sin esto los filtros citados (_lo_dijo_el_cliente) no veian la
+        # peticion recien escrita: "quiero solo hacendado" no validaba su propia marca.
+        self.mensaje_en_curso = ""
     
     def set_user_macros(self, macros: dict):
         """Establece los macros del usuario desde su perfil."""

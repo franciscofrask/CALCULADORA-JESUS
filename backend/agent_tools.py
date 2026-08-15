@@ -1630,6 +1630,7 @@ class AgentTools:
         dicho = [_sin_tildes(str(h.get("content") or ""))
                  for h in (self.bot.messages_history or [])
                  if h.get("role") == "user"]
+        dicho.append(_sin_tildes(str(getattr(self.bot, "mensaje_en_curso", "") or "")))
         # Lo que él mismo mandó apuntar cuenta igual: lo escribió el cliente, solo que en
         # otro turno («no me compro marcas» dicho el lunes vale el martes).
         dicho += [_sin_tildes(str(n)) for n in (self.bot.state.get("notas_cliente") or [])]
@@ -1664,6 +1665,29 @@ class AgentTools:
         nombres |= {"intra", "post", "peri", "pre", "pre entreno", "postentreno"}
         return "" if _sin_tildes(e) in nombres else e
 
+    def _estilo_con_cita(self, estilo: str, porque: str):
+        """(estilo, nota). El estilo tambien es un filtro en nombre del cliente.
+
+        La traza del 14-08 (noche): a un "dame opciones" pelado el modelo llamaba con
+        estilo="Comida 1 sencilla y rapida", y a un "vaciala", con estilo="Comida 1
+        salada con huevos y avena" arrastrado de otra conversacion. Un estilo puesto
+        salta recetario y comidas reales A PROPOSITO (asi debe ser cuando el cliente
+        pide un estilo de verdad), asi que cada estilo inventado degradaba la comida
+        entera a un compuesto flojo. Misma regla que marca/generico: sin las palabras
+        del cliente detras, no hay filtro; y si era una parafrasis legitima, la nota
+        le dice como volver a pedirlo (con la cita), no solo que no.
+        """
+        e = self._estilo_limpio(estilo)
+        if not e:
+            return "", None
+        if self._lo_dijo_el_cliente(e) or self._lo_dijo_el_cliente(porque):
+            return e, None
+        return "", (
+            f"NO he aplicado el estilo «{e}»: no consta que el cliente lo pidiera, "
+            "y no se lo atribuyas al presentar. Las opciones van con el catalogo entero. "
+            "Si de verdad lo dijo, vuelve a llamarme con sus palabras exactas en `estilo` "
+            "o su frase literal en `filtro_porque`.")
+
     # ============================================================ 2. componer_menu
     async def componer_menu(self, incluir_ids: List[int] = None, estilo: str = "",
                             generico: bool = None, marca: str = None,
@@ -1691,7 +1715,8 @@ class AgentTools:
         incluir_ids = [int(x) for x in (incluir_ids or []) if int(x) in self.foods]
         # Los filtros que hablan del cliente, solo con sus palabras detrás (ver arriba).
         generico, marca, nota_filtro = self._filtro_de_marca(generico, marca, filtro_porque)
-        estilo = self._estilo_limpio(estilo)
+        estilo, nota_estilo = self._estilo_con_cita(estilo, filtro_porque)
+        nota_filtro = " ".join(x for x in (nota_filtro, nota_estilo) if x) or None
         restante = self.bot.get_remaining_macros()
         momento = self._momento_actual()
         opciones: List[dict] = []
