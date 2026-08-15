@@ -941,6 +941,13 @@ export default function ChatbotPage() {
           + 'guardado desde aquí para no pisarlo.', false);
         return;
       }
+      // Ha borrado la comida en Nutrición mientras la teníamos aquí abierta: no se le
+      // devuelve lo que acaba de quitar (ver la nota del backend).
+      if (res.ok && data.skipped === 'borrado_fuera') {
+        addMessage(data.message || 'Has vaciado esa comida en tu plan, así que no la he '
+          + 'vuelto a guardar. Recarga el asistente y seguimos con lo que hay ahora.', false);
+        return;
+      }
       if (res.ok && !data.needs_confirmation) {
         recordarDia(dia);
         addMessage(`✅ Guardado en tu pestaña de nutrición (${formatDateLabel(dia)}).`, false);

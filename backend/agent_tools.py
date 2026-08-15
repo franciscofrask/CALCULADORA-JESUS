@@ -33,7 +33,7 @@ from calculator import (
 )
 from calma_engine import parse_categories
 from food_semantic import BusquedaSemantica, CorrectorErratas
-from meal_moment import momento_de_comida, describe_comida, PERI
+from meal_moment import momento_de_comida, describe_comida, PERI, DESAYUNO
 from moment_profile import PerfilMomento, cat2_de
 
 # Umbral de poda por momento: mismo criterio que el sugeridor (F0.5) y el banco de casos.
@@ -562,6 +562,19 @@ class AgentTools:
                 continue
             if not es_sugerible(food) and not self._acompana_a_algo(food, ya_en_la_comida):
                 vetados_solos += 1
+                continue
+            # EN EL DESAYUNO, NADA DE ACEITE. Ni con compañía.
+            #
+            # Los aceites ya son «no sugeribles» por condimento, pero el rescate de
+            # `_acompana_a_algo` los dejaba entrar en cuanto había con qué acompañarlos, y
+            # así salió un desayuno de flan proteico + aceite + acelgas. Francisco, viéndolo
+            # en la app el 15-08: «aceite no quiero que salga en un desayuno». En el resto
+            # de comidas se queda como estaba. Pedirlo por su nombre sigue funcionando: esto
+            # solo quita lo que la app propone por su cuenta.
+            if (momento == DESAYUNO and aid not in pedidos_por_nombre
+                    and any(cat_in_list(c, ["17.1"])
+                            for c in parse_categories(food.get("categorias")))):
+                vetados_momento += 1
                 continue
             if generico is True and food.get("url"):
                 continue
@@ -1491,6 +1504,17 @@ class AgentTools:
            recurso y ahi se justifican.
         """
         from meal_builder import build_meal
+
+        # Y EN EL DESAYUNO, TAMPOCO EL DE LAS COMIDAS RECUPERADAS. La regla de Francisco
+        # (15-08) es que en un desayuno no salga aceite, y estas comidas vienen del
+        # historial o de la biblioteca, donde alguien sí lo puso. Se quita la pieza y el
+        # recuadre reparte lo suyo entre las demás: son 10 g de condimento, no el plato.
+        if self._momento_actual() == DESAYUNO:
+            sin_aceite = [f for f in foods
+                          if not any(cat_in_list(c, ["17.1"])
+                                     for c in parse_categories(f.get("categorias")))]
+            if sin_aceite:
+                foods = sin_aceite
 
         por_nombre = {f["nombre"]: f for f in foods}
 

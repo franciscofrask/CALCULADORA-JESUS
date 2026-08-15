@@ -738,6 +738,34 @@ async def chatbot_save_to_diet(
                         "en la otra o recarga esta para trabajar con lo último."),
         }
 
+    # LO QUE EL CLIENTE BORRA EN NUTRICIÓN NO SE LE DEVUELVE (15-08, encontrado por
+    # Francisco en producción).
+    #
+    # El asistente se trae al empezar lo que el día ya tenía montado (`comidas_traidas`) y
+    # lo guarda en su sesión. Si después el cliente vacía ese día en Nutrición -- en otra
+    # pestaña, en el móvil, o simplemente porque no lo quería --, la sesión sigue con su
+    # copia, y el siguiente «Guardar y siguiente» la escribe otra vez con `upsert`: la
+    # comida que acababa de borrar reaparece. Él lo vio con un desayuno que había quitado a
+    # mano.
+    #
+    # Ni se resucita ni se tira su trabajo: se frena y se dice. Solo mira las comidas que
+    # VINIERON del plan; lo montado aquí en el chat no se toca. Con `overwrite` explícito
+    # (el cliente ha dicho que sí a sobrescribir) se guarda igual.
+    traidas = list(chatbot.state.get("comidas_traidas") or [])
+    if traidas and not overwrite:
+        en_el_plan = (existing or {}).get("comidas") or {}
+        fuera = [k for k in traidas if not (en_el_plan.get(k) or {}).get("alimentos")]
+        if fuera:
+            nombres = _enumerar([chatbot.meal_label(k) for k in fuera])
+            return {
+                "skipped": "borrado_fuera",
+                "fecha": fecha,
+                "comidas": fuera,
+                "message": (f"Has vaciado {nombres} en tu plan mientras lo teníamos abierto "
+                            f"aquí. No lo guardo para no devolverte algo que acabas de "
+                            f"quitar. Recarga el asistente y seguimos con lo que hay ahora."),
+            }
+
     # Chequeo de sobrescritura: ¿el día ya tiene alimentos?
     if existing and not overwrite:
         tiene_alimentos = any(

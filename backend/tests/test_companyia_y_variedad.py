@@ -216,7 +216,11 @@ class TestLoQueCompone:
         from calculator import es_sugerible
         assert not es_sugerible({"categorias": "17.5"})
         assert es_sugerible({"categorias": "17.2.1"})
-        assert es_sugerible({"categorias": "17.1.1"})
+        # LOS ACEITES TAMPOCO, DESDE EL 15-08. Este test los daba por sugeribles hasta que
+        # Francisco vio «Aceite de oliva una cucharadita - 1 ud» colado como pieza de grasa
+        # de un desayuno. Son condimento: con compañía real entran, sueltos no. En el
+        # desayuno no entran ni con compañía (ver `test_aceite_en_el_desayuno.py`).
+        assert not es_sugerible({"categorias": "17.1.1"})
 
     def test_si_todo_discorda_no_deja_al_cliente_sin_nada(self):
         """Pidiendo «tostadas» todo lo que cuadraba eran tres tostadas distintas juntas y
@@ -227,7 +231,15 @@ class TestLoQueCompone:
         compañía una a una (`_casan`), así que el caso que hacía falta rescatar dejó de
         producirse: «tostadas» sale hoy como queso de Burgos + pan tostado + frutos secos +
         claras, con peor pareja 0,81. Exigir el aviso era exigir que el menú siguiera
-        saliendo mal."""
+        saliendo mal.
+
+        Y SOLO SE LE PIDE A LO COMPUESTO (15-08). Desde que el recetario entró como tercera
+        fuente, «tostadas» devuelve tres recetas de Jesús, y a esas se les estaba aplicando
+        una regla que no es suya: la elevación mide qué pares se repiten en las dietas de
+        los clientes, y sirve para frenar lo que la app JUNTA por su cuenta. Una receta
+        firmada por él con yogur y atún dentro no es una combinación rara que haya que
+        avisar: es su receta. El juicio de las fuentes recuperadas es otro
+        (`_pasa_coherencia`) y ya lo han pasado."""
         async def _correr():
             from chatbot import NutritionChatbot
             from agent_tools import AgentTools
@@ -245,6 +257,8 @@ class TestLoQueCompone:
         assert bs, f"se queda sin nada que ofrecer: {r.get('sin_resultados_porque')}"
         mudas = []
         for b in bs:
+            if b.get("origen") != "compuesto":
+                continue
             foods = [tools.foods[i["id"]] for i in b["items"] if i["id"] in tools.foods]
             peor = perfil.peor_pareja(foods)
             if peor and peor[0] < ELEVACION_MINIMA and not b.get("avisos"):
