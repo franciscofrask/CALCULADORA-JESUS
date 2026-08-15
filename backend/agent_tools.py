@@ -732,6 +732,47 @@ class AgentTools:
                     + f". Dile que no tienes '{texto}', enséñale esos y que elija él si "
                       f"quiere alguno."]
                 return out
+        # UN PLATO QUE NO EXISTE NO SE SUSTITUYE POR SUS INGREDIENTES EN SILENCIO.
+        #
+        # «Pon tortillas de claras»: en el catálogo no hay ninguna tortilla de claras -- las
+        # tortillas que hay son de patata, de trigo, de maíz y de avena --, así que la
+        # búsqueda devolvió «Claras de huevo pasteurizadas» y el asistente le plantó 300 g
+        # sin decir nada. Francisco, en la app el 15-08: «no debería cargarme lo que
+        # quiera». Tiene razón: las claras son el INGREDIENTE con el que se hace, no el
+        # plato que pidió, y eso se dice y lo decide él.
+        #
+        # El aviso de arriba no lo cubría: solo mira peticiones de UNA palabra. Aquí se
+        # miran las de varias, y salta cuando NINGÚN resultado lleva todas dentro. Fuera
+        # los conectores, los números y las unidades, que si no «200 g de arroz» se leería
+        # como un plato inexistente.
+        _VACIAS = {"de", "del", "la", "el", "los", "las", "con", "sin", "y", "o", "al",
+                   "un", "una", "unos", "unas", "g", "gr", "gramos", "ml", "kg", "ud",
+                   "uds", "unidad", "unidades", "por"}
+        sig2 = [w for w in sig if w not in _VACIAS and not w.isdigit()]
+
+        def _menciona(palabra: str, nombre: str) -> bool:
+            """La palabra aparece en el nombre, tolerando plural («claras» ~ «clara»)."""
+            n = self.bot._norm_text(nombre or "")
+            raiz = palabra[:-2] if palabra.endswith("es") else palabra.rstrip("s")
+            return len(raiz) > 2 and raiz in n
+
+        if len(sig2) >= 2 and items and not vetados_solos:
+            # La CABEZA (de qué va el plato) tiene que ser el núcleo del alimento, y el
+            # resto de palabras basta con que aparezcan en el nombre: son adjetivos y
+            # complementos («arroz BLANCO», «salmón AHUMADO»), y esos nunca están en el
+            # núcleo. Pedirle núcleo a todas daba por inexistente medio catálogo.
+            cabeza, resto = sig2[0], sig2[1:]
+            nombra_el_plato = any(
+                self.bot._en_nucleo(cabeza, i.get("nombre", ""))
+                and all(_menciona(w, i.get("nombre", "")) for w in resto)
+                for i in items[:6])
+            if not nombra_el_plato:
+                out["ojo"] = (out.get("ojo", "") + " " if out.get("ojo") else "") + (
+                    f"OJO: en el catálogo no hay ningún '{texto}' como tal. Lo que te "
+                    f"devuelvo son los alimentos con los que se hace o lo más parecido: "
+                    + "; ".join(i.get("nombre", "") for i in items[:3])
+                    + f". NO lo añadas por tu cuenta: dile que '{texto}' no lo tienes como "
+                      f"plato, enséñale eso y que elija él.")
         # Lo apartado por soledad se cuenta SIEMPRE, haya items o no: es la diferencia
         # entre «no lo tengo» y «no te lo pongo suelto».
         if vetados_solos and any(self.bot._en_nucleo(w, f.get("nombre", ""))
@@ -2406,7 +2447,10 @@ class AgentTools:
         # menú NUEVO. Pulsar «Puré proteico de garbanzos y pollo» aplicaba un batido de
         # queso batido con corn flakes, con su «Menú aplicado ✓» de propina.
         _nuevo_bid = self._nuevo_bid
-        salida, descartes, cortos = [], [], []
+        # `pasadas`: las que se van por arriba de hidratos o grasa. Se apartan como los
+        # cortos, pero con una diferencia: un menú corto se completa y uno pasado no, así
+        # que si hay que rescatarlo sale SIN botón de aplicar.
+        salida, descartes, cortos, pasadas = [], [], [], []
         # ANTES de medir nada, los macros con los que la comida va a quedar de verdad
         # (tramos del día para cereales/panes y frutos secos): así la tarjeta, el desvío,
         # la puerta de calidad y lo que se aplica dicen EL MISMO número.
@@ -2452,6 +2496,35 @@ class AgentTools:
             tot_fij = {m: sum(i["macros"][m] for i in op["items"] if i["id"] in ids_fijos)
                        for m in ("P", "H", "G")}
             exceso_fij = sum(max(tot_fij[m] - restante[m], 0) for m in ("P", "H", "G"))
+            # POR ARRIBA NO SE PASA, Y SE MIRA MACRO A MACRO (15-08, Francisco en la app).
+            #
+            # El corte de aquí sumaba el exceso de los tres macros y lo comparaba con 24 g,
+            # así que una opción con 22,5 g de GRASA sobre un objetivo de 10 -- «tortilla
+            # de patata» pedida como tortilla de huevo -- pasaba con un 12,5 de exceso, y
+            # salía con su botón de elegir. Sumar los tres esconde justo el caso que
+            # importa: un macro reventado y los otros dos clavados.
+            #
+            # Y la proteína no cuenta: pasarse de proteína el método lo tolera (regla de
+            # Jesús del 13-08, la misma que ya aplican `comida_cuadrada` y la barra de la
+            # tarjeta). Lo que no se pasa es hidratos y grasa.
+            #
+            # El listón es el DOBLE del margen de la comida: el margen (`margen_de`) es
+            # para decir si algo cuadra, y al compositor se le deja el doble de cancha
+            # antes de tirar su intento. Sobre 10 g de grasa son 5; sobre 15, 7,5.
+            pasada = next((m for m in ("H", "G")
+                           if desvio[m] > 2 * self.bot.margen_de(restante.get(m, 0))), None)
+            if pasada and exceso_fij <= MARGEN_BORRADOR:
+                descartes.append(f"una opción se pasaba {desvio[pasada]:.0f} g de "
+                                 f"{_MACRO_LBL[pasada]} y se descartó")
+                # Guardada por si no queda nada: se enseña con su aviso y SIN botón, que
+                # es lo que ya se hace con las que tumba el juez. Una comida pasada de
+                # grasa no se puede rematar, así que aplicarla no es una opción.
+                pasadas.append((desvio[pasada], {
+                    **op, "aviso_companyia": (f"esta opción se pasa {desvio[pasada]:.0f} g de "
+                                              f"{_MACRO_LBL[pasada]}: por arriba el método no "
+                                              f"la da por buena"),
+                    "no_aplicable": True}))
+                continue
             if exceso > 2 * MARGEN_BORRADOR and exceso_fij <= MARGEN_BORRADOR:
                 peor_m = max(desvio, key=lambda m: desvio[m])
                 descartes.append(f"una opción se pasaba {desvio[peor_m]:.0f} g de "
@@ -2519,6 +2592,27 @@ class AgentTools:
                         "momento": momento, "meal_key": self.bot.current_meal_key(),
                         "avisos": [f"esta opción se queda corta: {motivo}. Complétala antes "
                                    f"de dársela por buena."]}
+            borradores[bid] = borrador
+            salida.append(borrador)
+        # Y si lo único que había se pasaba de hidratos o de grasa, sale la que menos se
+        # pasa, con su aviso y SIN botón: un menú corto se completa, uno pasado no. Antes
+        # que dejar la pantalla vacía, que vea qué había y por qué no se le ofrece.
+        if not salida and pasadas:
+            pasadas.sort(key=lambda x: x[0])
+            _, op = pasadas[0]
+            tot = {m: round(sum(i["macros"][m] for i in op["items"]), 1) for m in ("P", "H", "G")}
+            bid = _nuevo_bid()
+            numero += 1
+            borrador = {"id": bid, "numero": numero,
+                        "items": op["items"], "origen": op["origen"],
+                        "nombre": op["nombre"], "receta_url": op.get("receta_url"),
+                        "macros_totales": tot, "objetivo": dict(restante),
+                        "desvio": {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")},
+                        "pedidos": [int(x) for x in incluir_ids],
+                        "filtros": {"generico": generico, "marca": marca, "estilo": estilo or None},
+                        "momento": momento, "meal_key": self.bot.current_meal_key(),
+                        "no_aplicable": True,
+                        "avisos": [op["aviso_companyia"]]}
             borradores[bid] = borrador
             salida.append(borrador)
         # La cuenta consumida se apunta, se haya enseñado lo que se haya enseñado.
