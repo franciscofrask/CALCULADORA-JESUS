@@ -269,8 +269,12 @@ PLAN_CATALOG = {
         "precio": 177.0, "precio_nota": "177-397€/trimestre (según antigüedad)",
         "precios": [{"label": "Trimestral", "importe": 177.0, "periodo": "trimestre"}],
         "responsable": "CEO",
+        # Doc 16-08 (T8): el Bronze SÍ hace el reporte mensual (11 bloques) y el cierre
+        # del día, que van detrás de la habilitación de reportes. Sin "mensual" aquí, un
+        # bronze no podía abrir ni el reporte ni el "¿Cómo fuiste hoy?" (403 en
+        # /checkins). El quincenal sigue siendo solo de quien lo tenga (gold).
         "habilitaciones": {"calculadora": "personalizado", "rutina": "opcional",
-                            "reportes": [], "suplementacion": True, "harbiz": False},
+                            "reportes": ["mensual"], "suplementacion": True, "harbiz": False},
         "stripe_price_env": "STRIPE_PRICE_BRONZE", "billing_cycle_weeks": 12,
     },
     # ---------------- ESPECIALES ----------------
