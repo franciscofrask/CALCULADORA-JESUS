@@ -235,14 +235,12 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
 // Todo esto vive detrás del interruptor `t1_inicio_nuevo` del panel: apagado, el cliente
 // ve el Inicio de siempre sin que nadie despliegue nada.
 
-// La fecha de hoy con la que viajan las dietas: hora LOCAL, la misma que usa Nutrición
-// (`hoyISO` en NutritionPage). Aquí no vale la hora de España: si Inicio pidiera el día de
-// Madrid y Nutrición guardara el del aparato, el cliente que no está en España vería en
-// una pantalla los macros de un día y en la siguiente los de otro.
-const hoyDeLaDieta = () => {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
-};
+// La fecha de hoy con la que viajan las dietas: la de ESPAÑA, la misma que usa Nutrición
+// (`hoyISO`) y la misma con la que el backend cierra el día, cuenta el entreno y abre los
+// reportes. Estuvo en hora local para que Inicio y Nutrición coincidieran entre sí, pero
+// entonces las dos discrepaban del servidor: la cabecera decía «Lunes, 17 de agosto» y
+// debajo salían los macros del domingo.
+const hoyDeLaDieta = () => hoyEnEspana();
 
 const estrellas = (n) => (n >= 1 && n <= 5 ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
 
