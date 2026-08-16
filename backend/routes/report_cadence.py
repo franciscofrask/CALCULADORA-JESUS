@@ -22,7 +22,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from core.calendario_reportes import (
     calendario_del_cliente, dia_de_envio, reporte_de_la_semana, toca_en_la_semana)
 from core.cycle import compute_cycle, _parse_dt
-from core.tiempo import MADRID
+from core.tiempo import MADRID, a_madrid
 from core.database import db
 from core.security import get_admin_user, get_current_user
 from core.stripe_billing import create_alert
@@ -207,7 +207,22 @@ _MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", 
 
 
 def _fecha_es(dt: datetime) -> str:
-    return f"{_DIAS[dt.weekday()]} {dt.day} {_MESES[dt.month - 1]}"
+    """El día tal y como lo vive el cliente: en hora de España.
+
+    Las ventanas se guardan y se comparan en UTC, pero el nombre del día NO se puede sacar
+    de ahí: el mensual abre el viernes a las 00:00 de Madrid, que en UTC son las 22:00 del
+    JUEVES, y la app le decía «tu reporte abre el jueves». Un día entero de diferencia en
+    la fecha que se le promete.
+    """
+    d = a_madrid(dt) or dt
+    return f"{_DIAS[d.weekday()]} {d.day} {_MESES[d.month - 1]}"
+
+
+def _hora_es(dt: datetime) -> str:
+    """La hora de cierre, la suya. Antes se escribía «a las 6:00» a mano, que era la hora
+    UTC de la ventana única de entonces y ya no es la de nadie."""
+    d = a_madrid(dt) or dt
+    return f"{d.hour}:{d.minute:02d}"
 
 
 def _client_deadline(tipo: str, due: datetime, window_start: datetime):
@@ -368,7 +383,7 @@ async def get_my_due_report(user=Depends(get_current_user)):
         {"_id": 0, "id": 1},
     )
     label = _principal_label(state["tipos"])
-    closes_label = f"{_fecha_es(win_close)} a las 6:00"
+    closes_label = f"{_fecha_es(win_close)} a las {_hora_es(win_close)}"
     opens_label = _fecha_es(win_open)
     window = {
         "due": True,
