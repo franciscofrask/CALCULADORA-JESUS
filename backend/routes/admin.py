@@ -391,6 +391,21 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     profile["precio_ciclo"] = precio_de_ciclo(profile, merged_catalog(await _overrides_by_code()))
     profile["precio_cortesia"] = bool(profile.get("comp_plan"))
 
+    # TODOS LOS PESOS DE LA FICHA, EN KILOS.
+    #
+    # «Agosto de 2026 · 62800 kg · ▼ 700 kg» (Jesus, 16-08). Son 62,8 kg y 700 g. La
+    # «Evolucion del cliente» junta tres fuentes -- los reportes de la app, el historial de
+    # macros y lo que vino de Calma -- y las de Calma guardan el peso EN GRAMOS. Mezcladas
+    # sin sanear, el mes en gramos sale a 62800 y la diferencia contra el mes anterior en
+    # kilos da el peso entero. Se sanea aqui, en el origen, y no en la pantalla: de esta
+    # misma respuesta comen el mural de fotos y la comparativa de fases, que comparten
+    # `_pesoCercano`, y arreglarlo en una sola dejaria a las otras dos con los gramos.
+    _sanear_pesos(reports, "weight")
+    _sanear_pesos(macro_history, "peso", "client_weight")
+    if calma_raw:
+        _sanear_pesos(calma_raw.get("pesos"), "valor")
+        _sanear_pesos(calma_raw.get("formularios_mensuales"), "peso")
+
     return {
         "profile": profile,
         "user": user_data,
@@ -413,6 +428,21 @@ def _sanea_peso(w):
     veia la curva saneada y el cliente veia sus 0 kg (Jesus, 12-08)."""
     from core.series_cliente import sanea_peso
     return sanea_peso(w)
+
+
+def _sanear_pesos(filas, *campos) -> None:
+    """Deja en kilos los campos de peso de una lista de documentos, en el sitio.
+
+    Solo toca lo que es un numero: un peso que no lo sea (o que se salga del rango del
+    cuerpo humano) se queda en None, que es lo que la pantalla entiende como «no hay dato».
+    Un texto se deja tal cual, porque no es un peso y no le toca a esta funcion decidirlo.
+    """
+    for fila in (filas or []):
+        if not isinstance(fila, dict):
+            continue
+        for campo in campos:
+            if isinstance(fila.get(campo), (int, float)):
+                fila[campo] = _sanea_peso(fila[campo])
 
 
 def _refrescar_casos():
@@ -738,7 +768,15 @@ async def get_calma_foto(client_id: str, file: str, w: int = 0, user = Depends(g
 
 @router.get("/clients/{client_id}/diet")
 async def get_client_diet(client_id: str, fecha: str, user = Depends(get_admin_user)):
-    """Dieta de un cliente en una fecha concreta (visor de dietas del admin)."""
+    """Dieta de un cliente en una fecha concreta (visor de dietas del admin).
+
+    RESUELTA, no cruda. Esta ruta devolvia el documento tal cual esta en Mongo, y lo que
+    hay ahi es un registro incompleto: 3.731 de 4.166 alimentos guardados no traen
+    `macros_efectivos`, y en las dietas de Calma los alimentos por unidades guardan piezas
+    en `cantidad_g`. De ahi salian los dos primeros fallos del 16-08 -- «todas las lineas
+    ponen P0 H0 G0» y «un huevo sale como 1 g» --, en la pantalla desde la que se decide el
+    ajuste de 179 personas. Se resuelve por el mismo helper que la ruta del cliente y el PDF.
+    """
     profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "user_id": 1, "trainer_id": 1})
     assert_client_access(user, profile)
     diet = await db.diets.find_one(
@@ -746,7 +784,8 @@ async def get_client_diet(client_id: str, fecha: str, user = Depends(get_admin_u
     )
     if not diet:
         raise HTTPException(status_code=404, detail="Sin dieta en esa fecha")
-    return diet
+    from core.dieta_para_ver import enriquecer_para_ver
+    return await enriquecer_para_ver(diet)
 
 
 @router.put("/clients/{client_id}", response_model=ClientProfile)
@@ -861,7 +900,15 @@ async def anotar_body_fat(client_id: str, data: dict, user = Depends(get_admin_u
 
 @router.put("/clients/{client_id}/macros")
 async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depends(get_admin_user)):
-    """Actualizar macros de un cliente (admin). Marca como override manual."""
+    """Actualizar macros de un cliente (admin). Marca como override manual.
+
+    DE AQUI SALEN «Tienes macros nuevos» Y «Este mes no te toco nada»: los dos avisos
+    cuelgan del ajuste que se escribe en esta ruta (`marcar_cambios` + `marcar_ajuste`).
+    Guardar la dieta de un dia NO los dispara, y no puede hacerlo: mientras se monta una
+    dieta se guarda muchas veces y al cliente le llegaria un aviso por cada guardado. El
+    aviso es de la pestaña Macros, que es donde se decide el ajuste. La otra puerta buena
+    es `admin_calculator_apply`; no hay ninguna mas.
+    """
     profile = await db.client_profiles.find_one({"id": client_id})
     assert_client_access(user, profile)
 
@@ -1082,7 +1129,12 @@ async def delete_macro_history_entry(client_id: str, entry_id: str, user = Depen
 async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_admin_user)):
     """Calcular con el MOTOR v2 (mismas reglas que la vista del cliente: tabla +
     modificadores de las preguntas 5-8 + suelos + redondeo) y aplicar al perfil.
-    `ajustes` opcional en el body; si no llega, se usan los guardados del cliente."""
+    `ajustes` opcional en el body; si no llega, se usan los guardados del cliente.
+
+    La otra puerta de la que salen «Tienes macros nuevos» y «Este mes no te toco nada»,
+    junto a `update_client_macros`. Guardar la dieta de un dia no los dispara: se guarda
+    muchas veces mientras se monta y el cliente recibiria un aviso por cada guardado.
+    """
     from target_calculator import targets_to_profile_macros
     from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
     from core.quiz_store import guardar_quiz_respuestas

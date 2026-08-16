@@ -237,11 +237,23 @@ const DayHeader = ({
                 );
             })()}
 
-            {/* ESCRITORIO: las tres barras de siempre, tal cual estaban. El rediseño de esta
-                vista todavía no ha empezado. */}
+            {/* ESCRITORIO: las tres barras de siempre, pero diciendo LO QUE FALTA.
+                «Arriba dice lo que ha comido; abajo, lo que le falta» (Jesús, 16-08). En la
+                misma pantalla, esta línea ponía «152 / 135» y «+16,3 g» mientras la comida de
+                tres centímetros más abajo ponía «faltan 4,1 g», y el Inicio nuevo dice «Te
+                faltan 94, de 120». Tres formas de decir lo mismo, y solo una contesta a la
+                pregunta con la que se abre la app.
+
+                Así que aquí también «Te faltan X de Y», igual que abajo, que en el teléfono y
+                que en Inicio. Lo que sobra se sigue diciendo con la palabra de siempre
+                («sobran»), que es la que Jesús da por buena dentro de la calculadora. */}
             <div className="hidden lg:block mt-5 max-w-2xl space-y-2">
                 {macros.map(({ key, label, val, tgt, color }) => {
                     const over = tgt > 0 && seExcede(key, val, tgt);
+                    const falta = Math.max(0, tgt - val);
+                    // Cubierto: dentro del mismo margen de 4 g con el que la comida se da por
+                    // cuadrada, para no decir «te faltan 0» ni contradecir a la tarjeta.
+                    const cubierto = !over && (tgt <= 0 || falta < 4);
                     return (
                         <div key={key} className="flex items-center gap-3">
                             <span className="text-[13px] text-muted-foreground w-[64px] flex-shrink-0">{label}</span>
@@ -249,13 +261,18 @@ const DayHeader = ({
                                 <span className="block h-full rounded-full transition-all duration-300"
                                     style={{ width: `${tgt > 0 ? Math.min((val / tgt) * 100, 100) : 0}%`, backgroundColor: over ? '#EF4444' : color }} />
                             </span>
-                            <span className={`font-data text-[13px] text-right w-[92px] flex-shrink-0 ${over ? 'text-red-500 font-bold' : 'text-foreground'}`}>
-                                {val.toFixed(0)} <span className="text-muted-foreground">/ {tgt.toFixed(0)}</span>
-                            </span>
-                            {/* Cuánto sobra, escrito. En escritorio los dos números estaban
-                                uno al lado del otro y aun así había que restarlos. */}
-                            <span className="font-data text-[13px] text-red-500 w-[92px] flex-shrink-0">
-                                {over ? `+${fmtGramos(val - tgt)} g` : ''}
+                            <span className={`font-data text-[13px] text-right w-[150px] flex-shrink-0 ${over ? 'text-red-500 font-bold' : 'text-foreground'}`}
+                                data-testid={`dia-escritorio-${key}`}
+                                title={`Llevas ${val.toFixed(0)} g de ${tgt.toFixed(0)} g`}>
+                                {over
+                                    ? <>sobran {fmtGramos(val - tgt)} g</>
+                                    : cubierto
+                                        ? <>Ya está <span className="text-muted-foreground">· de {tgt.toFixed(0)}</span></>
+                                        : <>Te faltan {Math.round(falta)}
+                                            {/* Con el día a cero lo que falta YA ES el total:
+                                                «235 de 235» lo dice dos veces. Mismo criterio
+                                                que el bloque del teléfono. */}
+                                            {val > 0 && <span className="text-muted-foreground"> de {tgt.toFixed(0)}</span>}</>}
                             </span>
                         </div>
                     );

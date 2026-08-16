@@ -3,6 +3,7 @@ import { StatusDot } from './DaySummary';
 import { macrosDeVista } from './ModoMacros';
 import { seExcede, textoExceso } from '../../lib/exceso';
 import { num1, numMedio } from '../../lib/numeros';
+import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
 import {
     ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download
@@ -263,8 +264,12 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                     <Minus className="w-3.5 h-3.5" />
                 </button>
                 {isEditing ? (
+                    // Con techo: el campo no tenía `max`, así que la flecha de subir no
+                    // paraba nunca. El techo es el tope duro, en la unidad del campo; lo que
+                    // es mucho para ESTE alimento se avisa aparte, sin cortar.
                     <input type="number" defaultValue={valorEditable} autoFocus
                         step={porUnidad ? '0.5' : '1'} min="0"
+                        max={porUnidad ? Math.floor(TOPE_GRAMOS / (peso || 100)) : TOPE_GRAMOS}
                         aria-label={porUnidad ? 'Unidades' : 'Gramos'}
                         className="w-14 text-center text-sm font-bold font-data bg-transparent border-x border-border text-foreground focus:outline-none"
                         onBlur={(e) => updateFoodQuantityDirect(mealKey, idx, e.target.value)}
