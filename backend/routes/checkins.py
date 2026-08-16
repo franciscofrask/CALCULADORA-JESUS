@@ -403,6 +403,14 @@ async def admin_get_client_checkins(client_id: str, type: Optional[str] = None, 
             raise HTTPException(status_code=400, detail="Tipo invalido")
         query["type"] = type
     checkins = await db.checkins.find(query, {"_id": 0}).sort("created_at", -1).to_list(min(limit, 200))
+    # EL PESO, SANEADO ANTES DE ENSEÑARLO. En los check-ins importados el peso viene en
+    # gramos, y el bloque «Check-ins mensuales» de la ficha ponía «01 jun 2026 · 61250 kg».
+    # Es el mismo arreglo que ya se hace con los reportes y con lo de Calma en
+    # `get_client_detail`: la regla vive en un solo sitio, `sanea_peso`.
+    from core.series_cliente import sanea_peso
+    for c in checkins:
+        if c.get("weight") is not None:
+            c["weight"] = sanea_peso(c["weight"])
     return [CheckInResponse(**c) for c in checkins]
 
 
