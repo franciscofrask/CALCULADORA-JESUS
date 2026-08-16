@@ -30,7 +30,15 @@ def compute_cycle(profile: Dict[str, Any], now: Optional[datetime] = None) -> Di
     total = (plan.get("ciclo") or {}).get("semanas")
 
     anchor = _parse_dt(profile.get("cycle_start")) or _parse_dt(profile.get("created_at")) or now
-    days = max(0, (now - anchor).days)
+    # LOS DIAS SE CUENTAN EN HORA DE ESPAÑA, no en UTC.
+    #
+    # Restando los instantes en UTC, entre las 22:00 y las 00:00 de aqui -- que en Madrid ya
+    # son del dia siguiente -- el cliente seguia en la semana anterior. Se ve en el cambio de
+    # semana: a las 00:30 del lunes en Madrid la app decia que aun era la semana pasada, y de
+    # esa semana salen el reporte que le toca, su ventana y sus avisos. Contando los DIAS de
+    # calendario en España, la semana cambia cuando le cambia a el.
+    from core.tiempo import a_madrid
+    days = max(0, ((a_madrid(now) or now).date() - (a_madrid(anchor) or anchor).date()).days)
     weeks_elapsed = days // 7  # 0-based
 
     if total and total > 0:

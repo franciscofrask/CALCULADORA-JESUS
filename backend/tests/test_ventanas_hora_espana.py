@@ -95,3 +95,31 @@ def test_la_hora_de_cierre_ya_no_esta_escrita_a_mano():
                         "routes", "report_cadence.py")
     with open(ruta, encoding="utf-8") as f:
         assert 'a las 6:00"' not in f.read()
+
+
+# ── La semana de ciclo también es la de España ───────────────────────────────
+
+def test_la_semana_de_ciclo_cambia_a_medianoche_en_madrid():
+    """A las 00:30 del lunes en Madrid son las 22:30 del domingo en UTC. Contando en UTC, el
+    cliente seguía en la semana anterior: se le anunciaba el plazo de una ventana que ya
+    había vencido y el reporte que le tocaba era el de la semana pasada."""
+    from core.cycle import compute_cycle
+
+    perfil = {"plan": "gold", "cycle_start": "2026-08-03T00:00:00+00:00"}
+    # Domingo 16 a las 22:30 UTC = lunes 17 a las 00:30 en Madrid: ya es la semana 3.
+    medianoche_larga = datetime(2026, 8, 16, 22, 30, tzinfo=timezone.utc)
+    assert compute_cycle(perfil, medianoche_larga)["week"] == 3
+
+    # Y por la tarde del domingo, cuando aquí y allí es el mismo día, sigue siendo la 2.
+    domingo = datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc)
+    assert compute_cycle(perfil, domingo)["week"] == 2
+
+
+def test_la_ventana_se_calcula_sobre_la_semana_en_curso():
+    from routes.report_cadence import _week_window_start
+
+    perfil = {"plan": "gold", "cycle_start": "2026-08-03T00:00:00+00:00"}
+    inicio = _week_window_start(perfil, datetime(2026, 8, 16, 22, 30, tzinfo=timezone.utc))
+    abre, _ = _submission_window(inicio, "quincenal")
+    # El miércoles de SU semana (17-23), no el de la anterior.
+    assert a_madrid(abre).day == 19

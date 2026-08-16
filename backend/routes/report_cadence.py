@@ -64,10 +64,16 @@ def _cal(profile: Dict[str, Any], catalog: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _week_window_start(profile: Dict[str, Any], now: datetime) -> datetime:
-    """Inicio (00:00 relativo al ancla) de la semana de ciclo en curso del cliente."""
+    """Inicio (00:00 relativo al ancla) de la semana de ciclo en curso del cliente.
+
+    Los dias se cuentan en hora de España, igual que `compute_cycle`: si aqui se restan los
+    instantes en UTC, entre las 22:00 y medianoche -- que en Madrid ya es el dia siguiente --
+    la ventana se calcula sobre la semana pasada y al cliente se le anuncia un plazo que ya
+    ha vencido.
+    """
     anchor = _parse_dt(profile.get("cycle_start")) or _parse_dt(profile.get("created_at")) or now
-    weeks_elapsed = max(0, (now - anchor).days) // 7
-    return anchor + timedelta(days=weeks_elapsed * 7)
+    dias = max(0, ((a_madrid(now) or now).date() - (a_madrid(anchor) or anchor).date()).days)
+    return anchor + timedelta(days=(dias // 7) * 7)
 
 
 def _due_date_in_window(window_start: datetime, due_weekday: int) -> datetime:
