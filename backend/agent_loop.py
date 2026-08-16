@@ -110,11 +110,16 @@ _ESQUEMAS = [
                      "respetan tal cual: sin eso el motor decide por él y le puede poner 5. "
                      "Para cambiar la cantidad de una pieza QUE YA ESTÁ, op='ajustar' con "
                      "'mas' («súbele 10 g» -> mas:10) o con 'a' («déjalo en 200 g» -> a:200); "
-                     "NUNCA un añadir con cantidad, que eso la deja EN esos gramos."),
+                     "NUNCA un añadir con cantidad, que eso la deja EN esos gramos. "
+                     "Y si lo que quiere es CUADRAR esa opción («cuádrala», «ajústala», "
+                     "«déjala clavada»), op='cuadrar' SOLA: reajusta las cantidades de lo "
+                     "que lleva y remata con una pieza si falta un macro. Componer otra "
+                     "opción distinta cuando te ha pedido cuadrar ESTA es cambiarle la "
+                     "comida por la espalda."),
      "parameters": {"type": "object", "properties": {
          "borrador_id": {"type": "string"},
          "operaciones": {"type": "array", "items": {"type": "object", "properties": {
-             "op": {"type": "string", "enum": ["sustituir", "quitar", "añadir", "ajustar"]},
+             "op": {"type": "string", "enum": ["sustituir", "quitar", "añadir", "ajustar", "cuadrar"]},
              "item_id": {"type": "integer"}, "por_id": {"type": "integer"},
              "alimento_id": {"type": "integer"},
              "cantidad": {"type": "number",

@@ -1563,7 +1563,8 @@ class AgentTools:
                                           fechas=fechas, juicios=juicios) == "pasa"
 
     async def _recuadrar_a_hoy(self, foods: List[dict], restante: dict,
-                               rematar: bool = True, exigente: bool = True):
+                               rematar: bool = True, exigente: bool = True,
+                               umbral_corto: float = None):
         """Recuadra un menu REAL al hueco de hoy. Devuelve los items, o None si no da.
 
         Tres pasos, y el porque de cada uno (14-08-2026, del repaso de Francisco):
@@ -1613,7 +1614,12 @@ class AgentTools:
             return {m: sum(i["macros"][m] for i in its) for m in ("P", "H", "G")}
 
         tot = _tot(items)
-        cortos = [m for m in ("P", "H", "G") if restante[m] - tot[m] > MARGEN_BORRADOR]
+        # `umbral_corto`: cuánto tiene que faltar para que merezca la pena rematar. Por
+        # defecto el margen ancho del borrador (12 g), que es el de las comidas recuperadas;
+        # «cuádrame esta opción» pide la vara fina de la comida, porque ahí el cliente ya ha
+        # pedido expresamente que se ajuste y 8 g de grasa de menos son un fallo, no un roce.
+        liston = MARGEN_BORRADOR if umbral_corto is None else float(umbral_corto)
+        cortos = [m for m in ("P", "H", "G") if restante[m] - tot[m] > liston]
         # `rematar=False`: cuando lo que hay son LOS ALIMENTOS QUE HA PEDIDO EL CLIENTE, no
         # se completa con nada. Él decide qué come; si falta, se le dice y él pide.
         if rematar and len(cortos) == 1 and len(por_nombre) <= 5:
@@ -1630,9 +1636,13 @@ class AgentTools:
                                                        restante, _exacto, forzar=True))
                     if nuevo:
                         items, tot = nuevo, _tot(nuevo)
-                    else:
-                        por_nombre.pop(f2["nombre"], None)
-                    break
+                        break
+                    # Y SI ESE NO ENTRA, SE PRUEBA EL SIGUIENTE (16-08-2026). Aquí había un
+                    # `break` incondicional: si el primer candidato no cuadraba, el remate se
+                    # rendía y la comida se quedaba corta con dos candidatos más esperando.
+                    # Salió al pedir «cuádrame esta opción» con 8 g de grasa de menos: no
+                    # añadía nada y devolvía la misma comida como si la hubiera ajustado.
+                    por_nombre.pop(f2["nombre"], None)
             except Exception:
                 pass
 
@@ -3083,6 +3093,57 @@ class AgentTools:
         del_cliente: Dict[int, float] = {int(k): float(v)
                                          for k, v in (b.get("gramos_fijados") or {}).items()}
         fijas: Dict[int, float] = dict(del_cliente)
+        # CUADRAR ESTA OPCIÓN ES TOCAR ESTA OPCIÓN (16-08-2026, probando con la cuenta de
+        # Francisco). A una opción que se quedaba 4 g corta de grasa le dijo «sí, cuádrala»
+        # y el asistente montó OTRA distinta: perdió el pan, cambió a queso y yogur de
+        # chocolate, y acabó faltándole 9,5 g de hidratos. Cuadrar no es volver a empezar.
+        #
+        # Va antes que el resto de operaciones porque no cambia piezas: reajusta las
+        # cantidades de las que hay con el mismo motor del compositor, y si un macro se
+        # queda corto remata con UNA pieza, igual que al componer. Los gramos que dijo el
+        # cliente siguen intocables.
+        if any((o.get("op") or "").strip().lower() == "cuadrar" for o in (operaciones or [])):
+            objetivo_cuadre = b.get("objetivo") or self.bot.get_remaining_macros()
+            foods_actuales = [self.foods[i] for i in ids if i in self.foods]
+            _desvio_de = lambda its: sum(
+                abs(sum(i["macros"][m] for i in its) - float(objetivo_cuadre.get(m, 0) or 0))
+                for m in ("P", "H", "G"))
+            antes_desv = _desvio_de(b["items"])
+            # Rematar con una pieza SOLO si de verdad falta un macro. Sin esta condición,
+            # «cuádrala» sobre una opción que ya cuadraba metía un queso batido y tiraba el
+            # pan: los hidratos pasaban de clavados a 17 g por debajo. Cuadrar lo cuadrado
+            # es no tocarlo.
+            falta_algo = any(float(objetivo_cuadre.get(m, 0) or 0)
+                             - sum(i["macros"][m] for i in b["items"])
+                             > self.bot.margen_de(objetivo_cuadre.get(m, 0))
+                             for m in ("P", "H", "G"))
+            recuadrado = await self._recuadrar_a_hoy(
+                foods_actuales, objetivo_cuadre, rematar=falta_algo, exigente=False,
+                umbral_corto=min(self.bot.margen_de(objetivo_cuadre.get(m, 0))
+                                 for m in ("P", "H", "G")))
+            # Y NUNCA PEOR DE COMO ESTABA. Si el recuadre no mejora, se deja lo que había y
+            # se dice: es más honesto que devolverle una comida peor con cara de arreglo.
+            if recuadrado and _desvio_de(recuadrado) > antes_desv + 0.5:
+                recuadrado = None
+            if not recuadrado:
+                return {"ok": False, "error": ("esa opción ya está todo lo cuadrada que "
+                                               "puede estar con lo que lleva: tocarla la "
+                                               "empeora. Dile cómo queda y, si quiere más "
+                                               "ajuste, que diga qué pieza cambia.")}
+            for it in recuadrado:
+                if int(it["id"]) in del_cliente:      # sus gramos no se tocan
+                    it["cantidad_g"] = del_cliente[int(it["id"])]
+            b["items"] = recuadrado
+            tot_c = {m: round(sum(i["macros"][m] for i in recuadrado), 1) for m in ("P", "H", "G")}
+            b["macros_totales"] = tot_c
+            b["desvio"] = {m: round(tot_c[m] - float(objetivo_cuadre.get(m, 0) or 0), 1)
+                           for m in ("P", "H", "G")}
+            b.pop("avisos", None)
+            b.pop("no_aplicable", None)
+            return {"ok": True, "borrador": b,
+                    "nota": ("Es la MISMA opción con las cantidades cuadradas, no otra "
+                             "distinta. Dile qué ha cambiado en una línea.")}
+
         for op in operaciones or []:
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
             if tipo == "quitar" and int(op.get("item_id", 0)) in ids:
