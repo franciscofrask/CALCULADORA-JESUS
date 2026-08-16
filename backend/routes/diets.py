@@ -6,11 +6,13 @@ from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
 from typing import Optional
 import calendar
+import logging
 import uuid
 
 from core.database import db
 from core.security import get_current_user
 from calma_suggest import macros_reales
+from macro_distribution import objetivo_de_las_comidas
 from pdf_generator import generate_diet_pdf
 
 router = APIRouter(prefix="/diets", tags=["diets"])
@@ -512,6 +514,62 @@ async def _adjuntar_urls(diet: dict) -> None:
                 pass  # un alimento raro no puede tumbar la carga del dia
 
 
+async def _objetivo_comidas_del_dia(fecha: str, diet: Optional[dict], user: dict) -> Optional[dict]:
+    """EL OBJETIVO DEL DÍA, RESUELTO AQUÍ Y PARA TODOS.
+
+    Nutrición no enseña `macros_snapshot.P_total`: enseña ese total menos el perientreno, que
+    lleva su cuenta aparte, y lo saca del reparto VIVO de ese día (`/calculator/distribute`),
+    no del snapshot guardado -- que puede ser de cuando el día era de entreno y ahora es de
+    descanso. Inicio tiraba del snapshot a secas y por eso las dos pantallas decían cosas
+    distintas del mismo día: 235 arriba, 225 en Nutrición.
+
+    Se resuelve en el servidor para que haya UNA sola forma de calcularlo. La configuración
+    es la del día si está guardada y, si no, la que el cliente tiene puesta -- la misma
+    precedencia que aplica Nutrición al abrir la pantalla.
+
+    Devuelve None si no se puede saber (cliente sin macros, perfil a medias): un objetivo
+    inventado es peor que no dar ninguno, y quien lo pinta ya sabe vivir sin él.
+    """
+    from routes.calculator import distribute_macros
+
+    if diet:
+        config = {
+            "tipo_dia": diet.get("tipo_dia") or "entrenamiento",
+            "num_comidas": diet.get("num_comidas") or 4,
+            # `?? 1` y no `or 1`: el 0 es "en ayunas" y es una respuesta, no un vacío.
+            "momento_entreno": diet.get("momento_entreno") if diet.get("momento_entreno") is not None else 1,
+            "opcion_peri": diet.get("opcion_peri") or "intra_post",
+        }
+    else:
+        perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+        num_comidas = perfil.get("diet_num_comidas")
+        if num_comidas is None:
+            num_comidas = 1 if perfil.get("single_meal_mode") else 4
+        config = {
+            # Sin día guardado, el tipo de día todavía no lo ha dicho nadie: Nutrición abre
+            # en entreno (y marca el selector para que lo diga), y aquí se hace igual.
+            "tipo_dia": "entrenamiento",
+            "num_comidas": num_comidas,
+            "momento_entreno": perfil.get("diet_momento_entreno", 1),
+            "opcion_peri": perfil.get("diet_opcion_peri") or "intra_post",
+        }
+
+    try:
+        reparto = await distribute_macros({
+            "fecha": fecha,
+            **config,
+            "single_meal": config["num_comidas"] == 1,
+        }, user)
+    except HTTPException:
+        return None                      # sin macros asignados todavía
+    except Exception as e:               # noqa: BLE001 - el día se sirve igual
+        logging.getLogger("uvicorn.error").warning(
+            "no se pudo resolver el objetivo del día %s: %s", fecha, e)
+        return None
+
+    return objetivo_de_las_comidas(reparto)
+
+
 @router.get("/{fecha}")
 async def get_diet(fecha: str, user = Depends(get_current_user)):
     """Obtener la dieta guardada para una fecha."""
@@ -519,11 +577,16 @@ async def get_diet(fecha: str, user = Depends(get_current_user)):
         {"user_id": user["id"], "fecha": fecha},
         {"_id": 0}
     )
+    # `objetivo_comidas` viaja siempre, haya día guardado o no: es lo que tiene que enseñar
+    # cualquier pantalla que hable de los macros de ese día (Inicio, T1).
+    objetivo = await _objetivo_comidas_del_dia(fecha, diet, user)
+
     if not diet:
-        return {"fecha": fecha, "exists": False}
+        return {"fecha": fecha, "exists": False, "objetivo_comidas": objetivo}
 
     await _adjuntar_urls(diet)
     diet["exists"] = True
+    diet["objetivo_comidas"] = objetivo
     return diet
 
 @router.post("/copy")

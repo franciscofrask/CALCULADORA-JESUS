@@ -6,8 +6,35 @@
  */
 import { MARGEN } from './exceso';
 import {
-    ESTADO, estadoMacro, estadoDelDia, faltanDe, porcentajeMacro, varianteDelDia,
+    ESTADO, estadoMacro, estadoDelDia, objetivoDelDia,
+    faltanDe, porcentajeMacro, varianteDelDia,
 } from './estadoMacros';
+
+describe('el objetivo del dia', () => {
+    test('es el que resuelve el servidor, el mismo que ve en Nutricion', () => {
+        // El caso del fallo: el total del dia era 235,1 y las comidas piden 225.
+        expect(objetivoDelDia({ P: 225, H: 170, G: 60 })).toEqual({ P: 225, H: 170, G: 60 });
+    });
+
+    test('SIN SEGUNDA FUENTE: si el servidor no lo dice, no hay objetivo', () => {
+        // Aqui estaba el numero que bailaba: mientras no llegaba la dieta se pintaban los
+        // macros crudos (190) y luego el bueno (225), en la misma pantalla y el mismo dia.
+        expect(objetivoDelDia(null)).toBe(null);
+        expect(objetivoDelDia(undefined)).toBe(null);
+        expect(objetivoDelDia({ P: 0, H: 0, G: 0 })).toBe(null);
+    });
+
+    test('el objetivo no depende de que mas haya llegado', () => {
+        // Da igual el orden en que respondan las peticiones de Inicio: el objetivo sale de
+        // un solo sitio, asi que dos lecturas del mismo dia dan el mismo numero.
+        const delServidor = { P: 225, H: 170, G: 60 };
+        const primeraLectura = objetivoDelDia(delServidor);
+        const segundaLectura = objetivoDelDia(delServidor);
+        expect(primeraLectura).toEqual(segundaLectura);
+        // Y no hay ningun otro argumento que lo pueda cambiar.
+        expect(objetivoDelDia.length).toBe(1);
+    });
+});
 
 describe('el estado de un macro', () => {
     test('clavado es cuadrado', () => {

@@ -538,6 +538,36 @@ def distribuir_macros(
     }
 
 
+def objetivo_de_las_comidas(distribucion: Optional[Dict]) -> Dict[str, float]:
+    """
+    EL OBJETIVO QUE VE EL CLIENTE: el del día MENOS el perientreno.
+
+    El perientreno lleva su cuenta aparte, así que el objetivo de las COMIDAS no es
+    `resumen.P_total`: es lo que queda al quitarle el intra y el post. Es lo mismo que suma
+    `comidas`, y es lo que enseña la cabecera de Nutrición ("Te queda por comer ... de 225").
+
+    Y no vale usar `P_entreno`: en `sin_peri` (y en parte de `solo_intra`) el presupuesto de
+    perientreno se reparte ENTRE LAS COMIDAS, así que los objetivos por comida suman más que
+    los macros de entreno.
+
+    Está aquí, al lado del reparto, porque esta resta se hacía en la cabecera de Nutrición y
+    en ningún sitio más: Inicio tiraba de `P_total` a secas y por eso las dos pantallas
+    enseñaban objetivos distintos para el MISMO día (235 en Inicio, 225 en Nutrición, los
+    10 g del peri repartido). Una sola forma de calcularlo, y las dos pantallas dicen lo
+    mismo. La grasa no cambia: el objetivo del peri no lleva grasa.
+    """
+    d = distribucion or {}
+    resumen = d.get("resumen") or {}
+    peri = d.get("periworkout") or {}
+    p_peri = sum(float((v or {}).get("P") or 0) for v in peri.values())
+    h_peri = sum(float((v or {}).get("H") or 0) for v in peri.values())
+    return {
+        "P": round(float(resumen.get("P_total") or 0) - p_peri, 1),
+        "H": round(float(resumen.get("H_total") or 0) - h_peri, 1),
+        "G": round(float(resumen.get("G_total") or 0), 1),
+    }
+
+
 # =====================================================
 # TESTS DE VERIFICACIÓN
 # =====================================================
