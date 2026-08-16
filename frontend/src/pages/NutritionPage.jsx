@@ -450,10 +450,19 @@ const NutritionPage = () => {
     // que dice algo.
     const [loMontoSuCoach, setLoMontoSuCoach] = useState(null);
 
+    // La versión del día con la que trabaja esta pestaña (ver `loadDiet`).
+    const versionDiaRef = useRef(null);
+    const loadDietRef = useRef(null);
+
     // Load saved diet - returns { targets, config } where config has the diet's day values
     const loadDiet = useCallback(async (date) => {
         try {
             const diet = await api(`/api/diets/${date}`);
+            // CON QUÉ VERSIÓN DEL DÍA EMPEZAMOS. Viaja en cada guardado para que el
+            // servidor sepa si esta pantalla va con una copia vieja: con el mismo día
+            // abierto en dos sitios, el segundo en guardar devolvía su versión de antes y
+            // borraba lo del otro sin que nadie se enterara (16-08-2026).
+            versionDiaRef.current = diet?.updated_at || null;
             if (diet.exists) {
                 const dietConfig = {
                     tipoDia: diet.tipo_dia || 'entrenamiento',
@@ -573,7 +582,22 @@ const NutritionPage = () => {
         setGuardadoEstado('guardando');
         try {
             if (hasFood) {
-                await api('/api/diets', { method: 'POST', body: JSON.stringify({ fecha: date, ...snap }) });
+                const res = await api('/api/diets', {
+                    method: 'POST',
+                    body: JSON.stringify({ fecha: date, ...snap,
+                                           base_updated_at: versionDiaRef.current }),
+                });
+                // La versión con la que seguimos trabajando es la que acaba de escribir el
+                // servidor; sin esto, el siguiente autoguardado chocaría contra sí mismo.
+                if (res?.updated_at) versionDiaRef.current = res.updated_at;
+                if ((res?.conflictos || []).length) {
+                    // Esa comida la tocaron en otro sitio después de que cargáramos: se ha
+                    // respetado la de allí y aquí se recarga para no seguir con una copia
+                    // vieja que la volvería a pisar en el siguiente guardado.
+                    setGuardadoEstado('guardado');
+                    await loadDietRef.current?.(date);
+                    return true;
+                }
                 teniaAlimentosRef.current = true;
                 // A partir de este guardado el día lleva su firma, no la de su entrenador: el
                 // aviso tiene que irse o estaría diciendo que lo montó otro.
@@ -758,6 +782,9 @@ const NutritionPage = () => {
     // unstable `api` would re-fire the cleanup on every render and save constantly.
     const autoSaveDietRef = useRef(autoSaveDiet);
     autoSaveDietRef.current = autoSaveDiet;
+    // `loadDiet` se declara más arriba pero el autoguardado necesita llamarla cuando otra
+    // pantalla ha tocado el día; por el ref no hay que reordenar medio fichero.
+    loadDietRef.current = loadDiet;
     useEffect(() => {
         const dateLeaving = currentDate;
         return () => {
@@ -1536,7 +1563,7 @@ const NutritionPage = () => {
     // Save & Copy
     const saveDiet = async () => {
         try {
-            await api('/api/diets', {
+            const res = await api('/api/diets', {
                 method: 'POST',
                 body: JSON.stringify({
                     fecha: currentDate,
@@ -1549,8 +1576,19 @@ const NutritionPage = () => {
                     distribution_targets: distribTargetsOverlay || null,
                     is_cuadrado: getDayStatus() === 'cuadrado',
                     comida_volcada: volcadoMeal,
+                    base_updated_at: versionDiaRef.current,
                 })
             });
+            // Alguna comida se tocó por otro lado mientras esta pantalla la tenía abierta:
+            // esa se ha respetado, y aquí se recarga para enseñar lo que hay de verdad.
+            const chocaron = res?.conflictos || [];
+            if (chocaron.length) {
+                const nombres = chocaron.map(k => mealInfo[k]?.name || k).join(' y ');
+                toast(`${nombres} se había cambiado en otro sitio, así que dejé lo más `
+                    + `reciente. Te lo recargo.`, { icon: '🔄' });
+                await loadDiet(currentDate);
+                return;
+            }
             toast.success('Dieta guardada');
         } catch (err) { toast.error('Error guardando dieta'); }
     };

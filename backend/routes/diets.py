@@ -99,12 +99,43 @@ async def upsert_diet_doc(user_id: str, data: dict, quien: Optional[dict] = None
     # que se sale del reparto nuevo: si mañana vuelve a cuatro comidas, su comida sigue ahí.
     #
     # `comidas_completas=true` para quien de verdad quiera reemplazar el día entero.
+    conflictos = []
     if not data.get("comidas_completas"):
         previo = await db.diets.find_one({"user_id": user_id, "fecha": fecha},
-                                         {"_id": 0, "comidas": 1, "macros_snapshot": 1})
+                                         {"_id": 0, "comidas": 1, "macros_snapshot": 1,
+                                          "updated_at": 1})
         anteriores = (previo or {}).get("comidas") or {}
+        entrantes = dict(diet_doc.get("comidas") or {})
+
+        # Y LA PESTAÑA VIEJA TAMPOCO PISA CON SU COPIA DE ANTES (16-08-2026).
+        #
+        # Fusionar salva lo que la pantalla no tiene delante, pero no lo que sí tiene: con el
+        # mismo día abierto en el móvil y en el ordenador, el segundo que guardaba devolvía su
+        # versión antigua de esa comida y borraba el trabajo del otro. Nadie se enteraba.
+        #
+        # Cada comida se sella con la hora en que se escribió. Quien guarda dice con qué
+        # versión del día empezó (`base_updated_at`, la que le devolvió el servidor al
+        # cargar); si una comida se tocó DESPUÉS de eso en otro sitio, la suya está vieja: se
+        # conserva la del servidor y se devuelve en `conflictos` para que la pantalla lo diga
+        # y recargue. Sin `base_updated_at` -- clientes viejos -- todo sigue como estaba.
+        base = str(data.get("base_updated_at") or "")
+        if base and anteriores:
+            for k, comida_previa in anteriores.items():
+                if k not in entrantes:
+                    continue
+                sello = str((comida_previa or {}).get("_ts")
+                            or (previo or {}).get("updated_at") or "")
+                if sello and sello > base:
+                    entrantes[k] = comida_previa
+                    conflictos.append(k)
+        ahora_iso = diet_doc["updated_at"]
+        for k, comida in entrantes.items():
+            if isinstance(comida, dict) and k not in conflictos:
+                comida["_ts"] = ahora_iso
         if anteriores:
-            diet_doc["comidas"] = {**anteriores, **(diet_doc.get("comidas") or {})}
+            diet_doc["comidas"] = {**anteriores, **entrantes}
+        else:
+            diet_doc["comidas"] = entrantes
         # EL TOTAL DEL DÍA NO SE PIERDE PORQUE GUARDE EL CHAT. Nutrición escribe aquí el
         # reparto ya sumado (`P_total`...) y el chat escribe los macros crudos del cliente,
         # que es otra cosa con otras claves. Quien lee el total -- Inicio, para enseñar el
@@ -120,6 +151,10 @@ async def upsert_diet_doc(user_id: str, data: dict, quien: Optional[dict] = None
         {"$set": diet_doc},
         upsert=True
     )
+    if conflictos:
+        # No es un error: se ha guardado todo lo demás. Es lo que la pantalla tiene que
+        # contar y recargar, para que el cliente no crea que puso algo que no está.
+        return {**diet_doc, "conflictos": conflictos}
     return diet_doc
 
 
@@ -143,9 +178,16 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
         )
         return {"message": "Targets actualizados", "fecha": fecha}
 
-    await upsert_diet_doc(user["id"], data, quien=user)
+    guardado = await upsert_diet_doc(user["id"], data, quien=user)
 
-    return {"message": "Dieta guardada", "fecha": fecha}
+    # `updated_at` vuelve siempre: es la versión con la que la pantalla se queda trabajando
+    # a partir de ahora (si no, su siguiente guardado chocaría contra el suyo propio).
+    salida = {"message": "Dieta guardada", "fecha": fecha,
+              "updated_at": (guardado or {}).get("updated_at")}
+    conflictos = (guardado or {}).get("conflictos") or []
+    if conflictos:
+        salida["conflictos"] = conflictos
+    return salida
 
 
 # ── Dietas favoritas (Calma guardarFavorita / favoritas) - plantillas de día con NOMBRE ──

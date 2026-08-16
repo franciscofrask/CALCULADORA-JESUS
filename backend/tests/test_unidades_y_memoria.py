@@ -106,6 +106,36 @@ def test_guardar_el_dia_no_borra_las_comidas_que_no_vienen():
     assert doc["comidas"]["C4"]["alimentos"][0]["nombre"] == "Caballa"
 
 
+def test_una_pantalla_vieja_no_pisa_lo_que_toco_la_otra():
+    """El mismo día abierto en dos sitios: el segundo en guardar no borra lo del primero."""
+    async def _probar():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        import routes.diets as rd
+        db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+        rd.db = db
+        uid, fecha = "test_qa_dos_pestanas", "2026-08-20"
+        await db.diets.delete_many({"user_id": uid, "fecha": fecha})
+        # Las dos pantallas cargan el día tal y como está.
+        primero = await rd.upsert_diet_doc(uid, {"fecha": fecha, "comidas": {
+            "C1": {"alimentos": [{"nombre": "Pollo", "cantidad_g": 100}]}}})
+        version_de_ambas = primero["updated_at"]
+        # La pestaña A cambia la Comida 1.
+        await rd.upsert_diet_doc(uid, {"fecha": fecha, "base_updated_at": version_de_ambas,
+                                       "comidas": {"C1": {"alimentos": [
+                                           {"nombre": "Merluza", "cantidad_g": 150}]}}})
+        # La pestaña B, que sigue con la versión de antes, guarda su copia vieja.
+        r = await rd.upsert_diet_doc(uid, {"fecha": fecha, "base_updated_at": version_de_ambas,
+                                           "comidas": {"C1": {"alimentos": [
+                                               {"nombre": "Pollo", "cantidad_g": 100}]}}})
+        doc = await db.diets.find_one({"user_id": uid, "fecha": fecha}, {"_id": 0})
+        await db.diets.delete_many({"user_id": uid, "fecha": fecha})
+        return r, doc
+    r, doc = correr(_probar())
+    assert r.get("conflictos") == ["C1"], r.get("conflictos")
+    assert doc["comidas"]["C1"]["alimentos"][0]["nombre"] == "Merluza", \
+        "la pestaña vieja ha pisado el cambio de la otra"
+
+
 def test_vaciar_una_comida_sigue_vaciandola():
     async def _probar():
         from motor.motor_asyncio import AsyncIOMotorClient
