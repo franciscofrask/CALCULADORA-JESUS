@@ -48,6 +48,11 @@ async def _componer(nombres, comida="2"):
                   if (x.get("nombre") or "").lower() == n.lower()), None)
         assert f, f"'{n}' no está en el catálogo de pruebas"
         ids.append(int(f["id"]))
+    # Lo que el cliente ha escrito, que es lo que convierte esto en «lo que pide él»: desde
+    # el 16-08 la regla solo se aplica a los alimentos que salen de SUS palabras, porque el
+    # modelo se puso a meter en `incluir_ids` alimentos elegidos por su cuenta y la comida
+    # salía siendo solo eso (dos aceites como desayuno entero).
+    bot.mensaje_en_curso = "ponme " + ", ".join(nombres)
     return await tools.componer_menu(incluir_ids=ids, n=3), set(ids)
 
 
@@ -135,3 +140,33 @@ class TestLosGramosQueDiceElCliente:
         assert not perdidos, f"se llevó por delante ingredientes que él no quitó: {perdidos}"
         # Y como los gramos los ha puesto él, la opción no se le bloquea al elegirla.
         assert b2.get("solo_lo_pedido"), "se le bloquearía al aplicarla"
+
+
+def test_lo_que_elige_el_modelo_no_es_lo_que_pide_el_cliente():
+    """«Añádele algo de grasa» no puede acabar en una comida de dos aceites y nada más.
+
+    Francisco, 16-08-2026, en producción: pidió la opción anterior «con algo de grasa», el
+    modelo eligió por su cuenta aceite de coco y aceite de oliva, los pasó como si fueran
+    suyos, y salió un desayuno de 0 g de proteína, 0 de hidratos y 10 de grasa con su botón
+    de aplicar. La regla de «solo lo que pides» es para respetar al cliente, no para que el
+    modelo se salte el compositor.
+    """
+    async def _probar():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        from chatbot import NutritionChatbot
+        from agent_tools import AgentTools
+        db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+        bot = NutritionChatbot("test_no_lo_pidio_el", db)
+        bot.set_user_macros(dict(MACROS))
+        bot.configure_day("entrenamiento", 4, momento_entreno=1, opcion_peri="solo_post")
+        tools = await AgentTools.crear(bot)
+        aceite = next((f for f in tools.foods.values()
+                       if (f.get("nombre") or "").startswith("Aceite de coco")), None)
+        assert aceite, "no hay aceite de coco en el catálogo de pruebas"
+        bot.mensaje_en_curso = "la anterior con algo de grasa"
+        return await tools.componer_menu(incluir_ids=[int(aceite["id"])])
+    r = correr(_probar())
+    b = (r.get("borradores") or [None])[0]
+    assert b, r.get("sin_resultados_porque")
+    assert len(b["items"]) > 1, [i["nombre"] for i in b["items"]]
+    assert b["macros_totales"]["P"] > 10, b["macros_totales"]

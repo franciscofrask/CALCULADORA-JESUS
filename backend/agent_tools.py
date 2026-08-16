@@ -66,6 +66,17 @@ def _sin_tildes(t: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", (t or "").lower())
                    if unicodedata.category(c) != "Mn")
 
+
+def _como_lo_llamaria(alimento: dict) -> List[str]:
+    """Cómo llamaría una persona a ese alimento: «Pechuga de pollo» -> pechuga, pollo.
+
+    Sirve para saber si el cliente lo NOMBRÓ o lo eligió el modelo por su cuenta. Se
+    devuelven las dos primeras palabras con carga porque cualquiera de las dos vale: hay
+    quien dice «yogur» y quien dice «griego», y quien pide «pollo» y no «pechuga».
+    """
+    from meal_templates import palabras_con_carga
+    return palabras_con_carga((alimento or {}).get("nombre"))[:2]
+
 # El bote, detrás del plato a igualdad de distancia (punto 78 del documento del 07-08).
 # NO son categorías prohibidas: el cliente las busca y las mete cuando quiere, y en el intra
 # y el post son justo lo que toca. Es solo el desempate de las SUGERENCIAS en una comida
@@ -2023,6 +2034,24 @@ class AgentTools:
         # cliente decía «dale» y volvía a enseñar una pieza suelta y a ofrecer lo mismo --
         # el bucle de siempre, ahora provocado por la regla nueva. Con `completar` los suyos
         # entran fijos y el resto se compone alrededor, que es lo que acaba de aceptar.
+        # PERO «LO PEDIDO» ES LO QUE PIDE ÉL, NO LO QUE ELIGE EL MODELO (16-08-2026).
+        #
+        # Probando con la cuenta de Francisco: pidió «la anterior con algo de grasa», el
+        # modelo eligió por su cuenta aceite de coco y aceite de oliva, los metió en
+        # `incluir_ids`, y esta puerta montó una COMIDA ENTERA de dos aceites -- 0 P, 0 H,
+        # 10 G -- en el desayuno, con su botón de aplicar y todo. La regla de «solo lo que
+        # pides» es para respetar al cliente, no para que el modelo se salte el compositor.
+        #
+        # Así que se comprueba lo mismo que ya se comprueba con el estilo y con las marcas:
+        # que el alimento salga de SUS palabras. Si no lo nombró, esos alimentos entran como
+        # semilla y la comida se compone alrededor (que es lo que él pidió: «con algo de
+        # grasa»), en vez de servirle la semilla sola.
+        if incluir_ids and not completar:
+            suyos_de_verdad = [i for i in incluir_ids
+                               if any(self._lo_dijo_el_cliente(p)
+                                      for p in _como_lo_llamaria(self.foods.get(i)))]
+            if not suyos_de_verdad:
+                completar = True
         if incluir_ids and not completar:
             suyos = [self.foods[i] for i in incluir_ids if i in self.foods]
             items = await self._recuadrar_a_hoy(suyos, restante, rematar=False, exigente=False)
