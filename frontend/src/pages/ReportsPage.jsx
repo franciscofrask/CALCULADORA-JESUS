@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import GraficaDePeso from '../components/GraficaDePeso';
 import {
     FileText, TrendingUp, Scale, Ruler,
     Activity, Moon, Zap, Brain, Send, ChevronRight, ChevronLeft,
-    Calendar, ClipboardCheck, History
+    Calendar
 } from 'lucide-react';
 import InformeMensual from '../components/reports/InformeMensual';
+import EvolucionMedidas from '../components/EvolucionMedidas';
+import ComparativaCliente from '../components/ComparativaCliente';
+import Diario from '../components/Diario';
 import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import TresFotos from '../components/reports/TresFotos';
 import { verComo } from '../lib/modoRevision';
@@ -110,15 +112,16 @@ const WindowBanner = ({ w }) => {
  * calcula hoy, y la revisión mensual en seis pasos (pantallas 22 a 24) es otra pantalla.
  * Aquí cada tarjeta lleva a lo que ya existe.
  */
-const TarjetaSeguimiento = ({ cuando, titulo, sub, cta, onClick, tono = 'gris', testid }) => {
+const TarjetaSeguimiento = ({ cuando, titulo, sub, extra, cta, onClick, tono = 'gris', testid }) => {
     const destacada = tono === 'ahora';
     return (
         <button onClick={onClick} data-testid={testid}
             className={`w-full text-left rounded-2xl p-4 border transition-colors ${
                 destacada ? 'border-brand/50 bg-brand/5 hover:bg-brand/10' : 'border-border bg-card hover:border-foreground/20'}`}>
-            <p className={`text-xs font-bold uppercase tracking-wider ${destacada ? 'text-brand' : 'text-muted-foreground'}`}>{cuando}</p>
-            <p className="text-lg font-bold text-foreground mt-1">{titulo}</p>
+            {cuando && <p className={`text-xs font-bold uppercase tracking-wider ${destacada ? 'text-brand' : 'text-muted-foreground'}`}>{cuando}</p>}
+            <p className={`text-lg font-bold text-foreground ${cuando ? 'mt-1' : ''}`}>{titulo}</p>
             {sub && <p className="text-[15px] text-muted-foreground mt-0.5">{sub}</p>}
+            {extra && <p className="text-[13px] text-muted-foreground mt-1">{extra}</p>}
             {cta && (
                 <span className={`inline-flex items-center gap-1 mt-3 text-sm font-bold ${destacada ? 'text-brand' : 'text-foreground/70'}`}>
                     {cta} <ChevronRight className="w-4 h-4" />
@@ -128,7 +131,51 @@ const TarjetaSeguimiento = ({ cuando, titulo, sub, cta, onClick, tono = 'gris', 
     );
 };
 
-const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial, onCheckins }) => {
+// Una de las TRES puertas de Seguimiento: Reportes, Evolución y Diario. Sin etiqueta de
+// "cuándo" porque están siempre: el título, lo que hay dentro y la flecha.
+const PuertaSeguimiento = ({ titulo, sub, onClick, testid }) => (
+    <button onClick={onClick} data-testid={testid}
+        className="w-full text-left rounded-2xl p-4 border border-border bg-card hover:border-foreground/20 transition-colors flex items-center gap-3">
+        <span className="flex-1 min-w-0">
+            <span className="block text-lg font-bold text-foreground">{titulo}</span>
+            <span className="block text-[15px] text-muted-foreground">{sub}</span>
+        </span>
+        <ChevronRight className="w-5 h-5 text-foreground/30 flex-shrink-0" />
+    </button>
+);
+
+// EL PLAZO, EN HORA DE ESPAÑA (regla 1 del doc 16-08). El servidor manda `closes_at` en
+// UTC y el cliente vive en España: "hasta el jueves 20 a las 20:00 h España" tiene que
+// decir la hora de allí aunque el teléfono esté puesto en otro huso. Se monta por partes
+// porque el formato de un tirón mete comas donde el doc no las tiene.
+const MADRID = 'Europe/Madrid';
+
+const _plazoEnEspana = (iso) => {
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d)) return null;
+    const partes = new Intl.DateTimeFormat('es-ES', {
+        timeZone: MADRID, weekday: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(d);
+    const p = (tipo) => partes.find(x => x.type === tipo)?.value || '';
+    return `${p('weekday')} ${p('day')} a las ${p('hour')}:${p('minute')} h España`;
+};
+
+const _diaMadrid = (d) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: MADRID, year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(d);
+
+// "te quedan 2 días": días de calendario en España, no horas. Es como lo cuenta el cliente.
+const _cuantoQueda = (iso) => {
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d)) return null;
+    const dias = Math.round(
+        (new Date(`${_diaMadrid(d)}T12:00:00Z`) - new Date(`${_diaMadrid(new Date())}T12:00:00Z`)) / 86400000);
+    if (dias <= 0) return 'hoy es el último día';
+    return dias === 1 ? 'te queda 1 día' : `te quedan ${dias} días`;
+};
+
+const PortadaSeguimiento = ({ windowState, vencido, conDiario, onRevision, onEvolucion, onHistorial, onDiario }) => {
     // Le toca reporte y no lo ha mandado: es lo único que va arriba y en naranja.
     // LA FECHA LÍMITE VA EN LA TARJETA: la ventana son cuatro días y sin fecha nadie sabe
     // cuánto margen tiene («hasta el jueves 15», Jesús 11-08). El servidor ya mandaba
@@ -140,87 +187,85 @@ const PortadaSeguimiento = ({ windowState, onRevision, onEvolucion, onHistorial,
     // formulario en gris con «se abre el viernes». Prometía algo que no se podía hacer, que
     // es de lo que se queja Jesús el 11-08 sobre esta pantalla. Con `is_open` la tarjeta
     // dice lo que hay: cuando abra, en naranja; hasta entonces, en gris y con la fecha.
-    // EL PERIODO ES EL DEL REPORTE QUE TOCA, NO SIEMPRE «ESTE MES» (14-08-2026).
     //
-    // Esta tarjeta ponía «Este mes» a pelo, tocara lo que tocara. Un cliente del Nivel 2 en la
-    // semana 2 leía «Este mes · te toca / Reporte quincenal»: dos periodos distintos en dos
-    // renglones seguidos, y la sensación de que la app se ha equivocado de cliente.
+    // TRES COSAS Y NADA MÁS (doc 16-08, T6): Reportes, Evolución y Diario. Los informes van
+    // DENTRO de Reportes, no como una cuarta cosa, y la tarjeta «¿Cómo vas hoy?» se cae de
+    // aquí: al cierre del día se entra desde Inicio.
     //
-    // Y lo de debajo igual: prometía «unas fotos, tus medidas y unas preguntas» siempre,
-    // cuando las medidas SOLO se piden en el mensual. En el quincenal se le anunciaba sacar la
-    // cinta métrica para luego no pedírsela.
+    // PASADA LA HORA, EL REPORTE DESAPARECE. Un reporte vencido en la portada es una puerta
+    // que no lleva a ningún sitio: el servidor lo rechaza fuera de plazo. Se cae de aquí
+    // igual que de Inicio, y en su lugar queda lo que sí puede hacer: lo siguiente.
     const proximo = windowState?.proximo;
-    const tipoDeAhora = (windowState?.tipos || [])[0];
-    const esMensualLaTarjeta = tipoDeAhora === 'mensual';
-    const periodo = { mensual: 'Este mes', quincenal: 'Esta quincena', semanal: 'Esta semana' }[tipoDeAhora]
-        || 'Este mes';
     const yaPuede = windowState?.is_open !== false;
-    const tocaRevision = !!windowState?.due && !windowState?.submitted && yaPuede;
     const yaMandado = !!windowState?.submitted;
+    const tocaRevision = !!windowState?.due && !yaMandado && yaPuede && !vencido;
     // Le toca este periodo pero la ventana todavía no ha abierto.
-    const aunNoAbre = !!windowState?.due && !windowState?.submitted && !yaPuede;
+    const aunNoAbre = !!windowState?.due && !yaMandado && !yaPuede && !vencido;
+    const hayReporteALaVista = tocaRevision || yaMandado || aunNoAbre;
+    // El plazo, en hora de España y con lo que queda: la ventana son unos días y sin fecha
+    // nadie sabe cuánto margen tiene (Jesús, 11-08).
+    const plazo = _plazoEnEspana(windowState?.closes_at);
+    const queda = _cuantoQueda(windowState?.closes_at);
+
     return (
         <div className="space-y-3" data-testid="portada-seguimiento">
-            <TarjetaSeguimiento
-                testid="seg-revision"
-                cuando={`${periodo} · ${tocaRevision ? 'te toca' : yaMandado ? 'hecho' : aunNoAbre ? 'aún no' : ''}`.trim().replace(/ ·$/, '')}
-                titulo={windowState?.tipo_label || 'Tu revisión'}
-                sub={tocaRevision
-                    ? `${esMensualLaTarjeta ? 'Unas fotos, tus medidas y unas preguntas' : 'Unas fotos y unas preguntas'}. Y tienes tus macros nuevos.${
-                        // `closes_label` trae «lunes 10 ago a las 6:00»: la hora sobra en una
-                        // tarjeta que solo tiene que decir cuánto margen queda.
-                        windowState?.closes_label ? ` Hasta el ${String(windowState.closes_label).split(' a las ')[0]}.` : ''}`
-                    : yaMandado
+            {hayReporteALaVista && (
+                <TarjetaSeguimiento
+                    testid="seg-revision"
+                    cuando={tocaRevision ? 'Esta semana · te toca' : yaMandado ? 'Esta semana · hecho' : 'Esta semana · aún no'}
+                    titulo={windowState?.tipo_label || 'Tu revisión'}
+                    sub={yaMandado
                         ? 'Ya lo mandaste. Lo estamos mirando.'
-                        : windowState?.opens_label
-                            ? `Todavía no toca. Se abre el ${windowState.opens_label}.`
-                            : proximo
-                                // SU CALENDARIO, NO SOLO EL DÍA DE HOY. La semana que no le
-                                // toca nada ponía «te avisamos cuando abra» y ya: el del
-                                // Nivel 2 en la semana 2 no tenía forma de saber que existe
-                                // un reporte mensual, ni cuándo le llega. Y el mensual pide
-                                // fotos y medidas, así que enterarse el mismo viernes es
-                                // enterarse tarde.
-                                ? `Lo próximo es tu ${proximo.tipo_label.toLowerCase()}, el ${proximo.abre_label}.`
-                                : 'Todavía no toca. Te avisamos cuando abra.'}
-                cta={tocaRevision ? 'Empezar' : 'Ver'}
-                tono={tocaRevision ? 'ahora' : 'gris'}
-                onClick={onRevision} />
+                        : 'Unas breves preguntas para ajustar tus macros si hace falta.'}
+                    extra={tocaRevision && plazo
+                        ? `Hasta el ${plazo}${queda ? ` · ${queda}` : ''}`
+                        : aunNoAbre && windowState?.opens_label
+                            ? `Se abre el ${windowState.opens_label}.`
+                            : null}
+                    cta={tocaRevision ? 'Empezar' : 'Ver'}
+                    tono={tocaRevision ? 'ahora' : 'gris'}
+                    onClick={onRevision} />
+            )}
 
             {/* Y detrás del que toca, el siguiente. Va pegada a su tarjeta porque habla de
                 ella. Con esto el cliente ve su calendario y no solo el día de hoy: el del
                 Nivel 2 sabe que después de este quincenal le llega el mensual, que es el que
                 pide fotos y medidas y con el que hay que contar antes. */}
-            {proximo && (tocaRevision || yaMandado) && (
+            {proximo && hayReporteALaVista && (
                 <p className="text-[13px] text-muted-foreground px-1 -mt-1" data-testid="seg-proximo">
                     Después de este: tu {proximo.tipo_label.toLowerCase()}, el {proximo.abre_label}.
                 </p>
             )}
 
-            <TarjetaSeguimiento
-                testid="seg-hoy"
-                cuando="Hoy · 10 segundos"
-                titulo="¿Cómo vas hoy?"
-                sub="Energía, hambre y qué has comido."
-                cta="Rellenar"
-                tono={tocaRevision ? 'gris' : 'ahora'}
-                onClick={onCheckins} />
+            {/* Sin reporte a la vista -- porque no toca o porque se pasó la hora -- lo que
+                queda es su calendario, para que la pantalla no calle sobre lo que viene. */}
+            {!hayReporteALaVista && proximo && (
+                <p className="text-[13px] text-muted-foreground px-1" data-testid="seg-proximo">
+                    Lo próximo es tu {proximo.tipo_label.toLowerCase()}, el {proximo.abre_label}.
+                </p>
+            )}
 
-            <TarjetaSeguimiento
+            <PuertaSeguimiento
+                testid="seg-historial"
+                titulo="Reportes"
+                sub="Los que mandaste y los informes que te di"
+                onClick={onHistorial} />
+
+            <PuertaSeguimiento
                 testid="seg-evolucion"
-                cuando="Siempre"
-                titulo="Mi evolución"
-                sub="Fotos, medidas, peso y gráficas."
-                cta="Ver"
+                titulo="Evolución"
+                sub="Tus fotos y tus métricas"
                 onClick={onEvolucion} />
 
-            <TarjetaSeguimiento
-                testid="seg-historial"
-                cuando="Siempre"
-                titulo="Lo que ya mandaste"
-                sub="Tus reportes anteriores y sus informes."
-                cta="Ver"
-                onClick={onHistorial} />
+            {/* El Diario solo se ofrece si su interruptor está encendido: una puerta que
+                lleva a un «todavía no está disponible» es peor que no estar. */}
+            {conDiario && (
+                <PuertaSeguimiento
+                    testid="seg-diario"
+                    titulo="Diario"
+                    sub="Tus notas, día a día"
+                    onClick={onDiario} />
+            )}
         </div>
     );
 };
@@ -277,7 +322,11 @@ const VENTANA_DE_MENTIRA = (tipo) => ({
 });
 
 const ReportsPage = () => {
-    const { api, token, profile, user } = useAuth();
+    const { api, token, profile, user, pantalla } = useAuth();
+    // La Evolución completa (medidas y comparativa) va detrás de su interruptor del panel
+    // (T6). Con él apagado se queda la gráfica de peso, que es lo que hay hoy en producción.
+    const evolucionCompleta = pantalla('t6_evolucion');
+    const diarioActivo = pantalla('t5_diario');
     const { confirm } = useConfirm();
     const revision = verComo(user);
     const tipoRevision = ['mensual', 'quincenal', 'semanal'].includes(revision) ? revision : null;
@@ -300,11 +349,15 @@ const ReportsPage = () => {
     // preguntas más, enviar y las tres fotos, tocara reporte o no. Y en gris, con un «la
     // ventana se cerró» encima: se le enseñaba todo lo que no podía hacer (Jesús, 11-08).
     // Es el mismo cliente y el mismo trámite, así que es la misma solución.
-    const navigate = useNavigate();
+
     // En modo revisión se entra directamente al formulario: es lo que se viene a mirar.
     const [seccionAbierta, setSeccionAbierta] = useState(tipoRevision ? 'form' : null);
     const vista = seccionAbierta;
     const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
+    // Si el plazo ya pasó. Lo dice el servidor en `items[].overdue` y no se calcula aquí:
+    // la hora buena es la suya, no la del reloj del teléfono. Pasada la hora, el reporte
+    // pendiente desaparece de esta pantalla (y de Inicio, que ya lo hacía).
+    const [vencido, setVencido] = useState(false);
     const [prev, setPrev] = useState(null);                 // último reporte (referencia de medidas)
     // Confirmación de huecos: lo que se le pregunta ANTES de rellenar, en vez de pedirle
     // que puntúe su propio cumplimiento (documento, parte 7.1).
@@ -364,6 +417,7 @@ const ReportsPage = () => {
             setHasMore(reportsRes.data.length === 50);
             setEvolution(evolutionRes.data);
             setWindowState(tipoRevision ? VENTANA_DE_MENTIRA(tipoRevision) : (dueRes.data?.window || null));
+            setVencido(!tipoRevision && (dueRes.data?.items || []).some(i => i.overdue));
             setPrev(prevRes.data && Object.keys(prevRes.data).length ? prevRes.data : null);
             setHuecos(huecosRes.data || null);
         } catch (error) {
@@ -449,7 +503,12 @@ const ReportsPage = () => {
                 duration: 8000,
             });
             fetchData();
-            setActiveTab('history');
+            // AL TERMINAR, EL HISTORIAL. Aquí ponía `setActiveTab('history')`, que era la
+            // función de las pestañas viejas: se quitaron con la portada y la llamada se
+            // quedó, así que enviar un reporte reventaba con un ReferenceError justo
+            // después de guardarlo bien (el cliente veía el error y creía que no se había
+            // enviado). Ahora se abre la sección, que es lo que hay.
+            setSeccionAbierta('history');
             setHuecosResp({});
             setReportData({
                 weight: '',
@@ -500,9 +559,10 @@ const ReportsPage = () => {
                     <h1 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.05em' }} data-testid="reports-heading">
                         SEGUIMIENTO
                     </h1>
-                    {/* «Seguimiento semanal» despistaba: lo de dentro es mensual, diario y de
-                        consulta, no semanal (Jesús, 11-08). */}
-                    <p className="text-xs text-foreground/30">Tus reportes, tus check-ins y tu evolución</p>
+                    {/* Lo que hay dentro, con sus nombres: reportes, evolución y diario. Las
+                        tres cosas del doc 16-08, ni una más -- los check-ins ya no viven
+                        aquí, y nombrarlos era prometer una puerta que ya no está. */}
+                    <p className="text-xs text-foreground/30">Tus reportes, tu evolución y tu diario</p>
                 </div>
             </div>
 
@@ -518,10 +578,12 @@ const ReportsPage = () => {
             {!seccionAbierta && (
                 <PortadaSeguimiento
                     windowState={windowState}
+                    vencido={vencido}
+                    conDiario={diarioActivo}
                     onRevision={() => setSeccionAbierta('form')}
                     onEvolucion={() => setSeccionAbierta('evolution')}
                     onHistorial={() => setSeccionAbierta('history')}
-                    onCheckins={() => navigate('/dashboard/checkins')}
+                    onDiario={() => setSeccionAbierta('diario')}
                 />
             )}
 
@@ -741,14 +803,23 @@ const ReportsPage = () => {
                 </form>
             )}
 
-            {/* ── EVOLUTION TAB ── */}
+            {/* ── EVOLUCIÓN ──
+                «Tus fotos y tus métricas». Hasta el doc 16-08 aquí solo estaba la gráfica de
+                peso: ni fotos, ni medidas, ni comparativa, cuando todo eso ya existía en la
+                ficha del panel. Ahora se enseña lo mismo que ve su entrenador, con los dos
+                cambios de T6: dos fotos por defecto y sin el % graso, que lo pone Jesús. */}
             {vista === 'evolution' && (
                 <div className="space-y-4">
+                    <div>
+                        <p className="text-lg font-bold text-foreground">Evolución</p>
+                        <p className="text-[15px] text-muted-foreground">Tus fotos y tus métricas</p>
+                    </div>
+
                     {weightData.length > 0 ? (
                         <div className="bg-card border border-border rounded-2xl p-4">
                             <div className="flex items-center gap-2 mb-4">
                                 <Scale className="w-4 h-4" style={{ color: ORANGE }} />
-                                <p className="text-sm font-bold text-foreground uppercase tracking-wider">Evolución del peso</p>
+                                <p className="text-sm font-bold text-foreground uppercase tracking-wider">Tu peso</p>
                             </div>
                             {/* La gráfica es la MISMA que ve su entrenador (punto 4.13). Aquí
                                 los ejes iban pintados de blanco a pelo, y esta tarjeta es
@@ -763,7 +834,29 @@ const ReportsPage = () => {
                             <p className="text-xs text-foreground/30">Envía tu primer reporte para ver tu progreso.</p>
                         </div>
                     )}
+
+                    {evolucionCompleta && (
+                        <>
+                            <ComparativaCliente api={api} reports={reports} faseDesde={profile?.fase_desde} />
+                            {/* La misma tabla que la ficha del panel, con el tono de la app del
+                                cliente: la diferencia con la toma anterior y la columna Total. */}
+                            <EvolucionMedidas reports={reports} />
+                        </>
+                    )}
                 </div>
+            )}
+
+            {/* ── EL DIARIO (T5) ──
+                Vive DENTRO de Seguimiento, no es una pestaña nueva del menú. Solo lectura:
+                aquí cae lo que ya escribió en el cierre del día y en sus entrenos. */}
+            {vista === 'diario' && (
+                diarioActivo ? (
+                    <Diario api={api} />
+                ) : (
+                    <div className="bg-card border border-border rounded-2xl p-8 text-center">
+                        <p className="text-sm text-muted-foreground">Tu diario todavía no está disponible.</p>
+                    </div>
+                )
             )}
 
             {/* ── HISTORY TAB ── */}
@@ -791,7 +884,7 @@ const ReportsPage = () => {
                                 <div className="mb-3">
                                     {cargandoInforme
                                         ? <p className="text-sm text-foreground/40 py-4 text-center">Montando tu informe...</p>
-                                        : <InformeMensual informe={informe} onPedirFotos={() => setActiveTab('form')} />}
+                                        : <InformeMensual informe={informe} onPedirFotos={() => setSeccionAbierta('form')} />}
                                 </div>
                             )}
                             {/* Con el informe abierto, estos dos sobran: el cumplimiento de

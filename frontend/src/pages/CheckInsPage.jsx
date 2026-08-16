@@ -1,20 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { MEDIDAS } from '../lib/medidas';
 import { useEsTelefono } from '../lib/esTelefono';
 import { revisarPeso, PESO_MIN, PESO_MAX } from '../lib/pesoValido';
 import { useConfirm } from '../components/ui/confirm';
 import { toast } from 'sonner';
 import {
-    Activity, TrendingUp, CheckCircle2, Smile, Frown, Meh,
-    Zap, Apple, Dumbbell, Scale, Send, ChevronDown, ChevronUp, Calendar,
+    Activity, CheckCircle2, Smile, Frown, Meh,
+    Zap, Apple, Dumbbell, Scale, Send,
     Camera, Trash2, Loader2, ChevronLeft,
 } from 'lucide-react';
 
 const ORANGE = '#FF671F';
 const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
-const labelCls = "block text-xs font-bold text-foreground/40 uppercase tracking-wider mb-1.5";
 
 // Aquí había una tarjeta con la etiqueta de riesgo del cliente ("Saludable" / "Atención" /
 // "En riesgo") y el motivo debajo. Se quitó el 07-08 (punto 6 del documento de Jesús): esa
@@ -55,13 +53,6 @@ const Card = ({ className = '', children }) => (
     <div className={`bg-card border border-border rounded-2xl ${className}`}>{children}</div>
 );
 
-const Field = ({ label, children }) => (
-    <div>
-        <label className={labelCls}>{label}</label>
-        {children}
-    </div>
-);
-
 const BoolPicker = ({ icon: Icon, label, value, onChange }) => (
     <div>
         <span className="text-sm text-foreground/70 mb-2 flex items-center gap-2">
@@ -84,24 +75,8 @@ const BoolPicker = ({ icon: Icon, label, value, onChange }) => (
     </div>
 );
 
-const Collapsible = ({ open, onToggle, icon: Icon, title, subtitle, children }) => (
-    <Card className="overflow-hidden">
-        <button type="button" onClick={onToggle}
-            className="w-full text-left flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center">
-                    <Icon className="w-4 h-4 text-brand" />
-                </div>
-                <div>
-                    <p className="font-bold text-foreground text-sm">{title}</p>
-                    <p className="text-xs text-foreground/50">{subtitle}</p>
-                </div>
-            </div>
-            {open ? <ChevronUp className="w-4 h-4 text-foreground/40" /> : <ChevronDown className="w-4 h-4 text-foreground/40" />}
-        </button>
-        {open && <div className="border-t border-border p-4 space-y-4">{children}</div>}
-    </Card>
-);
+// Aquí vivía `Collapsible`, la caja plegable del check-in semanal y del mensual. Los dos
+// formularios se caen con T11 del doc 16-08, así que la caja se va con ellos.
 
 // ── El cierre del día (T4 del doc 16-08) ─────────────────────────────────────
 //
@@ -475,15 +450,9 @@ const CheckInsPage = () => {
     const [checkins, setCheckins] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [openForm, setOpenForm] = useState(null);
-    // En el teléfono, el semanal y el mensual empiezan detrás de una línea (ver abajo).
     const enTelefono = useEsTelefono();
-    const [otrosAbiertos, setOtrosAbiertos] = useState(false);
 
     const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null });
-    const [weekly, setWeekly] = useState({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
-    const [monthly, setMonthly] = useState({ weight: '', body_fat_pct: '', goals_progress: '', challenges: '', notes: '',
-        ...Object.fromEntries(MEDIDAS.map(m => [m.key, ''])) });
 
     // Historial paginado: se muestran 12, "Cargar más" amplía y pide más al backend si hace falta
     const [histShown, setHistShown] = useState(12);
@@ -565,51 +534,6 @@ const CheckInsPage = () => {
         finally { setSubmitting(false); }
     };
 
-    const submitWeekly = async () => {
-        if (!weekly.weight) return toast.error('Indica tu peso');
-        if (!await pesoAceptado(weekly.weight)) return;
-        setSubmitting(true);
-        try {
-            await api.post('/checkins', {
-                type: 'weekly',
-                weight: parseFloat(weekly.weight),
-                training_compliance: weekly.training_compliance ? parseInt(weekly.training_compliance) : null,
-                nutrition_compliance: weekly.nutrition_compliance ? parseInt(weekly.nutrition_compliance) : null,
-                sleep_quality: weekly.sleep_quality ? parseInt(weekly.sleep_quality) : null,
-                stress_level: weekly.stress_level ? parseInt(weekly.stress_level) : null,
-                notes: weekly.notes || null,
-            });
-            toast.success('Check-in semanal enviado');
-            setWeekly({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
-            setOpenForm(null);
-            fetchAll();
-        } catch { toast.error('Error al enviar check-in semanal'); }
-        finally { setSubmitting(false); }
-    };
-
-    const submitMonthly = async () => {
-        if (!monthly.weight) return toast.error('Indica tu peso');
-        if (!await pesoAceptado(monthly.weight)) return;
-        setSubmitting(true);
-        try {
-            const measurements = {};
-            MEDIDAS.forEach(({ key }) => { if (monthly[key]) measurements[key] = parseFloat(monthly[key]); });
-            await api.post('/checkins', {
-                type: 'monthly',
-                weight: parseFloat(monthly.weight),
-                body_fat_pct: monthly.body_fat_pct ? parseFloat(monthly.body_fat_pct) : null,
-                measurements: Object.keys(measurements).length ? measurements : null,
-                goals_progress: monthly.goals_progress || null,
-                challenges: monthly.challenges || null,
-                notes: monthly.notes || null,
-            });
-            toast.success('Check-in mensual enviado');
-            setMonthly({ weight: '', body_fat_pct: '', chest: '', waist: '', hip: '', arm: '', thigh: '', goals_progress: '', challenges: '', notes: '' });
-            setOpenForm(null);
-            fetchAll();
-        } catch { toast.error('Error al enviar check-in mensual'); }
-        finally { setSubmitting(false); }
-    };
 
     if (loading) {
         return (
@@ -755,76 +679,14 @@ const CheckInsPage = () => {
                 </Card>
             )}
 
-            {/* EL SEMANAL Y EL MENSUAL, DETRÁS DE UNA LÍNEA EN EL TELÉFONO.
-                El documento del 10-08 los quita del todo: «desaparecen el check-in semanal y
-                el mensual como formularios sueltos; el peso se pide una vez, no tres; el
-                sueño y el estrés, una vez, no dos». Y tiene razón en el diagnóstico: lo que
-                piden está también en el reporte del mes.
-
-                Pero borrarlos es quitar dos formularios que hoy funcionan y a los que el
-                reporte solo llega cuando su ventana está abierta, así que aquí se DEMOTAN en
-                vez de borrarse: dejan de ocupar media pantalla y se abren desde una línea.
-                Si Francisco confirma que se van, es quitar este bloque.
-
-                En escritorio siguen los dos como estaban. */}
-            {enTelefono && !otrosAbiertos && (
-                <button onClick={() => setOtrosAbiertos(true)} data-testid="ver-otros-checkins"
-                    className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2">
-                    Ver el check-in semanal y el mensual
-                </button>
-            )}
-            <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${enTelefono && !otrosAbiertos ? 'hidden' : ''}`}>
-                <Collapsible open={openForm === 'weekly'} onToggle={() => setOpenForm(openForm === 'weekly' ? null : 'weekly')}
-                    icon={Calendar} title="Check-in semanal" subtitle="Peso + adherencia + sueño">
-                    <Field label="Peso (kg)">
-                        <input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} value={weekly.weight} onChange={e => setWeekly({ ...weekly, weight: e.target.value })} className={inputCls} />
-                    </Field>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Field label="Adherencia entreno (%)"><input type="number" min="0" max="100" value={weekly.training_compliance} onChange={e => setWeekly({ ...weekly, training_compliance: e.target.value })} className={inputCls} /></Field>
-                        <Field label="Adherencia nutri (%)"><input type="number" min="0" max="100" value={weekly.nutrition_compliance} onChange={e => setWeekly({ ...weekly, nutrition_compliance: e.target.value })} className={inputCls} /></Field>
-                        <Field label="Sueño (1-10)"><input type="number" min="1" max="10" value={weekly.sleep_quality} onChange={e => setWeekly({ ...weekly, sleep_quality: e.target.value })} className={inputCls} /></Field>
-                        <Field label="Estrés (1-10)"><input type="number" min="1" max="10" value={weekly.stress_level} onChange={e => setWeekly({ ...weekly, stress_level: e.target.value })} className={inputCls} /></Field>
-                    </div>
-                    <Field label="Notas"><textarea rows={2} value={weekly.notes} onChange={e => setWeekly({ ...weekly, notes: e.target.value })} className={inputCls} /></Field>
-                    <button onClick={submitWeekly} disabled={submitting} className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
-                        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar
-                    </button>
-                </Collapsible>
-
-                <Collapsible open={openForm === 'monthly'} onToggle={() => setOpenForm(openForm === 'monthly' ? null : 'monthly')}
-                    icon={TrendingUp} title="Check-in mensual" subtitle="Peso y medidas">
-                    {/* EL % GRASO NO SE PIDE TODOS LOS MESES (punto 53 del doc del 07-08).
-                        Aquí había un campo «% Grasa» que le salía al cliente cada mes. Es un
-                        dato que estima Jesús mirando las fotos, y solo en tres momentos: al
-                        principio, al empezar una fase y al acabarla. Pedírselo al cliente
-                        cada cuatro semanas lo convierte en ruido - nadie nota su cambio en un
-                        mes, así que repite el mismo número o pone uno al azar -, y ese ruido
-                        entra luego en el eje respondedor del perfil.
-                        Se anota desde la comparativa de fotos de su ficha, que es donde el
-                        coach lo está mirando. */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <Field label="Peso (kg)"><input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} value={monthly.weight} onChange={e => setMonthly({ ...monthly, weight: e.target.value })} className={inputCls} /></Field>
-                    </div>
-                    {/* Las MISMAS diez que en el reporte y en el punto de partida. Había
-                        tres listas distintas en la app y ninguna era la suya, así que la
-                        medida de un sitio no se podía comparar con la de otro. */}
-                    <span className="text-xs font-bold text-foreground/40 uppercase tracking-wider block">Medidas (cm)</span>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {MEDIDAS.map(({ key, label }) => (
-                            <Field key={key} label={label}>
-                                <input type="number" step="0.1" value={monthly[key] ?? ''}
-                                    onChange={e => setMonthly({ ...monthly, [key]: e.target.value })}
-                                    className={inputCls} />
-                            </Field>
-                        ))}
-                    </div>
-                    <Field label="Progreso hacia tus objetivos"><textarea rows={2} value={monthly.goals_progress} onChange={e => setMonthly({ ...monthly, goals_progress: e.target.value })} className={inputCls} /></Field>
-                    <Field label="Dificultades / retos"><textarea rows={2} value={monthly.challenges} onChange={e => setMonthly({ ...monthly, challenges: e.target.value })} className={inputCls} /></Field>
-                    <button onClick={submitMonthly} disabled={submitting} className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
-                        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar
-                    </button>
-                </Collapsible>
-            </div>
+            {/* AQUÍ ESTABAN EL CHECK-IN SEMANAL Y EL MENSUAL, y se caen (T11 del doc 16-08).
+                Lo que pedían vive ya en otro sitio: el peso, el sueño, el estrés y las notas
+                del semanal están en el cierre del día; el peso y las medidas del mensual, en
+                el reporte del mes. Eran tres puertas para el mismo dato y ninguna decía cuál
+                era la buena.
+                El backend los sigue aceptando por compatibilidad (`POST /checkins` con type
+                weekly o monthly): los que ya están guardados se siguen leyendo, y salen aquí
+                abajo en el historial. Lo que desaparece son los formularios. */}
 
             {/* LAS FOTOS NO PINTAN NADA AQUÍ.
                 Este bloque decía «se suben en tu reporte» y justo debajo «aún no has subido

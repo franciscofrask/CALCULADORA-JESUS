@@ -14,6 +14,7 @@
 import React from 'react';
 import { Camera, TrendingDown, TrendingUp, Minus, Check, AlertCircle, Lock, Users } from 'lucide-react';
 import { plural } from '../../lib/labels';
+import { TITULO_ETIQUETA } from '../../lib/comparativaFotos';
 
 const COLOR = {
     verde: 'text-emerald-500',
@@ -74,12 +75,8 @@ const Peso = ({ peso }) => {
 // La comparativa de fotos con etiquetas (documento del 05-08, punto 3.2). Cada foto
 // responde a algo: de dónde vengo · dónde empezó esta fase · qué he hecho este mes ·
 // cómo estoy hoy. Debajo, la fecha, el peso de ese día y las medidas de ese momento.
-const TITULO_ETIQUETA = {
-    inicial: 'De dónde vengo',
-    inicio_fase: 'Dónde empezó esta fase',
-    mes_anterior: 'Qué he hecho este mes',
-    actual: 'Cómo estoy hoy',
-};
+// Las etiquetas son las de `lib/comparativaFotos.js`, las mismas que el panel: aquí había
+// una copia y eran dos sitios donde cambiar el nombre de una foto (T6 del doc 16-08).
 const _fechaFoto = (f) => {
     if (!f) return '';
     const d = new Date(f + 'T12:00:00');

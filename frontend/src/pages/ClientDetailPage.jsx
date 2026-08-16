@@ -20,6 +20,7 @@ import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import CoachCheckins from '../components/CoachCheckins';
+import EvolucionMedidas from '../components/EvolucionMedidas';
 import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
@@ -1679,7 +1680,7 @@ const ClientDetailPage = () => {
                     <WeightEvolution reports={reports} />
                     {/* Las diez medidas comparadas en el tiempo (punto 35): hasta ahora solo
                         se veía el último dato. */}
-                    <EvolucionMedidas reports={reports} />
+                    <EvolucionMedidas reports={reports} tono="admin" />
                     {/* La comparativa con etiquetas (3.2): cuatro fotos como mucho y cada una
                         responde a algo. Sustituye al comparador de dos con selectores de pose,
                         que ya no hace falta (decisión del 05-08). */}
@@ -1776,97 +1777,10 @@ const MacroCeldas = ({ m, prev, showG = true, apagado = false, cambios = null })
     </>
 );
 
-// LA EVOLUCIÓN DE CADA MEDIDA (punto 35 del doc del 07-08). Hasta ahora las medidas solo se
-// veían sueltas: el último dato debajo de su foto, y al rellenar el reporte la diferencia con
-// el mes pasado. Nunca se veían las diez comparadas a lo largo del tiempo, que es lo único
-// que dice si algo se mueve -- y es la razón por la que se piden todas siempre.
-//
-// Tabla y no gráfico a propósito: son diez series a la vez, y en un gráfico de diez líneas no
-// se lee ninguna. Aquí cada fila es una medida y cada columna una fecha.
-const SESIONES_A_LA_VISTA = 8;
-
-const EvolucionMedidas = ({ reports }) => {
-    const sesiones = React.useMemo(() => {
-        const conMedidas = (reports || [])
-            .filter(r => r?.created_at && r?.measurements && Object.keys(r.measurements).length)
-            .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
-        // Las columnas caben hasta cierto punto: se enseñan las últimas y se dice cuántas
-        // quedan fuera, que es mejor que cortar en silencio.
-        return { todas: conMedidas.length, vistas: conMedidas.slice(-SESIONES_A_LA_VISTA) };
-    }, [reports]);
-
-    if (sesiones.vistas.length === 0) {
-        return (
-            <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
-                <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Evolución de las medidas</p>
-                <p className="text-white/30 text-sm">Todavía no ha mandado ningún reporte con medidas.</p>
-            </CardContent></Card>
-        );
-    }
-
-    const fuera = sesiones.todas - sesiones.vistas.length;
-    return (
-        <Card className="bg-[#111] border-[#222]" data-testid="evolucion-medidas"><CardContent className="p-5">
-            <div className="flex items-baseline justify-between gap-2 flex-wrap mb-3">
-                <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Evolución de las medidas</p>
-                <p className="text-[10px] text-white/30">
-                    {fuera > 0 ? `Las ${sesiones.vistas.length} últimas de ${sesiones.todas}` : `${sesiones.todas} ${sesiones.todas === 1 ? 'toma' : 'tomas'}`}
-                    {' · '}la diferencia es con la toma anterior
-                </p>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[520px]">
-                    <thead>
-                        <tr className="text-white/40 border-b border-[#222]">
-                            <th className="text-left font-normal px-2 py-1.5">Medida</th>
-                            {sesiones.vistas.map(r => (
-                                <th key={r.created_at} className="text-right font-normal px-2 py-1.5 whitespace-nowrap tabular-nums">
-                                    {_fechaCorta(String(r.created_at).slice(0, 10)).slice(0, 5)}
-                                </th>
-                            ))}
-                            <th className="text-right font-normal px-2 py-1.5 whitespace-nowrap">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {MEDIDAS.map(({ key, label }) => {
-                            const valores = sesiones.vistas.map(r => valorAnterior(r.measurements, key));
-                            if (valores.every(v => v == null)) return null;   // esa medida no la ha dado nunca
-                            const primero = valores.find(v => v != null);
-                            const ultimo = [...valores].reverse().find(v => v != null);
-                            const total = diferencia(ultimo, primero);
-                            return (
-                                <tr key={key} className="border-b border-[#1a1a1a] last:border-0 hover:bg-white/[0.03]">
-                                    <td className="px-2 py-1.5 text-white/70 whitespace-nowrap">{label}</td>
-                                    {valores.map((v, i) => {
-                                        const antes = valores.slice(0, i).reverse().find(x => x != null);
-                                        const d = v != null ? diferencia(v, antes ?? null) : null;
-                                        return (
-                                            <td key={i} className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                                                <span className="text-white font-medium">{v ?? '-'}</span>
-                                                {d && d.signo !== 0 && (
-                                                    <span className={`ml-1 text-[10px] ${d.signo > 0 ? 'text-blue-400' : 'text-emerald-400'}`}>{d.texto}</span>
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                    <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                                        {total && total.signo !== 0
-                                            ? <span className={`font-bold ${total.signo > 0 ? 'text-blue-400' : 'text-emerald-400'}`}>{total.texto}</span>
-                                            : <span className="text-white/30">igual</span>}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-            <p className="text-[10px] text-white/25 mt-2">
-                En azul lo que sube y en verde lo que baja. Sin juzgar: subir de brazo y subir de
-                cintura no son lo mismo, y eso lo pone el coach, no el color.
-            </p>
-        </CardContent></Card>
-    );
-};
+// LA EVOLUCIÓN DE CADA MEDIDA (punto 35 del doc del 07-08) vive ahora en
+// `components/EvolucionMedidas.jsx`, compartida con la pantalla de Evolución del cliente
+// (T6 del doc 16-08): es la misma tabla y tiene que decir lo mismo en los dos sitios. Aquí
+// se pinta con `tono="admin"`, que es lo único que cambiaba.
 
 // LA EXCEPCIÓN DEL CLIENTE (punto 39 del doc del 07-08).
 //
