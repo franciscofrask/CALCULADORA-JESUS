@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
@@ -17,7 +17,7 @@ import {
     LogOut, Lock, ChevronRight, Crown,
     TrendingUp, Edit2, Camera, Check,
     Compass, SlidersHorizontal, Bot, Search, Pill, ClipboardCheck, MessageCircle,
-    ChevronDown
+    ChevronDown, Bell
 } from 'lucide-react';
 
 // "Mejorar mi plan" OCULTO (petición 2026-07-06): el checkout de upgrade no existe aún
@@ -75,6 +75,34 @@ const ProfilePage = () => {
             toast.error(error.response?.data?.detail || 'Error al cambiar la contraseña');
         } finally {
             setChangingPwd(false);
+        }
+    };
+
+    // Preferencias de avisos. El fallo se traga a propósito: no poder leerlas no es algo
+    // que el cliente tenga que arreglar, y la fila simplemente no aparece.
+    const [prefAvisos, setPrefAvisos] = useState(null);
+    const [guardandoPref, setGuardandoPref] = useState(false);
+    useEffect(() => {
+        let vivo = true;
+        api.get('/notifications/preferencias')
+            .then(({ data }) => { if (vivo) setPrefAvisos(data); })
+            .catch((e) => console.warn('No se han podido leer las preferencias de avisos', e));
+        return () => { vivo = false; };
+    }, [api]);
+
+    const guardarPrefCierre = async (valor) => {
+        const antes = prefAvisos;
+        setPrefAvisos({ ...prefAvisos, cierre_dia: valor });   // responde al toque, no al servidor
+        setGuardandoPref(true);
+        try {
+            const { data } = await api.put('/notifications/preferencias', { cierre_dia: valor });
+            setPrefAvisos(data);
+        } catch (error) {
+            setPrefAvisos(antes);
+            console.error('Error al guardar la preferencia de avisos', error);
+            toast.error('No se ha podido guardar. Inténtalo otra vez.');
+        } finally {
+            setGuardandoPref(false);
         }
     };
 
@@ -324,6 +352,43 @@ const ProfilePage = () => {
                         ))}
                     </CardContent>
                 </Card>
+
+                {/* AVISOS · el único que el cliente puede apagar (doc 16-08, T10).
+                    Es el de las 20:00, el único diario. Los demás son de calendario o los
+                    manda Jesús al tocarle algo, y esos no se silencian: son el programa.
+                    Sale nada más entrar en la pantalla; si el backend no contesta, la fila
+                    no se pinta en vez de mentir con un interruptor que no guarda nada. */}
+                {prefAvisos && (
+                    <Card className="bg-card border-border">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-foreground text-base">AVISOS</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-2">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                                        <Bell className="w-5 h-5 text-[#FF671F]" />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="font-medium text-foreground text-base lg:text-sm">Recordarme cerrar el día</p>
+                                        <p className="text-sm lg:text-xs text-foreground/50">Cada día a las 20:00, si no lo has cerrado</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={prefAvisos.cierre_dia}
+                                    disabled={guardandoPref}
+                                    onClick={() => guardarPrefCierre(!prefAvisos.cierre_dia)}
+                                    data-testid="aviso-cierre-dia"
+                                    className={`relative w-12 h-7 rounded-full transition-colors shrink-0 disabled:opacity-50 ${prefAvisos.cierre_dia ? 'bg-[#FF671F]' : 'bg-muted'}`}
+                                >
+                                    <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${prefAvisos.cierre_dia ? 'left-6' : 'left-1'}`} />
+                                </button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Settings */}
                 <Card className="bg-card border-border">

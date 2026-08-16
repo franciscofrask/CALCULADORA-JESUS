@@ -28,7 +28,10 @@ Todo esto se puede sobreescribir POR CLIENTE (`ciclo_semanas`, `semana_de_entrad
 `calendario_reportes` en su perfil), porque el punto 36 manda: el contrato de cada cliente es
 el que vale, y la tabla de planes es la plantilla de la que se copia.
 """
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+from core.tiempo import MADRID
 
 # weekday(): lunes=0 ... domingo=6
 DIAS = {"lunes": 0, "martes": 1, "miercoles": 2, "miércoles": 2, "jueves": 3,
@@ -144,3 +147,42 @@ def dia_de_envio(cal: Dict[str, Any], tipo: str) -> int:
 def toca_en_la_semana(cal: Dict[str, Any], tipo: str, semana: int) -> bool:
     """¿Toca ESE tipo en esa semana? (equivalente al `_tipo_due_this_week` de antes)."""
     return reporte_de_la_semana(cal, semana) == tipo
+
+
+# ── Cuándo abre y cuándo cierra cada reporte, en hora de España ───────────────
+#
+# Las horas son las del doc 16-08: el quincenal del miércoles 09:00 al jueves 20:00, y el
+# mensual del viernes al lunes 18:00. Están AQUÍ, en el calendario, y no repartidas por los
+# avisos, porque son el mismo dato que necesitan tres sitios: el aviso de apertura, el de
+# último día y el de "no me llegó".
+#
+# OJO: la ventana con la que hoy se ACEPTA el envío sigue viviendo en `report_cadence.py`
+# (`_submission_window`, viernes 00:00 -> lunes 06:00 UTC). Son dos cosas que tienen que
+# acabar siendo una: cuando T7/T8 muevan la ventana real, que la lean de aquí.
+HORAS_DEL_DOC = {
+    # (hora a la que abre, días hasta el cierre, hora del cierre)
+    "quincenal": (9, 1, 20),
+    "mensual": (0, 3, 18),
+    "semanal": (0, 0, 23),
+}
+
+
+def ventana_del_reporte(cal: Dict[str, Any], tipo: str,
+                        inicio_semana: date) -> Optional[Dict[str, datetime]]:
+    """{abre, cierra} de un reporte, en hora de España, para la semana de ciclo que
+    empieza en `inicio_semana`.
+
+    `inicio_semana` es el día en que arranca la semana de ciclo del cliente, que NO tiene
+    por qué ser un lunes: el ciclo cuenta desde su fecha de alta. El día de envío (el
+    miércoles del quincenal, el viernes del mensual) se busca dentro de esos siete días.
+    """
+    if tipo not in HORAS_DEL_DOC:
+        return None
+    hora_abre, dias, hora_cierra = HORAS_DEL_DOC[tipo]
+    dia_envio = dia_de_envio(cal, tipo)
+    abre_dia = inicio_semana + timedelta(days=(dia_envio - inicio_semana.weekday()) % 7)
+    abre = datetime(abre_dia.year, abre_dia.month, abre_dia.day, hora_abre, tzinfo=MADRID)
+    cierra_dia = abre_dia + timedelta(days=dias)
+    cierra = datetime(cierra_dia.year, cierra_dia.month, cierra_dia.day,
+                      hora_cierra, tzinfo=MADRID)
+    return {"abre": abre, "cierra": cierra}
