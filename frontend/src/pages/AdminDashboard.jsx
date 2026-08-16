@@ -1230,7 +1230,7 @@ const AdminLayout = () => {
     const navItems = [
         { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
-        { path: '/admin/planes', icon: Layers, label: 'Planes' },
+        { path: '/admin/planes', icon: Layers, label: 'Planes', adminOnly: true },
         { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios', adminOnly: true },
         { path: '/admin/pagos', icon: Receipt, label: 'Cobros', adminOnly: true },
         { path: '/admin/leads', icon: UserPlus, label: 'Leads' },

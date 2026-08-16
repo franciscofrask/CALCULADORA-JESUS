@@ -245,7 +245,15 @@ function AppRoutes() {
                 }
             >
                 <Route index element={<AdminDashboard />} />
-                <Route path="planes" element={<AdminPlansPage />} />
+                {/* El catálogo de planes decide qué incluye cada plan y, dentro, qué
+                    pantallas están encendidas para todos los clientes. Mismo candado que
+                    Usuarios y Cobros, y el backend lo vuelve a comprobar con
+                    `get_admin_only_user` por si alguien llama al endpoint a mano. */}
+                <Route path="planes" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminPlansPage />
+                    </ProtectedRoute>
+                } />
                 <Route path="clients" element={<AdminClientsList />} />
                 <Route path="clients/:clientId" element={<ClientDetailPage />} />
                 <Route path="leads" element={<LeadsPage />} />

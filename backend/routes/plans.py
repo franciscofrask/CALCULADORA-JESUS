@@ -11,7 +11,7 @@ import re
 import uuid
 
 from core.database import db
-from core.security import get_admin_user
+from core.security import get_admin_only_user
 from models.user import PLAN_CATALOG, PLAN_EDITABLE_FIELDS, merged_catalog
 from routes.audit import audit
 
@@ -201,11 +201,15 @@ async def guardar_quiz_venta(data: Dict[str, Any] = Body(default={})):
 
 # ==================== ADMIN ====================
 
+# SOLO ADMINISTRADORES, no los entrenadores. Aquí se decide qué incluye cada plan, y de
+# esas habilitaciones dependen el precio, lo que ve el cliente y a qué endpoints llega:
+# quitarle "reportes" a un plan se lo quita a todos sus clientes a la vez. Es una decisión
+# de negocio, del mismo orden que Usuarios y Cobros, no del día a día de un entrenador.
 admin_router = APIRouter(prefix="/admin/plans", tags=["admin-plans"])
 
 
 @admin_router.get("")
-async def admin_list_plans(user=Depends(get_admin_user)):
+async def admin_list_plans(user=Depends(get_admin_only_user)):
     """Catálogo completo para el panel admin (con overrides aplicados). Marca qué
     planes tienen alguna edición respecto al valor por defecto del código."""
     overrides = await _overrides_by_code()
@@ -216,7 +220,7 @@ async def admin_list_plans(user=Depends(get_admin_user)):
 
 
 @admin_router.put("/{code}")
-async def admin_update_plan(code: str, data: dict, user=Depends(get_admin_user)):
+async def admin_update_plan(code: str, data: dict, user=Depends(get_admin_only_user)):
     """Edita campos del catálogo de un plan (se guardan como override sobre el
     valor por defecto). Solo se aceptan campos editables."""
     code = (code or "").lower().strip()
@@ -243,7 +247,7 @@ async def admin_update_plan(code: str, data: dict, user=Depends(get_admin_user))
 
 
 @admin_router.delete("/{code}")
-async def admin_reset_plan(code: str, user=Depends(get_admin_user)):
+async def admin_reset_plan(code: str, user=Depends(get_admin_only_user)):
     """Elimina los overrides de un plan y lo restaura al valor por defecto del código."""
     code = (code or "").lower().strip()
     if code not in PLAN_CATALOG:

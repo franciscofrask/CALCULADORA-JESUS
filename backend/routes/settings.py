@@ -21,7 +21,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, Depends
 
 from core.database import db
-from core.security import get_admin_user, get_current_user
+from core.security import get_admin_only_user, get_current_user
 from core.tiempo import ahora_madrid
 
 DOC_ID = "app"
@@ -41,6 +41,10 @@ PANTALLAS = {
 }
 
 router = APIRouter(tags=["settings"])
+
+# SOLO ADMINISTRADORES: apagar una pantalla aquí se la quita a TODOS los clientes a la vez,
+# y la frase del día la leen todos. Va con el mismo candado que el catálogo de planes, que
+# es donde se edita.
 admin_router = APIRouter(prefix="/admin/settings", tags=["settings"])
 
 
@@ -77,12 +81,12 @@ async def get_app_settings(user=Depends(get_current_user)):
 
 
 @admin_router.get("")
-async def get_admin_settings(admin=Depends(get_admin_user)):
+async def get_admin_settings(admin=Depends(get_admin_only_user)):
     return await ajustes_app()
 
 
 @admin_router.put("")
-async def update_admin_settings(payload: Dict[str, Any] = Body(...), admin=Depends(get_admin_user)):
+async def update_admin_settings(payload: Dict[str, Any] = Body(...), admin=Depends(get_admin_only_user)):
     """Guarda interruptores y/o frase del día. Solo claves conocidas: un typo en el
     nombre de una pantalla no crea un interruptor fantasma que nadie lee."""
     cambios: Dict[str, Any] = {}
