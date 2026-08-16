@@ -1579,11 +1579,19 @@ const NutritionPage = () => {
                     base_updated_at: versionDiaRef.current,
                 })
             });
+            // La versión con la que seguimos trabajando es la que acaba de escribir el
+            // servidor, igual que en el autoguardado: sin esto, guardar a mano dejaba la
+            // referencia vieja y el siguiente guardado automático chocaba consigo mismo.
+            if (res?.updated_at) versionDiaRef.current = res.updated_at;
             // Alguna comida se tocó por otro lado mientras esta pantalla la tenía abierta:
             // esa se ha respetado, y aquí se recarga para enseñar lo que hay de verdad.
             const chocaron = res?.conflictos || [];
             if (chocaron.length) {
-                const nombres = chocaron.map(k => mealInfo[k]?.name || k).join(' y ');
+                // `_dia` no es una comida: es el reparto del día (cuántas comidas, entreno o
+                // descanso, peri). Nombrarlo por su clave sería enseñarle jerga al cliente.
+                const nombres = chocaron
+                    .map(k => (k === '_dia' ? 'El reparto del día' : (mealInfo[k]?.name || k)))
+                    .join(' y ');
                 toast(`${nombres} se había cambiado en otro sitio, así que dejé lo más `
                     + `reciente. Te lo recargo.`, { icon: '🔄' });
                 await loadDiet(currentDate);

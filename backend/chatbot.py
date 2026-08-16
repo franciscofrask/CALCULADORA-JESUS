@@ -242,6 +242,25 @@ class NutritionChatbot:
                 })
         self.state["reubicado_al_reconfigurar"] = reubicado
 
+        # LA COMIDA QUE DESAPARECE DEL DÍA TAMBIÉN TIENE QUE DESAPARECER DEL PLAN
+        # (16-08-2026, en producción con la cuenta de Francisco).
+        #
+        # Bajar de 4 comidas a 3 traspasa la Comida 4 a la Comida 3 y así se lo cuenta al
+        # cliente. Pero en Nutrición la C4 seguía entera con sus tres alimentos: el volcado
+        # exporta solo las comidas que existen, y desde el 16-08 el guardado FUSIONA -- lo
+        # que no llega se queda como estaba --, así que la comida retirada sobrevivía y sus
+        # macros se contaban dos veces. El día decía 192 g de proteína sobre 201 con la
+        # mitad del plato repetido.
+        #
+        # Se apuntan aquí, que es donde se sabe cuáles han caído, y el volcado las manda
+        # explícitamente vacías (vaciar sí atraviesa la fusión). Si el cliente vuelve a
+        # cuatro comidas, la clave revive vacía y sale de esta lista.
+        retiradas = [k for k in (self.state.get("comidas_retiradas") or []) if k not in vivas]
+        for k in caidas:
+            if k not in retiradas and k not in vivas:
+                retiradas.append(k)
+        self.state["comidas_retiradas"] = retiradas
+
         if not self.state["comidas_completadas"]:
             self.state["acumulado_cereales_panes"] = 0
             self.state["acumulado_frutos_secos"] = 0
@@ -1289,6 +1308,12 @@ class NutritionChatbot:
                 })
 
             comidas[key] = {"alimentos": alimentos}
+
+        # Las que el día ya no tiene se mandan vacías a propósito: es la única forma de que
+        # la fusión del guardado las quite del plan (ver `configurar_dia`).
+        for key in (self.state.get("comidas_retiradas") or []):
+            if key not in comidas:
+                comidas[key] = {"alimentos": []}
 
         return comidas
 

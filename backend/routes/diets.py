@@ -103,7 +103,9 @@ async def upsert_diet_doc(user_id: str, data: dict, quien: Optional[dict] = None
     if not data.get("comidas_completas"):
         previo = await db.diets.find_one({"user_id": user_id, "fecha": fecha},
                                          {"_id": 0, "comidas": 1, "macros_snapshot": 1,
-                                          "updated_at": 1})
+                                          "updated_at": 1, "tipo_dia": 1, "num_comidas": 1,
+                                          "momento_entreno": 1, "opcion_peri": 1,
+                                          "distribution_targets": 1})
         anteriores = (previo or {}).get("comidas") or {}
         entrantes = dict(diet_doc.get("comidas") or {})
 
@@ -119,6 +121,28 @@ async def upsert_diet_doc(user_id: str, data: dict, quien: Optional[dict] = None
         # conserva la del servidor y se devuelve en `conflictos` para que la pantalla lo diga
         # y recargue. Sin `base_updated_at` -- clientes viejos -- todo sigue como estaba.
         base = str(data.get("base_updated_at") or "")
+
+        # Y EL REPARTO DEL DÍA TAMPOCO SE PISA CON UNA COPIA VIEJA (16-08-2026, en prod).
+        #
+        # El sello por comida salvaba los alimentos, pero la CONFIGURACIÓN del día -- cuántas
+        # comidas, si es entreno o descanso, dónde va el peri, los objetivos de cada comida --
+        # se escribía entera con lo que trajera quien guardase. Medido con la cuenta de
+        # Francisco: le pedí al asistente «cámbialo a 3 comidas», lo hizo y lo contó bien, y
+        # la pestaña de Nutrición abierta al lado devolvió su copia de antes en su siguiente
+        # autoguardado: el día volvía a 4 comidas, con la Comida 4 resucitada y sus macros
+        # contados dos veces. En pantalla el chat decía una cosa y Nutrición otra.
+        #
+        # Quien guarda con una versión anterior a la última no manda sobre el reparto: se
+        # conserva el del servidor y se avisa con `_dia`, que hace recargar a la pantalla.
+        # Sin `base_updated_at` (el volcado del chat, clientes viejos) todo sigue igual.
+        sello_dia = str((previo or {}).get("updated_at") or "")
+        if base and sello_dia and sello_dia > base:
+            for campo in ("tipo_dia", "num_comidas", "momento_entreno", "opcion_peri",
+                          "distribution_targets"):
+                if (previo or {}).get(campo) is not None:
+                    diet_doc[campo] = previo[campo]
+            conflictos.append("_dia")
+
         if base and anteriores:
             for k, comida_previa in anteriores.items():
                 if k not in entrantes:

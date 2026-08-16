@@ -146,7 +146,8 @@ async def chatbot_configure(
         if chatbot.state.get("fecha_objetivo") and chatbot.state["fecha_objetivo"] != config.fecha:
             for clave in ("comidas_completadas", "borradores"):
                 chatbot.state[clave] = {}
-            for clave in ("saved_meals", "comidas_traidas", "last_options"):
+            for clave in ("saved_meals", "comidas_traidas", "last_options",
+                          "comidas_retiradas"):
                 chatbot.state[clave] = []
             for clave in ("acumulado_cereales_panes", "acumulado_frutos_secos"):
                 chatbot.state[clave] = 0
@@ -831,6 +832,21 @@ async def chatbot_save_to_diet(
         "is_cuadrado": False,
         "comida_volcada": None,
     })
+
+    # LO QUE ACABA DE IRSE A NUTRICIÓN ESTÁ GUARDADO, Y HAY QUE APUNTARLO (16-08, en prod).
+    #
+    # El contador salía «Comidas guardadas: 1/6» con cinco comidas montadas y las cinco
+    # escritas en el plan: `completas` cuenta `saved_meals`, y a esa lista solo entraban las
+    # que pasaban por el botón «Guardar y siguiente» o las que venían del plan. Con el
+    # volcado automático encendido siempre (16-08), casi ninguna pasa ya por ese botón.
+    # Resultado: el resumen del día mentía, y «guardar y siguiente» volvía a parar en
+    # comidas que ya estaban puestas.
+    tocadas = [k for k, v in comidas.items() if (v or {}).get("alimentos")]
+    saved = chatbot.state.setdefault("saved_meals", [])
+    nuevas = [k for k in tocadas if k not in saved]
+    if nuevas:
+        saved.extend(nuevas)
+        await save_chatbot_session(chatbot)
 
     return {
         "message": "Dieta volcada en tu pestaña de nutrición",

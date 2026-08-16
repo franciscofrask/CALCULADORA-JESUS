@@ -1031,10 +1031,23 @@ class AgentLoop:
             objetivo = self._comidas_del_encargo(user_input)
             if objetivo:
                 hechas, fallidas = [], []
-                for idx in objetivo[:4]:          # tope: cuatro por turno, o se eterniza
+                # EL DÍA ENTERO SON SEIS, NO CUATRO (16-08, en prod). Con la Comida 1 ya
+                # puesta y «móntame el resto del día entero» quedaban cinco vacías (intra,
+                # post, C2, C3, C4): montaba cuatro, se callaba la quinta y decía «hecho».
+                # El método no pasa de 4 comidas + intra + post, así que el día completo
+                # cabe en seis; lo que no quepa se dice, que callarlo es lo que hacía antes.
+                fuera_del_turno = objetivo[6:]
+                for idx in objetivo[:6]:
                     if not self.bot.go_to_meal(idx):
                         continue
                     etiqueta = self.bot.meal_label(self.bot.current_meal_key())
+                    # Una señal por comida: el front corta la conexión a los 45 s de
+                    # silencio, y montar seis comidas de una tacada pasa de ahí.
+                    if self.progreso:
+                        try:
+                            self.progreso("componer_menu")
+                        except Exception:
+                            pass
                     try:
                         r_c = await self.tools.componer_menu(n=2)
                         vivos = [b for b in (r_c.get("borradores") or [])
@@ -1042,9 +1055,30 @@ class AgentLoop:
                         if not vivos:
                             fallidas.append(etiqueta)
                             continue
-                        r_a = await self.tools.aplicar_borrador(vivos[0]["id"], forzar=True)
+                        # MONTAR POR ÉL ES MONTARLO BIEN (16-08, en prod). «Móntame la
+                        # comida 4» aplicaba la PRIMERA opción tal cual, y se quedó a 10 g
+                        # de proteína y 5 de grasa del objetivo. Cuando decide el asistente,
+                        # el cliente no ve las alternativas: se coge la que menos se desvía
+                        # y, si aun así falta, se cuadra antes de aplicarla.
+                        _fuera = lambda b: sum(abs(float(v or 0))
+                                               for v in (b.get("desvio") or {}).values())
+                        _corto = lambda b: any(
+                            abs(float((b.get("desvio") or {}).get(m) or 0))
+                            > self.bot.margen_de((b.get("objetivo") or {}).get(m, 0))
+                            for m in ("P", "H", "G"))
+                        elegido = min(vivos, key=_fuera)
+                        if _corto(elegido):
+                            try:
+                                r_q = await self.tools.editar_borrador(
+                                    elegido["id"], [{"op": "cuadrar"}])
+                                if r_q.get("ok") and r_q.get("borrador"):
+                                    elegido = r_q["borrador"]
+                            except Exception:
+                                logger.warning("encargo delegado: cuadrar %s no salió",
+                                               etiqueta, exc_info=True)
+                        r_a = await self.tools.aplicar_borrador(elegido["id"], forzar=True)
                         if r_a.get("ok"):
-                            piezas = ", ".join(i["nombre"] for i in vivos[0]["items"])
+                            piezas = ", ".join(i["nombre"] for i in elegido["items"])
                             hechas.append(f"{etiqueta}: {piezas}")
                         else:
                             fallidas.append(etiqueta)
@@ -1056,6 +1090,14 @@ class AgentLoop:
                     if fallidas:
                         texto += ("\n\nNo he podido cerrar " + ", ".join(fallidas) +
                                   ": dime qué te apetece ahí y lo monto.")
+                    if fuera_del_turno:
+                        pendientes = ", ".join(
+                            self.bot.meal_label(self.bot.state["meal_order"][i - 1])
+                            for i in fuera_del_turno
+                            if 0 < i <= len(self.bot.state.get("meal_order") or []))
+                        if pendientes:
+                            texto += (f"\n\nMe quedan {pendientes} por montar: dime «sigue» "
+                                      "y las cierro.")
                     texto += "\n\nMíralo y dime si cambio algo."
                     resp_m = self.bot._meal_response([], [])
                     resp_m["message"] = texto
