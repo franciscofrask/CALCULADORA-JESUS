@@ -23,6 +23,76 @@ from core.database import db
 MAX_ALIMENTOS = 40
 
 
+def _variantes(termino: str) -> List[str]:
+    """El termino y su singular/plural, para no perder el generico por una letra.
+
+    El cliente escribe «nueces» y quien lee la frase devuelve «nuez», que es lo correcto;
+    pero el catalogo guarda «Nueces», y buscando «nuez» eso NO aparece: el unico resultado
+    era «Leche de nuez (Borges)». Asi es como al cliente se le decia que desayuna una bebida
+    vegetal porque habia escrito frutos secos.
+
+    No es una lista de palabras -- eso esta prohibido en esta casa y ademas no escala --,
+    son las dos reglas del plural en castellano: +s a la vocal y +es a la consonante, con la
+    z que pasa a c (nuez -> nueces).
+    """
+    t = (termino or "").strip()
+    if len(t) < 3:
+        return [t] if t else []
+    fuera = [t]
+    if t.endswith(("s", "es")):                       # ya viene en plural: su singular
+        fuera += [t[:-2], t[:-1]] if t.endswith("es") else [t[:-1]]
+        if t.endswith("ces"):
+            fuera.append(t[:-3] + "z")
+    elif t.endswith("z"):                             # nuez -> nueces, pez -> peces
+        fuera.append(t[:-1] + "ces")
+    else:                                             # singular: su plural
+        fuera.append(t + ("s" if t[-1] in "aeiou" else "es"))
+    # Sin repetidos y sin restos de una letra.
+    vistos, limpio = set(), []
+    for v in fuera:
+        v = v.strip()
+        if len(v) >= 3 and v.lower() not in vistos:
+            vistos.add(v.lower())
+            limpio.append(v)
+    return limpio
+
+
+def _habla_de_lo_mismo(termino: str, nombre_alimento: str) -> bool:
+    """Si la ficha del catalogo menciona lo que el cliente escribio.
+
+    En castellano lo que distingue va al final: proteina de SUERO, leche de NUEZ, pechuga de
+    POLLO. Asi que se mira esa ultima palabra (y su singular/plural) dentro del nombre de la
+    ficha. «proteina de suero» contra «Proteina de soja» no pasa -- comparten «proteina»,
+    que es justo lo que no distingue --, y «pechuga de pollo» contra «Pollo asado» si.
+
+    Sirve para lo mismo que la regla de arriba: cuando no lo tenemos claro, se pregunta.
+    """
+    palabras = [p for p in (termino or "").lower().replace(",", " ").split()
+                if len(p) > 2 and p not in ("del", "con", "sin", "para")]
+    if not palabras:
+        return True
+    nombre = (nombre_alimento or "").lower()
+    return any(v.lower() in nombre for v in _variantes(palabras[-1]))
+
+
+async def _buscar_con_variantes(bot: NutritionChatbot, termino: str) -> List[Dict]:
+    """Busca el termino y, si no sale ningun generico, lo intenta con su otra forma.
+
+    Se para en cuanto una variante trae un generico: es la que de verdad describe lo que
+    come, y no una marca que casualmente lleva esa palabra en el nombre.
+    """
+    primeros: List[Dict] = []
+    for variante in _variantes(termino):
+        encontrados = await bot.search_foods(variante, limit=6)
+        if not encontrados:
+            continue
+        if not primeros:
+            primeros = encontrados
+        if any(not a.get("url") for a in encontrados):
+            return encontrados
+    return primeros
+
+
 async def _macros_de_alimentos(bot: NutritionChatbot, extraidos: List[Dict]) -> Dict:
     """
     Busca cada alimento en el catalogo y suma sus macros CON LAS REGLAS DE CONTEO DEL METODO
@@ -37,7 +107,7 @@ async def _macros_de_alimentos(bot: NutritionChatbot, extraidos: List[Dict]) -> 
         nombre = (item.get("nombre") or "").strip()
         if not nombre:
             continue
-        encontrados = await bot.search_foods(nombre, limit=6)
+        encontrados = await _buscar_con_variantes(bot, nombre)
         if not encontrados:
             no_reconocidos.append(nombre)
             continue
@@ -45,7 +115,19 @@ async def _macros_de_alimentos(bot: NutritionChatbot, extraidos: List[Dict]) -> 
         # Quien describe su dieta dice "pollo" o "ternera", no una marca concreta: se prefiere el
         # alimento generico (el que no tiene URL de ficha). Sin esto, "ternera" acababa en un plato
         # preparado de marca y "proteina en polvo" en cacahuete en polvo.
-        alimento = dict(next((a for a in encontrados if not a.get("url")), encontrados[0]))
+        generico = next((a for a in encontrados
+                         if not a.get("url") and _habla_de_lo_mismo(nombre, a.get("nombre"))), None)
+
+        # Y SI SOLO HAY MARCAS, NO SE ADIVINA. Es la regla de la casa para el asistente
+        # ("los terminos genericos con tipos dispares no se adivinan, se preguntan"), y aqui
+        # no hay a quien preguntar: el alta es de un tiro. Antes se cogia el primero que
+        # saliera, asi que «ensalada» acababa en «Ensalada gourmet maxi (Carrefour)». Es
+        # mejor decirle que eso no lo hemos entendido -- lo ve en la pantalla de confirmar y
+        # lo escribe mejor -- que ponerle en la boca algo que no ha dicho.
+        if generico is None:
+            no_reconocidos.append(nombre)
+            continue
+        alimento = dict(generico)
 
         # Cuanto ha dicho que come. Los alimentos "por unidad" (huevos, cucharadas de aceite)
         # llevan los macros por unidad, no por 100 g: por eso la cantidad se pasa en la unidad
