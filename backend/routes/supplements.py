@@ -12,6 +12,7 @@ from typing import List, Optional
 from core.database import db
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import require_access
+from core.tiempo import hoy_madrid
 from models.supplements import (
     SupplementCatalogItem, SupplementProtocolSave, SupplementProtocolResponse,
     ProtocolItem, VersionProtocolo,
@@ -25,7 +26,10 @@ from models.supplements import (
 # resuelve por la mas reciente que no pase de hoy, exactamente igual que los macros.
 
 def _hoy() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    """El día del CLIENTE, en hora de España (doc 16-08, regla 1). Con la fecha UTC, un
+    protocolo con fecha de mañana entraba en vigor a las 23:00 de esta noche: el cliente
+    veía lo nuevo antes de tiempo y lo de hoy desaparecía sin que nadie tocara nada."""
+    return hoy_madrid().isoformat()
 
 
 def _ordenadas(versiones) -> list:
@@ -162,10 +166,20 @@ async def save_protocol(client_id: str, data: SupplementProtocolSave, user=Depen
         {"client_id": client_id}, {"$set": doc}, upsert=True
     )
 
-    from routes.notifications import notify
-    await notify(profile["user_id"], "suplementos", "Tu protocolo de suplementos se ha actualizado", "/dashboard/supplements", body=data.nota)
+    # SOLO SE AVISA SI HAY ALGO QUE VER (T2 del doc del 16-08: "si le cambias la
+    # suplementación, le llega el aviso y AQUÍ LO VE").
+    #
+    # Guardar sin ningún suplemento borra la versión vigente -- es la forma de quitarle la
+    # suplementación -- y aun así salía el aviso "tu protocolo se ha actualizado". El
+    # cliente entraba y se encontraba "Todavía no tienes suplementación", que es
+    # exactamente la queja de la que sale esta tarea. Sin nada pautado no hay novedad que
+    # anunciar.
+    resuelto = _respuesta(doc)
+    if resuelto["actual"] or resuelto["siguiente"]:
+        from routes.notifications import notify
+        await notify(profile["user_id"], "suplementos", "Tu protocolo de suplementos se ha actualizado", "/dashboard/supplements", body=data.nota)
 
-    return SupplementProtocolResponse(**_respuesta(doc))
+    return SupplementProtocolResponse(**resuelto)
 
 
 @admin_router.delete("/version/{fecha}")

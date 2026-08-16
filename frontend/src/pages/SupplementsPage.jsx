@@ -60,8 +60,48 @@ const SupplementCard = ({ item }) => {
     );
 };
 
+/**
+ * UNA LÍNEA DEL PROTOCOLO, COMO LA PIDE EL DOC DEL 16-08 (T2): el producto y, debajo,
+ * «1 cacito · después de entrenar».
+ *
+ * La tarjeta de siempre partía la misma información en dos filas con sus rótulos
+ * («¿Cuándo?» / «¿Cuánto?»), que es cómo se rellena en el panel, no cómo se lee: lo que
+ * el cliente necesita saber de un vistazo es qué se toma y cuándo, en una frase.
+ */
+const LineaSuplemento = ({ item }) => {
+    const [imgError, setImgError] = useState(false);
+    const pauta = [item.cuanto, item.cuando].map((t) => (t || '').trim()).filter(Boolean).join(' · ');
+    return (
+        <div className="surface p-4 flex items-start gap-4" data-testid="supplement-card">
+            <div className="w-12 h-12 rounded-xl bg-muted/40 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {item.imagen && !imgError
+                    ? <img src={item.imagen} alt={item.titulo} className="max-h-12 object-contain" onError={() => setImgError(true)} />
+                    : <Pill className="w-6 h-6 text-brand/50" />}
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="font-bold text-foreground text-sm">{item.titulo}</p>
+                {pauta && <p className="text-muted-foreground text-sm">{pauta}</p>}
+                {item.observaciones && <p className="text-muted-foreground text-xs italic mt-1">{item.observaciones}</p>}
+                {item.enlaces?.length > 0 && (
+                    <div className="flex flex-wrap gap-3 mt-1.5">
+                        {item.enlaces.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-semibold">
+                                <Link2 className="w-3 h-3" /> Dónde comprarlo {item.enlaces.length > 1 ? i + 1 : ''}
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const SupplementsPage = () => {
-    const { api } = useAuth();
+    const { api, pantalla } = useAuth();
+    // El interruptor del panel (doc 16-08): encendido -- que es como nace -- la pantalla
+    // habla como el documento; apagado se queda la de siempre, sin desplegar nada.
+    const nuevo = pantalla('t2_suplementos', true);
     const [protocol, setProtocol] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -92,7 +132,9 @@ const SupplementsPage = () => {
 
     if (!protocol || (!tieneActual && !tieneSiguiente && !protocol.nota)) {
         return <Wrap>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-6">Suplementación</h1>
+            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-6">
+                {nuevo ? 'Tu suplementación' : 'Suplementación'}
+            </h1>
             <div className="surface p-10 text-center">
                 <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Pill className="w-8 h-8 text-brand/60" />
@@ -120,13 +162,21 @@ const SupplementsPage = () => {
         </Wrap>;
     }
 
+    const Tarjeta = nuevo ? LineaSuplemento : SupplementCard;
+
     return (
         <Wrap>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-2">Suplementación</h1>
+            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-2">
+                {nuevo ? 'Tu suplementación' : 'Suplementación'}
+            </h1>
+            {/* EL SUBTÍTULO ES SUYO, NO UN DESCARGO. Lo que había avisaba de que esto es
+                «orientativo» y que «pueden ser necesarios otros suplementos», que es lo que
+                se le dice a quien mira un catálogo general. Esto no es un catálogo: es lo
+                que le ha pautado a él. */}
             <p className="text-muted-foreground text-sm mb-5 max-w-2xl">
-                Aquí ves algunos de los suplementos más habituales que recomiendo, así como su modo de empleo. Esta
-                información es <span className="italic">orientativa</span>: pueden ser necesarios otros suplementos o dosis
-                según tu situación, objetivos o tolerancias.
+                {nuevo
+                    ? 'Lo que te he pautado y cuándo tomarlo'
+                    : 'Aquí ves algunos de los suplementos más habituales que recomiendo, así como su modo de empleo. Esta información es orientativa: pueden ser necesarios otros suplementos o dosis según tu situación, objetivos o tolerancias.'}
             </p>
 
             {protocol.nota && (
@@ -141,9 +191,12 @@ const SupplementsPage = () => {
 
             {tieneActual && (
                 <section className="mb-7">
-                    <h2 className="caption mb-3">Suplementación actual</h2>
-                    <div className="grid md:grid-cols-2 gap-3">
-                        {protocol.actual.map((it, i) => <SupplementCard key={i} item={it} />)}
+                    {/* Sin rótulo cuando no hay nada más: la pantalla entera ya dice qué es
+                        esto, y «Suplementación actual» solo hace falta para distinguirla de
+                        la que entra más adelante. */}
+                    {(!nuevo || tieneSiguiente) && <h2 className="caption mb-3">Suplementación actual</h2>}
+                    <div className={nuevo ? 'space-y-3 max-w-2xl' : 'grid md:grid-cols-2 gap-3'}>
+                        {protocol.actual.map((it, i) => <Tarjeta key={i} item={it} />)}
                     </div>
                 </section>
             )}
@@ -158,8 +211,8 @@ const SupplementsPage = () => {
                             </span>
                         )}
                     </div>
-                    <div className="grid md:grid-cols-2 gap-3">
-                        {protocol.siguiente.map((it, i) => <SupplementCard key={i} item={it} />)}
+                    <div className={nuevo ? 'space-y-3 max-w-2xl' : 'grid md:grid-cols-2 gap-3'}>
+                        {protocol.siguiente.map((it, i) => <Tarjeta key={i} item={it} />)}
                     </div>
                 </section>
             )}

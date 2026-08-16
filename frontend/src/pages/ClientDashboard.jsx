@@ -3,6 +3,14 @@ import { useNavigate, Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
 import { plural, nombreDePlan } from '../lib/labels';
+import { num1 } from '../lib/numeros';
+import {
+    estadoMacro, estadoDelDia, faltanDe, porcentajeMacro,
+    COLOR_ESTADO, PALABRA_ESTADO, TEXTO_ESTADO_DIA, varianteDelDia,
+} from '../lib/estadoMacros';
+import {
+    aFecha, diaEnEspana, hoyEnEspana, etiquetaMomento, fechaLargaDeHoy, textoPlazo,
+} from '../lib/horaEspana';
 import { useEsTelefono } from '../lib/esTelefono';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
@@ -208,10 +216,358 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
     );
 };
 
+// =============== INICIO NUEVO (T1 del doc del 16-08) ===============
+//
+// «Un bloque, "Lo que toca hoy", con macros, suplementación y entreno. Debajo,
+// "Pendiente". Y arriba del todo, la frase del día.»
+//
+// Lo que cambia respecto al Inicio de siempre, que sigue vivo debajo:
+//
+//  - Los macros dicen lo que FALTA, no lo consumido. Es la misma pregunta que ya contesta
+//    la cabecera de Nutrición en el teléfono: «nadie abre la app para saber lo que ya se
+//    ha comido». El color (naranja/amarillo/verde) sale de `lib/estadoMacros`, que es la
+//    regla que ya usaban las tarjetas de comida, no una nueva.
+//  - Desaparece la pila de banners: lo pendiente es una lista de líneas iguales, en el
+//    orden del documento, y cuando no queda nada se dice y ya está.
+//  - La línea de entreno sale por el DATO (tiene rutina cargada), no por el plan; y si no
+//    la marca se queda sin marcar. Nunca en rojo (regla 3 del doc).
+//
+// Todo esto vive detrás del interruptor `t1_inicio_nuevo` del panel: apagado, el cliente
+// ve el Inicio de siempre sin que nadie despliegue nada.
+
+// La fecha de hoy con la que viajan las dietas: hora LOCAL, la misma que usa Nutrición
+// (`hoyISO` en NutritionPage). Aquí no vale la hora de España: si Inicio pidiera el día de
+// Madrid y Nutrición guardara el del aparato, el cliente que no está en España vería en
+// una pantalla los macros de un día y en la siguiente los de otro.
+const hoyDeLaDieta = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+};
+
+const estrellas = (n) => (n >= 1 && n <= 5 ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
+
+// Una línea de «Lo que toca hoy» o de «Pendiente»: título, detalle y, a la derecha, la
+// flecha de entrar o el «✓ hecho». Nada de rojos ni de la palabra «pendiente».
+const LineaDeHoy = ({ icono: Icono, titulo, detalle, extra, hecho, onClick, testId }) => {
+    const Contenedor = onClick ? 'button' : 'div';
+    return (
+        <Contenedor onClick={onClick} data-testid={testId}
+            className={`surface w-full p-4 flex items-center gap-4 text-left ${onClick ? 'surface-hover group' : ''}`}>
+            {Icono && (
+                <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Icono className="w-5 h-5 text-brand" />
+                </div>
+            )}
+            <div className="min-w-0 flex-1">
+                <p className="font-bold text-foreground text-sm">{titulo}</p>
+                {detalle && <p className="text-muted-foreground text-sm truncate">{detalle}</p>}
+                {extra && <p className="text-muted-foreground text-xs mt-0.5">{extra}</p>}
+            </div>
+            {hecho ? (
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex-shrink-0"
+                    data-testid={testId ? `${testId}-hecho` : undefined}>
+                    <CheckCircle2 className="w-4 h-4" /> hecho
+                </span>
+            ) : onClick ? (
+                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors flex-shrink-0" />
+            ) : null}
+        </Contenedor>
+    );
+};
+
+// Un macro: «Te faltan 94 · de 120 · Proteína», con su barra y su palabra de estado.
+const MacroQueFalta = ({ label, servido, objetivo, clave }) => {
+    const estado = estadoMacro(clave, servido, objetivo);
+    const color = COLOR_ESTADO[estado];
+    return (
+        <div className="text-center" data-testid={`macro-falta-${slug(label)}`}>
+            <p className="text-xs text-muted-foreground">Te faltan</p>
+            <p className="font-data font-bold leading-none text-foreground text-[34px] sm:text-[40px]">
+                {faltanDe(servido, objetivo)}
+            </p>
+            <p className="text-sm text-muted-foreground font-data">de {Math.round(objetivo || 0)}</p>
+            <p className="text-sm font-bold mt-1" style={{ color }}>{label}</p>
+            <div className="h-1 bg-muted rounded-full overflow-hidden mt-2">
+                <div className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${porcentajeMacro(servido, objetivo)}%`, backgroundColor: color }} />
+            </div>
+            {PALABRA_ESTADO[estado] && (
+                <p className="text-xs mt-1.5" style={{ color }} data-testid={`estado-${slug(label)}`}>
+                    {PALABRA_ESTADO[estado]}
+                </p>
+            )}
+        </div>
+    );
+};
+
+// Los tres cierres del documento. Rotan por día: dentro del mismo día siempre el mismo,
+// que si no cambiaría de frase cada vez que recarga.
+const CIERRES = [
+    'Hoy no tienes nada más pendiente. Otra semana más, sigue así que vas bien.',
+    'Hoy no tienes nada más pendiente. Ahora a descansar, que ya toca.',
+    'Hoy no tienes nada más pendiente.',
+];
+
+const InicioNuevo = () => {
+    const { user, profile, api, can, appSettings, pantalla } = useAuth();
+    const navigate = useNavigate();
+    const [macros, setMacros] = useState(null);
+    const [comido, setComido] = useState({ P: 0, H: 0, G: 0 });
+    const [objetivoDelDia, setObjetivoDelDia] = useState(null);
+    const [suplementos, setSuplementos] = useState([]);
+    const [rutina, setRutina] = useState(null);
+    const [entrenoDeHoy, setEntrenoDeHoy] = useState(null);
+    const [ultimoCierre, setUltimoCierre] = useState(null);
+    const [reportes, setReportes] = useState([]);
+    const [tienePreferencias, setTienePreferencias] = useState(true);
+
+    useEffect(() => {
+        if (!profile) return;
+        const cargar = async () => {
+            // Cada petición con su red: una función que no está (el registro de entreno se
+            // está construyendo) o un plan sin suplementación no pueden dejar Inicio en
+            // blanco. Lo que no llega, no se pinta.
+            const [dietaRes, macrosRes, suplRes, rutinaRes, logRes, cierreRes, dueRes, prefsRes] = await Promise.all([
+                api.get(`/diets/${hoyDeLaDieta()}`).catch(() => ({ data: { exists: false } })),
+                api.get('/macros').catch(() => ({ data: null })),
+                api.get('/supplements/current').catch(() => ({ data: null })),
+                api.get('/routines/current').catch(() => ({ data: null })),
+                api.get('/workout-logs/hoy').catch(() => ({ data: { log: null } })),
+                api.get('/checkins?type=daily&limit=1').catch(() => ({ data: [] })),
+                api.get('/reports/due').catch(() => ({ data: { items: [] } })),
+                api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
+            ]);
+            setMacros(macrosRes.data);
+            setSuplementos(suplRes.data?.actual || []);
+            setRutina(rutinaRes.data);
+            setEntrenoDeHoy(logRes.data?.log || null);
+            setUltimoCierre(Array.isArray(cierreRes.data) ? cierreRes.data[0] || null : null);
+            setReportes(dueRes.data?.items || []);
+            setTienePreferencias(!!prefsRes.data?.has_preferences);
+
+            const dieta = dietaRes.data;
+            if (dieta?.exists && dieta.comidas) {
+                let P = 0, H = 0, G = 0;
+                Object.values(dieta.comidas).forEach((comida) => {
+                    (comida.alimentos || []).forEach((a) => {
+                        const ef = a.macros_efectivos || {};
+                        P += ef.P || 0; H += ef.H || 0; G += ef.G || 0;
+                    });
+                });
+                setComido({ P, H, G });
+                const snap = dieta.macros_snapshot;
+                if (snap && (snap.P_total || snap.H_total || snap.G_total)) {
+                    setObjetivoDelDia({ P: snap.P_total || 0, H: snap.H_total || 0, G: snap.G_total || 0 });
+                }
+            }
+        };
+        cargar().catch((err) => {
+            // Al cliente no se le enseña una traza: si algo no llega, Inicio se pinta con
+            // lo que tenga.
+            console.error('[inicio] no se pudieron cargar los datos del día', err);
+        });
+    }, [api, profile]);
+
+    // EL OBJETIVO, EL MISMO QUE ENSEÑA NUTRICIÓN: el del día ya repartido (`macros_snapshot`,
+    // que suma el perientreno) y solo se cae al objetivo crudo cuando todavía no hay día
+    // montado. En la base conviven las claves en inglés y en castellano: se leen las dos.
+    const diaDeLaRutina = rutina?.days?.find((d) =>
+        (d.day || '').toLowerCase() === new Date().toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase());
+    const mt = macros?.training || profile?.macros_training;
+    const mr = macros?.rest || profile?.macros_rest;
+    const crudo = diaDeLaRutina?.is_rest ? mr : mt;
+    const objetivo = objetivoDelDia || {
+        P: crudo?.protein || crudo?.proteinas || 0,
+        H: crudo?.carbs || crudo?.hidratos || 0,
+        G: crudo?.fat || crudo?.grasas || 0,
+    };
+    const tieneMacros = (objetivo.P || objetivo.H || objetivo.G) > 0;
+    const estadoDia = estadoDelDia(comido, objetivo);
+
+    // El cierre del día de HOY (hora de España, que es como cuenta el backend).
+    const cierreDeHoy = ultimoCierre && diaEnEspana(aFecha(ultimoCierre.created_at) || new Date()) === hoyEnEspana()
+        ? ultimoCierre : null;
+    // «✓ hecho» en suplementación cuando lo marcó en el cierre de hoy. El campo lo escribe
+    // T4; mientras no exista, la línea sale sin marcar y no pasa nada.
+    const suplementosTomados = (() => {
+        const r = (cierreDeHoy?.suplementos?.respuesta || '').toString().trim().toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        // Solo el «sí» entero: «no todos» y «no» se quedan sin marca.
+        return r === 'si';
+    })();
+
+    const nombresSuplementos = suplementos.map((s) => s.titulo).filter(Boolean).join(' · ');
+
+    // La línea de entreno sale por el dato, no por el plan (regla 3): si tiene rutina
+    // cargada para hoy. El día de descanso no se anuncia: no hay nada que hacer.
+    const grupoMuscular = diaDeLaRutina?.grupo || diaDeLaRutina?.grupo_muscular
+        || diaDeLaRutina?.focus || diaDeLaRutina?.nombre || '';
+    const esDiaDeEntreno = !!diaDeLaRutina && !diaDeLaRutina.is_rest;
+    const soloCardio = esDiaDeEntreno && !(diaDeLaRutina.exercises?.length) && !!diaDeLaRutina.cardio;
+    const duracionCardio = (() => {
+        const d = diaDeLaRutina?.cardio?.duration;
+        if (d == null || d === '') return '';
+        return /^\d+$/.test(String(d).trim()) ? `${d} minutos` : String(d);
+    })();
+    const resumenEntreno = [estrellas(entrenoDeHoy?.estrellas),
+        entrenoDeHoy?.pesos?.[0]?.ejercicio
+            ? `${entrenoDeHoy.pesos[0].ejercicio}${entrenoDeHoy.pesos[0].peso_kg != null ? ` ${num1(entrenoDeHoy.pesos[0].peso_kg)} kg` : ''}`
+            : ''].filter(Boolean).join(' · ');
+
+    // ── Lo pendiente, en el orden del documento ──
+    const pendientes = [];
+    if (can('reportes') && !cierreDeHoy) {
+        pendientes.push({
+            id: 'cierre', icono: ClipboardCheck, titulo: '¿Cómo fuiste hoy?',
+            detalle: 'Para rellenar al final del día',
+            // La fecha y la hora del último, en vez de la palabra «pendiente».
+            extra: ultimoCierre ? `último registro: ${etiquetaMomento(ultimoCierre.created_at)}` : null,
+            path: '/dashboard/checkins',
+        });
+    }
+    const faltaElAjuste = profile?.questionnaire_completed && !profile?.ajuste_macros_completado
+        && !profile?.macros_puestos_por_alguien;
+    const faltaElNivel1 = can('macros_personalizados') && profile?.questionnaire_completed
+        && (profile?.ajuste_macros_completado || profile?.macros_puestos_por_alguien)
+        && !profile?.questionnaire_nivel1_completed;
+    if (faltaElAjuste || faltaElNivel1) {
+        pendientes.push({
+            id: 'perfil', icono: User, titulo: 'Completar perfil',
+            detalle: 'Para terminar de ajustar tus macros',
+            path: faltaElAjuste ? '/questionnaire?ajustar=1' : '/questionnaire',
+        });
+    }
+    if (!tienePreferencias) {
+        pendientes.push({
+            id: 'preferentes', icono: Apple, titulo: 'Alimentos preferentes',
+            detalle: 'Lo rellenas una vez', path: '/dashboard/nutrition',
+        });
+    }
+    reportes.forEach((r) => {
+        // PASADA LA HORA DESAPARECE. Un plazo vencido en Inicio solo sirve para recordarle
+        // cada mañana que llega tarde a algo que ya no puede mandar.
+        const plazo = textoPlazo(r.deadline);
+        if (!r.is_open || r.overdue || !plazo || plazo.pasado) return;
+        pendientes.push({
+            id: `reporte-${r.tipo}`, icono: FileText, titulo: r.tipo_label,
+            detalle: plazo.texto, path: '/dashboard/reports',
+        });
+    });
+
+    const frase = pantalla('frase_del_dia') ? appSettings?.frase_del_dia?.texto : null;
+
+    return (
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-3xl mx-auto space-y-6 animate-fade-in" data-testid="inicio-nuevo">
+            <header>
+                <p className="text-sm text-muted-foreground first-letter:uppercase" data-testid="inicio-fecha">
+                    {fechaLargaDeHoy()}
+                </p>
+                <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase text-foreground leading-none mt-1">
+                    Hola, {user?.name?.split(' ')[0]}
+                </h1>
+            </header>
+
+            {/* LA FRASE DEL DÍA. La misma para todos, la escribe el panel. Si hoy no hay
+                nueva se queda la del día anterior y no se dice de cuándo es: la frase no
+                es una noticia, y ponerle fecha solo serviría para que se note que no la
+                han cambiado. */}
+            {frase && (
+                <section data-testid="frase-del-dia">
+                    <p className="caption text-brand mb-1">La frase del día</p>
+                    <p className="text-foreground text-lg leading-snug">«{frase}»</p>
+                </section>
+            )}
+
+            <section className="space-y-3">
+                <p className="caption">Lo que toca hoy</p>
+
+                {tieneMacros ? (
+                    <div className="surface surface-hover overflow-hidden cursor-pointer" data-testid="macros-de-hoy"
+                        onClick={() => navigate('/dashboard/nutrition')}>
+                        <div className="px-5 pt-5">
+                            <p className="text-sm font-semibold text-foreground">Tus macros de hoy</p>
+                        </div>
+                        <div className="px-5 pb-5 pt-3">
+                            <div className="grid grid-cols-3 gap-3">
+                                <MacroQueFalta label="Proteína" clave="P" servido={comido.P} objetivo={objetivo.P} />
+                                <MacroQueFalta label="Hidratos" clave="H" servido={comido.H} objetivo={objetivo.H} />
+                                <MacroQueFalta label="Grasa" clave="G" servido={comido.G} objetivo={objetivo.G} />
+                            </div>
+                            {/* El titular del día, SOLO cuando los tres cuadran o son válidos. */}
+                            {estadoDia && (
+                                <p className="text-sm font-bold text-center mt-4" data-testid="estado-del-dia"
+                                    style={{ color: COLOR_ESTADO[estadoDia] }}>
+                                    {TEXTO_ESTADO_DIA[estadoDia]}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <LineaDeHoy icono={Scale} titulo="Configura tus macros"
+                        detalle="Introduce tu peso, % graso y objetivo" testId="inicio-sin-macros"
+                        onClick={() => navigate('/dashboard/macro-calculator')} />
+                )}
+
+                {/* LA SUPLEMENTACIÓN NUNCA DICE «PENDIENTE»: se pincha y ve lo que le hemos
+                    pautado. Si no tiene nada pautado, no hay línea. */}
+                {nombresSuplementos && (
+                    <LineaDeHoy icono={Pill} titulo="Tu suplementación"
+                        detalle={suplementosTomados ? null : nombresSuplementos}
+                        hecho={suplementosTomados} testId="linea-suplementacion"
+                        onClick={() => navigate('/dashboard/supplements')} />
+                )}
+
+                {esDiaDeEntreno && (
+                    entrenoDeHoy?.hecho ? (
+                        <LineaDeHoy icono={Dumbbell}
+                            titulo={`Entreno${grupoMuscular ? ` · ${grupoMuscular}` : ''}`}
+                            detalle={resumenEntreno || null} hecho testId="linea-entreno"
+                            onClick={() => navigate('/dashboard/entreno')} />
+                    ) : soloCardio ? (
+                        <LineaDeHoy icono={Flame} titulo="Hoy solo cardio"
+                            detalle={[duracionCardio, 'ver la pauta'].filter(Boolean).join(' · ')}
+                            testId="linea-entreno" onClick={() => navigate('/dashboard/entreno')} />
+                    ) : (
+                        <LineaDeHoy icono={Dumbbell} titulo="Lo que te toca entrenar"
+                            detalle={[grupoMuscular, 'ver la rutina'].filter(Boolean).join(' · ')}
+                            testId="linea-entreno" onClick={() => navigate('/dashboard/entreno')} />
+                    )
+                )}
+
+                {/* Cerrado el día, la línea se queda arriba con su marca: es lo hecho hoy,
+                    no algo pendiente. */}
+                {cierreDeHoy && (
+                    <LineaDeHoy icono={ClipboardCheck} titulo="¿Cómo fuiste hoy?" hecho
+                        testId="linea-cierre-hecho" onClick={() => navigate('/dashboard/checkins')} />
+                )}
+            </section>
+
+            {pendientes.length > 0 && (
+                <section className="space-y-3">
+                    <p className="caption">Pendiente</p>
+                    {pendientes.map((p) => (
+                        <LineaDeHoy key={p.id} icono={p.icono} titulo={p.titulo} detalle={p.detalle}
+                            extra={p.extra} testId={`pendiente-${p.id}`} onClick={() => navigate(p.path)} />
+                    ))}
+                </section>
+            )}
+
+            {pendientes.length === 0 && (
+                <p className="text-muted-foreground text-sm" data-testid="inicio-cierre">
+                    {varianteDelDia(CIERRES, user?.id)}
+                </p>
+            )}
+        </div>
+    );
+};
+
 // =============== CLIENT DASHBOARD ===============
 
 const ClientDashboard = () => {
-    const { user, profile, api, myPlan, planUnpaid, can } = useAuth();
+    const { user, profile, api, myPlan, planUnpaid, can, pantalla } = useAuth();
+    // El Inicio nuevo del doc del 16-08 (T1), detrás de su interruptor. Apagado -- que es
+    // como nace -- aquí no cambia nada: se sigue viendo el Inicio de siempre.
+    const inicioNuevo = pantalla('t1_inicio_nuevo');
     const enTelefono = useEsTelefono();
     const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
@@ -290,8 +646,10 @@ const ClientDashboard = () => {
                 console.error('Error fetching dashboard data:', error);
             }
         };
-        if (profile) fetchData();
-    }, [api, profile]);
+        // Con el Inicio nuevo encendido, esto no se pinta: no hay por qué pedir las seis
+        // cosas que alimentan la pantalla vieja.
+        if (profile && !inicioNuevo) fetchData();
+    }, [api, profile, inicioNuevo]);
 
     const dismissChecklist = useCallback(() => {
         escribirLocal('onboarding-checklist-dismissed', user?.id, '1');
@@ -338,6 +696,11 @@ const ClientDashboard = () => {
             </div>
         );
     }
+
+    // A partir de aquí, el Inicio de siempre. El nuevo se pinta entero aparte para no
+    // dejar la pantalla vieja llena de condiciones: mientras el interruptor esté apagado,
+    // lo de abajo es exactamente lo que había.
+    if (inicioNuevo) return <InicioNuevo />;
 
     const mt = macros?.training || profile?.macros_training;
     const mr = macros?.rest || profile?.macros_rest;
