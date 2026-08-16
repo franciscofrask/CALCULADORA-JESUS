@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { leer as leerLocal, escribir as escribirLocal, borrar as borrarLocal } from '../lib/almacenLocal';
-import { excesos, textoExceso, margenDe } from '../lib/exceso';
+import { excesos, textoExceso, margenDe, MARGEN } from '../lib/exceso';
 import { num1 } from '../lib/numeros';
 import { leerCantidad, avisoRazonable, TOPE_GRAMOS, AVISO_TOPE, AVISO_NO_ES_NUMERO, AVISO_NEGATIVO } from '../lib/cantidades';
 import { useConfirm } from '../components/ui/confirm';
@@ -1027,8 +1027,8 @@ const NutritionPage = () => {
         if (foods.length === 0) return 'empty';
         // Calma margenValido = 4: a macro is OK while |target - served| < 4. "Sobra" only when
         // a macro genuinely overshoots by >= 4; "falta" otherwise. (margin 0 wrongly flagged
-        // a 0.2 g overshoot as "sobra".)
-        const margin = 4;
+        // a 0.2 g overshoot as "sobra".) El número no se escribe aquí: vive en `lib/exceso`.
+        const margin = MARGEN;
         const isPeriMeal = mealKey === 'Intra' || mealKey === 'Post';
         // EL MARGEN, PROPORCIONAL A LO QUE SE PIDE (13-08). Los 4 g fijos daban por
         // «cuadrado» un intra con 5 de 9 g de proteína, porque 4 sobre 9 es el 44 %. En una
@@ -1928,7 +1928,13 @@ const NutritionPage = () => {
 
     // Day status calculation
     const getDayStatus = () => {
-        const margin = 0;
+        // EL DÍA SE JUZGA CON EL MISMO MARGEN QUE LAS COMIDAS: ±4 g (decisión de Francisco,
+        // 16-08). Aquí había un 0 a pelo, así que un día con 234,8 de 235 de proteína se
+        // guardaba como NO cuadrado mientras la cabecera, las tarjetas de comida, el cierre
+        // del día y el reporte del mes lo daban por bueno. De ahí salían dos cuentas
+        // distintas de «cuadraste N días» sobre los mismos datos: la del calendario de
+        // Nutrición, que sale de este `is_cuadrado` guardado, y la del reporte.
+        const margin = MARGEN;
         const pDiff = dayMacros.P - (dayTarget.P_total || 0);
         const hDiff = dayMacros.H - (dayTarget.H_total || 0);
         const gDiff = comidasG - (dayTarget.G_total || 0);  // peri grasas excluded from comidas G

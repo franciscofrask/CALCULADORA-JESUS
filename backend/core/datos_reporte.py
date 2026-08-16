@@ -153,9 +153,18 @@ async def datos_dieta(perfil: Dict[str, Any], d0: date, d1: date) -> Dict[str, A
         if not any(v > 0 for v in objetivo.values()):
             continue                      # sin objetivo no se juzga el día
 
-        if all(abs(objetivo[r] - total[r]) < MARGEN_VALIDO for r in ("P", "H", "G")):
+        # EL DÍA CUADRA COMO CUADRA EN NUTRICIÓN, no con una regla propia del reporte.
+        #
+        # Margen de ±4 g en los tres (decisión de Francisco, 16-08), y la proteína cuenta
+        # como hecha en cuanto está CUBIERTA: pasarse de proteína no es un fallo (Jesús,
+        # 13-08), y por eso tampoco puede descontar un día aquí. Contándolo de otra forma,
+        # el «cuadraste los macros N días» del reporte no coincidía con los días verdes que
+        # el cliente ve en su calendario, sobre exactamente los mismos datos.
+        proteina_hecha = total["P"] - objetivo["P"] >= -MARGEN_VALIDO
+        resto_cuadrado = all(abs(objetivo[r] - total[r]) <= MARGEN_VALIDO for r in ("H", "G"))
+        if proteina_hecha and resto_cuadrado:
             cuadrados += 1
-        elif objetivo["P"] - total["P"] >= MARGEN_VALIDO:
+        elif objetivo["P"] - total["P"] > MARGEN_VALIDO:
             corto_proteina += 1
 
     return {
