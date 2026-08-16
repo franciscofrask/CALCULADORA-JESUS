@@ -811,7 +811,16 @@ const NutritionPage = () => {
                 fetch(`${process.env.REACT_APP_BACKEND_URL}/api/diets`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                    body: JSON.stringify({ fecha: currentDate, ...snap }),
+                    // CON SU VERSIÓN DEL DÍA, COMO TODOS LOS DEMÁS (16-08-2026, en prod).
+                    // Este guardado de despedida era el único que no la mandaba, y resultó
+                    // ser justo el que más daño hace: al salir de la pantalla escribía la
+                    // copia más vieja que hay, sin candado ninguno. Medido con la cuenta de
+                    // Francisco: el asistente pasaba el día a 3 comidas, y bastaba con
+                    // recargar Nutrición para que volvieran las 4 con la Comida 4 entera.
+                    // Aquí no se puede atender la respuesta -- la pestaña se está yendo --,
+                    // pero con la versión el servidor ya sabe qué parte suya está vieja.
+                    body: JSON.stringify({ fecha: currentDate, ...snap,
+                                           base_updated_at: versionDiaRef.current }),
                     keepalive: true,
                 });
             } catch (e) { /* best effort */ }
@@ -1875,6 +1884,7 @@ const NutritionPage = () => {
                     distribution_targets: distribTargetsOverlay || null,
                     is_cuadrado: getDayStatus() === 'cuadrado',
                     comida_volcada: meal,
+                    base_updated_at: versionDiaRef.current,
                 })
             });
         } catch (err) { /* silent: volcado state is already applied in the UI */ }
