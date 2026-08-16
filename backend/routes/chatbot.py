@@ -13,7 +13,8 @@ from core.security import get_current_user
 from models.diet import ChatConfigRequest, ChatMessageRequest
 
 # Import chatbot functions
-from chatbot import get_or_create_chatbot, clear_session, save_chatbot_session, session_exists
+from chatbot import (get_or_create_chatbot, clear_session, save_chatbot_session,
+                     session_exists, nombre_visible)
 from routes.diets import upsert_diet_doc
 from pdf_generator import generate_diet_pdf
 
@@ -230,7 +231,12 @@ async def chatbot_configure(
     # del 15-08 en producción). Si hay algo puesto, se dice qué hay y se ofrece tocarlo.
     ya_puesto = (chatbot.state["comidas_completadas"].get(key) or {}).get("alimentos", [])
     if ya_puesto:
-        nombres = _enumerar([a.get("nombre", "") for a in ya_puesto if a.get("nombre")])
+        # Por `nombre_visible`, que quita los apuntes de ficha del catálogo: este mensaje de
+        # apertura le recitaba al cliente «Arroz tres delicias ya cocinado - macros
+        # orientativos». La limpieza estaba puesta en las tarjetas y en lo que lee el modelo,
+        # y faltaba justo aquí, que es lo primero que se lee al abrir el chat (16-08-2026).
+        nombres = _enumerar([nombre_visible(a.get("nombre", "")) for a in ya_puesto
+                             if a.get("nombre")])
         mensaje += f"\n\nSeguimos por {label}, que ya tiene {nombres}."
         rc = chatbot.get_remaining_macros()
         pasa = [f"{_gr(abs(round(rc[k])))} g de {_NOMBRE_MACRO[k]}"
