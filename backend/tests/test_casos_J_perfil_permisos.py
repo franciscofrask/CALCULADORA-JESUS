@@ -84,11 +84,16 @@ def _capacidades(habilitaciones: dict) -> dict:
     la copia no se quede atrás en silencio, `test_las_reglas_del_front_siguen_siendo_estas`
     comprueba que las reglas del fichero original no han cambiado.
     """
+    from routes.settings import PANTALLAS
+
     h = habilitaciones or {}
     reportes = h.get("reportes") or []
     return {
-        # La Rutina está apagada para TODOS los clientes desde el 19-07 (ver el test 68).
-        "rutina": False,
+        # La Rutina depende del interruptor `t3_entreno` del panel además de del plan (T3
+        # del doc 16-08). Aquí se mira su valor POR DEFECTO, que es lo que se puede saber
+        # leyendo el código; encenderlo en el panel la abre a quien tenga rutina en su plan.
+        "rutina": (PANTALLAS["t3_entreno"] and bool(h.get("rutina"))
+                   and h.get("rutina") != "ninguna"),
         "suplementacion": bool(h.get("suplementacion")),
         "macros_personalizados": h.get("calculadora") == "personalizado",
         "reportes": len(reportes) > 0,
@@ -117,7 +122,7 @@ def _menu_del_cliente(habilitaciones: dict) -> list:
 def test_las_reglas_del_front_siguen_siendo_estas():
     """Cerrojo del espejo de arriba: si cambian las reglas de planAccess.js, esto avisa."""
     src = _fuente("lib", "planAccess.js")
-    for regla in ("[CAP.RUTINA]: false",
+    for regla in ("[CAP.RUTINA]: !!rutinaVisible && !!h.rutina && h.rutina !== 'ninguna'",
                   "[CAP.SUPLEMENTACION]: !!h.suplementacion",
                   "[CAP.REPORTES]: reportes.length > 0",
                   "h.acompanamiento ? h.acompanamiento !== 'solo_app' : true"):
@@ -294,25 +299,27 @@ def test_68_un_plan_sin_rutina_no_ensena_la_pantalla_de_rutina(
         assert "Rutina" not in menu, f"la Rutina sigue en el menú: {menu}"
 
 
-def test_68_la_rutina_esta_apagada_para_todos_y_en_los_dos_lados():
-    """Matiz que hay que decir: la Rutina no aparece PARA NADIE.
+def test_68_la_rutina_se_enciende_por_el_mismo_sitio_en_los_dos_lados():
+    """Matiz que hay que decir: la Rutina la abre el panel, no el código.
 
-    Se escondió el 19-07-2026 y se confirmó el 08-08: se queda del lado del entrenador.
-    O sea que el caso 68 pasa, pero no porque el plan no la incluya. Los dos interruptores
-    -- el del front y el del backend -- tienen que estar apagados a la vez: si uno se
-    enciende solo, al cliente le llegan avisos de una pantalla que no puede abrir.
+    Se escondió el 19-07-2026 con una constante en cada lado y desde T3 (doc 16-08) manda
+    el interruptor `t3_entreno` de db.app_settings. Los dos lados tienen que leer ESE, y no
+    cada uno el suyo: si uno se enciende solo, al cliente le llegan avisos de una pantalla
+    que no puede abrir, o al revés, ve la pantalla y no se entera de que tiene rutina nueva.
     """
     front = _fuente("lib", "planAccess.js")
-    apagada_en_el_front = "[CAP.RUTINA]: false" in front
+    assert "rutinaVisible" in front, "el front ya no lee el interruptor de la Rutina"
 
     ruta = os.path.join(_RAIZ, "backend", "core", "plan_access.py")
     with open(ruta, encoding="utf-8") as f:
         backend = f.read()
-    apagada_en_el_back = "RUTINA_VISIBLE_PARA_EL_CLIENTE = False" in backend
+    assert "pantalla_activa(\"t3_entreno\")" in backend, (
+        "el backend ya no resuelve la Rutina por el interruptor t3_entreno")
 
-    assert apagada_en_el_front == apagada_en_el_back, (
-        f"los dos interruptores de la Rutina no dicen lo mismo: front oculta="
-        f"{apagada_en_el_front}, backend oculta={apagada_en_el_back}")
+    # Y que quien lo enciende sea uno solo: el mismo nombre en los dos sitios.
+    contexto = _fuente("context", "AuthContext.jsx")
+    assert "pantalla('t3_entreno')" in contexto, (
+        "el front no está pasando el interruptor a deriveCapabilities")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

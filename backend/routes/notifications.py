@@ -75,11 +75,16 @@ async def sincronizar_avisos(user_id: str) -> int:
         ahora = datetime.now(timezone.utc)
         datos = await _datos_para_avisos(perfil, ahora)
 
+        # Las reglas de avisos son puras a proposito (se prueban sin base): el estado del
+        # interruptor de la rutina se lee aqui y se les pasa.
+        from core.plan_access import rutina_visible_para_el_cliente
+
         calendario = avisos_de_calendario(
             perfil=perfil, ahora=ahora,
             proximo_ajuste=datos["proximo_ajuste"],
             semanas_ciclo=datos["semanas_ciclo"],
             macros_puestos_por_alguien=datos["macros_puestos_por_alguien"],
+            rutina_visible=await rutina_visible_para_el_cliente(),
         )
         condicionados = avisos_condicionados(
             ahora=ahora,

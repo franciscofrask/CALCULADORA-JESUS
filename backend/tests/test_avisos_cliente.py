@@ -169,23 +169,20 @@ class TestCalendario:
         assert a == []
 
     def test_la_rutina_avisa_tres_dias_antes_no_el_dia_que_caduca(self):
-        """Y solo mientras Rutinas sea visible para el cliente.
+        """Y solo si la Rutina esta encendida para el cliente.
 
-        Esta pantalla esta oculta a proposito (`RUTINA_VISIBLE_PARA_EL_CLIENTE = False`), y
-        entonces el aviso NO sale: mandarle a renovar una rutina a una pantalla que no puede
-        abrir es peor que no avisarle. Al ocultarla se apago el aviso y este test se quedo
-        sin actualizar, asi que llevaba tiempo en rojo por un motivo que no era un fallo.
+        Quien llama pasa el estado del interruptor `t3_entreno` (T3 del doc 16-08). Con la
+        pantalla apagada el aviso NO sale: mandarle a renovar una rutina a un sitio que no
+        puede abrir es peor que no avisarle.
         """
-        from core.plan_access import RUTINA_VISIBLE_PARA_EL_CLIENTE
-
         base = {"perfil": {"ajuste_macros_completado": True}, "ahora": AHORA}
-        tres_dias_antes = avisos_de_calendario(**base, rutina_caduca=AHORA + timedelta(days=3))
-        if RUTINA_VISIBLE_PARA_EL_CLIENTE:
-            assert tres_dias_antes
-        else:
-            assert tres_dias_antes == [], "con Rutinas oculta el aviso no debe salir"
+        assert avisos_de_calendario(**base, rutina_caduca=AHORA + timedelta(days=3),
+                                    rutina_visible=True)
+        assert avisos_de_calendario(**base, rutina_caduca=AHORA + timedelta(days=3),
+                                    rutina_visible=False) == [], \
+            "con la Rutina apagada el aviso no debe salir"
         # El dia que caduca no se avisa nunca: ya es tarde.
-        assert avisos_de_calendario(**base, rutina_caduca=AHORA) == []
+        assert avisos_de_calendario(**base, rutina_caduca=AHORA, rutina_visible=True) == []
 
     def test_el_ajuste_avisa_a_seis_dias_y_el_dia(self):
         base = {"perfil": {"ajuste_macros_completado": True}, "ahora": AHORA}

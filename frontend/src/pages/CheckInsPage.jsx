@@ -33,6 +33,23 @@ const MOOD_FACES = [
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const isSameDay = (iso) => iso && new Date(iso).toISOString().slice(0, 10) === todayKey();
 
+// «Jueves, 20 de agosto», la fecha de la cabecera del cierre del día.
+const fechaLarga = (iso) => {
+    const d = iso ? new Date(`${iso}T12:00:00`) : new Date();
+    const texto = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+};
+
+// «77,3 kg, ayer». Los decimales con coma, que es como se escriben aquí.
+const kilos = (v) => `${String(v).replace('.', ',')} kg`;
+const cuando = (iso) => {
+    if (!iso) return '';
+    const dias = Math.round((new Date(`${todayKey()}T12:00:00`) - new Date(`${iso}T12:00:00`)) / 86400000);
+    if (dias <= 0) return 'hoy';
+    if (dias === 1) return 'ayer';
+    return new Date(`${iso}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+};
+
 // ── Subcomponentes a nivel de módulo (mantienen el foco al teclear) ──────────
 const Card = ({ className = '', children }) => (
     <div className={`bg-card border border-border rounded-2xl ${className}`}>{children}</div>
@@ -85,6 +102,226 @@ const Collapsible = ({ open, onToggle, icon: Icon, title, subtitle, children }) 
         {open && <div className="border-t border-border p-4 space-y-4">{children}</div>}
     </Card>
 );
+
+// ── El cierre del día (T4 del doc 16-08) ─────────────────────────────────────
+//
+// «Al final del día. Lo primero que sale es lo que no ha marcado». Ese orden -- entreno,
+// suplementos, comida sin registrar, macros -- no es decorativo: es lo que hace que el
+// cierre valga para algo, porque son las cuatro cosas que la app no puede saber sola.
+// Debajo va lo de siempre, que se pregunta todos los días le falte o no le falte nada.
+//
+// Todo lo condicional lo decide el servidor (`GET /checkins/hoy`): la pantalla pinta lo
+// que le digan y no vuelve a calcular por su cuenta si le toca entreno o si se ha pasado
+// de hidratos.
+
+// Las tres escalas del doc, cada una con sus extremos escritos.
+const Escala = ({ titulo, subtitulo, minLabel, maxLabel, value, onChange, testId }) => (
+    <div>
+        <span className="text-sm text-foreground/70 block">{titulo}</span>
+        {subtitulo && <p className="text-[11px] text-foreground/40 mt-0.5">{subtitulo}</p>}
+        <div className="flex gap-2 mt-2">
+            {[1, 2, 3, 4, 5].map(v => (
+                <button key={v} type="button" onClick={() => onChange(v)} data-testid={`${testId}-${v}`}
+                    className={`flex-1 py-3 rounded-xl border font-bold text-sm transition-all ${value === v
+                        ? 'border-brand bg-brand/10 text-brand'
+                        : 'border-border bg-muted text-foreground/50 hover:border-white/30'}`}>
+                    {v}
+                </button>
+            ))}
+        </div>
+        <div className="flex justify-between mt-1.5">
+            <span className="text-[11px] text-foreground/40">{minLabel}</span>
+            <span className="text-[11px] text-foreground/40">{maxLabel}</span>
+        </div>
+    </div>
+);
+
+// Los grupos de botones (entreno, suplementos, movimiento).
+const Opciones = ({ opciones, value, onChange, testId, columnas = 3 }) => (
+    <div className={`grid gap-2 ${columnas === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+        {opciones.map(o => (
+            <button key={o.v} type="button" onClick={() => onChange(o.v)}
+                data-testid={`${testId}-${o.v}`}
+                className={`py-3 px-2 rounded-xl border font-bold text-sm transition-all ${value === o.v
+                    ? 'border-brand bg-brand/10 text-brand'
+                    : 'border-border bg-muted text-foreground/50 hover:border-white/30'}`}>
+                {o.l}
+            </button>
+        ))}
+    </div>
+);
+
+const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
+    const navigate = useNavigate();
+    const [enviando, setEnviando] = useState(false);
+    const [f, setF] = useState({
+        entreno_respuesta: null, entreno_nota: '',
+        suplementos: null, suplementos_detalle: '',
+        cena_hecha: false,
+        exceso_nota: '',
+        descanso: null, energy: null, hunger_anxiety: null, movimiento: null,
+        notas: '', compartida: false, weight: '',
+    });
+    const set = (campo, valor) => setF(prev => ({ ...prev, [campo]: valor }));
+
+    const guardar = async () => {
+        const algo = ['entreno_respuesta', 'suplementos', 'descanso', 'energy', 'hunger_anxiety', 'movimiento']
+            .some(k => f[k] != null) || f.cena_hecha || f.notas.trim() || f.weight;
+        if (!algo) return toast.error('Cuéntame algo antes de guardar.');
+        if (f.weight && !await pesoAceptado(f.weight)) return;
+
+        setEnviando(true);
+        try {
+            await api.post('/checkins', {
+                type: 'daily',
+                descanso: f.descanso, energy: f.energy, hunger_anxiety: f.hunger_anxiety,
+                movimiento: f.movimiento,
+                entreno_respuesta: f.entreno_respuesta,
+                entreno_nota: f.entreno_nota.trim() || null,
+                suplementos: f.suplementos
+                    ? { respuesta: f.suplementos, detalle: f.suplementos_detalle.trim() || null }
+                    : null,
+                // El check de la comida se guarda AQUÍ y ya: no toca la dieta ni le manda
+                // a Nutrición. Se anota de cuál hablaba, o el sí/no no se puede leer luego.
+                cena_hecha: hoy?.comida_pendiente ? f.cena_hecha : null,
+                comida_pendiente: hoy?.comida_pendiente?.key || null,
+                exceso_nota: f.exceso_nota.trim() || null,
+                notas: f.notas.trim() ? { texto: f.notas.trim(), compartida: f.compartida } : null,
+                weight: f.weight ? parseFloat(String(f.weight).replace(',', '.')) : null,
+            });
+            toast.success('Anotado. Mañana seguimos.');
+            onGuardado();
+        } catch (err) {
+            console.error('No se pudo guardar el cierre del día:', err?.response?.data || err);
+            toast.error('No hemos podido guardar tu día. Inténtalo en un momento.');
+        } finally {
+            setEnviando(false);
+        }
+    };
+
+    return (
+        <Card className="p-5 space-y-6" data-testid="cierre-del-dia">
+            {/* 1 · El entreno que no marcó. «Sí, pero no lo puse» le lleva a registrarlo,
+                que es donde de verdad se arregla; no se apaña con un sí a secas aquí. */}
+            {hoy?.entreno && (
+                <div data-testid="cierre-entreno">
+                    <span className="text-sm text-foreground/70 mb-2 block">Hoy no entrenaste.</span>
+                    <Opciones columnas={2} testId="cierre-entreno-op" value={f.entreno_respuesta}
+                        onChange={(v) => {
+                            if (v === 'si_no_lo_puse') return navigate('/dashboard/entreno');
+                            set('entreno_respuesta', v);
+                        }}
+                        opciones={[
+                            { v: 'si_no_lo_puse', l: 'Sí, pero no lo puse' },
+                            { v: 'no_entrene', l: 'No entrené' },
+                        ]} />
+                    <textarea rows={2} value={f.entreno_nota} onChange={e => set('entreno_nota', e.target.value)}
+                        data-testid="cierre-entreno-nota"
+                        placeholder="Cuéntame si quieres qué pasó. Opcional."
+                        className={inputCls + ' resize-none mt-2'} />
+                </div>
+            )}
+
+            {/* 2 · Los suplementos, solo a quien tenga protocolo. */}
+            {hoy?.suplementos && (
+                <div data-testid="cierre-suplementos">
+                    <span className="text-sm text-foreground/70 mb-2 block">¿Tomaste tus suplementos?</span>
+                    <Opciones testId="cierre-suplementos-op" value={f.suplementos}
+                        onChange={(v) => set('suplementos', v)}
+                        opciones={[{ v: 'si', l: 'Sí' }, { v: 'no_todos', l: 'No todos' }, { v: 'no', l: 'No' }]} />
+                    {f.suplementos === 'no_todos' && (
+                        <input value={f.suplementos_detalle} onChange={e => set('suplementos_detalle', e.target.value)}
+                            data-testid="cierre-suplementos-detalle"
+                            placeholder="¿Cuál y por qué?" className={inputCls + ' mt-2'} />
+                    )}
+                </div>
+            )}
+
+            {/* 3 · La comida que le quedó sin registrar: un check y ya. */}
+            {hoy?.comida_pendiente && (
+                <div data-testid="cierre-comida">
+                    <span className="text-sm text-foreground/70 mb-2 block">
+                        Te queda la {hoy.comida_pendiente.etiqueta} sin registrar.
+                    </span>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={f.cena_hecha} data-testid="cierre-comida-hecha"
+                            onChange={e => set('cena_hecha', e.target.checked)}
+                            className="w-4 h-4 accent-[#FF671F]" />
+                        <span className="text-sm text-foreground/80">La hice</span>
+                    </label>
+                </div>
+            )}
+
+            {/* 4 · Si se ha pasado de macros. */}
+            {hoy?.exceso && (
+                <div data-testid="cierre-exceso">
+                    <span className="text-sm text-foreground/70 mb-2 block">
+                        Hoy te has pasado {hoy.exceso.gramos} g de {hoy.exceso.macro}.
+                    </span>
+                    <textarea rows={2} value={f.exceso_nota} onChange={e => set('exceso_nota', e.target.value)}
+                        data-testid="cierre-exceso-nota"
+                        placeholder="Cuéntame si quieres qué pasó. Opcional."
+                        className={inputCls + ' resize-none'} />
+                </div>
+            )}
+
+            {/* Y luego lo de siempre. El descanso se pregunta aquí, referido a la noche de
+                ayer, y sale del reporte del mes: así son 28 datos al mes en vez de uno. */}
+            <Escala titulo="¿Cómo has descansado?" subtitulo="La noche de ayer."
+                minLabel="fatal" maxLabel="de lujo" testId="cierre-descanso"
+                value={f.descanso} onChange={v => set('descanso', v)} />
+            <Escala titulo="Energía" minLabel="por los suelos" maxLabel="a tope" testId="cierre-energia"
+                value={f.energy} onChange={v => set('energy', v)} />
+            {/* Hambre y ansiedad, juntas: es como lo dice él y es una sola escala. */}
+            <Escala titulo="Hambre / ansiedad" minLabel="nada" maxLabel="mucha" testId="cierre-hambre"
+                value={f.hunger_anxiety} onChange={v => set('hunger_anxiety', v)} />
+
+            <div>
+                <span className="text-sm text-foreground/70 block">¿Te moviste lo suficiente?</span>
+                <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
+                    Moverte es salud y menos grasa: a más te muevas, más gastas.
+                </p>
+                <Opciones testId="cierre-movimiento" value={f.movimiento} onChange={v => set('movimiento', v)}
+                    opciones={[
+                        { v: 'menos', l: 'Menos de lo habitual' },
+                        { v: 'igual', l: 'Como me vengo moviendo' },
+                        { v: 'mas', l: 'Más de lo habitual' },
+                    ]} />
+            </div>
+
+            <div>
+                <span className="text-sm text-foreground/70 block">Notas personales</span>
+                <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
+                    Compártelo si quieres que lo veamos, o déjalo para ti. Opcional.
+                </p>
+                <textarea rows={3} value={f.notas} onChange={e => set('notas', e.target.value)}
+                    data-testid="cierre-notas" placeholder="Lo que quieras acordarte."
+                    className={inputCls + ' resize-none'} />
+                <label className="flex items-center gap-3 cursor-pointer mt-2">
+                    <input type="checkbox" checked={f.compartida} data-testid="cierre-compartir"
+                        onChange={e => set('compartida', e.target.checked)}
+                        className="w-4 h-4 accent-[#FF671F]" />
+                    <span className="text-sm text-foreground/80">Compartir con nosotros</span>
+                </label>
+            </div>
+
+            <div>
+                <span className="text-sm text-foreground/70 block">Peso</span>
+                <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
+                    Opcional{hoy?.ultimo_peso ? ` · último registro: ${kilos(hoy.ultimo_peso.valor)}, ${cuando(hoy.ultimo_peso.fecha)}` : ''}
+                </p>
+                <input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} value={f.weight}
+                    onChange={e => set('weight', e.target.value)} data-testid="cierre-peso"
+                    placeholder="kg" className={inputCls} />
+            </div>
+
+            <button onClick={guardar} disabled={enviando} data-testid="cierre-guardar"
+                className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
+                {enviando && <Loader2 className="w-4 h-4 animate-spin" />} Guardar
+            </button>
+        </Card>
+    );
+};
 
 // ── Fotos de progreso ────────────────────────────────────────────────────────
 const PhotoThumb = ({ photo, api, onDeleted }) => {
@@ -228,7 +465,11 @@ const PhotosSection = ({ api }) => {
 };
 
 const CheckInsPage = () => {
-    const { api } = useAuth();
+    const { api, pantalla } = useAuth();
+    // El cierre del día nuevo, detrás de su interruptor del panel (T4). Con él apagado se
+    // queda el check-in diario de siempre, que es lo que hay hoy en producción.
+    const cierreNuevo = pantalla('t4_cierre_nuevo');
+    const [hoy, setHoy] = useState(null);
     const { confirm } = useConfirm();
     const navigate = useNavigate();
     const [checkins, setCheckins] = useState([]);
@@ -239,7 +480,7 @@ const CheckInsPage = () => {
     const enTelefono = useEsTelefono();
     const [otrosAbiertos, setOtrosAbiertos] = useState(false);
 
-    const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null, comido_hoy: '' });
+    const [daily, setDaily] = useState({ energy: null, hunger_anxiety: null });
     const [weekly, setWeekly] = useState({ weight: '', training_compliance: '', nutrition_compliance: '', sleep_quality: '', stress_level: '', notes: '' });
     const [monthly, setMonthly] = useState({ weight: '', body_fat_pct: '', goals_progress: '', challenges: '', notes: '',
         ...Object.fromEntries(MEDIDAS.map(m => [m.key, ''])) });
@@ -262,6 +503,19 @@ const CheckInsPage = () => {
         }
     }, [api]);
 
+    // Lo que le falta hoy: lo decide el servidor (entreno, suplementos, la comida que se
+    // dejó y si se ha pasado de macros). Si no llega, el cierre se enseña igual con las
+    // preguntas de siempre, que es mejor que no dejarle cerrar el día.
+    const fetchHoy = useCallback(async () => {
+        try {
+            const { data } = await api.get('/checkins/hoy');
+            setHoy(data || null);
+        } catch (err) {
+            console.error('No se pudo consultar el día de hoy:', err?.response?.data || err);
+            setHoy(null);
+        }
+    }, [api]);
+
     const loadMoreHistory = async () => {
         if (histShown < checkins.length) { setHistShown(s => s + 12); return; }
         if (!histHasMore) return;
@@ -277,6 +531,7 @@ const CheckInsPage = () => {
     };
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
+    useEffect(() => { if (cierreNuevo) fetchHoy(); }, [cierreNuevo, fetchHoy]);
 
     const todayDaily = checkins.find(c => c.type === 'daily' && isSameDay(c.created_at));
 
@@ -302,12 +557,9 @@ const CheckInsPage = () => {
         }
         setSubmitting(true);
         try {
-            await api.post('/checkins', {
-                type: 'daily', ...daily,
-                comido_hoy: (daily.comido_hoy || '').trim() || null,
-            });
+            await api.post('/checkins', { type: 'daily', ...daily });
             toast.success('Check-in diario enviado');
-            setDaily({ energy: null, hunger_anxiety: null, comido_hoy: '' });
+            setDaily({ energy: null, hunger_anxiety: null });
             fetchAll();
         } catch { toast.error('Error al enviar check-in'); }
         finally { setSubmitting(false); }
@@ -391,23 +643,48 @@ const CheckInsPage = () => {
                     <Activity className="w-6 h-6 text-brand" />
                 </div>
                 <div>
-                    {/* En el teléfono se entra aquí desde la tarjeta «Hoy · 10 segundos» de
-                        Seguimiento, así que la pantalla se llama como lo que promete esa
-                        tarjeta. «Seguimiento» era el nombre de la pestaña de la que viene, y
-                        el subtítulo anunciaba tres check-ins cuando el documento deja uno. */}
-                    <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="checkins-heading">
-                        <span className="lg:hidden">¿Cómo vas hoy?</span>
-                        <span className="hidden lg:inline">Seguimiento</span>
-                    </h1>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        <span className="lg:hidden">Energía, hambre y qué has comido.</span>
-                        <span className="hidden lg:inline">Tus check-ins diarios, semanales y mensuales</span>
-                    </p>
+                    {/* Un solo nombre en los dos tamaños (T4): esto es el cierre del día y
+                        se llama como lo que pregunta. «Seguimiento» era el nombre de la
+                        pestaña de la que se viene, y en escritorio había DOS pantallas
+                        llamadas igual. */}
+                    {cierreNuevo ? (
+                        <>
+                            <p className="text-sm text-muted-foreground">{fechaLarga(hoy?.fecha)}</p>
+                            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none mt-1" data-testid="checkins-heading">
+                                ¿Cómo fuiste hoy?
+                            </h1>
+                        </>
+                    ) : (
+                        <>
+                            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none" data-testid="checkins-heading">
+                                <span className="lg:hidden">¿Cómo vas hoy?</span>
+                                <span className="hidden lg:inline">Seguimiento</span>
+                            </h1>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                <span className="lg:hidden">Energía y hambre.</span>
+                                <span className="hidden lg:inline">Tus check-ins diarios, semanales y mensuales</span>
+                            </p>
+                        </>
+                    )}
                 </div>
             </header>
 
-            {/* Diario */}
-            {todayDaily ? (
+            {/* El cierre del día */}
+            {cierreNuevo ? (
+                // Si ya cerró hoy lo dice el servidor, que es el único que sabe qué día es
+                // en España: aquí el día se sacaba de la fecha UTC del navegador.
+                hoy?.hecho ? (
+                    <Card className="p-4 border-l-4 border-l-emerald-500 flex items-start gap-3" data-testid="checkins-content">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                        <p className="font-bold text-foreground">Anotado. Mañana seguimos.</p>
+                    </Card>
+                ) : (
+                    <div data-testid="checkins-content">
+                        <CierreDelDia api={api} hoy={hoy} pesoAceptado={pesoAceptado}
+                            onGuardado={() => { fetchAll(); fetchHoy(); }} />
+                    </div>
+                )
+            ) : todayDaily ? (
                 <Card className="p-4 border-l-4 border-l-emerald-500 flex items-start gap-3" data-testid="checkins-content">
                     <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                     <div>
@@ -465,23 +742,11 @@ const CheckInsPage = () => {
                             </div>
                             <p className="text-[11px] text-foreground/40 mt-1.5">1 = nada · 5 = mucha</p>
                         </div>
-                        {/* Lo que ha comido de verdad, con sus palabras. No es su dieta: esa ya
-                            está en la app. Es el picoteo, la cerveza y el trozo de tarta que no
-                            aparecen en ningún sitio, y que son justo lo que explica por qué
-                            alguien coge peso sin saber por qué. */}
-                        <div>
-                            <span className="text-sm text-foreground/70 mb-2 block">¿Qué has comido hoy?</span>
-                            <textarea
-                                rows={3}
-                                value={daily.comido_hoy}
-                                onChange={e => setDaily({ ...daily, comido_hoy: e.target.value })}
-                                data-testid="daily-comido"
-                                placeholder="Cuéntalo a tu manera, sin pesar nada. Incluye lo que picaste entre horas."
-                                className={inputCls + ' resize-none'} />
-                            <p className="text-[11px] text-foreground/40 mt-1.5">
-                                Opcional, pero es lo que más ayuda a entender cómo te va.
-                            </p>
-                        </div>
+                        {/* AQUÍ ESTABA «¿QUÉ HAS COMIDO HOY?», y se cae (T4/T11 del doc
+                            16-08). Lo que se come ya se registra en Nutrición, y el cierre
+                            del día pregunta por lo que la app no puede saber. El campo
+                            `comido_hoy` se sigue aceptando en el backend: los que ya están
+                            escritos no se tiran. */}
                         <button onClick={submitDaily} disabled={submitting}
                             className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
                             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar check-in

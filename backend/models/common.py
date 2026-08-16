@@ -87,8 +87,39 @@ class ReportResponse(BaseModel):
     created_at: str
 
 # Check-In Models (3 niveles: daily, weekly, monthly) - portado de calmajp
+class SuplementosDelDia(BaseModel):
+    """La respuesta de "¿Tomaste tus suplementos?" y, si dijo "No todos", cuál y por qué."""
+    respuesta: Optional[str] = Field(None, pattern="^(si|no_todos|no)$")
+    detalle: Optional[str] = Field(None, max_length=1000)
+
+
+class NotaDelDia(BaseModel):
+    """Las "Notas personales" del cierre del día, con su marca. Van al Diario (T5) y el
+    equipo solo ve las compartidas: la marca es del cliente y manda ella."""
+    texto: Optional[str] = Field(None, max_length=4000)
+    compartida: bool = False
+
+
 class CheckInCreate(BaseModel):
     type: str  # "daily" | "weekly" | "monthly"
+    # ── El cierre del día nuevo (T4 del doc 16-08) ────────────────────────────
+    # Todo opcional a propósito: la pantalla enseña solo lo que le falta a ESE cliente
+    # ese día, así que un cierre normal llega con la mitad de los campos vacíos. Los
+    # campos de abajo (energy, hunger_anxiety, comido_hoy...) se siguen aceptando: los
+    # check-ins ya guardados y las versiones viejas de la app no se tiran.
+    descanso: Optional[int] = Field(None, ge=1, le=5)          # "¿Cómo has descansado?" · la noche de ayer
+    movimiento: Optional[str] = Field(None, pattern="^(menos|igual|mas)$")
+    # Qué contesta al "Hoy no entrenaste": lo puso pero no lo marcó, o no entrenó.
+    entreno_respuesta: Optional[str] = Field(None, pattern="^(si_no_lo_puse|no_entrene)$")
+    entreno_nota: Optional[str] = Field(None, max_length=1000)
+    suplementos: Optional[SuplementosDelDia] = None
+    # El check de la comida que le quedaba sin registrar. Se guarda AQUÍ y ya: no toca la
+    # dieta ni le manda a Nutrición (criterio explícito del doc).
+    cena_hecha: Optional[bool] = None
+    # Y de cuál hablaba, que sin esto el booleano de arriba no se puede leer luego.
+    comida_pendiente: Optional[str] = Field(None, max_length=20)
+    exceso_nota: Optional[str] = Field(None, max_length=1000)
+    notas: Optional[NotaDelDia] = None
     # Daily · DOS campos (documento 31-07-2026, partes 6 y 7.2): "solo lo que no está en
     # ningún dato: energía, y ansiedad y hambre. Lo de la dieta y el entreno se rellena
     # solo con lo registrado". `mood`, `trained` y `nutrition_followed` ya no se piden:
@@ -127,6 +158,17 @@ class CheckInResponse(BaseModel):
     id: str
     client_id: str
     type: str
+    # El cierre del día nuevo (T4). Salen a la respuesta porque de aquí los leen el
+    # Diario (las notas) y el reporte del mes (descanso y movimiento).
+    descanso: Optional[int] = None
+    movimiento: Optional[str] = None
+    entreno_respuesta: Optional[str] = None
+    entreno_nota: Optional[str] = None
+    suplementos: Optional[SuplementosDelDia] = None
+    cena_hecha: Optional[bool] = None
+    comida_pendiente: Optional[str] = None
+    exceso_nota: Optional[str] = None
+    notas: Optional[NotaDelDia] = None
     mood: Optional[int] = None
     energy: Optional[int] = None
     hunger_anxiety: Optional[int] = None

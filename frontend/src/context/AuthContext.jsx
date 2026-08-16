@@ -172,8 +172,10 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         if (!token) { setAppSettings(null); return; }
         api.get('/settings/app')
-            .then((res) => setAppSettings(res.data || null))
-            .catch(() => setAppSettings(null));
+            .then((res) => setAppSettings(res.data || {}))
+            // Vacío, no null: null significa "todavía no sé", y con eso `can()` espera. Si
+            // los ajustes no llegan, lo que se sabe es que no hay nada encendido de más.
+            .catch(() => setAppSettings({}));
         // eslint-disable-next-line react-hooks/exhaustive-deps -- api recreado cada render; refetch solo en cambio de token
     }, [token]);
 
@@ -270,7 +272,12 @@ export const AuthProvider = ({ children }) => {
         [profile?.plan, planUnpaid, planCatalog]
     );
     const habilitaciones = myPlan?.habilitaciones || null;
-    const capabilities = useMemo(() => deriveCapabilities(habilitaciones), [habilitaciones]);
+    // La Rutina depende ademas del interruptor del panel (T3): ver lib/planAccess.js.
+    const rutinaVisible = pantalla('t3_entreno');
+    const capabilities = useMemo(
+        () => deriveCapabilities(habilitaciones, { rutinaVisible }),
+        [habilitaciones, rutinaVisible]
+    );
     // can(cap): ¿el plan del usuario habilita esta capacidad?
     // - MIENTRAS CARGA (perfil o catálogo sin resolver): true, para no parpadear.
     // - CARGADO y sin plan contratado (sin perfil, pago pendiente o plan desconocido):
@@ -278,11 +285,14 @@ export const AuthProvider = ({ children }) => {
     //   funcionalidades (rutina, reportes, suplementos...).
     const can = useCallback(
         (cap) => {
-            if (loading || !Object.keys(planCatalog).length) return true;
+            // Los ajustes cuentan como parte de la carga desde que la Rutina depende de
+            // uno de ellos: sin esperarlos, entrar directo a /dashboard/entreno rebotaba
+            // al panel medio segundo antes de que llegara el interruptor encendido.
+            if (loading || !Object.keys(planCatalog).length || appSettings === null) return true;
             if (!myPlan) return false;
             return !!capabilities[cap];
         },
-        [loading, planCatalog, myPlan, capabilities]
+        [loading, planCatalog, myPlan, capabilities, appSettings]
     );
 
     // Empezar y dejar de actuar como un cliente (punto 4.11). Recarga a propósito: la app
