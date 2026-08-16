@@ -270,7 +270,9 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                                         className="text-sm text-brand font-bold hover:underline">
                                         {verTodosLosDias
                                             ? 'Ver menos'
-                                            : `Ver los ${entreno.sin_registrar.length - DIAS_A_LA_VISTA} días que faltan`}
+                                            : (entreno.sin_registrar.length - DIAS_A_LA_VISTA === 1
+                                                ? 'Ver el día que falta'
+                                                : `Ver los ${entreno.sin_registrar.length - DIAS_A_LA_VISTA} días que faltan`)}
                                     </button>
                                 )}
                             </div>
