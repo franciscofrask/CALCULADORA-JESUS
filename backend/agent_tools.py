@@ -2879,7 +2879,13 @@ class AgentTools:
         pedidos = {int(x) for x in (b.get("pedidos") or [])}
         tocados_del_encargo = []
         # Los gramos que ha dicho el cliente: {id: gramos}. Esos no los toca el recuadre.
-        fijas: Dict[int, float] = {}
+        #
+        # Y SE QUEDAN FIJADOS PARA SIEMPRE, no solo durante la llamada que los puso. Sin
+        # esto, la edición siguiente -- «quítame el huevo» -- volvía a soltar sus 30 g de
+        # almendras y el recuadre las bajaba a 5 otra vez, deshaciendo lo que él acababa de
+        # pedir (15-08, visto en la app dos turnos después de arreglarlo).
+        fijas: Dict[int, float] = {int(k): float(v)
+                                   for k, v in (b.get("gramos_fijados") or {}).items()}
         for op in operaciones or []:
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
             if tipo == "quitar" and int(op.get("item_id", 0)) in ids:
@@ -2906,6 +2912,24 @@ class AgentTools:
                         fijas[nuevo] = float(op["cantidad"])
                     except (TypeError, ValueError):
                         pass
+            elif tipo == "ajustar":
+                # «Súbele 10 g al pollo» NO es añadir pollo con cantidad 10: eso dejaba el
+                # pollo EN 10 g cuando tenía 190 (15-08, en la app). Aquí `a` fija y `mas`
+                # suma sobre lo que ya había, igual que en `editar_comida`.
+                cual = int(op.get("item_id") or op.get("alimento_id") or 0)
+                if cual not in self.foods:
+                    continue
+                if cual not in ids:
+                    ids.append(cual)
+                previo = next((float(i.get("cantidad_g") or 0) for i in (b.get("items") or [])
+                               if int(i["id"]) == cual), 0.0)
+                try:
+                    if op.get("a") is not None:
+                        fijas[cual] = float(op["a"])
+                    elif op.get("mas") is not None:
+                        fijas[cual] = max(0.0, previo + float(op["mas"]))
+                except (TypeError, ValueError):
+                    pass
         if not ids:
             return {"ok": False, "error": "el borrador se quedaría vacío"}
         nombres = [self.foods[i]["nombre"] for i in ids]
@@ -2984,6 +3008,10 @@ class AgentTools:
         # el bucle de siempre con otra cara.
         if fijas:
             b["solo_lo_pedido"] = True
+            # Solo las de las piezas que siguen en el menú: si él mismo la ha quitado, sus
+            # gramos ya no pintan nada.
+            vivos = {int(i["id"]) for i in items}
+            b["gramos_fijados"] = {str(k): v for k, v in fijas.items() if k in vivos}
         # LOS AVISOS SON DE LA VERSIÓN ANTERIOR (13-08-2026). Al cambiar el menú, la
         # revisión que los generó deja de valer, y se quedaban pegados a la tarjeta: en
         # producción salió «pidió genéricos y Masa para pancake de arroz y avena (Prozis)
@@ -3025,6 +3053,16 @@ class AgentTools:
                 f"el desvío, o bajar esa cantidad. NO le quites lo suyo por tu cuenta.")
         if salida:
             out["salida_posible"] = salida
+            # LA OFERTA QUEDA APUNTADA, PARA QUE EL «SÍ» SIGNIFIQUE ALGO (15-08, Francisco).
+            #
+            # Le ofreció quitar el pan de barra, él contestó «sí», y el asistente respondió
+            # «no tengo claro a qué le dices que sí». Es el bucle de siempre: la pregunta se
+            # la lleva el viento porque en el turno siguiente nadie se acuerda de qué ofreció.
+            # Guardada aquí, un «sí» pelado la ejecuta sin pasar por el modelo (ver el atajo
+            # de `agent_loop`).
+            self.bot.state["oferta_pendiente"] = {
+                "tipo": "quitar_del_borrador", "borrador_id": borrador_id,
+                "alimento_id": salida["id"], "nombre": salida["nombre"]}
             out["instruccion"] = (
                 f"Con lo que ha pedido la comida se pasa {salida['sobra']} g de "
                 f"{salida['macro']}. Díselo en una línea y OFRÉCELE la salida concreta: "
@@ -3902,9 +3940,9 @@ class AgentTools:
             # si con eso cuadra o solo se queda cerca.
             if libera < max(2.0, sobra * 0.25):
                 continue
-            return {"nombre": peor["nombre"], "macro": _MACRO_LBL[m],
-                    "libera": round(libera, 1), "sobra": round(sobra, 1),
-                    "cuadra": libera >= sobra}
+            return {"id": int(peor.get("id") or 0), "nombre": peor["nombre"],
+                    "macro": _MACRO_LBL[m], "libera": round(libera, 1),
+                    "sobra": round(sobra, 1), "cuadra": libera >= sobra}
         return None
 
     def _nombre_del_menu(self, items: List[dict], pedidos: List[int] = None) -> str:

@@ -105,15 +105,21 @@ _ESQUEMAS = [
                      "SIEMPRE op='sustituir' con item_id (sale) y por_id (entra), nunca "
                      "un añadir suelto: añadir sin quitar deja las dos piezas. Si el cliente "
                      "DICE LOS GRAMOS («añádele 30 g de almendras»), van en 'cantidad' y se "
-                     "respetan tal cual: sin eso el motor decide por él y le puede poner 5."),
+                     "respetan tal cual: sin eso el motor decide por él y le puede poner 5. "
+                     "Para cambiar la cantidad de una pieza QUE YA ESTÁ, op='ajustar' con "
+                     "'mas' («súbele 10 g» -> mas:10) o con 'a' («déjalo en 200 g» -> a:200); "
+                     "NUNCA un añadir con cantidad, que eso la deja EN esos gramos."),
      "parameters": {"type": "object", "properties": {
          "borrador_id": {"type": "string"},
          "operaciones": {"type": "array", "items": {"type": "object", "properties": {
-             "op": {"type": "string", "enum": ["sustituir", "quitar", "añadir"]},
+             "op": {"type": "string", "enum": ["sustituir", "quitar", "añadir", "ajustar"]},
              "item_id": {"type": "integer"}, "por_id": {"type": "integer"},
              "alimento_id": {"type": "integer"},
              "cantidad": {"type": "number",
-                          "description": "gramos EXACTOS que ha dicho el cliente para esa pieza"}}}}},
+                          "description": "gramos EXACTOS que ha dicho el cliente al AÑADIR esa pieza"},
+             "a": {"type": "number", "description": "ajustar: dejar esa pieza EN estos gramos"},
+             "mas": {"type": "number",
+                     "description": "ajustar: SUMAR estos gramos a los que ya tenía («súbele 10 g»). Negativo para restar"}}}}},
          "required": ["borrador_id", "operaciones"]}},
     {"name": "aplicar_borrador",
      "description": "Vuelca un borrador YA revisado a la comida actual. SOLO cuando el cliente diga explícitamente que se queda con ese menú. Pedir un cambio sobre una opción o contestar a una aclaración tuya NO es elegirla. Con problemas se bloquea; 'forzar' únicamente si el cliente lo pide sabiéndolos.",
@@ -387,6 +393,29 @@ _RAZONA_EN_INGLES = re.compile(
 #
 # Ampliar aquí no arriesga: si en la comida no hay nada que participe en la calibración,
 # `_explicar_calibracion` devuelve None y contesta el modelo como siempre.
+# Un «sí» y nada más. Con cualquier cosa detrás («sí, pero quítame el huevo») ya no es un
+# sí pelado: eso lleva instrucciones dentro y lo tiene que leer el modelo entero.
+_ES_UN_SI_PELADO = re.compile(
+    r"(?i)^\s*(s[ií]|sip|claro|vale|ok|okey|venga|dale|perfecto|correcto|hazlo|"
+    r"adelante|por\s*favor|s[ií]\s*por\s*favor|eso\s*es|exacto|quitalo|qu[ií]talo)"
+    r"[\s.!]*$")
+
+
+def _frase_de_como_queda(b: dict) -> str:
+    """«Así queda en 49,8 g de proteína, 30 g de hidratos y 10 g de grasa.»"""
+    t = b.get("macros_totales") or {}
+    partes = [f"{_gramos_humanos(t.get(m, 0))} g de {_MACRO_EN_PROSA[m]}"
+              for m in ("P", "H", "G")]
+    frase = f"Así queda en {', '.join(partes[:-1])} y {partes[-1]}."
+    avisos = b.get("avisos") or []
+    return frase + (f" {avisos[0][0].upper()}{avisos[0][1:]}." if avisos else "")
+
+
+def _gramos_humanos(x) -> str:
+    n = float(x or 0)
+    return (str(int(n)) if abs(n - round(n)) < 0.05 else f"{n:.1f}").replace(".", ",")
+
+
 _PREGUNTA_POR_CALIBRACION = re.compile(
     r"(?is)(?=.*\b(cuenta|cuentan|contar|computa|suma|suman|sumar|aporta|aportan|sirve)\b)"
     r"(?=.*\b(entera|entero|mitad|media|completa|al\s+50|la\s+mitad|no\s+cuenta|"
@@ -780,6 +809,36 @@ class AgentLoop:
         if _PIDE_LAS_INSTRUCCIONES.search(user_input or ""):
             return {"action": "message", "message": _RESPUESTA_INSTRUCCIONES,
                     "day_overview": self.bot.get_day_overview(), "traza": []}
+
+        # UN «SÍ» A UNA OFERTA CONCRETA SE EJECUTA, NO SE REPREGUNTA (15-08, Francisco).
+        #
+        # «¿Quieres que quite el pan de barra para que cuadre?» -- «sí» -- «no tengo claro a
+        # qué le dices que sí». Es la queja que más ha repetido en todo el día, y con el
+        # modelo de por medio no hay forma de garantizarlo: la oferta se apunta en el estado
+        # cuando se hace (ver `editar_borrador`) y aquí se ejecuta sin consultarle a nadie.
+        #
+        # Solo con un sí PELADO. «Sí, pero quítame también el huevo» lleva más instrucciones
+        # dentro y tiene que leerlo el modelo entero.
+        oferta = self.bot.state.get("oferta_pendiente")
+        if oferta and _ES_UN_SI_PELADO.match((user_input or "").strip()):
+            self.bot.state.pop("oferta_pendiente", None)
+            if oferta.get("tipo") == "quitar_del_borrador":
+                r = await self.tools.editar_borrador(
+                    oferta["borrador_id"],
+                    [{"op": "quitar", "item_id": int(oferta["alimento_id"])}])
+                if r.get("ok"):
+                    b = r["borrador"]
+                    resp = self.bot._meal_response([], [])
+                    resp["message"] = (f"Hecho, fuera {oferta['nombre']}. "
+                                       + _frase_de_como_queda(b))
+                    resp["action"] = "menus"
+                    resp["borradores"] = [b]
+                    self.bot.state["last_options"] = []
+                    return resp
+        # Cualquier otra cosa que diga cierra la oferta: si no contesta al sí o al no, es
+        # que ha pasado a otro tema y esa pregunta ya no está encima de la mesa.
+        if oferta:
+            self.bot.state.pop("oferta_pendiente", None)
 
         # LA CALIBRACIÓN LA CONTESTA EL MOTOR, NO EL MODELO (fallo 02 de Jesús, y sigue
         # vivo tras metérsela en el prompt y en el estado). A «¿la proteína de las
