@@ -175,7 +175,7 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
             {"id": profile["id"]},
             {"$unset": {"reporte_aplazado_hasta": "", "reporte_aplazado_tipo": ""}})
 
-    await _avisar_de_lo_que_pidio(profile, user, data)
+    await _avisar_de_lo_que_pidio(profile, user, data, report_id)
 
     # EL INFORME SE GENERA AL ENVIAR (T9). Hasta ahora se montaba al vuelo cada vez que
     # alguien abría la pantalla, así que no existía como cosa: no se podía revisar, ni
@@ -225,17 +225,18 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     return respuesta
 
 
-async def _avisar_de_lo_que_pidio(profile: dict, user: dict, data: ReportCreate) -> None:
+async def _avisar_de_lo_que_pidio(profile: dict, user: dict, data: ReportCreate,
+                                  report_id: str) -> None:
     """Lo que el cliente pide EN el reporte y alguien tiene que atender (T8, bloque 05).
 
     Son dos cosas y las dos son del plan sin rutina: la rutina del mes y el interés por
     el plan de arriba. Van a la campana del equipo porque no las resuelve la app: alguien
     tiene que montarle la rutina y alguien tiene que llamarle.
 
-    EL CARGO DE LOS 57 EUR NO SE DISPARA AQUI. El price de Stripe todavía no existe (lo
-    crea Francisco, ver el plan del 16-08), y cobrar de otra manera sería inventarse un
-    cobro. El cliente marca que la quiere, queda en su reporte y en el aviso, y el cobro
-    se enchufa cuando exista el price: es el único sitio que hay que tocar.
+    La rutina, además, SE COBRA: "al marcar «Sí» autorizas el cargo en tu tarjeta". El cobro
+    va en `core/rutina_del_mes.py` y nunca levanta: si no entra, el reporte se manda igual y
+    el aviso del equipo dice por qué, para que nadie se quede con una rutina sin pagar sin
+    que conste.
     """
     entreno = data.entreno
     if not entreno:
@@ -245,13 +246,33 @@ async def _avisar_de_lo_que_pidio(profile: dict, user: dict, data: ReportCreate)
     nombre = user.get("name") or user.get("email") or "Un cliente"
     if entreno.rutina_del_mes in ("basica", "avanzada"):
         modalidad = "básica" if entreno.rutina_del_mes == "basica" else "avanzada"
+        # «Al marcar «Sí» autorizas el cargo en tu tarjeta»: se le cobra en la que ya tiene
+        # guardada. Si no se puede, el reporte se manda igual y el equipo se entera de por
+        # qué; lo que no se hace es dejar la petición sin cobrar y sin decirlo.
+        from core.rutina_del_mes import PRECIO_EUR, cobrar
+        cobro = await cobrar(profile, entreno.rutina_del_mes, report_id)
+
+        if cobro["cobrado"]:
+            estado = f"Cobrados {PRECIO_EUR:.0f} € en su tarjeta."
+        else:
+            porques = {
+                "sin_tarjeta": "no tiene tarjeta guardada",
+                "requiere_autenticacion": "su banco pide que lo confirme él",
+                "rechazada": "la tarjeta la rechazó",
+                "sin_stripe": "los pagos no están configurados en este entorno",
+            }
+            estado = ("SIN COBRAR: " + porques.get(cobro.get("motivo"), str(cobro.get("motivo")))
+                      + ". Hay que cobrárselo a mano.")
+
         await avisar_al_equipo(
             db, tipo="rutina_del_mes",
             titulo="Quiere la rutina del mes",
-            mensaje=f"{nombre} ha marcado la rutina del mes en modalidad {modalidad} (57 €) "
-                    f"en su reporte. El cobro NO está hecho: falta el price de Stripe.",
+            mensaje=f"{nombre} ha marcado la rutina del mes en modalidad {modalidad} "
+                    f"({PRECIO_EUR:.0f} €) en su reporte. {estado}",
             client_id=profile["id"], trainer_id=profile.get("trainer_id"),
-            extra={"modalidad": entreno.rutina_del_mes, "cobrado": False},
+            extra={"modalidad": entreno.rutina_del_mes, "cobrado": cobro["cobrado"],
+                   "motivo": cobro.get("motivo"), "payment_intent": cobro.get("payment_intent"),
+                   "importe_eur": PRECIO_EUR},
         )
     if entreno.quiere_saber_del_silver:
         await avisar_al_equipo(
