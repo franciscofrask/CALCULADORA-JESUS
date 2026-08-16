@@ -19,7 +19,8 @@ from bson import Binary
 from core.database import db
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import plan_grants_feature
-from core.series_cliente import anotar_peso, anotar_grasa
+from core.series_cliente import actual as actual_de_serie, anotar_peso, anotar_grasa
+from core.tiempo import hoy_madrid
 from models.common import CheckInCreate, CheckInResponse
 
 router = APIRouter(tags=["checkins"])
@@ -118,12 +119,10 @@ async def _dieta_y_entreno_del_dia(profile: dict, fecha: str) -> Dict[str, Any]:
 
     Sustituye a las preguntas de dieta y entreno del check-in diario (documento 7.2).
 
-    OJO con el entrenamiento: hoy NO hay registro de sesiones hechas. `db.routines` guarda
-    el plan (qué le toca), no lo que hizo, así que no hay de dónde deducirlo y aquí no se
-    rellena. Antes el único origen del dato era esta misma pregunta; al quitarla, el conteo
-    de entrenos del informe se queda sin fuente hasta que exista un registro de sesiones.
-    Inventarlo (dar por entrenado el día que tocaba) seria peor: contaria entrenos que
-    nadie ha hecho.
+    El entrenamiento NO se deduce aquí: desde T3 tiene su propia colección (`workout_logs`,
+    lo que el cliente marca en /dashboard/entreno), y esa es la fuente del "entrenaste X de
+    Y". `db.routines` sigue siendo el plan -- qué le toca --, no lo que hizo, y dar por
+    entrenado el día que tocaba contaría entrenos que nadie ha hecho.
     """
     out: Dict[str, Any] = {}
 
@@ -137,6 +136,187 @@ async def _dieta_y_entreno_del_dia(profile: dict, fecha: str) -> Dict[str, Any]:
         out["nutrition_followed"] = bool(tiene_algo)
 
     return out
+
+
+# ==================== EL CIERRE DEL DÍA (T4) ====================
+#
+# "Lo primero que sale es lo que no ha marcado". El orden lo manda el documento: entreno,
+# suplementos, comida sin registrar y macros. Todo se calcula AQUÍ, en un solo sitio, para
+# que la pantalla solo tenga que pintar: son cuatro preguntas condicionales y cada una
+# necesita mirar una colección distinta.
+
+# Las comidas del día como se llaman en `db.diets` y como se le dicen al cliente. Ojo: al
+# cliente NO se le dice "cena" ni "desayuno" (decisión del 09-08); su comida se llama por
+# su número, que es como la ve en Nutrición. El literal del doc, "Te queda la {comida} sin
+# registrar", se rellena con esta etiqueta.
+ETIQUETA_COMIDA = {
+    "C1": "comida 1", "C2": "comida 2", "C3": "comida 3", "C4": "comida 4",
+    "Intra": "intra-entreno", "Post": "post-entreno",
+}
+NOMBRE_MACRO = {"P": "proteína", "H": "hidratos", "G": "grasa"}
+
+
+def _orden_de_comidas(dieta: dict) -> List[str]:
+    """Las comidas de ese día en el orden en que se las encuentra en Nutrición: las
+    normales, y el peri metido en el momento del entreno."""
+    num = int(dieta.get("num_comidas") or 4)
+    base = [f"C{i}" for i in range(1, max(1, min(num, 4)) + 1)]
+    peri = {"intra_post": ["Intra", "Post"], "solo_post": ["Post"],
+            "solo_intra": ["Intra"]}.get(dieta.get("opcion_peri") or "", [])
+    if peri:
+        momento = max(0, min(int(dieta.get("momento_entreno") or 1), len(base)))
+        base = base[:momento] + peri + base[momento:]
+    return base
+
+
+def _comida_sin_registrar(dieta: Optional[dict]) -> Optional[str]:
+    """La comida que le queda por registrar, o None.
+
+    Se coge la ÚLTIMA del día que esté vacía: es la que está cerrando cuando entra aquí, y
+    el doc pregunta por una, no por la lista. Si ese día no tiene dieta montada no se
+    pregunta nada: no hay nada planificado que se le haya quedado a medias.
+    """
+    if not dieta:
+        return None
+    comidas = dieta.get("comidas") or {}
+    vacias = [k for k in _orden_de_comidas(dieta) if not (comidas.get(k) or {}).get("alimentos")]
+    return vacias[-1] if vacias else None
+
+
+async def _consumido_del_dia(dieta: Optional[dict]) -> Dict[str, float]:
+    """Los macros que se ha comido hoy, con el motor de conteo único.
+
+    Lo guardado en `macros_efectivos` es solo un atajo: falta en la mayoría de los
+    alimentos (3.731 de 4.166 medidos el 11-08), así que leerlo a secas devuelve un día
+    entero a cero y "te has pasado" no saltaría nunca.
+    """
+    total = {"P": 0.0, "H": 0.0, "G": 0.0}
+    if not dieta:
+        return total
+    alimentos = [a for m in (dieta.get("comidas") or {}).values() for a in (m.get("alimentos") or [])]
+    ids = [a.get("alimento_id") for a in alimentos if a.get("alimento_id") is not None]
+    catalogo = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": ids}}, {"_id": 0}):
+            catalogo[f["id"]] = f
+    from calma_suggest import macros_efectivos as _efectivos
+    for a in alimentos:
+        me = a.get("macros_efectivos")
+        if not (me and any((me.get(r) or 0) > 0 for r in ("P", "H", "G"))):
+            food = catalogo.get(a.get("alimento_id"))
+            try:
+                me = _efectivos(food, float(a.get("cantidad_g") or 0)) if food else (me or {})
+            except Exception:
+                me = me or {}
+        for r in ("P", "H", "G"):
+            total[r] += float((me or {}).get(r) or 0)
+    return total
+
+
+async def _se_ha_pasado(profile: dict, dieta: Optional[dict], fecha: str) -> Optional[Dict[str, Any]]:
+    """"Hoy te has pasado 40 g de hidratos": el macro que más se le ha ido, si se le ha ido.
+
+    El listón es el mismo que usa la calculadora para decir "Válido" (MARGEN_VALIDO): por
+    debajo de eso el día está dentro y no hay nada que contarle.
+    """
+    if not dieta:
+        return None
+    try:
+        from calma_suggest import MARGEN_VALIDO
+        from macro_distribution import leer_macro
+        from macros_por_fecha import resolver
+
+        training, rest, _peri = await resolver(db, profile, fecha)
+        # Las claves conviven en inglés y en castellano en la misma base: se leen las dos.
+        objetivo_doc = rest if (dieta.get("tipo_dia") == "descanso") else training
+        objetivo = {
+            "P": leer_macro(objetivo_doc, "protein", "proteinas"),
+            "H": leer_macro(objetivo_doc, "carbs", "hidratos"),
+            "G": leer_macro(objetivo_doc, "fat", "grasas"),
+        }
+        if not any(v > 0 for v in objetivo.values()):
+            return None
+        consumido = await _consumido_del_dia(dieta)
+        excesos = [(r, consumido[r] - objetivo[r]) for r in ("P", "H", "G")
+                   if objetivo[r] > 0 and consumido[r] - objetivo[r] > MARGEN_VALIDO]
+        if not excesos:
+            return None
+        macro, gramos = max(excesos, key=lambda x: x[1])
+        return {"macro": NOMBRE_MACRO[macro], "gramos": int(round(gramos))}
+    except Exception as e:
+        # Un día sin macros resueltos no puede tumbar el cierre del día: se calla la
+        # pregunta y ya. El detalle, a la consola del servidor.
+        print(f"[cierre-dia] no se pudo mirar el exceso de macros: {e}")
+        return None
+
+
+async def _cierre_de_hoy(client_id: str, fecha: str) -> Optional[dict]:
+    """El cierre del día de hoy, si ya lo hizo.
+
+    Los cierres nuevos llevan `dia` (el día del cliente, hora de España). Los de antes
+    del 16-08 no lo tienen y hay que mirarles el `created_at`, que va en UTC: uno de las
+    23:30 de Madrid está guardado con la fecha del día siguiente.
+    """
+    from core.tiempo import a_madrid
+    ultimo = await db.checkins.find_one(
+        {"client_id": client_id, "type": "daily"}, {"_id": 0}, sort=[("created_at", -1)])
+    if not ultimo:
+        return None
+    if ultimo.get("dia"):
+        return ultimo if ultimo["dia"] == fecha else None
+    cuando = a_madrid(ultimo.get("created_at"))
+    return ultimo if cuando and cuando.date().isoformat() == fecha else None
+
+
+@router.get("/checkins/hoy")
+async def cierre_del_dia_hoy(user=Depends(get_current_user)):
+    """Lo que la pantalla del cierre del día necesita saber antes de preguntar nada.
+
+    `fecha` es el día del cliente en hora de España: a las 23:30 de Madrid el cierre
+    sigue siendo el de hoy, aunque en UTC ya sea mañana.
+    """
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    fecha = hoy_madrid().isoformat()
+    hecho = await _cierre_de_hoy(profile["id"], fecha)
+
+    # ── 1 · El entreno. Solo si hoy le tocaba y no lo ha registrado.
+    from routes.workout_logs import dia_de_rutina, log_del_dia, titulo_del_dia
+    from routes.settings import pantalla_activa
+
+    entreno = None
+    if await pantalla_activa("t3_entreno"):
+        rutina = await db.routines.find_one({"client_id": profile["id"], "status": "active"}, {"_id": 0})
+        dia = dia_de_rutina(rutina, fecha)
+        if dia and not await log_del_dia(profile["id"], fecha):
+            entreno = {"dia_rutina": titulo_del_dia(dia)}
+
+    # ── 2 · Los suplementos. Solo a quien tenga protocolo vigente: al que no le hemos
+    # pautado nada no se le pregunta si se lo ha tomado.
+    from routes.supplements import vigente_en
+    proto = await db.supplement_protocols.find_one({"client_id": profile["id"]}, {"_id": 0})
+    version = vigente_en((proto or {}).get("versiones") or [], fecha)
+    suplementos = bool((version or {}).get("items"))
+
+    # ── 3 y 4 · La dieta del día: la comida que falta y si se ha pasado de macros.
+    dieta = await db.diets.find_one({"user_id": profile.get("user_id"), "fecha": fecha}, {"_id": 0})
+    pendiente = _comida_sin_registrar(dieta)
+
+    ultimo = actual_de_serie(profile.get("pesos"))
+
+    return {
+        "fecha": fecha,
+        "hecho": bool(hecho),
+        "checkin": hecho,
+        "entreno": entreno,
+        "suplementos": suplementos,
+        "comida_pendiente": ({"key": pendiente, "etiqueta": ETIQUETA_COMIDA.get(pendiente, "comida")}
+                             if pendiente else None),
+        "exceso": await _se_ha_pasado(profile, dieta, fecha),
+        "ultimo_peso": ultimo,
+    }
 
 
 # El decorador estaba pegado a la funcion de arriba, que es una ayudante interna. Con eso, la
@@ -154,19 +334,24 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     if not plan_grants_feature(profile.get("plan"), "reportes"):
         raise HTTPException(status_code=403, detail="Tu plan no incluye check-ins de seguimiento.")
 
+    # El día DEL CLIENTE, en hora de España. `created_at` es UTC y a partir de las 22:00
+    # de Madrid (23:00 en invierno) ya cuenta como el día siguiente: el cierre de las
+    # 23:30 acababa guardado en mañana, que es justo el día que aún no ha vivido.
+    dia = hoy_madrid().isoformat()
+
     checkin = {
         "id": str(uuid.uuid4()),
         "client_id": profile["id"],
         **data.model_dump(exclude_none=True),
+        "dia": dia,
         "trainer_feedback": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # El check-in diario son DOS campos (documento, parte 7.2). La dieta y el entreno no
-    # se preguntan: ya constan. Preguntar por algo que el sistema sabe es hacerle trabajar
-    # para nada, y encima su respuesta puede contradecir al registro.
+    # La dieta no se pregunta: ya consta. Preguntar por algo que el sistema sabe es
+    # hacerle trabajar para nada, y encima su respuesta puede contradecir al registro.
     if data.type == "daily":
-        deducido = await _dieta_y_entreno_del_dia(profile, checkin["created_at"][:10])
+        deducido = await _dieta_y_entreno_del_dia(profile, dia)
         checkin.update(deducido)
         checkin["autorrelleno"] = list(deducido.keys())
 
@@ -176,7 +361,7 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     # el peso "actual" del perfil sale de la serie. Antes se escribia suelto en el perfil,
     # y era una de las dos vias por las que la app acababa ensenando dos pesos distintos.
     if data.weight is not None:
-        await anotar_peso(profile["id"], data.weight, checkin["created_at"][:10],
+        await anotar_peso(profile["id"], data.weight, dia,
                           origen=f"check-in {data.type}")
     # El % graso del check-in mensual, si viene. La pantalla YA NO LO PIDE (punto 53 del
     # doc del 07-08: "hoy la app lo pide cada mes" y no debe): es un dato que estima Jesus
@@ -187,7 +372,7 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     # Se sigue aceptando por si llega de una version vieja de la app o de un check-in ya
     # guardado: si alguien se molesto en ponerlo, no se tira.
     if data.body_fat_pct is not None:
-        await anotar_grasa(profile["id"], data.body_fat_pct, checkin["created_at"][:10],
+        await anotar_grasa(profile["id"], data.body_fat_pct, dia,
                            origen=f"check-in {data.type}")
 
     return CheckInResponse(**checkin)

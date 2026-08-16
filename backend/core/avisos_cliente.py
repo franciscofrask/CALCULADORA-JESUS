@@ -26,8 +26,6 @@ Tres reglas que no son de estilo:
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from core.plan_access import RUTINA_VISIBLE_PARA_EL_CLIENTE
-
 # El tope de las condicionadas. Las de calendario no cuentan para esto.
 DIAS_ENTRE_CONDICIONADAS = 7
 
@@ -74,7 +72,8 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                          proximo_ajuste: Optional[datetime] = None,
                          rutina_caduca: Optional[datetime] = None,
                          semanas_ciclo: Optional[int] = None,
-                         macros_puestos_por_alguien: bool = False) -> List[Dict[str, Any]]:
+                         macros_puestos_por_alguien: bool = False,
+                         rutina_visible: bool = False) -> List[Dict[str, Any]]:
     fuera: List[Dict[str, Any]] = []
     hoy = ahora.date()
 
@@ -116,10 +115,11 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                     "calendario": True,
                 })
 
-    # "Mañana empiezas": el domingo de antes de arrancar. Mientras la Rutina esté oculta
-    # para el cliente (ver plan_access.RUTINA_VISIBLE_PARA_EL_CLIENTE) no se le puede
-    # decir "tu rutina ya está cargada" ni mandarle a una pantalla que no puede abrir: el
-    # aviso se queda, pero apuntando a su panel y sin prometerle lo que no va a ver.
+    # "Mañana empiezas": el domingo de antes de arrancar. Mientras la Rutina esté apagada
+    # para el cliente (`rutina_visible`, que sale del interruptor t3_entreno y lo pasa
+    # quien llama) no se le puede decir "tu rutina ya está cargada" ni mandarle a una
+    # pantalla que no puede abrir: el aviso se queda, pero apuntando a su panel y sin
+    # prometerle lo que no va a ver.
     if arranque:
         dias_para_arrancar = (arranque.date() - hoy).days
         if dias_para_arrancar == 1:
@@ -127,8 +127,8 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                 "clave": f"arranque:{arranque.date()}",
                 "tipo": "programa",
                 "titulo": "Mañana empiezas",
-                "cuerpo": "Tu rutina ya está cargada." if RUTINA_VISIBLE_PARA_EL_CLIENTE else None,
-                "link": "/dashboard/routine" if RUTINA_VISIBLE_PARA_EL_CLIENTE else "/dashboard",
+                "cuerpo": "Tu rutina ya está cargada." if rutina_visible else None,
+                "link": "/dashboard/routine" if rutina_visible else "/dashboard",
                 "calendario": True,
             })
 
@@ -154,10 +154,10 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                 "calendario": True,
             })
 
-    # "Tu rutina acaba el X": tres dias antes, no el dia que caduca. Con la Rutina oculta
+    # "Tu rutina acaba el X": tres dias antes, no el dia que caduca. Con la Rutina apagada
     # este aviso no se manda: entero va de algo que el cliente no puede ver, y decirle
     # "renuevala" cuando no tiene donde es peor que no decirle nada.
-    if rutina_caduca and RUTINA_VISIBLE_PARA_EL_CLIENTE:
+    if rutina_caduca and rutina_visible:
         faltan = (rutina_caduca.date() - hoy).days
         if faltan == 3:
             fuera.append({

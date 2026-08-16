@@ -18,15 +18,20 @@ export const CAP = {
 };
 
 // Deriva capacidades booleanas a partir de la matriz de habilitaciones del plan.
-export function deriveCapabilities(habilitaciones) {
+//
+// `rutinaVisible` es el interruptor `t3_entreno` del panel (db.app_settings), que llega
+// por `pantalla('t3_entreno')` desde AuthContext. Su gemelo del backend es
+// `core/plan_access.rutina_visible_para_el_cliente()`: los dos leen lo mismo, para que no
+// pueda pasar que al cliente le lleguen avisos de una pantalla que no puede abrir.
+export function deriveCapabilities(habilitaciones, { rutinaVisible = false } = {}) {
     const h = habilitaciones || {};
     const reportes = h.reportes || [];
     return {
-        // RUTINA OCULTA temporalmente (petición 19-07-2026) hasta completar la
-        // funcionalidad. Al reactivarla, restaurar: !!h.rutina && h.rutina !== 'ninguna'
-        // Oculta menú, tarjeta "Entreno de hoy", paso del tour y la ruta directa
-        // (CapabilityRoute). El panel de admin de rutinas NO se toca.
-        [CAP.RUTINA]: false,
+        // La Rutina se escondió el 19-07-2026 con una constante aquí mismo. Ahora manda el
+        // interruptor, y por debajo lo de siempre: que el plan la incluya. Cierra menú,
+        // tarjeta "Entreno de hoy", paso del tour y las rutas directas (CapabilityRoute).
+        // El panel de admin de rutinas NO se toca.
+        [CAP.RUTINA]: !!rutinaVisible && !!h.rutina && h.rutina !== 'ninguna',
         [CAP.SUPLEMENTACION]: !!h.suplementacion,
         [CAP.MACROS_PERSONALIZADOS]: h.calculadora === 'personalizado',
         [CAP.REPORTES]: reportes.length > 0,

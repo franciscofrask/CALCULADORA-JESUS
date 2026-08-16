@@ -13,6 +13,7 @@ import MiCuerpoPage from "./pages/MiCuerpoPage";
 import { leerDestino } from "./lib/navegacion";
 import { ClientDashboard, ClientLayout } from "./pages/ClientDashboard";
 import RoutinePage from "./pages/RoutinePage";
+import EntrenoPage from "./pages/EntrenoPage";
 import NutritionPage from "./pages/NutritionPage";
 import ReportsPage from "./pages/ReportsPage";
 import MessagesPage from "./pages/MessagesPage";
@@ -218,6 +219,9 @@ function AppRoutes() {
             >
                 <Route index element={<ClientDashboard />} />
                 <Route path="routine" element={<CapabilityRoute cap="rutina"><RoutinePage /></CapabilityRoute>} />
+                {/* El registro del entreno del día (T3). Va con la misma llave que la
+                    rutina: CAP.RUTINA ya lleva dentro el interruptor `t3_entreno`. */}
+                <Route path="entreno" element={<CapabilityRoute cap="rutina"><EntrenoPage /></CapabilityRoute>} />
                 <Route path="nutrition" element={<NutritionPage />} />
                 <Route path="reports" element={<CapabilityRoute cap="reportes"><ReportsPage /></CapabilityRoute>} />
                 <Route path="messages" element={<MessagesPage />} />
