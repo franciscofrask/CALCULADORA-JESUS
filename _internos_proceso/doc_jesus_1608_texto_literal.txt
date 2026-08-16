@@ -1,0 +1,1710 @@
+
+
+12EN12 · Qué hay que hacer · para Francisco
+
+12EN12 · Especificación de trabajo · 16 de agosto de 2026
+
+[H1] Qué hay que hacer en la app
+
+Doce tareas, en orden. Cada una con lo que hay hoy, cómo tiene que quedar y los
+textos exactos.
+
+Todo esto sustituye a los correos de ActiveCampaign: de 13 correos a 19 avisos
+dentro de la app.
+
+Entra en producción · lunes 17 de agosto, 18:00 h España
+
+Entra todo · el orden es este
+
+ - Inicio · T1
+
+ - Suplementos · T2
+
+ - Entrenamiento · T3
+
+ - El cierre del día · T4
+
+ - El Diario · T5
+
+ - Seguimiento · T6
+
+ - El quincenal · T7
+
+ - El mensual · T8
+
+ - El envío y el informe · T9
+
+ - Los 19 avisos · T10
+
+ - Lo que se quita · T11
+
+ - Los cinco fallos del panel · T12
+
+Aparcado hasta que termines lo demás
+
+ - El reporte de mujer
+
+ - El asistente de IA — ya está bien, no hace falta tocarlo ahora
+
+Estas dos no se hacen todavía. El resto,
+todo.
+
+De uno en uno y en ese orden, no en paralelo. El lunes a las 18:00 entran los
+clientes antiguos: de T1 a T4 es lo que se encuentran al abrir y no puede faltar. De T5 en
+adelante se sigue el mismo día o al siguiente. Y que cada pantalla nueva se pueda apagar desde el
+panel sin desplegar, por si algo no está fino.
+
+ - Reglas
+
+ - T1 · Inicio
+
+ - T2 · Suplementos
+
+ - T3 · Entreno
+
+ - T4 · Cierre del día
+
+ - T5 · Diario
+
+ - T6 · Seguimiento
+
+ - T7 · Quincenal
+
+ - T8 · Mensual
+
+ - T9 · Enviar
+
+ - T10 · Avisos
+
+ - T11 · Se quita
+
+ - T12 · Admin
+
+00
+
+[H2] Seis reglas que valen para todo
+
+ | Regla | Por qué
+
+ | 1 · Todo en hora de España. Nada en UTC | Hoy ActiveCampaign va en UTC y el quincenal cierra a las 18:00 cuando el correo dice 20:00
+
+ | 2 · Nada por correo. Todo son avisos dentro de la app | El correo del reporte mensual lo abre 1 de cada 8 (13,3 %)
+
+ | 3 · Se mira el dato, no el plan. Si tiene rutina cargada en «Rutinas», ve la línea de entreno; si no, no | Evita tres excepciones por plan y una línea vacía en Inicio
+
+ | 4 · Nunca prometer lo que no se sabe. Un reporte no significa macros nuevos: «para ajustar tus macros si hace falta» | Puede que ese mes no haya que tocarle nada
+
+ | 5 · Primero el dato, después la pregunta. Si la app ya sabe algo, se lo dice; solo se pregunta lo que no se puede saber | «Has entrenado 14 de 16 días» en vez de «¿has entrenado?»
+
+ | 6 · Cada aviso con 2 o 3 textos que rotan, y nunca el mismo dos veces seguidas | El mismo mensaje repetido doce semanas deja de leerse
+
+T1
+
+[H2] Inicio
+
+cambia enterolos tres planes
+
+Un bloque, «Lo que toca hoy», con macros, suplementación y entreno. Debajo, «Pendiente». Y arriba del todo, la frase del día.
+
+Hoy
+Con cosas pendientes
+
+Jueves, 20 de agosto
+
+[H4] Hola, Jesús
+
+La frase del día
+
+«El único secreto que tiene esto es no dejarlo.»
+
+Lo que toca hoy
+
+Tus macros de hoy
+
+Te faltan
+
+94
+
+de 120
+
+Proteína
+
+Te faltan
+
+50
+
+de 50
+
+Hidratos
+
+Te faltan
+
+35
+
+de 50
+
+Grasa
+
+Tu suplementaciónWhey · Omega 3 · Creatina
+›
+
+Lo que te toca entrenarPierna, abdomen · ver la rutina
+›
+
+Pendiente
+
+¿Cómo fuiste hoy?Para rellenar al final del día
+›
+
+Completar perfilPara terminar de ajustar tus macros
+›
+
+Alimentos preferentesLo rellenas una vez
+›
+
+Reporte mensualHasta el lunes 24 a las 18:00 h España · te quedan 2 días
+›
+
+La suplementación no dice «pendiente»: se pincha y ve el protocolo que le has pautado.
+
+SaludoHola, [nombre]Etiqueta 1La frase del díaEtiqueta 2Lo que toca hoyMacrosTe faltan 94 · de 120 · ProteínaSuplementaciónTu suplementación
+Whey · Omega 3 · CreatinaEntrenoLo que te toca entrenar
+Pierna, abdomen · ver la rutinaEtiqueta 3PendientePendientes¿Cómo fuiste hoy? · Para rellenar al final del día
+Completar perfil · Para terminar de ajustar tus macros
+Alimentos preferentes · Lo rellenas una vez
+Reporte mensual · Hasta el lunes 24 a las 18:00 h España · te quedan 2 días
+
+Día de solo cardio · día válido
+
+Martes, 25 de agosto
+
+[H4] Hola, Jesús
+
+La frase del día
+
+«No se trata de lo que consigues, se trata de lo que mantienes.»
+
+Lo que toca hoy
+
+Tus macros de hoy
+
+Te faltan
+
+12
+
+de 120
+
+Proteína
+
+válido
+
+Te faltan
+
+0
+
+de 50
+
+Hidratos
+
+cuadrado
+
+Te faltan
+
+0
+
+de 50
+
+Grasa
+
+cuadrado
+
+Día válido · los tres dentro del margen
+
+Tu suplementaciónWhey · Omega 3 · Creatina
+›
+
+Hoy solo cardio40 minutos · ver la pauta
+›
+
+Pendiente
+
+¿Cómo fuiste hoy?Para rellenar al final del día
+último registro: ayer, 21:40
+
+El día es válido cuando los tres están cuadrados o dentro del margen. Amarillo. Y en «¿Cómo fuiste hoy?», la fecha y la hora del último registro en vez de «pendiente».
+
+Todo hecho · día cuadrado
+
+Martes, 25 de agosto
+
+[H4] Hola, Jesús
+
+La frase del día
+
+«El éxito no es llegar, es quedarte.»
+
+Lo que toca hoy
+
+Tus macros de hoy
+
+Te faltan
+
+0
+
+de 120
+
+Proteína
+
+cuadrado
+
+Te faltan
+
+0
+
+de 50
+
+Hidratos
+
+cuadrado
+
+Te faltan
+
+0
+
+de 50
+
+Grasa
+
+cuadrado
+
+Día cuadrado · los tres clavados
+
+Tu suplementación
+✓ hecho
+
+Entreno · Empuje
+✓ hecho
+
+¿Cómo fuiste hoy?
+✓ hecho
+
+Hoy no tienes nada más pendiente.
+Otra semana más. Sigue así, que vas bien.
+
+Verde cuando cuadra. Y el cierre cambia según lo que haya pasado.
+
+Estado del día · solo cuando los tres cuadran o son válidosDía cuadrado · los tres clavados  (verde)
+Día válido · los tres dentro del margen  (amarillo)Cierres, van rotandoHoy no tienes nada más pendiente. Otra semana más, sigue así que vas bien.
+Hoy no tienes nada más pendiente. Ahora a descansar, que ya toca.
+Hoy no tienes nada más pendiente.
+
+Está hecho cuando
+
+ - La frase del día sale de un campo del panel de admin y es la misma para todos
+
+ - Si un día no hay frase nueva, se queda la del día anterior, sin fecha
+
+ - Los macros dicen «Te faltan X, de Y» con barra: naranja falta · amarillo válido · verde cuadrado
+
+ - La suplementación no dice «pendiente»: se pincha y lleva a T2
+
+ - La línea de entreno solo sale si tiene una rutina cargada en el apartado Rutinas
+
+ - En «¿Cómo fuiste hoy?» sale la fecha y hora del último registro, no la palabra «pendiente»
+
+T2
+
+[H2] Suplementos · la pantalla
+
+la pestaña ya existeel contenido, nolos tres planes
+
+Hoy la pestaña está pero no enseña su protocolo. Se entra desde Inicio y desde el menú.
+
+Suplementos · la pantalla que falta
+
+[H4] Tu suplementación
+
+Lo que te he pautado y cuándo tomarlo
+
+Whey Isolate1 cacito · después de entrenar
+
+Omega 32 cápsulas · con la comida 2
+
+Creatina5 g · a cualquier hora, todos los días
+
+Y si le cambias algo, le llega el aviso y aquí lo ve.
+
+Hoy la pestaña Suplementos existe pero no enseña su protocolo. Es lo que pediste: que al tocarla vea lo que tiene que tomar.
+
+Está hecho cuando
+
+ - Enseña lo que le has pautado: qué, cuánto y cuándo
+
+ - Si le cambias la suplementación, le llega el aviso y aquí ve lo nuevo
+
+T3
+
+[H2] Entrenamiento
+
+pantalla nuevaquien tenga rutina cargada
+
+Se entra desde «lo que toca hoy». Ve la rutina, la marca, y lo que escriba va al Diario.
+
+La pantalla
+
+Jueves, 20 de agosto
+
+[H4] Pierna, abdomen
+
+Semana 6 · rutina 3
+
+Ver la rutinaO descárgala en PDF
+›
+
+¿Lo has completado?
+
+Hecho
+
+No hecho
+
+Sensaciones
+
+Cómo te has sentido entrenando
+
+★★★★★
+
+Algo que destacar
+
+Lo que quieras acordarte de este entreno.
+
+Pesos de referencia
+
+Opcional. Para que sepas de dónde partir en futuras rutinas.
+
+ejerciciorepsúltima serie
+
+Press banca880 kg
+
+Aperturas1216 kg
+
++ Añadir ejercicio
+
+Compartir con nosotros
+
+Guardar
+
+Todo lo que escriba aquí va a su diario, igual que las notas del día.
+
+Y así queda en Inicio
+
+Lo que toca hoy
+
+Entreno · Pierna, abdomenVer la rutina
+pendiente
+
+Después de marcarlo:
+
+Entreno · Pierna, abdomen★★★★☆ · Press banca 80 kg
+✓ hecho
+
+Y si no lo marca, se queda sin marcar hasta el final del día. Nunca en rojo.
+
+La línea de Inicio resume lo que puso: las estrellas y el peso de referencia.
+
+Cabecera[Grupo muscular] · Semana [n] · rutina [n]BotónVer la rutina · O descárgala en PDFPregunta 1¿Lo has completado?  [Hecho] [No hecho]Pregunta 2Sensaciones · Cómo te has sentido entrenando · estrellasPregunta 3Algo que destacar · Lo que quieras acordarte de este entrenoPregunta 4Pesos de referencia · Opcional. Para que sepas de dónde partir en futuras rutinas.
+Filas de ejercicio · repeticiones · peso de la última serie + «Añadir ejercicio»CheckCompartir con nosotros
+
+Está hecho cuando
+
+ - Los pesos de referencia se guardan y se le vuelven a enseñar la próxima vez que le toque esa rutina
+
+ - Lo que escriba aquí aparece en su Diario
+
+ - La línea de Inicio pasa a «✓ hecho» y resume las estrellas y el peso
+
+ - Si no lo marca, se queda sin marcar. Nunca en rojo
+
+T4
+
+[H2] El cierre del día · «¿Cómo fuiste hoy?»
+
+existecambia el contenidolos tres planes
+
+Al final del día. Lo primero que sale es lo que no ha marcado, y ninguna pregunta lleva opciones: campo libre.
+
+Hoy
+Si le faltan cosas
+
+Jueves, 20 de agosto
+
+[H4] ¿Cómo fuiste hoy?
+
+Hoy no entrenaste.
+
+Sí, pero no lo puse
+
+No entrené
+
+Cuéntame si quieres qué pasó. Opcional.
+
+¿Tomaste tus suplementos?
+
+Sí
+
+No todos
+
+No
+
+¿Cuál y por qué?
+
+La creatina, se me acabó.
+
+Te queda la cena sin registrar.
+
+✓
+La hice
+
+Hoy te has pasado 40 g de hidratos.
+
+Cuéntame si quieres qué pasó. Opcional.
+
+Lo primero, lo que le falta, y en este orden: el entreno, los suplementos, la comida sin registrar y los macros. Ninguno con opciones: campo libre. Y la cena, un check y ya — no le mandamos a Nutrición.
+
+Y luego lo de siempre
+
+¿Cómo has descansado?
+
+La noche de ayer.
+
+1
+
+2
+
+3
+
+4
+
+5
+
+fatalde lujo
+
+Energía
+
+1
+
+2
+
+3
+
+4
+
+5
+
+por los suelosa tope
+
+Hambre / ansiedad
+
+1
+
+2
+
+3
+
+4
+
+5
+
+nadamucha
+
+¿Te moviste lo suficiente?
+
+Moverte es salud y menos grasa: a más te muevas, más gastas.
+
+Menos de
+lo habitual
+
+Como me vengo
+moviendo
+
+Más de
+lo habitual
+
+Notas personales
+
+Compártelo si quieres que lo veamos, o déjalo para ti. Opcional.
+
+Lo que quieras acordarte.
+
+Compartir con nosotros
+
+PesoOpcional · último registro: 77,3 kg, ayer
+— kg
+
+Guardar
+
+Anotado. Mañana seguimos.
+
+El descanso entra aquí, referido a la noche anterior, y sale del reporte mensual: así tienes 28 datos al mes en vez de uno. Y hambre y ansiedad, juntas, que es como lo dices tú.
+
+Si no marcó el entrenoHoy no entrenaste.  [Sí, pero no lo puse] [No entrené]
+Cuéntame si quieres qué pasó. Opcional.Suplementos¿Tomaste tus suplementos?  [Sí] [No todos] [No]
+Si no todos: ¿Cuál y por qué?Comida sin registrarTe queda la cena sin registrar.  ☑ La hiceSi se pasó de macrosHoy te has pasado 40 g de hidratos.
+Cuéntame si quieres qué pasó. Opcional.Escalas 1-5¿Cómo has descansado? · La noche de ayer. · fatal → de lujo
+Energía · por los suelos → a tope
+Hambre / ansiedad · nada → muchaMovimiento¿Te moviste lo suficiente?
+Moverte es salud y menos grasa: a más te muevas, más gastas.
+[Menos de lo habitual] [Como me vengo moviendo] [Más de lo habitual]NotasNotas personales
+Compártelo si quieres que lo veamos, o déjalo para ti. Opcional.  ☐ Compartir con nosotrosPesoPeso · Opcional · último registro: 77,3 kg, ayerAl guardarAnotado. Mañana seguimos.
+
+Está hecho cuando
+
+ - El check de la comida sin registrar no lleva a Nutrición: se marca aquí y ya
+
+ - Si marca «Sí, pero no lo puse» en el entreno, le lleva a T3
+
+ - Hambre y ansiedad son una sola escala
+
+ - El peso es opcional aquí y obligatorio en los reportes
+
+ - Las notas van al Diario, con su marca de privada o compartida
+
+T5
+
+[H2] El Diario
+
+pantalla nuevalos tres planes
+
+Solo lectura. Cae todo lo que escribe: las notas del día y lo del entreno. Vive dentro de Seguimiento, no es una pestaña nueva.
+
+El diario
+
+[H4] Tu diario
+
+Todo lo que has ido apuntando
+
+Jueves, 20 de agosto · entreno
+Press banca 4×8 con 80 kg. La última serie a duras penas.
+
+★★★★☆ · Compartida
+
+Jueves, 20 de agosto
+Me he levantado sin ganas pero he entrenado igual.
+
+🔒 Solo para ti
+
+Martes, 18 de agosto
+Primer día que la báscula baja de 77.
+
+Compartida
+
+Dos tipos de entrada: las del entreno, con estrellas y peso, y las del día. Cada una con su marca de privada o compartida.
+
+Y dónde va
+
+[H4] Seguimiento
+
+Tus reportes, tu evolución y tu diario
+
+Tu reporte de esta semana
+›
+
+EvoluciónTus fotos y tus métricas
+›
+
+Lo que ya mandasteTus reportes y lo que te conté
+›
+
+Tu diarioTus notas, día a día
+›
+
+Dentro de Seguimiento. No es una pestaña nueva: el menú de la izquierda se queda como está.
+
+Está hecho cuando
+
+ - Dos tipos de entrada: las del entreno (con estrellas y peso) y las del día
+
+ - Cada una con su marca de privada o compartida
+
+ - Tú solo ves las compartidas
+
+T6
+
+[H2] Seguimiento y Evolución
+
+gran parte ya está en adminse quitan 2 pantallaslos tres planes
+
+Tres cosas y nada más: Reportes · Evolución · Diario. Los informes van dentro de Reportes.
+
+Hoy
+Cuatro tarjetas, con «¿Cómo vas hoy?» dentro.
+
+Como queda
+
+[H4] Seguimiento
+
+Tus reportes, tu evolución y tu diario
+
+ESTA SEMANA · TE TOCA
+Reporte quincenalUnas breves preguntas para ajustar tus macros si hace falta.Hasta el jueves 20 a las 20:00 h España · te quedan 2 días
+Empezar ›
+
+Después de este: tu reporte mensual, el viernes 21.
+
+ReportesLos que mandaste y los informes que te di
+›
+
+EvoluciónTus fotos y tus métricas
+›
+
+DiarioTus notas, día a día
+›
+
+Reportes, evolución y diario. Los informes van dentro de Reportes, no como una cuarta cosa. Y pasada la hora, el reporte desaparece de aquí y de Inicio.
+
+Lo importante de esta tarea
+La pantalla de Evolución ya está hecha: es la pestaña «Seguimiento» de la ficha del cliente en el panel de admin. La evolución del peso con «empezaste en / ahora / cambio», la tabla de medidas con la diferencia respecto a la toma anterior, y la comparativa de fotos.
+
+Hay que traerla al lado del cliente con dos cambios: dos fotos por defecto (con botón para añadir la del medio o ver todas) y fuera el campo de % graso, que lo rellena Jesús.
+
+Hoy, en la app del cliente
+Solo la gráfica de peso. Ni fotos, ni medidas, ni comparativa.
+
+Como queda
+
+[H4] Evolución
+
+Tus fotos y tus métricas
+
+Tu peso
+
+Empezaste en79,8 kg
+
+Ahora77,1 kg
+
+Cambio−2,7 kg
+
+15 pesajes · de junio a agosto
+
+Tu comparativa
+
+foto
+
+DE DÓNDE VENGO
+
+1 jun · 79,8 kg
+
+foto
+
+CÓMO ESTOY HOY
+
+20 ago · 77,1 kg
+
+Cintura 84 · y 9 medidas más
+
++ La del medio
+
+Mostrar todas
+
+Tus medidas
+
+ | | 19/06 | 17/07 | 20/08 | Total
+
+ | Hombros | 118 | 118 0 | 118 0 | 0
+
+ | Cintura | 88 | 86 −2 | 84 −2 | −4
+
+ | Cadera | 103 | 102 −1 | 101 −1 | −2
+
+ | Brazo dcho | 36 | 36 0 | 36,5 +0,5 | +0,5
+
+En azul lo que sube y en verde lo que baja. Sin juzgar: subir de brazo y subir de cintura no son lo mismo, y eso lo pone tu entrenador, no el color.
+
+Sus tres etiquetas, tal cual: «De dónde vengo» y «Cómo estoy hoy». Y dos fotos, no tres —con un botón para añadir la del medio o verlas todas—.
+
+Etiquetas de las fotos · las de admin, sin tocarDE DÓNDE VENGO · fecha · peso
+QUÉ HE HECHO ESTE MES · fecha · peso
+CÓMO ESTOY HOY · fecha · peso · medidasBajo la tabla de medidas · la de admin, sin tocarEn azul lo que sube y en verde lo que baja. Sin juzgar: subir de brazo y subir de cintura no son lo mismo, y eso lo pone tu entrenador, no el color.
+
+Está hecho cuando
+
+ - Reportes, Evolución y Diario. Nada más
+
+ - Se elimina la segunda pantalla de Seguimiento y la tarjeta «¿Cómo vas hoy?»
+
+ - Pasada la hora, el reporte pendiente desaparece de Seguimiento y de Inicio
+
+T7
+
+[H2] El reporte quincenal
+
+existede 6 preguntas a 4solo Gold
+
+Miércoles 09:00 → jueves 20:00, hora de España. Cuatro preguntas: el resto ya lo ha marcado cada día.
+
+Hoy en la app
+El mensual sin las medidas.
+
+Como queda
+
+Semana 2 · hasta el jueves 20 a las 20:00 h España
+
+[H4] Tu reporte quincenal
+
+ANTES DE RELLENAR
+
+No registraste el entreno 2 días de los 6 que tenías.
+
+No entrenéSí entrené, no lo apunté
+
+PesoObligatorioÚltimo registro: 77,1 kg, el 10 de agosto
+— kg
+
+¿Algún ejercicio de la rutina te da molestias o te falta alguna máquina?
+—
+
+Sensaciones
+★★★★★
+
+Y lo que quieras contarme.
+
+Enviar reporte
+
+La suplementación no sale: ya la marcó cada día. Y las sensaciones con estrellas, como pediste.
+
+Antes de rellenarNo registraste el entreno 2 días de los 6 que tenías.
+[No entrené] [Sí entrené, no lo apunté]1 · PesoObligatorio · Último registro: 77,1 kg, el 10 de agosto2 · Molestias¿Algún ejercicio de la rutina te da molestias o te falta alguna máquina?3 · Sensacionesestrellas4 · LibreY lo que quieras contarme.
+
+Está hecho cuando
+
+ - Se caen «¿has seguido la dieta?», «¿has cumplido el cardio?» y «¿tomas la suplementación?»
+
+ - Cierra el jueves a las 20:00 hora de España — hoy ActiveCampaign cierra a las 18:00
+
+ - Sustituye al formulario de WhatsForm
+
+T8
+
+[H2] El reporte mensual
+
+existeorden nuevo y 5 preguntas nuevaslos tres, distinto cada uno
+
+Semanas 3, 7 y 11. Viernes → lunes 18:00, hora de España. Gold 13 bloques · Silver 11 · Bronze 11.
+
+Gold
+
+Semana 3 de tu ciclo
+
+[H4] Tu reporte mensual
+
+Tus fotos, tus medidas y unas preguntas.
+
+Hasta el lunes 24 a las 18:00 h España · te quedan 2 días
+
+¿No has podido hacer el programa completo estas 3 semanas? Márcalo y te lo aplazo 7 días.
+
+01 Tu peso
+
+— kgÚltimo registro: 77,1 kg, el 10 de agosto
+
+02 Tus medidas
+
+Las diez, en centímetros.
+
+Si te puede medir alguien, y siempre el mismo, mejor.
+
+▶ CÓMO MEDIR LOS PERÍMETROS
+
+Hombros— 118,0
+
+Mesoesternal— 99,5
+
+Cintura— 88,0
+
+Cadera— 101,0
+
+Y seis más. A la derecha, la del mes pasado, para que sepa si va bien.
+
+03 Tus fotos
+
+De frente, de espaldas y de perfil. Relajado.
+
+Recuerda hacértelas siempre en las mismas buenas condiciones en que te hiciste las primeras.
+
+De frente
+
+De espaldas
+
+De perfil
+
+04 Tu dieta
+
+ESTE MES HAS REGISTRADO
+
+25 de 28 días
+89 %
+
+Cuadraste los macros 19 díasy 6 te quedaste corto de proteína
+
+¿Te ha costado seguirla?
+
+Nada, la llevo bien
+
+Algún día suelto
+
+Bastante
+
+No he podido
+
+¿Podrías con un ajuste nuevo?
+
+Me adapto a lo que me pongas
+
+Necesito comer más para poder cumplir
+
+Necesito comer menos para poder cumplir
+
+05 Tu entreno
+
+ESTE MES HAS ENTRENADO
+
+14 de 16 días
+88 %
+
+Sensaciones ★★★★☆media de lo que has ido marcando
+
+06 Lesiones y molestias
+
+LO QUE YA ME CONTASTE
+
+Hombro derechodesde mayo
+
+¿Cómo está respecto al mes pasado?
+
+Peor
+
+Igual
+
+Mejor
+
+Superada
+
+Ejercicios que no puedes hacer
+
+Press militarElevaciones laterales+ añadir
+
+Rodilla izquierdadesde junio
+
+¿Cómo está respecto al mes pasado?
+
+Peor
+
+Igual
+
+Mejor
+
+Superada
+
+¿Alguna nueva?
+
+Nada nuevo
+
+Sí, te cuento
+
+Si dice que sí: qué es, desde cuándo y qué ejercicios no puede hacer.
+
+07 Tu cardio
+
+ESTE MES HAS HECHO
+
+9 de 16 sesiones
+56 %
+
+Te moviste menos de lo habitual4 días de los 28
+
+De cara al mes que viene
+
+Puedo con las mismas sesiones
+
+Puedo con más sesiones
+
+Necesito menos sesiones
+
+08 Tu suplementación
+
+¿Estás tomando la que te pauté?
+
+Todos
+
+Alguno no
+
+Ninguno
+
+¿Cuál y por qué?
+
+Y si quieres que te lo quite.
+
+09 Tu energía
+
+POR TUS CIERRES DEL DÍA
+
+Llevas 11 días marcando la energía por debajo de 3.
+
+¿A qué crees que se debe?
+
+Duermo pocoEstrés del trabajoComo pocoNo lo sé
+
+Este bloque solo sale si la tiene baja. Si va bien, no aparece.
+
+10 Cómo lo valoras
+
+¿Cómo valoras el resultado teniendo en cuenta el esfuerzo que has invertido?
+
+★★★★★
+
+Y de cara al mes que viene, ¿cómo estás de motivación y de ganas?
+
+★★★★★
+
+11 Tu próximo objetivo
+
+De cara a las próximas 4 semanas. Puede ser el mismo o puedes cambiar (piénsalo bien).
+
+Definición
+
+Volumen
+
+Mantenimiento
+
+12 Lo que quieras contarme
+
+¿Alguna dificultad o algún logro de este mes?
+
+13 Sugerencias
+
+¿Qué nos sugieres para mejorar la aplicación?
+
+Opcional.
+
+—
+
+Revisar y enviar
+
+El único con lesiones y cardio, que es lo que lleva su plan.
+
+Silver
+
+Semana 3 de tu ciclo
+
+[H4] Tu reporte mensual
+
+Tus fotos, tus medidas y unas preguntas.
+
+Hasta el lunes 24 a las 18:00 h España · te quedan 2 días
+
+¿No has podido hacer el programa completo estas 3 semanas? Márcalo y te lo aplazo 7 días.
+
+01 Tu peso
+
+— kgÚltimo registro: 77,1 kg, el 10 de agosto
+
+02 Tus medidas
+
+Las diez, en centímetros.
+
+Si te puede medir alguien, y siempre el mismo, mejor.
+
+▶ CÓMO MEDIR LOS PERÍMETROS
+
+Hombros— 118,0
+
+Mesoesternal— 99,5
+
+Cintura— 88,0
+
+Cadera— 101,0
+
+Y seis más. A la derecha, la del mes pasado, para que sepa si va bien.
+
+03 Tus fotos
+
+De frente, de espaldas y de perfil. Relajado.
+
+Recuerda hacértelas siempre en las mismas buenas condiciones en que te hiciste las primeras.
+
+De frente
+
+De espaldas
+
+De perfil
+
+04 Tu dieta
+
+ESTE MES HAS REGISTRADO
+
+25 de 28 días
+89 %
+
+Cuadraste los macros 19 díasy 6 te quedaste corto de proteína
+
+¿Te ha costado seguirla?
+
+Nada, la llevo bien
+
+Algún día suelto
+
+Bastante
+
+No he podido
+
+¿Podrías con un ajuste nuevo?
+
+Me adapto a lo que me pongas
+
+Necesito comer más para poder cumplir
+
+Necesito comer menos para poder cumplir
+
+05 Tu entreno
+
+ESTE MES HAS ENTRENADO
+
+14 de 16 días
+88 %
+
+Te faltan 2 por confirmarel 8 y el 14 de agosto
+
+Sí entrené, no lo apunté
+
+No entrené
+
+¿Qué tal el entrenamiento este mes?
+
+★★★★★
+
+Lo que quieras contarme.
+
+06 Tu suplementación
+
+¿Estás tomando la que te pauté?
+
+Todos
+
+Alguno no
+
+Ninguno
+
+¿Cuál y por qué?
+
+Y si quieres que te lo quite.
+
+07 Tu energía
+
+POR TUS CIERRES DEL DÍA
+
+Llevas 11 días marcando la energía por debajo de 3.
+
+¿A qué crees que se debe?
+
+Duermo pocoEstrés del trabajoComo pocoNo lo sé
+
+Este bloque solo sale si la tiene baja. Si va bien, no aparece.
+
+08 Cómo lo valoras
+
+¿Cómo valoras el resultado teniendo en cuenta el esfuerzo que has invertido?
+
+★★★★★
+
+Y de cara al mes que viene, ¿cómo estás de motivación y de ganas?
+
+★★★★★
+
+09 Tu próximo objetivo
+
+De cara a las próximas 4 semanas. Puede ser el mismo o puedes cambiar (piénsalo bien).
+
+Definición
+
+Volumen
+
+Mantenimiento
+
+10 Lo que quieras contarme
+
+¿Alguna dificultad o algún logro de este mes?
+
+11 Sugerencias
+
+¿Qué nos sugieres para mejorar la aplicación?
+
+Opcional.
+
+—
+
+Revisar y enviar
+
+Del entreno solo se le confirma lo que no rellenó y qué tal le fue. Ni lesiones ni cardio: no lleva esa parte, como dijiste.
+
+Bronze
+
+Semana 3 de tu ciclo
+
+[H4] Tu reporte mensual
+
+Tus fotos, tus medidas y unas preguntas.
+
+Hasta el lunes 24 a las 18:00 h España · te quedan 2 días
+
+¿No has podido hacer el programa completo estas 3 semanas? Márcalo y te lo aplazo 7 días.
+
+01 Tu peso
+
+— kgÚltimo registro: 77,1 kg, el 10 de agosto
+
+02 Tus medidas
+
+Las diez, en centímetros.
+
+Si te puede medir alguien, y siempre el mismo, mejor.
+
+▶ CÓMO MEDIR LOS PERÍMETROS
+
+Hombros— 118,0
+
+Mesoesternal— 99,5
+
+Cintura— 88,0
+
+Cadera— 101,0
+
+Y seis más. A la derecha, la del mes pasado, para que sepa si va bien.
+
+03 Tus fotos
+
+De frente, de espaldas y de perfil. Relajado.
+
+Recuerda hacértelas siempre en las mismas buenas condiciones en que te hiciste las primeras.
+
+De frente
+
+De espaldas
+
+De perfil
+
+04 Tu dieta
+
+ESTE MES HAS REGISTRADO
+
+25 de 28 días
+89 %
+
+Cuadraste los macros 19 díasy 6 te quedaste corto de proteína
+
+¿Te ha costado seguirla?
+
+Nada, la llevo bien
+
+Algún día suelto
+
+Bastante
+
+No he podido
+
+¿Podrías con un ajuste nuevo?
+
+Me adapto a lo que me pongas
+
+Necesito comer más para poder cumplir
+
+Necesito comer menos para poder cumplir
+
+05 Tu entreno
+
+¿Entrenaste este mes de forma regular?
+
+Sí, a mi manera, y este mes quiero seguir así
+
+Sí, a mi manera, pero este mes quiero probar con una rutina tuya
+
+Sí, con una rutina tuya, y quiero seguir así
+
+TODOS LOS MESESLa rutina del mes
+Por estar en Bronze la tienes en 57 €. Te llega en unos días, junto con el ajuste nuevo de tus macros.
+
+Sí · modalidad básica
+
+Sí · modalidad avanzada
+
+Ahora no
+
+Al marcar «Sí» autorizas el cargo en tu tarjeta.
+
+¿O prefieres tenerla todos los meses?
+Eso es el plan Silver. Marca aquí y te cuento cómo pasarte.
+
+Cuéntame el Silver
+
+Ahora no
+
+06 Tu suplementación
+
+¿Estás tomando la que te pauté?
+
+Todos
+
+Alguno no
+
+Ninguno
+
+¿Cuál y por qué?
+
+Y si quieres que te lo quite.
+
+07 Tu energía
+
+POR TUS CIERRES DEL DÍA
+
+Llevas 11 días marcando la energía por debajo de 3.
+
+¿A qué crees que se debe?
+
+Duermo pocoEstrés del trabajoComo pocoNo lo sé
+
+Este bloque solo sale si la tiene baja. Si va bien, no aparece.
+
+08 Cómo lo valoras
+
+¿Cómo valoras el resultado teniendo en cuenta el esfuerzo que has invertido?
+
+★★★★★
+
+Y de cara al mes que viene, ¿cómo estás de motivación y de ganas?
+
+★★★★★
+
+09 Tu próximo objetivo
+
+De cara a las próximas 4 semanas. Puede ser el mismo o puedes cambiar (piénsalo bien).
+
+Definición
+
+Volumen
+
+Mantenimiento
+
+10 Lo que quieras contarme
+
+¿Alguna dificultad o algún logro de este mes?
+
+11 Sugerencias
+
+¿Qué nos sugieres para mejorar la aplicación?
+
+Opcional.
+
+—
+
+Revisar y enviar
+
+Sin lesiones ni cardio. Y donde el Gold tiene su entreno, él tiene la rutina del mes por 57 €, básica o avanzada, y la salida al Silver. Es la única oferta que queda en el reporte.
+
+Cabecera · los tresTu reporte mensual
+Tus fotos, tus medidas y unas preguntas.
+Hasta el lunes 24 a las 18:00 h España · te quedan 2 días
+¿No has podido hacer el programa completo estas 3 semanas? Márcalo y te lo aplazo 7 días.Bajo las medidasSi te puede medir alguien, y siempre el mismo, mejor.Bajo las fotosRecuerda hacértelas siempre en las mismas buenas condiciones en que te hiciste las primeras.Valoración · nueva¿Cómo valoras el resultado teniendo en cuenta el esfuerzo que has invertido? · estrellas
+Y de cara al mes que viene, ¿cómo estás de motivación y de ganas? · estrellasSugerencias · nueva¿Qué nos sugieres para mejorar la aplicación? · Opcional.Bronze · la rutinaTODOS LOS MESES
+La rutina del mes
+Por estar en Bronze la tienes en 57 €. Te llega en unos días, junto con el ajuste nuevo de tus macros.
+[Sí · modalidad básica] [Sí · modalidad avanzada] [Ahora no]
+Al marcar «Sí» autorizas el cargo en tu tarjeta.
+
+Está hecho cuando
+
+ - Las fotos y las medidas van al principio, no debajo del botón de enviar
+
+ - Cada medida sale con la del mes pasado al lado
+
+ - Dieta, entreno y cardio empiezan por el dato y solo preguntan lo que no se sabe
+
+ - Las lesiones salen con lo que ya contó, y las actualiza: peor · igual · mejor · superada, con los ejercicios que no puede hacer
+
+ - El bloque de energía solo aparece si la lleva baja
+
+ - Sueño, energía y estrés desaparecen del reporte: el sueño pasa al cierre del día
+
+ - El Silver no lleva lesiones ni cardio. El Bronze tampoco, y en su lugar lleva la rutina
+
+ - Puede aplazarlo 7 días marcándolo él, sin depender de no contestar un correo
+
+ - Una sola oferta en todo el reporte: la rutina del Bronze. Fuera menús, trimestral, CBD, FIT3D y «otros servicios»
+
+T9
+
+[H2] Al enviar · resumen e informe
+
+no existe hoydistinto por plan
+
+Resumen completo → confirma → envía. Y después el informe, que no es igual para los tres.
+
+1 · El resumen, antes de enviar
+
+[H4] Revisa antes de enviar
+
+Si algo no esta bien, vuelve atras y lo cambias.
+
+Peso77,1 kg-1,2
+
+Cintura84 cm-2
+
+Las otras 9 medidaspuestas
+
+Fotoslas tres
+
+Dieta25 de 28 diasalgun dia suelto
+
+Ajuste nuevome adapto
+
+Entreno14 de 164 estrellas
+
+Lesioneshombro: mejorrodilla: superada
+
+Cardio9 de 16menos sesiones
+
+Suplementacionalguno nola creatina
+
+Energiabajaestres del trabajo
+
+Como lo valoras4 estrellas
+
+Motivacion3 estrellas
+
+Proximo objetivodefinicionno cambia
+
+Notasescritas
+
+Enviar reporte
+
+Todo lo que ha contestado, en una pantalla. Si algo esta mal lo ve aqui y vuelve, no despues, cuando ya no se puede tocar.
+
+2 · Enviado · Silver y Bronze
+
+Reporte enviado.
+Antes del viernes tienes tus ajustes nuevos. Te aviso por aqui.
+
+Y el viernes le llega:
+
+Tienes ajustes nuevosLos he hecho con tu reporte. + tu nota.
+
+Reciben los ajustes. No llevan feedback: eso es del Gold.
+
+Ajustes si, feedback no. Y con fecha: «antes del viernes», no «en breve».
+
+3 · Enviado · Gold
+
+Reporte enviado.
+Antes del sabado tienes tu informe completo con mi feedback y tus ajustes. Te aviso por aqui.
+
+Y el sabado le llega:
+
+Tu informe esta listoCon mi feedback y tus macros nuevos.
+
+El informe se genera igual, pero espera a que lo revises y anadas lo tuyo antes de salir.
+
+Lo que distingue al Gold. El informe completo con tu feedback dentro.
+
+Silver y Bronze · al enviarReporte enviado.
+Antes del viernes tienes tus ajustes nuevos. Te aviso por aquí.Silver y Bronze · el viernesTienes ajustes nuevos
+Los he hecho con tu reporte. + tu nota.Gold · al enviarReporte enviado.
+Antes del sábado tienes tu informe completo con mi feedback y tus ajustes. Te aviso por aquí.Gold · el sábadoTu informe está listo
+Con mi feedback y tus macros nuevos.
+
+Está hecho cuando
+
+ - El resumen enseña todo lo que ha contestado y deja volver atrás
+
+ - Silver y Bronze reciben ajustes. Sin feedback
+
+ - Solo el Gold recibe el informe completo con el feedback
+
+ - El informe del Gold no sale hasta que Jesús lo revisa y añade lo suyo
+
+ - La pantalla del informe del mes ya existe: falta que se genere sola al enviar
+
+T10
+
+[H2] Los 19 avisos
+
+el sistema no existedentro de la app, nada por correo
+
+Ocho de calendario, seis que salen de algo que hace Jesús, cuatro que dependen de los datos del cliente y uno de confirmación. Cada uno con dos o tres textos que rotan.
+
+Las tres reglas del sistema
+1. Los de calendario y los que salen de una acción de Jesús siempre salen.
+
+2. Los que dependen de sus datos, uno por semana como mucho. Si se cumplen varios a la vez, sale solo el de más arriba.
+
+3. El texto rota: nunca la misma variante dos veces seguidas.
+
+[H3] Los ocho del calendario
+
+LOS TRES · domingo 19:00 · una sola vez
+Mañana empiezasTu rutina y tus macros ya están cargados.
+
+Mañana arrancamosLo tienes todo dentro. Nos vemos en doce semanas.
+antes del día 1
+
+LOS TRES · cada día 20:00 · solo si no lo ha cerrado
+Cierra tu díaDos toques y listo.
+
+¿Cómo fuiste hoy?Un minuto y lo tengo.
+
+Te falta cerrar el díaLo que no apuntas, no lo veo.
+activado por defecto · puede apagarlo
+
+SOLO GOLD · miércoles 09:00 · semanas 2, 4, 6, 8, 10 y 12
+Tu reporte quincenal está abiertoUnas breves preguntas para ajustar tus macros si hace falta. Hasta mañana a las 20:00.
+
+Toca quincenalCuatro preguntas. Tienes hasta mañana a las 20:00.
+
+Cuéntame estas dos semanasEs rápido, y con eso decido si te toco algo.
+abre el quincenal
+
+SOLO GOLD · jueves 09:00 · si no lo ha mandado
+Último día para tu quincenalSe cierra hoy a las 20:00.
+
+Hoy cierra tu quincenalA las 20:00. Sin él no sé cómo has ido estas dos semanas.
+recordatorio
+
+LOS TRES · viernes · semanas 3, 7 y 11
+Tu reporte mensual está abiertoTus fotos, tus medidas y unas preguntas. Hasta el lunes a las 18:00.
+
+Toca reporte mensualEste es el importante. Tienes hasta el lunes a las 18:00.
+
+Es el momento de las fotosTu reporte mensual está abierto hasta el lunes a las 18:00.
+abre el mensual
+
+LOS TRES · domingo 10:00 · si no lo ha mandado
+Último día para tu reporte mensualSe cierra mañana a las 18:00 y sin él no puedo ajustarte.
+
+Mañana cierra tu mensualA las 18:00. Es el que marca lo que viene después.
+recordatorio
+
+LOS TRES · martes · si pasó la hora y no lo mandó
+No me llegó tu reporteSin él no puedo ajustarte. Dime si lo mandas esta semana o te lo aplazo.
+
+Se te pasó el reporteNo pasa nada: dime si lo haces esta semana y te lo vuelvo a abrir.
+hoy no existe · el correo equivalente lo abre el 18,9 %
+
+LOS TRES · semana 11 · con el mensual
+Tu ciclo acaba en una semanaMira lo que has cambiado.
+
+Queda una semanaEntra en tu evolución y compara la primera foto con la de ahora.
+antes de renovar
+
+[H3] Los seis que salen de algo que hace Jesús
+
+Se disparan al guardar. Sin hora fija.
+
+AL GUARDAR LOS MACROS · lleva a Nutrición
+Tienes macros nuevosLos he ajustado con lo que me contaste. + tu nota.
+
+Te he tocado los macrosYa los tienes en Nutrición. + tu nota.
+los tres
+
+AL GUARDAR LOS MACROS SIN CAMBIARLOS · hoy no existe
+Este mes no te toco nadaVas bien con lo que tienes. Seguimos igual. + tu nota.
+los tres
+
+AL GENERARSE EL INFORME · lleva a Seguimiento
+Tienes ajustes nuevosLos he hecho con tu reporte. + tu nota.
+Silver y Bronze · sin feedback
+
+AL GENERARSE EL INFORME · lleva a Seguimiento
+Tu informe está listoCon mi feedback y tus macros nuevos.
+
+Ya tienes tu informeTe cuento lo que veo en tus datos de este mes.
+solo Gold · con feedback
+
+AL GUARDAR SUPLEMENTOS
+Te he cambiado la suplementación+ tu nota.
+
+Tienes suplementación nuevaMíralo antes de comprar nada. + tu nota.
+los tres
+
+AL SUBIR UNA RUTINA EN EL APARTADO RUTINAS
+Tienes rutina nuevaYa la tienes en tu entreno de mañana.
+
+Rutina nueva cargadaLa verás en cuanto entres a entrenar.
+a quien se la subas, del plan que sea
+
+[H3] Los cuatro que dependen de sus datos
+
+Uno por semana como mucho, por orden de prioridad.
+
+MANDÓ REPORTE HACE ≤7 DÍAS Y SIN FOTOS · prioridad 1
+Sin fotos no puedo compararTe lleva un minuto y es lo que de verdad enseña lo que ha cambiado.
+
+Te faltan las fotos del reporteLa báscula no lo cuenta todo.
+los tres
+
+2 SEMANAS O MÁS SIN AJUSTE · prioridad 2
+Llevas 3 semanas con los mismos macrosCon tus datos de estas semanas puedo mirarlo.
+
+Hace tiempo que no te ajustoCierra unos días seguidos y le echo un ojo.
+los tres
+
+5 DÍAS SIN CERRAR EL DÍA · prioridad 3
+Llevas 5 días sin apuntar nadaCon dos toques al día me vale.
+
+Te he perdido la pistaCinco días sin cerrar. ¿Todo bien?
+los tres
+
+14 DÍAS SIN ENTRAR · prioridad 4 · la última
+Tu plan sigue aquíRetomamos cuando quieras.
+
+Cuando quieras volver, aquí estáSin prisa.
+los tres
+
+[H3] Y el de confirmación
+
+LOS TRES · al marcar «aplázalo»
+Te lo he aplazado 7 díasTu reporte se vuelve a abrir el viernes que viene. Sigue registrando como siempre.
+confirmación
+
+[H3] El calendario, plan a plan
+
+ | Semana | Gold | Silver | Bronze
+
+ | Domingo antes | Mañana empiezas | Mañana empiezas | Mañana empiezas
+
+ | Todos los días 20:00 | Cierra tu día | Cierra tu día | Cierra tu día
+
+ | 2, 4, 6, 8, 10, 12 | Quincenal · mié 09:00 → jue 20:00 | — | —
+
+ | 3, 7, 11 | Mensual · vie → lun 18:00 | Mensual | Mensual
+
+ | 11 | + «Tu ciclo acaba en una semana» | + ciclo | + ciclo
+
+ | Total en 12 semanas | ~30 avisos | ~18 | ~15
+
+[H3] Qué correo de ActiveCampaign sustituye a qué
+
+ | Hoy · el correo | Apertura | Mañana · el aviso
+
+ | Email Reporte Mensual Gold | 13,3 % | Tu reporte mensual está abierto
+Uno solo. El plan es un dato, no un correo distinto
+
+ | Email Reporte Mensual Silver | 13,4 %
+
+ | Email Reporte Mensual Bronze | 19,0 %
+
+ | Email Reporte Mensual (Recordatorio) | 16,7 % | Último día para tu reporte mensual
+
+ | Email Reporte Mensual (No Enviado) | 18,9 % | No me llegó tu reporte — hoy no existe en la app
+
+ | Email Reporte Quincenal | 24,5 % | Tu reporte quincenal está abierto
+
+ | El formulario de Google (×3) | — | El reporte, dentro de la app
+
+ | El WhatsForm del quincenal | — | El quincenal, dentro de la app
+
+ActiveCampaign se mantiene de momento
+No se apaga el lunes. El cliente recibe el correo y el aviso unas semanas; cuando se vea que los reportes llegan igual o mejor, se apaga. Apagarlo de golpe es quedarse sin red.
+
+Mientras siga encendido hay dos cosas mal ahí: el quincenal cierra a las 18:00 cuando el correo dice 20:00, y todas las horas van en UTC.
+
+T11
+
+[H2] Lo que se quita
+
+borrar
+
+Nueve cosas fuera. Casi todas porque ya viven en otro sitio.
+
+ | Qué | Por qué
+
+ | El check-in semanal | Peso, adherencia, sueño, estrés y notas: las cinco están ya en otro sitio
+
+ | El check-in mensual | Peso y medidas ya están en el reporte
+
+ | La segunda pantalla de «Seguimiento» | Se queda vacía
+
+ | La tarjeta «¿Cómo vas hoy?» | Ahora vive en Inicio
+
+ | «¿Qué has comido hoy?» | La dieta ya se registra en Nutrición
+
+ | Sueño, energía y estrés del mensual | El sueño pasa al cierre del día; la energía ya está ahí; el estrés se cae
+
+ | Los tres formularios de Google | Un solo reporte, con el plan como dato
+
+ | El WhatsForm del quincenal | Entra en la app
+
+ | FIT3D, CBD, menús, paso a trimestral y «otros servicios» | Fuera del reporte. Se queda una sola oferta: la rutina del Bronze
+
+Y un texto que cambiar
+El chat dice «En cuanto tengas entrenador asignado, hablarás aquí mismo con él». Todos tienen entrenador, así que esa frase no vale para nadie. En Silver y Bronze debe decir que ahí les llegan los mensajes y los avisos de Jesús.
+
+T12
+
+[H2] Cinco fallos del panel de admin
+
+hay que arreglarlossolo lo ve Jesús
+
+No los ve el cliente, pero el primero es la pantalla desde la que se deciden los ajustes de 179 personas. Comprobado el 16 de agosto en la ficha de un Gold real.
+
+01 · lo más gordoLas dietas guardadas salen con todos los macros a cero
+En la ficha del cliente → Nutrición, al abrir cualquier dieta de la lista, todas las líneas ponen P0 H0 G0. Los alimentos y los gramos sí salen; los macros, no. Y el total de cada comida, también a cero.
+
+Comida 1  P0 H0 G0
+Pan de hogaza con masa madre 12 % y cereales  50 g  P0 H0 G0
+Aislado de suero - Whey Isolate  20 g  P0 H0 G0
+Jamón serrano de cebo ibérico  40 g  P0 H0 G0
+
+Comprobado en dos fechas distintas (14 y 10 de agosto) del mismo cliente. No es un día suelto.
+
+Abres la dieta de alguien para revisarla antes de ajustarle y no ves un solo macro. Tienes que entrar en su calculadora para verlos.
+
+02Las unidades se enseñan como gramos
+En esa misma vista, un huevo sale como «1 g». Y el pan brioche, y el chocolate, y la lata de atún: todos «1 g».
+
+En admin:  Huevos enteros L  1 g
+En la calculadora:  Huevos enteros M  1 ud (53 g)
+
+La calculadora lo hace bien —guarda la unidad y su equivalencia—; la vista de admin se queda solo con el número y le pega una «g».
+
+Un huevo pasa a ser un gramo de huevo. Y como los macros están a cero, no hay forma de darse cuenta.
+
+03 · lo que pedisteArriba dice lo que ha comido; abajo, lo que le falta
+En la misma pantalla, el resumen del día pone «152 / 135» y «+16,3 g». Cada comida, tres centímetros más abajo, pone «faltan 4,1 g». Y el Inicio nuevo va a decir «Te faltan 94, de 120».
+
+Hoy arriba:  Proteína  152 / 135
+Hoy en la comida:  Proteína 29,7/34 g  faltan 4,1 g
+Como debería:  Te faltan 4 de 135
+
+Tres formas de decir lo mismo en la misma pantalla. Que arriba diga lo que falta, como abajo y como en Inicio.
+
+04 · de propinaAquí tampoco hay tope de cantidad
+En la Comida 3 de ese cliente hay 1.000 g de leche de almendras. Un litro.
+
+Es el mismo fallo que acabas de arreglar en el asistente, pero en la calculadora: nadie impide meter un kilo de nada. El asistente ya avisa; la calculadora no.
+
+05 · en SeguimientoLos pesos salen en gramos
+En la ficha del cliente → Seguimiento, el bloque «Evolución del cliente» pone:
+
+Agosto De 2026  62800 kg  ▼ 700 kg
+Julio De 2026  63500 kg  ▲ 63436 kg
+
+Son 62,8 kg y 63,5 kg, y la diferencia son 700 g. Y en julio la diferencia sale como 63.436 kg, que es el peso entero restándole nada.
+
+Justo encima, en la misma pantalla, la evolución del peso lo hace bien: «Empezaste en 72 kg · Ahora 62.8 kg». Son dos sitios que leen el mismo dato de forma distinta.
+
+Y una cosa que hay que atar
+Los avisos «Tienes macros nuevos» y «Este mes no te toco nada» salen de guardar en esa pantalla. Hay que decidir qué guardado exacto los dispara: mientras se monta una dieta se guarda muchas veces y no puede saltar un aviso cada vez.
+
+Propuesta: atarlo a guardar los macros del cliente (la pestaña Macros), no a guardar la dieta de un día.
+
+Y lo que ahí está bien y no hay que tocar
+La barra de suplantación —«Estás en la cuenta de X · Lo que guardes aquí lo verá X en su app, con tu nombre» + Salir de su cuenta— y el método dentro de la calculadora: «faltan 4,1 g», «sobran 5 g», Válido y Cuadrado, Automático/Manual, prioridad por ingrediente, Cuadrar, Vaciar y Método/Reales. Eso está bien resuelto.
+
+Especificación de trabajo · 12EN12 · 16 de agosto de 2026. Las capturas son de la app en producción y del documento de pantallas; las maquetas son propuestas de diseño, no píxeles definitivos.
+
