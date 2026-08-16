@@ -200,3 +200,33 @@ def test_la_conversacion_sobrevive_a_la_siguiente_peticion():
     historial = correr(_probar())
     assert len(historial) == 2, historial
     assert historial[0]["content"] == "quiero pollo"
+
+
+# ------------------------------------------------------------------ bajar no es quitar
+def test_bajar_no_se_ejecuta_como_quitar():
+    """El asistente propuso «bajar algo el arroz», el cliente dijo que sí, y lo quitó entero."""
+    async def _probar():
+        from agent_tools import AgentTools
+        bot = await _bot("test_bajar_no_quitar")
+        t = await AgentTools.crear(bot)
+        arroz = next((f for f in t.foods.values()
+                      if (f.get("nombre") or "").lower().startswith("arroz blanco")), None)
+        assert arroz, "no hay arroz blanco en el catálogo de pruebas"
+        await t.editar_comida([{"op": "añadir", "alimento_id": int(arroz["id"]),
+                                "cantidad": 60, "unidad": "g"}])
+        # Lo que dijo el cliente en ESTE mensaje es lo que manda.
+        bot.mensaje_en_curso = "vale, baja algo el arroz"
+        r = await t.editar_comida([{"op": "quitar", "nombre": arroz["nombre"]}])
+        sigue = any("arroz" in (a.get("nombre") or "").lower()
+                    for a in bot.state["comidas_completadas"][bot.current_meal_key()]["alimentos"])
+        # Y si de verdad pide quitarlo, se quita.
+        bot.mensaje_en_curso = "quita el arroz"
+        await t.editar_comida([{"op": "quitar", "nombre": arroz["nombre"]}])
+        fuera = not any("arroz" in (a.get("nombre") or "").lower()
+                        for a in bot.state["comidas_completadas"][bot.current_meal_key()]["alimentos"])
+        return r, sigue, fuera
+    r, sigue, fuera = correr(_probar())
+    assert sigue, "ha quitado el arroz cuando le pidieron bajarlo"
+    assert r.get("fallos"), r
+    assert "BAJAR" in str(r["fallos"][0].get("detalle", "")), r["fallos"]
+    assert fuera, "no ha quitado el arroz cuando sí se lo han pedido"

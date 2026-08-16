@@ -3593,6 +3593,31 @@ class AgentTools:
                         {"op": op, "detalle": (r.get("foods_added") or r.get("foods_not_found") or [{}])[0]})
                 elif tipo == "quitar":
                     nombre = op.get("nombre") or str(op.get("alimento_id") or "")
+                    # BAJAR NO ES QUITAR (Francisco, 16-08-2026).
+                    #
+                    # El propio asistente propuso «bajar algo el arroz para ajustar los
+                    # hidratos», el cliente dijo que sí, y lo QUITÓ entero: la comida se
+                    # quedó con 0 g de hidratos sobre un objetivo de 10, y guardada. La
+                    # diferencia entre bajar y quitar la nota el cliente en el plato.
+                    #
+                    # Aquí no se adivina nada: se mira si el cliente ha pedido bajar y NO
+                    # quitar. Si es así, esta operación no es la suya y se le devuelve al
+                    # modelo diciéndole cuál es. Con `forzar` pasa igual, porque a veces
+                    # bajar hasta el suelo ES quitar y eso lo decide el cliente.
+                    dicho = self.bot._norm_text(self.bot.mensaje_en_curso or "")
+                    pide_bajar = bool(re.search(
+                        r"\b(baja|bajar|bajame|reduce|reducir|reduceme|recorta|recortar|"
+                        r"menos|rebaja|rebajar|ajusta|ajustar)\b", dicho))
+                    pide_quitar = bool(re.search(
+                        r"\b(quita|quitar|quitame|fuera|elimina|eliminar|saca|sacar|"
+                        r"sin|borra|borrar|retira|retirar)\b", dicho))
+                    if pide_bajar and not pide_quitar and not forzar:
+                        fallos.append({"op": op, "detalle": (
+                            f"te ha pedido BAJAR, no quitar: no se ha tocado "
+                            f"'{nombre}'. Usa op='ajustar' con una cantidad menor (y su "
+                            f"unidad), o pregúntale a cuánto lo deja. Quitarlo entero solo "
+                            f"si él lo pide.")})
+                        continue
                     q = self.bot.remove_food_by_name(nombre)
                     if isinstance(q, dict) and q.get("ambiguo"):
                         fallos.append({"op": op, "detalle": (
