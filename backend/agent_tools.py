@@ -2884,8 +2884,11 @@ class AgentTools:
         # esto, la edición siguiente -- «quítame el huevo» -- volvía a soltar sus 30 g de
         # almendras y el recuadre las bajaba a 5 otra vez, deshaciendo lo que él acababa de
         # pedir (15-08, visto en la app dos turnos después de arreglarlo).
-        fijas: Dict[int, float] = {int(k): float(v)
-                                   for k, v in (b.get("gramos_fijados") or {}).items()}
+        # Los gramos que ha dicho ÉL, con todas las letras. Solo estos hacen que la opción
+        # sea «suya» y se libren del candado al aplicarla.
+        del_cliente: Dict[int, float] = {int(k): float(v)
+                                         for k, v in (b.get("gramos_fijados") or {}).items()}
+        fijas: Dict[int, float] = dict(del_cliente)
         for op in operaciones or []:
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
             if tipo == "quitar" and int(op.get("item_id", 0)) in ids:
@@ -2909,7 +2912,7 @@ class AgentTools:
                 # sin decirlo y se le deshizo el menú que había elegido.
                 if op.get("cantidad") is not None:
                     try:
-                        fijas[nuevo] = float(op["cantidad"])
+                        fijas[nuevo] = del_cliente[nuevo] = float(op["cantidad"])
                     except (TypeError, ValueError):
                         pass
             elif tipo == "ajustar":
@@ -2925,13 +2928,24 @@ class AgentTools:
                                if int(i["id"]) == cual), 0.0)
                 try:
                     if op.get("a") is not None:
-                        fijas[cual] = float(op["a"])
+                        fijas[cual] = del_cliente[cual] = float(op["a"])
                     elif op.get("mas") is not None:
-                        fijas[cual] = max(0.0, previo + float(op["mas"]))
+                        fijas[cual] = del_cliente[cual] = max(0.0, previo + float(op["mas"]))
                 except (TypeError, ValueError):
                     pass
         if not ids:
             return {"ok": False, "error": "el borrador se quedaría vacío"}
+        # LO QUE YA ESTABA EN EL MENÚ SE QUEDA COMO ESTABA.
+        #
+        # Añadir 30 g de almendras no es pedir que se recalcule el resto, y el motor
+        # reoptimizaba todo: subió el pollo de 190 a 225 g por su cuenta -- Francisco, «le
+        # subió la cantidad al pollo» -- y la opción acabó en 61 g de proteína sobre 50,2 y
+        # 45,6 de grasa sobre 10. Sumar una pieza deja el menú anterior igual y añade la
+        # pieza; reajustar el conjunto se hace cuando lo pide él («cuádrala»).
+        for i in (b.get("items") or []):
+            fid = int(i.get("id") or 0)
+            if fid in ids and fid not in fijas:
+                fijas[fid] = float(i.get("cantidad_g") or 0)
         nombres = [self.foods[i]["nombre"] for i in ids]
         # EL RECUADRE VA CONTRA EL HUECO VIVO, NO CONTRA EL CONGELADO (vídeo 6 del 15-08).
         #
@@ -3006,12 +3020,12 @@ class AgentTools:
         # el desvío que ha provocado su propia petición (misma regla que «solo lo pedido»
         # en `aplicar_borrador`). Pedirle 30 g de almendras y luego no dejarle ponerlos es
         # el bucle de siempre con otra cara.
-        if fijas:
+        if del_cliente:
             b["solo_lo_pedido"] = True
             # Solo las de las piezas que siguen en el menú: si él mismo la ha quitado, sus
             # gramos ya no pintan nada.
             vivos = {int(i["id"]) for i in items}
-            b["gramos_fijados"] = {str(k): v for k, v in fijas.items() if k in vivos}
+            b["gramos_fijados"] = {str(k): v for k, v in del_cliente.items() if k in vivos}
         # LOS AVISOS SON DE LA VERSIÓN ANTERIOR (13-08-2026). Al cambiar el menú, la
         # revisión que los generó deja de valer, y se quedaban pegados a la tarjeta: en
         # producción salió «pidió genéricos y Masa para pancake de arroz y avena (Prozis)
@@ -3027,7 +3041,7 @@ class AgentTools:
         # le dijimos que se pasaba 9 g, y ahí lo dejamos. Averiguar qué sacar se lo quedaba
         # él. Con lo que ya hay se puede decir, y nunca proponiendo quitar lo suyo: los
         # gramos que él ha fijado son intocables.
-        salida = self._que_saldria_para_que_quepa(items, b["desvio"], set(fijas))
+        salida = self._que_saldria_para_que_quepa(items, b["desvio"], set(del_cliente))
         pasado = [(m, b["desvio"][m]) for m in ("H", "G")
                   if b["desvio"][m] > 2 * self.bot.margen_de(objetivo.get(m, 0))]
         if pasado:
@@ -3037,14 +3051,14 @@ class AgentTools:
                 aviso += ("; para que cuadre tendría que salir " + salida["nombre"]
                           if salida["cuadra"]
                           else f"; quitando {salida['nombre']} se queda mucho más cerca")
-            elif fijas:
+            elif del_cliente:
                 # Nada que quitar arregla esto: el exceso lo traen SUS gramos. Decirlo es
                 # mejor que callar o que proponerle sacar algo que no mueve la aguja.
                 aviso += (", y lo trae lo que has pedido: no hay nada más que quitar que "
                           "lo arregle. O lo dejas así, o bajamos esa cantidad")
             b["avisos"] = [aviso]
         out = {"ok": True, "borrador": b}
-        if pasado and not salida and fijas:
+        if pasado and not salida and del_cliente:
             m, sobra = max(pasado, key=lambda x: x[1])
             out["instruccion"] = (
                 f"La comida se pasa {sobra:.0f} g de {_MACRO_LBL[m]} y lo trae lo que ha "
