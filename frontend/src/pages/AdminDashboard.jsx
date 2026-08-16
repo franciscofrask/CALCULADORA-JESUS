@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { PlanBadge, JG12Logo } from './ClientDashboard';
 import LimiteDeError from '../components/LimiteDeError';
+import { AvisosDelEquipo, PeticionesDeCompra } from '../components/AvisosDelEquipo';
 import { prettyToken } from '../lib/labels';
 import { estadoClienteLabel } from '../lib/labels';
 import { contarClientes, contarRegistrosSinTerminar, cuentaComoCliente } from '../lib/cuentaClientes';
@@ -336,9 +337,89 @@ const AdminDashboard = () => {
         }
     };
 
-    // Campana: novedades reales (leads nuevos sin gestionar + mensajes sin leer)
-    const [notif, setNotif] = useState({ leads: 0, messages: 0 });
+    // Campana: novedades reales (leads nuevos sin gestionar + mensajes sin leer + los avisos
+    // que el backend le deja al equipo, que hasta ahora se escribían y no los leía nadie).
+    const [notif, setNotif] = useState({ leads: 0, messages: 0, equipo: 0, ventas: 0 });
     const [notifOpen, setNotifOpen] = useState(false);
+
+    // Los avisos del equipo, con su lista y todo, EN LA PÁGINA y no dentro de la campana:
+    // las peticiones de compra se pintan además como tarjeta arriba, y para eso hacen falta
+    // aquí. Una venta que solo se ve abriendo un desplegable depende de que a alguien se le
+    // ocurra abrirlo.
+    const [avisosEquipo, setAvisosEquipo] = useState({ items: [], cargando: true, error: false });
+
+    // Los contadores de la campana, cada uno por su lado: si falla el de leads, los avisos
+    // del equipo se siguen contando. En un solo try, una llamada mala dejaba la campana a
+    // cero, que se lee como "no hay nada".
+    const fetchNotif = useCallback(async () => {
+        const pedir = (url) => api.get(url).then(r => r.data).catch(e => {
+            console.error('Campana:', url, e);
+            return null;
+        });
+        const [leads, msgs, equipo] = await Promise.all([
+            pedir('/leads/stats/summary'),
+            pedir('/messages/unread-count'),
+            pedir('/notifications/equipo'),
+        ]);
+        if (equipo) {
+            setAvisosEquipo({
+                items: Array.isArray(equipo.notifications) ? equipo.notifications : [],
+                cargando: false, error: false,
+            });
+        } else {
+            setAvisosEquipo(prev => ({ ...prev, cargando: false, error: true }));
+        }
+        setNotif(prev => ({
+            leads: leads ? (leads.nuevo || 0) : prev.leads,
+            messages: msgs ? (msgs.count || 0) : prev.messages,
+            // El número sale de la MISMA lista que se pinta: con dos fuentes, el globo dice
+            // tres y la lista enseña dos, y entonces no te crees ninguno de los dos.
+            equipo: equipo ? (equipo.unread || 0) : prev.equipo,
+            ventas: equipo ? (equipo.dinero_sin_leer || 0) : prev.ventas,
+        }));
+    }, [api]);
+
+    /** Marca un aviso del equipo como leído (al abrirlo o al despacharlo desde la tarjeta). */
+    const marcarAvisoEquipo = useCallback(async (aviso) => {
+        if (!aviso || aviso.read) return;
+        setAvisosEquipo(prev => ({
+            ...prev,
+            items: prev.items.map(a => (a.id === aviso.id ? { ...a, read: true } : a)),
+        }));
+        setNotif(prev => ({
+            ...prev,
+            equipo: Math.max(0, prev.equipo - 1),
+            ventas: aviso.dinero ? Math.max(0, prev.ventas - 1) : prev.ventas,
+        }));
+        try {
+            await api.put(`/notifications/equipo/${aviso.id}/read`);
+        } catch (e) {
+            // Al usuario no se le cuenta: el aviso sigue en la base y vuelve en el próximo
+            // repaso. El detalle, a la consola.
+            console.error('No se pudo marcar el aviso del equipo:', e);
+        }
+    }, [api]);
+
+    /** Abrir un aviso: se da por leído y se va a la ficha del cliente, si la tiene. */
+    const abrirAvisoEquipo = useCallback((aviso) => {
+        marcarAvisoEquipo(aviso);
+        if (aviso?.link) {
+            setNotifOpen(false);
+            navigate(aviso.link);
+        }
+    }, [marcarAvisoEquipo, navigate]);
+
+    const marcarTodosLosAvisosEquipo = useCallback(async () => {
+        try {
+            await api.put('/notifications/equipo/read-all');
+            setAvisosEquipo(prev => ({ ...prev, items: prev.items.map(a => ({ ...a, read: true })) }));
+            setNotif(prev => ({ ...prev, equipo: 0, ventas: 0 }));
+        } catch (e) {
+            console.error('No se pudieron marcar los avisos del equipo:', e);
+            toast.error('No se han podido marcar como leídos');
+        }
+    }, [api]);
+
     // El reparto por plan enseña los que se venden; los antiguos, aquí detrás.
     const [verAntiguos, setVerAntiguos] = useState(false);
 
@@ -378,19 +459,10 @@ const AdminDashboard = () => {
             }
         };
         fetchAll();
-        const fetchNotif = async () => {
-            try {
-                const [leadsRes, msgsRes] = await Promise.all([
-                    api.get('/leads/stats/summary'),
-                    api.get('/messages/unread-count'),
-                ]);
-                setNotif({ leads: leadsRes.data?.nuevo || 0, messages: msgsRes.data?.count || 0 });
-            } catch { /* silencioso */ }
-        };
         fetchNotif();
         const id = setInterval(fetchNotif, 60000);
         return () => clearInterval(id);
-    }, [api]);
+    }, [api, fetchNotif]);
 
     if (loading) {
         return (
@@ -412,6 +484,7 @@ const AdminDashboard = () => {
     const planLabel = (code) => planCatalog?.[code]?.name || (code === 'sin_plan' ? 'Sin plan' : code);
     const planColor = (code) => PLAN_COLORS[code] || '#666666';
     const pendingReports = cadence.filter(i => i.status !== 'enviado');
+    const totalNotif = notif.leads + notif.messages + notif.equipo;
 
     // Los que están a la venta, cada uno con su trozo. Los que ya no se venden se juntan en
     // uno solo: siguen contando en el total y siguen listados debajo, pero no se llevan
@@ -443,18 +516,19 @@ const AdminDashboard = () => {
                 </div>
                 <div className="relative flex-shrink-0">
                     <Button variant="outline" size="icon" onClick={() => setNotifOpen(o => !o)}
-                        className="bg-transparent border-white/20 hover:border-[#FF671F]" data-testid="notif-bell">
-                        <Bell className="w-4 h-4 text-white" />
+                        className={`bg-transparent hover:border-[#FF671F] ${
+                            notif.ventas > 0 ? 'border-[#FF671F]' : 'border-white/20'}`} data-testid="notif-bell">
+                        <Bell className={`w-4 h-4 ${notif.ventas > 0 ? 'text-[#FF671F]' : 'text-white'}`} />
                     </Button>
-                    {(notif.leads + notif.messages) > 0 && (
+                    {totalNotif > 0 && (
                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center pointer-events-none">
-                            {notif.leads + notif.messages > 99 ? '99+' : notif.leads + notif.messages}
+                            {totalNotif > 99 ? '99+' : totalNotif}
                         </span>
                     )}
                     {notifOpen && (
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                            <div className="absolute right-0 top-11 z-50 w-72 bg-[#111] border border-[#333] rounded-xl shadow-xl overflow-hidden" data-testid="notif-dropdown">
+                            <div className="absolute right-0 top-11 z-50 w-[min(21rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto bg-[#111] border border-[#333] rounded-xl shadow-xl" data-testid="notif-dropdown">
                                 <p className="px-4 py-2.5 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-[#222]">Novedades</p>
                                 <button onClick={() => { setNotifOpen(false); navigate('/admin/leads'); }}
                                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left">
@@ -468,14 +542,24 @@ const AdminDashboard = () => {
                                     <span className="text-white text-sm flex-1">Mensajes sin leer</span>
                                     <span className={`text-xs font-bold ${notif.messages > 0 ? 'text-red-400' : 'text-white/30'}`}>{notif.messages}</span>
                                 </button>
-                                {(notif.leads + notif.messages) === 0 && (
+                                {totalNotif === 0 && (
                                     <p className="px-4 py-3 text-white/30 text-xs border-t border-[#1A1A1A]">Todo al día</p>
                                 )}
+                                {/* Los avisos que el backend le escribe al equipo, que hasta
+                                    ahora no leía nadie. */}
+                                <AvisosDelEquipo estado={avisosEquipo} onAbrir={abrirAvisoEquipo}
+                                    onMarcarTodos={marcarTodosLosAvisosEquipo} />
                             </div>
                         </>
                     )}
                 </div>
             </div>
+
+            {/* Piden comprar: lo de la campana, además, aquí fuera. Un cliente que marca la
+                rutina del mes o «Cuéntame el Silver» está pidiendo comprar, y eso no puede
+                depender de que alguien abra un desplegable. */}
+            <PeticionesDeCompra estado={avisosEquipo} onAbrir={abrirAvisoEquipo}
+                onAtendida={marcarAvisoEquipo} />
 
             {/* Piden llamada (Nivel 3): por encima de los KPIs porque hay gente esperando */}
             <LlamadasPendientes llamadas={llamadas} onAtendida={marcarLlamadaAtendida}

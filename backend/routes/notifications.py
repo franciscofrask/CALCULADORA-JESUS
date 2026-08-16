@@ -23,8 +23,9 @@ import uuid
 
 from core.database import db
 from core.sin_futuro import hasta_hoy
-from core.security import get_current_user
+from core.security import get_current_user, get_admin_user
 from core.tiempo import a_madrid, hoy_madrid
+from core.avisos_equipo import TIPOS_EQUIPO, es_de_dinero
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -536,6 +537,19 @@ async def _ventanas_de_reporte(perfil: dict, catalogo: dict, ahora: datetime) ->
     return semana, ventanas
 
 
+# LOS DEL CLIENTE NO SON LOS DEL EQUIPO, AUNQUE COMPARTAN COLECCIÓN.
+#
+# `db.notifications` guarda las dos cosas y solo las separa el `type`. Sin este filtro, la
+# campanita del cliente se llevaba por delante los avisos de staff del que la abriera: su
+# `PUT /read-all` marca leído TODO lo que tenga su `user_id`, y ahí dentro van las
+# peticiones de compra. Comprobado en dev: sembrando una rutina del mes sin leer y abriendo
+# la campanita del cliente, la petición quedaba leída sin que nadie la hubiera visto.
+#
+# El equipo tiene sus propios endpoints (`/notifications/equipo`) y su propio "marcar
+# leído": cada buzón se vacía por su lado.
+SOLO_DEL_CLIENTE = {"equipo": {"$ne": True}, "type": {"$nin": list(TIPOS_EQUIPO)}}
+
+
 @router.get("")
 async def list_notifications(user = Depends(get_current_user)):
     """Últimas notificaciones del usuario actual."""
@@ -543,7 +557,7 @@ async def list_notifications(user = Depends(get_current_user)):
     # Las caducadas no se pintan: son avisos que dejaron de ser verdad (ver
     # `_caducar_condicionadas`). Se conservan en la base, solo que fuera de la vista.
     items = await db.notifications.find(
-        {"user_id": user["id"], "caducada": {"$ne": True}}, {"_id": 0}
+        {"user_id": user["id"], "caducada": {"$ne": True}, **SOLO_DEL_CLIENTE}, {"_id": 0}
     ).sort("created_at", -1).to_list(30)
     return {"notifications": items}
 
@@ -552,7 +566,7 @@ async def list_notifications(user = Depends(get_current_user)):
 async def unread_count(user = Depends(get_current_user)):
     await sincronizar_avisos(user["id"])
     count = await db.notifications.count_documents(
-        {"user_id": user["id"], "read": False, "caducada": {"$ne": True}})
+        {"user_id": user["id"], "read": False, "caducada": {"$ne": True}, **SOLO_DEL_CLIENTE})
     return {"count": count}
 
 
@@ -583,6 +597,129 @@ async def update_preferencias(payload: Dict[str, Any] = Body(...), user=Depends(
 @router.put("/read-all")
 async def mark_all_read(user = Depends(get_current_user)):
     result = await db.notifications.update_many(
-        {"user_id": user["id"], "read": False}, {"$set": {"read": True}}
+        {"user_id": user["id"], "read": False, **SOLO_DEL_CLIENTE}, {"$set": {"read": True}}
     )
     return {"ok": True, "marked": result.modified_count}
+
+
+# ── La campanita del EQUIPO ──────────────────────────────────────────────────
+#
+# `avisar_al_equipo` llevaba meses escribiendo avisos en esta misma colección que NO LEÍA
+# NADIE: el panel de admin solo sumaba leads nuevos y mensajes sin leer, y no llamaba aquí
+# jamás. Entre lo que se estaba perdiendo van dos cosas que son dinero: el cliente que marca
+# la rutina del mes (57 €) y el que pide que le cuenten el plan de arriba.
+#
+# Un entrenador SOLO VE LO SUYO. `get_admin_user` deja pasar a admin y a entrenador por
+# igual, así que el filtro por destinatario se hace aquí y a mano: `user_id` es el del que
+# pregunta, y punto. Los avisos que no llevan entrenador se escriben con una copia por
+# administrador, así que cada uno marca la suya como leída sin tocar la de los demás.
+
+def _filtro_equipo(user_id: str) -> Dict[str, Any]:
+    """Los avisos de equipo de ESTE usuario, los nuevos y los que ya estaban escritos.
+
+    Los de antes no llevan la marca `equipo`, así que se cazan por el `type`; los nuevos
+    entran por la marca aunque su tipo no esté en el catálogo."""
+    return {
+        "user_id": user_id,
+        "$or": [{"equipo": True}, {"type": {"$in": list(TIPOS_EQUIPO)}}],
+    }
+
+
+async def _nombres_de_clientes(client_ids: set) -> Dict[str, str]:
+    """{client_profiles.id: nombre}, en dos consultas y no una por aviso.
+
+    OJO CON LOS DOS IDS: el `client_id` del aviso es el de `client_profiles`, pero el nombre
+    de la mayoría de los clientes NO está en el perfil, está en `users` y se llega por
+    `client_profiles.user_id`. Buscándolo solo en el perfil salían todos los avisos sin
+    nombre, que es justo lo que hace que la lista no se pueda leer de un vistazo."""
+    if not client_ids:
+        return {}
+    perfiles = await db.client_profiles.find(
+        {"id": {"$in": list(client_ids)}}, {"_id": 0, "id": 1, "name": 1, "user_id": 1}
+    ).to_list(200)
+
+    faltan = [p["user_id"] for p in perfiles if not p.get("name") and p.get("user_id")]
+    por_usuario = {}
+    if faltan:
+        async for u in db.users.find({"id": {"$in": faltan}}, {"_id": 0, "id": 1, "name": 1,
+                                                               "email": 1}):
+            por_usuario[u["id"]] = u.get("name") or u.get("email")
+
+    return {p["id"]: (p.get("name") or por_usuario.get(p.get("user_id")))
+            for p in perfiles if (p.get("name") or por_usuario.get(p.get("user_id")))}
+
+
+def _adornar(aviso: Dict[str, Any], nombres: Dict[str, str]) -> Dict[str, Any]:
+    """Le pone al aviso lo que necesita el panel: si es dinero, cómo se llama su tipo y a
+    dónde lleva el enlace."""
+    tipo = aviso.get("type") or ""
+    client_id = aviso.get("client_id")
+    if client_id:
+        link = f"/admin/clients/{client_id}"
+    elif aviso.get("lead_id"):
+        # El lead que paga todavía no es cliente: no tiene ficha a la que ir.
+        link = "/admin/leads"
+    else:
+        link = None
+    return {
+        **aviso,
+        "dinero": es_de_dinero(tipo),
+        "etiqueta": (TIPOS_EQUIPO.get(tipo) or {}).get("etiqueta") or aviso.get("title"),
+        "client_name": nombres.get(client_id or ""),
+        "link": link,
+    }
+
+
+@router.get("/equipo")
+async def avisos_del_equipo(user=Depends(get_admin_user)):
+    """Los avisos de staff del que pregunta, lo que sea que le hayan dejado.
+
+    Van primero los de dinero sin leer: son los únicos que caducan de verdad (el cliente
+    que pide comprar y no recibe respuesta se lo piensa dos veces), y en una lista por
+    fecha se quedaban debajo de treinta cuestionarios."""
+    items = await db.notifications.find(
+        _filtro_equipo(user["id"]), {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+
+    nombres = await _nombres_de_clientes(
+        {a.get("client_id") for a in items if a.get("client_id")})
+
+    avisos = [_adornar(a, nombres) for a in items]
+    # El orden de dentro de cada grupo lo pone Mongo (más reciente primero) y `sort` es
+    # estable, así que solo hay que subir el bloque de arriba.
+    avisos.sort(key=lambda a: 0 if (a["dinero"] and not a.get("read")) else 1)
+    return {
+        "notifications": avisos,
+        "unread": sum(1 for a in avisos if not a.get("read")),
+        "dinero_sin_leer": sum(1 for a in avisos if a["dinero"] and not a.get("read")),
+    }
+
+
+@router.get("/equipo/unread-count")
+async def avisos_del_equipo_sin_leer(user=Depends(get_admin_user)):
+    """Para el globo de la campana, sin traerse la lista entera."""
+    filtro = {**_filtro_equipo(user["id"]), "read": False}
+    total = await db.notifications.count_documents(filtro)
+    dinero = await db.notifications.count_documents(
+        {**filtro, "type": {"$in": [t for t, d in TIPOS_EQUIPO.items() if d["dinero"]]}})
+    return {"count": total, "dinero": dinero}
+
+
+@router.put("/equipo/read-all")
+async def marcar_avisos_del_equipo(user=Depends(get_admin_user)):
+    """Marca leídos TODOS los suyos. Los de otro destinatario ni se rozan."""
+    result = await db.notifications.update_many(
+        {**_filtro_equipo(user["id"]), "read": False}, {"$set": {"read": True}})
+    return {"ok": True, "marked": result.modified_count}
+
+
+@router.put("/equipo/{aviso_id}/read")
+async def marcar_aviso_del_equipo(aviso_id: str, user=Depends(get_admin_user)):
+    """Marca UNO leído. Existe para que atender una petición de compra no obligue a borrar
+    de un plumazo los treinta cuestionarios que hay debajo sin haberlos mirado.
+
+    El `user_id` va en el filtro a propósito: sin él, un entrenador podría marcarle como
+    leído a otro un aviso que no ha visto nunca."""
+    result = await db.notifications.update_one(
+        {**_filtro_equipo(user["id"]), "id": aviso_id}, {"$set": {"read": True}})
+    return {"ok": bool(result.matched_count)}
