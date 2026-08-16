@@ -581,6 +581,17 @@ class AgentLoop:
         lineas.append("Comidas del día: " + "; ".join(
             f"{c['nombre']} ({c['momento']}, {c['estado']})" + (" <- actual" if c["es_actual"] else "")
             for c in estado.get("comidas", [])) + ".")
+        # YA LA ACEPTÓ CON SU DESVÍO: no se le vuelve a ofrecer arreglarla (ver la nota en
+        # `aplicar_borrador`). Va aquí, en el estado que el modelo lee en cada turno,
+        # porque la regla del prompt sola no bastaba.
+        aceptada = (self.bot.state.get("aceptadas_con_desvio") or {}).get(
+            self.bot.current_meal_key())
+        if aceptada:
+            lineas.append(
+                f"EL CLIENTE YA ACEPTÓ esta comida sabiendo que se pasa {aceptada}. Está "
+                f"decidido: NO le ofrezcas ajustarla, ni afinarla, ni compensarla. Si "
+                f"quiere cambiar algo te lo dirá él. Lo que toca ahora es guardarla o "
+                f"seguir con la siguiente.")
         restr = self.bot.state.get("avoided_keywords") or []
         if restr:
             lineas.append("Vetos del cliente (perfil o dichos en la sesión): "

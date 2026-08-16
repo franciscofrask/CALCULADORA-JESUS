@@ -3025,6 +3025,24 @@ class AgentTools:
         for it in b["items"]:
             await self.bot.add_food_by_id(it["id"], it["cantidad_g"])
         b["aplicado"] = True
+        # LO QUE YA HA ACEPTADO NO SE LE VUELVE A DISCUTIR (15-08, Francisco).
+        #
+        # Le dices que se pasa 5 g de grasa, él elige esa opción igual, y el asistente le
+        # sigue ofreciendo afinarla turno tras turno. Eso ya es discutirle la comida. Hay
+        # regla en el prompt, pero el modelo no siempre la respeta, así que la decisión se
+        # apunta en el ESTADO y el contexto se la recuerda con todas las letras.
+        #
+        # Solo cuando el desvío estaba escrito en la tarjeta: si eligió algo que cuadra, no
+        # hay nada que recordar. La marca se borra en cuanto la comida cambia (`clear_meal`
+        # y `editar_comida`): a partir de ahí es otra comida y vuelve a opinar.
+        if b.get("avisos") or b.get("solo_lo_pedido"):
+            resto = self.bot.get_remaining_macros()
+            fuera = [f"{abs(round(resto[m]))} g de {_MACRO_LBL[m]}"
+                     for m in ("H", "G") if resto[m] < -self.bot.margen_de(
+                         (b.get("objetivo") or {}).get(m, 0))]
+            if fuera:
+                self.bot.state.setdefault("aceptadas_con_desvio", {})[
+                    self.bot.current_meal_key()] = " y ".join(fuera)
         # Tocada en este chat: ya no es el trabajo intocable que traía de Nutrición.
         mk_ap = self.bot.current_meal_key()
         if mk_ap in (self.bot.state.get("comidas_traidas") or []):
@@ -3121,6 +3139,10 @@ class AgentTools:
             return protegida
         # Punto de retorno antes de tocar nada: si entendió mal, «deshaz» lo devuelve.
         self.bot.apuntar_para_deshacer(self._resumen_ops(operaciones))
+        # Si la comida cambia, deja de valer el «ya la aceptó así»: sobre lo que quede
+        # después, el asistente vuelve a poder decir lo que ve (ver `aplicar_borrador`).
+        (self.bot.state.get("aceptadas_con_desvio") or {}).pop(
+            self.bot.current_meal_key(), None)
         hechos, fallos = [], []
 
         # VARIOS AÑADIRES SIN CANTIDAD SE DIMENSIONAN JUNTOS, NO EN FILA (vídeo 2 del

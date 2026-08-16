@@ -1741,6 +1741,9 @@ class NutritionChatbot:
         key = self.current_meal_key()
         self.state["comidas_completadas"][key] = {"alimentos": [], "macros": {"P": 0, "H": 0, "G": 0}}
         self.state.setdefault("seen_sugg", {}).pop(key, None)
+        # Vaciada la comida, se olvida que la había aceptado con desvío: lo que aceptó ya
+        # no existe, y sobre lo que monte ahora el asistente vuelve a poder opinar.
+        (self.state.get("aceptadas_con_desvio") or {}).pop(key, None)
         if key in self.state.get("saved_meals", []):
             self.state["saved_meals"].remove(key)
         # Y DEJA DE ESTAR PROTEGIDA: una comida vacía no tiene trabajo que proteger.
