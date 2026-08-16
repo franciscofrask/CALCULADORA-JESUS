@@ -66,16 +66,21 @@ def test_ajustar_sin_unidad_no_multiplica_la_grasa_por_cinco():
                    or "son 50" in str(f.get("detalle", "")) for f in r["fallos"]), r["fallos"]
 
 
-def test_una_pieza_que_dobla_el_objetivo_del_macro_se_pregunta():
+def test_un_numero_sin_unidad_que_dispara_el_macro_se_pregunta():
+    """El caso exacto de producción: «aceite a 5» sin decir si son gramos o cucharadas."""
     async def _probar():
         bot = await _bot("test_unidades_barbaridad")
         aceite = (await bot.search_foods("Aceite de oliva virgen extra una cucharada sopera",
                                          limit=1))
         assert aceite, "no está el aceite en el catálogo"
-        return await bot._es_desmedido({"nombre": aceite[0]["nombre"], "cantidad": 50,
-                                        "unidad": "g"})
-    aviso = correr(_probar())
-    assert aviso and "grasa" in aviso["texto"], aviso
+        sin_unidad = await bot._es_desmedido({"nombre": aceite[0]["nombre"], "cantidad": 5})
+        # Y con la unidad dicha, lo que pide el cliente es lo que va: no se le frena.
+        con_gramos = await bot._es_desmedido({"nombre": aceite[0]["nombre"], "cantidad": 5,
+                                              "unidad": "g"})
+        return sin_unidad, con_gramos
+    sin_unidad, con_gramos = correr(_probar())
+    assert sin_unidad and "grasa" in sin_unidad["texto"], sin_unidad
+    assert con_gramos is None, con_gramos
 
 
 # --------------------------------------------------- 2. guardar un día no borra otras comidas

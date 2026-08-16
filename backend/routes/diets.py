@@ -101,10 +101,19 @@ async def upsert_diet_doc(user_id: str, data: dict, quien: Optional[dict] = None
     # `comidas_completas=true` para quien de verdad quiera reemplazar el día entero.
     if not data.get("comidas_completas"):
         previo = await db.diets.find_one({"user_id": user_id, "fecha": fecha},
-                                         {"_id": 0, "comidas": 1})
+                                         {"_id": 0, "comidas": 1, "macros_snapshot": 1})
         anteriores = (previo or {}).get("comidas") or {}
         if anteriores:
             diet_doc["comidas"] = {**anteriores, **(diet_doc.get("comidas") or {})}
+        # EL TOTAL DEL DÍA NO SE PIERDE PORQUE GUARDE EL CHAT. Nutrición escribe aquí el
+        # reparto ya sumado (`P_total`...) y el chat escribe los macros crudos del cliente,
+        # que es otra cosa con otras claves. Quien lee el total -- Inicio, para enseñar el
+        # mismo objetivo que Nutrición -- se quedaba sin él en cuanto el cliente hablara con
+        # el asistente. Si lo que llega no trae totales, se conserva lo que hubiera.
+        anterior_snap = (previo or {}).get("macros_snapshot") or {}
+        nuevo_snap = diet_doc.get("macros_snapshot") or {}
+        if anterior_snap.get("P_total") and not nuevo_snap.get("P_total"):
+            diet_doc["macros_snapshot"] = {**anterior_snap, **nuevo_snap}
 
     await db.diets.update_one(
         {"user_id": user_id, "fecha": fecha},

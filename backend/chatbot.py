@@ -3799,12 +3799,19 @@ class NutritionChatbot:
             gramos = cantidad * (peso_unidad or float(alimento.get("racion") or 100) or 100.0)
         else:
             gramos = cantidad
-        # Y ADEMÁS, LO QUE ESO APORTA A ESTA COMIDA. El tope por alimento no basta: 50 g de
-        # aceite no llegan al triple de su tope (30 g) y sin embargo traen 50 g de grasa
-        # para un objetivo de 10. Si UNA sola pieza dobla el objetivo de un macro de la
-        # comida, eso se pregunta, venga de donde venga.
+        # Y ADEMÁS, LO QUE ESO APORTA A ESTA COMIDA, PERO SOLO CUANDO NO SE DIJO LA UNIDAD.
+        #
+        # El tope por alimento no basta: 50 g de aceite no llegan al triple de su tope
+        # (30 g) y traen 50 g de grasa para un objetivo de 10. Pero este segundo filtro se
+        # aplica ÚNICAMENTE al caso ambiguo -- número sin unidad sobre un alimento que se
+        # cuenta por piezas --, que es donde el número se multiplica sin que nadie lo haya
+        # pedido. Si el cliente pide 80 g de arroz y lo dice en gramos, van sus 80 g aunque
+        # sean el triple de los hidratos de esa comida: lo que pide él es suyo, y esa regla
+        # es de Francisco (15-08). Puesto ancho, este filtro frenaba raciones normales.
         exceso = None
         try:
+            if it.get("unidad") or not por_unidad:
+                raise StopIteration
             from meal_builder import get_effective_macros_per_100g
             objetivo = self.get_current_meal_macros() or {}
             ef = get_effective_macros_per_100g(alimento)
