@@ -276,9 +276,15 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                         {/* A CUÁNTO EQUIVALE LA UNIDAD, AL LADO (Jesús, 15-08, fallo 46): «1 ud»
                             no dice cuánto pesa, y de ahí salía que el mismo alimento valiera una
                             cosa pulsándolo y otra escribiéndolo. La calculadora de ahora la pone
-                            siempre en la propia línea. */}
+                            siempre en la propia línea.
+
+                            Y ES EL TOTAL, NO LO QUE PESA UNA (16-08-2026). Con una unidad daba
+                            igual, pero con cinco cucharadas de aceite esta línea ponía «5 ud
+                            (10 g)» mientras el chat, para la misma comida, ponía «5 ud (50 g)».
+                            Quien miraba Nutrición entendía que tenía 10 g de aceite teniendo 50.
+                            Lo que le importa al cliente es cuánto se come en total. */}
                         {porUnidad && (
-                            <span className="ml-1 text-[10px] font-normal text-muted-foreground">({num1(peso)} g)</span>
+                            <span className="ml-1 text-[10px] font-normal text-muted-foreground">({num1(Math.round(food.cantidad_g || 0))} g)</span>
                         )}
                     </button>
                 )}

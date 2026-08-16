@@ -79,6 +79,33 @@ async def upsert_diet_doc(user_id: str, data: dict, quien: Optional[dict] = None
     if data.get("sesion_chat"):
         diet_doc["sesion_chat"] = data["sesion_chat"]
 
+    # UNA COMIDA QUE NO VIENE EN LA CARGA NO SE BORRA (16-08-2026).
+    #
+    # Este `$set` reemplazaba `comidas` entero por lo que trajera quien guardase, así que el
+    # último en escribir se llevaba por delante lo que él no tuviera delante. Medido en
+    # producción con la cuenta de Jesús: pedirle al chat «para mañana ponme 3 comidas» dejó
+    # la Comida 4 -- ya montada, con cinco alimentos -- FUERA del reparto, y en el siguiente
+    # guardado la clave `C4` desapareció del documento. El día pasó de 138 g de proteína a
+    # 99 y volver a poner cuatro comidas devolvía el hueco vacío. Hubo que sacarla del backup
+    # de las 04:30, porque no hay historial ni papelera.
+    #
+    # El mismo agujero, por otra puerta: con la pestaña de Nutrición abierta en ese día, al
+    # recargar guardaba SU copia del día y borraba lo que se acabara de restaurar por detrás.
+    # Dos pestañas abiertas, o el móvil y el ordenador, se pisaban igual.
+    #
+    # Ahora las comidas se FUSIONAN: lo que llega manda sobre esa comida, y las que no
+    # llegan se quedan como estaban. Vaciar una comida sigue funcionando -- se manda con la
+    # lista de alimentos vacía, y eso sí la vacía --, y un cambio de reparto ya no borra lo
+    # que se sale del reparto nuevo: si mañana vuelve a cuatro comidas, su comida sigue ahí.
+    #
+    # `comidas_completas=true` para quien de verdad quiera reemplazar el día entero.
+    if not data.get("comidas_completas"):
+        previo = await db.diets.find_one({"user_id": user_id, "fecha": fecha},
+                                         {"_id": 0, "comidas": 1})
+        anteriores = (previo or {}).get("comidas") or {}
+        if anteriores:
+            diet_doc["comidas"] = {**anteriores, **(diet_doc.get("comidas") or {})}
+
     await db.diets.update_one(
         {"user_id": user_id, "fecha": fecha},
         {"$set": diet_doc},

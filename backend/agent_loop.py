@@ -169,7 +169,7 @@ _ESQUEMAS = [
              "op": {"type": "string", "enum": ["añadir", "quitar", "sustituir", "ajustar", "vaciar", "vaciar_dia", "descartar_opciones"]},
              "texto": {"type": "string"}, "alimento_id": {"type": "integer"},
              "nombre": {"type": "string"}, "cantidad": {"type": "number"},
-             "unidad": {"type": "string", "enum": ["g", "ud"]},
+             "unidad": {"type": "string", "enum": ["g", "ud"], "description": "EN QUÉ ESTÁ EL NÚMERO, y pónlo SIEMPRE que mandes 'cantidad', 'a' o 'mas'. Sin esto, un alimento que se cuenta por piezas (huevos, yogures, cucharadas de aceite) toma el número por PIEZAS: «aceite a 5» pensando en 5 gramos se convierte en 5 cucharadas"},
              "a": {"type": "number"}, "mas": {"type": "number"}, "por": {"type": "number"},
              "sumar": {"type": "boolean"}}}},
          "forzar": {"type": "boolean"}},
@@ -1480,10 +1480,12 @@ class AgentLoop:
         # Si ha cerrado preguntando si monta la comida con algo concreto, se apunta CON QUÉ.
         self._apuntar_promesa(texto_final, borradores_vistos)
 
-        # Historial persistible (solo lo humano, no el tráfico de herramientas)
+        # Historial persistible (solo lo humano, no el tráfico de herramientas). Va al
+        # ESTADO, que es lo único que se guarda entre peticiones: ver `get_or_create_chatbot`.
         self.bot.messages_history.append({"role": "user", "content": user_input})
         self.bot.messages_history.append({"role": "assistant", "content": texto_final})
         self.bot.messages_history = self.bot.messages_history[-20:]
+        self.bot.state["mensajes"] = self.bot.messages_history
 
         # La traza al log del servidor (guardarraíl 4): sin esto, ante un "¿por qué ha
         # hecho esto?" no había forma de ver qué llamó ni con qué argumentos.

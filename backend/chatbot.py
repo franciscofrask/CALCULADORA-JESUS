@@ -42,6 +42,21 @@ _SOLO_UNIDAD = {"g", "gr", "grs", "gramo", "gramos", "kg", "kgs", "kilo", "kilos
 # de casos (router 48/60; agente 59-60/60). La conversación la lleva agent_loop.py con
 # las herramientas de agent_tools.py. Aquí queda el MOTOR de la sesión: estado, búsqueda,
 # dimensionado, mutaciones de comida y exportación. Volver atrás es git revert.
+# LOS APUNTES DEL CATÁLOGO NO SE LE DICEN AL CLIENTE (16-08-2026).
+#
+# El asistente le recitó a Jesús su propia comida así: «ya tiene Calabacín, Solomillo de
+# pavo, Arroz tres delicias ya cocinado - macros orientativos, Almendras...». Esa coletilla
+# es una nota nuestra de la ficha (seis alimentos la llevan), como en su día lo fueron «(por
+# gramos)» y los corchetes de importación, que ya se limpiaban en las tarjetas. Faltaba
+# limpiarlas donde el asistente LEE la comida para hablar de ella.
+def nombre_visible(nombre: str) -> str:
+    """El nombre del alimento tal y como se le puede decir a una persona."""
+    n = re.sub(r"(?i)\s*[-–]\s*macros orientativos\s*$", "", (nombre or "").strip())
+    n = re.sub(r"(?i)\s*\(?por gramos\)?\s*$", "", n)
+    n = re.sub(r"\s*\[[^\]]*\]", "", n)
+    return n.strip() or (nombre or "")
+
+
 # =====================================================
 # CLASE PRINCIPAL DEL CHATBOT
 # =====================================================
@@ -106,7 +121,8 @@ class NutritionChatbot:
             "notas_cliente": [],
         }
         
-        # Historial de mensajes para persistencia (lo rellena el agente: solo lo humano)
+        # Historial de mensajes (lo rellena el agente: solo lo humano, sin tráfico de
+        # herramientas). VIVE EN EL ESTADO, que es lo que se persiste: ver `mensajes`.
         self.messages_history = []
         # El mensaje que se esta atendiendo AHORA. El historial se apunta al final del
         # turno, asi que sin esto los filtros citados (_lo_dijo_el_cliente) no veian la
@@ -3763,17 +3779,51 @@ class NutritionChatbot:
             return None
         cantidad = float(it.get("cantidad") or 0)
         unidad = it.get("unidad")
-        racion = float(alimento.get("racion") or 100) or 100.0
+        # LA UNIDAD SE RESUELVE COMO LA RESUELVE QUIEN LO APLICA (16-08-2026).
+        #
+        # Aquí, sin unidad, se daba por hecho que el número eran GRAMOS; en
+        # `set_food_quantity`, sin unidad, un alimento contable se cuenta en UNIDADES. Con
+        # ese desacuerdo el guardarraíl medía una cosa y el plato acababa con otra: el
+        # asistente mandó «aceite de oliva (una cucharada sopera) a 5» queriendo decir 5 g,
+        # esto lo leyó como 5 g -- inofensivo, adelante -- y la comida se quedó con 5
+        # CUCHARADAS, 50 g de aceite, 45 g de grasa por encima del objetivo. En producción,
+        # en la cuenta de Jesús, y guardado solo.
+        config = get_food_config(alimento)
+        peso_unidad = float(config.get("peso_unidad") or 0)
+        por_unidad = bool(config.get("por_unidad")) and peso_unidad > 0
+        if unidad not in ("g", "kg", "ud"):
+            unidad = "ud" if por_unidad else "g"
         if unidad == "kg":
             gramos = cantidad * 1000
         elif unidad == "ud":
-            gramos = cantidad * racion
+            gramos = cantidad * (peso_unidad or float(alimento.get("racion") or 100) or 100.0)
         else:
             gramos = cantidad
-        if gramos <= self._VECES_PARA_PREGUNTAR * maxr:
+        # Y ADEMÁS, LO QUE ESO APORTA A ESTA COMIDA. El tope por alimento no basta: 50 g de
+        # aceite no llegan al triple de su tope (30 g) y sin embargo traen 50 g de grasa
+        # para un objetivo de 10. Si UNA sola pieza dobla el objetivo de un macro de la
+        # comida, eso se pregunta, venga de donde venga.
+        exceso = None
+        try:
+            from meal_builder import get_effective_macros_per_100g
+            objetivo = self.get_current_meal_macros() or {}
+            ef = get_effective_macros_per_100g(alimento)
+            for m, etiqueta in (("P", "proteína"), ("H", "hidratos"), ("G", "grasa")):
+                obj_m = float(objetivo.get(m) or 0)
+                aporta = float(ef.get(m) or 0) * gramos / 100.0
+                if obj_m > 0 and aporta > 2 * obj_m:
+                    exceso = (f"solo eso ya trae {aporta:.0f} g de {etiqueta} y esta comida "
+                              f"pide {obj_m:.0f} g")
+                    break
+        except Exception:
+            exceso = None
+        if gramos <= self._VECES_PARA_PREGUNTAR * maxr and not exceso:
             return None
         pedido = (f"{cantidad:g} kg" if unidad == "kg"
                   else f"{cantidad:g} ud" if unidad == "ud" else f"{gramos:g} g")
+        if exceso:
+            return {"texto": (f"{pedido} de {alimento.get('nombre', '').strip()} son "
+                              f"{gramos:g} g: {exceso}.")}
         return {"texto": (f"{pedido} de {alimento.get('nombre', '').strip()} son "
                           f"{gramos:g} g, y lo habitual es no pasar de {int(maxr)} g.")}
 
@@ -3850,10 +3900,23 @@ async def create_chatbot(session_id: str, db, user_macros: dict = None) -> Nutri
 
 
 async def get_or_create_chatbot(session_id: str, db, user_macros: dict = None) -> NutritionChatbot:
-    """Obtiene o crea un chatbot para la sesión, rehidratando el estado desde Mongo."""
+    """Obtiene o crea un chatbot para la sesión, rehidratando el estado desde Mongo.
+
+    LA CONVERSACIÓN TAMBIÉN SE REHIDRATA (16-08-2026). El historial de mensajes vivía en
+    memoria del proceso y no se guardaba en ninguna parte, así que -- como en cada petición
+    se construye un bot nuevo -- el bloque del prompt que dice «estos son los últimos
+    mensajes» iba VACÍO SIEMPRE en producción. El asistente solo veía el estado (comidas,
+    borradores, vetos), y de ahí venían las quejas de que «le contestas y no hace caso»:
+    medido en la app real, a un «haz la primera» sobre una lista que él mismo acababa de
+    enumerar se fue a la Comida 1, porque de su lista no le quedaba ni rastro.
+
+    Y de paso deja el registro de conversaciones que no existía: hasta hoy no había forma de
+    leer lo que un cliente le dijo al asistente, ni para diagnosticar ni para nada.
+    """
     chatbot = await create_chatbot(session_id, db, user_macros)
     doc = await db.chatbot_sessions.find_one({"session_id": session_id}, {"_id": 0, "state": 1})
     if doc and doc.get("state"):
+        chatbot.messages_history = list((doc["state"] or {}).get("mensajes") or [])
         propios = chatbot.state.get("macros_propios")
         chatbot.state = doc["state"]
         # Las sesiones abiertas antes de este cambio no traen la marca. Se dan por buenas:

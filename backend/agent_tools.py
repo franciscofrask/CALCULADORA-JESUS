@@ -32,6 +32,7 @@ from calculator import (
     get_food_config,
 )
 from calma_engine import parse_categories
+from chatbot import nombre_visible
 from food_semantic import BusquedaSemantica, CorrectorErratas
 from meal_moment import momento_de_comida, describe_comida, PERI, DESAYUNO
 from moment_profile import PerfilMomento, cat2_de
@@ -382,10 +383,10 @@ class AgentTools:
         # salió tal cual en la tarjeta y en la frase del asistente. Se limpia AQUÍ porque
         # esta es la puerta única de lo que el modelo y las tarjetas ven; el doc del
         # catálogo no se toca (los flujos van por id).
-        nombre = re.sub(r"(?i)\s*\(?por gramos\)?\s*$", "", (food.get("nombre") or "")).strip()
-        # Y las coletillas entre corchetes del catálogo ("[Italy Product]"): apuntes de
-        # importación en inglés que el cliente veía en el chat y en Nutrición (QA 15-08).
-        nombre = re.sub(r"\s*\[[^\]]*\]", "", nombre).strip()
+        # Y las coletillas entre corchetes del catálogo ("[Italy Product]") y las notas de
+        # ficha ("- macros orientativos"): apuntes nuestros que el cliente veía en el chat
+        # y en Nutrición (QA 15 y 16-08). Todas viven en `nombre_visible`.
+        nombre = nombre_visible(food.get("nombre"))
         return {
             "id": int(food["id"]),
             "nombre": nombre or food.get("nombre"),
@@ -3745,7 +3746,8 @@ class AgentTools:
             "objetivo": bot.get_current_meal_macros(),
             "falta": bot.get_remaining_macros(),
             "guardada_en_nutricion": key in guardadas,
-            "alimentos": [{"id": a.get("alimento_id"), "nombre": a.get("nombre"),
+            "alimentos": [{"id": a.get("alimento_id"),
+                           "nombre": nombre_visible(a.get("nombre")),
                            "cantidad": a.get("cantidad_display"),
                            "macros": a.get("macros")} for a in comida.get("alimentos", [])],
         }

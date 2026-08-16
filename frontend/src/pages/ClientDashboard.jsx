@@ -219,6 +219,14 @@ const ClientDashboard = () => {
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [macros, setMacros] = useState(null);
     const [todayConsumed, setTodayConsumed] = useState({ P: 0, H: 0, G: 0 });
+    // EL OBJETIVO DEL DÍA, EL MISMO QUE ENSEÑA NUTRICIÓN (16-08-2026).
+    //
+    // Inicio pintaba el objetivo CRUDO del cliente (120 P · 50 H) y Nutrición el del día ya
+    // repartido, que suma el perientreno (135 P · 65 H). Mismo día, mismo cliente, dos
+    // pantallas seguidas y quince gramos de diferencia en dos macros. El día guardado ya
+    // trae el total bueno en `macros_snapshot`, así que se usa ese y solo se cae al crudo
+    // cuando todavía no hay día montado.
+    const [totalDelDia, setTotalDelDia] = useState(null);
     const [hasPreferences, setHasPreferences] = useState(true); // optimista: evita parpadeo del checklist
     const [hasDiet, setHasDiet] = useState(false);
     // POR CLIENTE (punto 4.7). Esta bandera dice si ya cerró el checklist, y guardada sin
@@ -271,6 +279,10 @@ const ClientDashboard = () => {
                         });
                     });
                     setTodayConsumed({ P: Math.round(totalP * 10) / 10, H: Math.round(totalH * 10) / 10, G: Math.round(totalG * 10) / 10 });
+                    const snap = diet.macros_snapshot;
+                    if (snap && (snap.P_total || snap.H_total || snap.G_total)) {
+                        setTotalDelDia({ P: snap.P_total || 0, H: snap.H_total || 0, G: snap.G_total || 0 });
+                    }
                 }
                 setHasDiet(dietHasFood);
                 setDashDataLoaded(true);
@@ -507,9 +519,9 @@ const ClientDashboard = () => {
                                     es una decisión aparte -- no parte de igualar el escritorio
                                     con el móvil, que es lo que se está haciendo aquí. */}
                                 <div className="grid grid-cols-3 gap-3">
-                                    <MacroGrande valor={todayConsumed.P} objetivo={getP(activeTarget)} label="Proteína" color={MACRO.protein} />
-                                    <MacroGrande valor={todayConsumed.H} objetivo={getH(activeTarget)} label="Hidratos" color={MACRO.carbs} />
-                                    <MacroGrande valor={todayConsumed.G} objetivo={getG(activeTarget)} label="Grasa" color={MACRO.fat} />
+                                    <MacroGrande valor={todayConsumed.P} objetivo={totalDelDia ? totalDelDia.P : getP(activeTarget)} label="Proteína" color={MACRO.protein} />
+                                    <MacroGrande valor={todayConsumed.H} objetivo={totalDelDia ? totalDelDia.H : getH(activeTarget)} label="Hidratos" color={MACRO.carbs} />
+                                    <MacroGrande valor={todayConsumed.G} objetivo={totalDelDia ? totalDelDia.G : getG(activeTarget)} label="Grasa" color={MACRO.fat} />
                                 </div>
                             </div>
                             {/* AQUÍ IBA EL PIE DEL PERIENTRENO, y se ha quitado entero

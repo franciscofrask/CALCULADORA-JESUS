@@ -344,7 +344,22 @@ async def _procesar_mensaje(chatbot, texto: str, progreso=None):
         return {"action": "message", "message": SIN_MACROS, "sin_macros": True}
     from agent_loop import AgentLoop
     loop = await AgentLoop.crear(chatbot, progreso=progreso)
-    return await loop.procesar(texto)
+    respuesta = await loop.procesar(texto)
+    # LA CONVERSACIÓN SE APUNTA AQUÍ, PASE LO QUE PASE DENTRO. El agente ya la apunta en su
+    # camino largo, pero tiene una docena de atajos que contestan antes de llegar al modelo
+    # (el «sí» a una oferta, la calibración, deshacer, navegar...) y esos turnos se perdían:
+    # ni el asistente los recordaba en el turno siguiente ni quedaban en el registro. Esta
+    # es la única puerta por la que pasan todos.
+    ultimo = (chatbot.messages_history or [])[-2:]
+    ya_apuntado = any((m or {}).get("role") == "user" and (m or {}).get("content") == texto
+                      for m in ultimo)
+    if not ya_apuntado:
+        chatbot.messages_history = (chatbot.messages_history or []) + [
+            {"role": "user", "content": texto},
+            {"role": "assistant", "content": (respuesta or {}).get("message") or ""}]
+        chatbot.messages_history = chatbot.messages_history[-20:]
+        chatbot.state["mensajes"] = chatbot.messages_history
+    return respuesta
 
 
 def _estado_para_front(chatbot) -> dict:
