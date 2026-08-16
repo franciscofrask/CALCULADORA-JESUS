@@ -1482,7 +1482,15 @@ const ClientLayout = () => {
                                 duda de si falta algo por cargar. Al abrir el panel ya se marcan
                                 todos como leídos, así que el estado real es ese: no hay nada
                                 más pendiente, y se dice (Jesús, 11-08). */}
-                            {notifCargando ? null : notifItems.length === 0 && unread === 0 ? (
+                            {/* MIENTRAS SE BUSCAN, SE DICE. El panel se abre al instante y la
+                                lista tarda lo que tarde el servidor (medido en desarrollo:
+                                cinco segundos largos). Sin esta línea eran cinco segundos de
+                                caja blanca vacía, que se lee como «no tengo nada» o como que
+                                la app se ha colgado. Decir «no hay nada» todavía no se puede:
+                                no se sabe. */}
+                            {notifCargando ? (
+                                <p className="text-muted-foreground text-sm text-center py-10">Buscando novedades...</p>
+                            ) : notifItems.length === 0 && unread === 0 ? (
                                 <p className="text-muted-foreground text-sm text-center py-10">No hay nada pendiente</p>
                             ) : (
                                 <p className="text-muted-foreground/70 text-xs text-center py-4">No hay nada más pendiente</p>
