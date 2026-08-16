@@ -101,15 +101,19 @@ _ESQUEMAS = [
          "required": ["borrador_id", "item_id"]}},
     {"name": "editar_borrador",
      "description": ("Cambia piezas de un borrador (sustituir/quitar/añadir por id) y "
-                     "recuadra todo el menú con el motor. Cambiar una pieza por otra es "
+                     "recuadra el resto del menú con el motor. Cambiar una pieza por otra es "
                      "SIEMPRE op='sustituir' con item_id (sale) y por_id (entra), nunca "
-                     "un añadir suelto: añadir sin quitar deja las dos piezas."),
+                     "un añadir suelto: añadir sin quitar deja las dos piezas. Si el cliente "
+                     "DICE LOS GRAMOS («añádele 30 g de almendras»), van en 'cantidad' y se "
+                     "respetan tal cual: sin eso el motor decide por él y le puede poner 5."),
      "parameters": {"type": "object", "properties": {
          "borrador_id": {"type": "string"},
          "operaciones": {"type": "array", "items": {"type": "object", "properties": {
              "op": {"type": "string", "enum": ["sustituir", "quitar", "añadir"]},
              "item_id": {"type": "integer"}, "por_id": {"type": "integer"},
-             "alimento_id": {"type": "integer"}}}}},
+             "alimento_id": {"type": "integer"},
+             "cantidad": {"type": "number",
+                          "description": "gramos EXACTOS que ha dicho el cliente para esa pieza"}}}}},
          "required": ["borrador_id", "operaciones"]}},
     {"name": "aplicar_borrador",
      "description": "Vuelca un borrador YA revisado a la comida actual. SOLO cuando el cliente diga explícitamente que se queda con ese menú. Pedir un cambio sobre una opción o contestar a una aclaración tuya NO es elegirla. Con problemas se bloquea; 'forzar' únicamente si el cliente lo pide sabiéndolos.",

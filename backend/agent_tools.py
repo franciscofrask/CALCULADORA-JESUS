@@ -1896,9 +1896,15 @@ class AgentTools:
                          for m in ("P", "H", "G")
                          if abs(desvio[m]) > 2 * self.bot.margen_de(restante.get(m, 0))]
                 if fuera:
-                    borrador["avisos"] = [
-                        "montada solo con lo que has pedido: así se queda a "
-                        + " y ".join(fuera) + " del objetivo de la comida"]
+                    aviso = ("montada solo con lo que has pedido: así se queda a "
+                             + " y ".join(fuera) + " del objetivo de la comida")
+                    # Y CON LA SALIDA PUESTA: qué tendría que salir para que quepa. Aquí
+                    # todo lo ha pedido él, así que solo sale cuando hay una pieza clara.
+                    salida = self._que_saldria_para_que_quepa(items, desvio)
+                    if salida:
+                        aviso += (f". Para que cuadre tendría que salir {salida['nombre']}, "
+                                  f"que pone {salida['libera']} g de {salida['macro']}")
+                    borrador["avisos"] = [aviso]
                 self.bot.state.setdefault("borradores", {})[bid] = borrador
                 return {"borradores": [borrador],
                         "nota": ("Va SOLO lo que ha pedido, con las cantidades ajustadas. No "
@@ -2934,7 +2940,11 @@ class AgentTools:
                       for m in ("P", "H", "G")}
             items.append(self._item_de(food, gramos, macros))
             for m in ("P", "H", "G"):
-                objetivo_libre[m] = round(objetivo_libre[m] - macros.get(m, 0), 1)
+                # NUNCA EN NEGATIVO. Con 30 g de almendras (15 g de grasa) en un hueco de
+                # 10, la grasa libre quedaba en -5, y el motor con un objetivo negativo se
+                # desmadra: salieron 91,7 g de proteína sobre 50,2 porque infló el queso.
+                # Cero quiere decir «de esto ya no cabe más», que es la verdad.
+                objetivo_libre[m] = max(0.0, round(objetivo_libre[m] - macros.get(m, 0), 1))
         libres = [self.foods[i]["nombre"] for i in ids if i not in fijas]
         if libres:
             resultado = await build_meal(self.db, libres, objetivo_libre,
@@ -2983,7 +2993,46 @@ class AgentTools:
         # fue la etiqueta, hablando de un alimento que ya no estaba. Quien quiera saber si
         # el menú nuevo tiene problemas, que vuelva a revisarlo.
         b.pop("avisos", None)
+        # SI LO QUE HA PEDIDO NO CABE, SE LE DICE QUÉ SALDRÍA (15-08, Francisco).
+        #
+        # Metió 30 g de almendras en una comida con 10 g de hueco de grasa: se los pusimos y
+        # le dijimos que se pasaba 9 g, y ahí lo dejamos. Averiguar qué sacar se lo quedaba
+        # él. Con lo que ya hay se puede decir, y nunca proponiendo quitar lo suyo: los
+        # gramos que él ha fijado son intocables.
+        salida = self._que_saldria_para_que_quepa(items, b["desvio"], set(fijas))
+        pasado = [(m, b["desvio"][m]) for m in ("H", "G")
+                  if b["desvio"][m] > 2 * self.bot.margen_de(objetivo.get(m, 0))]
+        if pasado:
+            m, sobra = max(pasado, key=lambda x: x[1])
+            aviso = f"así se pasa {sobra:.0f} g de {_MACRO_LBL[m]}"
+            if salida:
+                aviso += ("; para que cuadre tendría que salir " + salida["nombre"]
+                          if salida["cuadra"]
+                          else f"; quitando {salida['nombre']} se queda mucho más cerca")
+            elif fijas:
+                # Nada que quitar arregla esto: el exceso lo traen SUS gramos. Decirlo es
+                # mejor que callar o que proponerle sacar algo que no mueve la aguja.
+                aviso += (", y lo trae lo que has pedido: no hay nada más que quitar que "
+                          "lo arregle. O lo dejas así, o bajamos esa cantidad")
+            b["avisos"] = [aviso]
         out = {"ok": True, "borrador": b}
+        if pasado and not salida and fijas:
+            m, sobra = max(pasado, key=lambda x: x[1])
+            out["instruccion"] = (
+                f"La comida se pasa {sobra:.0f} g de {_MACRO_LBL[m]} y lo trae lo que ha "
+                f"pedido él, así que no hay ninguna otra pieza que quitar que lo arregle. "
+                f"Díselo tal cual y dale las dos salidas de verdad: dejarlo así asumiendo "
+                f"el desvío, o bajar esa cantidad. NO le quites lo suyo por tu cuenta.")
+        if salida:
+            out["salida_posible"] = salida
+            out["instruccion"] = (
+                f"Con lo que ha pedido la comida se pasa {salida['sobra']} g de "
+                f"{salida['macro']}. Díselo en una línea y OFRÉCELE la salida concreta: "
+                f"quitar {salida['nombre']}, que pone {salida['libera']} g de "
+                f"{salida['macro']}"
+                + (" y con eso cuadra" if salida["cuadra"] else " y con eso se queda cerca")
+                + ". Una sola pregunta de sí o no, y si dice que sí, lo quitas en ese "
+                  "turno. Sus gramos no se tocan.")
         if tocados_del_encargo:
             # La espiral del 15-08: ante un encargo que no cuadraba, el modelo le quito al
             # borrador las piezas que el cliente habia pedido y siguio como si nada.
@@ -3821,6 +3870,42 @@ class AgentTools:
         return {"ok": True, "fecha": fecha,
                 "nota": ("La app va a abrir ese día con SU configuración guardada. Confírmaselo "
                          "al cliente en una línea. Lo montado hasta ahora se quedó en su fecha.")}
+
+    def _que_saldria_para_que_quepa(self, items: List[dict], desvio: dict,
+                                    intocables: set = None):
+        """Qué pieza habría que quitar para que la comida cuadre, si es que hay una.
+
+        Francisco, 15-08: pidió 30 g de almendras en una comida con 10 g de hueco de grasa.
+        Se los pusimos y le dijimos que se pasaba 9 g -- que es la verdad --, pero ahí lo
+        dejamos, y el trabajo de averiguar qué sacar se lo quedaba él. Con los datos que ya
+        hay se puede decir: «para que te entren, tendría que salir el guacamole».
+
+        Nunca propone quitar lo que el cliente ha pedido: eso sería devolverle la petición
+        por otra puerta. Solo mira las piezas que ha puesto la app.
+
+        Devuelve {nombre, macro, libera, cuadra} o None si no hay ninguna que arregle nada.
+        """
+        intocables = intocables or set()
+        for m in ("H", "G"):                       # la proteína por arriba se tolera
+            sobra = desvio.get(m, 0)
+            if sobra <= 0:
+                continue
+            candidatas = [i for i in items if int(i.get("id") or 0) not in intocables
+                          and i["macros"].get(m, 0) > 0]
+            if not candidatas:
+                continue
+            peor = max(candidatas, key=lambda i: i["macros"].get(m, 0))
+            libera = peor["macros"].get(m, 0)
+            # Que sirva de algo, sin pedirle imposibles: si lo que se pasa lo trae lo que ha
+            # pedido ÉL -- 30 g de almendras son 15 g de grasa --, ninguna otra pieza va a
+            # cubrir la mitad. Basta con que quitarla mueva la aguja de verdad, y se le dice
+            # si con eso cuadra o solo se queda cerca.
+            if libera < max(2.0, sobra * 0.25):
+                continue
+            return {"nombre": peor["nombre"], "macro": _MACRO_LBL[m],
+                    "libera": round(libera, 1), "sobra": round(sobra, 1),
+                    "cuadra": libera >= sobra}
+        return None
 
     def _nombre_del_menu(self, items: List[dict], pedidos: List[int] = None) -> str:
         """Cómo se llama una comida compuesta: «Claras de huevo con pan de barra y yogur».
