@@ -3,50 +3,18 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import GraficaDePeso from '../components/GraficaDePeso';
 import {
-    FileText, TrendingUp, Scale, Ruler,
-    Activity, Moon, Zap, Brain, Send, ChevronRight, ChevronLeft,
-    Calendar
+    FileText, TrendingUp, Scale,
+    Activity, ChevronRight, ChevronLeft, Calendar
 } from 'lucide-react';
 import InformeMensual from '../components/reports/InformeMensual';
 import EvolucionMedidas from '../components/EvolucionMedidas';
 import ComparativaCliente from '../components/ComparativaCliente';
 import Diario from '../components/Diario';
-import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import TresFotos from '../components/reports/TresFotos';
+import FormularioReporte from '../components/reports/FormularioReporte';
 import { verComo } from '../lib/modoRevision';
-import { revisarPeso, PESO_MIN, PESO_MAX } from '../lib/pesoValido';
-import { useConfirm } from '../components/ui/confirm';
 
 const ORANGE = '#FF671F';
-
-const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
-const labelCls = "block text-xs font-bold text-foreground/40 uppercase tracking-wider mb-1.5";
-
-const SliderRow = ({ icon: Icon, iconColor, label, value, max, unit, onChange }) => (
-    <div>
-        <div className="flex items-center justify-between mb-2">
-            <span className="flex items-center gap-2 text-sm text-foreground/70">
-                <Icon className="w-4 h-4" style={{ color: iconColor }} />
-                {label}
-            </span>
-            <span className="font-bold text-sm" style={{ color: iconColor }}>{value}{unit}</span>
-        </div>
-        <input
-            type="range"
-            min={0}
-            max={max}
-            step={max === 10 ? 1 : 5}
-            value={value}
-            onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full h-2 rounded-full appearance-none cursor-pointer"
-            style={{
-                background: `linear-gradient(to right, ${iconColor} 0%, ${iconColor} ${value / max * 100}%, #333 ${value / max * 100}%, #333 100%)`
-            }}
-        />
-    </div>
-);
-
-const _fmtCorta = (iso) => iso ? new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '';
 
 // Estado de la ventana de envío (viernes 00:00 -> lunes 06:00).
 const WindowBanner = ({ w }) => {
@@ -270,44 +238,6 @@ const PortadaSeguimiento = ({ windowState, vencido, conDiario, onRevision, onEvo
     );
 };
 
-// Las tres preguntas del formulario de siempre de Jesús que faltaban en la app
-// (punto 5 del documento del 05-08). Los textos son los suyos.
-const PREGUNTAS_REPORTE = [
-    {
-        campo: 'proximo_objetivo',
-        titulo: 'Próximo objetivo',
-        // El texto entero del documento del 07-08 (punto 55). Faltaban "que hasta ahora" y
-        // el "(piénsalo bien)", que no es relleno: es lo que hace que no se conteste en
-        // automático, y esta es la pregunta que dispara el cambio de fase.
-        ayuda: 'De cara a las próximas 4 semanas, que puede ser lo mismo que hasta ahora o puedes cambiar (piénsalo bien).',
-        opciones: [
-            { value: 'definicion', label: 'Definición' },
-            { value: 'volumen', label: 'Volumen' },
-            { value: 'mantenimiento', label: 'Mantenimiento' },
-        ],
-    },
-    {
-        campo: 'viabilidad_ajuste',
-        titulo: '¿Cómo de viable sería un nuevo ajuste de macros?',
-        opciones: [
-            { value: 'me_adapto', label: 'Me adapto a lo que me pongas' },
-            { value: 'necesito_mas', label: 'Necesito comer más para poder cumplir' },
-            { value: 'necesito_menos', label: 'Necesito comer menos para poder cumplir' },
-        ],
-    },
-    {
-        campo: 'cumplimiento_entreno',
-        titulo: '¿En qué grado has cumplido con el entrenamiento?',
-        opciones: [
-            { value: 'todos', label: 'Todos los entrenos' },
-            { value: 'casi_todos', label: 'Casi todos' },
-            { value: 'la_mitad', label: 'La mitad' },
-            { value: 'pocos', label: 'Pocos' },
-            { value: 'ninguno', label: 'Ninguno' },
-        ],
-    },
-];
-
 // Modo revisión (solo equipo): `?ver=mensual`, `?ver=quincenal` o `?ver=semanal` abren el
 // formulario aunque no sea su semana ni su fin de semana. Es la única forma de repasar los
 // textos del reporte un martes, o de ver el mensual (con las diez medidas) el mes que toca
@@ -327,17 +257,11 @@ const ReportsPage = () => {
     // (T6). Con él apagado se queda la gráfica de peso, que es lo que hay hoy en producción.
     const evolucionCompleta = pantalla('t6_evolucion');
     const diarioActivo = pantalla('t5_diario');
-    const { confirm } = useConfirm();
     const revision = verComo(user);
     const tipoRevision = ['mensual', 'quincenal', 'semanal'].includes(revision) ? revision : null;
-    // Cuánto espera este cliente por sus macros nuevos (puntos 46 y 47): 24 horas en el
-    // Nivel 2, 48 en el resto. Sale del plan, no de un número escrito a mano, porque es una
-    // de las cosas que el cliente tiene que notar entre un nivel y otro.
-    const horasDeEspera = profile?.plan === 'nivel2' ? 24 : 48;
     const [reports, setReports] = useState([]);
     const [evolution, setEvolution] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
     // LA PANTALLA ABRE EN LA PORTADA, TAMBIÉN EN EL ORDENADOR.
     //
     // `seccionAbierta` dice en cuál de las cuatro tarjetas ha entrado, y mientras vale null
@@ -359,12 +283,6 @@ const ReportsPage = () => {
     // pendiente desaparece de esta pantalla (y de Inicio, que ya lo hacía).
     const [vencido, setVencido] = useState(false);
     const [prev, setPrev] = useState(null);                 // último reporte (referencia de medidas)
-    // Confirmación de huecos: lo que se le pregunta ANTES de rellenar, en vez de pedirle
-    // que puntúe su propio cumplimiento (documento, parte 7.1).
-    const [huecos, setHuecos] = useState(null);
-    const [huecosResp, setHuecosResp] = useState({});
-    // Las medidas solo van en el mensual, y allí van LAS DIEZ, todas visibles y todas
-    // obligatorias (06-08-2026). Ya no hay nada plegado que desplegar.
 
     // El informe del mes: se pide solo cuando abre uno, porque cruza dietas, check-ins
     // y macros de todo el periodo y no tiene sentido calcularlo para la lista entera.
@@ -388,30 +306,19 @@ const ReportsPage = () => {
         }
     };
 
-    const [reportData, setReportData] = useState({
-        weight: '',
-        measurements: Object.fromEntries(MEDIDAS.map(m => [m.key, ''])),
-        sleep_quality: 7,
-        energy_level: 7,
-        stress_level: 5,
-        notes: '',
-        // Las tres preguntas del formulario de siempre (punto 5 del 05-08)
-        proximo_objetivo: '',
-        viabilidad_ajuste: '',
-        cumplimiento_entreno: '',
-    });
-
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch solo al montar
     useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {
         try {
-            const [reportsRes, evolutionRes, dueRes, prevRes, huecosRes] = await Promise.all([
+            // La confirmación de huecos ya no se pide aquí: cada reporte trae los suyos
+            // dentro (`/reports/formulario`), con los días de rutina que le faltan por
+            // registrar en vez de una cuenta de check-ins.
+            const [reportsRes, evolutionRes, dueRes, prevRes] = await Promise.all([
                 api.get('/reports'),
                 api.get('/reports/evolution'),
                 api.get('/reports/due').catch(() => ({ data: { window: null } })),
                 api.get('/reports/previous').catch(() => ({ data: null })),
-                api.get('/reports/confirmacion-huecos').catch(() => ({ data: null })),
             ]);
             setReports(reportsRes.data);
             setHasMore(reportsRes.data.length === 50);
@@ -419,7 +326,6 @@ const ReportsPage = () => {
             setWindowState(tipoRevision ? VENTANA_DE_MENTIRA(tipoRevision) : (dueRes.data?.window || null));
             setVencido(!tipoRevision && (dueRes.data?.items || []).some(i => i.overdue));
             setPrev(prevRes.data && Object.keys(prevRes.data).length ? prevRes.data : null);
-            setHuecos(huecosRes.data || null);
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
@@ -440,93 +346,15 @@ const ReportsPage = () => {
         finally { setLoadingMore(false); }
     };
 
-    // Qué reporte toca esta semana. Sin el dato no se piden medidas: es preferible no
-    // pedirlas que pedirlas en el quincenal, que es justo lo que el documento quita.
+    // Qué reporte toca esta semana. Lo usa la subida de fotos suelta: las fotos son del
+    // mensual, pero se pueden subir cualquier día (punto 21 / 2.2).
     const esMensual = (windowState?.tipos || []).includes('mensual');
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!reportData.weight) { toast.error('El peso es obligatorio'); return; }
-        // EL PESO, ANTES DE NADA (#48 del 15-08). De este número salen la gráfica, el ritmo
-        // y el ajuste del mes: un 50 donde iba un 80 se arrastra durante meses. Fuera de
-        // rango no se guarda; un salto grande sí puede ser verdad, así que se pregunta.
-        const chequeo = revisarPeso(reportData.weight, prev?.weight);
-        if (!chequeo.ok) { toast.error(chequeo.error); return; }
-        if (chequeo.confirmar && !await confirm({
-            title: 'Confírmame el peso',
-            description: chequeo.confirmar,
-            confirmLabel: 'Sí, es correcto', cancelLabel: 'Lo corrijo',
-        })) return;
-        // Las diez, siempre. Antes solo se exigía la cintura y el resto iba plegado como
-        // opcional; desde el 06-08-2026 se piden todas ("sirvan o no, se piden siempre"),
-        // porque media serie de medidas no se puede comparar con nada.
-        if (esMensual) {
-            const faltan = MEDIDAS.filter(m => !reportData.measurements[m.key]);
-            if (faltan.length) {
-                toast.error(faltan.length === 1
-                    ? `Te falta una medida: ${faltan[0].label.toLowerCase()}`
-                    : `Te faltan ${faltan.length} medidas, y van todas: empieza por ${faltan[0].label.toLowerCase()}`);
-                return;
-            }
-        }
-        setSubmitting(true);
-        try {
-            const payload = {
-                weight: parseFloat(reportData.weight),
-                measurements: Object.fromEntries(
-                    Object.entries(reportData.measurements)
-                        .filter(([_, v]) => v)
-                        .map(([k, v]) => [k, parseFloat(v)])
-                ),
-                // El cumplimiento lo calcula el servidor a partir de esto y del registro.
-                huecos: huecosResp,
-                sleep_quality: reportData.sleep_quality,
-                energy_level: reportData.energy_level,
-                stress_level: reportData.stress_level,
-                notes: reportData.notes || null,
-                proximo_objetivo: reportData.proximo_objetivo || null,
-                viabilidad_ajuste: reportData.viabilidad_ajuste || null,
-                cumplimiento_entreno: reportData.cumplimiento_entreno || null,
-            };
-            await api.post('/reports', payload);
-            // LO QUE PASA AHORA (punto 47 del doc del 07-08). "Reporte enviado
-            // correctamente" no dice nada: el cliente no sabe si le toca hacer algo, ni
-            // cuándo tendrá sus macros. Y que espere y que se lo ponga una PERSONA es parte
-            // del producto: el sistema propone el ajuste, pero lo valida un entrenador
-            // antes de que salga, y el cliente no debe percibirlo como automático.
-            //
-            // Las horas salen del plan y no de un número escrito aquí: el Nivel 2 espera 24
-            // y el resto 48. Es una de las cosas que tienen que notarse entre niveles
-            // (punto 46).
-            toast.success('Reporte recibido', {
-                description: `Estamos revisando tus respuestas. En menos de ${horasDeEspera} horas recibirás tus nuevos macros.`,
-                duration: 8000,
-            });
-            fetchData();
-            // AL TERMINAR, EL HISTORIAL. Aquí ponía `setActiveTab('history')`, que era la
-            // función de las pestañas viejas: se quitaron con la portada y la llamada se
-            // quedó, así que enviar un reporte reventaba con un ReferenceError justo
-            // después de guardarlo bien (el cliente veía el error y creía que no se había
-            // enviado). Ahora se abre la sección, que es lo que hay.
-            setSeccionAbierta('history');
-            setHuecosResp({});
-            setReportData({
-                weight: '',
-                measurements: Object.fromEntries(MEDIDAS.map(m => [m.key, ''])),
-                sleep_quality: 7,
-                energy_level: 7,
-                stress_level: 5,
-                notes: ''
-            });
-        } catch (error) {
-            toast.error(error?.response?.data?.detail || 'Error al enviar el reporte');
-            if (error?.response?.status === 403) fetchData();  // la ventana pudo cambiar de estado
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const set = (field, value) => setReportData(prevData => ({ ...prevData, [field]: value }));
+    // EL ENVÍO VIVE EN EL FORMULARIO (T7, T8 y T9). Aquí estaba el `handleSubmit` de los
+    // dos reportes juntos: peso, medidas, tres deslizadores y tres preguntas, todo en el
+    // mismo sitio. Ahora cada reporte tiene su cuestionario, el mensual pasa por la
+    // pantalla de revisión y lo que se le dice al terminar depende de su plan, así que el
+    // envío se fue con ellos a `components/reports/FormularioReporte`.
     const formOpen = windowState ? (windowState.is_open && !windowState.submitted) : true;
 
     // Sin formatear: la gráfica necesita la fecha de verdad para poner el eje en el tiempo.
@@ -599,208 +427,36 @@ const ReportsPage = () => {
                 hace lo mismo diciendo además cuál toca ahora, y tener las dos cosas a la
                 vez era ofrecer dos navegaciones para la misma pantalla. */}
 
-            {/* ── FORM TAB ── */}
+            {/* ── EL FORMULARIO (T7 y T8) ──
+                Ya no es un formulario con campos sueltos: son dos cuestionarios distintos
+                -- el quincenal de cuatro preguntas y el mensual por bloques -- y el
+                mensual además cambia según lo que incluya su plan. Todo eso vive en
+                `components/reports/FormularioReporte`; aquí solo queda la ventana de
+                envío, que es de esta pantalla. */}
             {vista === 'form' && (
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-4">
                     <WindowBanner w={windowState} />
-                    {/* SI NO TOCA REPORTE, NO SE ENSEÑA EL FORMULARIO (punto 4.18). Se pintaba
-                        entero en gris debajo de un cartel que dice «esta semana no toca», que
-                        es enseñar un trabajo que no hay que hacer y dejarlo a medio apagar.
-                        Cuando la ventana está abierta pero ya lo mandó, sí se deja a la vista
-                        en gris: ahí el cliente quiere ver lo que envió. */}
-                    {windowState && !windowState.due ? null : (
-                    <fieldset disabled={!formOpen} className="space-y-4 p-0 m-0 border-0 min-w-0 disabled:opacity-50">
-                    {/* Weight */}
-                    <div className="bg-card border border-border rounded-2xl p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${ORANGE}20` }}>
-                                <Scale className="w-4 h-4" style={{ color: ORANGE }} />
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold text-foreground">Peso actual *</p>
-                                <p className="text-xs text-foreground/30">En ayunas, sin ropa</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="number"
-                                step="0.1"
-                                min={PESO_MIN}
-                                max={PESO_MAX}
-                                value={reportData.weight}
-                                onChange={(e) => set('weight', e.target.value)}
-                                placeholder="75,5"
-                                data-testid="weight-input"
-                                className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors"
-                            />
-                            <span className="text-lg text-foreground/40 font-bold">kg</span>
-                        </div>
-                        {prev?.weight != null && (
-                            <p className="text-xs text-foreground/40 mt-2">Último: {prev.weight} kg{prev.created_at ? ` · ${_fmtCorta(prev.created_at)}` : ''}</p>
-                        )}
-                    </div>
-
-                    {/* Medidas: SOLO en el mensual (documento, parte 7.3). En el quincenal
-                        no se piden; ahí el reporte es "dos minutos" y sacar la cinta métrica
-                        cada dos semanas para un dato que apenas se mueve no compensa.
-                        En el mensual, la cintura es obligatoria y el resto va plegado. */}
-                    {/* Las DIEZ, todas visibles y nada plegado. "Sirvan o no, se piden
-                        siempre". Y con el vídeo delante, que es lo que hace que el error
-                        de medir se repita igual cada mes -- que es lo que permite
-                        comparar, más que acertar el número. */}
-                    {esMensual && (
-                    <div className="bg-card border border-border rounded-2xl p-4" data-testid="medidas">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center">
-                                <Ruler className="w-4 h-4 text-foreground/40" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold text-foreground">Tus medidas (cm)</p>
-                                <p className="text-xs text-foreground/30">Las diez, como siempre</p>
-                            </div>
-                        </div>
-
-                        <div className="rounded-xl overflow-hidden bg-black mb-4" style={{ aspectRatio: '16 / 9' }}>
-                            <iframe src={VIDEO_MEDIDAS} title="Cómo medir los perímetros"
-                                allow="fullscreen; picture-in-picture" data-testid="video-medidas"
-                                className="w-full h-full border-0" />
-                        </div>
-
-                        <div className="space-y-2">
-                            {MEDIDAS.map(({ key, label }) => {
-                                const antes = valorAnterior(prev?.measurements, key);
-                                const dif = diferencia(reportData.measurements[key], antes);
-                                return (
-                                    <div key={key} className="grid grid-cols-[1fr_5rem_4.5rem] gap-2 items-center">
-                                        <label className="text-sm text-foreground/80">{label}</label>
-                                        <input
-                                            type="number" step="0.1" inputMode="decimal"
-                                            value={reportData.measurements[key] ?? ''}
-                                            onChange={(e) => set('measurements', { ...reportData.measurements, [key]: e.target.value })}
-                                            placeholder={antes != null ? String(antes) : '--'}
-                                            data-testid={`medida-${key}`}
-                                            className="h-10 px-2 rounded-lg bg-muted text-center text-base font-bold outline-none focus:ring-2 focus:ring-brand"
-                                        />
-                                        {/* El mes pasado y la diferencia, que sale en cuanto escribe */}
-                                        <span className="text-[11px] text-right tabular-nums">
-                                            {dif ? (
-                                                <span className={dif.signo === 0 ? 'text-foreground/40'
-                                                    : dif.signo > 0 ? 'text-blue-500' : 'text-emerald-500'}>
-                                                    {dif.texto}
-                                                </span>
-                                            ) : antes != null ? (
-                                                <span className="text-foreground/30">antes {antes}</span>
-                                            ) : null}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    {windowState && !windowState.due ? null : formOpen ? (
+                        <FormularioReporte
+                            api={api} token={token}
+                            tipoRevision={tipoRevision}
+                            windowState={{
+                                ...windowState,
+                                semana: profile?.week,
+                                plazoLabel: _plazoEnEspana(windowState?.closes_at),
+                                quedaLabel: _cuantoQueda(windowState?.closes_at),
+                            }}
+                            prev={prev}
+                            perfilCliente={profile}
+                            onEnviado={fetchData} />
+                    ) : (
+                        // Ventana cerrada o ya mandado: el formulario no se pinta en gris
+                        // detrás de un cartel (punto 4.18). Lo que sí sigue estando son las
+                        // fotos: se suben solas, en su propia petición, y que se pidan en el
+                        // mensual es una cosa y que el resto del mes no se puedan subir es otra.
+                        <TresFotos api={api} token={token} esMensual={esMensual} />
                     )}
-
-
-                    {/* Confirmación de huecos: sustituye a los dos deslizadores de
-                        cumplimiento (documento 31-07, parte 7.1). El cumplimiento sale del
-                        registro, no de que se puntúe a sí mismo. Los deslizadores que
-                        quedan son los que NO se pueden deducir: sueño, energía y estrés. */}
-                    {huecos?.hay_que_preguntar && (
-                        <div className="bg-card border border-border rounded-2xl p-4 space-y-4" data-testid="confirmacion-huecos">
-                            <p className="text-sm font-bold text-foreground">Antes de rellenar</p>
-                            {huecos.huecos.map(h => (
-                                <div key={h.tipo}>
-                                    <p className="text-sm text-foreground/70 mb-2">{h.pregunta}</p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {[
-                                            { v: 'no_lo_hice', t: h.tipo === 'dieta' ? 'No la hice' : 'No los hice' },
-                                            { v: 'si_pero_no_apunte', t: h.tipo === 'dieta' ? 'Sí, no la apunté' : 'Sí, no los apunté' },
-                                        ].map(op => (
-                                            <button key={op.v} type="button"
-                                                onClick={() => setHuecosResp({ ...huecosResp, [h.tipo]: op.v })}
-                                                data-testid={`hueco-${h.tipo}-${op.v}`}
-                                                className={`py-2.5 px-3 rounded-xl border text-sm transition-all ${
-                                                    huecosResp[h.tipo] === op.v
-                                                        ? 'border-brand bg-brand/10 text-brand font-bold'
-                                                        : 'border-border bg-muted text-foreground/60 hover:border-white/30'}`}>
-                                                {op.t}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Sliders: solo lo que no se puede deducir de lo registrado */}
-                    <div className="bg-card border border-border rounded-2xl p-4 space-y-5">
-                        <SliderRow icon={Moon}     iconColor="#818CF8"   label="Calidad del sueño"           value={reportData.sleep_quality}        max={10}  unit="/10" onChange={(v) => set('sleep_quality', v)} />
-                        <SliderRow icon={Zap}      iconColor="#F59E0B"   label="Nivel de energía"            value={reportData.energy_level}         max={10}  unit="/10" onChange={(v) => set('energy_level', v)} />
-                        <SliderRow icon={Brain}    iconColor="#F43F5E"   label="Nivel de estrés"             value={reportData.stress_level}         max={10}  unit="/10" onChange={(v) => set('stress_level', v)} />
-                    </div>
-
-                    {/* Notes */}
-                    <div className="bg-card border border-border rounded-2xl p-4">
-                        <label className={labelCls}>Notas adicionales</label>
-                        <textarea
-                            value={reportData.notes}
-                            onChange={(e) => set('notes', e.target.value)}
-                            placeholder="¿Cómo te has sentido esta semana? ¿Alguna dificultad o logro?"
-                            rows={4}
-                            data-testid="notes-textarea"
-                            className="w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors resize-none"
-                        />
-                    </div>
-
-                    {/* Las tres preguntas del formulario de siempre de Jesús (punto 5 del 05-08).
-                        La del próximo objetivo es la que dispara el cambio de fase. */}
-                    <div className="bg-card border border-border rounded-2xl p-4 space-y-4" data-testid="preguntas-reporte">
-                        {PREGUNTAS_REPORTE.map(p => (
-                            <div key={p.campo}>
-                                <p className="text-sm font-bold text-foreground mb-1">{p.titulo}</p>
-                                {p.ayuda && <p className="text-xs text-foreground/50 mb-2">{p.ayuda}</p>}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    {p.opciones.map(o => {
-                                        const activo = reportData[p.campo] === o.value;
-                                        return (
-                                            <button key={o.value} type="button" data-testid={`${p.campo}-${o.value}`}
-                                                onClick={() => set(p.campo, o.value)}
-                                                className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition-all ${
-                                                    activo ? 'border-[#FF671F] bg-[#FF671F]/10 text-[#FF671F]'
-                                                           : 'border-border bg-muted text-foreground/60 hover:border-white/30'}`}>
-                                                {o.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={submitting}
-                        data-testid="submit-report-btn"
-                        className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-foreground flex items-center justify-center gap-2 transition-all disabled:opacity-40"
-                        style={{ backgroundColor: ORANGE }}
-                    >
-                        <Send className="w-4 h-4" />
-                        {submitting ? 'Enviando...' : 'Enviar reporte'}
-                    </button>
-                    </fieldset>
-                    )}
-
-                    {/* LAS TRES FOTOS, SIEMPRE Y FUERA DEL FIELDSET (punto 21 / 2.2).
-                        Estaban dentro y con `esMensual`, y eso hacía que la app se
-                        contradijera: Check-ins manda al cliente aquí a subirlas y en una
-                        semana normal -- o con la ventana cerrada -- aquí no había nada que
-                        pulsar. Jesús recorrió el reporte de un cliente real y no encontró
-                        la subida.
-                        Fuera del fieldset porque una foto no es un campo del reporte: se
-                        sube sola, en su propia petición, y no tiene por qué depender de que
-                        la ventana de envío esté abierta. Que se pidan en el mensual es una
-                        cosa; que el resto del mes no se puedan subir es otra. */}
-                    <TresFotos api={api} token={token} esMensual={esMensual} />
-                </form>
+                </div>
             )}
 
             {/* ── EVOLUCIÓN ──
@@ -884,7 +540,14 @@ const ReportsPage = () => {
                                 <div className="mb-3">
                                     {cargandoInforme
                                         ? <p className="text-sm text-foreground/40 py-4 text-center">Montando tu informe...</p>
-                                        : <InformeMensual informe={informe} onPedirFotos={() => setSeccionAbierta('form')} />}
+                                        // EL INFORME NO SALE HASTA QUE LO REVISAN (T9). Mientras está
+                                        // pendiente no se le enseña el "te falta una foto" del informe
+                                        // sin generar: ahí no le falta nada a él, le falta a Jesús.
+                                        : informe?.motivo === 'pendiente_revision'
+                                            ? <p className="text-sm text-muted-foreground py-4 text-center" data-testid="informe-pendiente">
+                                                {informe.mensaje}
+                                              </p>
+                                            : <InformeMensual informe={informe} onPedirFotos={() => setSeccionAbierta('form')} />}
                                 </div>
                             )}
                             {/* Con el informe abierto, estos dos sobran: el cumplimiento de

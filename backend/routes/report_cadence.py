@@ -291,6 +291,20 @@ def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any]
     tipo = reporte_de_la_semana(cal, cycle["week"])
     tipos = [tipo] if tipo else []
     win_open, win_close = _submission_window(window_start)
+
+    # «MÁRCALO Y TE LO APLAZO 7 DÍAS» (T8). Sin esto, el botón escribía la fecha en el
+    # perfil y la ventana seguía a lo suyo: al cliente se le prometía un aplazamiento y su
+    # reporte vencía igual. La confirmación que lee es «tu reporte se vuelve a abrir el
+    # viernes que viene», así que la ventana ENTERA corre siete días, no solo el cierre.
+    #
+    # El tipo se guarda con la fecha porque a la semana que viene su patrón puede no tocar
+    # nada, y sin él no sabríamos qué reporte es el que se aplazó.
+    aplazado = _parse_dt(profile.get("reporte_aplazado_hasta"))
+    if aplazado and now <= aplazado:
+        win_open, win_close = win_open + timedelta(days=7), aplazado
+        if not tipos and profile.get("reporte_aplazado_tipo"):
+            tipos = [profile["reporte_aplazado_tipo"]]
+
     return {
         "proximo": _proximo_reporte(cal, cycle["week"], window_start),
         "cycle": cycle,

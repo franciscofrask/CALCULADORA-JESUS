@@ -21,6 +21,7 @@ import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import CoachCheckins from '../components/CoachCheckins';
 import EvolucionMedidas from '../components/EvolucionMedidas';
+import InformeMensual from '../components/reports/InformeMensual';
 import { FoodFilterBar } from '../components/nutrition/SearchFoodModal';
 import {
     ArrowLeft, User, Mail, Phone, Calendar, CreditCard, Dumbbell, Apple,
@@ -3329,6 +3330,71 @@ const WeightEvolution = ({ reports }) => {
 const MEAL_ORDER = { C1: 1, C2: 2, C3: 3, C4: 4, C5: 5, C6: 6, Intra: 7, Post: 8 };
 const MEAL_LABEL = { Intra: 'Intra-entreno', Post: 'Post-entreno', C1: 'Comida 1', C2: 'Comida 2', C3: 'Comida 3', C4: 'Comida 4', C5: 'Comida 5', C6: 'Comida 6' };
 
+// Lo que el cliente contestó en el reporte nuevo, con las palabras del formulario.
+// Los reportes viejos no traen nada de esto y el bloque no sale.
+const RESPUESTA_LABEL = {
+    dieta_dificultad: { nada: 'Nada, la llevo bien', algun_dia: 'Algún día suelto',
+                        bastante: 'Bastante', no_he_podido: 'No he podido' },
+    cardio_proximo_mes: { mismas: 'Puedo con las mismas sesiones', mas: 'Puedo con más sesiones',
+                          menos: 'Necesito menos sesiones' },
+    suplementacion: { todos: 'Todos', alguno_no: 'Alguno no', ninguno: 'Ninguno' },
+    energia_motivo: { duermo_poco: 'Duermo poco', estres_trabajo: 'Estrés del trabajo',
+                      como_poco: 'Como poco', no_lo_se: 'No lo sé' },
+    regularidad: { a_mi_manera_sigo: 'A su manera, quiere seguir así',
+                   a_mi_manera_quiero_rutina: 'A su manera, quiere probar una rutina tuya',
+                   con_tu_rutina_sigo: 'Con tu rutina, quiere seguir así' },
+    rutina_del_mes: { basica: 'La quiere · básica', avanzada: 'La quiere · avanzada', ahora_no: 'Ahora no' },
+};
+
+const Fila = ({ que, valor }) => (valor ? (
+    <p className="text-white/50">{que} <b className="text-white">{valor}</b></p>
+) : null);
+
+const RespuestasDelReporte = ({ reporte: r }) => {
+    const e = r.entreno || {};
+    const s = r.suplementacion || {};
+    const hayAlgo = r.tipo || r.molestias || r.sensaciones || r.dieta_dificultad || e.regularidad
+        || e.estrellas || e.rutina_del_mes || s.respuesta || r.cardio_proximo_mes
+        || (r.lesiones || []).length || r.valoracion_resultado || r.motivacion || r.sugerencias;
+    if (!hayAlgo) return null;
+    const estrellas = (n) => (n ? '★'.repeat(n) + '☆'.repeat(5 - n) : null);
+
+    return (
+        <div className="space-y-1.5 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]"
+            data-testid="respuestas-reporte">
+            {r.tipo && (
+                <p className="text-white/40 text-[11px] uppercase tracking-wider">Reporte {r.tipo}</p>
+            )}
+            <Fila que="Molestias" valor={r.molestias} />
+            <Fila que="Sensaciones" valor={estrellas(r.sensaciones)} />
+            <Fila que="La dieta" valor={RESPUESTA_LABEL.dieta_dificultad[r.dieta_dificultad]} />
+            <Fila que="Entreno del mes" valor={RESPUESTA_LABEL.regularidad[e.regularidad]} />
+            <Fila que="Qué tal el entreno" valor={estrellas(e.estrellas)} />
+            <Fila que="Del entreno" valor={e.nota} />
+            <Fila que="La rutina del mes" valor={RESPUESTA_LABEL.rutina_del_mes[e.rutina_del_mes]} />
+            {e.quiere_saber_del_silver && (
+                <p className="text-[#FF671F]">Quiere que le cuentes el plan de arriba</p>
+            )}
+            {(r.lesiones || []).filter(l => l.estado_mes).map((l, i) => (
+                <p key={i} className="text-white/50">
+                    {l.zona} <b className="text-white">{l.estado_mes}</b>
+                    {(l.ejercicios || []).length ? (
+                        <span className="text-white/40"> · no puede: {l.ejercicios.join(', ')}</span>
+                    ) : null}
+                </p>
+            ))}
+            <Fila que="Lesión nueva" valor={r.lesion_nueva} />
+            <Fila que="Cardio" valor={RESPUESTA_LABEL.cardio_proximo_mes[r.cardio_proximo_mes]} />
+            <Fila que="Suplementación" valor={RESPUESTA_LABEL.suplementacion[s.respuesta]} />
+            <Fila que="Cuál y por qué" valor={s.detalle} />
+            <Fila que="Energía" valor={RESPUESTA_LABEL.energia_motivo[r.energia_motivo]} />
+            <Fila que="Cómo lo valora" valor={estrellas(r.valoracion_resultado)} />
+            <Fila que="Motivación" valor={estrellas(r.motivacion)} />
+            <Fila que="Sugerencias" valor={r.sugerencias} />
+        </div>
+    );
+};
+
 // Reportes del cliente con feedback editable por el coach (cierra el circuito de ReportsPage)
 const ReportsFeedbackList = ({ initialReports }) => {
     const { api } = useAuth();
@@ -3337,6 +3403,40 @@ const ReportsFeedbackList = ({ initialReports }) => {
     const [savingId, setSavingId] = useState(null);
     const [showAll, setShowAll] = useState(false);
     const [detalleId, setDetalleId] = useState(null);   // reporte abierto en el modal
+    // EL INFORME, AQUÍ DENTRO (T9 del doc 16-08). Se genera solo al enviar el reporte y
+    // espera a que Jesús lo mire: hasta ahora el endpoint ya se lo permitía y no había
+    // pantalla, así que el informe del cliente salía sin que nadie lo hubiera visto.
+    const [informe, setInforme] = useState(null);
+    const [cargandoInforme, setCargandoInforme] = useState(false);
+    const [publicando, setPublicando] = useState(false);
+
+    const verInforme = async (reportId) => {
+        setCargandoInforme(true);
+        setInforme(null);
+        try {
+            const r = await api.get(`/reports/${reportId}/informe`);
+            setInforme(r.data);
+        } catch (e) {
+            console.error('No se pudo montar el informe del reporte', e);
+            toast.error('No hemos podido montar el informe de este reporte');
+        } finally { setCargandoInforme(false); }
+    };
+
+    const publicar = async (reportId) => {
+        setPublicando(true);
+        try {
+            const r = await api.post(`/reports/${reportId}/informe/publicar`);
+            setReports(prev => prev.map(x => x.id === reportId
+                ? { ...x, informe_estado: 'entregado' } : x));
+            setInforme(r.data?.informe || informe);
+            toast.success('Informe publicado', {
+                description: 'El cliente ya lo tiene y le ha llegado el aviso.',
+            });
+        } catch (e) {
+            console.error('No se pudo publicar el informe', e);
+            toast.error('No hemos podido publicar el informe');
+        } finally { setPublicando(false); }
+    };
 
     const saveFeedback = async (reportId) => {
         const text = (drafts[reportId] ?? '').trim();
@@ -3368,13 +3468,21 @@ const ReportsFeedbackList = ({ initialReports }) => {
             </div>
             <div className="space-y-1">
                 {visible.map(r => (
-                    <button key={r.id} onClick={() => setDetalleId(r.id)} data-testid={`report-${r.id}`}
+                    <button key={r.id} onClick={() => { setDetalleId(r.id); setInforme(null); }} data-testid={`report-${r.id}`}
                         className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#222] hover:border-[#FF671F]/40 transition-colors text-left">
                         <span className="text-white text-sm font-medium tabular-nums whitespace-nowrap">
                             {new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
                         {r.weight != null && <span className="text-[#FF671F] font-bold text-sm tabular-nums">{r.weight} kg</span>}
                         <span className="ml-auto flex items-center gap-2 flex-shrink-0">
+                            {/* Lo primero que hay que ver de un reporte es si su informe
+                                está esperando: es trabajo pendiente, no un adorno. */}
+                            {r.informe_estado === 'pendiente_revision' && (
+                                <span className="text-[#FF671F] text-[10px] uppercase tracking-wider">informe por revisar</span>
+                            )}
+                            {r.informe_estado === 'entregado' && (
+                                <span className="text-emerald-400 text-[10px] uppercase tracking-wider">informe entregado</span>
+                            )}
                             {r.trainer_feedback
                                 ? <span className="text-emerald-400 text-[10px] uppercase tracking-wider">con feedback</span>
                                 : <span className="text-white/25 text-[10px] uppercase tracking-wider">sin feedback</span>}
@@ -3391,7 +3499,7 @@ const ReportsFeedbackList = ({ initialReports }) => {
 
             <Dialog open={!!abierto} onOpenChange={(o) => !o && setDetalleId(null)}>
                 {abierto && (
-                    <DialogContent className="bg-[#111] border-[#333] max-w-lg text-white" data-testid="report-detail">
+                    <DialogContent className="bg-[#111] border-[#333] max-w-2xl max-h-[90vh] overflow-y-auto text-white" data-testid="report-detail">
                         <DialogHeader>
                             <DialogTitle className="uppercase tracking-wider">
                                 Reporte del {new Date(abierto.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -3424,7 +3532,49 @@ const ReportsFeedbackList = ({ initialReports }) => {
                                 )}
                             </div>
                         )}
+                        {/* LO QUE CONTESTÓ EN EL FORMULARIO NUEVO (T7 y T8). Sin esto, el
+                            panel enseñaba peso, cumplimiento y tres preguntas viejas: todo
+                            lo que el cliente cuenta del entreno, las lesiones, el cardio o
+                            la suplementación se quedaba guardado y sin ver. */}
+                        <RespuestasDelReporte reporte={abierto} />
+
                         {abierto.notes && <p className="text-white/70 text-sm italic">"{abierto.notes}"</p>}
+
+                        {/* EL INFORME MONTADO. Se pide al abrirlo y no al cargar la ficha:
+                            cruza dietas, cierres y macros de todo el mes, y no tiene
+                            sentido montar los cincuenta de la lista para pintar una fila. */}
+                        <div className="rounded-lg border border-[#222] bg-[#0A0A0A] p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-white/60 text-xs uppercase tracking-wider">Informe del mes</span>
+                                <Button size="sm" variant="outline" data-testid="ver-informe"
+                                    onClick={() => verInforme(abierto.id)} disabled={cargandoInforme}
+                                    className="bg-transparent border-[#333] text-white h-7 text-xs">
+                                    {cargandoInforme ? 'Montando...' : informe ? 'Actualizar' : 'Ver el informe'}
+                                </Button>
+                            </div>
+                            {informe && (
+                                <div className="max-h-[45vh] overflow-y-auto pr-1" data-testid="informe-montado">
+                                    {informe.generado === false
+                                        ? <p className="text-white/50 text-sm">{informe.mensaje || 'Todavía no se puede montar.'}</p>
+                                        : <InformeMensual informe={informe} />}
+                                </div>
+                            )}
+                            {abierto.informe_estado === 'pendiente_revision' ? (
+                                <>
+                                    <p className="text-white/40 text-[11px]">
+                                        El cliente no lo ve hasta que lo publiques. Escribe tu feedback abajo y publícalo.
+                                    </p>
+                                    <Button size="sm" onClick={() => publicar(abierto.id)} disabled={publicando}
+                                        data-testid="publicar-informe"
+                                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white h-8 text-xs">
+                                        {publicando ? 'Publicando...' : 'Publicar el informe'}
+                                    </Button>
+                                </>
+                            ) : abierto.informe_estado === 'entregado' ? (
+                                <p className="text-emerald-400 text-[11px]">Publicado. El cliente ya lo tiene.</p>
+                            ) : null}
+                        </div>
+
                         <div>
                             <Label className="text-white/60 text-xs">Feedback para el cliente</Label>
                             <Textarea value={draftAbierto} onChange={e => setDrafts(prev => ({ ...prev, [abierto.id]: e.target.value }))}

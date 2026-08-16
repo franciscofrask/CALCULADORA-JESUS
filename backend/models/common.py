@@ -33,6 +33,59 @@ class RoutineResponse(BaseModel):
     created_at: str
     status: str = "active"
 
+# ── El reporte, por bloques (T7 y T8 del doc 16-08) ──────────────────────────
+#
+# El quincenal y el mensual dejan de ser el mismo formulario. Lo que cambia no es solo
+# que el mensual pida medidas: son dos cuestionarios distintos, y el mensual además no
+# es el mismo para los tres planes. Por eso los campos nuevos van sueltos y todos
+# opcionales, en vez de un bloque obligatorio: cada cliente contesta los suyos y el que
+# no le toca llega vacío.
+#
+# Los valores son los del doc, en clave; los textos que ve el cliente viven en el front.
+
+
+class LesionDelReporte(BaseModel):
+    """Una lesión, como queda tras el reporte (bloque 06, solo quien lleva lesiones).
+
+    `estado_mes` es lo que contesta ESTE mes (peor/igual/mejor/superada) y `ejercicios`
+    los que no puede hacer. Se guarda igual en el reporte y en `client_profiles.lesiones`:
+    en el reporte para saber qué contestó aquel mes, en el perfil para poder enseñárselo
+    el mes que viene ("LO QUE YA ME CONTASTE").
+    """
+    zona: str
+    desde: Optional[str] = None
+    estado_mes: Optional[str] = Field(None, pattern="^(peor|igual|mejor|superada)$")
+    ejercicios: List[str] = []
+
+
+class SuplementacionDelReporte(BaseModel):
+    """Bloque 08: si está tomando la pauta y, si no toda, cuál y por qué."""
+    respuesta: Optional[str] = Field(None, pattern="^(todos|alguno_no|ninguno)$")
+    detalle: Optional[str] = Field(None, max_length=2000)
+
+
+class EntrenoDelReporte(BaseModel):
+    """Bloque 05, que es el que cambia de un plan a otro.
+
+    - Quien lleva entreno personalizado y quincenal solo ve el dato: no contesta nada.
+    - Quien lleva la rutina del mes confirma los días que no rellenó, puntúa el mes y
+      escribe lo que quiera.
+    - Quien no lleva rutina contesta por su regularidad, y ahí es donde va la rutina del
+      mes (la única oferta que queda en todo el reporte).
+    """
+    # {"2026-08-08": "si_no_lo_apunte" | "no_entrene"} · los días que la app no tiene
+    confirmacion: Optional[Dict[str, str]] = None
+    estrellas: Optional[int] = Field(None, ge=1, le=5)
+    nota: Optional[str] = Field(None, max_length=4000)
+    # Sin rutina cargada: "¿Entrenaste este mes de forma regular?"
+    regularidad: Optional[str] = Field(
+        None, pattern="^(a_mi_manera_sigo|a_mi_manera_quiero_rutina|con_tu_rutina_sigo)$")
+    # La rutina del mes por 57 EUR: básica, avanzada o ahora no.
+    rutina_del_mes: Optional[str] = Field(None, pattern="^(basica|avanzada|ahora_no)$")
+    # "¿O prefieres tenerla todos los meses?" -> el equipo le cuenta el plan de arriba.
+    quiere_saber_del_silver: Optional[bool] = None
+
+
 # Report Models
 class ReportCreate(BaseModel):
     # El mismo rango que acepta la serie de peso, `core/series_cliente` (punto 5.4). El peso
@@ -67,6 +120,34 @@ class ReportCreate(BaseModel):
     viabilidad_ajuste: Optional[str] = None      # me_adapto | necesito_mas | necesito_menos
     cumplimiento_entreno: Optional[str] = None   # todos | casi_todos | la_mitad | pocos | ninguno
 
+    # ── Lo que trae el formulario nuevo (T7 y T8) ────────────────────────────
+    # De qué reporte es. Lo manda el front y el servidor lo comprueba contra la semana
+    # que le toca: sin esto, un reporte guardado no dice si era el quincenal o el mensual
+    # y hay que deducirlo por si trae medidas, que es adivinar.
+    tipo: Optional[str] = Field(None, pattern="^(quincenal|mensual|semanal)$")
+    # QUINCENAL · las cuatro preguntas
+    molestias: Optional[str] = Field(None, max_length=4000)
+    sensaciones: Optional[int] = Field(None, ge=1, le=5)
+    # MENSUAL · 04 dieta
+    dieta_dificultad: Optional[str] = Field(
+        None, pattern="^(nada|algun_dia|bastante|no_he_podido)$")
+    # MENSUAL · 05 entreno (distinto por plan)
+    entreno: Optional[EntrenoDelReporte] = None
+    # MENSUAL · 06 lesiones y 07 cardio (solo quien los lleve en su plan)
+    lesiones: Optional[List[LesionDelReporte]] = None
+    lesion_nueva: Optional[str] = Field(None, max_length=4000)
+    cardio_proximo_mes: Optional[str] = Field(None, pattern="^(mismas|mas|menos)$")
+    # MENSUAL · 08 suplementación
+    suplementacion: Optional[SuplementacionDelReporte] = None
+    # MENSUAL · 09 energía (solo si la lleva baja: el bloque ni se enseña si va bien)
+    energia_motivo: Optional[str] = Field(
+        None, pattern="^(duermo_poco|estres_trabajo|como_poco|no_lo_se)$")
+    # MENSUAL · 10 cómo lo valoras
+    valoracion_resultado: Optional[int] = Field(None, ge=1, le=5)
+    motivacion: Optional[int] = Field(None, ge=1, le=5)
+    # MENSUAL · 13 sugerencias (opcional, y es para nosotros)
+    sugerencias: Optional[str] = Field(None, max_length=4000)
+
 class ReportResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -84,6 +165,24 @@ class ReportResponse(BaseModel):
     viabilidad_ajuste: Optional[str] = None
     cumplimiento_entreno: Optional[str] = None
     trainer_feedback: Optional[str] = None
+    # Lo del formulario nuevo, para que la ficha del cliente y el resumen puedan
+    # enseñarlo. Los reportes viejos no lo traen y salen a null, que es lo que son.
+    tipo: Optional[str] = None
+    molestias: Optional[str] = None
+    sensaciones: Optional[int] = None
+    dieta_dificultad: Optional[str] = None
+    entreno: Optional[Dict[str, Any]] = None
+    lesiones: Optional[List[Dict[str, Any]]] = None
+    lesion_nueva: Optional[str] = None
+    cardio_proximo_mes: Optional[str] = None
+    suplementacion: Optional[Dict[str, Any]] = None
+    energia_motivo: Optional[str] = None
+    valoracion_resultado: Optional[int] = None
+    motivacion: Optional[int] = None
+    sugerencias: Optional[str] = None
+    # El informe que se monta al enviar (T9): mientras esté "pendiente_revision" el
+    # cliente no lo ve; pasa a "entregado" cuando el coach lo publica.
+    informe_estado: Optional[str] = None
     created_at: str
 
 # Check-In Models (3 niveles: daily, weekly, monthly) - portado de calmajp
