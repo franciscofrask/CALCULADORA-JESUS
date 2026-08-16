@@ -20,6 +20,7 @@ from llm_client import LlmChat, UserMessage
 # Importar funciones del motor CALMA. El conteo de macros va por calma_suggest (fiel al
 # bundle de Calma) via calibracion_dia; de calma_engine solo queda el parseo de categorias.
 from calma_engine import parse_categories
+from core.topes_cantidad import max_cantidad_razonable
 from calibracion_dia import macros_item_por_acumulado
 from calculator import (
     calcular_cantidad_automatica,
@@ -1042,64 +1043,12 @@ class NutritionChatbot:
         }
     
     def _get_max_cantidad_razonable(self, cat: str, config: dict, racion: float) -> float:
+        """Lo maximo de este alimento que cabe en una comida de verdad.
+
+        La tabla vive en `core.topes_cantidad` porque la calculadora necesita el MISMO
+        numero: alli no habia tope por alimento y se colaba un litro de leche de almendras.
         """
-        Devuelve la cantidad máxima razonable para un alimento según su categoría.
-        Esto evita que el bot sugiera cantidades absurdas como 266g de claras.
-        
-        REGLA: El chatbot debe sugerir cantidades que un humano usaría en una comida real.
-        """
-        # Si es por unidad, máximo 3-4 unidades
-        if config.get("por_unidad", False):
-            peso_unidad = config.get("peso_unidad", racion)
-            # Máximo 3 unidades para la mayoría, 4 para panes pequeños
-            if cat.startswith("8"):  # Panes
-                return peso_unidad * 4
-            elif cat.startswith("1.2"):  # Huevos enteros
-                return peso_unidad * 3  # Máximo 3 huevos
-            elif cat.startswith("5.2"):  # Yogures
-                return peso_unidad * 2  # Máximo 2 yogures
-            else:
-                return peso_unidad * 3
-        
-        # Límites por categoría (en gramos), calibrados con las cantidades que
-        # aparecen en las dietas reales de los clientes.
-        limites = {
-            "1.1": 300,   # Claras: en dietas reales se usan 200-300g
-            "1.2": 190,   # Huevos enteros: máximo 3 (63g L * 3)
-            "2.1": 150,   # Embutidos/Fiambres
-            "2.2": 300,   # Aves
-            "2.3": 300,   # Vacuno
-            "2.4": 300,   # Cerdo
-            "2.6": 300,   # Otras carnes
-            "3": 300,     # Pescado
-            "4": 60,      # Proteína en polvo
-            "5.1": 400,   # Leche (un vaso grande / bol)
-            "5.2.3": 500, # Queso fresco batido (tarrina)
-            "5.2": 250,   # Yogures
-            "5.3": 100,   # Quesos
-            "7": 120,     # Cereales
-            "8": 150,     # Panes
-            "9": 350,     # Tubérculos
-            "10": 250,    # Legumbres
-            "11": 300,    # Frutas
-            "13": 400,    # Verduras
-            "16": 30,     # Salsas y condimentos: nunca son "el plato"
-            "17.1": 30,   # Aceites
-            "17.2": 60,   # Frutos secos
-            "17.6": 150,  # Aguacate
-            "18": 500,    # Bebidas deportivas / refrescos (una botella)
-            "19": 400,    # Otras bebidas (cerveza 0%, vegetales...)
-            "21": 150,    # Arroces (en seco)
-            "22": 150,    # Pasta (en seco)
-        }
-        
-        # Buscar límite para la categoría (soporta subcategorías)
-        for cat_prefix, max_g in limites.items():
-            if cat.startswith(cat_prefix):
-                return max_g
-        
-        # Default: máximo 300g
-        return 300
+        return max_cantidad_razonable(cat, config, racion)
     
     def add_food_to_meal(self, alimento: dict, cantidad_g: float) -> dict:
         """

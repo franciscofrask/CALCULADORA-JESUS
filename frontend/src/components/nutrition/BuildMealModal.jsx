@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
 import { seExcede } from '../../lib/exceso';
 import { num1, numMedio } from '../../lib/numeros';
-import { leerCantidad, TOPE_GRAMOS, AVISO_TOPE, AVISO_NEGATIVO } from '../../lib/cantidades';
+import { leerCantidad, avisoRazonable, TOPE_GRAMOS, AVISO_TOPE, AVISO_NEGATIVO } from '../../lib/cantidades';
 import { ordenarPorRelevancia } from '../../lib/busquedaAlimentos';
 import { FOOD_FAVORITES_UI } from './SearchFoodModal';
 import {
@@ -785,6 +785,9 @@ const BuildMealModal = ({
         const step = isPorUnidad ? unitWeight : 1;
         const newQty = Math.max(step, adjustedQuantity + (delta * step));
         if (newQty > TOPE_GRAMOS) { toast.warning(AVISO_TOPE, { id: 'tope-cantidad' }); return; }
+        // Lo que cabe de ESTE alimento en una comida: se avisa y se deja seguir (16-08).
+        const avisoTope = avisoRazonable(selectedFood, newQty, { porUnidad: isPorUnidad, pesoUnidad: unitWeight });
+        if (avisoTope) toast.warning(avisoTope, { id: 'tope-razonable' });
 
         try {
             const result = await api('/api/calculator/macros-efectivos', {
@@ -864,6 +867,9 @@ const BuildMealModal = ({
                 toast.warning(AVISO_TOPE, { id: 'tope-cantidad' });
                 return f;
             }
+            // Y el tope con sentido humano de ese alimento concreto (16-08): avisa, no corta.
+            const aviso = avisoRazonable(f, newQty, { porUnidad: Boolean(isUnit), pesoUnidad: step });
+            if (aviso) toast.warning(aviso, { id: 'tope-razonable' });
             return recalcFoodMacros(f, newQty);
         }));
     };
@@ -884,6 +890,7 @@ const BuildMealModal = ({
             porUnidad: isUnit,
             pesoUnidad: peso,
             minimo: isUnit ? peso : 1,
+            alimento: actual,
         });
         if (lectura.estado === 'no_es_numero') {
             // Sin aviso mientras se escribe: el campo se queda vacío un instante al borrar
@@ -897,6 +904,7 @@ const BuildMealModal = ({
         }
         if (lectura.estado === 'por_debajo_del_minimo') return;   // aún está escribiendo
         if (lectura.estado === 'pasa_del_tope') toast.warning(AVISO_TOPE, { id: 'tope-cantidad' });
+        if (lectura.aviso) toast.warning(lectura.aviso, { id: 'tope-razonable' });
         setTempFoods(prev => prev.map((f, i) => (i === index ? recalcFoodMacros(f, lectura.gramos) : f)));
     };
 
@@ -1236,9 +1244,15 @@ const BuildMealModal = ({
                                                         const value = qtyDraft[idx] !== undefined ? qtyDraft[idx] : display;
                                                         return (
                                                             <span className="flex items-center gap-1">
+                                                                {/* Con techo: el campo no tenía `max` y la flecha de arriba subía
+                                                                    sin final. El techo es el tope duro, en la unidad del campo;
+                                                                    el tope razonable del alimento avisa aparte. */}
                                                                 <input
                                                                     type="number"
                                                                     min="0"
+                                                                    max={isUnit
+                                                                        ? Math.floor(TOPE_GRAMOS / (food.peso_unidad || food.racion || 100))
+                                                                        : TOPE_GRAMOS}
                                                                     step={isUnit ? '0.5' : '1'}
                                                                     value={value}
                                                                     onChange={(e) => { setQtyDraft(d => ({ ...d, [idx]: e.target.value })); handleFoodQuantitySet(idx, e.target.value); }}

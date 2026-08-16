@@ -3578,7 +3578,15 @@ const DietDetail = ({ diet }) => {
                             return (
                                 <div key={i} className="flex items-center gap-2 text-xs">
                                     <span className="text-white/80 flex-1 min-w-0 truncate">{a.nombre}</span>
-                                    <span className="text-white/40 whitespace-nowrap w-12 text-right">{Math.round(a.cantidad_g)} g</span>
+                                    {/* LA CANTIDAD, CON SU UNIDAD. Aquí se pintaba el número
+                                        pelado con una «g» pegada detrás, así que un huevo salía
+                                        como «1 g» y una lata de atún, también (Jesús, 16-08).
+                                        Ahora el texto viene resuelto del backend -- «2 ud
+                                        (126 g)» --, que es el único que sabe si el alimento va
+                                        por unidades y cuánto pesa una. */}
+                                    <span className="text-white/40 whitespace-nowrap w-24 text-right" title="Cantidad">
+                                        {a.cantidad_texto || `${Math.round(a.cantidad_g || 0)} g`}
+                                    </span>
                                     <span className="whitespace-nowrap tabular-nums w-24 text-right">
                                         <span className="text-orange-400">P{Math.round(e.P || 0)}</span> <span className="text-blue-400">H{Math.round(e.H || 0)}</span> <span className="text-yellow-400">G{Math.round(e.G || 0)}</span>
                                     </span>

@@ -35,6 +35,7 @@ from target_calculator import calcular_targets, targets_to_profile_macros, run_t
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
 from core.quiz_store import guardar_quiz_respuestas
 from core.series_cliente import anotar_peso, anotar_grasa
+from core.topes_cantidad import tope_de_alimento
 from macro_distribution import distribuir_macros as dist_macros, leer_macro, leer_peri
 from redondeo_salida import redondear_cantidad, minimo_pesable
 
@@ -843,6 +844,15 @@ async def search_foods_endpoint(
     # like Calma's full-list ranking. 200 comfortably covers any real query (e.g. "arroz" ~120).
     if q:
         alimentos = alimentos[:max(limit, 200)]
+
+    # CUANTO CABE DE ESTE ALIMENTO EN UNA COMIDA DE VERDAD.
+    #
+    # El asistente ya lo sabia (nunca propone 500 g de salsa de soja); la calculadora no, y
+    # por eso se guardo 1 litro de leche de almendras en una comida (Jesus, 16-08). El tope
+    # viaja con la ficha para que la pantalla pueda avisar sin preguntar otra vez. Es un
+    # tope RAZONABLE: avisa, no bloquea.
+    for a in alimentos:
+        a["max_razonable"] = tope_de_alimento(a)
 
     return {"alimentos": alimentos, "total": len(alimentos), "available_preps": available_preps}
 

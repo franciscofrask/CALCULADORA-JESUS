@@ -13,6 +13,7 @@ from core.database import db
 from core.security import get_current_user
 from calma_suggest import macros_reales
 from macro_distribution import objetivo_de_las_comidas
+from core import dieta_para_ver as _para_ver
 from pdf_generator import generate_diet_pdf
 
 router = APIRouter(prefix="/diets", tags=["diets"])
@@ -407,111 +408,15 @@ async def copy_day(data: dict, user = Depends(get_current_user)):
     )
     return {"message": "Día copiado", "origen": source_date, "destino": target_date}
 
-def _ids_de(diet: dict) -> set:
-    """Los ids de alimento que aparecen en un dia."""
-    ids = {
-        a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
-        for comida in (diet.get("comidas") or {}).values()
-        for a in ((comida or {}).get("alimentos") or [])
-    }
-    ids.discard(None)
-    return ids
-
-
-def _normalizar_con_catalogo(diet: dict, catalogo: dict) -> int:
-    """Pasa a gramos las cantidades del dia. Punto 4.5 de la revision del 09-08.
-
-    En las dietas que vinieron de Calma los alimentos POR UNIDADES guardan el CONTEO de piezas
-    en `cantidad_g`: un huevo entero aparece como "1". Leido como un gramo de huevo da 0,1 de
-    proteina y al pintarlo en unidades sale "0 ud", que es lo que reporto Jesus.
-
-    Se convierte AL LEER y no en la pantalla porque por aqui pasan todas -- Nutricion, el
-    asistente, el PDF, la ficha del entrenador --, y arreglarlo en una sola dejaria a las
-    otras enseñando el numero malo. Y ademas era el escritor: al abrir un dia migrado, la
-    pantalla recalculaba los macros con la cantidad como gramos y al guardar los dejaba
-    escritos, convirtiendo un registro incompleto en uno falso.
-    """
-    from calculator import get_food_config
-    from core.cantidad_de_dieta import normalizar_dieta
-
-    cfgs = {}
-
-    def config_de(alimento_id, item):
-        if alimento_id not in cfgs:
-            ficha = catalogo.get(alimento_id)
-            cfgs[alimento_id] = get_food_config(ficha) if ficha else None
-        return cfgs[alimento_id]
-
-    return normalizar_dieta(diet, config_de)
-
-
-async def _normalizar_cantidades(diet: dict) -> int:
-    """Lo mismo, trayendose el catalogo que haga falta. Para las rutas que no lo tienen ya."""
-    ids = _ids_de(diet)
-    if not ids:
-        return 0
-    catalogo = {
-        f["id"]: f
-        async for f in db.foods.find(
-            {"id": {"$in": list(ids)}},
-            {"_id": 0, "id": 1, "racion": 1, "unidades": 1, "categorias": 1, "nombre": 1},
-        )
-    }
-    return _normalizar_con_catalogo(diet, catalogo)
-
-
-async def _adjuntar_urls(diet: dict) -> None:
-    """
-    Pone en cada alimento del dia lo que hay que resolver contra el catalogo:
-
-      - `url`: la ficha del producto (los de marca la tienen; los genericos no).
-      - `macros_reales`: lo que dice la etiqueta, para el switch de la pestaña de
-        Nutricion. Es SOLO para enseñarlo: no se guarda, no cuenta y no cambia el
-        reparto; lo que cuenta sigue siendo `macros_efectivos`.
-
-    Se resuelve aqui y no al guardar por dos motivos: los dias ya guardados no lo tienen
-    (de 3365 alimentos guardados, solo 95 traian los macros de etiqueta), y los alimentos
-    entran por muchas puertas (buscador, chatbot, menu sugerido, copiar dia, favoritas),
-    asi que guardarlo en cada una seria facil de olvidar. Ademas, si se corrige un
-    alimento, los dias antiguos lo cogen solos. Es una unica consulta por dia.
-    """
-    comidas = diet.get("comidas") or {}
-    ids = {
-        a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
-        for comida in comidas.values()
-        for a in ((comida or {}).get("alimentos") or [])
-    }
-    ids.discard(None)
-    if not ids:
-        return
-
-    catalogo = {
-        f["id"]: f
-        async for f in db.foods.find(
-            {"id": {"$in": list(ids)}},
-            # `categorias` va en la proyeccion porque la necesita `get_food_config` para
-            # saber si un alimento va por unidades y cuanto pesa una.
-            {"_id": 0, "id": 1, "url": 1, "proteinas": 1, "hidratos": 1, "grasas": 1,
-             "racion": 1, "unidades": 1, "categorias": 1},
-        )
-    }
-
-    # Las cantidades, a gramos ANTES de calcular nada (punto 4.5): si no, `macros_reales`
-    # saldria del numero equivocado.
-    _normalizar_con_catalogo(diet, catalogo)
-
-    for comida in comidas.values():
-        for a in ((comida or {}).get("alimentos") or []):
-            clave = a.get("alimento_id") if a.get("alimento_id") is not None else a.get("id")
-            ficha = catalogo.get(clave)
-            if not ficha:
-                continue
-            if ficha.get("url"):
-                a["url"] = ficha["url"]
-            try:
-                a["macros_reales"] = macros_reales(ficha, float(a.get("cantidad_g") or 0))
-            except (TypeError, ValueError):
-                pass  # un alimento raro no puede tumbar la carga del dia
+# LO QUE HAY QUE RESOLVER PARA ENSEÑAR UN DIA GUARDADO vive en `core.dieta_para_ver`.
+#
+# Estaba aqui, y por eso el panel del entrenador -- que tiene su propia ruta -- devolvia el
+# documento crudo de Mongo y enseñaba P0 H0 G0 y "1 g de huevo" (Jesus, 16-08). Los nombres
+# de aqui se quedan porque los usa el resto del fichero y `routes/chatbot.py`.
+_ids_de = _para_ver.ids_de
+_normalizar_con_catalogo = _para_ver.normalizar_con_catalogo
+_normalizar_cantidades = _para_ver.normalizar_cantidades
+_adjuntar_urls = _para_ver.adjuntar_urls
 
 
 async def _objetivo_comidas_del_dia(fecha: str, diet: Optional[dict], user: dict) -> Optional[dict]:
@@ -736,47 +641,14 @@ async def export_diet_pdf(fecha: str, user = Depends(get_current_user)):
         async for f in db.foods.find({"id": {"$in": ids}}, {"_id": 0}):
             catalogo[f["id"]] = f
 
+    # Los macros que cuentan (calculados si el dia no los guardo) y la cantidad escrita
+    # como la lee una persona ("2 ud (126 g)"). Las dos las comparte con el visor de dietas
+    # del panel, que es donde faltaban.
     def _macros_de(a: dict) -> dict:
-        """Los macros que le cuentan a este alimento. Guardados si estan, calculados si no.
+        return _para_ver.macros_de(a, catalogo)
 
-        EL PDF SALIA CON TODOS LOS ALIMENTOS A CERO (Francisco, 11-08-2026: «puedo ver sus
-        dietas pero no los macros de esos alimentos»).
-
-        Leia `macros_efectivos` de lo guardado y punto. Medido: de 4.166 alimentos guardados,
-        3.731 NO tienen ese campo -- huevos, claras, pan, yogur, whey --, asi que el PDF los
-        escribia a 0 y de paso daba un total del dia que no era el suyo. No es que el dato
-        este mal: es que nunca se llego a escribir en la mayoria de las dietas.
-
-        Asi que se calcula con el motor de conteo unico (`calma_suggest.macros_efectivos`,
-        el mismo que usa la app desde el 31-07), y lo guardado solo se usa como atajo. Un
-        cero legitimo -- la lechuga, o un macro que el filtro del tercio descarta -- sigue
-        saliendo cero, porque lo dice el motor y no la ausencia del campo.
-        """
-        me = a.get("macros_efectivos")
-        if me and any((me.get(r) or 0) > 0 for r in ("P", "H", "G")):
-            return me
-        food = catalogo.get(a.get("alimento_id"))
-        if not food:
-            return me or {}
-        try:
-            from calma_suggest import macros_efectivos as _efectivos
-            return _efectivos(food, float(a.get("cantidad_g") or 0))
-        except Exception:
-            # Si el motor falla por lo que sea, mejor lo guardado que romper la descarga.
-            return me or {}
-
-    def _cantidad_de(a):
-        """Texto de la cantidad. En los alimentos por unidades, Jesus quiere ver las
-        unidades y el peso entre parentesis: "2 ud (126 g)", no "126 g" a secas."""
-        gramos = a.get("cantidad_g", 0) or 0
-        food = catalogo.get(a.get("alimento_id")) or {}
-        por_unidad = bool(food.get("unidades")) or a.get("unidad") == "ud"
-        racion = float(food.get("racion") or a.get("racion") or 0)
-        if por_unidad and racion > 0:
-            uds = round(gramos / racion * 2) / 2          # medias unidades, como en la app
-            uds_txt = f"{uds:.0f}" if uds == int(uds) else f"{uds:.1f}"
-            return f"{uds_txt} ud ({gramos:.0f} g)"
-        return f"{gramos:.0f} g"
+    def _cantidad_de(a: dict) -> str:
+        return _para_ver.cantidad_de(a, catalogo)
 
     # Build comidas list in the format pdf_generator expects
     comidas_list = []

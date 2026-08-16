@@ -5,7 +5,7 @@ import { useOnboarding } from '../context/OnboardingContext';
 import { leer as leerLocal, escribir as escribirLocal, borrar as borrarLocal } from '../lib/almacenLocal';
 import { excesos, textoExceso, margenDe } from '../lib/exceso';
 import { num1 } from '../lib/numeros';
-import { leerCantidad, TOPE_GRAMOS, AVISO_TOPE, AVISO_NO_ES_NUMERO, AVISO_NEGATIVO } from '../lib/cantidades';
+import { leerCantidad, avisoRazonable, TOPE_GRAMOS, AVISO_TOPE, AVISO_NO_ES_NUMERO, AVISO_NEGATIVO } from '../lib/cantidades';
 import { useConfirm } from '../components/ui/confirm';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -1308,6 +1308,13 @@ const NutritionPage = () => {
                 toast.warning(AVISO_TOPE, { id: 'tope-cantidad' });
                 return prev;
             }
+            // Y el tope RAZONABLE de ese alimento, que es otro (16-08): a golpe de «+» se
+            // llegaba a 1.000 g de leche de almendras sin que nadie dijera nada. Se avisa y
+            // se pone igual, como hace el asistente.
+            const aviso = avisoRazonable(food, bruta, {
+                porUnidad: esPorUnidad(food), pesoUnidad: pesoUnidad(food),
+            });
+            if (aviso) toast.warning(aviso, { id: 'tope-razonable' });
             foods[foodIndex] = scaleFood(food, bruta);
             return { ...prev, [mealKey]: { alimentos: foods } };
         });
@@ -1334,6 +1341,7 @@ const NutritionPage = () => {
             porUnidad: esPorUnidad(food),
             pesoUnidad: pesoUnidad(food),
             minimo: cantidadMinima(food),
+            alimento: food,
         });
 
         if (lectura.estado === 'no_es_numero') { toast.error(AVISO_NO_ES_NUMERO); return; }
@@ -1353,6 +1361,9 @@ const NutritionPage = () => {
         }
 
         if (lectura.estado === 'pasa_del_tope') toast.warning(AVISO_TOPE);
+        // Dentro del tope duro y aun así demasiado para una comida (un litro de leche): se
+        // dice y se pone, que es como se comporta el asistente.
+        if (lectura.aviso) toast.warning(lectura.aviso, { id: 'tope-razonable' });
         setMealsData(prev => {
             const foods = [...(prev[mealKey]?.alimentos || [])];
             if (!foods[foodIndex]) return prev;
