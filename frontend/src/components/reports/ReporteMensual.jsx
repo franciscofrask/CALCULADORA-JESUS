@@ -49,11 +49,16 @@ const fraseDeLosMacros = (dieta) => {
     return null;
 };
 
+// Cuantos dias sin confirmar se enseñan de entrada: los demas, detras de «ver mas».
+const DIAS_A_LA_VISTA = 2;
+
 const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plazo,
                           api, token, prev, aplazado, onAplazar }) => {
     const dieta = datos?.dieta || {};
     const entreno = datos?.entreno || {};
     const cardio = entreno.cardio || {};
+    // Los días de entreno sin confirmar se enseñan de dos en dos (ver el bloque 05).
+    const [verTodosLosDias, setVerTodosLosDias] = React.useState(false);
     const cierres = datos?.cierres || {};
     const peso = datos?.peso_ultimo;
     const lesiones = datos?.lesiones || [];
@@ -236,7 +241,15 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                                         {' '}el {enumerarFechas(entreno.sin_registrar_labels)}
                                     </span>
                                 </p>
-                                {entreno.sin_registrar.map((fecha, i) => (
+                                {/* DE DOS EN DOS, NO EL MES ENTERO (Francisco, 17-08). El
+                                    documento lo escribió pensando en dos o tres días sueltos;
+                                    un cliente que no registró nada se encontraba dieciséis
+                                    fechas con dos botones cada una, y eso ya no es una
+                                    pregunta, es un muro. Se enseñan las dos primeras y el
+                                    resto se abre si quiere. */}
+                                {entreno.sin_registrar
+                                    .slice(0, verTodosLosDias ? undefined : DIAS_A_LA_VISTA)
+                                    .map((fecha, i) => (
                                     <div key={fecha}>
                                         <p className="text-[13px] text-muted-foreground mb-1">
                                             {entreno.sin_registrar_labels[i]}
@@ -251,6 +264,15 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                                             ]} />
                                     </div>
                                 ))}
+                                {entreno.sin_registrar.length > DIAS_A_LA_VISTA && (
+                                    <button type="button" data-testid="entreno-ver-mas-dias"
+                                        onClick={() => setVerTodosLosDias(!verTodosLosDias)}
+                                        className="text-sm text-brand font-bold hover:underline">
+                                        {verTodosLosDias
+                                            ? 'Ver menos'
+                                            : `Ver los ${entreno.sin_registrar.length - DIAS_A_LA_VISTA} días que faltan`}
+                                    </button>
+                                )}
                             </div>
                         )}
                         <div>
