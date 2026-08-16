@@ -414,11 +414,22 @@ async def chatbot_message(
     chatbot = await get_or_create_chatbot(session_id, db)
     response = await _procesar_mensaje(chatbot, request.message)
 
+    # EL ESTADO PARA EL FRONT SE ARMA ANTES DE GUARDAR, PORQUE CONSUME BANDERAS (16-08-2026).
+    #
+    # `_estado_para_front` hace `pop` de las de un solo uso -- `fecha_pedida`,
+    # `config_tocada` --, y guardando primero se persistían PUESTAS. `config_tocada` decide
+    # si la configuración viaja al día nuevo: una vez encendida se quedaba encendida para
+    # siempre, así que a partir de ahí CUALQUIER cambio de día plantaba la configuración del
+    # día viejo encima del nuevo. Medido en producción: tras pedir «3 comidas» para el lunes,
+    # el martes y el domingo pasaban a anunciarse como «3 comidas, solo post» teniendo cuatro
+    # y sin peri en el plan. Es el contagio que Jesús reportó en la ronda 1, colándose por
+    # otra puerta.
+    estado = _estado_para_front(chatbot)
     await save_chatbot_session(chatbot)
     return {
         "session_id": session_id,
         "response": response,
-        "state": _estado_para_front(chatbot),
+        "state": estado,
         "day_overview": chatbot.get_day_overview(),
     }
 
@@ -462,9 +473,12 @@ async def chatbot_message_stream(
                 chatbot, request.message,
                 progreso=lambda h: cola.put_nowait(
                     {"tipo": "progreso", "texto": ETIQUETAS.get(h, "Trabajando...")}))
+            # Igual que en `/message`: primero se consume el estado del turno (hace `pop`
+            # de las banderas de un solo uso) y DESPUÉS se guarda, o se quedan pegadas.
+            estado = _estado_para_front(chatbot)
             await save_chatbot_session(chatbot)
             await cola.put({"tipo": "respuesta", "response": resp,
-                            "state": _estado_para_front(chatbot),
+                            "state": estado,
                             "day_overview": chatbot.get_day_overview()})
         except Exception as e:
             await cola.put({"tipo": "error", "detalle": f"{type(e).__name__}"})

@@ -155,6 +155,31 @@ def test_vaciar_una_comida_sigue_vaciandola():
 
 
 # --------------------------------------------------- 3. la conversación se recuerda
+# ------------------------------------- las banderas de un solo turno no se quedan pegadas
+def test_las_banderas_de_un_turno_no_se_persisten():
+    """`config_tocada` encendida para siempre = la config del día viejo pisando al nuevo."""
+    async def _probar():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        from chatbot import get_or_create_chatbot, save_chatbot_session, clear_session
+        from routes.chatbot import _estado_para_front
+        db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+        sesion = "chat_test_banderas_qa"
+        await clear_session(sesion, db)
+        bot = await get_or_create_chatbot(sesion, db, dict(MACROS))
+        bot.state["config_tocada"] = True
+        bot.state["fecha_pedida"] = "2026-08-17"
+        # El orden de la ruta: primero se consume el estado del turno, después se guarda.
+        estado = _estado_para_front(bot)
+        await save_chatbot_session(bot)
+        doc = await db.chatbot_sessions.find_one({"session_id": sesion}, {"_id": 0, "state": 1})
+        await clear_session(sesion, db)
+        return estado, (doc or {}).get("state") or {}
+    estado, guardado = correr(_probar())
+    assert estado["config_tocada"] is True and estado["fecha_pedida"] == "2026-08-17", estado
+    assert not guardado.get("config_tocada"), "la bandera se ha quedado guardada"
+    assert not guardado.get("fecha_pedida"), "la fecha pedida se ha quedado guardada"
+
+
 def test_la_conversacion_sobrevive_a_la_siguiente_peticion():
     async def _probar():
         from motor.motor_asyncio import AsyncIOMotorClient
