@@ -2625,7 +2625,11 @@ class NutritionChatbot:
                 "objetivo": self.get_current_meal_macros(),
                 "actual": comida.get("macros", {"P": 0, "H": 0, "G": 0}),
                 "restante": restante,
-                "alimentos": comida.get("alimentos", []),
+                # Los nombres, como se le dicen a una persona: la comida que viene precargada
+                # del plan trae el nombre crudo del catálogo, con sus apuntes de ficha
+                # («- macros orientativos»), y esta es la lista que pinta la tarjeta.
+                "alimentos": [dict(a, nombre=nombre_visible(a.get("nombre")))
+                              for a in comida.get("alimentos", [])],
                 "cuadrado": cuadrado,
             },
             "day_overview": self.get_day_overview(),
