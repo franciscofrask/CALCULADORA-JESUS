@@ -94,3 +94,44 @@ def test_sin_alimentos_nombrados_el_compositor_trabaja_como_siempre():
     r = correr(t())
     assert r.get("borradores"), "se ha quedado sin componer nada"
     assert any(len(b["items"]) >= 3 for b in r["borradores"]), "solo trae medias comidas"
+
+
+# ------------------------------------------------- los gramos que dice el cliente
+class TestLosGramosQueDiceElCliente:
+    """«La opción 3 pero añádele 30 gramos de almendras» -> 30, y el menú entero.
+
+    Salió en producción el 15-08: puso 5 g de almendras en vez de 30, borró las claras y el
+    fiambre de pavo, y subió el queso de 50 a 150 g. Un menú que el cliente había elegido,
+    deshecho para que los números cuadraran. Iba TODO al recuadre y este hacía lo que quería.
+    """
+
+    def test_respeta_los_gramos_y_no_pierde_ingredientes(self):
+        async def t():
+            from motor.motor_asyncio import AsyncIOMotorClient
+            from chatbot import NutritionChatbot
+            from agent_tools import AgentTools
+            db = AsyncIOMotorClient(MONGO_URL)[os.environ.get("DB_NAME", "test_database")]
+            bot = NutritionChatbot("test_gramos_cliente", db)
+            bot.set_user_macros(dict(MACROS))
+            bot.configure_day("entrenamiento", 4, momento_entreno=1, opcion_peri="intra_post")
+            tools = await AgentTools.crear(bot)
+            r = await tools.componer_menu(n=3)
+            bs = r.get("borradores") or []
+            if not bs:
+                pytest.skip("el compositor no dio ninguna opción con la que probar")
+            b = bs[-1]
+            antes = {i["nombre"] for i in b["items"]}
+            alm = next(x for x in tools.foods.values() if x.get("nombre") == "Almendras")
+            await tools.editar_borrador(b["id"], [{"op": "añadir",
+                                                   "alimento_id": int(alm["id"]),
+                                                   "cantidad": 30}])
+            return (bot.state.get("borradores") or {}).get(b["id"]), antes
+
+        b2, antes = correr(t())
+        ahora = {i["nombre"]: i.get("cantidad_g") for i in b2["items"]}
+        assert ahora.get("Almendras") == 30, (
+            f"le cambió los gramos: pidió 30 y puso {ahora.get('Almendras')}")
+        perdidos = antes - set(ahora)
+        assert not perdidos, f"se llevó por delante ingredientes que él no quitó: {perdidos}"
+        # Y como los gramos los ha puesto él, la opción no se le bloquea al elegirla.
+        assert b2.get("solo_lo_pedido"), "se le bloquearía al aplicarla"

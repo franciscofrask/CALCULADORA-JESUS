@@ -2872,6 +2872,8 @@ class AgentTools:
         ids = [i["id"] for i in b["items"]]
         pedidos = {int(x) for x in (b.get("pedidos") or [])}
         tocados_del_encargo = []
+        # Los gramos que ha dicho el cliente: {id: gramos}. Esos no los toca el recuadre.
+        fijas: Dict[int, float] = {}
         for op in operaciones or []:
             tipo = (op.get("op") or "").strip().lower().replace("anadir", "añadir")
             if tipo == "quitar" and int(op.get("item_id", 0)) in ids:
@@ -2888,6 +2890,16 @@ class AgentTools:
                 nuevo = int(op.get("alimento_id", 0))
                 if nuevo in self.foods and nuevo not in ids:
                     ids.append(nuevo)
+                # LOS GRAMOS QUE DICE EL CLIENTE SON LOS QUE VAN (15-08, Francisco en la
+                # app). «La opción 3 pero añádele 30 gramos de almendras» acabó con 5 g de
+                # almendras, y de paso el recuadre se llevó por delante las claras y el
+                # fiambre de pavo y subió el queso de 50 a 150 g. Se le cambió la cantidad
+                # sin decirlo y se le deshizo el menú que había elegido.
+                if op.get("cantidad") is not None:
+                    try:
+                        fijas[nuevo] = float(op["cantidad"])
+                    except (TypeError, ValueError):
+                        pass
         if not ids:
             return {"ok": False, "error": "el borrador se quedaría vacío"}
         nombres = [self.foods[i]["nombre"] for i in ids]
@@ -2905,12 +2917,49 @@ class AgentTools:
             b["objetivo"] = dict(objetivo)
         else:
             objetivo = b.get("objetivo") or self.bot.get_remaining_macros()
-        resultado = await build_meal(self.db, nombres, objetivo, self.bot.search_foods, forzar=True)
+        # LO QUE EL CLIENTE FIJA NO SE RECUADRA, Y EL RESTO SE AJUSTA A LO QUE QUEDA.
+        #
+        # Antes iba TODO al recuadre y este hacía lo que quería: pidiendo «la opción 3 pero
+        # añádele 30 g de almendras» salieron 5 g de almendras, las claras y el fiambre de
+        # pavo desaparecidos, y el queso de 50 a 150 g. Un menú que él había elegido,
+        # deshecho para que los números cuadraran.
         items = []
-        for f in resultado.get("foods_added", []):
-            food = next((x for x in self.foods.values() if x.get("nombre") == f.get("nombre")), None)
-            if food:
-                items.append(self._item_de(food, float(f.get("cantidad", 0) or 0), f.get("macros", {})))
+        objetivo_libre = dict(objetivo)
+        for fid, gramos in fijas.items():
+            food = self.foods.get(fid)
+            if not food:
+                continue
+            ef = self._ef100(food)          # los macros del método, no los de la etiqueta
+            macros = {m: round(float(ef.get(m, 0) or 0) * gramos / 100.0, 1)
+                      for m in ("P", "H", "G")}
+            items.append(self._item_de(food, gramos, macros))
+            for m in ("P", "H", "G"):
+                objetivo_libre[m] = round(objetivo_libre[m] - macros.get(m, 0), 1)
+        libres = [self.foods[i]["nombre"] for i in ids if i not in fijas]
+        if libres:
+            resultado = await build_meal(self.db, libres, objetivo_libre,
+                                         self.bot.search_foods, forzar=True)
+            puestos = set()
+            for f in resultado.get("foods_added", []):
+                food = next((x for x in self.foods.values()
+                             if x.get("nombre") == f.get("nombre")), None)
+                if food:
+                    puestos.add(food["nombre"])
+                    items.append(self._item_de(food, float(f.get("cantidad", 0) or 0),
+                                               f.get("macros", {})))
+            # NINGUNA PIEZA SE CAE POR EL CAMINO. Si el recuadre se deja alguna fuera, se
+            # respeta la cantidad que ya tenía en el borrador: quitar un ingrediente que él
+            # no ha mandado quitar no es un ajuste, es otro menú.
+            previas = {int(i["id"]): float(i.get("cantidad_g") or 0) for i in (b.get("items") or [])}
+            for i in ids:
+                food = self.foods.get(i)
+                if not food or i in fijas or food["nombre"] in puestos:
+                    continue
+                g = previas.get(i) or float(food.get("racion") or 100)
+                ef = self._ef100(food)
+                macros = {m: round(float(ef.get(m, 0) or 0) * g / 100.0, 1)
+                          for m in ("P", "H", "G")}
+                items.append(self._item_de(food, g, macros))
         if not items:
             return {"ok": False, "error": "con ese cambio no sale ninguna combinación que cuadre"}
         # La tarjeta editada también dice el número con el que va a quedar (tramos del día).
@@ -2919,6 +2968,12 @@ class AgentTools:
         b.update({"items": items, "origen": "editado", "nombre": None, "receta_url": None,
                   "macros_totales": tot,
                   "desvio": {m: round(tot[m] - objetivo[m], 1) for m in ("P", "H", "G")}})
+        # Si ha puesto él los gramos, la opción es suya: al elegirla no se le bloquea por
+        # el desvío que ha provocado su propia petición (misma regla que «solo lo pedido»
+        # en `aplicar_borrador`). Pedirle 30 g de almendras y luego no dejarle ponerlos es
+        # el bucle de siempre con otra cara.
+        if fijas:
+            b["solo_lo_pedido"] = True
         # LOS AVISOS SON DE LA VERSIÓN ANTERIOR (13-08-2026). Al cambiar el menú, la
         # revisión que los generó deja de valer, y se quedaban pegados a la tarjeta: en
         # producción salió «pidió genéricos y Masa para pancake de arroz y avena (Prozis)
