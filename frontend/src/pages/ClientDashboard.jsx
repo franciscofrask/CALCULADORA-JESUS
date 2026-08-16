@@ -1253,6 +1253,11 @@ const ClientLayout = () => {
     const [notifCount, setNotifCount] = useState(0);
     const [notifOpen, setNotifOpen] = useState(false);
     const [notifItems, setNotifItems] = useState([]);
+    // Si ya se preguntó o se está preguntando. El panel se abre antes de que lleguen los
+    // avisos, y sin esto la primera vez decía «No hay nada pendiente» encima de una lista
+    // que estaba llegando: al segundo intento aparecían. Decirle que no tiene nada cuando
+    // todavía no se sabe es lo mismo que mentirle.
+    const [notifCargando, setNotifCargando] = useState(false);
 
     useEffect(() => {
         api.get('/messages/unread-count').then(r => setUnread(r.data.count || 0)).catch(() => {});
@@ -1261,6 +1266,7 @@ const ClientLayout = () => {
 
     const openNotifications = async () => {
         setNotifOpen(true);
+        setNotifCargando(true);
         try {
             const res = await api.get('/notifications');
             setNotifItems(res.data.notifications || []);
@@ -1268,7 +1274,9 @@ const ClientLayout = () => {
                 await api.put('/notifications/read-all');
                 setNotifCount(0);
             }
-        } catch { /* silencioso */ }
+        } catch { /* silencioso */ } finally {
+            setNotifCargando(false);
+        }
     };
 
     const notifTime = (iso) => {
@@ -1468,7 +1476,7 @@ const ClientLayout = () => {
                                 duda de si falta algo por cargar. Al abrir el panel ya se marcan
                                 todos como leídos, así que el estado real es ese: no hay nada
                                 más pendiente, y se dice (Jesús, 11-08). */}
-                            {notifItems.length === 0 && unread === 0 ? (
+                            {notifCargando ? null : notifItems.length === 0 && unread === 0 ? (
                                 <p className="text-muted-foreground text-sm text-center py-10">No hay nada pendiente</p>
                             ) : (
                                 <p className="text-muted-foreground/70 text-xs text-center py-4">No hay nada más pendiente</p>
