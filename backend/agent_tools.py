@@ -3000,6 +3000,19 @@ class AgentTools:
             return protegida
         revision = await self.revisar_borrador(borrador_id)
         impiden = revision.get("impide_aplicar") or []
+        # SU COMIDA, SU DECISIÓN: LO QUE HA PEDIDO Y HA ELEGIDO, ENTRA (15-08, Francisco).
+        #
+        # Pidió «pollo, huevos, arroz y verduras», se le montó con esos cuatro y solo esos,
+        # se le dijo que se pasaba 11 g de grasa, y al contestar «me gusta esa opción» el
+        # revisor la bloqueaba por... pasarse de grasa. Cuatro turnos y la comida seguía
+        # vacía, con el asistente proponiéndole cambios que él no había pedido.
+        #
+        # El revisor está para frenar lo que PROPONE la app, no para discutirle al cliente
+        # una comida que ha nombrado él y ha elegido él. El aviso ya lo ha leído en la
+        # tarjeta. Solo aplica a los borradores de «solo lo pedido»: los compuestos por la
+        # app siguen pasando por la puerta de siempre.
+        if impiden and b.get("solo_lo_pedido"):
+            impiden = []
         if impiden and not forzar:
             return {"ok": False, "bloqueado_por": impiden,
                     "instruccion": "Cuéntale qué pasa y ofrécele arreglarlo. SI YA TE HA "
