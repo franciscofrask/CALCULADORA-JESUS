@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import SelectorGrasa from '../components/SelectorGrasa';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const MiCuerpoPage = () => {
     const navigate = useNavigate();
@@ -54,7 +55,7 @@ const MiCuerpoPage = () => {
             setFicha(r.data);
             cargarMenus();
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'No hemos podido calcularlo');
+            toast.error(mensajeDeError(err, 'No hemos podido calcularlo'));
         } finally {
             setCargando(false);
         }

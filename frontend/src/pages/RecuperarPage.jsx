@@ -17,6 +17,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Mail, Lock, Loader2, ArrowLeft, Check } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -85,7 +86,7 @@ const RecuperarPage = () => {
             setListo(true);
             setTimeout(() => navigate('/auth'), 2200);
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'No hemos podido cambiarla');
+            toast.error(mensajeDeError(err, 'No hemos podido cambiarla'));
         } finally {
             setCargando(false);
         }

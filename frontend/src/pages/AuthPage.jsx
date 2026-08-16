@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import { dejarDestino, leerDestino } from '../lib/navegacion';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 // Aquí había una copia del logo hecha a mano, con la flecha colgando por encima del suelo de
 // las letras. Se usa el de siempre (14-08-2026): así el logo es uno solo y se arregla en un
@@ -47,7 +48,7 @@ const AuthPage = () => {
                 }
             }
         } catch (error) {
-            toast.error(error.response?.data?.detail || 'Error de autenticación');
+            toast.error(mensajeDeError(error, 'Error de autenticación'));
         } finally {
             setLoading(false);
         }

@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, TrendingDown, TrendingUp, Check, ArrowRight, Info, Phone } from 'lucide-react';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const fmtPct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x}%`);
 
@@ -58,7 +59,7 @@ const RenovacionPage = () => {
             if (r.data?.checkout_url) window.location.href = r.data.checkout_url;
             else toast.error('No hemos podido abrir el pago');
         } catch (e) {
-            toast.error(e?.response?.data?.detail || 'No hemos podido abrir el pago');
+            toast.error(mensajeDeError(e, 'No hemos podido abrir el pago'));
             setYendo(null);
         }
     };

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
 import { X, Upload, Loader2 } from 'lucide-react';
 import HelpTooltip from '../HelpTooltip';
+import { mensajeDeError } from '../../lib/mensajeDeError';
 
 const EMPTY = {
     nombre: '',
@@ -103,7 +104,7 @@ const SuggestFoodModal = ({ open, onClose, onSubmitted }) => {
             onClose();
             onSubmitted?.();
         } catch (e) {
-            toast.error(e.response?.data?.detail || 'No se pudo enviar la sugerencia');
+            toast.error(mensajeDeError(e, 'No se pudo enviar la sugerencia'));
         } finally {
             setSaving(false);
         }

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { Utensils, Plus, Pencil, Trash2, Loader2, Save, X } from 'lucide-react';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const MOMENTOS = ['desayuno', 'comida', 'merienda', 'cena'];
 const ROLES = ['proteina', 'hidrato', 'grasa'];
@@ -197,7 +198,7 @@ const AdminMenusPage = () => {
             toast.success(modal.item ? 'Menú actualizado' : 'Menú creado');
             setModal({ open: false, item: null });
             load();
-        } catch (e) { toast.error(e.response?.data?.detail || 'Error al guardar'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'Error al guardar')); }
         finally { setSaving(false); }
     };
 

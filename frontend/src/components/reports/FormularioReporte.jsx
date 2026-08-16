@@ -20,6 +20,7 @@ import RevisaAntesDeEnviar from './RevisaAntesDeEnviar';
 import { MEDIDAS } from '../../lib/medidas';
 import { revisarPeso } from '../../lib/pesoValido';
 import { useConfirm } from '../ui/confirm';
+import { mensajeDeError } from '../../lib/mensajeDeError';
 
 const ORANGE = '#FF671F';
 
@@ -110,7 +111,7 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
             });
         } catch (e) {
             console.error('No se pudo aplazar el reporte', e);
-            toast.error(e?.response?.data?.detail || 'No hemos podido aplazártelo. Inténtalo en un momento.');
+            toast.error(mensajeDeError(e, 'No hemos podido aplazártelo. Inténtalo en un momento.'));
         }
     };
 
@@ -195,7 +196,7 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
             if (onEnviado) onEnviado();
         } catch (error) {
             console.error('Error al enviar el reporte', error);
-            toast.error(error?.response?.data?.detail || 'No hemos podido enviar tu reporte. Inténtalo en un momento.');
+            toast.error(mensajeDeError(error, 'No hemos podido enviar tu reporte. Inténtalo en un momento.'));
         } finally {
             setEnviando(false);
         }

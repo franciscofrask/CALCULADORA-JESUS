@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { euros } from '../lib/precios';
 import { PRECIO_REVISION } from '../lib/revision';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const RevisionPage = () => {
     const navigate = useNavigate();
@@ -36,7 +37,7 @@ const RevisionPage = () => {
             if (r.data?.checkout_url) window.location.href = r.data.checkout_url;
             else throw new Error('Sin enlace de pago');
         } catch (e) {
-            toast.error(e.response?.data?.detail || 'No hemos podido abrir el pago');
+            toast.error(mensajeDeError(e, 'No hemos podido abrir el pago'));
             setPagando(false);
         }
     };

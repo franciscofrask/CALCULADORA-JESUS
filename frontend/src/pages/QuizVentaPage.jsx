@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, ArrowRight, Check, Loader2, Phone } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import { dejarDestino } from '../lib/navegacion';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -155,7 +156,7 @@ const QuizVentaPage = () => {
             });
             setGuardado(true);
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'No hemos podido guardarlo');
+            toast.error(mensajeDeError(err, 'No hemos podido guardarlo'));
         } finally {
             setEnviando(false);
         }

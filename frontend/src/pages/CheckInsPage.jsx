@@ -10,6 +10,7 @@ import {
     Zap, Apple, Dumbbell, Scale, Send,
     Camera, Trash2, Loader2, ChevronLeft,
 } from 'lucide-react';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const ORANGE = '#FF671F';
 const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
@@ -373,7 +374,7 @@ const PhotosSection = ({ api }) => {
 
     const remove = async (id) => {
         try { await api.delete(`/reports/photos/${id}`); setPhotos(p => p.filter(x => x.id !== id)); }
-        catch (err) { toast.error(err.response?.data?.detail || 'Error borrando la foto'); }
+        catch (err) { toast.error(mensajeDeError(err, 'Error borrando la foto')); }
     };
 
     // POR MESES, Y DENTRO DEL MES POR POSE. Era una parrilla plana de todas las fotos de

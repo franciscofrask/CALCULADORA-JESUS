@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { Search, Pencil, UserX, RotateCcw, Loader2, Shield, KeyRound } from 'lucide-react';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const ROLES = [
     { value: 'client', label: 'Cliente' },
@@ -73,7 +74,7 @@ const AdminUsersPage = () => {
             toast.success('Usuario actualizado');
             setModal({ open: false, user: null });
             load();
-        } catch (e) { toast.error(e?.response?.data?.detail || 'Error al guardar'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'Error al guardar')); }
         finally { setSaving(false); }
     };
 
@@ -84,7 +85,7 @@ const AdminUsersPage = () => {
             confirmLabel: 'Dar de baja', danger: true,
         })) return;
         try { await api.delete(`/admin/users/${u.id}`); toast.success('Usuario dado de baja'); load(); }
-        catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo dar de baja'); }
+        catch (e) { toast.error(mensajeDeError(e, 'No se pudo dar de baja')); }
     };
     const restore = async (u) => {
         try { await api.post(`/admin/users/${u.id}/restore`); toast.success('Usuario reactivado'); load(); }
@@ -102,7 +103,7 @@ const AdminUsersPage = () => {
         try {
             const r = await api.post(`/admin/users/${u.id}/reset-password`);
             setResetResult({ user: u, temp_password: r.data.temp_password });
-        } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo restablecer'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo restablecer')); }
     };
     const copyResetPassword = () => {
         if (!resetResult) return;

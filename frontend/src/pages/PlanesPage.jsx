@@ -19,6 +19,7 @@ import { euros, numero } from '../lib/precios';
 import { limpiarDestino } from '../lib/navegacion';
 import { toast } from 'sonner';
 import { Check, Minus, Phone, Loader2, ArrowLeft, ArrowRight, Compass, RotateCcw } from 'lucide-react';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const ORDEN = ['nivel1', 'nivel2', 'nivel3'];
 
@@ -100,7 +101,7 @@ const PedirLlamada = ({ api, profile, onCerrar }) => {
                 recomendado: 'nivel3', quiere_llamada: true,
             });
             setHecho(true);
-        } catch (e) { toast.error(e.response?.data?.detail || 'No hemos podido guardarlo'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No hemos podido guardarlo')); }
         finally { setEnviando(false); }
     };
 
@@ -239,7 +240,7 @@ const PlanesPage = () => {
             if (r.data?.checkout_url) window.location.href = r.data.checkout_url;
             else toast.error('No hemos podido abrir el pago');
         } catch (e) {
-            toast.error(e?.response?.data?.detail || 'No hemos podido abrir el pago');
+            toast.error(mensajeDeError(e, 'No hemos podido abrir el pago'));
             setComprando(null);
         }
     };

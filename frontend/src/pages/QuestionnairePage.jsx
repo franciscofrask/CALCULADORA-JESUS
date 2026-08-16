@@ -32,6 +32,7 @@ const BIOTIPOS = [
 ];
 
 import BodyFatSlider, { BF_PERCENTAGES, BF_DEFAULT } from '../components/SelectorGrasa';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EL ALTA - cuatro preguntas y ya tiene macros (doc 29-07, paso 1).
@@ -1061,7 +1062,7 @@ const QuestionnairePage = () => {
             const r = await api.post('/clients/leer-dieta', cuerpo);
             setLecturaDieta(r.data);
         } catch (e) {
-            toast.error(e.response?.data?.detail || 'No hemos podido leer tu dieta');
+            toast.error(mensajeDeError(e, 'No hemos podido leer tu dieta'));
         } finally {
             setLeyendoDieta(false);
         }
@@ -1204,7 +1205,7 @@ const QuestionnairePage = () => {
             toast.success('¡Macros calculados!');
             goNext(); // -> pantalla de resultados
         } catch (e) {
-            toast.error(e.response?.data?.detail || 'Error al enviar el cuestionario');
+            toast.error(mensajeDeError(e, 'Error al enviar el cuestionario'));
         } finally {
             setLoading(false);
         }
@@ -1278,7 +1279,7 @@ const QuestionnairePage = () => {
             toast.success('¡Perfil completo! El equipo ya tiene toda la información.');
             navigate('/welcome');
         } catch (e) {
-            toast.error(e.response?.data?.detail || 'Error al guardar el perfil');
+            toast.error(mensajeDeError(e, 'Error al guardar el perfil'));
         } finally {
             setLoading(false);
         }

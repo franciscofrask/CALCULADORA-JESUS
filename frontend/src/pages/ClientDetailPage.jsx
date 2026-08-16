@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
 import { revisarPeso } from '../lib/pesoValido';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const USER_ROLES = [
     { value: 'client', label: 'Cliente' },
@@ -354,7 +355,7 @@ const ClientDetailPage = () => {
             toast.success(trainerId ? 'Entrenador asignado' : 'Entrenador quitado');
             fetchClient();
         } catch (e) {
-            toast.error(e.response?.data?.detail || 'No se pudo cambiar el entrenador');
+            toast.error(mensajeDeError(e, 'No se pudo cambiar el entrenador'));
         } finally { setAssigningTrainer(false); }
     };
 
@@ -422,7 +423,7 @@ const ClientDetailPage = () => {
             const r = await api.post(`/admin/clients/${clientId}/sugerir-ajuste`);
             if (r.data?.propuesta) setSugerencia(r.data);
             else toast.error('El asistente no devolvió una propuesta válida');
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo obtener la sugerencia'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo obtener la sugerencia')); }
         finally { setSugiriendo(false); }
     };
     // Vuelca la propuesta de la IA en el editor de la pestaña: el coach la ve
@@ -481,7 +482,7 @@ const ClientDetailPage = () => {
             toast.success('Evaluación guardada');
             setEvalEntry(null);
             fetchClient();
-        } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo guardar la evaluación'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo guardar la evaluación')); }
         finally { setSavingEval(false); }
     };
 
@@ -501,7 +502,7 @@ const ClientDetailPage = () => {
         const uid = client?.user?.id; if (!uid) return;
         setSavingMgmt(true);
         try { await api.put(`/admin/users/${uid}`, { role }); toast.success('Rol actualizado'); fetchClient(); }
-        catch (e) { toast.error(e?.response?.data?.detail || 'Error al cambiar el rol'); }
+        catch (e) { toast.error(mensajeDeError(e, 'Error al cambiar el rol')); }
         finally { setSavingMgmt(false); }
     };
     const setUserPlan = async (plan, comp) => {
@@ -522,7 +523,7 @@ const ClientDetailPage = () => {
             confirmLabel: 'Dar de baja', danger: true,
         })) return;
         try { await api.delete(`/admin/users/${uid}`); toast.success('Usuario dado de baja'); fetchClient(); }
-        catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo dar de baja'); }
+        catch (e) { toast.error(mensajeDeError(e, 'No se pudo dar de baja')); }
     };
 
     const macrosFormToBody = (f) => ({
@@ -593,7 +594,7 @@ const ClientDetailPage = () => {
             setSugerencia(null);
             setSugerenciaId(null);
             fetchClient();
-        } catch (error) { toast.error(error?.response?.data?.detail || 'Error al guardar'); }
+        } catch (error) { toast.error(mensajeDeError(error, 'Error al guardar')); }
         finally { setSavingMacros(false); }
     };
 
@@ -614,7 +615,7 @@ const ClientDetailPage = () => {
             setEntryModalOpen(false);
             setEditingEntryId(null);
             fetchClient();
-        } catch (error) { toast.error(error?.response?.data?.detail || 'Error al guardar'); }
+        } catch (error) { toast.error(mensajeDeError(error, 'Error al guardar')); }
         finally { setSavingEntry(false); }
     };
 
@@ -730,7 +731,7 @@ const ClientDetailPage = () => {
             await api.put(`/admin/clients/${clientId}`, { excepcion: texto });
             toast.success(texto.trim() ? 'Excepción guardada' : 'Excepción quitada');
             fetchClient();
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo guardar la excepción'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo guardar la excepción')); }
         finally { setGuardandoExcepcion(false); }
     };
 
@@ -745,7 +746,7 @@ const ClientDetailPage = () => {
             await api.delete(`/admin/supplements/version/${fecha}?client_id=${clientId}`);
             toast.success('Versión borrada');
             fetchClient();
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo borrar'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo borrar')); }
     };
 
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-48 bg-[#111] rounded-xl" /></div></div>;
@@ -1878,7 +1879,7 @@ const ReportePorElCliente = ({ api, clientId, onHecho }) => {
             setFotos([]);
             setAbierto(false);
             onHecho?.();
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo guardar el reporte'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo guardar el reporte')); }
         finally { setGuardando(false); }
     };
 
@@ -1893,7 +1894,7 @@ const ReportePorElCliente = ({ api, clientId, onHecho }) => {
                 fd, { headers: { 'Content-Type': 'multipart/form-data' } });
             setFotos(f => [...f, { ...r.data, pose }]);
             toast.success(`Foto subida${pose ? ` (${pose})` : ''}`);
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo subir la foto'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo subir la foto')); }
         finally { setSubiendo(false); }
     };
 
@@ -3021,7 +3022,7 @@ const BodyFatFoto = ({ api, clientId, fecha, valor, onGuardado }) => {
             onGuardado?.(r.data?.porcentajes_grasos || []);
             toast.success(limpio === '' ? '% graso quitado' : `% graso de ${_fechaCorta(fecha)} guardado`);
         } catch (e) {
-            toast.error(e?.response?.data?.detail || 'No se pudo guardar el % graso');
+            toast.error(mensajeDeError(e, 'No se pudo guardar el % graso'));
             setV(valor != null ? String(valor) : '');
         } finally { setGuardando(false); }
     };

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { Check, X, Pencil, Trash2, Plus, Loader2, ExternalLink, ImageOff } from 'lucide-react';
 import CategorySelect from '../components/nutrition/CategorySelect';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const STATUS_META = {
     pending: { label: 'Pendiente', cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
@@ -154,7 +155,7 @@ const AdminFoodSuggestionsPage = () => {
             toast.success('Sugerencia actualizada');
             setEditModal({ open: false, id: null });
             load();
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo guardar'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo guardar')); }
         finally { setSaving(false); }
     };
 
@@ -175,7 +176,7 @@ const AdminFoodSuggestionsPage = () => {
             await api.post(`/admin/food-suggestions/${s.id}/approve`);
             toast.success('Alimento aprobado y añadido a la calculadora');
             load();
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo aprobar'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo aprobar')); }
         finally { setBusy(null); }
     };
 
@@ -192,7 +193,7 @@ const AdminFoodSuggestionsPage = () => {
             await api.post(`/admin/food-suggestions/${s.id}/reject`, { motivo });
             toast.success('Sugerencia rechazada');
             load();
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo rechazar'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo rechazar')); }
         finally { setBusy(null); }
     };
 
@@ -207,7 +208,7 @@ const AdminFoodSuggestionsPage = () => {
             await api.delete(`/admin/food-suggestions/${s.id}`);
             setItems(prev => prev.filter(x => x.id !== s.id));
             toast.success('Sugerencia eliminada');
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo eliminar'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo eliminar')); }
         finally { setBusy(null); }
     };
 
@@ -228,7 +229,7 @@ const AdminFoodSuggestionsPage = () => {
             toast.success('Alimento añadido a la calculadora');
             setAddModal(false);
             setAddForm(emptyFood);
-        } catch (e) { toast.error(e.response?.data?.detail || 'No se pudo crear el alimento'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo crear el alimento')); }
         finally { setSaving(false); }
     };
 

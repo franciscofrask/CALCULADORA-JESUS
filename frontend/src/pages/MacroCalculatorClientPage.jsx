@@ -7,6 +7,7 @@ import { seLeOfreceLaRevision } from '../lib/revision';
 import { MACRO } from './ClientDashboard';
 import DesgloseChips from '../components/DesgloseChips';
 import MisMacrosPage from './MisMacrosPage';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 // Fecha de HOY en la zona del usuario. Con toISOString() (que es UTC) a partir de las
 // 22:00 en Espana el "hoy" saltaba al dia siguiente.
@@ -198,7 +199,7 @@ const MacroCalculatorClientPage = () => {
             }
             setNote('');
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'Error guardando macros');
+            toast.error(mensajeDeError(err, 'Error guardando macros'));
         } finally {
             setSaving(false);
         }
@@ -287,7 +288,7 @@ const MacroCalculatorClientPage = () => {
             // y quedaba fuera de pantalla justo en el momento más importante del alta.
             setTimeout(() => refResultados.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'Error calculando macros');
+            toast.error(mensajeDeError(err, 'Error calculando macros'));
         } finally { setLoading(false); }
     };
 

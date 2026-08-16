@@ -9,6 +9,7 @@ import { Check, ArrowRight, ArrowLeft, Loader2, Star } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import { habilitacionesToList } from '../lib/planAccess';
 import { formatEuros } from '../lib/precios';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 // Presentación de cada plan (orden, badge, descripción comercial). Los datos reales
 // (nombre, precios, qué incluye) vienen del catálogo del backend (GET /api/plans),
@@ -125,8 +126,10 @@ const OnboardingPage = () => {
         } catch (error) {
             // Los errores de configuración del servidor (5xx) no se enseñan en crudo al usuario
             const status = error.response?.status || 0;
-            const detail = error.response?.data?.detail;
-            toast.error(status >= 500 || !detail ? 'No se pudo iniciar el pago. Inténtalo en un momento.' : detail);
+            const generico = 'No se pudo iniciar el pago. Inténtalo en un momento.';
+            // `mensajeDeError` se encarga de que nunca salga un objeto: si el servidor
+            // rechaza un dato, lo que llega es la lista de errores de validación.
+            toast.error(status >= 500 ? generico : mensajeDeError(error, generico));
             setLoading(false);
         }
     };

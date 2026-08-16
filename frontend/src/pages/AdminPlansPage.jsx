@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { Layers, Pencil, RotateCcw, Check, X } from 'lucide-react';
 import { queIncluyeElPlan, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia, etiquetaCalculadora } from '../lib/planAccess';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 // Orden y etiquetas de las categorías (pestañas del catálogo original).
 const ESTADOS = [
@@ -278,7 +279,7 @@ const AdminPlansPage = () => {
             setForm(null);
             load();
         } catch (e) {
-            toast.error(e?.response?.data?.detail || 'Error al guardar');
+            toast.error(mensajeDeError(e, 'Error al guardar'));
         } finally {
             setSaving(false);
         }

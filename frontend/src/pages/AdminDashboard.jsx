@@ -21,6 +21,7 @@ import {
     AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple, Layers,
     Menu, X, Phone, Receipt
 } from 'lucide-react';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 // Colores para el desglose por plan (cualquier plan sin color cae en el gris).
 const PLAN_COLORS = {
@@ -286,7 +287,7 @@ const AdminDashboard = () => {
             }
             setLlamadas(prev => prev.filter(x => x.id !== l.id));
         } catch (e) {
-            toast.error(e?.response?.data?.detail || 'No se pudo crear el enlace de pago');
+            toast.error(mensajeDeError(e, 'No se pudo crear el enlace de pago'));
         } finally {
             setGenerandoEnlace(null);
         }
@@ -1006,7 +1007,7 @@ const AdminClientsList = () => {
             toast.success('Cliente asignado');
             fetchClients();
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'No se pudo asignar el cliente');
+            toast.error(mensajeDeError(err, 'No se pudo asignar el cliente'));
         }
     };
 

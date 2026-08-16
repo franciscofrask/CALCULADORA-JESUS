@@ -19,6 +19,7 @@ import {
     Compass, SlidersHorizontal, Bot, Search, Pill, ClipboardCheck, MessageCircle,
     ChevronDown, Bell
 } from 'lucide-react';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 // "Mejorar mi plan" OCULTO (petición 2026-07-06): el checkout de upgrade no existe aún
 // (pagos reales pospuestos). Poner a true cuando se habiliten pagos.
@@ -52,7 +53,7 @@ const ProfilePage = () => {
             toast.success('Perfil actualizado');
             setEditing(false);
         } catch (error) {
-            toast.error(error.response?.data?.detail || 'Error al actualizar el perfil');
+            toast.error(mensajeDeError(error, 'Error al actualizar el perfil'));
         } finally {
             setSaving(false);
         }
@@ -72,7 +73,7 @@ const ProfilePage = () => {
             setShowPasswordDialog(false);
             setPwdForm({ current: '', next: '', confirm: '' });
         } catch (error) {
-            toast.error(error.response?.data?.detail || 'Error al cambiar la contraseña');
+            toast.error(mensajeDeError(error, 'Error al cambiar la contraseña'));
         } finally {
             setChangingPwd(false);
         }

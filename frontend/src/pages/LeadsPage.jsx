@@ -16,6 +16,7 @@ import {
     ArrowRight, UserPlus, Trash2, X, Search, Filter, BarChart3
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { mensajeDeError } from '../lib/mensajeDeError';
 
 const STATUSES = [
     { id: 'nuevo', label: 'Nuevo', color: '#3B82F6', bg: 'bg-blue-500/10 text-blue-400' },
@@ -180,7 +181,7 @@ const LeadsPage = () => {
             const res = await api.put(`/leads/${leadId}`, { [field]: value });
             setLeads(prev => prev.map(l => l.id === leadId ? res.data : l));
             if (detailLead?.id === leadId) setDetailLead(res.data);
-        } catch (e) { toast.error(e.response?.data?.detail || 'Error actualizando'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'Error actualizando')); }
     };
 
     // Drag & drop del kanban (API nativa HTML5)
@@ -206,7 +207,7 @@ const LeadsPage = () => {
             setDetailLead(addEntry);
             setLeads(prev => prev.map(l => l.id === detailLead.id ? addEntry(l) : l));
             setActivityText('');
-        } catch (e) { toast.error(e.response?.data?.detail || 'Error guardando la nota'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'Error guardando la nota')); }
     };
     const handleDeleteActivity = async (entryId) => {
         if (!detailLead) return;
@@ -226,7 +227,7 @@ const LeadsPage = () => {
             setNewLeadOpen(false);
             setNewLead({ name: '', email: '', phone: '', source: 'instagram', notes: '', assigned_to: '' });
             fetchLeads();
-        } catch (e) { toast.error(e.response?.data?.detail || 'Error'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'Error')); }
     };
 
     // Descarte con motivo
@@ -261,7 +262,7 @@ const LeadsPage = () => {
             if (detailLead?.id === discardLead.id) setDetailLead(updated);
             setDiscardLead(null);
             toast.success('Lead descartado');
-        } catch (e) { toast.error(e.response?.data?.detail || 'Error descartando'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'Error descartando')); }
     };
 
     const handleUpdateNotes = async (leadId, notes) => {
@@ -279,7 +280,7 @@ const LeadsPage = () => {
             setConvertResult(res.data);
             setDetailLead(null);
             fetchLeads();
-        } catch (e) { toast.error(e.response?.data?.detail || 'Error convirtiendo'); }
+        } catch (e) { toast.error(mensajeDeError(e, 'Error convirtiendo')); }
     };
 
     const closeConvert = () => { setConvertLead(null); setConvertResult(null); setConvertTrainer(''); };

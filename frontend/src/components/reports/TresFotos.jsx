@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2, Check } from 'lucide-react';
+import { mensajeDeError } from '../../lib/mensajeDeError';
 
 const POSES = [
     { key: 'frente', label: 'De frente', ayuda: 'Brazos relajados a los lados, de pie y recto. Sin meter tripa.' },
@@ -66,7 +67,7 @@ const TresFotos = ({ api, token, esMensual = true }) => {
             toast.success('Foto subida');
             cargar();
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'No hemos podido subirla');
+            toast.error(mensajeDeError(err, 'No hemos podido subirla'));
         } finally {
             setSubiendo(null);
         }
