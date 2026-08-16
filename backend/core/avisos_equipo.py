@@ -28,7 +28,35 @@ permiso y esto es a quien se le da un toque.
 """
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+
+
+# EL CATALOGO DE LO QUE SE LE PUEDE AVISAR AL EQUIPO.
+#
+# Existe porque los avisos del equipo y los del cliente comparten coleccion
+# (`db.notifications`) y solo se distinguen por el `type`. Sin esta lista, la campanita del
+# panel tendria que adivinar cuales son suyos, y el dia que alguien anada un aviso nuevo se
+# quedaria fuera sin que nadie se entere.
+#
+# `dinero` marca los que son una venta: o el cliente esta pidiendo comprar algo, o ya ha
+# pagado y falta darselo. Esos se pintan aparte y arriba del todo. Perder uno no es perder
+# un recordatorio, es perder un cobro.
+TIPOS_EQUIPO: Dict[str, Dict[str, Any]] = {
+    "rutina_del_mes": {"etiqueta": "Quiere comprar la rutina del mes", "dinero": True},
+    "interes_plan": {"etiqueta": "Quiere que le cuentes el plan de arriba", "dinero": True},
+    "revision_suelta_pagada": {"etiqueta": "Revisión de macros pagada", "dinero": True},
+    "lead_pagado": {"etiqueta": "Lead que ha pagado", "dinero": True},
+    "macros_propuestos": {"etiqueta": "Macros propuestos por el cuestionario", "dinero": False},
+    "perfil_completo": {"etiqueta": "Cuestionario largo relleno", "dinero": False},
+}
+
+# Los que hay que mirar antes que nada, en el orden en que se pintan.
+TIPOS_DE_DINERO: List[str] = [t for t, d in TIPOS_EQUIPO.items() if d["dinero"]]
+
+
+def es_de_dinero(tipo: Optional[str]) -> bool:
+    """¿Este aviso es una venta esperando a que alguien la atienda?"""
+    return bool(TIPOS_EQUIPO.get(tipo or "", {}).get("dinero"))
 
 
 async def avisar_al_equipo(
@@ -53,6 +81,12 @@ async def avisar_al_equipo(
         "message": mensaje,
         "client_id": client_id,
         "read": False,
+        # La marca de que esto es del EQUIPO y no del cliente. El `type` ya lo dice (ver
+        # TIPOS_EQUIPO), pero un tipo nuevo que alguien anada sin acordarse de apuntarlo
+        # arriba se quedaria fuera de la campanita del panel y nadie lo notaria: con la
+        # marca puesta aqui, cualquier aviso que salga de esta funcion se pinta si o si.
+        # Los que ya estaban escritos antes de que existiera la marca entran por el `type`.
+        "equipo": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
         **(extra or {}),
     }
