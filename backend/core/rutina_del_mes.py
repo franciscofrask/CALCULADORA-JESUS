@@ -27,10 +27,11 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 # ── PRECIO ────────────────────────────────────────────────────────────────────
-# 57 EUR, del documento de Jesús del 16-08. OJO: el catálogo de planes tiene la "Rutina del
-# Mes" suelta a 55 EUR (`rutina_mes` en models/user.py); son dos cosas distintas -- aquella
-# es la compra suelta y esta es la del reporte -- y hasta que Jesús diga lo contrario cada
-# una mantiene su precio. Si se unifican, este número sale de allí.
+# 57 EUR, del documento de Jesús del 16-08. Es el MISMO precio que el del catálogo
+# (`rutina_mes` en models/user.py), que estaba a 55 y lo cerró Francisco el 16-08: son dos
+# puertas al mismo producto -- la compra suelta y la del reporte -- y un cliente no puede
+# verlo a un precio y pagar otro. Este es el número que se cobra; el del catálogo es el que
+# se enseña, y `test_cobro_rutina_del_mes` no deja que se separen.
 PRECIO_EUR = 57.0
 NOMBRE_PRODUCTO = "La rutina del mes"
 DESCRIPCION = "Tu rutina del mes, con el ajuste nuevo de tus macros."

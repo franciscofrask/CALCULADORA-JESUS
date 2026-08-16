@@ -161,3 +161,15 @@ def test_en_live_bloqueado_no_cobra(monkeypatch):
 def test_el_precio_es_el_del_documento():
     assert rm.PRECIO_EUR == 57.0
     assert rm.importe_centimos() == 5700
+
+
+def test_el_precio_que_se_enseña_es_el_que_se_cobra():
+    """La rutina del mes se vende por dos puertas -- la compra suelta del catálogo y el
+    bloque del reporte mensual -- y un cliente no puede verla a un precio y que se le cobre
+    otro. Si alguien cambia uno, esto avisa (Francisco, 16-08: los dos a 57)."""
+    from models.user import PLAN_CATALOG
+
+    catalogo = PLAN_CATALOG["rutina_mes"]
+    assert catalogo["precio"] == rm.PRECIO_EUR
+    assert all(p["importe"] == rm.PRECIO_EUR for p in catalogo["precios"])
+    assert f"{rm.PRECIO_EUR:.0f}€" in catalogo["precio_nota"]

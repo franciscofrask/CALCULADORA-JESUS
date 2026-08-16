@@ -326,8 +326,12 @@ PLAN_CATALOG = {
     "rutina_mes": {
         "name": "Rutina del Mes", "estado": "complemento", "asignable": False,
         "ciclo": {"tipo": "unico", "semanas": None},
-        "precio": 55.0, "precio_nota": "55€ (pago único)",
-        "precios": [{"label": "Único", "importe": 55.0, "periodo": "único"}],
+        # 57 EUR: el mismo precio que se cobra desde el reporte mensual (T8 del doc del
+        # 16-08). Estaba a 55 y eran dos puertas al mismo producto con dos precios; lo
+        # cierra Francisco el 16-08. El número de verdad, el que se cobra, vive en
+        # `core/rutina_del_mes.PRECIO_EUR`, y un test vigila que estos dos no se separen.
+        "precio": 57.0, "precio_nota": "57€ (pago único)",
+        "precios": [{"label": "Único", "importe": 57.0, "periodo": "único"}],
         "responsable": "Operaciones",
         "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "del_mes",
                             "reportes": [], "suplementacion": False, "harbiz": False},
