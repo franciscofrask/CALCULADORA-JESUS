@@ -41,8 +41,10 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     if not plan_grants_feature(profile.get("plan"), "reportes"):
         raise HTTPException(status_code=403, detail="Tu plan no incluye reportes de seguimiento.")
 
-    # Ventana de envío (viernes 00:00 -> lunes 06:00): fuera de ella se bloquea.
-    from routes.report_cadence import compute_client_report_state, _fecha_es
+    # Ventana de envío: fuera de ella se bloquea. Cada reporte tiene la suya (el quincenal
+    # de miércoles a jueves, el mensual de viernes a lunes), así que lo que se le dice al
+    # cliente sale de SU ventana y no de una frase fija.
+    from routes.report_cadence import compute_client_report_state, _fecha_es, _hora_es
     from routes.plans import _overrides_by_code
     from models.user import merged_catalog
     now = datetime.now(timezone.utc)
@@ -50,7 +52,13 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     if not state["due"]:
         raise HTTPException(status_code=403, detail="Esta semana no toca reporte. Te avisaremos cuando abra la ventana.")
     if now < state["window_open"]:
-        raise HTTPException(status_code=403, detail=f"Tu reporte se rellena el fin de semana. La ventana abre el {_fecha_es(state['window_open'])}.")
+        # Decía «se rellena el fin de semana», que es verdad para el mensual y mentira para
+        # el quincenal: ese se rellena el miércoles y el jueves.
+        raise HTTPException(
+            status_code=403,
+            detail=f"Todavía no toca: se abre el {_fecha_es(state['window_open'])} "
+                   f"a las {_hora_es(state['window_open'])} y lo tienes hasta el "
+                   f"{_fecha_es(state['window_close'])} a las {_hora_es(state['window_close'])}.")
     if now > state["window_close"]:
         raise HTTPException(status_code=403, detail="La ventana de esta semana ya se cerró. Espera a la semana que viene.")
 
