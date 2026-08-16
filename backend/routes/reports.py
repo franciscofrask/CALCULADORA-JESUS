@@ -11,15 +11,30 @@ from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import plan_grants_feature
 from core.series_cliente import anotar_peso
 from core.sin_futuro import hasta_hoy
+from core.tiempo import a_madrid, hoy_madrid
 from models.common import ReportCreate, ReportResponse
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+# CUÁNTO PERIODO MIRA CADA REPORTE (doc 16-08, T7 y T8).
+#
+# El quincenal habla de las dos últimas semanas ("de los 6 que tenías") y el mensual del
+# mes ("25 de 28 días"). Va por ventana fija y no por "desde el reporte anterior": a un
+# cliente con quincenal, el mensual caería a catorce días del anterior y su "este mes"
+# serían dos semanas. El único recorte es el arranque, para no pedirle cuentas de un mes
+# en el que todavía no era cliente.
+DIAS_DEL_PERIODO = {"quincenal": 14, "mensual": 28, "semanal": 7}
 # Rutas del equipo sobre el reporte de un cliente (punto 45): meterlo en su nombre.
 admin_router = APIRouter(prefix="/admin", tags=["admin-reports"])
 
-@router.post("", response_model=ReportResponse)
+@router.post("")
 async def create_report(data: ReportCreate, user = Depends(get_current_user)):
-    """Crear un reporte de seguimiento."""
+    """Crear un reporte de seguimiento.
+
+    Devuelve el reporte MAS lo que la pantalla de "enviado" tiene que decirle (T9): si su
+    plan lleva feedback y, con eso, qué se le promete y para cuándo. Por eso ya no lleva
+    `response_model`: el modelo describe el reporte guardado, no la respuesta al envío.
+    """
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
@@ -103,6 +118,21 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "proximo_objetivo": data.proximo_objetivo,
         "viabilidad_ajuste": data.viabilidad_ajuste,
         "cumplimiento_entreno": data.cumplimiento_entreno,
+        # Lo que trae el formulario nuevo (T7 y T8). El `tipo` que manda es el del
+        # calendario, no el que diga el front: es el servidor quien sabe qué semana es.
+        "tipo": (state["tipos"] or [data.tipo])[0] if (state["tipos"] or data.tipo) else None,
+        "molestias": (data.molestias or "").strip() or None,
+        "sensaciones": data.sensaciones,
+        "dieta_dificultad": data.dieta_dificultad,
+        "entreno": data.entreno.model_dump() if data.entreno else None,
+        "lesiones": [l.model_dump() for l in data.lesiones] if data.lesiones else None,
+        "lesion_nueva": (data.lesion_nueva or "").strip() or None,
+        "cardio_proximo_mes": data.cardio_proximo_mes,
+        "suplementacion": data.suplementacion.model_dump() if data.suplementacion else None,
+        "energia_motivo": data.energia_motivo,
+        "valoracion_resultado": data.valoracion_resultado,
+        "motivacion": data.motivacion,
+        "sugerencias": (data.sugerencias or "").strip() or None,
         "trainer_feedback": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -123,9 +153,113 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         if profile.get("goal") != data.proximo_objetivo:
             set_perfil["goal"] = data.proximo_objetivo
             set_perfil["fase_desde"] = report["created_at"][:10]
-    await db.client_profiles.update_one({"id": profile["id"]}, {"$set": set_perfil})
 
-    return ReportResponse(**report)
+    # LAS LESIONES SE QUEDAN EN EL PERFIL, NO SOLO EN EL REPORTE (T8, bloque 06).
+    # Es lo que hace que el mes que viene salga "LO QUE YA ME CONTASTE" en vez de una
+    # hoja en blanco. Las superadas se guardan igual, con su estado: así se sabe que se
+    # cerró y no se le vuelve a preguntar (`lesiones_del_perfil` las filtra).
+    if data.lesiones is not None:
+        set_perfil["lesiones"] = [
+            {"zona": l.zona, "desde": l.desde, "estado_mes": l.estado_mes,
+             "ejercicios_vetados": l.ejercicios, "actualizado": report["created_at"][:10]}
+            for l in data.lesiones
+        ]
+    await db.client_profiles.update_one({"id": profile["id"]}, {"$set": set_perfil})
+    # Y el perfil que se lleva el informe es el de DESPUÉS: si acaba de cambiar de fase,
+    # la foto de "inicio de fase" es la de ahora, no la de la fase que deja atrás.
+    profile.update(set_perfil)
+
+    # El aplazamiento se cierra al mandarlo: si ya está el reporte, no hay nada que correr.
+    if profile.get("reporte_aplazado_hasta"):
+        await db.client_profiles.update_one(
+            {"id": profile["id"]},
+            {"$unset": {"reporte_aplazado_hasta": "", "reporte_aplazado_tipo": ""}})
+
+    await _avisar_de_lo_que_pidio(profile, user, data)
+
+    # EL INFORME SE GENERA AL ENVIAR (T9). Hasta ahora se montaba al vuelo cada vez que
+    # alguien abría la pantalla, así que no existía como cosa: no se podía revisar, ni
+    # tenía estado, ni había nada que publicar. Se guarda con `pendiente_revision` y no
+    # sale hasta que el coach lo publica.
+    #
+    # Solo con el MENSUAL: el informe es del mes -- compara fotos, medidas y el ritmo de
+    # cuatro semanas -- y en el quincenal no hay nada nuevo que comparar. Generarlo
+    # también allí solo serviría para dejar el informe del mes escondido detrás de un
+    # "pendiente de revisión" que nadie ha prometido.
+    #
+    # "Sin fotos no hay informe" sigue mandando: si no las subió, `montar_informe`
+    # devuelve `generado: False` y eso es lo que se guarda -- el equipo lo ve al abrirlo
+    # y sabe por qué no hay informe que revisar.
+    if report.get("tipo") == "mensual":
+        try:
+            informe = await _montar_informe_del_reporte(report, profile)
+            await db.reports.update_one(
+                {"id": report_id},
+                {"$set": {"informe": informe, "informe_estado": "pendiente_revision",
+                          "informe_generado_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            report["informe_estado"] = "pendiente_revision"
+        except Exception as e:      # noqa: BLE001
+            # Un informe que no se puede montar no puede tumbar el envío del reporte: lo
+            # que no se puede perder es lo que ha escrito el cliente. El detalle, a la
+            # consola del servidor.
+            print(f"[reportes] no se pudo montar el informe de {report_id}: {e}")
+
+    # LO QUE SE LE PROMETE AL TERMINAR, QUE NO ES IGUAL PARA TODOS (T9).
+    #
+    # Quien lleva alguien detrás recibe el informe completo con su feedback, y eso tarda
+    # hasta el sábado; el resto recibe sus ajustes, y esos están el viernes. Los dos
+    # textos son los del doc, literales, y los pinta la pantalla de "enviado".
+    #
+    # En el QUINCENAL se promete lo mismo a todos -- ajustes -- porque el informe es del
+    # mes: prometerle el sábado un informe completo por un reporte de dos semanas sería
+    # prometer algo que no llega (regla 4 del doc: nunca prometer lo que no se sabe).
+    hab = await _habilitaciones_de(profile)
+    lleva_feedback = "quincenal" in (hab.get("reportes") or [])
+    respuesta = ReportResponse(**report).model_dump()
+    respuesta["lleva_feedback"] = lleva_feedback
+    respuesta["mensaje_envio"] = (
+        "Antes del sábado tienes tu informe completo con mi feedback y tus ajustes. Te aviso por aquí."
+        if lleva_feedback and report.get("tipo") == "mensual" else
+        "Antes del viernes tienes tus ajustes nuevos. Te aviso por aquí.")
+    return respuesta
+
+
+async def _avisar_de_lo_que_pidio(profile: dict, user: dict, data: ReportCreate) -> None:
+    """Lo que el cliente pide EN el reporte y alguien tiene que atender (T8, bloque 05).
+
+    Son dos cosas y las dos son del plan sin rutina: la rutina del mes y el interés por
+    el plan de arriba. Van a la campana del equipo porque no las resuelve la app: alguien
+    tiene que montarle la rutina y alguien tiene que llamarle.
+
+    EL CARGO DE LOS 57 EUR NO SE DISPARA AQUI. El price de Stripe todavía no existe (lo
+    crea Francisco, ver el plan del 16-08), y cobrar de otra manera sería inventarse un
+    cobro. El cliente marca que la quiere, queda en su reporte y en el aviso, y el cobro
+    se enchufa cuando exista el price: es el único sitio que hay que tocar.
+    """
+    entreno = data.entreno
+    if not entreno:
+        return
+    from core.avisos_equipo import avisar_al_equipo
+
+    nombre = user.get("name") or user.get("email") or "Un cliente"
+    if entreno.rutina_del_mes in ("basica", "avanzada"):
+        modalidad = "básica" if entreno.rutina_del_mes == "basica" else "avanzada"
+        await avisar_al_equipo(
+            db, tipo="rutina_del_mes",
+            titulo="Quiere la rutina del mes",
+            mensaje=f"{nombre} ha marcado la rutina del mes en modalidad {modalidad} (57 €) "
+                    f"en su reporte. El cobro NO está hecho: falta el price de Stripe.",
+            client_id=profile["id"], trainer_id=profile.get("trainer_id"),
+            extra={"modalidad": entreno.rutina_del_mes, "cobrado": False},
+        )
+    if entreno.quiere_saber_del_silver:
+        await avisar_al_equipo(
+            db, tipo="interes_plan",
+            titulo="Quiere que le cuentes el plan de arriba",
+            mensaje=f"{nombre} ha marcado «Cuéntame el Silver» en su reporte mensual.",
+            client_id=profile["id"], trainer_id=profile.get("trainer_id"),
+        )
 
 @admin_router.post("/clients/{client_id}/reporte", response_model=ReportResponse)
 async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
@@ -272,6 +406,157 @@ async def get_confirmacion_huecos(user = Depends(get_current_user)):
     return huecos_del_periodo(dias_periodo, dias_dieta, dias_entreno, previstos)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# EL FORMULARIO (T7 y T8): qué le toca rellenar y con qué datos delante
+# ════════════════════════════════════════════════════════════════════════════
+
+async def _habilitaciones_de(perfil: dict) -> dict:
+    """Las habilitaciones vivas de su plan (las del catálogo con lo editado en el panel)."""
+    from routes.plans import _overrides_by_code
+    from models.user import codigo_de_plan, merged_catalog
+    catalogo = merged_catalog(await _overrides_by_code())
+    return (catalogo.get(codigo_de_plan(perfil.get("plan"))) or {}).get("habilitaciones") or {}
+
+
+def _periodo_del_reporte(perfil: dict, tipo: str):
+    """(desde, hasta) del periodo del que habla el reporte, en días de España."""
+    hasta = hoy_madrid()
+    desde = hasta - timedelta(days=DIAS_DEL_PERIODO.get(tipo, 28) - 1)
+    arranque = perfil.get("arranque_lunes") or perfil.get("created_at")
+    if arranque:
+        try:
+            d = datetime.fromisoformat(str(arranque).replace("Z", "+00:00")).date()
+            desde = max(desde, d)
+        except (ValueError, TypeError):
+            pass
+    return desde, hasta
+
+
+@router.get("/formulario")
+async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(get_current_user)):
+    """TODO lo que el formulario necesita antes de preguntar nada (doc 16-08, T7 y T8).
+
+    Devuelve qué reporte toca, qué bloques lleva ESE cliente y los datos que la app ya
+    sabe: los días que registró la dieta, los entrenos que hizo de los que tenía, su
+    energía, sus lesiones y su último peso. La regla 5 del doc, entera: "si la app ya
+    sabe algo, se lo dice; solo se pregunta lo que no se puede saber".
+
+    `tipo` solo se acepta para poder repasar el formulario fuera de su semana (modo
+    revisión del equipo); si no viene, manda el calendario.
+    """
+    from core.datos_reporte import bloques_del_mensual, datos_del_reporte, perfil_de_reporte
+
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    hab = await _habilitaciones_de(perfil)
+    reportes = hab.get("reportes") or []
+    if tipo not in ("quincenal", "mensual", "semanal"):
+        from routes.report_cadence import compute_client_report_state
+        from routes.plans import _overrides_by_code
+        from models.user import merged_catalog
+        estado = compute_client_report_state(
+            perfil, merged_catalog(await _overrides_by_code()), datetime.now(timezone.utc))
+        tipo = (estado["tipos"] or ["mensual"])[0]
+
+    perfil_rep = perfil_de_reporte(hab)
+    d0, d1 = _periodo_del_reporte(perfil, tipo)
+    datos = await datos_del_reporte(perfil, tipo, d0, d1)
+
+    bloques = bloques_del_mensual(perfil_rep) if tipo == "mensual" else [
+        "entreno_previo", "peso", "molestias", "sensaciones", "libre"]
+    # SE MIRA EL DATO, NO EL PLAN (regla 3 del doc): sin rutina cargada, el bloque del
+    # entreno no tiene ni dato que enseñar ni pregunta que hacer, así que no sale y los de
+    # abajo se renumeran solos. El del plan sin rutina SÍ se queda: ahí ese bloque no
+    # habla de lo que entrenó, es donde va la rutina del mes.
+    if (tipo == "mensual" and perfil_rep != "sin_rutina"
+            and not (datos.get("entreno") or {}).get("tiene_rutina")):
+        bloques = [b for b in bloques if b != "entreno"]
+    # LA ENERGÍA SOLO SI LA LLEVA BAJA ("si va bien, no aparece"). Se quita de la lista y
+    # no solo de la pantalla para que los bloques de abajo se renumeren: un reporte que
+    # salta del 06 al 08 parece que se ha perdido algo por el camino.
+    if tipo == "mensual" and not (datos.get("cierres") or {}).get("energia_baja"):
+        bloques = [b for b in bloques if b != "energia"]
+
+    return {
+        "tipo": tipo,
+        # Cuál de los tres mensuales le toca: completo / con_rutina / sin_rutina.
+        "perfil": perfil_rep,
+        "bloques": bloques,
+        # Si su plan lleva alguien detrás que le escriba el informe. De esto depende lo
+        # que se le promete al enviar: ajustes (viernes) o informe con feedback (sábado).
+        "lleva_feedback": "quincenal" in reportes,
+        "datos": datos,
+        # Si ya lo aplazó este mes, para que la casilla salga marcada y no lo aplace dos veces.
+        "aplazado_hasta": perfil.get("reporte_aplazado_hasta"),
+    }
+
+
+@router.post("/aplazar")
+async def aplazar_reporte(user=Depends(get_current_user)):
+    """"¿No has podido hacer el programa completo estas 3 semanas? Márcalo y te lo aplazo
+    7 días." (doc 16-08, T8, cabecera de los tres).
+
+    Guarda hasta cuándo se le corre la ventana en su perfil y deja el aviso de
+    confirmación. La ventana de envío la sigue mandando `report_cadence`, que es quien
+    tiene que leer este campo: aquí solo se escribe.
+
+    Lo pide él, no se deduce de que no conteste un correo: es la diferencia entre
+    organizarse y quedarse fuera.
+    """
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    from routes.report_cadence import compute_client_report_state
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+
+    ahora = datetime.now(timezone.utc)
+    estado = compute_client_report_state(
+        perfil, merged_catalog(await _overrides_by_code()), ahora)
+    if not estado["due"]:
+        raise HTTPException(status_code=403,
+                            detail="Esta semana no te toca reporte, así que no hay nada que aplazar.")
+
+    # Siete días desde el cierre de SU ventana, no desde hoy: aplazarlo el viernes y
+    # aplazarlo el domingo tienen que dejarle el mismo plazo nuevo.
+    hasta = estado["window_close"] + timedelta(days=7)
+    ya_aplazado = perfil.get("reporte_aplazado_hasta")
+    if ya_aplazado and str(ya_aplazado) >= hasta.isoformat():
+        # Ya lo aplazó: se le contesta con lo que tiene, sin correrle la fecha otra vez.
+        hasta = datetime.fromisoformat(str(ya_aplazado).replace("Z", "+00:00"))
+    else:
+        await db.client_profiles.update_one(
+            {"id": perfil["id"]},
+            {"$set": {"reporte_aplazado_hasta": hasta.isoformat(),
+                      # QUÉ reporte se aplazó, no solo hasta cuándo: la semana que viene
+                      # puede que no le toque ninguno, y sin esto la ventana ampliada no
+                      # sabría de qué reporte está hablando.
+                      "reporte_aplazado_tipo": (estado["tipos"] or [None])[0],
+                      "reporte_aplazado_at": ahora.isoformat()}},
+        )
+
+    # El aviso de confirmación del doc (T10, "el de confirmación"). El texto no se escribe
+    # aquí: vive con los demás, que es lo que evita dos redacciones de la misma frase.
+    from routes.notifications import avisar_reporte_aplazado
+    await avisar_reporte_aplazado(user["id"])
+
+    local = a_madrid(hasta)
+    return {
+        "ok": True,
+        "hasta": hasta.isoformat(),
+        "hasta_label": f"{local.day} de {_MESES_LARGOS[local.month - 1]}" if local else None,
+        "titulo": "Te lo he aplazado 7 días",
+        "mensaje": "Tu reporte se vuelve a abrir el viernes que viene. Sigue registrando como siempre.",
+    }
+
+
+_MESES_LARGOS = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+                 "septiembre", "octubre", "noviembre", "diciembre")
+
+
 @router.get("/evolution")
 async def get_evolution_data(user = Depends(get_current_user)):
     """Obtener datos de evolución para gráficos."""
@@ -370,10 +655,14 @@ async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
     apartados. No calcula nada de macros: eso ya esta hecho y guardado.
 
     Lo puede pedir el propio cliente o su coach.
-    """
-    from core.informe_mensual import montar_informe
-    from core.plan_access import plan_grants_feature  # noqa: F401  (mismo modulo que arriba)
 
+    EL INFORME NO SALE HASTA QUE JESUS LO REVISA (doc 16-08, T9). Desde que se genera al
+    enviar el reporte, el informe se guarda con `informe_estado`. Mientras esté en
+    "pendiente_revision" el CLIENTE no lo ve: se le prometió "antes del sábado, con mi
+    feedback", y enseñarle antes el montado a secas es entregarle media promesa. El
+    equipo lo ve siempre (es lo que tiene que revisar) y los reportes viejos -- que no
+    tienen estado -- se siguen montando al vuelo como hasta ahora.
+    """
     reporte = await db.reports.find_one({"id": report_id}, {"_id": 0})
     if not reporte:
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
@@ -382,9 +671,30 @@ async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
     if not perfil:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
-    # El cliente ve el suyo; el staff, el de cualquiera de sus clientes.
-    if perfil.get("user_id") != user["id"] and user.get("role") not in ("admin", "trainer"):
+    es_del_equipo = user.get("role") in ("admin", "trainer")
+    if perfil.get("user_id") != user["id"] and not es_del_equipo:
         raise HTTPException(status_code=403, detail="Este informe no es tuyo")
+
+    if not es_del_equipo and reporte.get("informe_estado") == "pendiente_revision":
+        return {"generado": False, "motivo": "pendiente_revision",
+                "mensaje": "Tu informe está en camino. Te aviso por aquí en cuanto esté."}
+
+    # Ya montado y publicado: se devuelve tal cual se guardó. Un informe es la foto de un
+    # momento, y recalcularlo meses después lo cambiaría con datos que entonces no había.
+    if reporte.get("informe") and (es_del_equipo or reporte.get("informe_estado") == "entregado"):
+        return reporte["informe"]
+
+    return await _montar_informe_del_reporte(reporte, perfil)
+
+
+async def _montar_informe_del_reporte(reporte: dict, perfil: dict) -> dict:
+    """Junta de la base todo lo que necesita `montar_informe` y lo monta.
+
+    Estaba dentro del GET, y desde T9 hace falta también al ENVIAR el reporte: el informe
+    se genera solo en ese momento y se guarda con su estado, en vez de montarse cada vez
+    que alguien abre la pantalla.
+    """
+    from core.informe_mensual import montar_informe
 
     anterior = await db.reports.find_one(
         {"client_id": reporte["client_id"], "created_at": {"$lt": reporte["created_at"]}},
@@ -500,19 +810,64 @@ async def _actividad_del_periodo(perfil: dict, desde: Optional[str], hasta: Opti
 
 @router.put("/{report_id}/feedback")
 async def set_report_feedback(report_id: str, data: dict, user = Depends(get_admin_user)):
-    """El coach escribe (o edita) el feedback de un reporte del cliente."""
+    """El coach escribe (o edita) el feedback de un reporte del cliente.
+
+    Si el informe todavía está por publicar, el feedback NO avisa al cliente: el aviso lo
+    da el botón de publicar, cuando el informe entero está listo. Avisar aquí sería
+    llamarle para enseñarle algo que aún no puede ver (T9).
+    """
     feedback = (data.get("feedback") or "").strip()
-    report = await db.reports.find_one({"id": report_id}, {"_id": 0, "client_id": 1})
+    report = await db.reports.find_one({"id": report_id}, {"_id": 0, "client_id": 1,
+                                                           "informe_estado": 1})
     if not report:
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
     await db.reports.update_one(
         {"id": report_id}, {"$set": {"trainer_feedback": feedback or None}}
     )
 
-    if feedback:
+    if feedback and report.get("informe_estado") != "pendiente_revision":
         profile = await db.client_profiles.find_one({"id": report["client_id"]}, {"_id": 0, "user_id": 1})
         if profile:
             from routes.notifications import notify
             await notify(profile["user_id"], "feedback", "Hemos comentado tu reporte", "/dashboard/reports")
 
     return {"ok": True}
+
+
+@router.post("/{report_id}/informe/publicar")
+async def publicar_informe(report_id: str, user=Depends(get_admin_user)):
+    """PUBLICAR EL INFORME (T9): hasta aquí, el cliente no lo ve.
+
+    Se vuelve a montar con lo que el coach acaba de escribir dentro -- el feedback es la
+    parte que lo distingue -- y pasa a "entregado". Solo entonces sale el aviso.
+    """
+    reporte = await db.reports.find_one({"id": report_id}, {"_id": 0})
+    if not reporte:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    perfil = await db.client_profiles.find_one({"id": reporte["client_id"]}, {"_id": 0})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    assert_client_access(user, perfil)
+
+    informe = await _montar_informe_del_reporte(reporte, perfil)
+    ahora = datetime.now(timezone.utc).isoformat()
+    await db.reports.update_one(
+        {"id": report_id},
+        {"$set": {"informe": informe, "informe_estado": "entregado",
+                  "informe_publicado_at": ahora, "informe_publicado_por": user.get("id")}},
+    )
+
+    # EL AVISO NO SE ESCRIBE AQUÍ. Los textos y sus variantes viven en un solo sitio (T10),
+    # que es lo que hace que roten y que no haya dos redacciones de la misma frase sueltas
+    # por el código. Aquí solo se decide CUÁL toca, y eso sale de sus habilitaciones:
+    # quien tiene quincenal recibe el informe con el feedback de Jesús; el resto reciben
+    # los ajustes, que es lo que el doc les promete al enviar.
+    if perfil.get("user_id"):
+        from routes.notifications import avisar_ajustes_nuevos, avisar_informe_listo
+        hab = await _habilitaciones_de(perfil)
+        if "quincenal" in (hab.get("reportes") or []):
+            await avisar_informe_listo(perfil["user_id"])
+        else:
+            await avisar_ajustes_nuevos(perfil["user_id"])
+
+    return {"ok": True, "informe_estado": "entregado", "informe": informe}
