@@ -329,7 +329,12 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     routines = await db.routines.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(10)
     # Hasta hoy (punto 22): la ficha abria por un reporte de noviembre. Los 31 reportes
     # fechados por delante vinieron de la importacion de Calma, no de la app.
-    reports = await db.reports.find(hasta_hoy({"client_id": client_id}), {"_id": 0}).sort("created_at", -1).to_list(50)
+    # SIN EL INFORME DENTRO. Desde T9 cada reporte guarda su informe montado, y la ficha se
+    # trae cincuenta: eso son cincuenta informes enteros en una respuesta que solo necesita
+    # la lista. El informe se pide aparte, cuando se abre uno (`GET /reports/{id}/informe`).
+    reports = await db.reports.find(
+        hasta_hoy({"client_id": client_id}), {"_id": 0, "informe": 0}
+    ).sort("created_at", -1).to_list(50)
     payments = await db.payments.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
     messages = await db.messages.find(
         {"$or": [{"sender_id": profile["user_id"]}, {"receiver_id": profile["user_id"]}]},

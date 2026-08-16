@@ -22,6 +22,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from core.calendario_reportes import (
     calendario_del_cliente, dia_de_envio, reporte_de_la_semana, toca_en_la_semana)
 from core.cycle import compute_cycle, _parse_dt
+from core.tiempo import MADRID
 from core.database import db
 from core.security import get_admin_user, get_current_user
 from core.stripe_billing import create_alert
@@ -223,19 +224,36 @@ def _client_deadline(tipo: str, due: datetime, window_start: datetime):
     return deadline, _fecha_es(deadline)
 
 
-# ==================== Ventana de envío del cliente (viernes -> lunes 6:00) ====================
+# ==================== Ventana de envío del cliente, EN HORA DE ESPAÑA ====================
 #
-# TODOS los reportes del cliente se recogen en el fin de semana de la semana de ciclo
-# en la que tocan: la ventana abre el VIERNES 00:00 y cierra el LUNES 06:00. Fuera de
-# ella el envío se bloquea ("espera a la semana que viene"). Horas en UTC (como el
-# resto del módulo); se podrían pasar a Europe/Madrid más adelante.
+# Cada reporte tiene la suya (doc 16-08, regla 1: "todo en hora de España, nada en UTC"):
+#
+#   quincenal   miércoles 09:00 -> jueves 20:00
+#   mensual     viernes 00:00   -> lunes 18:00
+#   semanal     viernes 00:00   -> lunes 06:00   (no lo cubre el doc: se queda como estaba)
+#
+# Antes iban todos en UTC y con el mismo horario, y de ahí salían los dos desajustes que
+# denuncia el doc: el quincenal se cerraba el lunes cuando el correo prometía el jueves a
+# las 20:00, y las horas bailaban una o dos según la época del año. Se guarda y se compara
+# en UTC, como el resto del módulo; lo que cambia es que la hora que se le promete al
+# cliente es la suya.
 
 
-def _submission_window(window_start: datetime):
-    """(apertura, cierre) de la ventana de envío: viernes 00:00 -> lunes 06:00."""
-    friday = _due_date_in_window(window_start, 4).replace(hour=0, minute=0, second=0, microsecond=0)
-    close = (friday + timedelta(days=3)).replace(hour=6, minute=0, second=0, microsecond=0)
-    return friday, close
+def _en_madrid(dia: datetime, hora: int, minuto: int = 0) -> datetime:
+    """Ese día a esa hora DE ESPAÑA, devuelto en UTC para poder compararlo con `now`."""
+    local = datetime(dia.year, dia.month, dia.day, hora, minuto, tzinfo=MADRID)
+    return local.astimezone(timezone.utc)
+
+
+def _submission_window(window_start: datetime, tipo: Optional[str] = None):
+    """(apertura, cierre) de la ventana de envío del tipo de reporte que toque."""
+    if tipo == "quincenal":
+        miercoles = _due_date_in_window(window_start, 2)
+        return _en_madrid(miercoles, 9), _en_madrid(miercoles + timedelta(days=1), 20)
+
+    viernes = _due_date_in_window(window_start, 4)
+    cierra = 18 if tipo == "mensual" else 6
+    return _en_madrid(viernes, 0), _en_madrid(viernes + timedelta(days=3), cierra)
 
 
 def _principal_label(tipos: List[str]) -> str:
@@ -269,7 +287,7 @@ def _proximo_reporte(cal: Dict[str, Any], semana_actual: int, window_start: date
             continue
         # Su ventana: el viernes de la semana de ciclo en la que caiga.
         arranque = window_start + timedelta(days=7 * salto)
-        abre, _ = _submission_window(arranque)
+        abre, _ = _submission_window(arranque, tipo)
         return {
             "tipo": tipo,
             "tipo_label": LABEL.get(tipo, tipo),
@@ -290,7 +308,7 @@ def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any]
     cal = _cal(profile, catalog)
     tipo = reporte_de_la_semana(cal, cycle["week"])
     tipos = [tipo] if tipo else []
-    win_open, win_close = _submission_window(window_start)
+    win_open, win_close = _submission_window(window_start, tipo)
 
     # «MÁRCALO Y TE LO APLAZO 7 DÍAS» (T8). Sin esto, el botón escribía la fecha en el
     # perfil y la ventana seguía a lo suyo: al cliente se le prometía un aplazamiento y su
