@@ -90,6 +90,14 @@ async def create_indexes():
     # predictivo) y revisiones pendientes de dieta reportada que no cuadra.
     await _ensure("quiz_respuestas", [("client_id", 1), ("created_at", -1)])
     await _ensure("macro_revisiones", [("trainer_id", 1), ("status", 1), ("created_at", -1)])
+    # Registro de sesiones de entreno (T3 del doc 16-08): UNA por cliente y día. El
+    # guardado es un upsert por (client_id, fecha); el unique cierra la carrera de dos
+    # guardados a la vez. `fecha` es el día del cliente (hora de España), "YYYY-MM-DD".
+    await _ensure("workout_logs", [("client_id", 1), ("fecha", 1)], unique=True)
+    # Rotación de textos de los avisos (regla 6 del doc 16-08): la última variante de
+    # cada familia se busca por aquí.
+    await _ensure("notifications", [("user_id", 1), ("familia", 1), ("created_at", -1)],
+                  partialFilterExpression={"familia": {"$type": "string"}})
     # Sesiones del chatbot persistidas: TTL de 7 días desde la última interacción.
     await _ensure("chatbot_sessions", "session_id", unique=True)
     await _ensure("chatbot_sessions", "updated_at", expireAfterSeconds=7 * 24 * 3600)

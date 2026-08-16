@@ -44,6 +44,109 @@ const HabRow = ({ label, value }) => (
     </div>
 );
 
+// Los interruptores de las pantallas nuevas (doc 16-08) y la frase del día. Viven en
+// db.app_settings y se tocan aquí para poder apagar una pantalla SIN desplegar.
+const PANTALLAS_APP = [
+    { clave: 'frase_del_dia', label: 'La frase del día en Inicio' },
+    { clave: 't1_inicio_nuevo', label: 'Inicio nuevo (Lo que toca hoy)' },
+    { clave: 't2_suplementos', label: 'Suplementos del cliente' },
+    { clave: 't3_entreno', label: 'Entreno (rutina y registro)' },
+    { clave: 't4_cierre_nuevo', label: 'Cierre del día nuevo' },
+    { clave: 't5_diario', label: 'El Diario' },
+    { clave: 't6_evolucion', label: 'Evolución completa del cliente' },
+    { clave: 't10_avisos_nuevos', label: 'Los avisos nuevos' },
+];
+
+const PantallasDeLaApp = () => {
+    const { api } = useAuth();
+    const [ajustes, setAjustes] = useState(null);
+    const [frase, setFrase] = useState('');
+    const [guardandoFrase, setGuardandoFrase] = useState(false);
+
+    useEffect(() => {
+        api.get('/admin/settings')
+            .then((res) => setAjustes(res.data || null))
+            .catch(() => toast.error('No se pudieron cargar los ajustes de la app'));
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al entrar
+    }, []);
+
+    const alternar = async (clave) => {
+        const nuevo = !ajustes?.pantallas?.[clave];
+        try {
+            const res = await api.put('/admin/settings', { pantallas: { [clave]: nuevo } });
+            setAjustes(res.data);
+        } catch (e) {
+            toast.error('No se pudo guardar el cambio');
+        }
+    };
+
+    const guardarFrase = async () => {
+        if (!frase.trim()) return;
+        setGuardandoFrase(true);
+        try {
+            const res = await api.put('/admin/settings', { frase_del_dia: { texto: frase.trim() } });
+            setAjustes(res.data);
+            setFrase('');
+            toast.success('Frase del día guardada');
+        } catch (e) {
+            toast.error('No se pudo guardar la frase');
+        } finally {
+            setGuardandoFrase(false);
+        }
+    };
+
+    if (!ajustes) return null;
+
+    return (
+        <Card className="bg-[#111] border-[#2a2a2a]">
+            <CardContent className="p-4 space-y-4">
+                <div>
+                    <h2 className="text-base font-bold text-white">Pantallas de la app</h2>
+                    <p className="text-xs text-white/50">Apagar aquí quita la pantalla a todos los clientes al momento, sin desplegar.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {PANTALLAS_APP.map(({ clave, label }) => {
+                        const on = !!ajustes.pantallas?.[clave];
+                        return (
+                            <button
+                                key={clave}
+                                type="button"
+                                onClick={() => alternar(clave)}
+                                className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${on ? 'border-green-500/40 bg-green-500/10 text-white' : 'border-[#333] bg-black/30 text-white/60'}`}
+                            >
+                                <span>{label}</span>
+                                <Dot on={on} />
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="space-y-1">
+                    <Label className="text-xs text-white/60">
+                        Frase del día
+                        {ajustes.frase_del_dia?.texto ? (
+                            <span className="ml-2 text-white/40 normal-case">ahora: «{ajustes.frase_del_dia.texto}» ({ajustes.frase_del_dia.fecha})</span>
+                        ) : (
+                            <span className="ml-2 text-white/40">todavía no hay ninguna</span>
+                        )}
+                    </Label>
+                    <div className="flex gap-2">
+                        <Input
+                            value={frase}
+                            onChange={(e) => setFrase(e.target.value)}
+                            placeholder="El único secreto que tiene esto es no dejarlo."
+                            className="bg-black/30 border-[#333] text-white text-sm"
+                        />
+                        <Button onClick={guardarFrase} disabled={guardandoFrase || !frase.trim()} className="bg-[#FF671F] hover:bg-[#e55b1a] text-white">
+                            Guardar
+                        </Button>
+                    </div>
+                    <p className="text-[11px] text-white/40">Si un día no hay frase nueva, el cliente sigue viendo la última.</p>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
 const PlanCard = ({ plan, onEdit }) => {
     const h = plan.habilitaciones || {};
     const sem = plan.ciclo?.semanas;
@@ -208,6 +311,8 @@ const AdminPlansPage = () => {
                     <p className="text-sm text-white/50">Fuente única de planes, ciclos y habilitaciones. Editar aquí afecta a lo que ve cada usuario.</p>
                 </div>
             </div>
+
+            <PantallasDeLaApp />
 
             {loading ? (
                 <div className="flex justify-center py-16"><div className="animate-spin w-7 h-7 border-2 border-[#FF671F] border-t-transparent rounded-full" /></div>

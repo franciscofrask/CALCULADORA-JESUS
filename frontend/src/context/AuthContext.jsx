@@ -29,6 +29,9 @@ export const AuthProvider = ({ children }) => {
     // seguidas (QA del 15-08). Un 404 sí es «todavía no tiene perfil», y ese es normal.
     const [perfilNoCargado, setPerfilNoCargado] = useState(false);
     const [planCatalog, setPlanCatalog] = useState({});
+    // Ajustes globales de la app (doc 16-08): los interruptores de las pantallas nuevas
+    // y la frase del día. Se editan en el panel sin desplegar; ver routes/settings.py.
+    const [appSettings, setAppSettings] = useState(null);
 
     // ACTUAR COMO UN CLIENTE (punto 4.11). Cuando el entrenador abre la calculadora de un
     // cliente desde su ficha, la app entera trabaja como ese cliente: cada petición lleva la
@@ -164,6 +167,27 @@ export const AuthProvider = ({ children }) => {
             .catch(() => setPlanCatalog({}));
     }, []);
 
+    // Ajustes de la app: con sesión, porque la frase del día es de los clientes. Si no
+    // llegan, `pantalla()` cae en null y cada pantalla decide con su propio default.
+    useEffect(() => {
+        if (!token) { setAppSettings(null); return; }
+        api.get('/settings/app')
+            .then((res) => setAppSettings(res.data || null))
+            .catch(() => setAppSettings(null));
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- api recreado cada render; refetch solo en cambio de token
+    }, [token]);
+
+    // pantalla('t3_entreno'): ¿está encendido ese interruptor del panel? Mientras los
+    // ajustes no hayan llegado devuelve `porDefecto` (false salvo que se diga otra cosa):
+    // mejor no enseñar una pantalla nueva un segundo de más que parpadearla.
+    const pantalla = useCallback(
+        (nombre, porDefecto = false) => {
+            const v = appSettings?.pantallas?.[nombre];
+            return v === undefined ? porDefecto : !!v;
+        },
+        [appSettings]
+    );
+
     const login = async (email, password) => {
         const response = await api.post('/auth/login', { email, password });
         const { access_token, user: userData } = response.data;
@@ -293,6 +317,8 @@ export const AuthProvider = ({ children }) => {
         refreshUser: fetchUser,
         api,
         planCatalog,
+        appSettings,
+        pantalla,
         myPlan,
         planUnpaid,
         habilitaciones,

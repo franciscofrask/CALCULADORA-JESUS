@@ -32,6 +32,21 @@ from core.plan_access import RUTINA_VISIBLE_PARA_EL_CLIENTE
 DIAS_ENTRE_CONDICIONADAS = 7
 
 
+def rotar_variante(variantes: List[Dict[str, Any]], ultima: Optional[int]) -> Dict[str, Any]:
+    """Regla 6 del doc 16-08: "cada aviso con 2 o 3 textos que rotan, y nunca el mismo
+    dos veces seguidas. El mismo mensaje repetido doce semanas deja de leerse."
+
+    `variantes` son los textos de UN aviso ({titulo, cuerpo, ...}); `ultima` es el
+    índice de la variante que se le mandó la vez anterior (va guardado en la propia
+    notificación, campo `variante`). Devuelve la variante que toca con su índice
+    dentro, para que quien la inserte lo deje guardado y la rueda siga girando.
+    """
+    if not variantes:
+        raise ValueError("un aviso sin textos no es un aviso")
+    idx = 0 if ultima is None else (int(ultima) + 1) % len(variantes)
+    return {**variantes[idx], "variante": idx}
+
+
 def _dias_desde(iso: Optional[str], ahora: datetime) -> Optional[int]:
     """Dias transcurridos desde una fecha ISO. None si no hay fecha o no se entiende."""
     if not iso:

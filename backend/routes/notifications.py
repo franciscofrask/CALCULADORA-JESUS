@@ -37,6 +37,23 @@ async def notify(user_id: str, type: str, title: str, link: Optional[str] = None
         pass
 
 
+async def variante_para(user_id: str, familia: str, variantes: list) -> dict:
+    """La variante que toca de un aviso con varios textos (regla 6 del doc 16-08:
+    nunca el mismo dos veces seguidas).
+
+    `familia` es la clave ESTABLE del aviso, sin fechas ("cierra_dia",
+    "quincenal_abierto"...): la `clave` de deduplicación lleva la fecha dentro y
+    cambia cada vez, así que no sirve para saber qué texto se usó la última vez.
+    Devuelve el texto elegido con `familia` y `variante` dentro, para que el insert
+    los persista y la rueda siga girando.
+    """
+    from core.avisos_cliente import rotar_variante
+    ultimo = await db.notifications.find_one(
+        {"user_id": user_id, "familia": familia},
+        {"_id": 0, "variante": 1}, sort=[("created_at", -1)])
+    return {**rotar_variante(variantes, (ultimo or {}).get("variante")), "familia": familia}
+
+
 async def sincronizar_avisos(user_id: str) -> int:
     """Mira si al cliente le toca algún aviso de los de la parte 9 y lo crea.
 
@@ -88,7 +105,7 @@ async def sincronizar_avisos(user_id: str) -> int:
 
         elegidos = elegir_avisos(calendario, condicionados, claves, ultima_cond, ahora)
         for aviso in elegidos:
-            await db.notifications.insert_one({
+            doc = {
                 "id": str(uuid.uuid4()),
                 "user_id": user_id,
                 "type": aviso["tipo"],
@@ -99,7 +116,13 @@ async def sincronizar_avisos(user_id: str) -> int:
                 "clave": aviso["clave"],
                 "condicionada": not aviso.get("calendario"),
                 "created_at": ahora.isoformat(),
-            })
+            }
+            # Avisos con textos que rotan (regla 6 del doc 16-08): se guarda qué
+            # variante salió para que `variante_para` no repita la misma dos veces.
+            if aviso.get("familia") is not None:
+                doc["familia"] = aviso["familia"]
+                doc["variante"] = aviso.get("variante")
+            await db.notifications.insert_one(doc)
         return len(elegidos)
     except Exception:
         return 0
