@@ -63,3 +63,35 @@ def test_la_ventana_del_quincenal_cae_antes_que_la_del_mensual():
     assert cierra_q < abre_m
     assert abre_q < abre_m
     assert cierra_q - abre_q == timedelta(days=1, hours=11)
+
+
+# ── Lo que se le DICE al cliente ─────────────────────────────────────────────
+
+def test_la_etiqueta_dice_el_dia_que_el_cliente_vive():
+    """El mensual abre el viernes 00:00 de Madrid, que en UTC son las 22:00 del JUEVES.
+    Sacar el nombre del día del datetime en UTC le prometía al cliente un día que no era:
+    «tu reporte abre el jueves» cuando abre el viernes."""
+    from routes.report_cadence import _fecha_es, _hora_es
+
+    abre, cierra = _submission_window(VERANO, "mensual")
+    assert _fecha_es(abre).startswith("viernes")
+    assert _fecha_es(cierra).startswith("lunes")
+    assert _hora_es(cierra) == "18:00"
+
+
+def test_la_etiqueta_del_quincenal_tambien():
+    from routes.report_cadence import _fecha_es, _hora_es
+
+    abre, cierra = _submission_window(VERANO, "quincenal")
+    assert _fecha_es(abre).startswith("miércoles")
+    assert _fecha_es(cierra).startswith("jueves")
+    assert _hora_es(cierra) == "20:00"
+
+
+def test_la_hora_de_cierre_ya_no_esta_escrita_a_mano():
+    """Decía «a las 6:00» fijo, que era la hora UTC de la ventana única de antes."""
+    import os
+    ruta = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "routes", "report_cadence.py")
+    with open(ruta, encoding="utf-8") as f:
+        assert 'a las 6:00"' not in f.read()
