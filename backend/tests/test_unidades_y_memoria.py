@@ -230,3 +230,28 @@ def test_bajar_no_se_ejecuta_como_quitar():
     assert r.get("fallos"), r
     assert "BAJAR" in str(r["fallos"][0].get("detalle", "")), r["fallos"]
     assert fuera, "no ha quitado el arroz cuando sí se lo han pedido"
+
+
+def test_aplicar_lo_que_ya_esta_puesto_no_es_un_fallo():
+    """«Guarda esta» no puede contestarse con «no se ha podido guardar» siendo mentira.
+
+    Francisco, 16-08-2026: la Comida 1 estaba montada y guardada, el modelo intentó aplicar
+    una tarjeta vieja con esa misma comida, la puerta del exceso lo paró («se pasa muchísimo
+    de proteína») y el asistente se lo contó como «la Comida 1 no se ha podido guardar».
+    """
+    async def _probar():
+        from agent_tools import AgentTools
+        bot = await _bot("test_ya_estaba")
+        t = await AgentTools.crear(bot)
+        r = await t.componer_menu(n=2)
+        b = (r.get("borradores") or [None])[0]
+        assert b, r.get("sin_resultados_porque")
+        await t.aplicar_borrador(b["id"])
+        # Otra tarjeta con las mismas piezas (lo que pasa al cuadrar una opción).
+        gemelo = dict(b, id="gemelo", aplicado=False)
+        (bot.state.setdefault("borradores", {}))["gemelo"] = gemelo
+        return await t.aplicar_borrador("gemelo")
+    r = correr(_probar())
+    assert r.get("ok"), r
+    assert r.get("ya_estaba"), r
+    assert "no se ha podido guardar" in (r.get("nota") or "")

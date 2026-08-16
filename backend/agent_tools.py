@@ -3406,6 +3406,28 @@ class AgentTools:
             return {"ok": False, "ya_aplicado": True,
                     "error": ("ese menú ya está puesto en la comida. Si quiere repetirlo "
                               "otra vez encima, dígalo y repite con forzar=true.")}
+        # NI OTRA TARJETA CON LA MISMA COMIDA DENTRO (16-08-2026). La marca `aplicado` es de
+        # ESE borrador, pero al cuadrar una opción se crea otro con las mismas piezas: el
+        # modelo intentó aplicar la versión vieja sobre la comida ya montada, la puerta del
+        # exceso lo paró con «se pasa muchísimo de proteína» -- que es verdad y no viene a
+        # cuento -- y el asistente se lo contó al cliente como «la Comida 1 no se ha podido
+        # guardar». Mentira: estaba guardada y bien. Si lo que trae la tarjeta ya está en la
+        # comida, no hay nada que aplicar y se dice así.
+        # El id del alimento guardado viaja DENTRO de `alimento` (la ficha entera), no suelto:
+        # ver la nota de `add_food_by_id`. Leerlo de `alimento_id` daba None y este candado
+        # no saltaba nunca.
+        def _id_de(a):
+            return int((a.get("alimento") or {}).get("id")
+                       or a.get("alimento_id") or a.get("id") or 0)
+        puestos = {_id_de(a) for a in
+                   ((self.bot.state.get("comidas_completadas") or {})
+                    .get(self.bot.current_meal_key()) or {}).get("alimentos", [])}
+        puestos.discard(0)
+        if puestos and {int(i["id"]) for i in b["items"]} <= puestos and not forzar:
+            return {"ok": True, "ya_estaba": True,
+                    "nota": ("lo de esa tarjeta YA está en la comida: no hay nada que "
+                             "aplicar ni nada que se haya perdido. Díselo así, y sobre todo "
+                             "no le digas que no se ha podido guardar.")}
         protegida = self._protegida(forzar)
         if protegida:
             return protegida
