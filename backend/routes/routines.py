@@ -12,7 +12,7 @@ from core.database import db
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.sin_futuro import hasta_hoy
 from core.plan_access import require_access, rutina_visible_para_el_cliente
-from routes.notifications import notify
+from routes.notifications import avisar_rutina_nueva
 from models.common import RoutineResponse, RoutineCreate
 from models.user import PLAN_TYPES
 from llm_client import LlmChat, UserMessage
@@ -199,7 +199,7 @@ async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(g
     # algo que no puede abrir le ensena a ignorar los avisos, y son los mismos por los que
     # se entera de sus macros.
     if await rutina_visible_para_el_cliente():
-        await notify(profile["user_id"], "rutina", "Te hemos preparado una rutina nueva", "/dashboard/routine")
+        await avisar_rutina_nueva(profile["user_id"])
 
     return RoutineResponse(**routine_doc)
 

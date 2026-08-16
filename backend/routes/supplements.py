@@ -176,8 +176,8 @@ async def save_protocol(client_id: str, data: SupplementProtocolSave, user=Depen
     # anunciar.
     resuelto = _respuesta(doc)
     if resuelto["actual"] or resuelto["siguiente"]:
-        from routes.notifications import notify
-        await notify(profile["user_id"], "suplementos", "Tu protocolo de suplementos se ha actualizado", "/dashboard/supplements", body=data.nota)
+        from routes.notifications import avisar_suplementos
+        await avisar_suplementos(profile["user_id"], nota=data.nota)
 
     return SupplementProtocolResponse(**resuelto)
 

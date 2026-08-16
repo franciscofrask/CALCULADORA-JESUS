@@ -368,9 +368,17 @@ async def get_my_due_report(user=Depends(get_current_user)):
                 "opens_label": opens_label,
             })
 
+        # LOS DOS AVISOS DE ABAJO SE APAGAN CON T10 (doc 16-08). Los del doc dicen lo
+        # mismo mejor, distinguen quincenal de mensual y rotan el texto, y salen de
+        # `sincronizar_avisos` con las horas de España. Mientras `t10_avisos_nuevos` esté
+        # apagado siguen saliendo estos, que es lo que hay hoy en producción; encendido,
+        # dejarlos sería mandarle al cliente el mismo recado dos veces.
+        from routes.settings import pantalla_activa
+        avisa_t10 = await pantalla_activa("t10_avisos_nuevos")
+
         # Campanita cuando la ventana está ABIERTA (aviso del viernes, tarea 11+13).
         # Una sola por semana de ciclo.
-        if state["is_open"]:
+        if state["is_open"] and not avisa_t10:
             title = f"Ya puedes rellenar tu {label.lower()}: tienes hasta el {closes_label}"
             already = await db.notifications.find_one({
                 "user_id": user["id"], "type": "reporte",

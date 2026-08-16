@@ -18,7 +18,7 @@ from core.security import (
 
 # Carpeta local con las fotos de progreso importadas de Calma (solo dev).
 _FOTOS_CALMA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_fotos_calma")
-from routes.notifications import notify
+from routes.notifications import avisar_macros, notify
 from routes.audit import audit
 from models.user import (
     ClientProfile, ClientProfileUpdate, MacrosUpdate, MacroEvaluacion, TrainerAssign, PLAN_CATALOG,
@@ -898,6 +898,22 @@ async def anotar_body_fat(client_id: str, data: dict, user = Depends(get_admin_u
     return {"porcentajes_grasos": perfil.get("porcentajes_grasos") or [], "body_fat": perfil.get("body_fat")}
 
 
+def _no_le_ha_tocado_nada(cambios, peri_antes, peri_ahora) -> bool:
+    """¿Ha guardado los MISMOS macros que ya tenía? De ahí sale «Este mes no te toco nada».
+
+    Se apoya en `marcar_cambios`, que ya compara macro a macro al guardar, más el
+    perientreno: ese bloque puede estrenarse o quitarse entero, y `marcar_cambios` no lo
+    marca a propósito (aparecer de la nada no es "cambiar el intra"), pero para el cliente
+    sí es un cambio y no se le puede decir que este mes no se le toca nada.
+
+    Con `cambios` a None -- el primer ajuste de su vida -- no hay con qué comparar: eso no
+    es que no haya cambiado nada, así que se le manda el aviso normal.
+    """
+    if cambios is None:
+        return False
+    return not palancas(cambios) and bool(peri_antes) == bool(peri_ahora)
+
+
 @router.put("/clients/{client_id}/macros")
 async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depends(get_admin_user)):
     """Actualizar macros de un cliente (admin). Marca como override manual.
@@ -1019,6 +1035,20 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
                 "criterio_coach": data.criterio,
             }})
 
+    # ANTES DE GUARDAR EN EL HISTORIAL, que reescribe `cambios`. Solo hay una fila por día
+    # (`core/historial_macros.py`): al segundo guardado del día, `cambios` pasa a comparar
+    # con el estado de la mañana, no con el que tenía el cliente hace un minuto. Eso es lo
+    # que quiere el historial, y lo contrario de lo que quiere el aviso: tocar los macros a
+    # las 10:00 y volver a guardar los mismos a las 12:00 le mandaba "tienes macros nuevos"
+    # las dos veces.
+    #
+    # El perientreno solo se escribe si viene en la petición: omitirlo NO se lo quita al
+    # cliente, así que lo que tiene después es lo nuevo o, si no vino, lo de antes.
+    peri_despues = (set_data.get("macros_periworkout") if data.peri is not None
+                    else profile.get("macros_periworkout"))
+    sin_cambios = _no_le_ha_tocado_nada(macro_log["cambios"],
+                                        profile.get("macros_periworkout"), peri_despues)
+
     await guardar_en_historial(macro_log)
     # "¿Quien me toca esta semana?" (punto 29): la fecha se queda tambien en el cliente.
     await marcar_ajuste(client_id, fecha_de_vigencia(macro_log))
@@ -1033,7 +1063,7 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     # El banco de casos (clientes gemelos) se refresca solo con cada ajuste nuevo.
     _refrescar_casos()
 
-    await notify(profile["user_id"], "macros", "Hemos actualizado tus macros", "/dashboard/nutrition", body=data.note)
+    await avisar_macros(profile["user_id"], nota=data.note, sin_cambios=sin_cambios)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Actualizó macros de {(client_user or {}).get('name') or client_id} (manual)")
 
@@ -1228,6 +1258,11 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
                   "ajustes": ajustes},
         "created_at": datetime.now(timezone.utc).isoformat()
     }
+    # Antes de guardarlo: el historial reescribe `cambios` al segundo guardado del día
+    # (una fila por día, ver el comentario del guardado manual).
+    sin_cambios = _no_le_ha_tocado_nada(macro_log["cambios"],
+                                        profile.get("macros_periworkout"), peri)
+
     await guardar_en_historial(macro_log)
     await marcar_ajuste(client_id, fecha_de_vigencia(macro_log))   # punto 29
     # Peso y % graso, a sus series con la fecha del ajuste (punto 30).
@@ -1242,7 +1277,7 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
                   "sexo": sexo, "objetivo": objetivo},
     )
 
-    await notify(profile["user_id"], "macros", "Hemos actualizado tus macros", "/dashboard/nutrition", body=note)
+    await avisar_macros(profile["user_id"], nota=note, sin_cambios=sin_cambios)
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Aplicó macros por calculadora a {(client_user or {}).get('name') or client_id}")
 
