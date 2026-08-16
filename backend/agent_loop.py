@@ -580,22 +580,29 @@ class AgentLoop:
         hoy = date.today()
         dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
         montando = self.bot.state.get("fecha_objetivo") or hoy.isoformat()
-        # «MAÑANA» ES RELATIVO AL DÍA QUE SE MONTA (A1-F16 de la ronda del 15-08).
-        # Montando el lunes 17, «mañana descanso» saltaba al 16 -- el mañana de HOY --,
-        # o sea, HACIA ATRÁS. Y desde el 16, «mañana» contestaba «ya estamos en mañana»:
-        # no se podía avanzar nunca. Quien está montando un día y dice «mañana» quiere
-        # el día siguiente AL QUE MONTA; el mañana del calendario solo manda cuando se
-        # está montando hoy.
+        # «MAÑANA» ES MAÑANA, LA DEL CALENDARIO (Francisco, 16-08-2026).
+        #
+        # Estuvo un tiempo siendo «el día siguiente al que se monta», para arreglar que
+        # montando el lunes 17 un «mañana descanso» saltara hacia atrás. Pero en la app real
+        # eso hace algo peor: el asistente anuncia «vamos con lunes 17», el cliente contesta
+        # «para mañana ponme 3 comidas» pensando en ese lunes, y se planta en el martes 18.
+        # Nadie dice «mañana» queriendo decir «el día siguiente a ese otro día»: mañana es
+        # mañana. Para avanzar desde el día que se monta están «el día siguiente» y el
+        # nombre del día, y los dos van escritos aquí abajo con su fecha para que no haya
+        # que deducir nada.
         try:
             d_montando = date.fromisoformat(str(montando))
         except (ValueError, TypeError):
             d_montando = hoy
         siguiente = (d_montando + timedelta(days=1)).isoformat()
+        manana = (hoy + timedelta(days=1)).isoformat()
         lineas = [
             f"Hoy es {dias[hoy.weekday()]} {hoy.isoformat()}. "
             f"Estás montando la dieta del {dias[d_montando.weekday()]} {montando}. "
-            f"Si el cliente dice «mañana» se refiere al día siguiente al que estáis "
-            f"montando: {siguiente}. «Pasado mañana» es el de después. "
+            f"«Mañana» es SIEMPRE {manana} y «pasado mañana» "
+            f"{(hoy + timedelta(days=2)).isoformat()}, aunque estéis montando otro día; si "
+            f"ya estáis en ese día, no te muevas y dilo. Si lo que quiere es avanzar desde "
+            f"el día que montáis («el día siguiente», «y al otro»), ese es {siguiente}. "
             # «HOY» ES HOY Y NO SE PREGUNTA (QA del 15-08 en producción). Montando el 20,
             # a un «vamos con hoy» contestaba «estamos montando el jueves 20/08, no el de
             # hoy real; si quieres que trabajemos sobre hoy, dímelo» -- que es justo lo que

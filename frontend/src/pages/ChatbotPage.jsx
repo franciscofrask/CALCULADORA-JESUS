@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
-import { useConfirm } from '../components/ui/confirm';
 import { Send, Bot, User, Loader2, RefreshCw, Check, ChevronRight, Download, ClipboardList } from 'lucide-react';
 import ChatMealSummary from '../components/nutrition/ChatMealSummary';
 import ChatDayOverview from '../components/nutrition/ChatDayOverview';
@@ -88,7 +87,6 @@ const loadPersisted = (uid) => {
 };
 
 export default function ChatbotPage() {
-  const { confirm } = useConfirm();
   const navigate = useNavigate();
   // EL DÍA QUE SE ESTÁ MIRANDO, GUARDADO CON DUEÑO (punto 4.7). Nutrición ya lo pasó a
   // `u:<id>:nutrition_last_date` cuando se arregló que la dieta de un cliente se viera en
@@ -913,25 +911,19 @@ export default function ChatbotPage() {
         }).then(r => r.json());
         const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
         autoSyncRef.current.decided = true;
-        if (hasFood) {
-          // "el Hoy" no lo dice nadie: con etiquetas relativas va sin articulo.
-          const etiq = formatDateLabel(dia);
-          const cuando = /^(hoy|mañana|ayer)$/i.test(etiq) ? etiq.toLowerCase() : `el ${etiq}`;
-          const ok = await confirm({
-            title: `Ya tienes una dieta guardada ${cuando}`,
-            description: '¿Quieres que la vaya actualizando con lo que montemos aquí?',
-            confirmLabel: 'Sí, actualizarla', cancelLabel: 'No, dejarla',
-          });
-          autoSyncRef.current.enabled = ok;
-          setSincroApagada(!ok);
-          escribirLocal(claveSync, uid, ok ? 'si' : 'no');
-          if (!ok) {
-            // Y el botón que lo hace posible aparece ahora abajo, junto a los demás.
-            addMessage('Vale, no tocaré tu dieta guardada. Cuando quieras pasarla, pulsa '
-              + '«Volcar a mi dieta» aquí abajo.', false);
-            return;
-          }
-        }
+        // AQUÍ SALTABA UN MODAL, Y EN UN CHAT SOBRA (Francisco, 16-08-2026): «es un chat,
+        // debería poder preguntarme y yo denegar o aceptar de manera normal, pero ni lo veo
+        // necesario porque el mismo chat ya avisa que tiene cosas cargadas».
+        //
+        // Y tenía razón doble: el asistente abre diciendo exactamente qué hay montado ese
+        // día, así que el aviso ya está dado en su sitio; y con las comidas fusionadas al
+        // guardar (16-08) actualizar el día ya no puede llevarse por delante lo que no se
+        // esté tocando. Se actualiza y punto. Si no quiere que se toque, el botón «Volcar a
+        // mi dieta» sigue abajo para hacerlo a mano.
+        autoSyncRef.current.enabled = true;
+        setSincroApagada(false);
+        escribirLocal(claveSync, uid, 'si');
+        if (hasFood) { /* el propio asistente ya ha contado qué hay en ese día */ }
       }
 
       if (!autoSyncRef.current.enabled) return;
@@ -1124,23 +1116,10 @@ export default function ChatbotPage() {
         force = true;
       }
 
-      // 1. Si no forzamos, comprobar si ese día ya tiene alimentos
-      if (!force) {
-        const exRes = await fetchConTope(`${API_URL}/api/diets/${targetDate}`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        });
-        const ex = await exRes.json();
-        const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
-        if (hasFood) {
-          const ok = await confirm({
-            title: `Ya tienes una dieta el ${formatDateLabel(targetDate)}`,
-            description: 'Si sigues, se sustituye por esta.',
-            confirmLabel: 'Sobrescribir', danger: true,
-          });
-          if (!ok) { setSaving(false); return; }
-          force = true;
-        }
-      }
+      // 1. Volcar es volcar: el botón lo ha pulsado él sabiendo lo que tiene montado, y el
+      //    día ya no se sustituye entero -- las comidas se fusionan (16-08). El modal de
+      //    «¿sobrescribir?» que había aquí era el mismo que sobraba en la sincronización.
+      force = true;
 
       // 2. Volcar
       const res = await fetch(
@@ -1149,15 +1128,11 @@ export default function ChatbotPage() {
       );
       const data = await res.json();
 
+      // Si el servidor pide confirmación (día con comida), se repite ya forzado: la
+      // decisión la tomó el cliente al pulsar «Volcar a mi dieta».
       if (data.needs_confirmation) {
-        const ok = await confirm({
-          title: '¿Sobrescribir la dieta existente?',
-          description: data.message || 'Ese día ya tiene alimentos guardados.',
-          confirmLabel: 'Sobrescribir', danger: true,
-        });
-        if (ok) { setSaving(false); return saveToDiet(true); }
         setSaving(false);
-        return;
+        return saveToDiet(true);
       }
 
       if (!res.ok) throw new Error(data.detail || 'Error al volcar');

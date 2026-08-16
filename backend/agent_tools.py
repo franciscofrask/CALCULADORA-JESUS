@@ -1933,14 +1933,28 @@ class AgentTools:
                 return {"borradores": [], "sin_resultados_porque": [
                     f"no hay ninguna receta llamada «{receta}» en el recetario. Dilo así, sin "
                     f"inventarte una parecida, y ofrécele montar algo con lo que quiera dentro."]}
-            hecha = await self._receta_recuadrada(plantilla, restante)
+            # UNA RECETA NO SE MIDE CONTRA LAS SOBRAS DE LA COMIDA (16-08-2026).
+            #
+            # Pidiendo la «Avena Fusion Cake» para una Comida 1 que ya estaba montada, el
+            # desvío salía de restar la receta a lo que QUEDABA (casi nada), y la tarjeta
+            # anunciaba «se desvía 64,3 g de grasa» de una receta que lleva 19,3. Con eso el
+            # asistente le dijo al cliente que su receta no cabía y le ofreció un capricho
+            # fuera del plan, mientras debajo el botón decía «Elegir este menú».
+            #
+            # Una receta con nombre es un plato entero: va EN LUGAR de lo que haya, así que
+            # se ajusta al objetivo de la comida y se dice que sustituye. Con la comida
+            # vacía, objetivo y restante son lo mismo y no cambia nada.
+            ya_hay = bool(((self.bot.state.get("comidas_completadas") or {}).get(
+                self.bot.current_meal_key()) or {}).get("alimentos"))
+            contra = self.bot.get_current_meal_macros() if ya_hay else restante
+            hecha = await self._receta_recuadrada(plantilla, contra)
             if not hecha:
                 return {"borradores": [], "sin_resultados_porque": [
                     f"«{plantilla.get('nombre')}» está en el recetario pero sus ingredientes no "
                     f"se pueden servir en esta comida. Dilo tal cual."]}
             items = hecha["items"]
             tot = {m: round(sum(i["macros"][m] for i in items), 1) for m in ("P", "H", "G")}
-            desvio = {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")}
+            desvio = {m: round(tot[m] - contra[m], 1) for m in ("P", "H", "G")}
             seq = self.bot.state.setdefault("opcion_seq", {})
             mk_receta = self.bot.current_meal_key()
             numero = int(seq.get(mk_receta, 0)) + 1
@@ -1950,19 +1964,21 @@ class AgentTools:
                 "id": bid, "numero": numero, "items": items, "origen": "recetario",
                 "nombre": plantilla.get("nombre"), "receta_url": None,
                 "receta_foto": plantilla.get("foto"),
-                "macros_totales": tot, "objetivo": dict(restante), "desvio": desvio,
+                "macros_totales": tot, "objetivo": dict(contra), "desvio": desvio,
                 "pedidos": [], "filtros": {"generico": None, "marca": None, "estilo": None},
                 "momento": momento, "meal_key": mk_receta,
                 "solo_lo_pedido": True,      # la ha pedido él: se aplica aunque se desvíe
                 "receta_pedida": plantilla.get("nombre"),
+                # Va en lugar de lo que hubiera: al aplicarla, la comida se vacía primero.
+                "reemplaza": ya_hay,
             }
             # El desvío se dice con su signo en palabras: «se pasa» o «le faltan». Un
             # «se queda a 12 g del objetivo» no distingue pasarse de quedarse corto, y una
             # receta grande metida en un hueco pequeño se pasa casi siempre.
             se_pasa = [f"{desvio[m]:.0f} g de {_MACRO_LBL[m]}" for m in ("P", "H", "G")
-                       if desvio[m] > 2 * self.bot.margen_de(restante.get(m, 0))]
+                       if desvio[m] > 2 * self.bot.margen_de(contra.get(m, 0))]
             se_queda = [f"{-desvio[m]:.0f} g de {_MACRO_LBL[m]}" for m in ("P", "H", "G")
-                        if -desvio[m] > 2 * self.bot.margen_de(restante.get(m, 0))]
+                        if -desvio[m] > 2 * self.bot.margen_de(contra.get(m, 0))]
             partes = []
             if se_pasa:
                 partes.append("se pasa " + " y ".join(se_pasa))
@@ -1970,14 +1986,19 @@ class AgentTools:
                 partes.append("le faltan " + " y ".join(se_queda))
             if partes:
                 borrador["avisos"] = [
-                    f"«{plantilla.get('nombre')}» con las cantidades ajustadas a lo que te "
-                    "falta en esta comida: aun así " + ", y ".join(partes)]
+                    f"«{plantilla.get('nombre')}» con las cantidades ajustadas al objetivo de "
+                    "esta comida: aun así " + ", y ".join(partes)]
             self.bot.state.setdefault("borradores", {})[bid] = borrador
-            return {"borradores": [borrador],
-                    "nota": (f"Es la receta «{plantilla.get('nombre')}» del recetario de Jesús, "
-                             "con sus ingredientes y las cantidades ajustadas a esta comida. "
-                             "Nómbrala por su nombre y no le quites ni le añadas nada por tu "
-                             "cuenta.")}
+            nota = (f"Es la receta «{plantilla.get('nombre')}» del recetario de Jesús, con sus "
+                    "ingredientes y las cantidades ajustadas a esta comida. Nómbrala por su "
+                    "nombre y no le quites ni le añadas nada por tu cuenta. La ha pedido él, "
+                    "así que se la enseñas y decide él: si se desvía, dices cuánto y ya está. "
+                    "NO le digas que no se puede ni le ofrezcas otra cosa en su lugar, que "
+                    "debajo tiene el botón para elegirla y quedaría en ridículo.")
+            if ya_hay:
+                nota += (" Ojo: esa comida ya tenía alimentos y esta receta va EN LUGAR de "
+                         "ellos (al aplicarla se quitan). Díselo en una línea.")
+            return {"borradores": [borrador], "nota": nota}
 
         # LO QUE PIDE EL CLIENTE ES LO QUE VA. NI UN ALIMENTO MÁS.
         #
@@ -3314,6 +3335,12 @@ class AgentTools:
                     "sugerencias_de_cambio": revision.get("sugerencias_de_cambio", [])}
         nombre_menu = b.get("nombre") or f"la opción {b.get('numero')}"
         self.bot.apuntar_para_deshacer(f"aplicar {nombre_menu}")
+        # UNA RECETA PEDIDA POR SU NOMBRE SUSTITUYE, NO SE APILA. Aplicar un borrador SUMA
+        # sus piezas a lo que haya, que es lo correcto cuando se está montando la comida a
+        # trozos; pero una receta con nombre es el plato entero, y sumarla a una comida ya
+        # montada deja doce alimentos y el doble de todo. Se marca al componerla.
+        if b.get("reemplaza"):
+            self.bot.clear_meal()
         for it in b["items"]:
             await self.bot.add_food_by_id(it["id"], it["cantidad_g"])
         b["aplicado"] = True
