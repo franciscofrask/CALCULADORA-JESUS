@@ -2909,7 +2909,15 @@ class AgentTools:
         # justo encima de un «65,9 / 66» que decia lo contrario. Dos numeros que no pueden
         # ser verdad a la vez, y el cliente no sabe a cual creer.
         tot = b.get("macros_totales") or {}
-        ahora = self.bot.get_remaining_macros()
+        # Contra lo que FALTA, salvo si el borrador sustituye la comida entera: una receta
+        # pedida por su nombre entra en lugar de lo que hay, así que su vara es el objetivo
+        # de la comida. Midiéndola contra las sobras salía el disparate de siempre por otra
+        # puerta: la «Avena Fusion Cake» (39,4 g de proteína) sobre una comida que ya se
+        # pasaba anunciaba «se desvía 43,7 g de proteína» cuando contra el objetivo de esa
+        # comida se queda a 1 g. El desvío bueno lo calcula quien la compone; aquí solo hay
+        # que refrescarlo con la misma vara, no cambiarla (16-08-2026).
+        ahora = (self.bot.get_current_meal_macros() if b.get("reemplaza")
+                 else self.bot.get_remaining_macros())
         desvio = {m: round(float(tot.get(m, 0) or 0) - float(ahora.get(m, 0) or 0), 1)
                   for m in ("P", "H", "G")}
         b["desvio"] = desvio
