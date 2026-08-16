@@ -5,7 +5,7 @@ import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLoca
 import { plural, nombreDePlan } from '../lib/labels';
 import { num1 } from '../lib/numeros';
 import {
-    estadoMacro, estadoDelDia, faltanDe, porcentajeMacro,
+    estadoMacro, estadoDelDia, objetivoDelDia, faltanDe, porcentajeMacro,
     COLOR_ESTADO, PALABRA_ESTADO, TEXTO_ESTADO_DIA, varianteDelDia,
 } from '../lib/estadoMacros';
 import {
@@ -246,6 +246,10 @@ const hoyDeLaDieta = () => {
 
 const estrellas = (n) => (n >= 1 && n <= 5 ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
 
+// Las dos comidas que no cuentan para el objetivo del día: el perientreno va por su cuenta
+// (mismos nombres que usa Nutrición para montarlas).
+const COMIDAS_PERI = ['Intra', 'Post'];
+
 // Una línea de «Lo que toca hoy» o de «Pendiente»: título, detalle y, a la derecha, la
 // flecha de entrar o el «✓ hecho». Nada de rojos ni de la palabra «pendiente».
 const LineaDeHoy = ({ icono: Icono, titulo, detalle, extra, hecho, onClick, testId }) => {
@@ -311,9 +315,12 @@ const CIERRES = [
 const InicioNuevo = () => {
     const { user, profile, api, can, appSettings, pantalla } = useAuth();
     const navigate = useNavigate();
-    const [macros, setMacros] = useState(null);
     const [comido, setComido] = useState({ P: 0, H: 0, G: 0 });
-    const [objetivoDelDia, setObjetivoDelDia] = useState(null);
+    // El objetivo del día ya resuelto por el servidor (el del día menos el peri): el mismo
+    // número que la cabecera de Nutrición. No se recalcula aquí, y no hay segunda fuente:
+    // mientras no llegue, arriba no hay números (ver `diaCargado`).
+    const [objetivoComidas, setObjetivoComidas] = useState(null);
+    const [diaCargado, setDiaCargado] = useState(false);
     const [suplementos, setSuplementos] = useState([]);
     const [rutina, setRutina] = useState(null);
     const [entrenoDeHoy, setEntrenoDeHoy] = useState(null);
@@ -327,9 +334,12 @@ const InicioNuevo = () => {
             // Cada petición con su red: una función que no está (el registro de entreno se
             // está construyendo) o un plan sin suplementación no pueden dejar Inicio en
             // blanco. Lo que no llega, no se pinta.
-            const [dietaRes, macrosRes, suplRes, rutinaRes, logRes, cierreRes, dueRes, prefsRes] = await Promise.all([
+            // OJO: aquí NO se pide `/macros`. El objetivo del día no se compone de dos
+            // fuentes -- ese fue el fallo: según cuál llegara antes, Inicio enseñaba 190, 235
+            // o 225 del mismo día mientras el cliente miraba. Viene resuelto con la dieta o
+            // no viene.
+            const [dietaRes, suplRes, rutinaRes, logRes, cierreRes, dueRes, prefsRes] = await Promise.all([
                 api.get(`/diets/${hoyDeLaDieta()}`).catch(() => ({ data: { exists: false } })),
-                api.get('/macros').catch(() => ({ data: null })),
                 api.get('/supplements/current').catch(() => ({ data: null })),
                 api.get('/routines/current').catch(() => ({ data: null })),
                 api.get('/workout-logs/hoy').catch(() => ({ data: { log: null } })),
@@ -337,7 +347,6 @@ const InicioNuevo = () => {
                 api.get('/reports/due').catch(() => ({ data: { items: [] } })),
                 api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
             ]);
-            setMacros(macrosRes.data);
             setSuplementos(suplRes.data?.actual || []);
             setRutina(rutinaRes.data);
             setEntrenoDeHoy(logRes.data?.log || null);
@@ -346,43 +355,41 @@ const InicioNuevo = () => {
             setTienePreferencias(!!prefsRes.data?.has_preferences);
 
             const dieta = dietaRes.data;
+            // Viene aunque el día no exista todavía: el objetivo es del día, no de lo que
+            // haya puesto.
+            setObjetivoComidas(dieta?.objetivo_comidas || null);
             if (dieta?.exists && dieta.comidas) {
                 let P = 0, H = 0, G = 0;
-                Object.values(dieta.comidas).forEach((comida) => {
+                Object.entries(dieta.comidas).forEach(([nombre, comida]) => {
+                    // EL INTRA Y EL POST NO ENTRAN, igual que en la cabecera de Nutrición:
+                    // el perientreno lleva su cuenta aparte y el objetivo de arriba ya lo
+                    // ha descontado. Sumarlos aquí sería restarlos de un presupuesto que no
+                    // los incluye, y volveríamos a tener dos pantallas con números
+                    // distintos del mismo día.
+                    if (COMIDAS_PERI.includes(nombre)) return;
                     (comida.alimentos || []).forEach((a) => {
                         const ef = a.macros_efectivos || {};
                         P += ef.P || 0; H += ef.H || 0; G += ef.G || 0;
                     });
                 });
                 setComido({ P, H, G });
-                const snap = dieta.macros_snapshot;
-                if (snap && (snap.P_total || snap.H_total || snap.G_total)) {
-                    setObjetivoDelDia({ P: snap.P_total || 0, H: snap.H_total || 0, G: snap.G_total || 0 });
-                }
             }
+            setDiaCargado(true);
         };
         cargar().catch((err) => {
             // Al cliente no se le enseña una traza: si algo no llega, Inicio se pinta con
             // lo que tenga.
             console.error('[inicio] no se pudieron cargar los datos del día', err);
+            setDiaCargado(true);
         });
     }, [api, profile]);
 
-    // EL OBJETIVO, EL MISMO QUE ENSEÑA NUTRICIÓN: el del día ya repartido (`macros_snapshot`,
-    // que suma el perientreno) y solo se cae al objetivo crudo cuando todavía no hay día
-    // montado. En la base conviven las claves en inglés y en castellano: se leen las dos.
+    // EL OBJETIVO, EL MISMO QUE ENSEÑA NUTRICIÓN. Lo resuelve el servidor con el reparto de
+    // ese día, ya con el perientreno descontado. O ese, o ninguno: no hay segundo camino.
     const diaDeLaRutina = rutina?.days?.find((d) =>
         (d.day || '').toLowerCase() === new Date().toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase());
-    const mt = macros?.training || profile?.macros_training;
-    const mr = macros?.rest || profile?.macros_rest;
-    const crudo = diaDeLaRutina?.is_rest ? mr : mt;
-    const objetivo = objetivoDelDia || {
-        P: crudo?.protein || crudo?.proteinas || 0,
-        H: crudo?.carbs || crudo?.hidratos || 0,
-        G: crudo?.fat || crudo?.grasas || 0,
-    };
-    const tieneMacros = (objetivo.P || objetivo.H || objetivo.G) > 0;
-    const estadoDia = estadoDelDia(comido, objetivo);
+    const objetivo = objetivoDelDia(objetivoComidas);
+    const estadoDia = objetivo ? estadoDelDia(comido, objetivo) : null;
 
     // El cierre del día de HOY (hora de España, que es como cuenta el backend).
     const cierreDeHoy = ultimoCierre && diaEnEspana(aFecha(ultimoCierre.created_at) || new Date()) === hoyEnEspana()
@@ -481,7 +488,19 @@ const InicioNuevo = () => {
             <section className="space-y-3">
                 <p className="caption">Lo que toca hoy</p>
 
-                {tieneMacros ? (
+                {/* MIENTRAS NO SE SEPA EL OBJETIVO, NO HAY NÚMEROS.
+                    Antes, hasta que llegaba la respuesta del día se pintaba el objetivo
+                    crudo del cliente, así que el mismo día decía 190, luego 235 y luego 225
+                    en tres lecturas seguidas de la misma pantalla. Un número que se corrige
+                    solo mientras lo miras no se vuelve a creer. */}
+                {!diaCargado ? (
+                    <div className="surface p-5 animate-pulse" data-testid="macros-cargando">
+                        <div className="h-4 w-32 bg-muted rounded" />
+                        <div className="grid grid-cols-3 gap-3 mt-4">
+                            {[0, 1, 2].map((i) => <div key={i} className="h-20 bg-muted rounded-xl" />)}
+                        </div>
+                    </div>
+                ) : objetivo ? (
                     <div className="surface surface-hover overflow-hidden cursor-pointer" data-testid="macros-de-hoy"
                         onClick={() => navigate('/dashboard/nutrition')}>
                         <div className="px-5 pt-5">

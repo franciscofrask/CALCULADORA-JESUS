@@ -37,6 +37,29 @@ export const PALABRA_ESTADO = {
     [ESTADO.EXCESO]: 'te pasas',
 };
 
+/**
+ * EL OBJETIVO DEL DÍA: EL MISMO QUE VE EN NUTRICIÓN, O NINGUNO.
+ *
+ * Lo resuelve el servidor y viaja en `GET /diets/{fecha}` como `objetivo_comidas`: es el
+ * total del día MENOS el perientreno, que lleva su cuenta aparte (`objetivo_de_las_comidas`
+ * en macro_distribution.py).
+ *
+ * Aquí no se recalcula nada NI HAY SEGUNDA FUENTE, y eso es lo importante. Inicio tenía dos:
+ * el snapshot del día y, si no llegaba, los macros crudos del cliente. Como llegan por
+ * peticiones distintas, la misma pantalla del mismo día enseñaba 190, luego 235 y luego 225
+ * según el orden en que respondiera cada una. Un objetivo que se corrige solo mientras el
+ * cliente lo mira es peor que uno mal calculado: deja de creerse el número.
+ *
+ * Devuelve null cuando todavía no se sabe. Quien lo pinta enseña un hueco, no un número.
+ */
+export function objetivoDelDia(objetivoComidas) {
+    const o = objetivoComidas;
+    if (!o) return null;
+    const objetivo = { P: Number(o.P) || 0, H: Number(o.H) || 0, G: Number(o.G) || 0 };
+    if (!(objetivo.P || objetivo.H || objetivo.G)) return null;
+    return objetivo;
+}
+
 /** El estado de UN macro. `key` es 'P', 'H' o 'G': hace falta para saber si pasarse cuenta. */
 export function estadoMacro(key, servido, objetivo) {
     const obj = Number(objetivo) || 0;
