@@ -324,6 +324,8 @@ const InicioNuevo = () => {
     const [suplementos, setSuplementos] = useState([]);
     const [rutina, setRutina] = useState(null);
     const [entrenoDeHoy, setEntrenoDeHoy] = useState(null);
+    // Lo que le toca hoy según el servidor: si tiene rutina, qué día es y si es descanso.
+    const [entrenoDelDia, setEntrenoDelDia] = useState(null);
     const [ultimoCierre, setUltimoCierre] = useState(null);
     const [reportes, setReportes] = useState([]);
     const [tienePreferencias, setTienePreferencias] = useState(true);
@@ -350,6 +352,8 @@ const InicioNuevo = () => {
             setSuplementos(suplRes.data?.actual || []);
             setRutina(rutinaRes.data);
             setEntrenoDeHoy(logRes.data?.log || null);
+            // Qué le toca hoy lo dice el SERVIDOR, que cuenta los días en hora de España.
+            setEntrenoDelDia(logRes.data?.tiene_rutina ? logRes.data : null);
             setUltimoCierre(Array.isArray(cierreRes.data) ? cierreRes.data[0] || null : null);
             setReportes(dueRes.data?.items || []);
             setTienePreferencias(!!prefsRes.data?.has_preferences);
@@ -386,8 +390,6 @@ const InicioNuevo = () => {
 
     // EL OBJETIVO, EL MISMO QUE ENSEÑA NUTRICIÓN. Lo resuelve el servidor con el reparto de
     // ese día, ya con el perientreno descontado. O ese, o ninguno: no hay segundo camino.
-    const diaDeLaRutina = rutina?.days?.find((d) =>
-        (d.day || '').toLowerCase() === new Date().toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase());
     const objetivo = objetivoDelDia(objetivoComidas);
     const estadoDia = objetivo ? estadoDelDia(comido, objetivo) : null;
 
@@ -407,12 +409,18 @@ const InicioNuevo = () => {
 
     // La línea de entreno sale por el dato, no por el plan (regla 3): si tiene rutina
     // cargada para hoy. El día de descanso no se anuncia: no hay nada que hacer.
-    const grupoMuscular = diaDeLaRutina?.grupo || diaDeLaRutina?.grupo_muscular
-        || diaDeLaRutina?.focus || diaDeLaRutina?.nombre || '';
-    const esDiaDeEntreno = !!diaDeLaRutina && !diaDeLaRutina.is_rest;
-    const soloCardio = esDiaDeEntreno && !(diaDeLaRutina.exercises?.length) && !!diaDeLaRutina.cardio;
+    //
+    // QUÉ DÍA ES HOY LO DICE EL SERVIDOR, NO EL NAVEGADOR. Esto miraba
+    // `new Date().toLocaleDateString(...)`, o sea el día del aparato del cliente, mientras
+    // la cabecera de arriba escribe el día de España: a un cliente que no esté en España la
+    // misma pantalla le decía «Lunes, 17 de agosto» y buscaba su entreno en el domingo, así
+    // que un día de descanso ahí le borraba la línea de entreno del lunes. El backend ya lo
+    // resuelve en `GET /workout-logs/hoy` con `hoy_madrid()`, que es la única cuenta buena.
+    const grupoMuscular = entrenoDelDia?.dia_rutina || '';
+    const esDiaDeEntreno = !!entrenoDelDia && !entrenoDelDia.descanso;
+    const soloCardio = esDiaDeEntreno && entrenoDelDia.tipo === 'cardio';
     const duracionCardio = (() => {
-        const d = diaDeLaRutina?.cardio?.duration;
+        const d = entrenoDelDia?.cardio_minutos;
         if (d == null || d === '') return '';
         return /^\d+$/.test(String(d).trim()) ? `${d} minutos` : String(d);
     })();

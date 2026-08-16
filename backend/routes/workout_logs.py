@@ -154,6 +154,10 @@ async def get_log_de_hoy(ctx=Depends(require_access("rutina"))):
         # Un dia de solo cardio ("Hoy solo cardio · 40 minutos") se registra como cardio:
         # cuenta como dia hecho en Inicio, pero en el mensual va a su propio bloque.
         "tipo": "cardio" if (dia and not (dia.get("exercises") or []) and dia.get("cardio")) else "entreno",
+        # Los minutos van con el tipo: Inicio escribe «Hoy solo cardio · 40 minutos» y sin
+        # esto tendría que volver a buscar el día en la rutina por su cuenta, que es como
+        # acababa mirando el día del NAVEGADOR en vez del de España.
+        "cardio_minutos": ((dia or {}).get("cardio") or {}).get("duration"),
         "ejercicios": [e.get("name") for e in (dia or {}).get("exercises") or []],
         # Los de hoy si ya guardo, y si no los de la ultima vez que le toco esta rutina.
         "pesos_referencia": (log or {}).get("pesos") or await pesos_de_la_ultima_vez(
