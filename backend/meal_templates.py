@@ -10,10 +10,90 @@ grasa) y las cantidades se autoajustan a los macros del usuario.
 
 import math
 import random
+import re
+import unicodedata
 
 from typing import Dict, List, Optional
 from calma_engine import _redondear_cantidad, parse_categories
 from redondeo_salida import redondear_cantidad
+
+
+# =========================================================
+# UNA RECETA TIENE NOMBRE, Y POR EL NOMBRE SE LA PIDE
+# =========================================================
+#
+# Francisco, 15-08-2026: «esa avena que le pido es una receta y no la puso». Pedía la
+# «Avena Fusion Cake» -- receta de desayuno del recetario, nueve ingredientes -- y el
+# asistente le montaba otra cosa. No es que no la tuviera: es que NADIE buscaba las recetas
+# por su nombre. El recetario entraba solo filtrado por momento y macros, así que una receta
+# que no cuadrara con los macros de esa comida no existía para el chat aunque el cliente la
+# llamara por su nombre.
+#
+# Cuándo se da por nombrada una receta (las dos condiciones, y la segunda con dos vías):
+#
+#   1. TODAS las palabras con carga del nombre están en lo que ha escrito el cliente.
+#   2. Y además, o bien alguna de esas palabras no es el nombre de un alimento del catálogo
+#      («fusion», «cake», «brioche»), o bien el nombre aparece ENTERO y SEGUIDO en la frase.
+#
+# La condición 2 es la que separa pedir una receta de pedir ingredientes, que es la regla que
+# Francisco impuso el mismo día: «si yo le pido pollo solo debe poner pollo». Sin ella, «pollo
+# con arroz» se convertiría en una receta de Jesús con seis ingredientes más. Medido sobre las
+# 159 recetas de producción: 148 se encuentran a sí mismas citando su nombre, y ninguna de las
+# frases de ingredientes sueltos («montame pollo con arroz», «quiero pollo, arroz y aceite»,
+# «algo con huevos y pan») dispara nada. Las 11 que fallaban por la vía del vocabulario --
+# «Cheesy Chicken Burger», «Arroz salteado con pavo y verduras» -- las recupera la vía del
+# nombre seguido: si escribe el nombre entero y en orden, es que lo está nombrando.
+_VACIAS_NOMBRE = {"de", "del", "con", "y", "la", "el", "los", "las", "al", "en", "a", "sin",
+                  "un", "una", "unos", "unas", "su", "sus", "para", "por", "mas", "que", "lo"}
+
+
+def _sin_tildes(t: str) -> str:
+    t = unicodedata.normalize("NFD", (t or "").lower())
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9ñ ]+", " ", t)
+
+
+def palabras_con_carga(t: str) -> List[str]:
+    """Las palabras del texto que dicen algo (sin artículos, preposiciones ni sílabas sueltas)."""
+    return [w for w in _sin_tildes(t).split() if len(w) >= 3 and w not in _VACIAS_NOMBRE]
+
+
+def _nombre_seguido(nombre: str, texto: str) -> bool:
+    """El nombre aparece entero y en orden en la frase (con lo que sea entre medias)."""
+    pn = palabras_con_carga(nombre)
+    if len(pn) < 2:
+        return False
+    return re.search(r"\b" + r"\W+(?:\w+\W+){0,2}?".join(map(re.escape, pn)) + r"\b",
+                     _sin_tildes(texto)) is not None
+
+
+def recetas_nombradas(plantillas: List[dict], texto: str,
+                      cabezas_catalogo: set = None, momento: str = None) -> List[dict]:
+    """Las recetas que el cliente ha llamado por su nombre, la más completa primero."""
+    palabras_texto = set(palabras_con_carga(texto))
+    if not palabras_texto:
+        return []
+    cabezas = cabezas_catalogo or set()
+    encontradas = []
+    for p in plantillas:
+        pn = palabras_con_carga(p.get("nombre"))
+        if len(pn) < 2 or not set(pn) <= palabras_texto:
+            continue
+        propias = [w for w in pn if w not in cabezas]
+        if not propias and not _nombre_seguido(p.get("nombre"), texto):
+            continue
+        # Más palabras del nombre citadas = más seguro; a igualdad, la del momento que toca.
+        encontradas.append((len(pn), 1 if (momento and p.get("momento") == momento) else 0, p))
+    encontradas.sort(key=lambda x: (-x[0], -x[1]))
+    # Sin duplicados: el mismo nombre está repetido en varios momentos.
+    vistas, salida = set(), []
+    for _, _, p in encontradas:
+        clave = _sin_tildes(p.get("nombre"))
+        if clave in vistas:
+            continue
+        vistas.add(clave)
+        salida.append(p)
+    return salida
 
 
 

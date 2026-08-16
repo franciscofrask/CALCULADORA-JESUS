@@ -19,7 +19,7 @@ import json
 import logging
 import os
 import re
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from openai import AsyncOpenAI
 
@@ -78,11 +78,13 @@ _ESQUEMAS = [
          "estilo": {"type": "string", "description": "CÓMO la quiere, copiado de sus palabras ('algo ligero para llevar'). Se comprueba contra lo que escribió: inventado o arrastrado de otra charla se ignora. NO el nombre de la comida, y a un 'dame opciones' pelado NO le pongas estilo"},
          "solo_recetario": {"type": "boolean",
                             "description": "Solo recetas de Jesús, sin componer nada tuyo"},
+         "receta": {"type": "string", "description": "El NOMBRE de una receta concreta del recetario, cuando el cliente la llama por su nombre («móntame la Avena Fusion Cake»). Trae ESA receta con sus ingredientes, ajustada a lo que falta en la comida. Copia el nombre tal cual lo escribió; si no existe, te lo dice"},
          "generico": {"type": "boolean", "description": "SOLO si el cliente ha hablado de marcas: true = sin marcas, false = de marca. Si no ha dicho nada, OMÍTELO: el menú va con todo el catálogo y poner esto lo estrecha sin motivo"},
          "marca": {"type": "string", "description": "SOLO si el cliente pidió una marca concreta"},
          "filtro_porque": {"type": "string", "description": "obligatorio si mandas 'generico', 'marca' o un 'estilo' con otras palabras que las suyas: la frase EXACTA con que el cliente lo pidió. Se comprueba contra lo que escribió; si no aparece, el filtro se ignora"},
          "n": {"type": "integer", "description": "cuántas opciones montar (2-4; por defecto 3). Pedir 1 aquí NO funciona: para una sola usa 'solo_una'"},
-         "solo_una": {"type": "boolean", "description": "true SOLO si el cliente pidió expresamente UNA («móntame un menú», «hazme una opción»). Con «dame opciones» o cualquier plural, ni lo pongas"}}}},
+         "solo_una": {"type": "boolean", "description": "true SOLO si el cliente pidió expresamente UNA («móntame un menú», «hazme una opción»). Con «dame opciones» o cualquier plural, ni lo pongas"},
+         "completar": {"type": "boolean", "description": "true SOLO cuando te ha pedido COMPLETAR la comida con lo que falta, o ha dicho que sí a que la completes tú: los de 'incluir_ids' se quedan fijos y el resto se monta alrededor. Con «ponme X» o una lista de alimentos NO se pone: ahí va solo lo que ha nombrado"}}}},
     {"name": "revisar_borrador",
      "description": "Audita un borrador de menú: restricciones, marcas no pedidas, momento, margen. Llámala SIEMPRE antes de enseñar o aplicar un borrador.",
      "parameters": {"type": "object", "properties": {"borrador_id": {"type": "string"}},
@@ -276,7 +278,8 @@ CÓMO TRABAJAS:
 - Si te nombra las piezas de una comida por montar («quiero A con B»), eso es un encargo, no una consulta: móntala ENTERA con eso dentro y lo que falte para cuadrarla, en UNA propuesta. Un abanico de opciones es para cuando pide opciones; y una opción que no cuadra no se enseña como si valiera.
 - CON LA COMIDA VACÍA Y EL CLIENTE DICIENDO QUÉ QUIERE COMER, SE MONTA. No se le pregunta si se la montas: `componer_menu` y le enseñas la comida. La tarjeta YA es el momento de elegir; preguntarle antes de enseñársela es un turno tirado, y prometerle que «en el siguiente paso» se la montas es dejarle la comida a medias.
 - SI NOMBRA ALIMENTOS, VAN ESOS Y SOLO ESOS. «Pon pollo» es pollo; «pon pollo, avena y yogur» son esos tres. Llama a `componer_menu` con `incluir_ids` = lo que ha nombrado y te devuelve exactamente eso con las cantidades ajustadas. NO le añadas nada más: ni para cuadrar los macros, ni porque falte un hidrato, ni porque a ti te parezca que la comida está coja. Puede que quiera ir cargando de uno en uno, y ya te pedirá él una sugerencia si la quiere.
-- Y SI CON LO SUYO NO CUADRA, SE LO DICES. La tarjeta trae el desvío escrito: cuéntaselo en una línea («así te quedas a 6 g de grasa del objetivo») y ofrécele las salidas -- quitar una pieza, cambiar una cantidad, o que te deje buscar algo para completar. La decisión es suya. Meterle un sexto alimento que no ha pedido para que los números salgan es lo que NO se hace.
+- SI LLAMA A UNA RECETA POR SU NOMBRE, ES ESA RECETA. «Móntame la Avena Fusion Cake» no se compone a ojo: `componer_menu` con `receta` = el nombre tal cual lo escribió, y te la trae entera y ajustada a lo que falta. Sus ingredientes son los de Jesús: no le quites piezas ni le ofrezcas cambiarlas nada más enseñarla, y si se desvía dilo y ya está. Si esa receta no existe, la herramienta te lo dice: cuéntaselo sin inventarte una parecida con ese nombre.
+- Y SI CON LO SUYO NO CUADRA, SE LO DICES. La tarjeta trae el desvío escrito: cuéntaselo en una línea («así te quedas a 6 g de grasa del objetivo») y ofrécele las salidas -- quitar una pieza, cambiar una cantidad, o que te deje completar la comida. Si dice que sí a completarla, se COMPLETA en ese mismo turno: `componer_menu` con `completar`=true y sus alimentos en `incluir_ids`, y le enseñas la comida entera. Volver a enseñarle la misma pieza suelta y repetirle la pregunta es el bucle que más le harta. La decisión es suya. Meterle un sexto alimento que no ha pedido para que los números salgan es lo que NO se hace.
 - Si el cliente veta algo o cuenta una alergia, respétalo en lo que propongas a partir de ahí.
 - Si una herramienta no devuelve nada, di por qué (viene en el resultado) y ofrece la alternativa; no rellenes con inventos.
 - «Ponme lo mismo que comí ayer» o «repíteme la cena del lunes» SÍ se puede: `copiar_de_otro_dia` con esa fecha resuelta. No digas que no ves otros días. Cuando la traiga, cuéntale de qué día viene y que los gramos van ajustados a lo que le falta hoy, no son los de aquel día.
@@ -530,6 +533,9 @@ class AgentLoop:
         self.model = model or MODELO_AGENTE
         self.progreso = progreso           # callback por herramienta (indicador SSE)
         self.traza: List[dict] = []        # registro de llamadas (guardarraíl 4)
+        self._receta_del_turno = None      # receta del recetario nombrada en este mensaje
+        self._vistos_del_turno: Dict[int, str] = {}   # alimentos mirados en este turno
+        self._prometidos: List[int] = []   # los que prometió en su pregunta y él aceptó
         self._client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
     @classmethod
@@ -625,6 +631,15 @@ class AgentLoop:
                 f"decidido: NO le ofrezcas ajustarla, ni afinarla, ni compensarla. Si "
                 f"quiere cambiar algo te lo dirá él. Lo que toca ahora es guardarla o "
                 f"seguir con la siguiente.")
+        # HA LLAMADO A UNA RECETA DE JESÚS POR SU NOMBRE. Se ha comprobado contra el
+        # recetario, así que existe: se monta ESA, con su nombre en la frase.
+        if self._receta_del_turno:
+            lineas.append(
+                f"El cliente ha nombrado la receta «{self._receta_del_turno}», que SÍ está en "
+                f"el recetario de Jesús. Si quiere montarla, llama a componer_menu con "
+                f"receta=«{self._receta_del_turno}» y te la trae entera y ajustada; no compongas "
+                f"tú una parecida ni le digas que no la tienes. Si lo que hace es preguntar por "
+                f"ella, contéstale.")
         restr = self.bot.state.get("avoided_keywords") or []
         if restr:
             lineas.append("Vetos del cliente (perfil o dichos en la sesión): "
@@ -680,13 +695,91 @@ class AgentLoop:
                           "ya no está delante y ofrécele las vivas o montar otras.")
         return "\n".join(lineas)
 
+    # ------------------------------------------------------------ promesas
+    def _apuntar_promesa(self, texto: str, borradores_vistos) -> None:
+        """Si acaba preguntando si monta la comida con X, se guarda X para el «sí».
+
+        Francisco, 15-08-2026: «¿Te monto la Comida 1 con avena de base?» -- «dale» -- y las
+        tres opciones que salieron no llevaban avena. El asistente promete y luego compone
+        sin lo prometido, y al cliente le toca repetirlo. Aquí se apunta la promesa; el «sí»
+        pelado del turno siguiente la mete en `incluir_ids` sin contar con el modelo.
+
+        Solo con alimentos que ha MIRADO en este turno, o con los de la tarjeta que acaba de
+        enseñar: leer nombres de comida sueltos dentro de una frase es adivinar, y con el
+        catálogo delante no hace falta.
+        """
+        from meal_templates import palabras_con_carga
+        self.bot.state.pop("promesa_alimentos", None)
+        if not texto or "?" not in texto:
+            return
+        ids, nombres = [], []
+        if borradores_vistos:
+            # Con menús completos delante, un «sí» pelado no es «complétamelo»: es una
+            # respuesta a otra cosa, y elegir se elige por número. Solo cuenta la tarjeta
+            # de una o dos piezas, que es la avena sola esperando a que la completen.
+            ultimo = borradores_vistos[-1]
+            piezas = ultimo.get("items") or []
+            if len(piezas) > 2:
+                return
+            ids = [i["id"] for i in piezas]
+            nombres = [i["nombre"] for i in piezas]
+        else:
+            if not self._vistos_del_turno:
+                return
+            palabras_texto = set(palabras_con_carga(texto))
+            for aid, nombre in self._vistos_del_turno.items():
+                propias = [w for w in palabras_con_carga(nombre) if len(w) >= 4]
+                if propias and any(w in palabras_texto for w in propias):
+                    ids.append(aid)
+                    nombres.append(nombre)
+        # Tres alimentos ya no son «una comida con avena de base», son la comida entera: si
+        # nombra tantos, que lo monte el modelo con lo que él decida.
+        if ids and len(ids) <= 2:
+            self.bot.state["promesa_alimentos"] = {"ids": ids, "nombres": nombres}
+
     # ------------------------------------------------------------ despacho
     async def _despachar(self, nombre: str, args: dict):
         t = self.tools
         try:
             if nombre == "buscar_alimentos":
-                return await t.buscar_alimentos(**args)
+                r_b = await t.buscar_alimentos(**args)
+                # Lo que ha mirado en este turno: es el único vocabulario con el que se
+                # puede leer una promesa suya («¿te monto la comida con avena de base?»)
+                # sin ponerse a adivinar alimentos dentro de una frase.
+                for it in (r_b.get("items") or [])[:8]:
+                    try:
+                        self._vistos_del_turno[int(it["id"])] = it.get("nombre") or ""
+                    except (TypeError, ValueError, KeyError):
+                        pass
+                return r_b
             if nombre == "componer_menu":
+                # SI HA NOMBRADO UNA RECETA, SE MONTA ESA (15-08-2026). La detección la
+                # hace el código con los nombres del recetario delante (ver
+                # `receta_nombrada`), no el modelo: pedir la «Avena Fusion Cake» acabó en
+                # tres opciones sin avena porque el modelo compuso por su cuenta. Si él ya
+                # manda `receta`, manda la suya; esto solo cubre cuando la ignora.
+                if self._receta_del_turno:
+                    # La detectada gana a la que escriba el modelo: sale de las palabras del
+                    # cliente comparadas con el recetario, no de su memoria. Y se gasta al
+                    # usarla: si en el mismo turno monta otra comida, esa va como siempre.
+                    args = dict(args, receta=self._receta_del_turno)
+                    self._receta_del_turno = None
+                # LO QUE PROMETIÓ EN LA PREGUNTA VA EN LA COMIDA (15-08-2026, Francisco).
+                # «¿Te monto la Comida 1 con avena de base?» -- «dale» -- y las tres
+                # opciones sin avena. El cliente dijo que sí a algo concreto: eso entra
+                # fijado, aunque al modelo se le haya olvidado por el camino.
+                if self._prometidos:
+                    # Y con la comida ENTERA alrededor: lo que ofreció fue montarla con eso
+                    # de base, no servirle eso solo. Sin `completar` la respuesta al «dale»
+                    # era otra vez la pieza suelta y otra vez la misma pregunta.
+                    #
+                    # Se SUMA a lo que mande el modelo, no se mira si viene vacío: medido en
+                    # el chat real, al «sí» volvió a componer con sus alimentos (huevos, pan,
+                    # pavo) y sin la avena, hablando de la avena en el texto. Lo prometido
+                    # entra sí o sí, y el resto lo elige él.
+                    args = dict(args, completar=True, incluir_ids=list(dict.fromkeys(
+                        [int(x) for x in (args.get("incluir_ids") or [])] + self._prometidos)))
+                    self._prometidos = []
                 return await t.componer_menu(**args)
             if nombre == "revisar_borrador":
                 return await t.revisar_borrador(**args)
@@ -839,6 +932,25 @@ class AgentLoop:
         # que ha pasado a otro tema y esa pregunta ya no está encima de la mesa.
         if oferta:
             self.bot.state.pop("oferta_pendiente", None)
+
+        # ¿HA LLAMADO A UNA RECETA POR SU NOMBRE? Se mira aquí, contra los nombres del
+        # recetario, y no se le pregunta al modelo: pidiendo la «Avena Fusion Cake» compuso
+        # tres opciones sin avena. Lo que se decida aquí entra en el contexto (para que la
+        # nombre al hablar) y se le impone a `componer_menu` si él no la manda.
+        try:
+            nombrada = await self.tools.receta_nombrada(user_input or "")
+        except Exception:
+            nombrada = None
+        self._receta_del_turno = (nombrada or {}).get("nombre")
+
+        # LO QUE PROMETIÓ EN SU PREGUNTA, SI EL CLIENTE HA DICHO QUE SÍ. La promesa se
+        # apunta al cerrar el turno anterior (`_apuntar_promesa`) y solo vale para el
+        # siguiente mensaje: o la acepta ahora, o caduca.
+        promesa = self.bot.state.pop("promesa_alimentos", None)
+        self._vistos_del_turno = {}
+        self._prometidos = (list(promesa.get("ids") or [])
+                            if promesa and _ES_UN_SI_PELADO.match((user_input or "").strip())
+                            else [])
 
         # LA CALIBRACIÓN LA CONTESTA EL MOTOR, NO EL MODELO (fallo 02 de Jesús, y sigue
         # vivo tras metérsela en el prompt y en el estado). A «¿la proteína de las
@@ -1364,6 +1476,9 @@ class AgentLoop:
                 self.bot.state.pop("fecha_pedida", None)
             else:
                 self.bot.state["fecha_pedida"] = fecha_al_entrar
+
+        # Si ha cerrado preguntando si monta la comida con algo concreto, se apunta CON QUÉ.
+        self._apuntar_promesa(texto_final, borradores_vistos)
 
         # Historial persistible (solo lo humano, no el tráfico de herramientas)
         self.bot.messages_history.append({"role": "user", "content": user_input})

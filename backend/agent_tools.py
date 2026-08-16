@@ -91,6 +91,7 @@ class AgentTools:
     _FORMA = None          # de cuántas piezas se compone una comida, y de qué papeles
     _ROLES = {}            # id -> papel del alimento (P/H/G/V), calculado una vez
     _EF100 = {}            # id -> macros efectivos por 100 g, calculados una vez
+    _CABEZAS = None        # palabra que encabeza el nombre de cada alimento del catálogo
 
     def __init__(self, bot, semantica, corrector, perfil, foods: Dict[int, dict],
                  companyia=None, forma=None):
@@ -314,6 +315,65 @@ class AgentTools:
         puestas = len(((self.bot.state.get("comidas_completadas") or {})
                        .get(self.bot.current_meal_key()) or {}).get("alimentos", []))
         return max(1, tipicas - puestas)
+
+    # LAS RECETAS DE JESÚS SE PUEDEN PEDIR POR SU NOMBRE (15-08-2026, Francisco).
+    #
+    # «Esa avena que le pido es una receta y no la puso»: la «Avena Fusion Cake» está en el
+    # recetario desde siempre, pero el recetario solo entraba filtrado por momento y macros,
+    # así que llamarla por su nombre no servía de nada. El criterio de qué cuenta como
+    # nombrar una receta -- y por qué «pollo con arroz» NO lo es -- está en `meal_templates`.
+    async def receta_nombrada(self, texto: str) -> Optional[dict]:
+        """La receta del recetario que el cliente ha llamado por su nombre, o None."""
+        from meal_templates import recetas_nombradas, palabras_con_carga
+        if not (texto or "").strip():
+            return None
+        if AgentTools._CABEZAS is None:
+            # La primera palabra con carga de cada alimento del catálogo: es lo que
+            # distingue «cake» (no está) de «pollo» (sí está).
+            cabezas = set()
+            for f in (self.foods or {}).values():
+                p = palabras_con_carga(f.get("nombre"))
+                if p:
+                    cabezas.add(p[0])
+            AgentTools._CABEZAS = cabezas
+        try:
+            nombres = await self.db.menu_templates.find(
+                {}, {"_id": 0, "id": 1, "nombre": 1, "momento": 1}).to_list(2000)
+        except Exception:
+            return None
+        halladas = recetas_nombradas(nombres, texto, AgentTools._CABEZAS,
+                                     momento=self._momento_actual())
+        if not halladas:
+            return None
+        return await self.db.menu_templates.find_one(
+            {"id": halladas[0].get("id")}, {"_id": 0})
+
+    async def _receta_recuadrada(self, plantilla: dict, restante: dict) -> Optional[dict]:
+        """La receta del recetario con sus cantidades ajustadas a lo que falta en la comida.
+
+        `best_effort`: se ajusta lo que se pueda y se devuelve igual. La ha pedido por su
+        nombre, así que la ve aunque no cuadre; el desvío se le dice, que es lo que se hace
+        con todo lo que pide él.
+        """
+        from meal_templates import _ajustar_plantilla
+        try:
+            op = await _ajustar_plantilla(
+                self.db, plantilla,
+                {"P": restante.get("P", 0), "H": restante.get("H", 0), "G": restante.get("G", 0)},
+                best_effort=True)
+        except Exception:
+            op = None
+        if not op:
+            return None
+        items = []
+        for it in op.get("items", []):
+            aid = it.get("alimento_id")
+            food = self.foods.get(int(aid)) if aid not in (None, "") else None
+            if not food:
+                continue
+            items.append(self._item_de(food, float(it.get("cantidad_g") or 0),
+                                       it.get("macros_efectivos") or {}))
+        return {"items": items} if items else None
 
     def _item_de(self, food: dict, cantidad_g: float, macros: dict) -> dict:
         config = get_food_config(food)
@@ -1829,7 +1889,8 @@ class AgentTools:
                             generico: bool = None, marca: str = None,
                             n: int = 3, solo_recetario: bool = False,
                             filtro_porque: str = None,
-                            solo_una: bool = False) -> dict:
+                            solo_una: bool = False, receta: str = "",
+                            completar: bool = False) -> dict:
         """Monta hasta `n` menús completos para la comida actual con el catálogo entero.
         `incluir_ids` son obligatorios (van en todas las opciones); `estilo` es el texto
         libre del cliente y guía la elección por semántica. El recetario (153 recetas de
@@ -1857,6 +1918,66 @@ class AgentTools:
         momento = self._momento_actual()
         opciones: List[dict] = []
 
+        # UNA RECETA PEDIDA POR SU NOMBRE ES ESA RECETA, NO UNA PARECIDA (15-08-2026).
+        #
+        # Francisco pidió la «Avena Fusion Cake» y le salieron tres opciones sin avena. La
+        # receta existe -- desayuno, nueve ingredientes -- pero el recetario solo se consultaba
+        # filtrado por momento y macros: si con los macros de esa comida no cuadraba, para el
+        # chat no existía. Aquí se trae ESA, ajustada a lo que falta, y se enseña aunque se
+        # desvíe: se dice cuánto, como con lo que pide alimento a alimento. Quien nombra una
+        # receta quiere verla, no que se la sustituyan por otra que cuadre mejor.
+        if receta:
+            plantilla = await self.receta_nombrada(receta)
+            if not plantilla:
+                return {"borradores": [], "sin_resultados_porque": [
+                    f"no hay ninguna receta llamada «{receta}» en el recetario. Dilo así, sin "
+                    f"inventarte una parecida, y ofrécele montar algo con lo que quiera dentro."]}
+            hecha = await self._receta_recuadrada(plantilla, restante)
+            if not hecha:
+                return {"borradores": [], "sin_resultados_porque": [
+                    f"«{plantilla.get('nombre')}» está en el recetario pero sus ingredientes no "
+                    f"se pueden servir en esta comida. Dilo tal cual."]}
+            items = hecha["items"]
+            tot = {m: round(sum(i["macros"][m] for i in items), 1) for m in ("P", "H", "G")}
+            desvio = {m: round(tot[m] - restante[m], 1) for m in ("P", "H", "G")}
+            seq = self.bot.state.setdefault("opcion_seq", {})
+            mk_receta = self.bot.current_meal_key()
+            numero = int(seq.get(mk_receta, 0)) + 1
+            seq[mk_receta] = numero
+            bid = self._nuevo_bid()
+            borrador = {
+                "id": bid, "numero": numero, "items": items, "origen": "recetario",
+                "nombre": plantilla.get("nombre"), "receta_url": None,
+                "receta_foto": plantilla.get("foto"),
+                "macros_totales": tot, "objetivo": dict(restante), "desvio": desvio,
+                "pedidos": [], "filtros": {"generico": None, "marca": None, "estilo": None},
+                "momento": momento, "meal_key": mk_receta,
+                "solo_lo_pedido": True,      # la ha pedido él: se aplica aunque se desvíe
+                "receta_pedida": plantilla.get("nombre"),
+            }
+            # El desvío se dice con su signo en palabras: «se pasa» o «le faltan». Un
+            # «se queda a 12 g del objetivo» no distingue pasarse de quedarse corto, y una
+            # receta grande metida en un hueco pequeño se pasa casi siempre.
+            se_pasa = [f"{desvio[m]:.0f} g de {_MACRO_LBL[m]}" for m in ("P", "H", "G")
+                       if desvio[m] > 2 * self.bot.margen_de(restante.get(m, 0))]
+            se_queda = [f"{-desvio[m]:.0f} g de {_MACRO_LBL[m]}" for m in ("P", "H", "G")
+                        if -desvio[m] > 2 * self.bot.margen_de(restante.get(m, 0))]
+            partes = []
+            if se_pasa:
+                partes.append("se pasa " + " y ".join(se_pasa))
+            if se_queda:
+                partes.append("le faltan " + " y ".join(se_queda))
+            if partes:
+                borrador["avisos"] = [
+                    f"«{plantilla.get('nombre')}» con las cantidades ajustadas a lo que te "
+                    "falta en esta comida: aun así " + ", y ".join(partes)]
+            self.bot.state.setdefault("borradores", {})[bid] = borrador
+            return {"borradores": [borrador],
+                    "nota": (f"Es la receta «{plantilla.get('nombre')}» del recetario de Jesús, "
+                             "con sus ingredientes y las cantidades ajustadas a esta comida. "
+                             "Nómbrala por su nombre y no le quites ni le añadas nada por tu "
+                             "cuenta.")}
+
         # LO QUE PIDE EL CLIENTE ES LO QUE VA. NI UN ALIMENTO MÁS.
         #
         # Francisco, 15-08-2026: «si yo le pido pollo solo debe poner pollo, si le pido dos
@@ -1873,7 +1994,14 @@ class AgentTools:
         # enseña aunque no cuadre: si lo que ha pedido se pasa de grasa, se le dice cuánto
         # y decide él. La vara de «por arriba no se pasa» es para lo que propone la app,
         # no para lo que pide el cliente.
-        if incluir_ids:
+        #
+        # SALVO QUE ÉL PIDA COMPLETARLA (`completar`), que es la otra mitad de su frase:
+        # «luego quizá le pida alguna sugerencia para completar los macros». Sin esa puerta
+        # el asistente se quedaba encerrado: enseñaba la avena sola, ofrecía completarla, el
+        # cliente decía «dale» y volvía a enseñar una pieza suelta y a ofrecer lo mismo --
+        # el bucle de siempre, ahora provocado por la regla nueva. Con `completar` los suyos
+        # entran fijos y el resto se compone alrededor, que es lo que acaba de aceptar.
+        if incluir_ids and not completar:
             suyos = [self.foods[i] for i in incluir_ids if i in self.foods]
             items = await self._recuadrar_a_hoy(suyos, restante, rematar=False, exigente=False)
             if items:
@@ -1909,7 +2037,10 @@ class AgentTools:
                 return {"borradores": [borrador],
                         "nota": ("Va SOLO lo que ha pedido, con las cantidades ajustadas. No "
                                  "le añadas nada por tu cuenta: si falta para cuadrar, dile "
-                                 "cuánto falta y ofrécele buscar algo, que decida él.")}
+                                 "cuánto falta y ofrécele completarla. Y si dice que sí, "
+                                 "vuelve a llamarme con completar=true y los mismos "
+                                 "incluir_ids: eso monta la comida entera con lo suyo dentro. "
+                                 "Volver a enseñarle lo mismo y repetir la pregunta, no.")}
             return {"borradores": [], "sin_resultados_porque": [
                 "con esos alimentos no sale ninguna cantidad que se pueda servir en esta "
                 "comida. Dile cuáles son y pregúntale si quita alguno o los lleva a otra "
@@ -2733,7 +2864,11 @@ class AgentTools:
             if b.get("filtros", {}).get("generico") is True and food.get("url"):
                 problemas.append({"item_id": it["id"], "tipo": "marca_no_pedida",
                                   "detalle": f"pidió genéricos y {it['nombre']} es de marca"})
-            if self.perfil and momento != PERI \
+            # A UNA RECETA DE JESÚS NO SE LE AUDITA EL REPARTO. Pedida por su nombre, sus
+            # ingredientes son los que él puso: marcar el Skyr como «atípico para la Comida
+            # 1» solo sirvió para que el asistente ofreciera cambiárselo por otra cosa nada
+            # más enseñarla. Lo que sí se sigue mirando: vetos del cliente y desvío.
+            if self.perfil and momento != PERI and not b.get("receta_pedida") \
                     and self.perfil.coherencia(food, momento) < COHERENCIA_MINIMA:
                 # Este `detalle` SE VE en la tarjeta del menú («⚠ Arroz basmati es atípico
                 # para desayuno»), así que la comida se nombra como en la pantalla.
