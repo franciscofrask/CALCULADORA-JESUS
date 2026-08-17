@@ -827,26 +827,20 @@ async def search_foods_endpoint(
                 if food_in_cat_calma(f, code):
                     return (idx - 0.5) if _is_pro(f) else idx
             return float('inf')
-        if solo_cantidad:
-            # El hueco ha servido para la CANTIDAD y para nada más: el orden es el del
-            # buscador (parecido con lo escrito > frecuencia > alfabético), igual que
-            # cuando no viajaba el hueco. Ordenar aquí por diferencia de macros era la
-            # otra mitad del fallo 3 de Jesús (15-08).
-            food_freq = await _get_food_frequency(user["id"])
-            alimentos.sort(key=lambda f: (
-                _relevancia(f),
-                (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
-                -food_freq.get(str(f.get("id", "")), 0),
-                f.get("nombre", "")
-            ))
-        else:
-            alimentos.sort(key=lambda f: (
-                _relevancia(f),
-                (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
-                _prioridad(f),
-                _diff(f),
-                f.get("nombre", "")
-            ))
+        # EL PARECIDO MANDA; DENTRO DE LO IGUAL DE PARECIDO, MANDA CALMA.
+        #
+        # `_relevancia` va primero y eso es el fallo 3: buscando «pechuga» ninguna Pepsi
+        # se sube por delante de una pechuga, aunque tape mejor el hueco. Pero entre dos
+        # que se parecen IGUAL a lo escrito, el orden es el de Calma -- prioridad de fase
+        # y diferencia de macros --, no el abecedario: es lo que hace que buscando «pollo»
+        # salga primero el que cuadra la comida (Francisco, 17-08).
+        alimentos.sort(key=lambda f: (
+            _relevancia(f),
+            (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
+            _prioridad(f),
+            _diff(f),
+            f.get("nombre", "")
+        ))
     else:
         # Default sort: (favorites si FOOD_FAVORITES_FIRST) > frequency > alphabetical
         fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
