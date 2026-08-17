@@ -1374,22 +1374,42 @@ async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_onl
         set_user["role"] = data["role"]
     if "plan" in data:
         plan_code = (data["plan"] or "").lower().strip()
-        plan_entry = PLAN_CATALOG.get(plan_code)
-        if not plan_entry:
-            raise HTTPException(status_code=400, detail="Plan no válido")
-        if not plan_entry.get("asignable"):
-            raise HTTPException(status_code=400, detail=f"El plan '{plan_entry['name']}' no es asignable como membresía")
-        set_user["plan"] = plan_code
-        set_prof["plan"] = plan_code
-        # Cambiar de plan reinicia el ciclo (nueva duración, semana 1).
-        if plan_code != (target.get("plan") or ""):
-            set_prof["cycle_start"] = datetime.now(timezone.utc).isoformat()
-        if data.get("comp_plan"):
-            set_user["comp_plan"] = True
-            set_prof.update({"comp_plan": True, "price": 0.0, "status": "activo"})
-        elif "comp_plan" in data:
+        if not plan_code:
+            # QUITARLE EL PLAN. Los dos sitios del panel que lo editan -- la lista de
+            # usuarios y la ficha del cliente -- traen «Sin plan» como primera opcion y
+            # mandan `null`, pero aqui todo pasaba por el catalogo y `PLAN_CATALOG.get("")`
+            # no da entrada: se respondia «Plan no valido». Asignar un plan se podia,
+            # quitarlo no, asi que uno puesto por error solo se arreglaba tocando la base.
+            #
+            # Sin plan no hay acceso y no hace falta nada mas: `estado_de_acceso` devuelve
+            # `sin_plan` aunque el perfil siga "activo", y las funciones de pago exigen una
+            # feature, que un perfil sin plan no tiene (`plan_features(None)` es la lista
+            # vacia). No se toca el `status` -- para dejar a alguien fuera esta la baja
+            # logica -- ni el `cycle_start`, que ya se reinicia solo el dia que se le
+            # vuelva a asignar plan.
+            set_user["plan"] = None
+            set_prof["plan"] = None
+            # La cortesia lo era de un plan que ya no tiene. Dejarla puesta marcaria como
+            # «precio cortesia» en la ficha a alguien que no tiene membresia ninguna.
             set_user["comp_plan"] = False
             set_prof["comp_plan"] = False
+        else:
+            plan_entry = PLAN_CATALOG.get(plan_code)
+            if not plan_entry:
+                raise HTTPException(status_code=400, detail="Plan no válido")
+            if not plan_entry.get("asignable"):
+                raise HTTPException(status_code=400, detail=f"El plan '{plan_entry['name']}' no es asignable como membresía")
+            set_user["plan"] = plan_code
+            set_prof["plan"] = plan_code
+            # Cambiar de plan reinicia el ciclo (nueva duración, semana 1).
+            if plan_code != (target.get("plan") or ""):
+                set_prof["cycle_start"] = datetime.now(timezone.utc).isoformat()
+            if data.get("comp_plan"):
+                set_user["comp_plan"] = True
+                set_prof.update({"comp_plan": True, "price": 0.0, "status": "activo"})
+            elif "comp_plan" in data:
+                set_user["comp_plan"] = False
+                set_prof["comp_plan"] = False
     if set_user:
         await db.users.update_one({"id": user_id}, {"$set": set_user})
     if set_prof:
