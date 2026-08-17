@@ -659,9 +659,16 @@ const BuildMealModal = ({
      *
      * Ahora se busca como en la pantalla «Alimentos»: filtro por nombre y orden por parecido
      * con lo escrito (`ordenarPorRelevancia`, el mismo código de Calma que usa aquella
-     * pantalla). El hueco de macros sigue existiendo, pero donde toca: en las CATEGORÍAS,
-     * que es la parte que sugiere. `peri` se mantiene porque no es un hueco de macros, es de
-     * qué alimentos se compone un intra o un post.
+     * pantalla). `peri` se mantiene porque no es un hueco de macros, es de qué alimentos se
+     * compone un intra o un post.
+     *
+     * PERO LA CANTIDAD SÍ SALE DEL HUECO (Jesús, 17-08). Quitar el hueco de la búsqueda se
+     * llevó por delante la cantidad: al no calcularla el motor, el alimento entraba con su
+     * ración (o 100 g), y buscando «leche de almendras» eso tapaba 1 g de los 10 g de grasa
+     * que faltaban, mientras Calma cuadraba el macro. En Calma no hay dos listas: TODO lo
+     * que se muestra pasa por ajustarCantidadIngrediente. Así que el hueco vuelve a viajar,
+     * con `solo_cantidad`: sirve para poner la cantidad y para nada más -- no reordena la
+     * lista ni tira a nadie de ella, que era el fallo 3.
      */
     const handleSearch = async (query) => {
         setSearchQuery(query);
@@ -679,7 +686,9 @@ const BuildMealModal = ({
         const miTurno = ++turnoBusqueda.current;
 
         try {
-            const params = new URLSearchParams({ q: texto, limit: '200' });
+            const macrosParams = getMacrosParams();
+            const params = new URLSearchParams({ q: texto, limit: '200', ...macrosParams });
+            if (Object.keys(macrosParams).length > 0) params.set('solo_cantidad', 'true');
             if (isIntraMode || isPostMode) params.set('peri', isIntraMode ? 'intra' : 'post');
             const result = await api(`/api/calculator/search?${params}`);
             if (miTurno !== turnoBusqueda.current) return;   // ya se ha escrito otra cosa
@@ -705,11 +714,10 @@ const BuildMealModal = ({
             }
 
             const quantity = food._cantidad_sugerida || food.racion || 100;
-            // Los alimentos que vienen de la BÚSQUEDA POR NOMBRE no traen macros calculados
-            // (esa lista ya no pasa por el motor de sugerencias, ver `handleSearch`), así que
-            // se le piden al servidor: escalar aquí los campos crudos contaría lo que dice la
-            // etiqueta y no lo que cuenta el método, y en los alimentos por unidades lo
-            // multiplicaría además por la ración equivocada.
+            // En la comida MANUAL no hay hueco que cuadrar, así que el alimento no trae
+            // macros calculados y se le piden al servidor: escalar aquí los campos crudos
+            // contaría lo que dice la etiqueta y no lo que cuenta el método, y en los
+            // alimentos por unidades lo multiplicaría además por la ración equivocada.
             let macrosEf;
             if (food._macros_sugeridos && Object.keys(food._macros_sugeridos).length > 0) {
                 macrosEf = { P: food._macros_sugeridos.P || 0, H: food._macros_sugeridos.H || 0, G: food._macros_sugeridos.G || 0 };
@@ -743,6 +751,15 @@ const BuildMealModal = ({
                 if (!isSearching) { toast.error(seVaDeMadre); return; }
                 toast.warning(`${food.nombre} entra, pero esta comida se pasa. Baja la cantidad si quieres cuadrarla.`);
             }
+
+            // Cuadrar el macro puede pedir una cantidad que no se come: 10 g de grasa con
+            // leche de almendras son casi 900 ml. Se pone -- es la cantidad que cuadra --
+            // pero se avisa, igual que al teclearla a mano (Jesús, 16-08).
+            const avisoTope = avisoRazonable(food, quantity, {
+                porUnidad: Boolean(food.por_unidad ?? food.unidades),
+                pesoUnidad: food.peso_unidad || food.racion || 0,
+            });
+            if (avisoTope) toast.warning(avisoTope, { id: 'tope-razonable' });
 
             const foodToAdd = {
                 ...food,
@@ -1117,7 +1134,7 @@ const BuildMealModal = ({
                                                 falta a la comida -- y así se dice. */}
                                             <p className="text-[11px] text-muted-foreground mb-1.5" data-testid="origen-lista">
                                                 {isSearching
-                                                    ? <>Resultados de <span className="font-semibold text-foreground">«{searchQuery.trim()}»</span>, por parecido con lo que has escrito</>
+                                                    ? <>Resultados de <span className="font-semibold text-foreground">«{searchQuery.trim()}»</span>, por parecido con lo que has escrito{!isManual && ', con la cantidad que cuadra'}</>
                                                     : isManual
                                                         ? 'Alimentos de la categoría, por orden alfabético'
                                                         : 'Sugerencias para lo que le falta a esta comida, con la cantidad que cuadra'}
@@ -1152,15 +1169,15 @@ const BuildMealModal = ({
                                                                         ? `${(food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
                                                                             ? `${num1(Math.round(food._cantidad_sugerida / (food.peso_unidad || food.racion) * 2) / 2)} ud (${num1(food._cantidad_sugerida)} g/ml)`
                                                                             : `${num1(food._cantidad_sugerida)} g`} → `
-                                                                        // Buscando no hay cantidad sugerida (la lista ya no pasa por el motor):
+                                                                        // Sin cantidad del motor (comida manual, sin objetivo que cuadrar):
                                                                         // se dice a cuánto equivale una unidad, que es lo que se añadirá.
                                                                         : (food.por_unidad ?? food.unidades) && (food.peso_unidad || food.racion) > 0
                                                                             ? `1 ud (${num1(food.peso_unidad || food.racion)} g/ml) → `
                                                                             : `${num1(food.racion || 100)} g → `}
                                                                     {(() => {
-                                                                        // Sin cantidad sugerida (búsqueda por nombre) se enseñan los
-                                                                        // macros de UNA ración, que es lo que trae el catálogo ya
-                                                                        // pasado por las reglas del método (`macros_efectivos`).
+                                                                        // Sin cantidad sugerida (comida manual) se enseñan los macros
+                                                                        // de UNA ración, que es lo que trae el catálogo ya pasado
+                                                                        // por las reglas del método (`macros_efectivos`).
                                                                         const ms = food._macros_sugeridos || food.macros_efectivos;
                                                                         const qty = food._cantidad_sugerida || food.racion || 100;
                                                                         const fmt = num1;

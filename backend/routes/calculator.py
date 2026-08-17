@@ -621,10 +621,15 @@ async def search_foods_endpoint(
     frequent: bool = False,
     cuadrar: bool = False,
     peri: Optional[str] = None,
+    solo_cantidad: bool = False,
     user = Depends(get_current_user)
 ):
     """Búsqueda de alimentos con macros efectivos (CALMA).
     Si se pasan p_rest/h_rest/g_rest, ordena por aporte y calcula cantidad sugerida.
+    `solo_cantidad=true` -> el hueco de macros decide la CANTIDAD de cada alimento, pero
+    NO el orden ni quién sale: es lo que necesita el buscador por nombre, donde manda lo
+    que ha escrito el cliente (Jesús, 15-08) pero la cantidad tiene que cuadrar el macro
+    igual que en Calma (Jesús, 17-08).
     Filtra alimentos que el usuario marcó como 'a evitar'.
     `frequent=true` -> el set de alimentos = top-20 frecuentes del usuario (como el
     filtro TOP de Calma); luego pasa por el mismo motor (cantidad + regla + diferencia).
@@ -745,7 +750,12 @@ async def search_foods_endpoint(
                 # 0 -> minimum portion already overshoots; exclude (matches Calma a>cant).
                 # inf only for zero-macro foods, already resolved inside the engine.
                 if cant <= 0:
-                    continue
+                    if not solo_cantidad:
+                        continue
+                    # Buscando por nombre nadie se cae de la lista: si ni la ración mínima
+                    # cabe en el hueco, la cantidad es esa mínima y la pantalla avisa de que
+                    # la comida se pasa.
+                    cant = cantidad_minima_calma(a) or 1.0
             contrib = macros_at_calma(a, cant)  # {proteinas,hidratos,grasas}
             es_unidad = bool(a.get("unidades"))
             racion = float(a.get("racion") or 100)
@@ -817,13 +827,26 @@ async def search_foods_endpoint(
                 if food_in_cat_calma(f, code):
                     return (idx - 0.5) if _is_pro(f) else idx
             return float('inf')
-        alimentos.sort(key=lambda f: (
-            _relevancia(f),
-            (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
-            _prioridad(f),
-            _diff(f),
-            f.get("nombre", "")
-        ))
+        if solo_cantidad:
+            # El hueco ha servido para la CANTIDAD y para nada más: el orden es el del
+            # buscador (parecido con lo escrito > frecuencia > alfabético), igual que
+            # cuando no viajaba el hueco. Ordenar aquí por diferencia de macros era la
+            # otra mitad del fallo 3 de Jesús (15-08).
+            food_freq = await _get_food_frequency(user["id"])
+            alimentos.sort(key=lambda f: (
+                _relevancia(f),
+                (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
+                -food_freq.get(str(f.get("id", "")), 0),
+                f.get("nombre", "")
+            ))
+        else:
+            alimentos.sort(key=lambda f: (
+                _relevancia(f),
+                (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
+                _prioridad(f),
+                _diff(f),
+                f.get("nombre", "")
+            ))
     else:
         # Default sort: (favorites si FOOD_FAVORITES_FIRST) > frequency > alphabetical
         fav_doc = await db.food_favorites.find_one({"user_id": user["id"]}, {"_id": 0})
