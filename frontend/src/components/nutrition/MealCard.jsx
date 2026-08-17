@@ -1,7 +1,7 @@
 import React from 'react';
 import { StatusDot } from './DaySummary';
 import { macrosDeVista } from './ModoMacros';
-import { seExcede, textoExceso } from '../../lib/exceso';
+import { margenDe, seExcede, textoExceso } from '../../lib/exceso';
 import { num1, numMedio } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
@@ -14,15 +14,18 @@ const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 /**
  * EN QUÉ PUNTO ESTÁ ESTA COMIDA, con la palabra que usa el documento del 10-08.
  *
- * «Sin hacer», «Válida» y «Cuadrada» son las suyas, y «Montar» se cambió por «Sin hacer»
+ * «Sin hacer» y «Cuadrada» son las suyas, y «Montar» se cambió por «Sin hacer»
  * a petición de Jesús. Van al final de la fila, que es lo que convierte la lista en algo
  * que se va tachando.
  *
- * La app distingue MENOS estados que el documento: `getMealStatus` da por cuadrada todo lo
- * que caiga dentro de ±4 g en los tres macros, y el documento separa «Cuadrada» (clavada)
- * de «Válida» (dentro del margen pero no clavada). Esa distinción se hace aquí, con los
- * mismos números que ya usa el marcador de dentro de la comida, para no inventar un
- * criterio nuevo: clavado es diferencia menor de medio gramo.
+ * TRES ESTADOS, LOS MISMOS QUE EN NUTRICIÓN (Francisco, 17-08): por debajo del margen
+ * «Te falta», por encima «Te pasas», y dentro «Cuadrada». Se quita «Válida».
+ *
+ * Estaba separado «Cuadrada» (clavada, menos de medio gramo) de «Válida» (dentro del
+ * margen pero no clavada), siguiendo el documento del 10-08. En la pantalla eso se leía
+ * como que había dos varas: una comida con 10,5 g de grasa sobre 10 salía «Válida» y
+ * parecía peor que otra idéntica, cuando el método la da por buena igual. El margen es
+ * ±4 g y es el mismo en todas partes; si algo cae dentro, cuadra.
  *
  * En el perientreno la grasa no cuenta, igual que en el resto del cálculo.
  */
@@ -36,11 +39,7 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
         return { texto: cuanto ? `Te pasas ${cuanto}` : 'Te pasas', cls: 'text-red-500' };
     }
     if (status === 'falta') return { texto: 'Te falta', cls: 'text-amber-600 dark:text-amber-400' };
-    const dif = ['P', 'H', 'G'].map(m => Math.abs((target[m] || 0) - (served[m] || 0)));
-    const clavada = dif.every(d => d < 0.5);
-    return clavada
-        ? { texto: 'Cuadrada', cls: 'text-emerald-600 dark:text-emerald-400' }
-        : { texto: 'Válida', cls: 'text-emerald-600/70 dark:text-emerald-400/70' };
+    return { texto: 'Cuadrada', cls: 'text-emerald-600 dark:text-emerald-400' };
 };
 
 // Los números con coma decimal y sin decimales cuando son cero, en un solo sitio para toda
@@ -134,7 +133,7 @@ export const MealTab = ({ mealKey, mealInfo, getMealStatus, isLocked, selected, 
 
 // ===== Macro progress block =====
 const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFoods }) => {
-    // EN EL TELÉFONO, EL ESTADO VA DETRÁS DE «VER DETALLES». Los «Cuadrado», «Válido» y
+    // EN EL TELÉFONO, EL ESTADO VA DETRÁS DE «VER DETALLES». Los «Cuadrado» y los
     // «faltan 12g» de cada macro son tres avisos por comida y cinco comidas por pantalla:
     // en 390 px eso es media pantalla diciendo en palabras lo que la resta de al lado ya
     // dice. No se quitan -- cuando hace falta, hacen falta --, se piden.
@@ -151,8 +150,15 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     const macroState = (servedVal, tgtVal, key) => {
         if (!(servedVal > 0)) return { label: null, cls: '', over: false };
         const r = tgtVal - servedVal;
-        if (Math.round(r) === 0) return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false };
-        if (Math.abs(r) < 4) return { label: 'Válido', cls: 'text-amber-500', over: false };
+        // DENTRO DEL MARGEN, CUADRADO (Francisco, 17-08). Habia un escalon intermedio,
+        // «Válido» en ambar, para lo que caia dentro de los ±4 sin estar clavado. Dos
+        // palabras y dos colores para lo que el metodo da por bueno igual: si esta dentro,
+        // cuadra. Y con el mismo margen que usa `getMealStatus` para decidir el veredicto
+        // de la comida (`margenDe`, proporcional en el perientreno): si el chip y el titulo
+        // usaran varas distintas volveriamos a tener dos criterios para lo mismo.
+        if (Math.abs(r) <= margenDe(tgtVal)) {
+            return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false };
+        }
         if (r > 0) return { label: `faltan ${fmt1(r)} g`, cls: 'text-red-500', over: false };
         const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeri });
         return { label: `sobran ${fmt1(-r)} g`,
@@ -335,7 +341,7 @@ const MealCard = ({
     // del teléfono depende de ella: cuando la comida se pasa, el texto es largo («Te pasas
     // 29 g de hidratos y 12 g de grasa») y OCUPA EL SITIO DEL NOMBRE en vez de pelearse con
     // él. Francisco, 13-08: «ese texto tapa el título de Comida 1, Comida 2... haz que lo
-    // reemplace si se pasa». Los otros estados son cortos («Válida», «Te falta») y caben al
+    // reemplace si se pasa». Los otros estados son cortos («Cuadrada», «Te falta») y caben al
     // lado, así que esos no se tocan.
     const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri);
     const excesoTapaElNombre = status === 'sobra' && foods.length > 0;
