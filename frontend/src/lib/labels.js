@@ -73,6 +73,34 @@ const ESTADO_CLIENTE = {
 export const estadoClienteLabel = (v) => (v ? lookup(ESTADO_CLIENTE, v) : 'Sin estado');
 
 /**
+ * EL ESTADO QUE LE TOCA EN EL PANEL, QUE ES EL QUE VE ÉL AL ENTRAR.
+ *
+ * El panel pintaba `status` a pelo, y ese es una etiqueta que alguien puso una vez: no se
+ * entera de que pasa el tiempo. Resultado del 17-08: un cliente de ELM con el ciclo
+ * terminado el 20 de julio salía «Activo» en el panel mientras a él, al abrir la app, se
+ * le decía que su suscripción había caducado. En producción no era uno: eran 60 de los
+ * 184 marcados como activos.
+ *
+ * Manda `acceso`, que lo calcula el servidor con la MISMA regla que la puerta de la app
+ * (`core/plan_access.estado_de_acceso`). `status` se sigue enseñando cuando dice algo que
+ * el acceso no cuenta -- «Pago pendiente», «En pausa», «Registro sin terminar» --, porque
+ * ahí la etiqueta es la información.
+ */
+export const estadoDeAcceso = (cliente) => {
+    const acceso = cliente?.acceso;
+    const status = cliente?.status;
+    if (status === 'registro_incompleto') return { texto: 'Registro sin terminar', tono: 'aviso' };
+    if (!acceso) return { texto: estadoClienteLabel(status), tono: status === 'activo' ? 'ok' : 'apagado' };
+    if (acceso.activo) return { texto: 'Activo', tono: 'ok' };
+    if (acceso.motivo === 'sin_pagar') return { texto: 'Pago pendiente', tono: 'aviso' };
+    if (acceso.motivo === 'sin_plan') return { texto: 'Sin plan', tono: 'apagado' };
+    // Caducado: si el perfil dice algo más concreto (baja, cancelado, en pausa), se dice
+    // eso, que explica POR QUÉ se acabó.
+    const concreto = ['baja', 'cancelado', 'inactivo', 'pausado', 'impagado'].includes(status);
+    return { texto: concreto ? estadoClienteLabel(status) : 'Caducado', tono: 'apagado' };
+};
+
+/**
  * El nombre del plan tal y como lo llamamos de cara al cliente.
  *
  * El código («reto12en12_gold», «nivel1») solo sirve si no hay catálogo cargado, y ahí se

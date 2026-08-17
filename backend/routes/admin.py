@@ -187,6 +187,8 @@ async def get_all_clients(
 ):
     """Obtener todos los clientes con filtros opcionales. Con include_incomplete=true añade
     también los usuarios rol client SIN perfil (se registraron pero no completaron el alta)."""
+    from core.plan_access import estado_de_acceso
+
     query = {}
     if plan:
         query["plan"] = plan.lower()
@@ -244,10 +246,18 @@ async def get_all_clients(
     # `ultimo_ajuste` y `ultimo_reporte` viajan aqui (punto 29): son las dos fechas que
     # contestan "¿quien me toca esta semana?" y estan guardadas EN el cliente justo para
     # poder ordenar la lista sin recorrer el historico de doscientos y pico clientes.
+    # `current_period_end` y `checkout_status` viajan porque sin ellos el panel NO PUEDE
+    # saber si el cliente tiene acceso: son justo los dos campos que mira la puerta de la
+    # app (`core/plan_access`). Sin el primero, un perfil con el ciclo terminado el 20 de
+    # julio salía como «Activo» en la lista mientras a él, al entrar, se le decía que su
+    # suscripción había caducado (Francisco, 17-08, con un cliente de ELM). Son 60 de los
+    # 184 marcados activos en producción: el panel no se equivocaba en uno, se equivocaba
+    # en todos los que se les acabó el ciclo.
     LIST_FIELDS = {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "week": 1,
                    "cycle_start": 1, "status": 1, "trainer_id": 1, "created_at": 1,
                    "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
                    "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
+                   "current_period_end": 1, "checkout_status": 1,
                    # La excepcion viaja en el listado (punto 39): si solo estuviera dentro
                    # de la ficha, para verla habria que entrar en las 232, que es lo mismo
                    # que tenerla en una hoja aparte.
@@ -283,9 +293,16 @@ async def get_all_clients(
     for profile in profiles:
         user_data = umap.get(profile["user_id"])
         if user_data:
+            # EL MISMO ESTADO QUE VE ÉL AL ENTRAR. `status` es una etiqueta que alguien puso
+            # una vez y no se entera de que pasa el tiempo; quien decide si puede usar la app
+            # es `estado_de_acceso`, que además mira el fin del ciclo. Se manda calculado y
+            # no se deja que lo deduzca el panel: dos criterios para la misma pregunta
+            # siempre acaban contradiciéndose, y esta vez le dijeron cosas distintas al
+            # equipo y al cliente el mismo día.
             fila = {**enrich_cycle(profile), "user": user_data,
                     "price": precio_de_ciclo(profile, catalogo),
                     "precio_mensual": round(precio_mensual(profile, catalogo), 2),
+                    "acceso": estado_de_acceso(profile),
                     "semaforo": _semaforo_del_cliente(profile, hablado, ahora)}
             # TU PROPIA FICHA VA MARCADA. Es la única que entra por la excepción de arriba,
             # y no es negocio: los contadores del panel (clientes totales, activos, MRR)
@@ -411,8 +428,13 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
         _sanear_pesos(calma_raw.get("pesos"), "valor")
         _sanear_pesos(calma_raw.get("formularios_mensuales"), "peso")
 
+    from core.plan_access import estado_de_acceso
+
     return {
         "profile": profile,
+        # Si puede entrar en la app y, si no, por qué. Va calculado desde aquí por lo mismo
+        # que en la lista: el `status` del perfil no sabe que se le acabó el ciclo.
+        "acceso": estado_de_acceso(profile),
         "user": user_data,
         "routines": routines,
         "reports": reports,

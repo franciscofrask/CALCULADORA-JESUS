@@ -12,7 +12,7 @@ import { PlanBadge, JG12Logo } from './ClientDashboard';
 import LimiteDeError from '../components/LimiteDeError';
 import { AvisosDelEquipo, PeticionesDeCompra } from '../components/AvisosDelEquipo';
 import { prettyToken } from '../lib/labels';
-import { estadoClienteLabel } from '../lib/labels';
+import { estadoClienteLabel, estadoDeAcceso } from '../lib/labels';
 import { contarClientes, contarRegistrosSinTerminar, cuentaComoCliente } from '../lib/cuentaClientes';
 import {
     LayoutDashboard, Users, CreditCard, Dumbbell,
@@ -920,9 +920,16 @@ const AdminDashboard = () => {
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                     <PlanBadge plan={c.plan} />
-                                    <Badge className={c.status === 'activo' ? 'bg-green-500/10 text-green-500 border-0 text-[10px]' : 'bg-red-500/10 text-red-400 border-0 text-[10px]'}>
-                                        {estadoClienteLabel(c.status)}
-                                    </Badge>
+                                    {(() => {
+                                        const e = estadoDeAcceso(c);
+                                        return (
+                                            <Badge className={`${e.tono === 'ok' ? 'bg-green-500/10 text-green-500'
+                                                : e.tono === 'aviso' ? 'bg-yellow-500/10 text-yellow-400'
+                                                : 'bg-red-500/10 text-red-400'} border-0 text-[10px]`}>
+                                                {e.texto}
+                                            </Badge>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         ))}
@@ -1229,15 +1236,17 @@ const AdminClientsList = () => {
                                             <CeldaSemaforo celda={client.semaforo?.peso} />
                                         </TableCell>
                                         <TableCell>
-                                            {client.status === 'registro_incompleto' ? (
-                                                <Badge className="bg-yellow-500/15 text-yellow-400 border-0">Registro sin terminar</Badge>
-                                            ) : (
-                                                /* El estado con palabras, no con el código de la base:
-                                                   «pendiente_pago» era lo que leía Jesús en la tabla (#64). */
-                                                <Badge className={client.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-[#333] text-white/50 border-0'}>
-                                                    {estadoClienteLabel(client.status)}
-                                                </Badge>
-                                            )}
+                                            {/* El estado con palabras, no con el código de la base
+                                                («pendiente_pago» era lo que leía Jesús en la tabla, #64),
+                                                y el MISMO que ve el cliente al entrar: ver
+                                                `estadoDeAcceso`. */}
+                                            {(() => {
+                                                const e = estadoDeAcceso(client);
+                                                const color = e.tono === 'ok' ? 'bg-green-500/20 text-green-500'
+                                                    : e.tono === 'aviso' ? 'bg-yellow-500/15 text-yellow-400'
+                                                    : 'bg-[#333] text-white/50';
+                                                return <Badge className={`${color} border-0`}>{e.texto}</Badge>;
+                                            })()}
                                         </TableCell>
                                         {/* LA FLECHA QUE ABRE LA FICHA.
                                             Estaba, pero en gris tenue y sin acción propia: si el

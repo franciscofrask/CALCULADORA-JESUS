@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { PlanBadge } from './ClientDashboard';
-import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES, plural, estadoClienteLabel } from '../lib/labels';
+import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES, plural, estadoClienteLabel, estadoDeAcceso } from '../lib/labels';
 import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
@@ -752,7 +752,7 @@ const ClientDetailPage = () => {
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-48 bg-[#111] rounded-xl" /></div></div>;
     if (!client) return <div className="p-6 bg-[#0A0A0A] min-h-screen text-center text-white/50">Cliente no encontrado</div>;
 
-    const { profile, user, routines, reports, payments, macro_history, nutrition_stats, calma_raw } = client;
+    const { profile, user, routines, reports, payments, macro_history, nutrition_stats, calma_raw, acceso } = client;
     const mt = profile?.macros_training;
     const mr = profile?.macros_rest;
     const mp = profile?.macros_periworkout;
@@ -828,7 +828,13 @@ const ClientDetailPage = () => {
                         <h1 className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Barlow Condensed' }}>{user?.name?.toUpperCase()}</h1>
                         <PlanBadge plan={profile?.plan} />
                         {/* El estado con palabras: «pendiente_pago» es el código de la base (#64). */}
-                        <Badge className={profile?.status === 'activo' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-red-500/20 text-red-400 border-0'}>{estadoClienteLabel(profile?.status)}</Badge>
+                        {(() => {
+                            /* El mismo estado que ve él al entrar, no la etiqueta del perfil. */
+                            const e = estadoDeAcceso({ ...(profile || {}), acceso });
+                            return <Badge className={`${e.tono === 'ok' ? 'bg-green-500/20 text-green-500'
+                                : e.tono === 'aviso' ? 'bg-yellow-500/20 text-yellow-400'
+                                : 'bg-red-500/20 text-red-400'} border-0`}>{e.texto}</Badge>;
+                        })()}
                     </div>
                     <p className="text-white/40 text-sm truncate">{user?.email}</p>
                 </div>
