@@ -33,11 +33,31 @@ def test_sin_macros_puede_calcular_aunque_su_plan_no_ajuste():
 
 
 def test_con_macros_el_plan_sin_ajuste_sigue_cerrado():
-    """Y el candado sigue puesto para quien SÍ tiene macros: no se ha abierto la puerta."""
+    """Y el candado sigue puesto para quien SÍ tiene macros: no se ha abierto la puerta.
+
+    Comprobado además contra dev de punta a punta: `POST /calculator/targets/apply` con la
+    cuenta encerrada da 200 y le escribe sus macros; la segunda llamada, ya con macros, da
+    403. La puerta se abre una vez, para entrar.
+    """
     perfil = {"id": "x", "plan": "mantenimiento", "macros_training": {"protein": 180}}
     puede, por_que_no = asyncio.run(puede_ajustarlos(None, perfil))
     assert puede is False
     assert "no incluye ajustes" in por_que_no
+
+
+def test_un_plan_que_no_esta_en_el_catalogo_no_encierra_a_nadie():
+    """El caso que de verdad había en producción: `plan: None`.
+
+    `modo_calculadora` manda a `sin_ajuste` todo lo que no reconoce -- None, la cadena vacía
+    y grafías que no están en el catálogo, como «CalMa» --, así que el régimen más
+    restrictivo era también el de los perfiles con el plan mal puesto. En producción el
+    17-08 eran 5 perfiles (4 sin plan y 1 «CalMa»), y 3 de ellos sin macros: uno era una
+    clienta real y activa, que no podía pasar del cuestionario.
+    """
+    for plan in (None, "", "CalMa", "loquesea"):
+        puede, _ = asyncio.run(puede_ajustarlos(None, {"id": "x", "plan": plan,
+                                                       "macros_training": {}}))
+        assert puede is True, f"con plan={plan!r} se queda encerrado"
 
 
 # ── Punto 17: el lector de dieta elegía variantes que el cliente no había dicho ────────

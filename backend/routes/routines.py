@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Optional
 import uuid
 import os
 import json
+import logging
 
 from core.database import db
 from core.security import get_current_user, get_admin_user, assert_client_access
@@ -202,6 +203,354 @@ async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(g
         await avisar_rutina_nueva(profile["user_id"])
 
     return RoutineResponse(**routine_doc)
+
+
+# ─────────────────────────────────────────────────────────────────────────────────────
+# ASIGNAR RUTINA A VARIOS A LA VEZ (punto 6 del documento del 17-08)
+#
+# «164 clientes tienen la rutina incluida en su plan y ninguno la tiene puesta. La vía
+# existe -- ficha → Entreno → Generar rutina con IA -- pero uno a uno, 164 veces, no es
+# viable. Lo que hace falta: poder generar y asignar en bloque, o al menos por grupos
+# (mismo objetivo, misma maquinaria, mismo nivel)».
+#
+# Se hace POR GRUPOS, que es lo que pide el documento y además es lo único sensato: una
+# llamada al modelo por cliente son 164 llamadas para rutinas que, con el mismo objetivo,
+# los mismos días, el mismo material y el mismo nivel, iban a salir casi iguales. Se genera
+# UNA por grupo y se asigna a todos los del grupo.
+#
+# Lo que NO hace: tocar a quien ya tiene rutina activa. Este endpoint es para el que no
+# tiene ninguna; cambiarle la rutina a alguien que ya entrena con la suya es otra cosa y
+# se hace desde su ficha, de una en una y mirándola.
+# ─────────────────────────────────────────────────────────────────────────────────────
+
+def _clave_de_grupo(perfil: Dict[str, Any]) -> Dict[str, Any]:
+    """Lo que hace que dos clientes puedan compartir rutina.
+
+    Los cuatro del documento: mismo objetivo, mismo material, mismos días y mismo nivel.
+    El peso y los macros no entran -- la rutina no cambia porque uno pese cinco kilos más --
+    y las lesiones sí, porque una rutina que ignora una lesión no vale para esa persona:
+    quien tenga alguna se queda en su propio grupo y se le genera aparte.
+    """
+    equipo = sorted({str(e).strip().lower() for e in (perfil.get("equipment") or []) if str(e).strip()})
+    lesiones = sorted({str(l).strip().lower() for l in (perfil.get("injuries") or []) if str(l).strip()})
+    return {
+        "objetivo": (perfil.get("goal") or "sin objetivo").strip().lower(),
+        "dias": _dias_de_entreno(perfil) or 0,
+        # EL CAMPO SE LLAMA `training_experience` (17-08). Buscando `experience` salían cero
+        # de 163, y no era que nadie lo tuviera: era que ese nombre no existe en la base.
+        "nivel": (perfil.get("training_experience") or "sin nivel").strip().lower(),
+        "material": equipo or ["gimnasio completo"],
+        "lesiones": lesiones,
+    }
+
+
+def _dias_de_entreno(perfil: Dict[str, Any]) -> Optional[int]:
+    """Cuántos días entrena a la semana, o None si no lo sabemos.
+
+    Está guardado de dos formas: `training_days` (un número) y `training_weekdays` (la lista
+    de días: lunes, miércoles...). Las dos contestan a lo mismo. Devuelve None cuando no hay
+    ninguna, y eso NO se rellena con un 4 por defecto: una rutina de cuatro días para quien
+    entrena dos no es una rutina, es un cliente que abandona en la primera semana.
+    """
+    for campo in ("training_days", "training_weekdays"):
+        v = perfil.get(campo)
+        if isinstance(v, (list, tuple, set)):
+            n = len([d for d in v if str(d).strip()])
+            if n:
+                return max(1, min(7, n))
+        elif v not in (None, ""):
+            try:
+                return max(1, min(7, int(v)))
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _que_le_falta(perfil: Dict[str, Any]) -> List[str]:
+    """Los datos sin los cuales no se le puede generar una rutina que valga.
+
+    Medido en producción el 17-08 sobre los 163 clientes con rutina en el plan y sin rutina
+    puesta: 91 no tienen objetivo y 159 no tienen días de entreno. Ninguno de los 163 tenía
+    los datos completos. Por eso este endpoint no le pone rutina a todo el que se le ponga
+    por delante: generar 163 rutinas iguales «de 4 días sin objetivo» es peor que no tener
+    ninguna, porque encima parece que el trabajo está hecho.
+
+    El material y el nivel sí se dan por supuestos (gimnasio completo, nivel intermedio):
+    ahí equivocarse cambia los ejercicios, no el plan.
+    """
+    falta = []
+    if not (perfil.get("goal") or "").strip():
+        falta.append("objetivo")
+    if _dias_de_entreno(perfil) is None:
+        falta.append("días de entreno")
+    return falta
+
+
+def _id_de_grupo(clave: Dict[str, Any]) -> str:
+    return "|".join([clave["objetivo"], str(clave["dias"]), clave["nivel"],
+                     ",".join(clave["material"]), ",".join(clave["lesiones"])])
+
+
+def _como_se_llama_el_grupo(clave: Dict[str, Any]) -> str:
+    """El nombre que ve quien mira la pantalla. En sus palabras, no en claves.
+
+    El material viene del cuestionario con los nombres del formulario -- `barra_olimpica`,
+    `pull_up_bar`, `bandas_elasticas` --, y una fila con los nueve puestos ocupa dos líneas
+    y no se lee. Se enseñan tres y se cuenta el resto.
+    """
+    partes = [clave["objetivo"], f"{clave['dias']} días", clave["nivel"]]
+    material = [m.replace("_", " ") for m in clave["material"]]
+    if material != ["gimnasio completo"]:
+        if len(material) > 3:
+            partes.append(", ".join(material[:3]) + f" y {len(material) - 3} cosas más")
+        else:
+            partes.append(" y ".join(material))
+    if clave["lesiones"]:
+        partes.append("con " + " y ".join(l.replace("_", " ") for l in clave["lesiones"]))
+    return " · ".join(p for p in partes if p and p not in ("sin objetivo", "sin nivel"))
+
+
+async def _los_que_no_tienen_rutina(user) -> List[Dict[str, Any]]:
+    """Los clientes cuyo plan incluye rutina y no tienen ninguna activa."""
+    from core.plan_access import plan_grants_feature
+    from routes.admin import _fuera_el_equipo
+
+    con_rutina = set(await db.routines.distinct("client_id", {"status": "active"}))
+    filtro: Dict[str, Any] = {**await _fuera_el_equipo(),
+                              "status": {"$in": ["activo", "pago_pendiente"]}}
+    # Un entrenador solo ve y toca a los suyos, la misma regla que la ficha.
+    if user.get("role") == "trainer":
+        filtro["trainer_id"] = user.get("id")
+
+    # Solo los campos que se miran. Sin la proyección venían los perfiles enteros -- con la
+    # serie de pesos y lo importado de Calma dentro -- y agrupar a 219 tardaba siete segundos.
+    CAMPOS = {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "goal": 1, "training_days": 1,
+              "training_weekdays": 1, "training_experience": 1, "equipment": 1, "injuries": 1}
+    fuera = []
+    async for p in db.client_profiles.find(filtro, CAMPOS):
+        if not plan_grants_feature(p.get("plan"), "rutina"):
+            continue
+        if p["id"] in con_rutina:
+            continue
+        fuera.append(p)
+    return fuera
+
+
+@admin_router.get("/pendientes-por-grupo")
+async def rutinas_pendientes_por_grupo(user = Depends(get_admin_user)):
+    """Quién está sin rutina, agrupado por lo que permite compartirla.
+
+    No genera nada: es la foto previa, para poder decidir por dónde empezar y ver de un
+    vistazo cuántas rutinas hacen falta de verdad (que son bastantes menos que clientes).
+    """
+    grupos: Dict[str, Dict[str, Any]] = {}
+    incompletos: List[Dict[str, Any]] = []
+    por_falta: Dict[str, int] = {}
+
+    pendientes = await _los_que_no_tienen_rutina(user)
+    # Los nombres en UNA consulta, no una por cliente: con 219 pendientes eran 219 viajes a
+    # la base y la pantalla se quedaba en «Agrupando…».
+    uids = [p.get("user_id") for p in pendientes if p.get("user_id")]
+    umap = {u["id"]: u for u in await db.users.find(
+        {"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(len(uids) or 1)}
+
+    for p in pendientes:
+        u = umap.get(p.get("user_id")) or {}
+        ficha = {"client_id": p["id"], "nombre": u.get("name") or "?",
+                 "email": u.get("email") or "", "plan": p.get("plan")}
+
+        falta = _que_le_falta(p)
+        if falta:
+            ficha["le_falta"] = falta
+            incompletos.append(ficha)
+            for f in falta:
+                por_falta[f] = por_falta.get(f, 0) + 1
+            continue
+
+        clave = _clave_de_grupo(p)
+        gid = _id_de_grupo(clave)
+        g = grupos.setdefault(gid, {"id": gid, "clave": clave,
+                                    "nombre": _como_se_llama_el_grupo(clave), "clientes": []})
+        g["clientes"].append(ficha)
+
+    salida = sorted(grupos.values(), key=lambda g: -len(g["clientes"]))
+    for g in salida:
+        g["cuantos"] = len(g["clientes"])
+    listos = sum(g["cuantos"] for g in salida)
+    return {
+        "grupos": salida,
+        "sin_rutina": listos + len(incompletos),
+        "se_les_puede_poner_ya": listos,
+        "rutinas_que_harian_falta": len(salida),
+        # A QUIÉN NO SE LE PUEDE, Y POR QUÉ. Es la mitad importante de la respuesta: en
+        # producción son casi todos, y sin decirlo el panel enseñaría «0 grupos» sin
+        # explicar que el problema no es la herramienta sino que faltan los datos.
+        "les_faltan_datos": len(incompletos),
+        "que_les_falta": [{"dato": k, "a_cuantos": v}
+                          for k, v in sorted(por_falta.items(), key=lambda x: -x[1])],
+        "incompletos": incompletos[:200],
+    }
+
+
+@admin_router.post("/asignar-en-bloque")
+async def asignar_rutinas_en_bloque(data: Dict[str, Any], user = Depends(get_admin_user)):
+    """Genera UNA rutina por grupo y se la asigna a todos los de ese grupo.
+
+    Recibe `{"grupos": ["id1", "id2"]}` con los ids que devuelve `/pendientes-por-grupo`, o
+    `{"grupos": "todos"}`. Con `"probar": true` genera y devuelve lo que haría SIN guardar
+    nada, que es lo que hay que mirar antes de asignarle una rutina a treinta personas.
+
+    Devuelve, por grupo, a cuántos se la ha puesto y a cuántos no, con el motivo.
+    """
+    pedidos = data.get("grupos")
+    solo_probar = bool(data.get("probar"))
+    instrucciones = (data.get("instrucciones") or "").strip()
+
+    pendientes = await _los_que_no_tienen_rutina(user)
+    por_grupo: Dict[str, List[Dict[str, Any]]] = {}
+    claves: Dict[str, Dict[str, Any]] = {}
+    saltados = 0
+    for p in pendientes:
+        # Sin objetivo o sin días no se le pone nada: ver `_que_le_falta`.
+        if _que_le_falta(p):
+            saltados += 1
+            continue
+        clave = _clave_de_grupo(p)
+        gid = _id_de_grupo(clave)
+        claves[gid] = clave
+        por_grupo.setdefault(gid, []).append(p)
+
+    if pedidos != "todos":
+        if not isinstance(pedidos, list) or not pedidos:
+            raise HTTPException(status_code=400, detail="Dime a qué grupos, o «todos»")
+        por_grupo = {g: v for g, v in por_grupo.items() if g in pedidos}
+    if not por_grupo:
+        return {"grupos": [], "asignadas": 0, "sin_datos": saltados,
+                "nota": (f"A {saltados} les faltan datos (objetivo o días de entreno) y no se "
+                         "les puede generar una rutina que valga."
+                         if saltados else "No hay nadie sin rutina en lo que has pedido.")}
+
+    resultado, asignadas = [], 0
+    for gid, perfiles in por_grupo.items():
+        clave = claves[gid]
+        # Una rutina para el grupo, con el primero como referencia: comparten objetivo,
+        # días, nivel y material, que es todo lo que mira el generador.
+        muestra = perfiles[0]
+        try:
+            rutina = await _generar_para_grupo(clave, len(perfiles), instrucciones, muestra)
+        except Exception as e:                     # noqa: BLE001
+            resultado.append({"grupo": gid, "nombre": _como_se_llama_el_grupo(clave),
+                              "cuantos": len(perfiles), "asignadas": 0,
+                              "error": "no se ha podido generar la rutina de este grupo"})
+            logging.getLogger("uvicorn.error").warning("rutina en bloque, grupo %s: %s", gid, e)
+            continue
+
+        puestas, fallos = [], []
+        for p in perfiles:
+            if solo_probar:
+                continue
+            try:
+                await db.routines.update_many({"client_id": p["id"], "status": "active"},
+                                              {"$set": {"status": "inactive"}})
+                await db.routines.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "client_id": p["id"],
+                    "days": rutina.get("days", []),
+                    "trainer_notes": rutina.get("trainer_notes"),
+                    "status": "active",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    # De dónde salió, para poder deshacerlo y para saber cuál se puso a mano.
+                    "origen": "bloque",
+                    "grupo": gid,
+                    "puesta_por": user.get("id"),
+                })
+                puestas.append(p["id"])
+                if await rutina_visible_para_el_cliente():
+                    await avisar_rutina_nueva(p["user_id"])
+            except Exception as e:                 # noqa: BLE001
+                fallos.append(p["id"])
+                logging.getLogger("uvicorn.error").warning("rutina en bloque, cliente %s: %s",
+                                                           p["id"], e)
+        asignadas += len(puestas)
+        resultado.append({
+            "grupo": gid, "nombre": _como_se_llama_el_grupo(clave),
+            "cuantos": len(perfiles), "asignadas": len(puestas), "fallos": len(fallos),
+            "rutina": rutina if solo_probar else None,
+        })
+
+    return {"grupos": resultado, "asignadas": asignadas, "sin_datos": saltados,
+            "probado_sin_guardar": solo_probar}
+
+
+async def _generar_para_grupo(clave: Dict[str, Any], cuantos: int, instrucciones: str,
+                              muestra: Dict[str, Any]) -> Dict[str, Any]:
+    """Una rutina para un grupo. Misma forma que la de uno, sin datos de nadie.
+
+    A propósito NO se le manda nombre, peso ni macros de ningún cliente: esta rutina la van
+    a usar `cuantos` personas y no puede estar escrita para una.
+    """
+    contexto = f"""
+Objetivo: {clave['objetivo']}
+Días de entrenamiento: {clave['dias']}
+Nivel: {clave['nivel']}
+Equipamiento disponible: {', '.join(clave['material'])}
+Lesiones/Limitaciones: {', '.join(clave['lesiones']) or 'Ninguna'}
+Incluir cardio: {'Sí' if 'cardio' in (PLAN_TYPES.get(muestra.get('plan'), {}).get('features') or []) else 'No'}
+Instrucciones del entrenador: {instrucciones or 'Generar rutina estándar según objetivo'}
+"""
+    prompt = f"""Genera una rutina de entrenamiento en formato JSON para este perfil:
+
+{contexto}
+Esta rutina la van a seguir {cuantos} personas con ese mismo perfil, así que no la
+personalices con nombres ni con pesos concretos: usa rangos de repeticiones y de descanso.
+
+La rutina debe tener este formato exacto:
+{{
+  "days": [
+    {{"day": "Lunes", "is_rest": false, "exercises": [{{"name": "Nombre", "sets": 4, "reps": "10-12", "rest": "90s"}}]}},
+    {{"day": "Martes", "is_rest": true, "exercises": []}}
+  ],
+  "trainer_notes": "Notas generales"
+}}
+
+Genera una rutina completa de 7 días. Responde SOLO con el JSON."""
+
+    chat = LlmChat(
+        api_key=os.environ.get('OPENAI_API_KEY'),
+        session_id=f"rutina-grupo-{uuid.uuid4()}",
+        system_message=("Eres un entrenador personal experto. Genera rutinas en formato JSON. "
+                        "Escribe los nombres de ejercicios y notas en español neutro con tuteo "
+                        "(prohibido el voseo y los regionalismos)."),
+    ).with_model("openai", os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'))
+
+    # LOS DÍAS QUE ENTRENA SE COMPRUEBAN, NO SE PIDEN (17-08). En la primera prueba, un
+    # grupo de «volumen · 2 días» salió con CUATRO días de entreno: el modelo lee «2 días»
+    # y monta la rutina que le parece. A quien entrena dos días una rutina de cuatro no le
+    # sirve, y encima no se nota hasta que el cliente la abre. Se cuenta y, si no cuadra, se
+    # le dice y se repite una vez. Si a la segunda tampoco, ese grupo se queda sin rutina y
+    # se informa: mejor eso que asignarle a nadie una que no puede seguir.
+    aviso = ""
+    for intento in (1, 2):
+        texto = (await chat.send_message(UserMessage(text=prompt + aviso))).strip()
+        if texto.startswith("```"):
+            texto = texto.split("```")[1]
+            if texto.startswith("json"):
+                texto = texto[4:]
+        rutina = json.loads(texto)
+        dias = rutina.get("days") or []
+        if not dias:
+            raise ValueError("la rutina vino sin días")
+        entreno = len([d for d in dias if not d.get("is_rest")])
+        if entreno == clave["dias"]:
+            return rutina
+        aviso = (f"\n\nATENCIÓN: la rutina anterior tenía {entreno} días de entrenamiento y "
+                 f"tienen que ser EXACTAMENTE {clave['dias']}. El resto de los 7 días van con "
+                 f'"is_rest": true y sin ejercicios.')
+        logging.getLogger("uvicorn.error").info(
+            "rutina en bloque: pedidos %s días de entreno y vinieron %s (intento %s)",
+            clave["dias"], entreno, intento)
+    raise ValueError(f"la rutina no respeta los {clave['dias']} días de entreno")
 
 
 def _get_default_routine():

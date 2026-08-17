@@ -5,8 +5,141 @@ import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, Dumbbell, ChevronRight } from 'lucide-react';
+import { Search, Dumbbell, ChevronRight, Users } from 'lucide-react';
 import { PlanBadge } from './ClientDashboard';
+
+/**
+ * PONERLES RUTINA A VARIOS A LA VEZ (punto 6 del documento del 17-08).
+ *
+ * «164 clientes tienen la rutina incluida en su plan y ninguno la tiene puesta. La vía
+ * existe -- ficha → Entreno → Generar rutina con IA -- pero uno a uno, 164 veces, no es
+ * viable.»
+ *
+ * Se hace por grupos, que es lo que pide el documento: quien comparte objetivo, días,
+ * nivel y material puede compartir rutina, así que se genera UNA por grupo.
+ *
+ * Y lo primero que enseña es lo que NO se puede hacer. Medido en producción el 17-08: de
+ * los 163 sin rutina, 159 no tienen puesto cuántos días entrenan y 91 no tienen objetivo.
+ * Con eso no hay rutina que valga, y el botón no puede fingir que sí. Antes de asignar
+ * nada se ve a cuántos les falta qué.
+ */
+const PonerlesRutinaAVarios = ({ api, onHecho }) => {
+    const [datos, setDatos] = useState(null);
+    const [cargando, setCargando] = useState(false);
+    const [trabajando, setTrabajando] = useState(false);
+    const [abierto, setAbierto] = useState(false);
+
+    const mirar = () => {
+        setCargando(true);
+        setAbierto(true);
+        api.get('/admin/routines/pendientes-por-grupo')
+            .then(r => setDatos(r.data))
+            .catch(() => toast.error('No hemos podido agrupar a los clientes. Inténtalo de nuevo.'))
+            .finally(() => setCargando(false));
+    };
+
+    const asignar = (grupos) => {
+        setTrabajando(true);
+        api.post('/admin/routines/asignar-en-bloque', { grupos })
+            .then(r => {
+                const n = r.data?.asignadas || 0;
+                toast.success(n === 1 ? 'Rutina puesta a 1 cliente' : `Rutinas puestas a ${n} clientes`);
+                mirar();
+                onHecho?.();
+            })
+            .catch(() => toast.error('No hemos podido asignar las rutinas. Inténtalo de nuevo.'))
+            .finally(() => setTrabajando(false));
+    };
+
+    if (!abierto) {
+        return (
+            <Card className="bg-[#111] border-[#222]">
+                <CardContent className="p-4 flex items-center gap-3 flex-wrap">
+                    <Users className="w-5 h-5 text-[#FF671F] shrink-0" />
+                    <div className="min-w-0 flex-1">
+                        <p className="text-white text-sm font-semibold">Ponerles rutina a varios a la vez</p>
+                        <p className="text-white/40 text-xs">
+                            Agrupa a los que están sin rutina por objetivo, días y material, y genera una para cada grupo.
+                        </p>
+                    </div>
+                    <button onClick={mirar} data-testid="ver-grupos-rutina"
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+                        Ver los grupos
+                    </button>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                    <Users className="w-5 h-5 text-[#FF671F] shrink-0" />
+                    <p className="text-white text-sm font-semibold flex-1">Ponerles rutina a varios a la vez</p>
+                    <button onClick={() => setAbierto(false)} className="text-white/40 hover:text-white text-xs">cerrar</button>
+                </div>
+
+                {cargando && <p className="text-white/40 text-sm py-3">Agrupando…</p>}
+
+                {!cargando && datos && (
+                    <>
+                        {/* Primero, a quién NO se le puede poner y por qué. */}
+                        {datos.les_faltan_datos > 0 && (
+                            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
+                                <p className="text-white text-sm">
+                                    A <b className="text-yellow-400">{datos.les_faltan_datos}</b> no se les puede
+                                    generar todavía: falta saber lo básico de su entrenamiento.
+                                </p>
+                                <p className="text-white/50 text-xs mt-1">
+                                    {datos.que_les_falta?.map(q => `${q.a_cuantos} sin ${q.dato}`).join(' · ')}
+                                    {' '}· Se rellena en su ficha, o preguntándoselo.
+                                </p>
+                            </div>
+                        )}
+
+                        {datos.se_les_puede_poner_ya === 0 ? (
+                            <p className="text-white/40 text-sm">
+                                Ahora mismo no hay nadie a quien se le pueda poner una rutina con lo que sabemos de él.
+                            </p>
+                        ) : (
+                            <>
+                                <p className="text-white/60 text-sm">
+                                    A <b className="text-white">{datos.se_les_puede_poner_ya}</b> sí, y hacen falta{' '}
+                                    <b className="text-white">{datos.rutinas_que_harian_falta}</b>{' '}
+                                    {datos.rutinas_que_harian_falta === 1 ? 'rutina' : 'rutinas'}.
+                                </p>
+                                <div className="space-y-2">
+                                    {datos.grupos?.map(g => (
+                                        <div key={g.id} className="flex items-center justify-between gap-3 p-3 bg-[#0A0A0A] rounded-lg border border-[#222]">
+                                            <div className="min-w-0">
+                                                <p className="text-white text-sm">{g.nombre || 'sin clasificar'}</p>
+                                                <p className="text-white/40 text-xs">
+                                                    {g.cuantos} {g.cuantos === 1 ? 'cliente' : 'clientes'}
+                                                    {' · '}{g.clientes?.slice(0, 3).map(c => c.nombre).join(', ')}
+                                                    {g.cuantos > 3 ? '…' : ''}
+                                                </p>
+                                            </div>
+                                            <button disabled={trabajando} onClick={() => asignar([g.id])}
+                                                className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#FF671F] text-[#FF671F] hover:bg-[#FF671F] hover:text-white disabled:opacity-40 transition-colors">
+                                                Ponérsela
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button disabled={trabajando} onClick={() => asignar('todos')}
+                                    data-testid="asignar-todos-los-grupos"
+                                    className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+                                    {trabajando ? 'Generando y asignando…' : `Ponérsela a los ${datos.se_les_puede_poner_ya}`}
+                                </button>
+                            </>
+                        )}
+                    </>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
 
 // Vista general de rutinas: quien tiene rutina activa y quien no.
 // La rutina se genera/edita dentro de la ficha del cliente (pestaña Entreno).
@@ -18,13 +151,16 @@ const AdminRoutinesPage = () => {
     const [search, setSearch] = useState('');
     const [onlyMissing, setOnlyMissing] = useState(false);
 
-    useEffect(() => {
+    const recargar = React.useCallback(() => {
+        setLoading(true);
         api.get('/admin/routines/overview')
             .then(r => setRows(r.data || []))
-            .catch(() => toast.error('Error cargando rutinas'))
+            .catch(() => toast.error('No hemos podido cargar las rutinas. Inténtalo de nuevo.'))
             .finally(() => setLoading(false));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => { recargar(); }, [recargar]);
 
     // A QUIÉN SE LE PROMETIÓ UNA RUTINA.
     //
@@ -75,6 +211,8 @@ const AdminRoutinesPage = () => {
                     </p>
                 )}
             </div>
+
+            <PonerlesRutinaAVarios api={api} onHecho={recargar} />
 
             <div className="flex flex-col md:flex-row gap-3">
                 <div className="relative flex-1 max-w-sm">
