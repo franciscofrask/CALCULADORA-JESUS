@@ -24,12 +24,19 @@ import {
 import { mensajeDeError } from '../lib/mensajeDeError';
 
 // Colores para el desglose por plan (cualquier plan sin color cae en el gris).
+// UN COLOR POR PLAN, Y NINGUNO SIN COLOR. Faltaban los cuatro que se venden hoy y los que
+// llegaron el 17-08 desde Calma (Reto 12en12, Plan Personalizado, Básica): salían todos en
+// el mismo gris de «desconocido», y en un reparto por colores dos planes del mismo gris son
+// un plan. `calma` (sin normalizar) comparte el de CALMA 12 porque son el mismo.
 const PLAN_COLORS = {
+    nivel1: '#F59E0B', nivel2: '#FF671F', nivel3: '#DC2626', membresia: '#0EA5E9',
     reto12en12_gold: '#EAB308', gold: '#EAB308',
     reto12en12_silver: '#9CA3AF', silver: '#9CA3AF',
     bronze: '#C2410C', elm: '#FF671F', reto60: '#22C55E',
     calculadora_jp: '#3B82F6', mantenimiento: '#8B5CF6',
     premium: '#EC4899', plan_6m: '#14B8A6', sin_plan: '#555555',
+    reto12en12: '#A16207', personalizado: '#7C3AED', basica: '#64748B',
+    calma12: '#06B6D4', CalMa: '#06B6D4', calma: '#06B6D4',
 };
 
 // Panel "Por hacer esta semana": tres columnas accionables (sin macros / sin rutina /
@@ -495,15 +502,25 @@ const AdminDashboard = () => {
     const seVende = (code) => planCatalog?.[code]?.estado === 'activo';
     const antiguos = planEntries.filter(([plan]) => !seVende(plan));
     const antiguosTotal = antiguos.reduce((a, [, n]) => a + n, 0);
+    // LA BARRA PINTA LOS PLANES QUE TIENE LA GENTE, NO LOS QUE ESTÁN A LA VENTA
+    // (Francisco, 17-08: «no hay distribución de color, el 176 está en gris»).
+    //
+    // Se dibujaba un trozo por plan EN VENTA y el resto en un gris común. Como hoy los
+    // cuatro que se venden tienen cero clientes -- todo el mundo viene de Calma y está en un
+    // plan legacy --, la barra entera era un solo bloque gris con el total dentro: un
+    // gráfico de reparto que no repartía nada. Ahora salen los seis mayores con su color y
+    // la cola se junta, que es lo que decía este comentario desde el principio.
+    const TOPE_BARRA = 6;
+    const conGente = planEntries.filter(([, count]) => count > 0);
+    const cola = conGente.slice(TOPE_BARRA);
+    const colaTotal = cola.reduce((a, [, n]) => a + n, 0);
     const barraPlanes = [
-        ...planEntries
-            .filter(([plan, count]) => seVende(plan) && count > 0)
-            .map(([plan, count]) => ({
-                plan, count, pct: pctDe(count), color: planColor(plan), label: planLabel(plan),
-            })),
-        ...(antiguosTotal > 0 ? [{
-            plan: '__antiguos__', count: antiguosTotal, pct: pctDe(antiguosTotal), color: '#3F3F46',
-            label: `Planes que ya no se venden (${antiguos.length})`,
+        ...conGente.slice(0, TOPE_BARRA).map(([plan, count]) => ({
+            plan, count, pct: pctDe(count), color: planColor(plan), label: planLabel(plan),
+        })),
+        ...(colaTotal > 0 ? [{
+            plan: '__cola__', count: colaTotal, pct: pctDe(colaTotal), color: '#3F3F46',
+            label: `Otros ${cola.length} planes: ${cola.map(([p, n]) => `${planLabel(p)} ${n}`).join(' · ')}`,
         }] : []),
     ];
 
@@ -638,15 +655,17 @@ const AdminDashboard = () => {
                                 </div>
                             ))}
                         </div>
-                        {/* Los que se venden siempre a la vista; los antiguos, detrás de un
-                            desplegable. Están, pero no compiten por la atención con los cuatro
-                            que sí se pueden vender hoy. */}
+                        {/* La leyenda es la de la barra: los mismos seis y sus colores. Antes
+                            listaba solo los planes en venta y, con todos los clientes en planes
+                            legacy, se quedaba vacía debajo de una barra llena. El resto sigue
+                            detrás del desplegable de abajo, con su número. */}
                         <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-                            {planEntries.filter(([plan]) => seVende(plan)).map(([plan, count]) => (
+                            {barraPlanes.filter(({ plan }) => plan !== '__cola__').map(({ plan, count }) => (
                                 <div key={plan} className="flex items-center gap-1.5">
                                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: planColor(plan) }} />
                                     <span className="text-xs text-white/50 uppercase">{planLabel(plan)}</span>
                                     <span className="text-xs font-bold text-white">{count}</span>
+                                    {!seVende(plan) && <span className="text-[10px] text-white/25">legacy</span>}
                                 </div>
                             ))}
                         </div>
