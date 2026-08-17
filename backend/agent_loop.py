@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Callable, Dict, List, Optional
 
 from openai import AsyncOpenAI
@@ -1326,11 +1327,17 @@ class AgentLoop:
                         self.progreso(nombre)
                     except Exception:
                         pass
+                # CUÁNTO TARDA CADA HERRAMIENTA. Con el turno entero cronometrado fuera, la
+                # resta dice cuánto se fue en el modelo y cuánto en nuestra cocina. Sin esto,
+                # «el chat tarda quince segundos» no se puede ni confirmar ni desmentir: no
+                # había un solo número medido en todo el camino.
+                _t0 = time.perf_counter()
                 if nombre == "cambiar_de_dia" and (toco_la_comida or any(
                         n in _TOCAN_LA_COMIDA_DEL_DIA for n in nombres_de_la_tanda)):
                     resultado = dict(_NO_CAMBIA_DE_DIA)
                 else:
                     resultado = await self._despachar(nombre, args)
+                _ms = round((time.perf_counter() - _t0) * 1000)
                 if nombre in _TOCAN_LA_COMIDA_DEL_DIA and resultado.get("ok"):
                     toco_la_comida = True
                     # CUANDO LA COMIDA SE TOCA, LAS TARJETAS ANTERIORES CADUCAN (14-08).
@@ -1344,7 +1351,8 @@ class AgentLoop:
                     # posteriores a la última mutación, que esas sí son deliberadas.
                     sugerencias = []
                 self.traza.append({"herramienta": nombre, "args": args,
-                                   "resultado_resumen": str(resultado)[:300]})
+                                   "resultado_resumen": str(resultado)[:300],
+                                   "ms": _ms})
                 if nombre == "buscar_alimentos" and resultado.get("items"):
                     # ACUMULAR entre búsquedas del mismo turno: con "quiero pavo, ensalada
                     # y una bebida" se hacían tres búsquedas y las tarjetas solo enseñaban

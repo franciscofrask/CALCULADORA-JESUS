@@ -17,6 +17,7 @@ from routes import (
     calculator_router,
     diets_router,
     chatbot_router,
+    chat_traces_router,
     routines_router,
     routines_admin_router,
     supplements_router,
@@ -119,6 +120,7 @@ api_router.include_router(admin_router)
 api_router.include_router(calculator_router)
 api_router.include_router(diets_router)
 api_router.include_router(chatbot_router)
+api_router.include_router(chat_traces_router)
 api_router.include_router(routines_router)
 api_router.include_router(routines_admin_router)
 api_router.include_router(supplements_router)

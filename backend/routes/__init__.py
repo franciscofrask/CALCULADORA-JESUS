@@ -7,6 +7,7 @@ from .admin import router as admin_router
 from .calculator import router as calculator_router
 from .diets import router as diets_router
 from .chatbot import router as chatbot_router
+from .chatbot import trazas_router as chat_traces_router
 from .routines import router as routines_router, admin_router as routines_admin_router
 from .supplements import router as supplements_router, admin_router as supplements_admin_router
 from .reports import router as reports_router, admin_router as reports_admin_router
@@ -26,6 +27,7 @@ __all__ = [
     "calculator_router",
     "diets_router",
     "chatbot_router",
+    "chat_traces_router",
     "routines_router",
     "routines_admin_router",
     "supplements_router",

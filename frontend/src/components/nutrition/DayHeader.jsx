@@ -207,7 +207,16 @@ const DayHeader = ({
                         {(() => {
                             if (nadaPuesto || cuadrado) return null;
                             const NOMBRE = { P: 'la proteína', H: 'los hidratos', G: 'la grasa' };
-                            const cubiertos = macros.filter(m => m.tgt > 0 && m.val >= m.tgt - 4);
+                            // CUBIERTO NO ES PASADO (Francisco, 17-08, en su móvil). Con 70 g
+                            // de hidratos sobre 50 y 56 de grasa sobre 50, la cabecera decía en
+                            // rojo «Te has pasado · 20 g de hidratos y 5,5 g de grasa» y justo
+                            // debajo, en verde, «Ya tienes cubiertos los hidratos y la grasa».
+                            // Lo mismo contado como fallo y como logro en dos líneas seguidas.
+                            // Esta línea existe para que no se ponga a buscar un macro que ya
+                            // está; del que se ha pasado ya le avisa el titular, y repetirlo en
+                            // verde suena a que va bien.
+                            const cubiertos = macros.filter(
+                                m => m.tgt > 0 && m.val >= m.tgt - 4 && !seExcede(m.key, m.val, m.tgt));
                             if (!cubiertos.length || cubiertos.length === macros.filter(m => m.tgt > 0).length) return null;
                             const nombres = cubiertos.map(m => NOMBRE[m.key]).filter(Boolean);
                             const texto = nombres.length === 1

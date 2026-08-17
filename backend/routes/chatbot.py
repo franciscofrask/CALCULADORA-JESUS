@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional
 
 from core.database import db
-from core.security import get_current_user
+from core.security import get_admin_user, get_current_user
 from models.diet import ChatConfigRequest, ChatMessageRequest
 
 # Import chatbot functions
@@ -350,8 +350,27 @@ async def _procesar_mensaje(chatbot, texto: str, progreso=None):
     if chatbot.sin_macros_asignados():
         return {"action": "message", "message": SIN_MACROS, "sin_macros": True}
     from agent_loop import AgentLoop
-    loop = await AgentLoop.crear(chatbot, progreso=progreso)
-    respuesta = await loop.procesar(texto)
+
+    # EL TURNO, CRONOMETRADO Y GUARDADO (17-08-2026). La traza se escribía solo en el log
+    # del pod, así que se iba con cada despliegue: el del 17 se llevó las de la sesión que
+    # había que analizar y no quedó forma de saber qué había llamado el agente. Se guarda
+    # aquí porque esta es la única puerta por la que pasan TODOS los turnos, también la
+    # docena de atajos que contestan antes de llegar al modelo (`core/trazas_chat`).
+    import time as _time
+
+    from core.trazas_chat import guardar as _guardar_traza
+
+    _t0 = _time.perf_counter()
+    respuesta = None
+    try:
+        loop = await AgentLoop.crear(chatbot, progreso=progreso)
+        respuesta = await loop.procesar(texto)
+    except Exception as e:
+        await _guardar_traza(chatbot=chatbot, mensaje=texto, respuesta=None,
+                             ms=round((_time.perf_counter() - _t0) * 1000), error=repr(e)[:300])
+        raise
+    await _guardar_traza(chatbot=chatbot, mensaje=texto, respuesta=respuesta,
+                         ms=round((_time.perf_counter() - _t0) * 1000))
     # LA CONVERSACIÓN SE APUNTA AQUÍ, PASE LO QUE PASE DENTRO. El agente ya la apunta en su
     # camino largo, pero tiene una docena de atajos que contestan antes de llegar al modelo
     # (el «sí» a una oferta, la calibración, deshacer, navegar...) y esos turnos se perdían:
@@ -900,3 +919,59 @@ async def export_diet_pdf_route(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+# ── LA TRAZA, PARA QUIEN TIENE QUE DIAGNOSTICAR ─────────────────────────────────────────
+#
+# Hasta ahora, ante un «mira lo que me ha hecho el asistente» había que pedirle al cliente
+# que pegara la conversación y cruzar los dedos para que el pod no se hubiera reiniciado.
+# Esto lee lo que `core/trazas_chat` va guardando: el mensaje, lo que llamó el agente en
+# orden, lo que le contestó cada herramienta y lo que acabó respondiendo.
+#
+# Es del equipo (admin y entrenadores), como la ficha del cliente: aquí se lee lo que ha
+# escrito una persona en su chat.
+trazas_router = APIRouter(prefix="/chat-traces", tags=["chatbot"])
+
+
+@trazas_router.get("")
+async def listar_trazas(email: Optional[str] = None, user_id: Optional[str] = None,
+                        session_id: Optional[str] = None, desde: Optional[str] = None,
+                        limite: int = 50, staff=Depends(get_admin_user)):
+    """Los últimos turnos, del cliente que se pida (por correo o por id) o de todos.
+
+    `desde` filtra por fecha ("2026-08-17"). El tiempo del modelo no se guarda aparte: es
+    el total menos lo que se fue en herramientas, y se calcula aquí para no repetir la
+    resta en cada sitio que lo lea.
+    """
+    filtro = {}
+    if email:
+        u = await db.users.find_one({"email": email.strip().lower()}, {"_id": 0, "id": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="No hay ningún usuario con ese correo")
+        filtro["user_id"] = u["id"]
+    elif user_id:
+        filtro["user_id"] = user_id
+    if session_id:
+        filtro["session_id"] = session_id
+    if desde:
+        try:
+            filtro["created_at"] = {"$gte": datetime.fromisoformat(desde)}
+        except ValueError:
+            raise HTTPException(status_code=400, detail="La fecha va como 2026-08-17")
+
+    limite = max(1, min(int(limite or 50), 200))
+    filas = await db.chat_traces.find(filtro, {"_id": 0}).sort("created_at", -1).to_list(limite)
+
+    # El nombre de quien habla, para no tener que ir a buscarlo a mano cliente por cliente.
+    ids = {f.get("user_id") for f in filas if f.get("user_id")}
+    quien = {}
+    if ids:
+        async for u in db.users.find({"id": {"$in": list(ids)}}, {"_id": 0, "id": 1, "name": 1, "email": 1}):
+            quien[u["id"]] = {"nombre": u.get("name"), "email": u.get("email")}
+
+    for f in filas:
+        f["cliente"] = quien.get(f.get("user_id"), {})
+        f["ms_modelo"] = max(0, int(f.get("ms_total") or 0) - int(f.get("ms_herramientas") or 0))
+        if isinstance(f.get("created_at"), datetime):
+            f["created_at"] = f["created_at"].isoformat()
+    return {"total": len(filas), "trazas": filas}
