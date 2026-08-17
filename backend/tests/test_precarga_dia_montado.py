@@ -74,13 +74,35 @@ def test_sin_catalogo_no_se_inventa_nada():
     assert bot.get_day_overview()["consumido"]["P"] == 0
 
 
-def test_lo_guardado_manda_si_esta():
-    """Si la dieta trae macros escritos, no se recalculan."""
+def test_manda_el_motor_aunque_la_dieta_traiga_macros_escritos():
+    """Con ficha, cuenta el motor: el campo guardado no puede llevar la contraria.
+
+    Esto antes afirmaba lo contrario («si la dieta trae macros escritos, no se recalculan»).
+    Se cambió el 17-08 con el punto 3 del documento de Jesús: mientras el asistente se creía
+    ese campo y las demás pantallas recalculaban, el mismo día salía con dos cifras. Un día
+    con 150 g de pechuga y «99 g de proteína» escritos a mano daba 99 en el chat y lo que
+    dice el motor en Nutrición y en Inicio.
+
+    Son 411 de 55.323 alimentos guardados en producción, pero es justo donde las cuentas se
+    separaban.
+    """
     bot = _bot()
     bot.precargar_desde_dieta({"C1": {"alimentos": [
         {"alimento_id": 101, "nombre": "Pechuga de pollo", "cantidad_g": 150,
          "macros_efectivos": {"P": 99, "H": 0, "G": 0}},
     ]}}, CATALOGO)
+    p = bot.get_day_overview()["consumido"]["P"]
+    assert p != 99, "se creyó el campo guardado en vez de contar"
+    assert 30 < p < 40, f"150 g de pechuga son unos 34,5 g de proteína, no {p}"
+
+
+def test_sin_ficha_lo_guardado_es_el_respaldo():
+    """Sin catálogo no hay con qué contar: ahí sí vale lo que traiga la dieta."""
+    bot = _bot()
+    bot.precargar_desde_dieta({"C1": {"alimentos": [
+        {"alimento_id": 101, "nombre": "Pechuga de pollo", "cantidad_g": 150,
+         "macros_efectivos": {"P": 99, "H": 0, "G": 0}},
+    ]}})            # sin catálogo
     assert bot.get_day_overview()["consumido"]["P"] == 99
 
 

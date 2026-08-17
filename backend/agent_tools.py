@@ -4097,10 +4097,22 @@ class AgentTools:
         _kcal = lambda m: round(4 * float((m or {}).get("P") or 0)
                                 + 4 * float((m or {}).get("H") or 0)
                                 + 9 * float((m or {}).get("G") or 0))
+        # EL DÍA SE CUENTA COMO EN NUTRICIÓN (puntos 3 y 10 del 17-08): el objetivo de las
+        # COMIDAS, con el perientreno descontado y llevando su propia cuenta. Aquí iba el
+        # total con el peri dentro, así que el modelo decía un número y la pantalla que el
+        # cliente tiene delante decía otro.
+        peri = ov.get("peri") or {}
         return {"actual": actual, "tipo_dia": bot.state.get("tipo_dia"),
-                "objetivo_dia": ov.get("objetivo"), "consumido": ov.get("consumido"),
-                "kcal_dia": {"objetivo": _kcal(ov.get("objetivo")),
-                             "consumidas": _kcal(ov.get("consumido"))},
+                "objetivo_dia": ov.get("objetivo_comidas"),
+                "consumido": ov.get("consumido_comidas"),
+                # El perientreno, solo si ese día lo tiene: es un presupuesto aparte y
+                # sumarlo al del día es el fallo que se venía arreglando.
+                **({"perientreno": {"objetivo": peri.get("objetivo"),
+                                    "consumido": peri.get("consumido"),
+                                    "nota": "va aparte: no entra en `objetivo_dia`"}}
+                   if peri.get("hay") else {}),
+                "kcal_dia": {"objetivo": _kcal(ov.get("objetivo_comidas")),
+                             "consumidas": _kcal(ov.get("consumido_comidas"))},
                 # Para poder EXPLICAR la calibración progresiva si preguntan (QA 15-08,
                 # fallo 2 de Jesús: negó que las almendras cuenten proteína cuando en el
                 # tramo de 20 a 40 g cuenta a la mitad). Los números de tarjetas y estado

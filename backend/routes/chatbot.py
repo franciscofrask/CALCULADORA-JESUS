@@ -221,7 +221,11 @@ async def chatbot_configure(
     # rehacerlas. Se dice por donde va y se sigue por la primera que le falta.
     if comidas_traidas:
         v = chatbot.get_day_overview()
-        r = v["restante"]
+        # EL MISMO NÚMERO QUE NUTRICIÓN (punto 3 del 17-08). Esto usaba `restante`, que es
+        # el total del día con el perientreno dentro; la cabecera de Nutrición descuenta el
+        # peri y lo lleva aparte. El mismo día decía «faltan 5 g de grasa» aquí y «faltan
+        # 10,1» tres centímetros más allá. `restante_comidas` es el par de Nutrición.
+        r = v["restante_comidas"]
         hechas = f"{comidas_traidas} de {total}" if total else str(comidas_traidas)
         mensaje += f"\n\nYa tienes {hechas} comidas montadas de ese día."
         # En palabras, no en iniciales: «Te faltan 13 P · 17 H · 1 G» es lo que Jesús

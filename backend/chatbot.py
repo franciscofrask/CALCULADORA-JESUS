@@ -1501,10 +1501,23 @@ class NutritionChatbot:
 
         Un cero legitimo -- la lechuga, o el macro que el filtro del tercio descarta -- sigue
         saliendo cero, porque lo dice el motor y no la ausencia del campo.
+
+        MANDA EL MOTOR, NO EL CAMPO GUARDADO (punto 3 del 17-08).
+
+        Esto devolvia `macros_efectivos` tal cual cuando traia algo, y solo recalculaba
+        cuando venia vacio. Con eso el asistente era la unica pantalla que se creia el campo:
+        Inicio dejo de hacerlo el 17-08 (`routes/diets.py::_servido_de_las_comidas`), el PDF
+        el 11-08 y Nutricion nunca lo hizo, porque pide la calibracion del dia al cargar.
+
+        Se ve en un dia con 200 g de pechuga guardados con 3 g de grasa escritos a mano: la
+        cabecera de Nutricion dice «te faltan 60 g de grasa» y el asistente «57», del mismo
+        dia y a la misma hora. Son 411 de los 55.323 alimentos guardados en produccion (el
+        0,7 %) -- los unicos que traen el campo --, pero es justo el caso en el que las dos
+        cuentas se separan, y el criterio del documento es que digan el mismo numero.
+
+        Lo guardado se queda de RESPALDO para cuando no hay ficha con la que contar.
         """
         guardado = a.get("macros_efectivos") or a.get("macros") or {}
-        if guardado and any((guardado.get(k) or 0) > 0 for k in ("P", "H", "G")):
-            return guardado
         if not ficha:
             return guardado or {}
         try:
@@ -1532,26 +1545,70 @@ class NutritionChatbot:
         if orden:
             self.state["comida_actual"] = len(orden)
 
+    # Las comidas que no entran en el presupuesto de las comidas regulares.
+    COMIDAS_PERI = ("Intra", "Post")
+
     def get_day_overview(self) -> dict:
-        """Objetivo total del día + consumido + restante, y la comida actual."""
+        """Objetivo total del día + consumido + restante, y la comida actual.
+
+        DOS CUENTAS, NO UNA (punto 3 y 10 del documento del 17-08).
+
+        Aquí solo había el TOTAL del día, con el perientreno metido en los dos lados: el
+        objetivo era `P_total` (día entero, peri incluido) y el consumido sumaba todas las
+        comidas, Intra y Post entre ellas. Nutrición hace justo lo contrario -- lo saca de
+        los dos lados, porque el peri lleva su cuenta aparte -- y la diferencia entre las
+        dos cuentas es exactamente lo que le falta al peri.
+
+        Medido en producción el 17-08, día 5 de julio: Nutrición decía «faltan 10,1 g de
+        grasa» y el asistente «te faltan 5 g de grasa» de ese mismo día; en hidratos, 100
+        contra 130. El criterio del documento es que «Inicio, Nutrición y el asistente
+        dicen el mismo número».
+
+        `objetivo`/`consumido`/`restante` siguen siendo el TOTAL, que es lo que pinta la
+        tarjeta «Total del día» del chat y ahí está bien. Lo que se añade es el presupuesto
+        de las COMIDAS -- el mismo que enseña la cabecera de Nutrición -- y el peri aparte:
+        eso es lo que hay que decirle al cliente y lo que tiene que ver el modelo.
+        """
         dist = self.state.get("distribucion") or {}
         resumen = dist.get("resumen", {})
         consumido = {"P": 0.0, "H": 0.0, "G": 0.0}
-        for comida in self.state["comidas_completadas"].values():
+        consumido_peri = {"P": 0.0, "H": 0.0, "G": 0.0}
+        for nombre, comida in self.state["comidas_completadas"].items():
             m = comida.get("macros", {})
-            consumido["P"] += m.get("P", 0)
-            consumido["H"] += m.get("H", 0)
-            consumido["G"] += m.get("G", 0)
+            donde = consumido_peri if nombre in self.COMIDAS_PERI else consumido
+            for k in ("P", "H", "G"):
+                donde[k] += m.get(k, 0)
+        # El objetivo del peri sale del reparto, igual que el del día.
+        peri = dist.get("periworkout") or {}
+        objetivo_peri = {k: sum(float((peri.get(b) or {}).get(k) or 0) for b in self.COMIDAS_PERI)
+                         for k in ("P", "H", "G")}
         objetivo = {
             "P": resumen.get("P_total", 0),
             "H": resumen.get("H_total", 0),
             "G": resumen.get("G_total", 0),
         }
+        # El presupuesto de las comidas regulares: el total menos lo que se lleva el peri.
+        objetivo_comidas = {k: round((objetivo.get(k) or 0) - objetivo_peri[k], 1)
+                            for k in ("P", "H", "G")}
         key = self.current_meal_key()
         return {
             "objetivo": objetivo,
-            "consumido": {k: round(v, 1) for k, v in consumido.items()},
-            "restante": {k: round(objetivo[k] - consumido[k], 1) for k in ("P", "H", "G")},
+            "consumido": {k: round(v + consumido_peri[k], 1) for k, v in consumido.items()},
+            "restante": {k: round(objetivo[k] - consumido[k] - consumido_peri[k], 1)
+                         for k in ("P", "H", "G")},
+            # LO QUE SE LE DICE AL CLIENTE, y lo que ve el modelo: el mismo par que
+            # Nutrición pinta arriba.
+            "objetivo_comidas": objetivo_comidas,
+            "consumido_comidas": {k: round(v, 1) for k, v in consumido.items()},
+            "restante_comidas": {k: round(objetivo_comidas[k] - consumido[k], 1)
+                                 for k in ("P", "H", "G")},
+            "peri": {
+                "objetivo": {k: round(v, 1) for k, v in objetivo_peri.items()},
+                "consumido": {k: round(v, 1) for k, v in consumido_peri.items()},
+                "restante": {k: round(objetivo_peri[k] - consumido_peri[k], 1)
+                             for k in ("P", "H", "G")},
+                "hay": any(objetivo_peri.values()) or any(consumido_peri.values()),
+            },
             "comida_key": key,
             "comida_nombre": self.meal_label(key),
             "comida_objetivo": self.get_current_meal_macros(),
