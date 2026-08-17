@@ -7,6 +7,7 @@ El catálogo refleja el documento "JG - Catálogo de Planes y Membresías".
 from fastapi import APIRouter, Body, HTTPException, Depends
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
+import os
 import re
 import uuid
 
@@ -208,6 +209,17 @@ async def guardar_quiz_venta(data: Dict[str, Any] = Body(default={})):
 admin_router = APIRouter(prefix="/admin/plans", tags=["admin-plans"])
 
 
+def _tiene_price_en_stripe(plan: Dict[str, Any]) -> bool:
+    """Si este plan puede cobrarse hoy: tiene variable de Price y la variable trae un id.
+
+    Sin esto el checkout revienta con un 503 y un mensaje que al cliente no le dice nada.
+    Es lo que decide si el interruptor de «renovable por los suyos» se puede encender: de
+    poco sirve reabrirle el plan a alguien si al darle a pagar no hay nada que cobrarle.
+    """
+    env = (plan.get("stripe_price_env") or "").strip()
+    return bool(env and os.environ.get(env, "").strip())
+
+
 @admin_router.get("")
 async def admin_list_plans(user=Depends(get_admin_only_user)):
     """Catálogo completo para el panel admin (con overrides aplicados). Marca qué
@@ -216,6 +228,9 @@ async def admin_list_plans(user=Depends(get_admin_only_user)):
     catalog = merged_catalog(overrides)
     for code, p in catalog.items():
         p["has_override"] = bool(overrides.get(code))
+        # Para que el panel pueda dejar el interruptor bloqueado en vez de dejar encender
+        # algo que despues no cobra.
+        p["tiene_price_en_stripe"] = _tiene_price_en_stripe(p)
     return catalog
 
 
@@ -236,6 +251,27 @@ async def admin_update_plan(code: str, data: dict, user=Depends(get_admin_only_u
 
     existing = await db.plan_overrides.find_one({"code": code}, {"_id": 0, "fields": 1})
     merged_fields = {**(existing.get("fields") if existing else {}), **fields}
+
+    # EL INTERRUPTOR DEL PLAN ANTIGUO SE COMPRUEBA AL GUARDAR, no solo en la pantalla.
+    # Encenderlo en un plan que no tiene Price en Stripe deja una promesa que no se puede
+    # cumplir: el cliente ve «Seguir igual», le da, y el checkout responde un 503. Mejor
+    # decirlo aquí, cuando se guarda, que descubrirlo cuando alguien intente pagar. Se
+    # valida contra el catálogo YA mezclado (lo guardado + lo que llega ahora), que es el
+    # que va a mandar cuando el cliente entre a renovar.
+    if merged_fields.get("renovable_por_los_suyos"):
+        resultante = merged_catalog({code: merged_fields}).get(code, {})
+        if resultante.get("estado") != "legacy":
+            raise HTTPException(
+                status_code=400,
+                detail="Ese interruptor es solo para los planes que ya no se venden.",
+            )
+        if not _tiene_price_en_stripe(resultante):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{resultante.get('name') or code} no tiene precio configurado en Stripe, "
+                       "así que no se le podría cobrar la renovación. Hay que crearlo antes de encenderlo.",
+            )
+
     await db.plan_overrides.update_one(
         {"code": code},
         {"$set": {"code": code, "fields": merged_fields,

@@ -36,7 +36,11 @@ const RenovacionPage = () => {
 
     const elegir = async (salida) => {
         // Seguir en el mismo plan no necesita checkout: su suscripción ya renueva sola.
-        if (salida.tipo === 'renovar') {
+        //
+        // Salvo el plan antiguo que el admin ha reabierto para los suyos: ese llega con
+        // `por_checkout` porque su suscripción no renueva sola (se retiró el plan), así que
+        // decirle «no tienes que hacer nada» sería dejarle sin plan y sin cobrar.
+        if (salida.tipo === 'renovar' && !salida.por_checkout) {
             toast.success('Perfecto, seguimos. No tienes que hacer nada más.');
             navigate('/dashboard');
             return;
@@ -198,6 +202,15 @@ const RenovacionPage = () => {
                     Si no haces nada, tu plan se renueva solo y sigues sin interrupciones.
                 </p>
             )}
+            {/* El plan antiguo reabierto para los suyos: puede quedarse, pero esta vez tiene
+                que darle él, porque su plan ya no se cobra solo. Decirlo evita que se quede
+                esperando una renovación que no va a llegar. */}
+            {!motivo_cambio && !renueva_solo && salidas.some(s => s.tipo === 'renovar' && s.por_checkout) && (
+                <p className="text-sm text-muted-foreground mb-4" data-testid="aviso-renovacion-legacy">
+                    Tu plan ya no se vende, pero puedes seguir en él. Eso sí, esta vez la
+                    renovación la tienes que confirmar tú aquí.
+                </p>
+            )}
 
             <div className="space-y-3">
                 {salidas.map(s => (
@@ -231,7 +244,7 @@ const RenovacionPage = () => {
                                 ? <Loader2 className="w-4 h-4 animate-spin text-brand" />
                                 : s.por_llamada
                                     ? <Phone className="w-5 h-5 text-brand" />
-                                    : s.tipo === 'renovar'
+                                    : (s.tipo === 'renovar' && !s.por_checkout)
                                         ? <Check className="w-5 h-5 text-brand" />
                                         : <ArrowRight className="w-5 h-5 text-muted-foreground" />}
                         </div>

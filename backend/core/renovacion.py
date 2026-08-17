@@ -122,28 +122,41 @@ def _en_una_frase(info: Dict[str, Any]) -> str:
 
 
 def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
-            catalogo: Dict[str, Dict[str, Any]], precio_alta: Optional[float]) -> List[Dict[str, Any]]:
+            catalogo: Dict[str, Dict[str, Any]], precio_alta: Optional[float],
+            suscripcion_viva: bool = False) -> List[Dict[str, Any]]:
     """Las tres salidas del documento, en el orden en que se le ofrecen.
 
     `opciones_catalogo` es lo que devuelve models.user.opciones_de_renovacion: de ahi
     salen las reglas (si puede seguir igual, si conserva precio, cual es la de salida).
+
+    `suscripcion_viva` es si Stripe le sigue cobrando solo. Solo importa para el plan
+    antiguo reabierto: al que todavia tiene su suscripcion en pie no hay que mandarle a
+    pagar otra vez (el checkout lo rechazaria, y con razon).
     """
     fuera: List[Dict[str, Any]] = []
     actual = (plan_actual or "").lower().strip()
     contratables = opciones_catalogo.get("opciones") or []
 
     # 1) Seguir igual. Solo si su plan se sigue vendiendo, y con SU precio.
+    #
+    # O si es un plan antiguo que el admin ha reabierto para los suyos (Francisco, 16-08).
+    # Ese caso lleva `por_checkout`: al retirar un plan las suscripciones dejan de renovar
+    # solas, asi que decirle «no tienes que hacer nada» seria mentirle y quedarse sin
+    # cobrar. Va a la pasarela como cualquier otra salida.
     if opciones_catalogo.get("puede_seguir_igual") and actual in catalogo:
         info = catalogo[actual]
         precio = precio_alta if precio_alta else info.get("precio")
+        legacy = bool(opciones_catalogo.get("renovacion_legacy")) and not suscripcion_viva
         fuera.append({
             "tipo": "renovar",
             "plan": actual,
             "nombre": info.get("name"),
             "precio": precio,
             "precio_congelado": bool(precio_alta and precio_alta != info.get("precio")),
+            "por_checkout": legacy,
             "titulo": "Seguir igual",
-            "detalle": "Otras 12 semanas con lo mismo.",
+            "detalle": ("Sigues en tu plan de siempre, con todo lo que incluye."
+                        if legacy else "Otras 12 semanas con lo mismo."),
         })
 
     # 2) Cambiar de nivel. Los que no tiene, mas caros primero: subir es lo que se quiere
@@ -195,13 +208,19 @@ def montar_renovacion(*, perfil: Dict[str, Any], catalogo: Dict[str, Dict[str, A
                       ahora: Optional[datetime] = None) -> Dict[str, Any]:
     """Todo lo de la pantalla: primero lo conseguido, despues lo que puede hacer."""
     estado = estado_del_ciclo(perfil, ahora)
+    # Los estados de Stripe en los que se le sigue cobrando sin que haga nada.
+    suscripcion_viva = perfil.get("subscription_status") in ("active", "trialing")
+    fuera = salidas(plan_actual=perfil.get("plan"), opciones_catalogo=opciones_catalogo,
+                    catalogo=catalogo, precio_alta=perfil.get("precio_alta"),
+                    suscripcion_viva=suscripcion_viva)
     return {
         "ciclo": estado,
         "resumen": resumen,
-        "salidas": salidas(plan_actual=perfil.get("plan"), opciones_catalogo=opciones_catalogo,
-                           catalogo=catalogo, precio_alta=perfil.get("precio_alta")),
+        "salidas": fuera,
         # Si no hace nada, Stripe cobra solo: conviene decirlo para que no parezca que
-        # se le va a cortar el acceso.
-        "renueva_solo": not estado.get("ya_vencido"),
+        # se le va a cortar el acceso. Al del plan antiguo reabierto NO se le dice, porque
+        # en su caso no es verdad: su renovacion pasa por la pasarela (`por_checkout`).
+        "renueva_solo": (not estado.get("ya_vencido")
+                         and not any(s.get("por_checkout") for s in fuera if s["tipo"] == "renovar")),
         "motivo_cambio": opciones_catalogo.get("motivo"),
     }

@@ -160,6 +160,12 @@ const PlanCard = ({ plan, onEdit }) => {
                         <p className="text-[11px] text-white/40 font-mono">{plan.code}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                        {/* Que un plan retirado esté abierto a los suyos se tiene que ver
+                            desde fuera, sin abrir la ficha: es lo que decide si a un
+                            cliente le sale «Seguir igual» al acabar su ciclo. */}
+                        {plan.renovable_por_los_suyos && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold">renovable</span>
+                        )}
                         {plan.has_override && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold">editado</span>
                         )}
@@ -225,8 +231,10 @@ const AdminPlansPage = () => {
         setForm({
             name: plan.name || '',
             estado: plan.estado || 'activo',
+            // Se enseña, no se manda: el importe no es editable.
             precio: plan.precio ?? 0,
             precio_nota: plan.precio_nota || '',
+            renovable_por_los_suyos: !!plan.renovable_por_los_suyos,
             responsable: plan.responsable || '',
             que_incluye: plan.que_incluye || '',
             ciclo_tipo: plan.ciclo?.tipo || 'mensual',
@@ -252,11 +260,15 @@ const AdminPlansPage = () => {
         if (!editing) return;
         setSaving(true);
         try {
+            // `precio` NO viaja: el backend ya no lo acepta (PLAN_EDITABLE_FIELDS) y
+            // mandarlo daría la impresión de que se guarda algo.
             const payload = {
                 name: form.name.trim(),
                 estado: form.estado,
-                precio: parseFloat(form.precio) || 0,
                 precio_nota: form.precio_nota,
+                // Si el plan deja de ser legacy, el interruptor se apaga con él: un plan
+                // que vuelve a venderse no necesita puerta de atrás para los suyos.
+                renovable_por_los_suyos: form.estado === 'legacy' && !!form.renovable_por_los_suyos,
                 responsable: form.responsable,
                 que_incluye: form.que_incluye.trim(),
                 ciclo: {
@@ -363,17 +375,66 @@ const AdminPlansPage = () => {
                                     <Input type="number" value={form.ciclo_semanas} onChange={e => setForm(f => ({ ...f, ciclo_semanas: e.target.value }))} className="bg-[#111] border-[#333] text-white mt-1" />
                                 </div>
                             </div>
+                            {/* EL IMPORTE SE VE PERO NO SE TOCA (Francisco, 16-08). Lo que
+                                se cobra sale del Price de Stripe, no de aquí: escribir otro
+                                número cambiaba el escaparate y seguía cobrando lo de
+                                siempre. Para cambiarlo de verdad hay que crear el precio en
+                                Stripe y tocar el catálogo en el código. */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div><Label className="text-white/60 text-xs">Precio (€)</Label>
-                                    <Input type="number" value={form.precio} onChange={e => setForm(f => ({ ...f, precio: e.target.value }))} className="bg-[#111] border-[#333] text-white mt-1" />
+                                    <Input type="number" value={form.precio} readOnly disabled data-testid="plan-precio"
+                                        className="bg-[#0A0A0A] border-[#282828] text-white/50 mt-1 cursor-not-allowed" />
+                                    <p className="text-[11px] text-white/30 mt-1">Lo fija el precio de Stripe. No se edita aquí.</p>
                                 </div>
                                 <div><Label className="text-white/60 text-xs">Responsable</Label>
                                     <Input value={form.responsable} onChange={e => setForm(f => ({ ...f, responsable: e.target.value }))} className="bg-[#111] border-[#333] text-white mt-1" />
                                 </div>
                             </div>
+
+                            {/* Las opciones de precio del catálogo (mensual, anual...), también
+                                de solo lectura: son importes, y valen lo mismo que el de arriba. */}
+                            {!!(editing?.precios || []).length && (
+                                <div>
+                                    <Label className="text-white/60 text-xs">Opciones de precio</Label>
+                                    <div className="mt-1 space-y-1" data-testid="plan-precios">
+                                        {editing.precios.map((p, i) => (
+                                            <div key={i} className="flex items-center justify-between rounded-lg border border-[#282828] bg-[#0A0A0A] px-3 py-2 text-sm">
+                                                <span className="text-white/50">{p.label}{p.periodo ? ` · ${p.periodo}` : ''}</span>
+                                                <span className="text-white/60 font-medium">{p.importe}€</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             <div><Label className="text-white/60 text-xs">Nota de precio</Label>
                                 <Input value={form.precio_nota} onChange={e => setForm(f => ({ ...f, precio_nota: e.target.value }))} className="bg-[#111] border-[#333] text-white mt-1" />
                             </div>
+
+                            {/* REABRIR UN PLAN ANTIGUO PARA LOS SUYOS (Francisco, 16-08).
+                                Solo tiene sentido en los que ya no se venden: al cliente que
+                                YA lo tiene se le deja renovarlo con lo que incluye hoy y con
+                                su precio congelado; para el resto el plan sigue sin existir.
+                                Bloqueado si el plan no tiene precio en Stripe, porque
+                                entonces la renovación no se podría cobrar. */}
+                            {form.estado === 'legacy' && (
+                                <div className="border border-[#282828] rounded-lg p-3 bg-[#0A0A0A]">
+                                    <button
+                                        type="button"
+                                        disabled={!editing?.tiene_price_en_stripe}
+                                        onClick={() => setForm(f => ({ ...f, renovable_por_los_suyos: !f.renovable_por_los_suyos }))}
+                                        data-testid="plan-renovable-por-los-suyos"
+                                        className={`w-full flex items-center justify-between gap-3 text-left text-sm ${editing?.tiene_price_en_stripe ? '' : 'opacity-50 cursor-not-allowed'}`}
+                                    >
+                                        <span className="text-white/80">Dejar que lo renueven los que ya lo tienen</span>
+                                        <Dot on={!!form.renovable_por_los_suyos} />
+                                    </button>
+                                    <p className="text-[11px] text-white/30 mt-1">
+                                        {editing?.tiene_price_en_stripe
+                                            ? 'No vuelve a la tienda: solo lo verá quien ya esté en este plan, al acabar su ciclo.'
+                                            : 'Este plan no tiene precio en Stripe, así que no se le podría cobrar la renovación.'}
+                                    </p>
+                                </div>
+                            )}
 
                             {/* QUÉ INCLUYE, ESCRITO A MANO (punto 6.4). Lo que se pinta tal cual en
                                 «Tu plan incluye» de Mi perfil. Si se deja vacío se siguen derivando

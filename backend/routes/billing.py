@@ -20,7 +20,9 @@ from models.common import (
     CheckoutSessionRequest, CheckoutSessionResponse, BillingPortalResponse,
     PaymentResponse, AlertResponse,
 )
-from models.user import PLAN_CATALOG
+from models.user import (
+    PLAN_CATALOG, codigo_de_plan, merged_catalog, puede_renovar_su_plan_legacy,
+)
 from core.calendario_arranque import plan_de_arranque
 from core.stripe_billing import (
     get_stripe_module, stripe_api_call, require_stripe_test_mode,
@@ -49,11 +51,24 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
 
     # Solo se venden online los planes comercialmente activos (los legacy se respetan
     # a quien ya los tiene, pero no se contratan de nuevo; especiales → alta manual).
+    #
+    # LA UNICA PUERTA DEL PLAN ANTIGUO (Francisco, 16-08): si el admin ha encendido
+    # `renovable_por_los_suyos` en un plan legacy, ese plan se puede cobrar SOLO al cliente
+    # que ya lo tiene. Se mira su perfil ANTES de tocarlo, porque `ensure_checkout_profile`
+    # le escribe el plan pedido encima y despues ya no habria con que comparar. Para
+    # cualquier otro sigue siendo el 400 de siempre: no basta con encender el interruptor,
+    # hay que ser de los suyos.
     override = await db.plan_overrides.find_one({"code": plan_info["code"]}, {"_id": 0, "fields": 1})
-    estado = ((override or {}).get("fields", {}).get("estado")
-              or PLAN_CATALOG.get(plan_info["code"], {}).get("estado"))
+    campos = (override or {}).get("fields", {})
+    base = PLAN_CATALOG.get(plan_info["code"], {})
+    estado = campos.get("estado") or base.get("estado")
     if estado != "activo":
-        raise HTTPException(status_code=400, detail="Este plan ya no está disponible para nuevas contrataciones.")
+        from routes.plans import _overrides_by_code
+        perfil_previo = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "plan": 1})
+        catalogo = merged_catalog(await _overrides_by_code())
+        el_suyo = codigo_de_plan((perfil_previo or {}).get("plan"))
+        if not (el_suyo == plan_info["code"] and puede_renovar_su_plan_legacy(el_suyo, catalogo)):
+            raise HTTPException(status_code=400, detail="Este plan ya no está disponible para nuevas contrataciones.")
 
     profile = await ensure_checkout_profile(user, plan_info["code"])
     customer_id = await get_or_create_stripe_customer(user, profile)

@@ -5,8 +5,9 @@ El Nivel 3 se vende hablando, pero se cobra por Stripe con tarjeta igual que los
 Lo que se fija aqui son las tres decisiones que no pueden cambiar sin querer:
 
   1. Es PAGO UNICO del ciclo (`mode="payment"`), no una suscripcion que renueve sola.
-  2. Cobra el precio del CATALOGO (1.500 EUR), no una cifra escrita en el codigo, y
-     respeta el override que el admin haya puesto desde el panel.
+  2. Cobra el precio del CATALOGO (1.500 EUR), no una cifra escrita a mano en este
+     fichero ni en el de leads. Y desde el 16-08 el catalogo es el del codigo tambien
+     aqui: el importe ya no se edita en el panel.
   3. Al pagarlo NO se le activa el plan solo: se avisa al equipo para que le de el alta.
 """
 import asyncio
@@ -110,10 +111,20 @@ class TestElEnlaceDePago:
         assert item["unit_amount"] == 150000, "1.500 EUR en centimos"
         assert item["currency"] == "eur"
 
-    def test_respeta_el_override_del_panel(self, stripe_espia, sin_auditoria):
+    def test_un_precio_editado_en_el_panel_ya_no_cambia_lo_que_se_cobra(self, stripe_espia, sin_auditoria):
+        """El importe dejo de ser editable (Francisco, 16-08).
+
+        Antes este enlace era el unico sitio donde un `precio` escrito en el panel llegaba
+        a cobrarse de verdad: por Stripe se cobra el Price de la variable de entorno, asi
+        que en todo lo demas ese numero solo cambiaba el escaparate. Un mismo campo que
+        unas veces cobra y otras no es peor que un campo que no se puede tocar.
+
+        Quedan overrides antiguos guardados con `precio` dentro (uno de `elm` en
+        produccion): se ignoran solos, porque merged_catalog solo copia lo editable.
+        """
         db = _Db([LEAD], overrides=[{"code": "nivel3", "fields": {"precio": 1800.0}}])
         _crear(db)
-        assert stripe_espia["line_items"][0]["price_data"]["unit_amount"] == 180000
+        assert stripe_espia["line_items"][0]["price_data"]["unit_amount"] == 150000
 
     def test_lleva_el_lead_en_los_metadatos(self, stripe_espia, sin_auditoria):
         db = _Db([LEAD])
