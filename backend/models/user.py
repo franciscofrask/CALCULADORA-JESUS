@@ -322,6 +322,67 @@ PLAN_CATALOG = {
         # Los perfiles migrados lo traen escrito asi, sin normalizar.
         "alias": ["CalMa", "calma", "calma_12", "calma 12"],
     },
+    # ── LOS TRES QUE FALTABAN, TRAIDOS DE CALMA (17-08-2026) ─────────────────────────
+    #
+    # Francisco: «hay otros clientes que tienen planes que nosotros no manejamos» y «que
+    # conserven la misma membresia, nada de cambios». Estos tres existen en Calma con
+    # clientes activos hoy y aqui no estaban, asi que sus clientes figuraban como ELM: el
+    # plan equivocado, y con el las habilitaciones equivocadas.
+    #
+    # Las habilitaciones NO se han elegido por el parecido del nombre: salen de los `items`
+    # de la membresia de Calma, que son los 28 permisos numerados de su panel (la tabla
+    # esta en su bundle, `_calma_ref/group-admin-miembros`). Medido sobre los 140 activos.
+    "reto12en12": {
+        # Sus items son EXACTAMENTE los de Gold, los dieciseis, uno a uno: reporte quincenal
+        # (9), informe mensual (11), rutina 100 % personalizada (12), suplementacion (7),
+        # ajuste cada 4 semanas (8), soporte extendido (16) y programa aerobico (19). No es
+        # un plan con menos: es Gold con otro nombre comercial, y son 14 clientes activos.
+        # Se le deja su nombre en vez de meterlos en "Reto 12en12 - Gold" porque lo que
+        # compraron se llama asi.
+        "name": "Reto 12en12", "estado": "legacy", "asignable": True,
+        "ciclo": {"tipo": "trimestral", "semanas": 12},
+        "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
+        "precios": [],
+        "responsable": "CEO",
+        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
+                           "reportes": ["quincenal", "mensual"], "suplementacion": True,
+                           "harbiz": False, "acompanamiento": "con_entrenador",
+                           "frecuencia_contacto": "quincenal"},
+        "stripe_price_env": "", "billing_cycle_weeks": 12,
+        "alias": ["Reto 12en12", "Reto12en12", "reto 12 en 12"],
+    },
+    "personalizado": {
+        # «Plan Personalizado 500» y «550»: dos clientes, mismos items que Silver, con la
+        # rutina «adaptada a tu nivel» (item 13) en vez de la 100 % personalizada y sin
+        # reporte quincenal. El numero del nombre es lo que paga cada uno, y por eso el
+        # precio va vacio: son dos acuerdos distintos.
+        "name": "Plan Personalizado", "estado": "legacy", "asignable": True,
+        "ciclo": {"tipo": "trimestral", "semanas": 12},
+        "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
+        "precios": [],
+        "responsable": "CEO",
+        "habilitaciones": {"calculadora": "personalizado", "rutina": "del_mes",
+                           "reportes": ["mensual"], "suplementacion": True, "harbiz": False,
+                           "acompanamiento": "con_entrenador", "frecuencia_contacto": "mensual"},
+        "stripe_price_env": "", "billing_cycle_weeks": 12,
+        "alias": ["Plan Personalizado 500", "Plan Personalizado 550"],
+    },
+    "basica": {
+        # La mas pequeña de todas: sus items son DOS, el 1 y el 3. Programar dietas por
+        # macros y buscador de alimentos. Ni siquiera puede editarse los macros (item 2, que
+        # si tienen ELM y Calculadora JP), asi que la calculadora va en "sin_ajuste": ve lo
+        # que le pongan y come con ello.
+        "name": "Básica", "estado": "legacy", "asignable": True,
+        "ciclo": {"tipo": "mensual", "semanas": None},
+        "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
+        "precios": [],
+        "responsable": "Ninguno (autogestión)",
+        "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "ninguna",
+                           "reportes": [], "suplementacion": False, "harbiz": False,
+                           "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
+        "stripe_price_env": "", "billing_cycle_weeks": 4,
+        "alias": ["Basica", "básica"],
+    },
     # ---------------- COMPLEMENTOS (no asignables como membresía) ----------------
     "rutina_mes": {
         "name": "Rutina del Mes", "estado": "complemento", "asignable": False,

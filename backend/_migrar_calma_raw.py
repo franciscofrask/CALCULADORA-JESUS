@@ -303,6 +303,29 @@ async def build_and_store(email):
         "macros": len(doc["macros_historial"]),
     }
 
+async def _procesar(emails):
+    """Recorre la lista y deja el resumen. Lo comparten `activos` y `all`."""
+    stats = {"ok": 0, "con_inicial": 0, "con_mensuales": 0, "con_user": 0, "fotos": 0, "errores": 0}
+    for i, email in enumerate(emails, 1):
+        try:
+            r = await build_and_store(email)
+            stats["ok"] += 1
+            stats["con_inicial"] += 1 if r["inicial"] else 0
+            stats["con_mensuales"] += 1 if r["mensuales"] else 0
+            stats["con_user"] += 1 if r["user_id"] else 0
+            stats["fotos"] += r["fotos"]
+            if i % 25 == 0 or i == len(emails):
+                print(f"[{i}/{len(emails)}] {email} | ini={r['inicial']} mens={r['mensuales']} "
+                      f"fotos={r['fotos']} | acum ok={stats['ok']}")
+        except Exception as e:
+            stats["errores"] += 1
+            print(f"  ERROR {email}: {type(e).__name__}: {e}")
+
+    print("\n===== RESUMEN calma_raw =====")
+    for k, v in stats.items():
+        print(f"  {k}: {v}")
+
+
 async def main():
     args = sys.argv[1:]
     if not args:
@@ -321,8 +344,31 @@ async def main():
         r = await build_and_store(target.strip().lower())
         print("OK:", r); return
 
+    # SOLO LOS ACTIVOS (Francisco, 17-08-2026: «solo quiero los usuarios activos de Calma»).
+    #
+    # Refrescar los 1.324 tarda lo que tarda, y los que importan para el dia a dia son los
+    # 140 que tienen una membresia viva HOY. Activo = tiene un tramo de `membresia` cuyo
+    # inicio y fin abrazan la fecha de hoy, que es el mismo criterio con el que Calma pinta
+    # su lista de miembros.
+    if target == "activos":
+        from datetime import datetime as _dt, timezone as _tz
+        ahora = _dt.now(_tz.utc)
+        emails = []
+        for d in fs.collection("usuarios").stream():
+            for m in ((d.to_dict() or {}).get("membresia") or []):
+                if (isinstance(m, dict) and m.get("inicio") and m.get("fin")
+                        and m["inicio"] <= ahora <= m["fin"]):
+                    emails.append(d.id.lower())
+                    break
+        emails = sorted(set(e for e in emails if e and "@" in e))
+        if limit:
+            emails = emails[:limit]
+        print(f"activos en Calma hoy: {len(emails)}")
+        await _procesar(emails)
+        return
+
     if target != "all":
-        print("Uso: _migrar_calma_raw.py <email> | all [--limit N]"); return
+        print("Uso: _migrar_calma_raw.py <email> | activos | all [--limit N]"); return
 
     print("recogiendo lista de emails (union de las 3 colecciones)...")
     emails = set()
@@ -335,24 +381,6 @@ async def main():
     if limit:
         emails = emails[:limit]
     print(f"emails a procesar: {len(emails)}")
-
-    stats = {"ok": 0, "con_inicial": 0, "con_mensuales": 0, "con_user": 0, "fotos": 0, "errores": 0}
-    for i, email in enumerate(emails, 1):
-        try:
-            r = await build_and_store(email)
-            stats["ok"] += 1
-            stats["con_inicial"] += 1 if r["inicial"] else 0
-            stats["con_mensuales"] += 1 if r["mensuales"] else 0
-            stats["con_user"] += 1 if r["user_id"] else 0
-            stats["fotos"] += r["fotos"]
-            if i % 25 == 0 or i == len(emails):
-                print(f"[{i}/{len(emails)}] {email} | ini={r['inicial']} mens={r['mensuales']} fotos={r['fotos']} | acum ok={stats['ok']}")
-        except Exception as e:
-            stats["errores"] += 1
-            print(f"  ERROR {email}: {type(e).__name__}: {e}")
-
-    print("\n===== RESUMEN calma_raw =====")
-    for k, v in stats.items():
-        print(f"  {k}: {v}")
+    await _procesar(emails)
 
 asyncio.run(main())

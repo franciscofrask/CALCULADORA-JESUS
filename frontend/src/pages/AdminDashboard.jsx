@@ -977,6 +977,9 @@ const AdminClientsList = () => {
     const esAdmin = user?.role === 'admin';
     const general = esAdmin ? 'todos' : 'mios';
     const [cartera, setCartera] = useState('sin_coach');
+    // Se abre en «Activos»: lo que se mira a diario son los que estan dentro, y los
+    // caducados estaban mezclados sin forma de distinguirlos.
+    const [acceso, setAcceso] = useState('activos');
     const carteraElegida = useRef(false);
     // Orden de la tabla (punto 29): por defecto como venía, y "sin tocar" pone arriba a los
     // que llevan más tiempo sin que les muevan los macros. Desde la home se llega ya
@@ -1037,7 +1040,18 @@ const AdminClientsList = () => {
         return true;
     };
 
-    const filteredClients = clients.filter(c => deLaCartera(c) && (
+    // ACTIVOS Y CADUCADOS, SEPARADOS (Francisco, 17-08-2026: «aparta en el panel los
+    // usuarios activos de los inactivos»). Se mira `acceso`, que lo calcula el servidor con
+    // la misma regla que la puerta de la app, no el `status` del perfil: en producción hay
+    // 57 marcados «activo» a los que la app ya no deja entrar, y mezclados en la misma
+    // lista no hay forma de saber a quién estás mirando. Los registros a medias no son ni
+    // una cosa ni la otra y salen solo en «Todos».
+    const tieneAcceso = (c) => (c.acceso ? c.acceso.activo : c.status === 'activo');
+    const delAcceso = (c) => (acceso === 'todos' ? true
+        : c.status === 'registro_incompleto' ? false
+        : acceso === 'activos' ? tieneAcceso(c) : !tieneAcceso(c));
+
+    const filteredClients = clients.filter(c => deLaCartera(c) && delAcceso(c) && (
         c.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.user?.email?.toLowerCase().includes(searchQuery.toLowerCase())
     ));
@@ -1067,6 +1081,15 @@ const AdminClientsList = () => {
         ? [['sin_coach', 'Sin entrenador'], ['todos', 'Todos']]
         : [['sin_coach', 'Sin entrenador'], ['mios', 'Mis clientes']];
 
+    // Cuenta con el filtro de cartera puesto: si estás mirando «Sin entrenador», los
+    // números de activos y caducados tienen que ser los de esa cartera, no los del total.
+    const cuantosAcceso = (cual) => clients.filter(
+        c => cuentaComoCliente(c) && deLaCartera(c)
+             && (cual === 'todos' ? true
+                 : c.status === 'registro_incompleto' ? false
+                 : cual === 'activos' ? tieneAcceso(c) : !tieneAcceso(c))).length;
+    const ACCESOS = [['activos', 'Activos'], ['caducados', 'Caducados'], ['todos', 'Todos']];
+
     return (
         <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen">
             <div className="flex items-center justify-between">
@@ -1092,15 +1115,26 @@ const AdminClientsList = () => {
                 </div>
             </div>
 
-            {/* Mi cartera / los que no lleva nadie */}
-            <div className="inline-flex rounded-lg bg-[#111111] p-0.5 border border-[#333]">
-                {CARTERAS.map(([valor, etiqueta]) => (
-                    <button key={valor} onClick={() => setCartera(valor)}
-                        data-testid={`cartera-${valor}`}
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${cartera === valor ? 'bg-[#FF671F] text-white' : 'text-white/50 hover:text-white'}`}>
-                        {etiqueta} <span className="opacity-60">({cuantos(valor)})</span>
-                    </button>
-                ))}
+            {/* Mi cartera / los que no lleva nadie, y al lado activos o caducados */}
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex rounded-lg bg-[#111111] p-0.5 border border-[#333]">
+                    {CARTERAS.map(([valor, etiqueta]) => (
+                        <button key={valor} onClick={() => setCartera(valor)}
+                            data-testid={`cartera-${valor}`}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${cartera === valor ? 'bg-[#FF671F] text-white' : 'text-white/50 hover:text-white'}`}>
+                            {etiqueta} <span className="opacity-60">({cuantos(valor)})</span>
+                        </button>
+                    ))}
+                </div>
+                <div className="inline-flex rounded-lg bg-[#111111] p-0.5 border border-[#333]">
+                    {ACCESOS.map(([valor, etiqueta]) => (
+                        <button key={valor} onClick={() => setAcceso(valor)}
+                            data-testid={`acceso-${valor}`}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${acceso === valor ? 'bg-[#FF671F] text-white' : 'text-white/50 hover:text-white'}`}>
+                            {etiqueta} <span className="opacity-60">({cuantosAcceso(valor)})</span>
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Filters */}
