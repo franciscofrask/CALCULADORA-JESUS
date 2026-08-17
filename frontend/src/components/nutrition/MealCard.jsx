@@ -410,10 +410,20 @@ const MealCard = ({
             )}
             {/* EL OBJETIVO, AL PIE DE LA TARJETA (teléfono). Arriba queda la comida y su
                 estado, que es lo que se recorre de un vistazo; los números, que son lo que
-                se lee cuando ya te has parado en esa comida, van debajo y a todo el ancho. */}
+                se lee cuando ya te has parado en esa comida, van debajo y a todo el ancho.
+
+                Y CON SU NOMBRE DELANTE (Francisco, 17-08). Estos números son el OBJETIVO, no
+                lo que lleva puesto, y en el teléfono no lo decía en ninguna parte -- en el
+                ordenador sí pone «Objetivo:». Resultado: dos comidas con el mismo objetivo
+                (30P · 15H · 10G) se veían idénticas y una decía «te pasas 5 g de grasa» y la
+                otra «Válida». Las dos eran ciertas -- una llevaba 15 g de grasa y la otra
+                10,5 -- pero desde fuera parecía que el aviso mentía. */}
             {!forceExpanded && (
                 <p className="lg:hidden px-3.5 sm:px-4 pb-3 text-[17px] font-data text-foreground/70"
                     data-testid={`objetivo-${mealKey}`}>
+                    <span className="font-sans text-[11px] font-bold uppercase tracking-wider text-muted-foreground mr-2">
+                        Objetivo
+                    </span>
                     {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
                 </p>
             )}
