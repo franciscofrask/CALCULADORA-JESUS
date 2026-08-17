@@ -101,6 +101,12 @@ async def create_indexes():
     # Sesiones del chatbot persistidas: TTL de 7 días desde la última interacción.
     await _ensure("chatbot_sessions", "session_id", unique=True)
     await _ensure("chatbot_sessions", "updated_at", expireAfterSeconds=7 * 24 * 3600)
+    # La traza de cada turno del asistente (`core/trazas_chat`). Caduca a los 30 días: es
+    # para diagnosticar, no un archivo. Más margen que las sesiones porque un fallo se
+    # reporta días después, y la sesión ya no está cuando llega el vídeo.
+    await _ensure("chat_traces", [("user_id", 1), ("created_at", -1)])
+    await _ensure("chat_traces", [("session_id", 1), ("created_at", 1)])
+    await _ensure("chat_traces", "created_at", expireAfterSeconds=30 * 24 * 3600)
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""
