@@ -616,6 +616,24 @@ async def get_evolution_data(user = Depends(get_current_user)):
         fecha, valor = str(p.get("fecha") or "")[:10], sanea_peso(p.get("valor"))
         if fecha and fecha <= hoy and valor is not None:
             pesos[fecha] = valor
+    # Y LOS PESAJES QUE VIAJARON CON UN AJUSTE DE MACROS. Cada fila de `macro_history` lleva
+    # el peso del cliente ese día, y los importados de Calma van de 2022 en adelante: sin
+    # ellos la curva empieza el día que estrenamos la serie y se pierde justo el recorrido
+    # que le da sentido. Mis macros ya los sumaba; aquí no, y por eso -- ya con la fuente
+    # arreglada y el «ahora» coincidiendo -- Evolución seguía enseñando 2 pesajes donde Mis
+    # macros enseñaba 5 del mismo cliente (Francisco, 17-08: «¿ninguna miente, verdad?»).
+    if profile.get("id"):
+        async for h in db.macro_history.find(
+            hasta_hoy({"client_id": profile["id"]}, campo="effective_date"),
+            {"_id": 0, "effective_date": 1, "created_at": 1, "peso": 1, "client_weight": 1},
+        ):
+            # Por `effective_date`, nunca por `created_at`: en las filas importadas ese campo
+            # es el día de la importación, no el del pesaje (ver `macros_por_fecha`).
+            fecha = h.get("effective_date") or str(h.get("created_at") or "")[:10]
+            valor = sanea_peso(h.get("peso") if h.get("peso") is not None else h.get("client_weight"))
+            if fecha and str(fecha)[:10] not in pesos and valor is not None:
+                pesos[str(fecha)[:10]] = valor
+
     # Un reporte con peso que todavia no este en la serie tambien cuenta: los importados de
     # Calma no pasaron por ella. Sin pisar lo que ya hay, que es lo mas reciente.
     for r in reports:
