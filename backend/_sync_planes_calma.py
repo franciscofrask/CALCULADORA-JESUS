@@ -83,14 +83,14 @@ def _limpio(t: str) -> str:
 # Los que NO se tocan porque no son un plan de cliente.
 NO_ES_PLAN = ("entrenador",)
 
-# Los que hacen falta y todavia no existen en el catalogo del codigo. Se dejan fuera a
-# proposito: escribir un plan que el catalogo no conoce deja al cliente sin habilitaciones
-# (plan_features devuelve [] y se queda sin nada), que es peor que el plan equivocado.
-FALTAN_EN_EL_CATALOGO = {
-    "reto12en12": "Reto 12en12 (accesos identicos a Gold)",
-    "basica": "Basica (solo dietas por macros y buscador)",
-    "personalizado": "Plan Personalizado 500/550 (accesos de Silver)",
-}
+# Un plan que el catalogo no conozca deja al cliente sin habilitaciones (`plan_features`
+# devuelve [] y se queda sin nada), que es peor que el plan equivocado. Asi que se comprueba
+# contra el catalogo de verdad y no contra una lista escrita a mano: el 17-08 se añadieron
+# Reto 12en12, Plan Personalizado y Basica, y desde ese momento sus 18 clientes ya se pueden
+# corregir sin tocar esto.
+def esta_en_el_catalogo(codigo: str) -> bool:
+    from models.user import PLAN_CATALOG
+    return codigo in PLAN_CATALOG
 
 
 def codigo_de_calma(nombre: str):
@@ -174,7 +174,7 @@ async def main():
         if not codigo:
             sin_codigo[nombre or "(sin nombre)"] += 1
             continue
-        if codigo in FALTAN_EN_EL_CATALOGO:
+        if not esta_en_el_catalogo(codigo):
             sin_catalogo[f"{nombre}  ->  {codigo}"] += 1
             continue
         perfil = await db.client_profiles.find_one({"user_id": u["id"]},
