@@ -827,15 +827,19 @@ async def search_foods_endpoint(
                 if food_in_cat_calma(f, code):
                     return (idx - 0.5) if _is_pro(f) else idx
             return float('inf')
-        # EL PARECIDO MANDA; DENTRO DE LO IGUAL DE PARECIDO, MANDA CALMA.
+        # BUSCANDO, EL ORDEN ES EL DE CALMA Y NADA MÁS (Francisco, 17-08).
         #
-        # `_relevancia` va primero y eso es el fallo 3: buscando «pechuga» ninguna Pepsi
-        # se sube por delante de una pechuga, aunque tape mejor el hueco. Pero entre dos
-        # que se parecen IGUAL a lo escrito, el orden es el de Calma -- prioridad de fase
-        # y diferencia de macros --, no el abecedario: es lo que hace que buscando «pollo»
-        # salga primero el que cuadra la comida (Francisco, 17-08).
+        # El buscador de la Dieta de Calma NO puntúa el parecido con lo escrito: eso es el
+        # scoring `Ie` del catálogo de Alimentos, otra pantalla. Aquí `ordenarIngredientes-
+        # PorMacro` ordena por diferencia de macros y desempata por nombre, y punto. Poner
+        # el parecido por delante partía la lista en bloques ("Pollo asado" antes que
+        # "Pechuga de pollo") donde Calma los mezcla por encaje.
+        #
+        # Y el parecido no hacía de escudo contra el fallo 3: el filtro por nombre ya es el
+        # de Calma -- cada palabra escrita tiene que estar en el nombre (`buscar_alimentos`)
+        # --, así que buscando «pechuga» salen 58 pechugas y ninguna Pepsi, medido.
         alimentos.sort(key=lambda f: (
-            _relevancia(f),
+            0 if solo_cantidad else _relevancia(f),
             (0 if f.get("is_favorite") else 1) if FOOD_FAVORITES_FIRST else 0,
             _prioridad(f),
             _diff(f),

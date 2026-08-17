@@ -11,7 +11,6 @@ import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
 import { seExcede } from '../../lib/exceso';
 import { num1, numMedio } from '../../lib/numeros';
 import { leerCantidad, avisoRazonable, TOPE_GRAMOS, AVISO_TOPE, AVISO_NEGATIVO } from '../../lib/cantidades';
-import { ordenarPorRelevancia } from '../../lib/busquedaAlimentos';
 import { FOOD_FAVORITES_UI } from './SearchFoodModal';
 import {
     faStopwatch20,
@@ -650,25 +649,26 @@ const BuildMealModal = ({
     };
 
     /**
-     * BUSCAR POR NOMBRE: MANDA LO QUE HA ESCRITO EL CLIENTE (Jesús, 15-08, fallo 3).
+     * BUSCAR POR NOMBRE, COMO EN CALMA: ESTA LISTA TIENE QUE SALIR IGUAL QUE LA SUYA.
      *
-     * Antes esta búsqueda viajaba con el hueco de macros de la comida (p_rest/h_rest/g_rest
-     * y `cuadrar`), y el servidor ordenaba por lo que tapaba ese hueco y además quitaba los
-     * alimentos cuya ración mínima se pasase. Buscando «pechuga» eso significaba: primero lo
-     * que da 31,8 g de hidratos, y ninguna pechuga si ya no cabía proteína.
+     * Las tres cosas que hace el buscador de la Dieta de Calma, y las tres están aquí:
      *
-     * Ahora se busca como en la pantalla «Alimentos»: filtro por nombre y orden por parecido
-     * con lo escrito (`ordenarPorRelevancia`, el mismo código de Calma que usa aquella
-     * pantalla). `peri` se mantiene porque no es un hueco de macros, es de qué alimentos se
-     * compone un intra o un post.
+     *  1. FILTRA por nombre: cada palabra escrita tiene que estar en el nombre
+     *     (`Ye(nombre, texto.split(" "), true)`), sin buscar parecidos. Eso lo hace el
+     *     servidor (`buscar_alimentos`) y es lo que cierra el fallo 3 de Jesús (15-08):
+     *     buscando «pechuga» salen 58 pechugas y ninguna Pepsi, porque ninguna Pepsi lleva
+     *     esa palabra. No hace falta nada más para que mande lo que ha escrito el cliente.
+     *  2. PONE CANTIDAD con el hueco de macros de la comida (`ajustarCantidadIngrediente`).
+     *     Sin el hueco el alimento entraba con su ración: buscando «leche de almendras»
+     *     tapaba 1 g de los 10 g de grasa que faltaban (Francisco, 17-08). Por eso el hueco
+     *     viaja con `solo_cantidad`: pone la cantidad y NO tira a nadie de la lista.
+     *  3. ORDENA por diferencia de macros y desempata por nombre, y nada más. No puntúa el
+     *     parecido con lo escrito: ese scoring (`Ie`) es del catálogo de «Alimentos», que es
+     *     otra pantalla. Ordenar aquí por parecido partía la lista en bloques que Calma
+     *     mezcla por encaje, y era la lista que no cuadraba con la suya (Francisco, 17-08).
      *
-     * PERO LA CANTIDAD SÍ SALE DEL HUECO (Jesús, 17-08). Quitar el hueco de la búsqueda se
-     * llevó por delante la cantidad: al no calcularla el motor, el alimento entraba con su
-     * ración (o 100 g), y buscando «leche de almendras» eso tapaba 1 g de los 10 g de grasa
-     * que faltaban, mientras Calma cuadraba el macro. En Calma no hay dos listas: TODO lo
-     * que se muestra pasa por ajustarCantidadIngrediente. Así que el hueco vuelve a viajar,
-     * con `solo_cantidad`: sirve para poner la cantidad y para nada más -- no reordena la
-     * lista ni tira a nadie de ella, que era el fallo 3.
+     * `peri` se mantiene porque no es un hueco de macros: dice de qué alimentos se compone
+     * un intra o un post.
      */
     const handleSearch = async (query) => {
         setSearchQuery(query);
@@ -692,7 +692,10 @@ const BuildMealModal = ({
             if (isIntraMode || isPostMode) params.set('peri', isIntraMode ? 'intra' : 'post');
             const result = await api(`/api/calculator/search?${params}`);
             if (miTurno !== turnoBusqueda.current) return;   // ya se ha escrito otra cosa
-            setSearchResults(ordenarPorRelevancia(result.alimentos || [], texto));
+            // EL ORDEN VIENE DEL SERVIDOR Y ES EL DE CALMA (diferencia de macros). Reordenar
+            // aquí por parecido con lo escrito -- el scoring `Ie`, que es el del catálogo de
+            // Alimentos, no el de la Dieta -- dejaba una lista distinta a la de Calma.
+            setSearchResults(result.alimentos || []);
         } catch (err) {
             console.error('Error buscando:', err);
             if (miTurno === turnoBusqueda.current) {
@@ -1134,7 +1137,7 @@ const BuildMealModal = ({
                                                 falta a la comida -- y así se dice. */}
                                             <p className="text-[11px] text-muted-foreground mb-1.5" data-testid="origen-lista">
                                                 {isSearching
-                                                    ? <>Resultados de <span className="font-semibold text-foreground">«{searchQuery.trim()}»</span>, por parecido con lo que has escrito{!isManual && ', con la cantidad que cuadra'}</>
+                                                    ? <>Resultados de <span className="font-semibold text-foreground">«{searchQuery.trim()}»</span>{isManual ? '' : ', con la cantidad que cuadra y el que mejor encaja primero'}</>
                                                     : isManual
                                                         ? 'Alimentos de la categoría, por orden alfabético'
                                                         : 'Sugerencias para lo que le falta a esta comida, con la cantidad que cuadra'}
