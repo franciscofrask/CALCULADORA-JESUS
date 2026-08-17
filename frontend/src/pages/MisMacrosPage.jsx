@@ -16,15 +16,13 @@
  *   TU HISTÓRICO   la escalera de los ajustes anteriores, con lo que cambió marcado en color.
  *                  Es la misma marca que lee el entrenador en su panel, calculada al guardar
  *                  (`cambios`, punto 31), así que los dos ven señalado lo mismo.
- *   TU PESO        la gráfica de `GraficaDePeso`, la misma de Reportes y de la ficha.
  *
  * Quién ve el histórico lo decide el servidor a partir de su plan (TABLA 20): el plan
  * personalizado sí, el plan sin ajuste no. Aquí solo se pinta lo que llega.
  */
 import React, { useEffect, useState } from 'react';
-import { SlidersHorizontal, Loader2, Quote, TrendingUp } from 'lucide-react';
+import { SlidersHorizontal, Loader2, Quote } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import GraficaDePeso from '../components/GraficaDePeso';
 import { MACRO } from './ClientDashboard';
 
 const fechaLarga = (iso) => {
@@ -256,15 +254,18 @@ const MisMacrosPage = () => {
                         </section>
                     )}
 
-                    {/* ── EVOLUCIÓN DE TU PESO ── */}
-                    {(datos?.evolucion_peso || []).length > 1 && (
-                        <section className="space-y-2">
-                            <p className="caption flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Evolución de tu peso</p>
-                            <div className="surface p-4">
-                                <GraficaDePeso puntos={datos.evolucion_peso} />
-                            </div>
-                        </section>
-                    )}
+                    {/* LA CURVA DE PESO VIVE EN SEGUIMIENTO, Y SOLO AHÍ (punto 4 del 17-08).
+                        «El peso no es un macro y ya vive en Evolución.»
+
+                        Estaba en las dos pantallas y llegaron a decir lo contrario: «Ahora
+                        77,1 kg · +2,1» aquí y «Ahora 50 kg · −25» allí, del mismo cliente el
+                        mismo día. Se arreglaron las fuentes -- las dos leen ya la misma serie
+                        saneada, punto por punto -- pero mientras la gráfica esté duplicada,
+                        el día que alguien toque una de las dos volvemos a esto: de hecho, ya
+                        arregladas seguían discrepando en cuántos pesajes enseñaba cada una, y
+                        no se vio hasta que Francisco preguntó si de verdad coincidían.
+
+                        Una sola gráfica no puede contradecirse consigo misma. */}
 
                     {/* Por qué no puede tocarlos, con las palabras que decide el servidor. Va al
                         final: es la explicación de una pantalla que ya se entiende sola, no un
