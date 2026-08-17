@@ -65,9 +65,29 @@ from core.macros_de_quien import de_una_persona
 from core.plan_access import modo_calculadora
 
 
+def _todavia_no_tiene_macros(perfil: Dict[str, Any]) -> bool:
+    """Si este perfil no tiene ni unos macros de entreno puestos."""
+    m = perfil.get("macros_training") or {}
+    return not (m.get("protein") or m.get("proteinas"))
+
+
 async def puede_ajustarlos(db, perfil: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """(puede, por que no). El `por que no` esta escrito para leerselo al cliente."""
     modo = modo_calculadora(perfil.get("plan"))
+
+    # SIN MACROS NO HAY NADA QUE PROTEGER, Y SI HAY ALGUIEN ATRAPADO (punto 1 del 17-08).
+    #
+    # Este candado existe para que un cliente no machaque los numeros que le puso una
+    # persona. Cuando todavia no tiene ninguno no esta machacando nada -- y en cambio se
+    # queda encerrado: el cuestionario del alta es obligatorio para entrar, su ultimo paso
+    # es «Calcular mis macros», y aqui recibia un 403 que ademas le decia «escribenos», que
+    # es justo lo que no puede hacer porque el chat esta detras de esta misma pantalla.
+    # En produccion habia dos personas asi el 17-08.
+    #
+    # Va lo primero, antes de mirar el plan: el motivo por el que se le cierra la puerta da
+    # igual si el resultado es dejarlo fuera de la app que ha pagado.
+    if _todavia_no_tiene_macros(perfil):
+        return True, None
 
     if modo == "sin_ajuste":
         return False, ("Tu plan no incluye ajustes de macros. Si quieres que te los revisemos, "

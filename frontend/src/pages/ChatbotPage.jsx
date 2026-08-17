@@ -7,6 +7,7 @@ import ChatMealSummary from '../components/nutrition/ChatMealSummary';
 import ChatDayOverview from '../components/nutrition/ChatDayOverview';
 import ChatSuggestions from '../components/nutrition/ChatSuggestions';
 import ChatMenus from '../components/nutrition/ChatMenus';
+import { cabeceras } from '../lib/cabeceras';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -199,7 +200,7 @@ export default function ChatbotPage() {
     (async () => {
       try {
         const r = await fetchConTope(`${API_URL}/api/chatbot/session-exists?session_id=${sid}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: cabs()
         });
         const d = await r.json();
         // EL ASISTENTE SIGUE AL DÍA DE NUTRICIÓN, TAMBIÉN AL VOLVER (vídeo 1 del 15-08).
@@ -287,6 +288,12 @@ export default function ChatbotPage() {
 
   const getToken = () => localStorage.getItem('token');
 
+  // LAS CABECERAS, DE UN SOLO SITIO (punto 2 del 17-08). Esta pantalla construía el
+  // `Authorization` a mano en dieciséis llamadas y en ninguna mandaba `X-Actuar-Como`: con
+  // el entrenador dentro de la cuenta de un cliente, el asistente le montaba el día al
+  // ENTRENADOR mientras la pantalla decía que estaba en la del cliente. Ver `lib/cabeceras`.
+  const cabs = (extra) => cabeceras(getToken(), extra);
+
   const addMessage = (content, isUser = false, data = null) => {
     setMessages(prev => [...prev, { content, isUser, data, timestamp: new Date() }]);
   };
@@ -333,10 +340,7 @@ export default function ChatbotPage() {
     try {
       const res = await fetchConTope(`${API_URL}/api/chatbot/start`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        }
+        headers: cabs({ 'Content-Type': 'application/json' })
       });
       const data = await res.json();
 
@@ -384,7 +388,7 @@ export default function ChatbotPage() {
   const arrancarConLaConfigDeNutricion = async (iso, encima = {}, sid = null,
                                                 motivo = 'nutricion') => {
     setLoading(true);
-    const cabecera = { Authorization: `Bearer ${getToken()}` };
+    const cabecera = cabs();
     let dieta = null;
     let prefs = null;
     try {
@@ -461,10 +465,7 @@ export default function ChatbotPage() {
       // esta en el estado de React y la peticion se iba con session_id=null.
       const res = await fetchConTope(`${API_URL}/api/chatbot/configure?session_id=${sid || sessionId}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
+        headers: cabs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           tipo_dia: tipo,
           num_comidas: comidas,
@@ -584,7 +585,7 @@ export default function ChatbotPage() {
     setProgressText(null);
 
     const body = JSON.stringify({ message: userMessage, session_id: sessionId });
-    const headers = { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' };
+    const headers = cabs({ 'Content-Type': 'application/json' });
     // Ni el stream ni el POST tienen final garantizado: si el backend se cae o se
     // reinicia a mitad, reader.read() se queda esperando para siempre, setLoading(false)
     // no llega nunca y el chat se queda en «Actualizando la comida...» con el input
@@ -680,7 +681,7 @@ export default function ChatbotPage() {
     try {
       const res = await fetch(
         `${API_URL}/api/chatbot/apply-draft?session_id=${sessionId}&borrador_id=${encodeURIComponent(borrador.id)}`,
-        { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } });
+        { method: 'POST', headers: cabs() });
       const data = await res.json();
       // LA TARJETA APLICADA SE MARCA EN EL HILO (QA 15-08 en prod). El backend marca el
       // borrador, pero la tarjeta que ya esta pintada es una copia dentro del mensaje y
@@ -711,7 +712,7 @@ export default function ChatbotPage() {
     try {
       const res = await fetchConTope(`${API_URL}/api/chatbot/message`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        headers: cabs({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ message: `la ${numero}`, session_id: sessionId }),
       });
       const data = await res.json();
@@ -818,7 +819,7 @@ export default function ChatbotPage() {
     setLoading(true);
     try {
       const res = await fetchConTope(`${API_URL}/api/chatbot/remove-food?session_id=${sessionId}&index=${index}`, {
-        method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
+        method: 'POST', headers: cabs()
       });
       const data = await res.json();
       applyMealResponse(data.response);
@@ -840,7 +841,7 @@ export default function ChatbotPage() {
     setLoading(true);
     try {
       const res = await fetchConTope(`${API_URL}/api/chatbot/suggest-foods?session_id=${sessionId}`, {
-        method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
+        method: 'POST', headers: cabs()
       });
       const data = await res.json();
       await handleBotResponse(data.response);
@@ -875,10 +876,7 @@ export default function ChatbotPage() {
     try {
       const res = await fetchConTope(`${API_URL}/api/chatbot/complete-meal?session_id=${sessionId}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        }
+        headers: cabs({ 'Content-Type': 'application/json' })
       });
       const data = await res.json();
       
@@ -945,7 +943,7 @@ export default function ChatbotPage() {
       }
       if (!autoSyncRef.current.decided) {
         const ex = await fetchConTope(`${API_URL}/api/diets/${dia}`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
+          headers: cabs()
         }).then(r => r.json());
         const hasFood = ex.exists && Object.values(ex.comidas || {}).some(m => (m?.alimentos || []).length > 0);
         autoSyncRef.current.decided = true;
@@ -968,7 +966,7 @@ export default function ChatbotPage() {
 
       const res = await fetch(
         `${API_URL}/api/chatbot/save-to-diet?session_id=${sessionId}&fecha=${dia}&overwrite=true`,
-        { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } }
+        { method: 'POST', headers: cabs() }
       );
       const data = await res.json();
       // Volcado saltado a proposito: la sesion ya esta en otra fecha (ventana del cambio
@@ -1033,7 +1031,7 @@ export default function ChatbotPage() {
       try {
         await fetchConTope(`${API_URL}/api/chatbot/reset?session_id=${sessionId}`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${getToken()}` }
+          headers: cabs()
         });
       } catch (e) {}
     }
@@ -1122,9 +1120,7 @@ export default function ChatbotPage() {
     try {
       const res = await fetchConTope(`${API_URL}/api/chatbot/export-pdf?session_id=${sessionId}`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
+        headers: cabs()
       });
       
       if (!res.ok) throw new Error('Error al generar PDF');
@@ -1162,7 +1158,7 @@ export default function ChatbotPage() {
       // 2. Volcar
       const res = await fetch(
         `${API_URL}/api/chatbot/save-to-diet?session_id=${sessionId}&fecha=${targetDate}&overwrite=${force}`,
-        { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } }
+        { method: 'POST', headers: cabs() }
       );
       const data = await res.json();
 
@@ -1466,7 +1462,7 @@ export default function ChatbotPage() {
                 let ov = dayOverview;
                 try {
                   const r = await fetchConTope(`${API_URL}/api/chatbot/day-overview?session_id=${sessionId}`,
-                    { headers: { 'Authorization': `Bearer ${getToken()}` } });
+                    { headers: cabs() });
                   if (r.ok) {
                     const d = await r.json();
                     if (d.day_overview) { ov = d.day_overview; setDayOverview(d.day_overview); }

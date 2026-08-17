@@ -29,6 +29,11 @@ const BodyFatSlider = ({ value, onChange }) => {
         const el = scrollRef.current;
         if (!el) return;
         const col = el.clientWidth / 3; // 3 columnas visibles
+        // SIN ANCHO NO SE DECIDE NADA (punto 16 del 17-08). Mientras el navegador no ha
+        // resuelto el layout, `clientWidth` es 0: `scrollLeft / 0` da NaN, el índice sale
+        // NaN, `BF_PERCENTAGES[NaN]` es undefined y esto llamaba a `onChange(undefined)`,
+        // o sea BORRABA la respuesta del cliente en la pregunta de la que salen sus macros.
+        if (!col) return;
         const i = Math.max(0, Math.min(BF_PERCENTAGES.length - 1, Math.round(el.scrollLeft / col)));
         const pct = BF_PERCENTAGES[i];
         if (pct !== value) onChange(pct);
@@ -73,7 +78,7 @@ const BodyFatSlider = ({ value, onChange }) => {
             el.style.scrollBehavior = '';
             // Al soltar, encaja en la referencia mas cercana en vez de quedarse a medias.
             const col = el.clientWidth / 3;
-            el.scrollTo({ left: Math.round(el.scrollLeft / col) * col, behavior: 'smooth' });
+            if (col) el.scrollTo({ left: Math.round(el.scrollLeft / col) * col, behavior: 'smooth' });
         }
     };
 
@@ -82,6 +87,7 @@ const BodyFatSlider = ({ value, onChange }) => {
         const el = scrollRef.current;
         if (!el) return;
         const col = el.clientWidth / 3;
+        if (!col) return;   // sin ancho la cuenta da NaN y el carrusel se va al extremo
         el.scrollTo({ left: (Math.round(el.scrollLeft / col) + pasos) * col, behavior: 'smooth' });
     };
 
@@ -91,13 +97,37 @@ const BodyFatSlider = ({ value, onChange }) => {
     const puedeMas = iBase > 0;
 
     // Posicionar el carrusel en el valor inicial al montar.
+    //
+    // SE ESPERA A TENER ANCHO (punto 16 del 17-08). Esto medía `el.clientWidth` en el efecto
+    // de montaje, y ahí el navegador todavía no ha resuelto el layout de un contenedor que se
+    // dimensiona por `aspect-ratio`: `clientWidth` valía 0, así que `scrollLeft` se ponía a 0
+    // -- la primera columna del array, el 50 % -- y el cliente se encontraba el carrusel
+    // abierto en el extremo, con el hueco espaciador a la vista. Que es exactamente lo que
+    // se veía: «arranca en 50 %, las fotos salen a trozos y hay huecos en blanco».
+    //
+    // Con `ResizeObserver` se coloca en cuanto hay ancho de verdad, y una sola vez: `hecho`
+    // corta el observador para que un cambio de tamaño posterior no le mueva la respuesta
+    // al cliente mientras la está eligiendo.
+    const colocado = useRef(false);
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return;
         const start = value ?? BF_DEFAULT;
-        const i = BF_PERCENTAGES.indexOf(start);
-        el.scrollLeft = (i < 0 ? BF_PERCENTAGES.indexOf(BF_DEFAULT) : i) * (el.clientWidth / 3);
         if (value == null) onChange(start);
+
+        const colocar = () => {
+            const col = el.clientWidth / 3;
+            if (!col || colocado.current) return;
+            const i = BF_PERCENTAGES.indexOf(start);
+            el.scrollLeft = (i < 0 ? BF_PERCENTAGES.indexOf(BF_DEFAULT) : i) * col;
+            colocado.current = true;
+        };
+
+        colocar();                       // si ya hay layout, aquí se acaba
+        if (colocado.current) return;
+        const obs = new ResizeObserver(() => { colocar(); if (colocado.current) obs.disconnect(); });
+        obs.observe(el);
+        return () => obs.disconnect();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -158,7 +188,13 @@ const BodyFatSlider = ({ value, onChange }) => {
                     <div className="flex-shrink-0 w-1/3 h-full" aria-hidden="true" />
                     {BF_PERCENTAGES.map((n) => (
                         <div key={n} className="relative flex-shrink-0 w-1/3 h-full border-r-4 border-white/80 last:border-r-0">
+                            {/* Son 22 fotos de 600x933. Sin `lazy` el navegador las decodifica
+                                todas a la vez -- unos 49 MB de mapa de bits -- y la pestaña se
+                                queda sin responder mientras tanto: medido en producción el
+                                17-08, treinta segundos con la pantalla congelada en el paso
+                                del que salen los macros. */}
                             <img src={`/bodyfat/frente/${n}.webp`} alt={`${n}%`} draggable="false"
+                                loading="lazy" decoding="async"
                                 className="w-full h-full object-cover pointer-events-none" />
                             <span className="absolute inset-x-0 bottom-[8%] flex items-end justify-center font-extrabold text-3xl text-white"
                                 style={{ textShadow: '1px 1px 6px rgba(0,0,0,.9)' }}>{n}%</span>

@@ -228,6 +228,16 @@ async def save_favorite(data: dict, user = Depends(get_current_user)):
     name = name.strip() if isinstance(name, str) else ""
     if not name:
         raise HTTPException(status_code=400, detail="Nombre requerido")
+    # UNA FAVORITA VACÍA NO ES UNA FAVORITA (punto 15 del documento del 17-08). Se podía
+    # guardar el día sin haber puesto nada, y quedaba en la lista una plantilla con «0
+    # comidas» que al aplicarla no hace nada: seis de las 1.211 de producción están así. El
+    # sitio de esta comprobación es aquí y no en la pantalla, porque el día se guarda desde
+    # Nutrición y desde el asistente.
+    comidas = _as_dict(data.get("comidas"))
+    if not any((c or {}).get("alimentos") for c in comidas.values()):
+        raise HTTPException(
+            status_code=400,
+            detail="Este día está vacío. Monta al menos una comida antes de guardarlo.")
     fav = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
@@ -236,7 +246,7 @@ async def save_favorite(data: dict, user = Depends(get_current_user)):
         "num_comidas": data.get("num_comidas", 4),
         "momento_entreno": data.get("momento_entreno", 1),
         "opcion_peri": data.get("opcion_peri", "intra_post"),
-        "comidas": _as_dict(data.get("comidas")),
+        "comidas": comidas,
         "macros_snapshot": data.get("macros_snapshot"),
         "distribution_targets": _as_dict(data.get("distribution_targets")) or None,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -487,12 +497,82 @@ async def get_diet(fecha: str, user = Depends(get_current_user)):
     objetivo = await _objetivo_comidas_del_dia(fecha, diet, user)
 
     if not diet:
-        return {"fecha": fecha, "exists": False, "objetivo_comidas": objetivo}
+        return {"fecha": fecha, "exists": False, "objetivo_comidas": objetivo,
+                "servido_comidas": {"P": 0.0, "H": 0.0, "G": 0.0}}
 
     await _adjuntar_urls(diet)
     diet["exists"] = True
     diet["objetivo_comidas"] = objetivo
+    diet["servido_comidas"] = await _servido_de_las_comidas(diet)
     return diet
+
+
+# Las comidas que NO entran en el presupuesto del día: el perientreno lleva su cuenta
+# aparte y `objetivo_comidas` ya lo ha descontado.
+_PERI = ("Intra", "Post")
+
+
+async def _servido_de_las_comidas(diet: dict) -> dict:
+    """Lo que suman las comidas regulares de este día, YA CALIBRADO.
+
+    POR QUÉ LO CUENTA EL SERVIDOR (punto 3 del documento del 17-08).
+
+    Inicio y Nutrición daban números distintos del mismo día. No era un redondeo: era que
+    cada una lo sacaba de un sitio. Nutrición pide la calibración progresiva al cargar y
+    pinta lo que le devuelve; Inicio sumaba el campo `macros_efectivos` tal y como estuviera
+    guardado en la dieta. Y ese campo no siempre está: medido en producción el 17-08, en el
+    día 2026-07-05 los diez alimentos guardados no lo tenían, así que Nutrición decía «Ya
+    está · de 180» de proteína y la misma jornada en Inicio habría salido «Te faltan 180».
+
+    Con esto el servidor lo cuenta una vez, con la misma función que usa el chat
+    (`calibracion_dia.calibrar_dia`), y las pantallas solo pintan. Una fuente, un número.
+    """
+    from calibracion_dia import calibrar_dia
+
+    comidas = diet.get("comidas") or {}
+    # Vacío por si acaso: sin alimentos no hay nada que calibrar y `calibrar_dia` no
+    # tiene por qué recibir un día sin comidas.
+    if not comidas:
+        return {"P": 0.0, "H": 0.0, "G": 0.0}
+
+    # El orden importa: la calibración de una comida depende del acumulado de las
+    # anteriores, así que se recorre en el orden cronológico del día.
+    orden = [k for k in ("C1", "Intra", "Post", "C2", "C3", "C4") if k in comidas]
+    orden += [k for k in comidas if k not in orden]
+
+    NEUTRO = {"categorias": "", "proteinas": 0, "hidratos": 0, "grasas": 0, "racion": 100}
+    # Los alimentos guardados llevan el id, no la ficha: hay que traerlas del catálogo o
+    # la calibración no sabe de qué bloque es cada uno.
+    ids = {a.get("alimento_id") for k in orden for a in (comidas.get(k, {}).get("alimentos") or [])
+           if a.get("alimento_id") is not None}
+    fichas = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0}):
+            fichas[f.get("id")] = f
+
+    meals = []
+    for k in orden:
+        fila = [(fichas.get(a.get("alimento_id")) or NEUTRO,
+                 float(a.get("cantidad_g") or a.get("cantidad") or 0))
+                for a in (comidas.get(k, {}).get("alimentos") or [])]
+        meals.append((k, fila))
+
+    try:
+        macros_dia, _ = calibrar_dia(meals)
+    except Exception as e:                # noqa: BLE001 - el día se sirve igual
+        logging.getLogger("uvicorn.error").warning(
+            "no se pudo calibrar el día %s: %s", diet.get("fecha"), e)
+        return {"P": 0.0, "H": 0.0, "G": 0.0}
+
+    total = {"P": 0.0, "H": 0.0, "G": 0.0}
+    for k in orden:
+        if k in _PERI:
+            continue
+        for m in macros_dia.get(k, []):
+            total["P"] += m.get("P", 0) or 0
+            total["H"] += m.get("H", 0) or 0
+            total["G"] += m.get("G", 0) or 0
+    return {k: round(v, 1) for k, v in total.items()}
 
 @router.post("/copy")
 async def copy_diet(data: dict, user = Depends(get_current_user)):

@@ -1362,13 +1362,32 @@ const ClientDetailPage = () => {
                         )}
                     </CardContent></Card>
                     <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Historial de pagos</CardTitle></CardHeader>
+                        {/* Los cobros llegan de dos sitios con dos formas (punto 5 del 17-08):
+                            los de Cobros (`pagos_historicos`: importe/fecha/concepto/origen) y
+                            los que escribió el checkout de la app (amount/created_at/status).
+                            Se normalizan aquí para que la tarjeta no tenga que saberlo. */}
                         <CardContent>{payments?.length > 0 ? (
-                            <div className="space-y-2">{payments.map(p => (
-                                <div key={p.id} className="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-lg border border-[#222]">
-                                    <div><p className="text-white text-sm font-medium">{p.amount}€</p><p className="text-white/40 text-xs">{new Date(p.created_at).toLocaleDateString('es-ES')}</p></div>
-                                    <Badge className={p.status === 'success' ? 'bg-green-500/20 text-green-500 border-0' : 'bg-red-500/20 text-red-400 border-0'}>{p.status === 'success' ? 'Exitoso' : 'Fallido'}</Badge>
+                            <div className="space-y-2">{payments.map((p, i) => {
+                                const importe = p.importe ?? p.amount;
+                                const cuando = p.fecha || p.created_at;
+                                const fallido = p.status ? p.status !== 'success' : p.es_dinero === false;
+                                return (
+                                <div key={p.id || p.referencia || i} className="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-lg border border-[#222] gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-white text-sm font-medium">{importe}€</p>
+                                        <p className="text-white/40 text-xs">
+                                            {cuando ? new Date(cuando).toLocaleDateString('es-ES') : '-'}
+                                            {p.concepto ? ` · ${p.concepto}` : ''}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        {p.origen && <span className="text-white/30 text-[11px] uppercase tracking-wider">{p.origen}</span>}
+                                        <Badge className={fallido ? 'bg-red-500/20 text-red-400 border-0' : 'bg-green-500/20 text-green-500 border-0'}>
+                                            {fallido ? 'Fallido' : 'Cobrado'}
+                                        </Badge>
+                                    </div>
                                 </div>
-                            ))}</div>
+                            );})}</div>
                         ) : <p className="text-white/30 text-sm text-center py-4">Sin pagos registrados</p>}</CardContent>
                     </Card>
                     {calma_raw?.membresia?.length > 0 && <CalmaMembresias membresia={calma_raw.membresia} />}

@@ -42,9 +42,12 @@ describe('el estado de un macro', () => {
         expect(estadoMacro('H', 49.6, 50)).toBe(ESTADO.CUADRADO); // redondea a 0 de resto
     });
 
-    test('dentro del margen es valido', () => {
-        expect(estadoMacro('P', 120 - (MARGEN - 1), 120)).toBe(ESTADO.VALIDO);
-        expect(estadoMacro('G', 50 - (MARGEN - 1), 50)).toBe(ESTADO.VALIDO);
+    // «Si está dentro del margen, cuadra» (Francisco, 17-08). Antes esto era un segundo
+    // escalón, «válido», y Nutrición ya lo había quitado ese mismo día: la misma comida
+    // salía cuadrada allí y «válida» en Inicio.
+    test('dentro del margen tambien cuadra', () => {
+        expect(estadoMacro('P', 120 - (MARGEN - 1), 120)).toBe(ESTADO.CUADRADO);
+        expect(estadoMacro('G', 50 - (MARGEN - 1), 50)).toBe(ESTADO.CUADRADO);
     });
 
     test('mas lejos del margen, falta', () => {
@@ -82,8 +85,8 @@ describe('el estado del dia', () => {
         expect(estadoDelDia({ P: 120, H: 50, G: 50 }, objetivos)).toBe(ESTADO.CUADRADO);
     });
 
-    test('uno dentro del margen y los otros clavados: valido', () => {
-        expect(estadoDelDia({ P: 118, H: 50, G: 50 }, objetivos)).toBe(ESTADO.VALIDO);
+    test('uno dentro del margen y los otros clavados: tambien cuadrado', () => {
+        expect(estadoDelDia({ P: 118, H: 50, G: 50 }, objetivos)).toBe(ESTADO.CUADRADO);
     });
 
     test('si a uno le falta, no hay titular', () => {

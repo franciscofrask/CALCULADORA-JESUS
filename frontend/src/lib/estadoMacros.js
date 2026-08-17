@@ -68,8 +68,12 @@ export function estadoMacro(key, servido, objetivo) {
     // medalla verde a un macro que nadie ha pedido.
     if (obj <= 0) return ESTADO.FALTA;
     const resto = obj - val;
-    if (Math.round(resto) === 0) return ESTADO.CUADRADO;
-    if (Math.abs(resto) < MARGEN) return ESTADO.VALIDO;
+    // DENTRO DEL MARGEN, CUADRA (punto 14 del 17-08). Aquí seguía viva la separación entre
+    // «cuadrado» (clavado) y «válido» (dentro de los ±4 g), que Nutrición ya quitó ese mismo
+    // día por decisión de Francisco: «si está dentro del margen, cuadra». Mientras estuvo en
+    // los dos sitios con criterios distintos, la misma comida salía cuadrada en Nutrición y
+    // «válida» en Inicio, y el cliente veía dos varas para el mismo método.
+    if (Math.abs(resto) < MARGEN) return ESTADO.CUADRADO;
     if (resto > 0) return ESTADO.FALTA;
     // Por arriba: solo hidratos y grasa se marcan; pasarse de proteína no es un fallo.
     return seExcede(key, val, obj) ? ESTADO.EXCESO : ESTADO.CUADRADO;
@@ -98,8 +102,9 @@ export function estadoDelDia(servidos = {}, objetivos = {}) {
     const claves = ['P', 'H', 'G'];
     if (!claves.some((k) => (Number(objetivos[k]) || 0) > 0)) return null;
     const estados = claves.map((k) => estadoMacro(k, servidos[k], objetivos[k]));
+    // Ya no hay un segundo escalón: desde el 17-08 lo que entra en el margen cuadra, aquí
+    // y en Nutrición (ver `estadoMacro`).
     if (estados.every((e) => e === ESTADO.CUADRADO)) return ESTADO.CUADRADO;
-    if (estados.every((e) => e === ESTADO.CUADRADO || e === ESTADO.VALIDO)) return ESTADO.VALIDO;
     return null;
 }
 

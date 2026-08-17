@@ -278,10 +278,14 @@ const DayHeader = ({
                                     : cubierto
                                         ? <>Ya está <span className="text-muted-foreground">· de {tgt.toFixed(0)}</span></>
                                         : <>Te faltan {Math.round(falta)}
-                                            {/* Con el día a cero lo que falta YA ES el total:
-                                                «235 de 235» lo dice dos veces. Mismo criterio
-                                                que el bloque del teléfono. */}
-                                            {val > 0 && <span className="text-muted-foreground"> de {tgt.toFixed(0)}</span>}</>}
+                                            {/* EL «DE X» VA SIEMPRE (punto 13 del 17-08).
+                                                Se ocultaba con el día a cero, pensando que
+                                                «235 de 235» lo dice dos veces. En pantalla se
+                                                lee al revés: la línea cambia de forma según el
+                                                día y el cliente pierde la referencia justo
+                                                cuando abre la app y todo está a cero. Inicio ya
+                                                lo pinta siempre; esto era el segundo criterio. */}
+                                            <span className="text-muted-foreground"> de {tgt.toFixed(0)}</span></>}
                             </span>
                         </div>
                     );
@@ -311,7 +315,14 @@ const DayHeader = ({
                     maneras distintas por la app y el abreviado no lo entiende nadie que no
                     lleve meses aquí. */}
                 {hayPeri && (
-                    <span className="text-[11px] text-muted-foreground font-data">
+                    /* POR QUÉ EL OBJETIVO DE ARRIBA ES MENOR QUE SUS MACROS (punto 11 del
+                       17-08). Al montar el día con perientreno, el número grande baja -- de
+                       175 g de proteína a 130, por ejemplo -- porque el peri sale del total y
+                       lleva su cuenta aparte. Es correcto y está en el método, pero en
+                       pantalla parecía que se le habían recortado los macros y nadie se lo
+                       decía. El `title` lo explica donde ocurre, sin añadir otra línea. */
+                    <span className="text-[11px] text-muted-foreground font-data cursor-help"
+                        title={`El perientreno va aparte: estos ${totalPeriP.toFixed(0)} g de proteína y ${totalPeriH.toFixed(0)} de hidratos salen del total del día, por eso el objetivo de arriba es el resto.`}>
                         perientreno {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
                     </span>
                 )}

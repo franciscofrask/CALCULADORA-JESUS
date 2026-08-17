@@ -27,6 +27,7 @@ import { VistaComidasSelector, leerVista, guardarVista } from '../components/nut
 import { ModoMacrosSelector, AvisoMacrosReales, leerModoMacros, guardarModoMacros } from '../components/nutrition/ModoMacros';
 import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
+import { cabeceras } from '../lib/cabeceras';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -302,14 +303,20 @@ const NutritionPage = () => {
     const [exportingPdf, setExportingPdf] = useState(false);
 
     // API helper
+    //
+    // LAS CABECERAS SALEN DE `lib/cabeceras`, NO DE AQUÍ (punto 2 del 17-08). Esto ponía el
+    // token a mano y se dejaba `X-Actuar-Como`, así que cuando el entrenador entraba en la
+    // calculadora de un cliente TODA esta pantalla trabajaba como el entrenador: el reparto
+    // devolvía los macros del admin, la dieta que se cargaba era la del admin y lo que se
+    // guardaba se guardaba encima de su propio día. Con el cartel naranja de «Estás en la
+    // cuenta de Cliente Demo» arriba.
     const api = useCallback(async (endpoint, options = {}) => {
         const res = await fetch(`${API_URL}${endpoint}`, {
             ...options,
-            headers: {
+            headers: cabeceras(token, {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
                 ...options.headers
-            }
+            })
         });
         if (!res.ok) {
             const error = await res.json().catch(() => ({ detail: 'Error de red' }));

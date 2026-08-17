@@ -352,7 +352,29 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     reports = await db.reports.find(
         hasta_hoy({"client_id": client_id}), {"_id": 0, "informe": 0}
     ).sort("created_at", -1).to_list(50)
-    payments = await db.payments.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    # LOS COBROS DE LA FICHA SON LOS DE COBROS (punto 5 del documento del 17-08).
+    #
+    # Esto leía `db.payments`, que es lo que escribe el checkout de la app. Cobros lee otra
+    # colección, `db.pagos_historicos`, que es donde `_sync_membresias_cobros.py` unifica
+    # Stripe, Holded y ThriveCart. Dos sitios para «lo que ha pagado», y el de la ficha casi
+    # siempre vacío: en producción, Jose Alberto Marquez Valenzuela tenía un cobro de
+    # Mantenimiento del 16-08 y un Plan Gold de 847 EUR del 25-05 en Cobros, y su ficha decía
+    # «Sin pagos registrados». Se cruzan por CORREO, que es la clave con la que llegan de las
+    # tres pasarelas; el `client_id` no viaja en todas.
+    correo = (user_data or {}).get("email") or ""
+    payments = []
+    if correo:
+        payments = await db.pagos_historicos.find(
+            {"email": correo.lower().strip(), "duplicado_de": {"$exists": False}},
+            {"_id": 0},
+        ).sort("fecha", -1).to_list(50)
+    # Lo que escribió el checkout de la app, por si hay algo que no haya llegado a la
+    # sincronización todavía. Las referencias se comparan para no enseñar el mismo cobro dos
+    # veces con dos nombres.
+    vistos = {p.get("referencia") for p in payments}
+    async for p in db.payments.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1):
+        if p.get("referencia") not in vistos:
+            payments.append(p)
     messages = await db.messages.find(
         {"$or": [{"sender_id": profile["user_id"]}, {"receiver_id": profile["user_id"]}]},
         {"_id": 0}

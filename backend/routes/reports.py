@@ -3,7 +3,7 @@ Rutas de reportes: crear, listar, evolución.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 import uuid
 
 from core.database import db
@@ -598,9 +598,33 @@ async def get_evolution_data(user = Depends(get_current_user)):
         hasta_hoy({"client_id": profile["id"]}),
         {"_id": 0, "weight": 1, "measurements": 1, "created_at": 1}
     ).sort("created_at", 1).to_list(100)
-    
-    weight_data = [{"date": r["created_at"], "value": r["weight"]} for r in reports if r.get("weight")]
-    
+
+    # EL PESO SALE DE LA SERIE, NO DE LOS REPORTES (punto 4 del documento del 17-08).
+    #
+    # Esto cogia el `weight` de cada reporte en crudo y cortaba a cien. «Mis macros» pinta la
+    # MISMA grafica con otra cosa: la serie `pesos` del perfil, saneada, y ademas con los
+    # pesajes que viajaron en los ajustes viejos. Resultado en produccion el 17-08, mismo
+    # cliente y mismo dia: «Ahora 77,1 kg · +2,1 kg · 106 pesajes» en Mis macros y «Ahora
+    # 50 kg · -25 kg · 100 pesajes» en Evolucion. Lo contrario, con la misma grafica.
+    #
+    # El documento proponia quitar la de Mis macros. Es al reves: la buena era esa. Aqui se
+    # arregla la fuente, y las dos pantallas pasan a decir lo mismo porque leen lo mismo.
+    from core.series_cliente import sanea_peso
+    hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    pesos: Dict[str, float] = {}
+    for p in (profile.get("pesos") or []):
+        fecha, valor = str(p.get("fecha") or "")[:10], sanea_peso(p.get("valor"))
+        if fecha and fecha <= hoy and valor is not None:
+            pesos[fecha] = valor
+    # Un reporte con peso que todavia no este en la serie tambien cuenta: los importados de
+    # Calma no pasaron por ella. Sin pisar lo que ya hay, que es lo mas reciente.
+    for r in reports:
+        fecha, valor = str(r.get("created_at") or "")[:10], sanea_peso(r.get("weight"))
+        if fecha and fecha not in pesos and valor is not None:
+            pesos[fecha] = valor
+
+    weight_data = [{"date": f, "value": v} for f, v in sorted(pesos.items())]
+
     measurements_data = {}
     for r in reports:
         if r.get("measurements"):

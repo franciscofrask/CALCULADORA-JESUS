@@ -1726,15 +1726,29 @@ const QuestionnairePage = () => {
                     /* Lo que hemos entendido, para que lo confirme */
                     <div className="space-y-4 mb-6">
                         <div className="rounded-xl border-2 border-brand/40 bg-brand/5 p-5">
+                            {/* PROTEÍNA · HIDRATOS · GRASA, como en toda la app (punto 18 del
+                                17-08). Aquí iba hidratos primero, y es la única pantalla que lo
+                                hacía: la tabla de macros de dos pasos después, las tarjetas de
+                                comida, la cabecera del día y el asistente van todos en el orden
+                                del método. */}
                             <p className="text-foreground text-base mb-3">
                                 He entendido que estás comiendo{' '}
-                                <strong className="text-brand">{lecturaDieta.macros.hidratos} g de hidratos</strong>,{' '}
-                                <strong className="text-brand">{lecturaDieta.macros.proteina} g de proteína</strong> y{' '}
+                                <strong className="text-brand">{lecturaDieta.macros.proteina} g de proteína</strong>,{' '}
+                                <strong className="text-brand">{lecturaDieta.macros.hidratos} g de hidratos</strong> y{' '}
                                 <strong className="text-brand">{lecturaDieta.macros.grasa} g de grasa</strong>. ¿Es correcto?
                             </p>
+                            {/* QUÉ PIDIÓ Y QUÉ HEMOS COGIDO (punto 17 del 17-08). Decía solo
+                                «250 g · Leche desnatada» cuando el cliente había escrito
+                                «leche»: la variante la elegimos nosotros y él no tenía forma de
+                                verlo ni de corregirlo. El backend ya devuelve `pedido`. */}
                             <ul className="text-xs text-foreground/50 space-y-0.5 max-h-40 overflow-y-auto">
                                 {lecturaDieta.alimentos.map((a, i) => (
-                                    <li key={i}>{a.cantidad_g} g · {a.nombre}</li>
+                                    <li key={i}>
+                                        {a.cantidad_g} g{a.cantidad_asumida && <span className="text-foreground/35"> (a ojo)</span>} · {a.nombre}
+                                        {a.pedido && a.nombre
+                                            && !a.nombre.toLowerCase().startsWith(String(a.pedido).toLowerCase())
+                                            && <span className="text-foreground/35"> · tú dijiste «{a.pedido}»</span>}
+                                    </li>
                                 ))}
                             </ul>
                             {lecturaDieta.no_reconocidos?.length > 0 && (

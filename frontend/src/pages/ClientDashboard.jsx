@@ -244,10 +244,6 @@ const hoyDeLaDieta = () => hoyEnEspana();
 
 const estrellas = (n) => (n >= 1 && n <= 5 ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
 
-// Las dos comidas que no cuentan para el objetivo del día: el perientreno va por su cuenta
-// (mismos nombres que usa Nutrición para montarlas).
-const COMIDAS_PERI = ['Intra', 'Post'];
-
 // Una línea de «Lo que toca hoy» o de «Pendiente»: título, detalle y, a la derecha, la
 // flecha de entrar o el «✓ hecho». Nada de rojos ni de la palabra «pendiente».
 const LineaDeHoy = ({ icono: Icono, titulo, detalle, extra, hecho, onClick, testId }) => {
@@ -360,22 +356,16 @@ const InicioNuevo = () => {
             // Viene aunque el día no exista todavía: el objetivo es del día, no de lo que
             // haya puesto.
             setObjetivoComidas(dieta?.objetivo_comidas || null);
-            if (dieta?.exists && dieta.comidas) {
-                let P = 0, H = 0, G = 0;
-                Object.entries(dieta.comidas).forEach(([nombre, comida]) => {
-                    // EL INTRA Y EL POST NO ENTRAN, igual que en la cabecera de Nutrición:
-                    // el perientreno lleva su cuenta aparte y el objetivo de arriba ya lo
-                    // ha descontado. Sumarlos aquí sería restarlos de un presupuesto que no
-                    // los incluye, y volveríamos a tener dos pantallas con números
-                    // distintos del mismo día.
-                    if (COMIDAS_PERI.includes(nombre)) return;
-                    (comida.alimentos || []).forEach((a) => {
-                        const ef = a.macros_efectivos || {};
-                        P += ef.P || 0; H += ef.H || 0; G += ef.G || 0;
-                    });
-                });
-                setComido({ P, H, G });
-            }
+            // LO SERVIDO TAMBIÉN LO CUENTA EL SERVIDOR (punto 3 del 17-08).
+            //
+            // Aquí se sumaba `macros_efectivos` de cada alimento tal y como estuviera
+            // guardado en la dieta. Nutrición no hace eso: pide la calibración del día y
+            // pinta lo que le devuelve. Dos cuentas del mismo número, y la de aquí fallaba
+            // en silencio cuando el campo no estaba guardado -- pasa, y entonces Inicio
+            // decía «Te faltan 180 de 180» de un día que Nutrición daba por cerrado.
+            // Ahora `servido_comidas` viene resuelto de `GET /diets/{fecha}`, con el
+            // perientreno ya fuera, igual que `objetivo_comidas`.
+            if (dieta?.servido_comidas) setComido(dieta.servido_comidas);
             setDiaCargado(true);
         };
         cargar().catch((err) => {

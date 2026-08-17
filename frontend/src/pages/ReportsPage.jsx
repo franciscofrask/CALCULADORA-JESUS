@@ -57,8 +57,14 @@ const WindowBanner = ({ w }) => {
             <Calendar className={`w-4 h-4 flex-shrink-0 ${before ? 'text-yellow-500' : 'text-red-500'}`} />
             {/* «La semana que viene» no es una fecha, y el servidor sabe cuándo vuelve a abrir:
                 lo mandaba en `opens_label` y aquí no se usaba (Jesús, 11-08). */}
+            {/* NO SE DICE CUÁNDO SE RELLENA, SE DICE CUÁNDO ABRE (punto 7 del 17-08).
+                Ponía «Tu reporte se rellena el fin de semana. La ventana abre el miércoles 19
+                ago.»: dos fechas distintas en la misma frase, y la primera además es falsa
+                para el quincenal, que va de miércoles a jueves. El «fin de semana» era del
+                mensual y se había quedado escrito para los dos. La fecha buena la manda el
+                servidor en `opens_label` y es la única que hace falta. */}
             {before
-                ? `Tu reporte se rellena el fin de semana. La ventana abre el ${w.opens_label}.`
+                ? `Todavía no toca. Se abre el ${String(w.opens_label).split(' a las ')[0]}.`
                 : w.opens_label
                     ? `La ventana de esta semana se cerró. Se abre el ${String(w.opens_label).split(' a las ')[0]}.`
                     : 'La ventana de esta semana se cerró. Espera a la semana que viene.'}

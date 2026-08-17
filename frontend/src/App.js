@@ -230,6 +230,12 @@ function AppRoutes() {
                 <Route path="supplements" element={<CapabilityRoute cap="suplementacion"><SupplementsPage /></CapabilityRoute>} />
                 <Route path="checkins" element={<CapabilityRoute cap="reportes"><CheckInsPage /></CapabilityRoute>} />
                 <Route path="macro-calculator" element={<MacroCalculatorClientPage />} />
+                {/* LOS DOS NOMBRES QUE LA GENTE ESCRIBE (punto 22 del 17-08). `/dashboard/macros`
+                    y `/dashboard/my-macros` no estaban declaradas, así que caían en el comodín y
+                    acababan en el panel de admin: a Mis macros solo se llegaba pinchando en el
+                    menú. Se redirige, no se duplica la pantalla: una ruta, un componente. */}
+                <Route path="macros" element={<Navigate to="/dashboard/macro-calculator" replace />} />
+                <Route path="my-macros" element={<Navigate to="/dashboard/macro-calculator" replace />} />
                 <Route path="foods" element={<FoodSearchPage />} />
                 {/* La revisión suelta: pantalla, no popup (documento del 06-08-2026) */}
                 <Route path="revision" element={<RevisionPage />} />

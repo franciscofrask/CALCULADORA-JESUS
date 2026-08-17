@@ -75,6 +75,30 @@ def _habla_de_lo_mismo(termino: str, nombre_alimento: str) -> bool:
     return any(v.lower() in nombre for v in _variantes(palabras[-1]))
 
 
+def _distancia_a_lo_pedido(termino: str, nombre_alimento: str) -> tuple:
+    """Cuanto se aleja una ficha de lo que el cliente escribio. Menos es mejor.
+
+    POR QUE HACE FALTA (punto 17 del documento del 17-08).
+
+    De los genericos que valen se cogia EL PRIMERO, y el primero trae adjetivos que el
+    cliente no ha dicho: «leche» acababa en Leche desnatada, «arroz» en Arroz integral y
+    «verduras» en Crema de verduras. Comprobado en produccion el 17-08 con esa misma frase.
+    No es un detalle de redaccion: desnatada y entera no tienen los mismos macros, y de aqui
+    sale el punto de partida de su dieta.
+
+    La regla no es una lista de palabras -- eso esta prohibido en esta casa --, es de forma:
+    entre dos fichas que hablan de lo mismo, la que MENOS anade es la que menos supone. Se
+    ordena por (no empieza por lo pedido, cuantas palabras sobran, largo). Asi «Leche» gana
+    a «Leche desnatada», y si solo existen variantes gana la de nombre mas corto -- y el
+    cliente lo ve escrito en la pantalla de confirmar, con lo que el escribio al lado.
+    """
+    t = (termino or "").strip().lower()
+    n = (nombre_alimento or "").strip().lower()
+    empieza = 0 if n.startswith(t) else 1
+    sobran = max(0, len(n.split()) - len(t.split()))
+    return (empieza, sobran, len(n))
+
+
 async def _buscar_con_variantes(bot: NutritionChatbot, termino: str) -> List[Dict]:
     """Busca el termino y, si no sale ningun generico, lo intenta con su otra forma.
 
@@ -115,8 +139,12 @@ async def _macros_de_alimentos(bot: NutritionChatbot, extraidos: List[Dict]) -> 
         # Quien describe su dieta dice "pollo" o "ternera", no una marca concreta: se prefiere el
         # alimento generico (el que no tiene URL de ficha). Sin esto, "ternera" acababa en un plato
         # preparado de marca y "proteina en polvo" en cacahuete en polvo.
-        generico = next((a for a in encontrados
-                         if not a.get("url") and _habla_de_lo_mismo(nombre, a.get("nombre"))), None)
+        # EL QUE MENOS SUPONE, no el primero que salga (ver `_distancia_a_lo_pedido`).
+        candidatos = [a for a in encontrados
+                      if not a.get("url") and _habla_de_lo_mismo(nombre, a.get("nombre"))]
+        generico = min(candidatos,
+                       key=lambda a: _distancia_a_lo_pedido(nombre, a.get("nombre") or ""),
+                       default=None)
 
         # Y SI SOLO HAY MARCAS, NO SE ADIVINA. Es la regla de la casa para el asistente
         # ("los terminos genericos con tipos dispares no se adivinan, se preguntan"), y aqui
@@ -152,6 +180,13 @@ async def _macros_de_alimentos(bot: NutritionChatbot, extraidos: List[Dict]) -> 
             "nombre": alimento.get("nombre"),
             "pedido": nombre,
             "cantidad_g": round(cantidad_metodo * racion if por_unidad else cantidad_metodo, 1),
+            # LA CANTIDAD QUE NO DIJO VA MARCADA (punto 17 del 17-08). Cuando el cliente
+            # escribe «una tostada de pan» sin gramos, aqui se pone la racion estandar: 100 g
+            # de pan de barra, que son 50 g de hidratos metidos en su punto de partida sin
+            # que el lo haya dicho. La cifra sigue haciendo falta -- el alta es de un tiro y
+            # hay que poner algo --, pero deja de ser invisible: la pantalla de confirmar la
+            # señala y el puede corregirla antes de que entre en el calculo.
+            "cantidad_asumida": cantidad is None,
             "macros": {"proteina": round(p, 1), "hidratos": round(h, 1), "grasa": round(g, 1)},
         })
 
