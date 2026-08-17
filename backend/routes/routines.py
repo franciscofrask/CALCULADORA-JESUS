@@ -553,6 +553,162 @@ Genera una rutina completa de 7 días. Responde SOLO con el JSON."""
     raise ValueError(f"la rutina no respeta los {clave['dias']} días de entreno")
 
 
+# ─────────────────────────────────────────────────────────────────────────────────────
+# LA BIBLIOTECA DE RUTINAS DEL EQUIPO (17-08-2026)
+#
+# Hasta hoy una rutina solo podía nacer de dos sitios: la IA, o escribirla a mano en la
+# ficha de UN cliente. Las que Jesús escribe cada mes -- «Rutina del mes Hombre», «Rutina
+# Agosto ELM Mujer», la carpeta «Rutinas GOLD» -- viven en Drive y se mandan por fuera, así
+# que la app no las conoce y cada asignación empieza de cero.
+#
+# Esto es el sitio donde guardarlas: se crea una vez, se le pone nombre, y desde la ficha de
+# cualquier cliente se elige y se le asigna. Al asignarla se COPIA, no se enlaza: si luego se
+# le cambia un ejercicio a ese cliente, no se le toca la rutina a los otros veinte que la
+# tienen puesta.
+#
+# El formato es el que la app ya sabe pintar (días con ejercicios de serie/reps/descanso) más
+# un campo de notas por ejercicio, que es donde cabe la ejecución. Lo que Jesús escribe de
+# verdad -- semanas con descarga, RIR serie a serie, aproximaciones con porcentajes -- NO
+# cabe todavía y es lo primero de la lista de lo que queda.
+# ─────────────────────────────────────────────────────────────────────────────────────
+
+def _dias_limpios(dias: Any) -> List[Dict[str, Any]]:
+    """Los siete días de una rutina, con lo que valga y sin lo que no.
+
+    Se limpia aquí y no en la pantalla porque a esta colección se escribe desde el panel y,
+    el día de mañana, desde la importación de las rutinas de Drive.
+    """
+    SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    porNombre = {}
+    for d in (dias or []):
+        if not isinstance(d, dict):
+            continue
+        nombre = str(d.get("day") or "").strip().capitalize()
+        if nombre not in SEMANA:
+            continue
+        ejercicios = []
+        for e in (d.get("exercises") or []):
+            if not isinstance(e, dict):
+                continue
+            nom = str(e.get("name") or "").strip()
+            if not nom:
+                continue
+            ejercicios.append({
+                "name": nom[:120],
+                "sets": e.get("sets"),
+                "reps": str(e.get("reps") or "")[:40],
+                "rest": str(e.get("rest") or "")[:40],
+                # Donde cabe la ejecución y las notas del entrenador.
+                "notes": str(e.get("notes") or "")[:2000] or None,
+            })
+        porNombre[nombre] = {
+            "day": nombre,
+            # Un día es de descanso si lo dicen O si no tiene ejercicios: así no hace falta
+            # acordarse de marcar la casilla.
+            "is_rest": bool(d.get("is_rest")) or not ejercicios,
+            "exercises": ejercicios,
+        }
+    return [porNombre.get(n, {"day": n, "is_rest": True, "exercises": []}) for n in SEMANA]
+
+
+@admin_router.get("/biblioteca")
+async def listar_biblioteca(user = Depends(get_admin_user)):
+    """Las rutinas guardadas del equipo, para elegir una."""
+    fuera = []
+    async for r in db.routine_templates.find({}, {"_id": 0}).sort("updated_at", -1):
+        dias = r.get("days") or []
+        r["dias_de_entreno"] = len([d for d in dias if not d.get("is_rest")])
+        r["ejercicios"] = sum(len(d.get("exercises") or []) for d in dias)
+        fuera.append(r)
+    return {"rutinas": fuera}
+
+
+@admin_router.post("/biblioteca")
+async def crear_en_biblioteca(data: Dict[str, Any], user = Depends(get_admin_user)):
+    """Guarda una rutina nueva en la biblioteca (o reescribe una, si viene con `id`)."""
+    nombre = str(data.get("nombre") or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Ponle un nombre a la rutina")
+
+    dias = _dias_limpios(data.get("days"))
+    if not any(not d["is_rest"] for d in dias):
+        raise HTTPException(
+            status_code=400,
+            detail="Esta rutina no tiene ningún día con ejercicios. Añade al menos uno.")
+
+    ahora = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "nombre": nombre[:120],
+        "descripcion": str(data.get("descripcion") or "").strip()[:500] or None,
+        "objetivo": str(data.get("objetivo") or "").strip().lower() or None,
+        "nivel": str(data.get("nivel") or "").strip().lower() or None,
+        "days": dias,
+        "trainer_notes": str(data.get("trainer_notes") or "").strip()[:2000] or None,
+        "updated_at": ahora,
+        "updated_by": user.get("name") or user.get("email"),
+    }
+
+    if data.get("id"):
+        r = await db.routine_templates.update_one({"id": data["id"]}, {"$set": doc})
+        if not r.matched_count:
+            raise HTTPException(status_code=404, detail="Esa rutina ya no está")
+        return {"id": data["id"], **doc}
+
+    doc["id"] = str(uuid.uuid4())
+    doc["created_at"] = ahora
+    doc["created_by"] = doc["updated_by"]
+    await db.routine_templates.insert_one(dict(doc))
+    return doc
+
+
+@admin_router.delete("/biblioteca/{rutina_id}")
+async def borrar_de_biblioteca(rutina_id: str, user = Depends(get_admin_user)):
+    """Quita una rutina de la biblioteca.
+
+    No toca a quien ya la tenga puesta: al asignarla se copió, así que sus clientes siguen
+    con la suya. Borrar la plantilla no le deja a nadie sin rutina.
+    """
+    r = await db.routine_templates.delete_one({"id": rutina_id})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Esa rutina ya no está")
+    return {"borrada": True}
+
+
+@admin_router.post("/biblioteca/{rutina_id}/asignar")
+async def asignar_de_biblioteca(rutina_id: str, data: Dict[str, Any],
+                                user = Depends(get_admin_user)):
+    """Le pone a un cliente una rutina de la biblioteca. Se copia, no se enlaza."""
+    client_id = str(data.get("client_id") or "").strip()
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Falta el cliente")
+    plantilla = await db.routine_templates.find_one({"id": rutina_id}, {"_id": 0})
+    if not plantilla:
+        raise HTTPException(status_code=404, detail="Esa rutina ya no está")
+
+    profile = await db.client_profiles.find_one({"id": client_id})
+    assert_client_access(user, profile)
+
+    await db.routines.update_many({"client_id": client_id, "status": "active"},
+                                  {"$set": {"status": "inactive"}})
+    rutina = {
+        "id": str(uuid.uuid4()),
+        "client_id": client_id,
+        "days": plantilla.get("days", []),
+        "trainer_notes": plantilla.get("trainer_notes"),
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        # De dónde salió: para saber cuál se puso a mano, cuál la IA y cuál la biblioteca.
+        "origen": "biblioteca",
+        "plantilla_id": rutina_id,
+        "plantilla_nombre": plantilla.get("nombre"),
+        "puesta_por": user.get("id"),
+    }
+    await db.routines.insert_one(dict(rutina))
+    if await rutina_visible_para_el_cliente():
+        await avisar_rutina_nueva(profile["user_id"])
+    return {"asignada": True, "nombre": plantilla.get("nombre")}
+
+
 def _get_default_routine():
     """Rutina por defecto."""
     return {

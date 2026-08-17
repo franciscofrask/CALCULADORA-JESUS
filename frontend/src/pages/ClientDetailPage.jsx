@@ -268,6 +268,62 @@ const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
     );
 };
 
+/**
+ * LAS RUTINAS QUE EL EQUIPO YA TIENE ESCRITAS, para ponérsela a este cliente.
+ *
+ * Se escriben en el panel de Rutinas y aquí solo se eligen. Al asignarla se COPIA: si luego
+ * se le retoca un ejercicio a este cliente, no se le cambia a los demás que la tienen.
+ *
+ * Si la biblioteca está vacía no se pinta nada: una tarjeta que solo dice «no hay nada» es
+ * ruido en una pantalla que ya tiene diez.
+ */
+const RutinasGuardadas = ({ api, clientId, onAsignada }) => {
+    const [rutinas, setRutinas] = useState([]);
+    const [poniendo, setPoniendo] = useState(null);
+
+    useEffect(() => {
+        api.get('/admin/routines/biblioteca')
+            .then(r => setRutinas(r.data?.rutinas || []))
+            .catch(() => { /* sin biblioteca, esta tarjeta no sale */ });
+    }, [api]);
+
+    const asignar = (r) => {
+        setPoniendo(r.id);
+        api.post(`/admin/routines/biblioteca/${r.id}/asignar`, { client_id: clientId })
+            .then(() => { toast.success(`Le hemos puesto «${r.nombre}»`); onAsignada?.(); })
+            .catch(e => toast.error(e?.response?.data?.detail || 'No hemos podido asignársela. Inténtalo de nuevo.'))
+            .finally(() => setPoniendo(null));
+    };
+
+    if (!rutinas.length) return null;
+
+    return (
+        <Card className="bg-[#111] border-[#222]">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-white/40 uppercase tracking-wider">Ponerle una rutina guardada</CardTitle>
+            </CardHeader>
+            <CardContent><div className="space-y-2">
+                {rutinas.map(r => (
+                    <div key={r.id} className="flex items-center justify-between gap-3 p-3 bg-[#0A0A0A] rounded-lg border border-[#222]">
+                        <div className="min-w-0">
+                            <p className="text-white text-sm">{r.nombre}</p>
+                            <p className="text-white/40 text-xs">
+                                {r.dias_de_entreno} {r.dias_de_entreno === 1 ? 'día' : 'días'} · {r.ejercicios} ejercicios
+                                {r.objetivo ? ` · ${r.objetivo}` : ''}{r.nivel ? ` · ${r.nivel}` : ''}
+                            </p>
+                        </div>
+                        <Button size="sm" variant="outline" disabled={poniendo === r.id}
+                            onClick={() => asignar(r)} data-testid={`asignar-rutina-${r.id}`}
+                            className="shrink-0 bg-transparent border-[#FF671F]/40 text-[#FF671F] hover:bg-[#FF671F]/10 text-xs">
+                            {poniendo === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Ponérsela'}
+                        </Button>
+                    </div>
+                ))}
+            </div></CardContent>
+        </Card>
+    );
+};
+
 const ClientDetailPage = () => {
     const { clientId } = useParams();
     const navigate = useNavigate();
@@ -1522,6 +1578,12 @@ const ClientDetailPage = () => {
                             <p className="text-[10px] text-white/30 mt-1">Para ti. Aquí, no en suplementación: el entrenamiento va aparte.</p>
                         </div>
                     </CardContent></Card>
+
+                    {/* ELEGIR UNA DE LAS GUARDADAS (17-08-2026). Antes solo se podía escribir
+                        a mano aquí o pedírsela a la IA; las que el equipo tiene hechas no se
+                        podían reutilizar. Al asignarla se copia, así que retocársela luego a
+                        este cliente no se la cambia a los demás. */}
+                    <RutinasGuardadas api={api} clientId={clientId} onAsignada={fetchClient} />
 
                     {/* Current routine */}
                     {activeRoutine ? (

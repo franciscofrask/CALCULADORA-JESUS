@@ -7,6 +7,94 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { Search, Dumbbell, ChevronRight, Users } from 'lucide-react';
 import { PlanBadge } from './ClientDashboard';
+import EditorDeRutina from '../components/EditorDeRutina';
+
+/**
+ * LA BIBLIOTECA DE RUTINAS DEL EQUIPO (17-08-2026).
+ *
+ * «Deberíamos agregar la opción de crear rutinas en el panel de rutinas, y cuando vas a la
+ * ficha poder elegir también de las creadas por entrenadores, poder editarlas y borrarlas»
+ * (Francisco).
+ *
+ * Las rutinas que escribe Jesús cada mes viven en Drive y se mandan por fuera de la app.
+ * Aquí se escriben una vez y se le asignan a quien haga falta desde su ficha. Borrar una de
+ * la biblioteca NO deja a nadie sin rutina: al asignarla se copia.
+ */
+const BibliotecaDeRutinas = ({ api }) => {
+    const [rutinas, setRutinas] = useState(null);
+    const [editando, setEditando] = useState(null);   // null = cerrado; {} = nueva
+
+    const cargar = React.useCallback(() => {
+        api.get('/admin/routines/biblioteca')
+            .then(r => setRutinas(r.data?.rutinas || []))
+            .catch(() => toast.error('No hemos podido cargar las rutinas guardadas.'));
+    }, [api]);
+
+    useEffect(() => { cargar(); }, [cargar]);
+
+    const borrar = (r) => {
+        api.delete(`/admin/routines/biblioteca/${r.id}`)
+            .then(() => { toast.success(`«${r.nombre}» quitada de la biblioteca`); cargar(); })
+            .catch(() => toast.error('No hemos podido borrarla. Inténtalo de nuevo.'));
+    };
+
+    return (
+        <>
+            <Card className="bg-[#111] border-[#222]">
+                <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <Dumbbell className="w-5 h-5 text-[#FF671F] shrink-0" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-white text-sm font-semibold">Rutinas guardadas</p>
+                            <p className="text-white/40 text-xs">
+                                Escríbelas una vez y asígnalas desde la ficha de cualquier cliente.
+                            </p>
+                        </div>
+                        <button onClick={() => setEditando({})} data-testid="nueva-rutina"
+                            className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+                            Rutina nueva
+                        </button>
+                    </div>
+
+                    {rutinas === null ? (
+                        <p className="text-white/30 text-sm py-2">Cargando…</p>
+                    ) : rutinas.length === 0 ? (
+                        <p className="text-white/30 text-sm py-2">
+                            Todavía no hay ninguna. La primera que escribas se podrá asignar a todos los que la necesiten.
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            {rutinas.map(r => (
+                                <div key={r.id} className="flex items-center justify-between gap-3 p-3 bg-[#0A0A0A] rounded-lg border border-[#222]">
+                                    <div className="min-w-0">
+                                        <p className="text-white text-sm">{r.nombre}</p>
+                                        <p className="text-white/40 text-xs">
+                                            {r.dias_de_entreno} {r.dias_de_entreno === 1 ? 'día' : 'días'} · {r.ejercicios} ejercicios
+                                            {r.objetivo ? ` · ${r.objetivo}` : ''}{r.nivel ? ` · ${r.nivel}` : ''}
+                                            {r.updated_by ? ` · la escribió ${r.updated_by}` : ''}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <button onClick={() => setEditando(r)}
+                                            className="text-white/50 hover:text-white text-xs font-semibold">Editar</button>
+                                        <button onClick={() => borrar(r)}
+                                            className="text-white/30 hover:text-red-400 text-xs">Borrar</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {editando && (
+                <EditorDeRutina api={api} rutina={editando.id ? editando : null}
+                    onCerrar={() => setEditando(null)}
+                    onGuardada={() => { setEditando(null); cargar(); }} />
+            )}
+        </>
+    );
+};
 
 /**
  * PONERLES RUTINA A VARIOS A LA VEZ (punto 6 del documento del 17-08).
@@ -211,6 +299,8 @@ const AdminRoutinesPage = () => {
                     </p>
                 )}
             </div>
+
+            <BibliotecaDeRutinas api={api} />
 
             <PonerlesRutinaAVarios api={api} onHecho={recargar} />
 
