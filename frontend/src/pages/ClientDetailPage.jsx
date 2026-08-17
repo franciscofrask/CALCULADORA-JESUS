@@ -1368,13 +1368,18 @@ const ClientDetailPage = () => {
                             Se normalizan aquí para que la tarjeta no tenga que saberlo. */}
                         <CardContent>{payments?.length > 0 ? (
                             <div className="space-y-2">{payments.map((p, i) => {
-                                const importe = p.importe ?? p.amount;
+                                // El importe con la coma y sus dos decimales, igual que en
+                                // Cobros: «60,50 €», no «60.5€».
+                                const bruto = Number(p.importe ?? p.amount);
+                                const importe = Number.isFinite(bruto)
+                                    ? bruto.toLocaleString('es-ES', { style: 'currency', currency: p.moneda || 'EUR' })
+                                    : '-';
                                 const cuando = p.fecha || p.created_at;
                                 const fallido = p.status ? p.status !== 'success' : p.es_dinero === false;
                                 return (
                                 <div key={p.id || p.referencia || i} className="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-lg border border-[#222] gap-3">
                                     <div className="min-w-0">
-                                        <p className="text-white text-sm font-medium">{importe}€</p>
+                                        <p className="text-white text-sm font-medium">{importe}</p>
                                         <p className="text-white/40 text-xs">
                                             {cuando ? new Date(cuando).toLocaleDateString('es-ES') : '-'}
                                             {p.concepto ? ` · ${p.concepto}` : ''}
