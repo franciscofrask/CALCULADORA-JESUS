@@ -219,4 +219,8 @@ async def main():
     print(f"\nescritos {len(cambios)} clientes")
 
 
-asyncio.run(main())
+# Solo al ejecutarlo: `_alta_desde_calma` importa de aqui el mapa de planes y el
+# criterio de membresia vigente, y sin esto le corria la sincronizacion entera por
+# el mero hecho de importarlo.
+if __name__ == "__main__":
+    asyncio.run(main())
