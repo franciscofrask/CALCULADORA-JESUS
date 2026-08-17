@@ -496,24 +496,50 @@ def opciones_de_renovacion(plan_actual: Optional[str],
     Devuelve tambien `mantiene_precio`: el precio se congela mientras no se de de baja
     (parte 1), asi que si renueva en su MISMO plan paga lo que pagaba. Si cambia de
     plan, paga el precio del nuevo.
+
+    EXCEPCION: EL PLAN ANTIGUO REABIERTO PARA LOS SUYOS (Francisco, 16-08). Si el admin
+    enciende `renovable_por_los_suyos` en un plan legacy, al que YA lo tiene se le deja
+    seguir igual, con lo que ese plan incluye hoy y con su precio congelado. No es volver a
+    vender el plan: sigue fuera de `opciones` -- de la tienda y de la lista de renovacion
+    -- para todos los demas. Es solo no echar de su plan a quien lleva ahi desde antes.
     """
     cat = catalogo or PLAN_CATALOG
-    actual = (plan_actual or "").lower().strip()
+    actual = codigo_de_plan(plan_actual)
     info = cat.get(actual) or {}
     es_legacy = info.get("estado") in ("legacy", None) and actual not in NIVELES
+    # Solo cuenta para un plan que existe y esta en legacy: encenderlo en un activo no
+    # significa nada, y en un plan que no esta en el catalogo no hay nada que renovar.
+    legacy_reabierto = bool(es_legacy and info and info.get("renovable_por_los_suyos"))
 
     return {
         "plan_actual": actual or None,
-        "puede_seguir_igual": not es_legacy and info.get("estado") == "activo",
+        "puede_seguir_igual": legacy_reabierto or (not es_legacy and info.get("estado") == "activo"),
+        # Que su «seguir igual» es el de un plan que ya no se vende. Lo mira la pantalla de
+        # renovacion: ese no renueva solo por Stripe (su suscripcion pudo cancelarse al
+        # retirar el plan), asi que hay que llevarle al checkout en vez de decirle que no
+        # tiene que hacer nada.
+        "renovacion_legacy": legacy_reabierto,
         "opciones": planes_contratables(cat),
         # La tercera salida del documento ("renovar, subir de nivel, o salir a la
         # membresia"): no es una opcion de compra, es donde cae el que no renueva.
         "salida": next((c for c, p in cat.items()
                         if p.get("solo_salida") and p.get("estado") == "activo"), None),
-        "mantiene_precio": not es_legacy,
+        "mantiene_precio": legacy_reabierto or not es_legacy,
         "motivo": ("Tu plan ya no se ofrece: al renovar eliges entre los actuales"
-                   if es_legacy else None),
+                   if (es_legacy and not legacy_reabierto) else None),
     }
+
+
+def puede_renovar_su_plan_legacy(plan_actual: Optional[str],
+                                 catalogo: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
+    """Si ESTE cliente puede renovar el plan antiguo que ya tiene.
+
+    La usa el checkout: un plan legacy no se contrata (400 de siempre) salvo que su
+    interruptor este encendido Y quien lo pide sea justo el que ya lo tiene. Vive aqui,
+    junto a la regla de renovacion, para que las dos puertas no puedan decir cosas
+    distintas.
+    """
+    return bool(opciones_de_renovacion(plan_actual, catalogo).get("renovacion_legacy"))
 
 
 def plan_habilitaciones(code: Optional[str]) -> Dict[str, Any]:
@@ -524,9 +550,29 @@ def plan_habilitaciones(code: Optional[str]) -> Dict[str, Any]:
 
 # Campos del catálogo que el admin puede sobrescribir desde el panel (guardados en
 # db.plan_overrides). Lo demás (code, asignable, stripe_price_env) queda fijo por código.
+#
+# EL IMPORTE NO SE EDITA (Francisco, 16-08). `precio` y `precios` estaban aquí y no
+# deberían haber estado nunca: lo que se cobra por Stripe no sale del catálogo, sale del
+# Price ID de la variable de entorno (`stripe_price_env`, ver
+# core/stripe_billing.get_stripe_price_id_for_plan). O sea que editar el precio en el
+# panel cambiaba el escaparate -- la tarjeta del plan, la pantalla de renovación, «Mi
+# perfil» -- y seguía cobrando lo de siempre, sin que nada avisara. Un precio que se puede
+# escribir y no se cobra es peor que no poder escribirlo.
+#
+# Para cambiar un importe de verdad hay que crear el Price nuevo en Stripe (Stripe no deja
+# editar importes: se archiva el viejo y se crea otro, ver setup_stripe_products.py),
+# poner su id en la variable de entorno y actualizar el `precio` del catálogo aquí, en el
+# código, que es donde se revisa y se despliega. `precio_nota` sí se sigue editando: es
+# texto de escaparate y no lo lee ningún cobro.
 PLAN_EDITABLE_FIELDS = {
-    "name", "estado", "ciclo", "precio", "precio_nota", "precios",
+    "name", "estado", "ciclo", "precio_nota",
     "responsable", "habilitaciones",
+    # EL BOTÓN DEL PLAN ANTIGUO (Francisco, 16-08). Apagado por defecto. Encendido, el
+    # cliente que YA tiene ese plan legacy puede renovarlo con lo que el plan incluye hoy
+    # y con su precio congelado; al que no lo tiene el plan le sigue sin existir, ni en la
+    # tienda ni en el checkout. Vive en el catálogo y no en un ajuste suelto porque es una
+    # propiedad del plan, y así se ve al lado de su estado en el mismo sitio.
+    "renovable_por_los_suyos",
     # QUE INCLUYE, ESCRITO A MANO (punto 6.4 de la revision del 09-08). Hasta ahora «Tu plan
     # incluye» de Mi perfil se derivaba de la matriz de habilitaciones, y de ahi solo salen
     # frases de sistema: «Macros personalizados por tu entrenador», «Reporte quincenal». Eso
@@ -543,6 +589,14 @@ def merged_catalog(overrides_by_code: Optional[Dict[str, Dict[str, Any]]] = None
     """Catálogo con los overrides del admin aplicados sobre los valores por defecto.
     `overrides_by_code`: {code: {campo: valor, ...}} (normalmente leído de db.plan_overrides).
     Devuelve {code: entrada completa con `code` y `features` recalculadas}.
+
+    LOS OVERRIDES VIEJOS DE PRECIO SE IGNORAN, NO SE BORRAN. En producción hay guardado al
+    menos un override con `precio` dentro (el de `elm`), de cuando el importe se podía
+    editar. El filtro de abajo ya los deja fuera solos: si el campo no está en
+    PLAN_EDITABLE_FIELDS, no se copia. Manda el código, que es lo coherente -- ese importe
+    nunca llegó a cobrarse, porque el cobro sale del Price de Stripe -- y el documento
+    guardado se queda como está: borrarlo perdería el resto de campos que sí valen
+    (nombre, nota de precio, habilitaciones) y no arregla nada.
     """
     overrides_by_code = overrides_by_code or {}
     out: Dict[str, Dict[str, Any]] = {}
@@ -553,6 +607,9 @@ def merged_catalog(overrides_by_code: Optional[Dict[str, Dict[str, Any]]] = None
             if field in PLAN_EDITABLE_FIELDS:
                 entry[field] = value
         entry["code"] = code
+        # Ningún plan del código lo declara: sin esto el panel no tendría qué pintar en el
+        # interruptor hasta que alguien lo encendiera una vez.
+        entry["renovable_por_los_suyos"] = bool(entry.get("renovable_por_los_suyos"))
         entry["habilitaciones"] = completar_acompanamiento(entry.get("habilitaciones", {}))
         entry["features"] = derive_features(entry["habilitaciones"])
         out[code] = entry
