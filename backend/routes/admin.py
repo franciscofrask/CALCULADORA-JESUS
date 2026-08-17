@@ -450,6 +450,39 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
         _sanear_pesos(calma_raw.get("pesos"), "valor")
         _sanear_pesos(calma_raw.get("formularios_mensuales"), "peso")
 
+    # LOS MACROS QUE COME HOY, QUE NO SIEMPRE SON LOS DEL CAMPO (17-08-2026).
+    #
+    # `macros_training` es un espejo: lo escriben el ajuste del coach, la calculadora y la
+    # sincronización de Calma. La fila vigente de `macro_history` es lo que de verdad usa el
+    # reparto del día, o sea lo que el cliente tiene delante en Nutrición, en Inicio y en el
+    # asistente. Cuando alguien escribe uno sin el otro, la ficha enseña una cosa y el
+    # cliente come otra: medido en producción el 17-08, 6 de 175 activos, cuatro de ellos con
+    # la última fila puesta «por migracion» y dos de ese mismo día. Cliente Demo: la ficha
+    # decía 220 g de proteína y el cliente comía 170.
+    #
+    # No se toca el campo -- lo leen decenas de sitios --, se manda al lado lo que rige hoy y
+    # que la pantalla enseñe eso. Es lo mismo que se hizo con el peso en `series_cliente`.
+    from macros_por_fecha import ultima_vigente
+
+    vigente = await ultima_vigente(db, client_id)
+    if vigente:
+        profile["macros_vigentes"] = {
+            "entreno": vigente.get("training") or vigente.get("new_training"),
+            "descanso": vigente.get("rest") or vigente.get("new_rest"),
+            "perientreno": vigente.get("peri"),
+            "desde": vigente.get("effective_date"),
+            "quien": vigente.get("changed_by"),
+        }
+        de_hoy = (vigente.get("training") or vigente.get("new_training") or {})
+        del_campo = profile.get("macros_training") or {}
+        p_hoy = de_hoy.get("protein") or de_hoy.get("proteinas")
+        p_campo = del_campo.get("protein") or del_campo.get("proteinas")
+        try:
+            profile["macros_descuadrados"] = (p_hoy is not None and p_campo is not None
+                                              and abs(float(p_hoy) - float(p_campo)) >= 1)
+        except (TypeError, ValueError):
+            profile["macros_descuadrados"] = False
+
     from core.plan_access import estado_de_acceso
 
     return {

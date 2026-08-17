@@ -969,6 +969,30 @@ const ClientDetailPage = () => {
                             <Button size="sm" variant="outline" className="bg-transparent border-[#FF671F]/40 text-[#FF671F] hover:bg-[#FF671F]/10 text-xs" onClick={pedirSugerencia} disabled={sugiriendo} data-testid="suggest-macros-btn">{sugiriendo ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}Sugerir ajuste (IA)</Button>
                         </div>
                         {!mt && <p className="text-white/40 text-xs mb-3">Este cliente aún no tiene macros asignados: rellénalos aquí o pídele una propuesta al asistente.</p>}
+                        {/* LO QUE COME HOY, CUANDO NO ES LO QUE PONE AQUÍ (17-08-2026).
+                            Este editor carga `macros_training`, que es un espejo; el reparto
+                            del día usa la fila vigente del historial, que es lo que el cliente
+                            tiene delante en Nutrición. Cuando alguien escribe uno sin el otro
+                            -- la sincronización de Calma lo ha hecho hoy mismo en dos --, el
+                            coach ajustaría sobre un número que el cliente no tiene. */}
+                        {profile?.macros_descuadrados && profile?.macros_vigentes && (
+                            <div className="mb-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
+                                <p className="text-white text-sm">
+                                    Ojo: hoy está comiendo con{' '}
+                                    <b className="text-yellow-400">
+                                        {profile.macros_vigentes.entreno?.protein} P ·{' '}
+                                        {profile.macros_vigentes.entreno?.carbs} H ·{' '}
+                                        {profile.macros_vigentes.entreno?.fat} G
+                                    </b>{' '}
+                                    en día de entreno, que no es lo que hay escrito aquí.
+                                </p>
+                                <p className="text-white/50 text-xs mt-1">
+                                    Es lo que manda desde el {profile.macros_vigentes.desde}
+                                    {profile.macros_vigentes.quien ? ` · lo puso ${profile.macros_vigentes.quien}` : ''}
+                                    {' '}· Al guardar aquí, estos pasan a ser los suyos.
+                                </p>
+                            </div>
+                        )}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <MacroEditGroup title="Entrenamiento" icon={Zap} color="#FF671F" fields={[
                                 { label: 'Proteína', value: macrosForm.training.protein, actual: macrosActuales.training.protein, onChange: v => setMacroCampo('training', 'protein', v), testId: 'macro-input-tp' },
