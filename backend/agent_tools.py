@@ -50,6 +50,18 @@ _MACRO_LBL = {"P": "proteína", "H": "hidratos", "G": "grasa"}
 _MACRO_ART = {"P": "la proteína", "H": "los hidratos", "G": "la grasa"}
 
 
+# CÓMO SE CUENTA UN FRENO, PORQUE ACABA EN LA PANTALLA DEL CLIENTE (17-08-2026).
+#
+# A «ponme 2 kg de arroz blanco» el asistente contestó: «no se ha añadido el arroz: 2 kg es
+# muchísimo para una Comida 1 y el sistema lo ha bloqueado». La primera mitad es perfecta; la
+# segunda le habla al cliente de nuestra fontanería. El texto del aviso ya venía en su idioma,
+# lo que faltaba era decirle al modelo que no añada de dónde sale.
+_COMO_CONTAR_EL_FRENO = (
+    "cuéntaselo como lo que es -- una cantidad fuera de lo normal para una comida -- y "
+    "pregúntale si la quiere igualmente. Nada de «el sistema», «bloqueado», «no me deja» ni "
+    "nombres de parámetros: el cliente no tiene por qué saber que hay un tope.")
+
+
 def _y(palabras: list) -> str:
     """«la proteína y la grasa», no «proteína, grasa»."""
     if len(palabras) <= 1:
@@ -1597,9 +1609,14 @@ class AgentTools:
             return [f] if f else []
 
         def _items_de(rb):
+            # NADA A CERO GRAMOS (17-08-2026). En la pantalla de Francisco salió un «Aceite
+            # de coco una cucharadita de café — 0 g» dentro de una tarjeta: el resolvedor
+            # había dejado esa pieza en cero porque no cabía nada. Un alimento a 0 g no es
+            # un alimento, es ruido con nombre; si no cabe, no está.
             out = [self._item_de(por_nombre[x["nombre"]],
                                  float(x.get("cantidad", 0) or 0), x.get("macros", {}))
-                   for x in (rb.get("foods_added") or []) if x.get("nombre") in por_nombre]
+                   for x in (rb.get("foods_added") or []) if x.get("nombre") in por_nombre
+                   and float(x.get("cantidad", 0) or 0) > 0]
             return out if len(out) == len(por_nombre) else None
 
         try:
@@ -2056,6 +2073,37 @@ class AgentTools:
         # que el alimento salga de SUS palabras. Si no lo nombró, esos alimentos entran como
         # semilla y la comida se compone alrededor (que es lo que él pidió: «con algo de
         # grasa»), en vez de servirle la semilla sola.
+        # CAMBIAR UNA COMIDA MONTADA NO ES COMPONER OTRA (17-08-2026).
+        #
+        # A «quítame las nueces y baja un poco la avena» el modelo llamó aquí con los ids de
+        # los alimentos que YA estaban en la comida. Y esto los recuadra contra lo que FALTA,
+        # que en una comida montada es casi nada: salió una tarjeta con los mismos nueve
+        # alimentos, un aceite de coco a 0 g, «se desvía 63,5 g de proteína del objetivo» y
+        # un «se pasa 59 g de hidratos» que no existía. Ninguna de las dos cosas que pidió
+        # el cliente se hizo. Por separado, con `editar_comida`, las dos funcionan.
+        #
+        # Así que si lo que manda ya está puesto, esto no es montar: es editar, y se le dice
+        # con qué. El caso de rehacer la comida entera sigue abierto -- se vacía y se compone,
+        # o se pide `completar` -- y va escrito en la respuesta.
+        if incluir_ids:
+            puestos = {a.get("alimento_id")
+                       for a in ((self.bot.state.get("comidas_completadas") or {})
+                                 .get(self.bot.current_meal_key()) or {}).get("alimentos", [])
+                       if a.get("alimento_id") is not None}
+            ya_estaban = [i for i in incluir_ids if i in puestos]
+            if ya_estaban and not completar:
+                nombres_ya = _y([nombre_visible((self.foods.get(i) or {}).get("nombre", ""))
+                                 for i in ya_estaban[:4]])
+                return {"borradores": [], "error": (
+                    f"{nombres_ya} ya está en {self._nombre_comida_actual()}: esto no es "
+                    "montar un menú, es cambiar la comida."), "instruccion": (
+                    "Usa `editar_comida` sobre lo que ya hay: op='quitar' con el nombre para "
+                    "sacar una pieza, op='ajustar' con 'a' y su unidad para cambiar una "
+                    "cantidad (bajar NO es quitar), op='sustituir' para cambiar una cosa por "
+                    "otra. Si de verdad quiere la comida rehecha desde cero, vacíala primero "
+                    "(op='vaciar') y compón; y si solo quiere que le complete lo que falta "
+                    "alrededor de lo suyo, vuelve a llamarme con completar=true.")}
+
         if incluir_ids and not completar:
             suyos_de_verdad = [i for i in incluir_ids
                                if any(self._lo_dijo_el_cliente(p)
@@ -3377,6 +3425,15 @@ class AgentTools:
         # pedírselo es el bucle que ya conocemos.
         if self._cliente_nombro_esta_comida():
             return None
+        # BORRAR TAMBIÉN SE PIDE CON PALABRAS (17-08-2026). «vacía el día» no nombra ninguna
+        # comida, así que este candado lo frenaba y el asistente contestaba «no puedo vaciar
+        # Comida 4 por mi cuenta porque ya la tenías montada... te vacío el día entero
+        # forzando el cambio, ¿lo hago así?». Francisco: «tiene que vaciar una comida de
+        # manera individual o las que yo le diga». El criterio ya existía en `vaciar_dia`
+        # («si quiero vaciar, vacías», 15-08) y aquí faltaba: un verbo de borrar en el
+        # mensaje del cliente es permiso suficiente para su propio trabajo.
+        if self._cliente_pidio_borrar():
+            return None
         return {
             "ok": False,
             "error": f"{self._nombre_comida_actual()} ya la tenía montada el cliente antes de "
@@ -3385,6 +3442,12 @@ class AgentTools:
                      f"repite AHORA esta misma llamada con forzar=true y hazlo: no se lo "
                      f"vuelvas a preguntar, que es lo que le deja dando vueltas. "
                      f"Para montar lo que le falta, ve a una comida vacía.",
+            # CÓMO SE LE CUENTA, PORQUE ESTE TEXTO ACABA EN SU PANTALLA. El modelo tradujo
+            # este error literalmente y el cliente leyó «te vacío el día entero FORZANDO EL
+            # CAMBIO»: el nombre de un parámetro nuestro. Ver `errores-nunca-tecnicos`.
+            "como_decirlo": ("pregúntale por lo que se pierde, no por cómo lo haces: «esa "
+                             "comida la traías montada, ¿la cambio igualmente?». Ni «forzar», "
+                             "ni «forzando el cambio», ni nombres de parámetros."),
             "comida_ya_montada": self.ver_estado("comida"),
         }
 
@@ -3655,7 +3718,8 @@ class AgentTools:
                         if des:
                             fallos.append({"op": op, "detalle": des["texto"] +
                                            " No lo pongas por tu cuenta: pregúntaselo, y si "
-                                           "ya te ha dicho que sí, repite con forzar=true."})
+                                           "ya te ha dicho que sí, repite con forzar=true.",
+                                           "como_decirlo": _COMO_CONTAR_EL_FRENO})
                             continue
                     if op.get("alimento_id"):
                         r = await self.bot.add_food_by_id(int(op["alimento_id"]),
@@ -3805,6 +3869,64 @@ class AgentTools:
                     hechos.append({"op": op, "detalle": f"{len(fuera)} propuestas descartadas; "
                                                         "la comida no se ha tocado"})
                 elif tipo == "vaciar":
+                    # «VACÍA LA COMIDA 2 Y LA 4» ES UNA OPERACIÓN, NO CUATRO (17-08-2026).
+                    #
+                    # Francisco: «tiene que vaciar una comida de manera individual o las que yo
+                    # le diga». Para eso había que navegar y vaciar por cada comida -- el mismo
+                    # camino que ya se cerró para el día entero, porque choca con el tope de
+                    # pasos y deja el trabajo a medias --. Si el cliente las nombra, vienen en
+                    # `comidas` y se vacían aquí de una vez.
+                    pedidas = op.get("comidas") or []
+                    if pedidas:
+                        idx_ini = self.bot.state.get("comida_actual")
+                        vaciadas_p, sin_nada, no_estan = [], [], []
+                        for cual in pedidas:
+                            # «la 2», «post», «intra-entreno»: lo resuelve el mismo traductor
+                            # que usa `navegar`, para que un número sea la Comida N y no la
+                            # posición en el orden del día (el post puede ir antes).
+                            i_p = self.bot.resolve_meal_ref(cual)
+                            if i_p is None or not self.bot.go_to_meal(i_p):
+                                no_estan.append(str(cual))
+                                continue
+                            k_p = self.bot.current_meal_key()
+                            n_p = len(((self.bot.state.get("comidas_completadas") or {})
+                                       .get(k_p) or {}).get("alimentos", []))
+                            # El candado de la comida traída de Nutrición sigue en pie, y el
+                            # de la iniciativa propia también: nombrar comidas no es pedir
+                            # borrarlas si el verbo no está en su mensaje.
+                            if n_p and not forzar and not self._cliente_pidio_borrar():
+                                self.bot.state["vaciar_pendiente"] = {
+                                    "op": "vaciar", "meal_idx": self.bot.state.get("comida_actual")}
+                                fallos.append({"op": op, "detalle": (
+                                    f"{self._nombre_comida_actual()} tiene {n_p} alimentos y el "
+                                    "cliente no ha pedido borrar en su mensaje: pregúntaselo y, "
+                                    "tras su sí, repite con forzar=true.")})
+                                self.bot.go_to_meal(idx_ini)
+                                break
+                            nom_p = self.bot.clear_meal()
+                            if not nom_p:
+                                continue
+                            (vaciadas_p if n_p else sin_nada).append(nom_p)
+                            for bid in [k for k, b in (self.bot.state.get("borradores") or {}).items()
+                                        if b.get("meal_key") == k_p]:
+                                (self.bot.state.get("borradores") or {}).pop(bid, None)
+                        else:
+                            self.bot.go_to_meal(idx_ini)
+                            self.bot.state["last_options"] = []
+                            self.bot.state["vaciar_pendiente"] = None
+                            if vaciadas_p:
+                                self.bot.state["vaciado_en_el_turno"] = (
+                                    "he vaciado " + _y(vaciadas_p))
+                            detalle_p = []
+                            if vaciadas_p:
+                                detalle_p.append("vaciadas " + ", ".join(vaciadas_p))
+                            if sin_nada:
+                                detalle_p.append("ya estaban vacías " + ", ".join(sin_nada))
+                            if no_estan:
+                                detalle_p.append("no existen en este día: " + ", ".join(no_estan))
+                            (hechos if (vaciadas_p or sin_nada) else fallos).append(
+                                {"op": op, "detalle": "; ".join(detalle_p) or "no había nada que vaciar"})
+                        continue
                     cuantos = len(((self.bot.state.get("comidas_completadas") or {})
                                    .get(self.bot.current_meal_key()) or {}).get("alimentos", []))
                     # Si el CLIENTE ha pedido borrar en este mismo mensaje, se borra y
@@ -3823,6 +3945,15 @@ class AgentTools:
                             "forzar=true.")})
                         continue
                     nombre = self.bot.clear_meal()
+                    # LO VACIADO YA NO ESTÁ PENDIENTE (17-08-2026). El candado de arriba
+                    # arma `vaciar_pendiente` para que el «sí» del cliente se ejecute en
+                    # código, pero si el vaciado acaba haciéndose por otra vía -- el modelo
+                    # reintentando con forzar en el mismo turno -- la nota se quedaba puesta
+                    # y el SIGUIENTE «sí» del cliente, que contestaba a otra cosa
+                    # («¿te monto la Comida 1?»), volvía a vaciar un día ya vacío y se
+                    # comía su respuesta. Medido en dev: el «sí» a «¿te la monto?» contestó
+                    # «Hecho: vaciadas Intra, Post, Comida 1...» y no montó nada.
+                    self.bot.state["vaciar_pendiente"] = None
                     if nombre:
                         # Vaciada la comida, sus propuestas mueren con ella: un «opción 1»
                         # vivo tras el vaciado volvía a meter justo lo que se acababa de
@@ -3832,6 +3963,13 @@ class AgentTools:
                         for bid in [k for k, b in bs.items() if b.get("meal_key") == mk_v]:
                             bs.pop(bid, None)
                         self.bot.state["last_options"] = []
+                        # Vaciar una comida también se le cuenta al cliente aunque el
+                        # modelo se despiste (ver `vaciado_en_el_turno` en vaciar_dia). Si
+                        # no había nada dentro no hay nada que contar: el aviso es por el
+                        # trabajo que se pierde, no por la operación.
+                        if cuantos:
+                            self.bot.state["vaciado_en_el_turno"] = (
+                                f"he vaciado {nombre} ({cuantos} alimentos fuera)")
                     (hechos if nombre else fallos).append(
                         {"op": op, "detalle": (f"{nombre} vaciada ({cuantos} alimentos fuera)"
                                                if nombre else "no se pudo vaciar")})
@@ -3860,6 +3998,16 @@ class AgentTools:
                         if nombre:
                             vaciadas.append(nombre)
                     self.bot.go_to_meal(1)
+                    # Ya está vaciado: la nota del candado se retira (ver el porqué en la
+                    # rama de `vaciar`, unas líneas más arriba).
+                    self.bot.state["vaciar_pendiente"] = None
+                    # Y EL DÍA VACIADO SE CUENTA, LO DIGA EL MODELO O NO (17-08-2026): lo
+                    # apunta el bucle del agente para anteponerlo a su respuesta si se le
+                    # olvida. Francisco: «lo borró pero nunca me avisó de que lo borró».
+                    if en_el_dia:
+                        self.bot.state["vaciado_en_el_turno"] = (
+                            f"he vaciado el día completo ({en_el_dia} alimentos fuera)")
+                    self.bot.state["vacio_el_dia_en_el_turno"] = True
                     # Día vaciado, TODAS las propuestas fuera (no solo las de otras
                     # comidas: las de la primera también hablan de un plato que ya no está).
                     (self.bot.state.get("borradores") or {}).clear()
@@ -3880,7 +4028,8 @@ class AgentTools:
                         if des:
                             fallos.append({"op": op, "detalle": des["texto"] +
                                            " No lo pongas por tu cuenta: pregúntaselo, y si "
-                                           "ya te ha dicho que sí, repite con forzar=true."})
+                                           "ya te ha dicho que sí, repite con forzar=true.",
+                                           "como_decirlo": _COMO_CONTAR_EL_FRENO})
                             continue
                         r = await self.bot.set_food_quantity(
                             op.get("nombre") or "", cantidad=float(cantidad),
@@ -3923,6 +4072,23 @@ class AgentTools:
                            "cantidad": a.get("cantidad_display"),
                            "macros": a.get("macros")} for a in comida.get("alimentos", [])],
         }
+        # PROPUESTO NO ES PUESTO (17-08-2026). A «muéstrame la comida 1» el asistente
+        # contestó «para la Comida 1 ahora mismo tienes la opción "Pancakes Fit Energy",
+        # que lleva whey, huevo, claras...» y esa comida estaba VACÍA: era una tarjeta que
+        # había propuesto antes. El cliente se cree que su comida está montada. Aquí no se
+        # puede confundir: si hay propuestas vivas se dicen aparte, contadas y con su aviso.
+        vivas = [b for b in (self.bot.state.get("borradores") or {}).values()
+                 if b.get("meal_key") == key]
+        if not actual["alimentos"]:
+            actual["vacia"] = True
+        if vivas:
+            actual["propuestas_vivas"] = {
+                "cuantas": len(vivas),
+                "nombres": [b.get("nombre") for b in vivas if b.get("nombre")],
+                "aviso": ("son PROPUESTAS: no están en la comida. Si te pregunta qué tiene "
+                          "esa comida, contéstale por `alimentos`" +
+                          (" -- y ahora mismo está vacía --" if not actual["alimentos"] else "") +
+                          "; las propuestas se nombran como lo que son, algo que puede elegir.")}
         if ambito != "dia":
             return actual
         ov = bot.get_day_overview()
@@ -4061,6 +4227,69 @@ class AgentTools:
                             + "se pasa " + " y ".join(pasan))
         return out
 
+    async def completar_lo_que_falta(self) -> dict:
+        """Añade lo que falta a la comida SIN tocar los gramos que el cliente ya puso.
+
+        Francisco, 17-08-2026: al decir «sí» a «¿te la completo?», la propuesta traía sus
+        alimentos pero con las cantidades recalculadas -- su pechuga de 150 g bajaba a 25 --.
+        «25 g de pollo es nada, entonces no tendría sentido un ajuste de esa característica».
+        Y tiene razón: completar es añadir alrededor de lo suyo, no rehacérselo. Reajustar lo
+        que él ha pedido es la misma falta que meterle un alimento que no pidió.
+
+        Así que lo suyo entra TAL CUAL y el compositor solo trabaja contra el hueco que queda
+        (`get_remaining_macros` ya lo descuenta). No es una herramienta del agente a propósito:
+        la llama el atajo del «sí», que es donde esto tiene que ser determinista.
+        """
+        key = self.bot.current_meal_key()
+        puestos = ((self.bot.state.get("comidas_completadas") or {})
+                   .get(key) or {}).get("alimentos", [])
+        if not puestos:
+            return {"borradores": [], "error": "esa comida está vacía: no hay nada que completar"}
+
+        mios, ya_dentro = [], set()
+        for a in puestos:
+            food = a.get("alimento") or self.foods.get(a.get("alimento_id")) or {}
+            if not food.get("id"):
+                continue
+            mios.append(self._item_de(food, float(a.get("cantidad_g") or a.get("cantidad") or 0),
+                                      a.get("macros") or {}))
+            ya_dentro.add(int(food["id"]))
+        if not mios:
+            return {"borradores": [], "error": "no reconozco lo que hay puesto en esa comida"}
+
+        # El hueco: lo que falta después de lo suyo. Y sin repetirle lo que ya tiene.
+        r = await self.componer_menu(solo_una=True)
+        nuevos = [i for i in ((r.get("borradores") or [{}])[0].get("items") or [])
+                  if int(i.get("id", 0)) not in ya_dentro]
+        if not nuevos:
+            return {"borradores": [], "error": "no encuentro con qué completarla sin repetir "
+                                               "lo que ya tienes"}
+
+        items = mios + nuevos
+        objetivo = self.bot.get_current_meal_macros()
+        tot = {m: round(sum(i["macros"].get(m, 0) for i in items), 1) for m in ("P", "H", "G")}
+        desvio = {m: round(tot[m] - float(objetivo.get(m) or 0), 1) for m in ("P", "H", "G")}
+        seq = self.bot.state.setdefault("opcion_seq", {})
+        numero = int(seq.get(key, 0)) + 1
+        seq[key] = numero
+        bid = self._nuevo_bid()
+        borrador = {
+            "id": bid, "numero": numero, "items": items, "origen": "completado",
+            "nombre": self._nombre_del_menu(items, list(ya_dentro)), "receta_url": None,
+            "macros_totales": tot, "objetivo": dict(objetivo), "desvio": desvio,
+            "pedidos": sorted(ya_dentro), "meal_key": key, "momento": self._momento_actual(),
+            "filtros": {"generico": None, "marca": None, "estilo": None},
+        }
+        fuera = [f"{abs(desvio[m]):.0f} g de {_MACRO_LBL[m]}" for m in ("P", "H", "G")
+                 if abs(desvio[m]) > 2 * self.bot.margen_de(float(objetivo.get(m) or 0))]
+        if fuera:
+            borrador["avisos"] = ["con tus cantidades tal cual, así se queda a "
+                                  + _y(fuera) + " del objetivo de la comida"]
+        self.bot.state.setdefault("borradores", {})[bid] = borrador
+        return {"borradores": [borrador],
+                "anadido": [i["nombre"] for i in nuevos],
+                "respetado": [i["nombre"] for i in mios]}
+
     def guion_del_peri(self, variante: str = "principal") -> dict:
         """Lo que Jesus dice en el intra y en el post, literal. Se suelta TAL CUAL.
 
@@ -4074,6 +4303,19 @@ class AgentTools:
         if not momento:
             return {"ok": False, "error": "esto solo aplica al intra y al post; "
                                           f"ahora estas en {self._nombre_comida_actual()}"}
+        # QUIEN ACABA DE TIRAR EL DIA NO HA PEDIDO RECOMENDACIONES (17-08-2026).
+        #
+        # Vaciar el dia deja al cliente en la primera comida, que con entreno en ayunas es el
+        # intra; y como esta herramienta se llama «al LLEGAR al intra», el turno del borrado
+        # terminaba soltandole el parrafo del metodo con sus tarjetas. Francisco: «me dio
+        # sugerencias para el intraentreno sin que se lo pida». El borrado se cuenta y se
+        # espera: cuando diga por donde empieza, el guion sigue estando.
+        if self.bot.state.get("vacio_el_dia_en_el_turno"):
+            return {"ok": False, "error": "acabas de vaciar el dia entero en este mismo turno",
+                    "instruccion": ("cuentale SOLO que has vaciado el dia y preguntale por "
+                                    "donde quiere empezar. No propongas nada todavia: cuando "
+                                    "te lo diga, si toca el intra o el post, vuelves a "
+                                    "llamarme y te doy el guion.")}
         texto = guion(momento, variante)
         if not texto:
             return {"ok": False, "error": f"no hay guion de '{variante}' para el {momento}"}

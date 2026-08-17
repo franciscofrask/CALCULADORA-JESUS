@@ -364,7 +364,25 @@ export default function ChatbotPage() {
    * ninguna, sus preferencias guardadas (num de comidas, horario de entreno y peri), y
    * entonces lo único que no se puede adivinar es si hoy entrena: eso sí se pregunta.
    */
-  const arrancarConLaConfigDeNutricion = async (iso, encima = {}, sid = null) => {
+  /**
+   * ARRANCAR NO ES MUDARSE (17-08-2026).
+   *
+   * Esta función hace dos cosas distintas con el mismo texto: abrir la conversación, y
+   * mover una conversación ya abierta al día que el cliente tiene en Nutrición (lo que
+   * pidió Jesús el 15-08). Como el saludo era el mismo, la pantalla enseñaba dos
+   * aperturas seguidas de días distintos y con configuraciones que se contradecían:
+   *
+   *     Vamos con Hoy, ... día de entreno, 4 comidas, entrenas tras la Comida 1, intra + post.
+   *     Empezamos por Comida 1. Tu objetivo es: ...
+   *     Vamos con domingo, 16 de agosto, ... entrenas en ayunas, intra + post.
+   *     Ya tienes 6 de 6 comidas montadas de ese día.
+   *
+   * Francisco lo leyó como que el asistente se autocontestaba. No se contestaba: se estaba
+   * mudando sin decirlo. Cuando ya hay conversación, el texto dice que nos movemos y por
+   * qué; el saludo de apertura se da UNA vez.
+   */
+  const arrancarConLaConfigDeNutricion = async (iso, encima = {}, sid = null,
+                                                motivo = 'nutricion') => {
     setLoading(true);
     const cabecera = { Authorization: `Bearer ${getToken()}` };
     let dieta = null;
@@ -400,9 +418,22 @@ export default function ChatbotPage() {
     setOpcionPeri(cfg.opcion_peri);
     setTipoDia(cfg.tipo_dia);
 
-    addMessage(`Vamos con ${formatDateLabel(iso)}, con lo que tienes en Nutrición: `
-      + `${resumenConfig(cfg)}. Si quieres otro día o cambiar algo, dímelo cuando quieras: `
-      + '"mañana", "hoy descanso", "3 comidas", "en ayunas" o "sin peri".', false);
+    // ¿Es la apertura o una mudanza? Lo dice la conversación: si ya hay algo escrito, el
+    // cliente no está abriendo el asistente, se le está moviendo el día debajo.
+    // Y POR QUÉ nos movemos, que no siempre es lo mismo: unas veces lo ha pedido él («hoy
+    // descanso» estando en el martes) y otras es que en Nutrición tiene otro día abierto.
+    // Decirle «es el día que tienes abierto en Nutrición» cuando acaba de pedirlo él suena a
+    // que la app hace lo que quiere (17-08-2026).
+    const yaHabiaConversacion = messages.some(m => !m.isUser);
+    addMessage(yaHabiaConversacion
+      ? (motivo === 'peticion'
+        ? `Nos vamos a ${formatDateLabel(iso)}, como me has pedido: ${resumenConfig(cfg)}. `
+          + 'Lo de antes se queda guardado en su fecha.'
+        : `Nos movemos a ${formatDateLabel(iso)}, que es el día que tienes abierto en `
+          + `Nutrición: ${resumenConfig(cfg)}. Lo de antes se queda guardado en su fecha.`)
+      : `Vamos con ${formatDateLabel(iso)}, con lo que tienes en Nutrición: `
+        + `${resumenConfig(cfg)}. Si quieres otro día o cambiar algo, dímelo cuando quieras: `
+        + '"mañana", "hoy descanso", "3 comidas", "en ayunas" o "sin peri".', false);
     configureDay(cfg.tipo_dia, cfg.num_comidas, cfg.opcion_peri, cfg.momento_entreno,
                  cfg.single_meal, sid, iso);
   };
@@ -441,7 +472,12 @@ export default function ChatbotPage() {
           opcion_peri: opPeri || (tipo === 'entrenamiento' ? 'intra_post' : 'sin_peri'),
           single_meal: single,
           // Qué fecha se monta: el asistente resuelve "mañana" contra el día abierto.
-          fecha: fecha || targetDate || null
+          fecha: fecha || targetDate || null,
+          // El saludo con la configuración lo acaba de dar `arrancarConLaConfigDeNutricion`
+          // (es quien llama aquí). Sin esto, el backend lo repetía en su respuesta con la
+          // forma de un «Perfecto, día de entrenamiento con 4 comidas» a una petición que
+          // el cliente no ha hecho, y el chat parecía hablar solo (17-08-2026).
+          saludo: false
         })
       });
       const data = await res.json();
@@ -505,7 +541,9 @@ export default function ChatbotPage() {
       // también se muda. Sin esto, el día guardado con dueño seguía en el viejo y la
       // comprobación de foco devolvía el chat al día del que acababa de salir.
       recordarDia(otroDia);
-      arrancarConLaConfigDeNutricion(otroDia, encima);
+      // Este camino es siempre porque el cliente lo ha pedido por chat: es el agente el que
+      // deja `fecha_pedida`, no la comprobación de foco.
+      arrancarConLaConfigDeNutricion(otroDia, encima, null, 'peticion');
       return;
     }
 

@@ -870,8 +870,20 @@ const NutritionPage = () => {
     // desfase descartamos el overlay: la comida pasa a usar el objetivo de HOY (coinciden) y
     // el autoguardado deja de re-persistir el valor viejo. Se ignora en modo volcado (sus
     // objetivos viven en volcadoMeal, no en el overlay).
+    //
+    // PERO NO SE JUZGA A MITAD DE LA CARGA (17-08-2026). Al abrir un día que el asistente
+    // dejó en 3 comidas, esta pantalla arranca con las 4 del perfil: su distribución dice
+    // 47,5 para la Comida 1, el objetivo guardado dice 63,3, la diferencia pasa de la
+    // tolerancia y el overlay se tira ENTERO. Cuando llega la configuración del día ya no
+    // hay overlay que usar, así que la comida sale con el número que calcula esta pantalla
+    // (63,5) y el chat sigue diciendo el suyo (63,3): dos cifras para lo mismo, y el «faltan
+    // 9,3 g» de al lado calculado sobre la otra. Mientras la distribución no sea la de ESTE
+    // día -- misma cantidad de comidas que el objetivo guardado -- aquí no se decide nada.
     useEffect(() => {
-        if (!distribTargetsOverlay || !distribution || volcadoMeal) return;
+        if (!distribTargetsOverlay || !distribution || volcadoMeal || loading) return;
+        const enDistribucion = Object.keys(distribution.comidas || {}).length
+            + Object.keys(distribution.periworkout || {}).length;
+        if (enDistribucion !== Object.keys(distribTargetsOverlay).length) return;
         const TOL = 3; // holgura por redondeos; un cambio real de macros es >= 5 g
         const stale = Object.entries(distribTargetsOverlay).some(([k, t]) => {
             const f = distribution.comidas?.[k] || distribution.periworkout?.[k];
@@ -881,7 +893,7 @@ const NutritionPage = () => {
                    Math.abs((t.G || 0) - (f.G || 0)) > TOL;
         });
         if (stale) setDistribTargetsOverlay(null);
-    }, [distribTargetsOverlay, distribution, volcadoMeal]);
+    }, [distribTargetsOverlay, distribution, volcadoMeal, loading]);
 
     // Wrappers for user-initiated config changes - persist to profile (cross-device)
     // En cuanto elige, el día deja de estar sin marcar: lo ha dicho él (punto 4.17).

@@ -196,7 +196,22 @@ async def chatbot_configure(
     base_n = chatbot.state["num_comidas"]
     n_peri = total - base_n
     extra = f" (más {n_peri} peri-entreno)" if n_peri > 0 else ""
-    if chatbot.state.get("single_meal"):
+    # «PERFECTO, DÍA DE ENTRENAMIENTO CON 4 COMIDAS» ES LA RESPUESTA A ALGO QUE NADIE
+    # PREGUNTÓ (17-08-2026).
+    #
+    # El chat ya no se configura a mano: arranca solo con lo que el cliente tiene en
+    # Nutrición, y el front lo cuenta en su saludo («Vamos con Hoy, con lo que tienes en
+    # Nutrición: día de entreno, 4 comidas, entrenas en ayunas, intra + post»). Justo
+    # detrás, esta ruta contestaba «Perfecto, día de entrenamiento con 4 comidas»: el mismo
+    # dato dos veces y, peor, con la forma de un «perfecto» a una petición del cliente que
+    # no existe. Francisco: «se autocontesta un mensaje fantasma, es confuso».
+    #
+    # Con `saludo=False` (lo que manda el front) la apertura empieza por lo único que el
+    # cliente no sabe: por dónde va su día. Se deja el eco para quien llame a esta ruta sin
+    # haber saludado antes.
+    if not config.saludo:
+        mensaje = ""
+    elif chatbot.state.get("single_meal"):
         mensaje = f"Perfecto, día de {config.tipo_dia} en bloque único (1 comida){extra}."
     else:
         mensaje = f"Perfecto, día de {config.tipo_dia} con {base_n} comidas{extra}."
@@ -247,7 +262,9 @@ async def chatbot_configure(
     elif comidas_traidas:
         mensaje += f"\n\nSeguimos por {label}. Tu objetivo son {_frase_objetivo(objetivo)}."
     else:
-        mensaje += (f"\n\nVamos con {label}. Tu objetivo es:\n"
+        # «Empezamos», no «Vamos con»: el saludo del front ya abre con «Vamos con Hoy...» y
+        # dos «vamos con» seguidos suenan a dos personas hablando.
+        mensaje += (f"\n\nEmpezamos por {label}. Tu objetivo es:\n"
                     f"• Proteína: {_gr(objetivo['P'])} g\n"
                     f"• Hidratos: {_gr(objetivo['H'])} g\n"
                     f"• Grasa: {_gr(objetivo['G'])} g")
@@ -261,6 +278,7 @@ async def chatbot_configure(
     # pregunta si la deja o la cambia.
     mensaje += ("\n\n¿La dejamos así o le cambiamos algo?" if ya_puesto
                 else "\n\n¿Qué quieres tomar?")
+    mensaje = mensaje.lstrip("\n")   # sin el eco de la config, el texto empieza aquí
 
     await save_chatbot_session(chatbot)
     return {
@@ -510,10 +528,42 @@ async def chatbot_message_stream(
             await cola.put({"tipo": "error", "detalle": f"{type(e).__name__}"})
         await cola.put(None)
 
+    # UN TURNO LARGO NO ES UNA CONEXIÓN CAÍDA (17-08-2026).
+    #
+    # «No quiero que quites la avena, solo bájala a 30 g. Y las nueces fuera. ¿Qué tengo
+    # ahora?» -- tres cosas en un mensaje, que el prompt promete atender -- estuvo minuto y
+    # medio trabajando y acabó en «se me ha cortado la conexión y he dejado la petición a
+    # medias». No se cortó nada: la pantalla corta a los 45 segundos de SILENCIO, y entre dos
+    # herramientas el modelo puede pensar más que eso sin que aquí salga ningún evento.
+    #
+    # Así que mientras haya trabajo se manda un latido. Cambia dos cosas: la pantalla no se
+    # rinde, y el cliente ve que seguimos con lo suyo en vez de un indicador congelado.
+    LATIDO = 12
+
     async def eventos():
         tarea = asyncio.create_task(trabajar())
+        esperas = 0
+        # OJO AL ESPERAR CON LATIDO: la espera NO puede cancelar el `get` de la cola.
+        # Con `asyncio.wait_for(cola.get(), timeout)` el primer latido que caía justo cuando
+        # llegaba la respuesta se la LLEVABA por delante -- el get cancelado se traga el
+        # elemento -- y la pantalla se quedaba en «Un momento más...» con el turno terminado y
+        # el log del servidor diciendo 200 OK. Así que la espera se hace sobre una tarea que
+        # sobrevive al timeout, y el elemento no se pierde nunca.
+        pendiente = None
         while True:
-            item = await cola.get()
+            if pendiente is None:
+                pendiente = asyncio.ensure_future(cola.get())
+            listas, _ = await asyncio.wait({pendiente}, timeout=LATIDO)
+            if not listas:
+                esperas += 1
+                yield ('data: ' + _json.dumps(
+                    {"tipo": "progreso",
+                     "texto": "Sigo con lo tuyo..." if esperas < 3 else "Un momento más..."},
+                    ensure_ascii=False) + "\n\n")
+                continue
+            item = pendiente.result()
+            pendiente = None
+            esperas = 0
             if item is None:
                 break
             yield f"data: {_json.dumps(item, ensure_ascii=False, default=str)}\n\n"

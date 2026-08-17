@@ -41,6 +41,11 @@ class ChatConfigRequest(BaseModel):
     # Qué fecha se está montando: el asistente la necesita para resolver "mañana" o "el
     # jueves" contra el día que el cliente tiene abierto, no contra hoy.
     fecha: Optional[str] = None
+    # ¿Tiene que saludar la respuesta? El chat arranca solo con la configuración de
+    # Nutrición y es el front quien la cuenta ("Vamos con Hoy, con lo que tienes en
+    # Nutrición: ..."); si además la repite esta ruta, parece que el asistente se contesta
+    # a sí mismo (17-08-2026). El front manda False; por defecto se saluda.
+    saludo: bool = True
 
 class ChatMessageRequest(BaseModel):
     session_id: Optional[str] = None

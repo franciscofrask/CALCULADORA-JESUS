@@ -66,9 +66,31 @@ MAXIMOS = {
 
 
 def get_food_limits(alimento: dict, config: dict) -> Tuple[float, float]:
+    """Los límites de un alimento, y el que dice SU FICHA manda (17-08-2026).
+
+    Debajo está el cálculo por categoría, que es lo que había: reglas por familia (frutos
+    secos, aceites, carnes...) y un mínimo por defecto para el resto. El problema es que 93
+    alimentos del catálogo traen su propio campo `minimo` -- curado, alimento por alimento --
+    y no lo leía nadie. El aguacate declara 25 g y el asistente lo montaba a 15, y a 5 g en la
+    revisión del 16-08: es el «relleno absurdo» que reportó Jesús.
+
+    Así que se calcula como siempre y luego se respeta lo declarado, sin pasarse del máximo:
+    un mínimo mayor que el máximo no es un límite, es un alimento que no cabe.
+    """
+    minimo_g, maximo_g = _limites_por_categoria(alimento, config)
+    try:
+        declarado = float(alimento.get("minimo") or 0)
+    except (TypeError, ValueError):
+        declarado = 0
+    if declarado > 0:
+        minimo_g = min(max(minimo_g, declarado), maximo_g)
+    return (minimo_g, maximo_g)
+
+
+def _limites_por_categoria(alimento: dict, config: dict) -> Tuple[float, float]:
     """
     Obtiene los límites mínimo y máximo para un alimento.
-    
+
     Returns:
         (minimo_g, maximo_g)
     """

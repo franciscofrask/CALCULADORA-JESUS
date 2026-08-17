@@ -32,3 +32,13 @@ export const numMedio = (valor) => num(valor, 0.5);
 
 /** Enteros (los totales del día): sin decimales y sin coma que poner. */
 export const num0 = (valor) => num(valor, 1);
+
+/**
+ * Los mismos redondeos, pero en NÚMERO, para que las cuentas cuadren con lo escrito.
+ *
+ * «54/63,5 g · faltan 9,3 g» (17-08-2026): el objetivo se escribe al medio gramo y el
+ * restante salía del valor exacto, así que la resta que hace el cliente no le daba. Quien
+ * escriba una diferencia al lado de dos cifras redondeadas tiene que restar ESAS.
+ */
+export const alMedio = (valor) => Math.round((Number(valor) || 0) / 0.5) * 0.5;
+export const alDecima = (valor) => Math.round((Number(valor) || 0) / 0.1) * 0.1;

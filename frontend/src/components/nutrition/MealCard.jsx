@@ -2,7 +2,7 @@ import React from 'react';
 import { StatusDot } from './DaySummary';
 import { macrosDeVista } from './ModoMacros';
 import { margenDe, seExcede, textoExceso } from '../../lib/exceso';
-import { num1, numMedio } from '../../lib/numeros';
+import { num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
 import {
@@ -149,7 +149,13 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
     // en el color de siempre, porque no es un fallo que haya que corregir.
     const macroState = (servedVal, tgtVal, key) => {
         if (!(servedVal > 0)) return { label: null, cls: '', over: false };
-        const r = tgtVal - servedVal;
+        // LO QUE FALTA SE CUENTA CONTRA EL OBJETIVO QUE SE ESTÁ VIENDO (17-08-2026).
+        //
+        // La línea decía «54/63,5 g · faltan 9,3 g», y 54 + 9,3 son 63,3, no 63,5. El
+        // objetivo se enseña redondeado al medio gramo (como en Calma) y el restante salía
+        // del valor exacto: dos criterios en el mismo renglón, y el cliente haciendo una
+        // resta que no le da. Se cuenta contra lo que lee; el motor sigue con el exacto.
+        const r = alMedio(tgtVal) - alDecima(servedVal);
         // DENTRO DEL MARGEN, CUADRADO (Francisco, 17-08). Habia un escalon intermedio,
         // «Válido» en ambar, para lo que caia dentro de los ±4 sin estar clavado. Dos
         // palabras y dos colores para lo que el metodo da por bueno igual: si esta dentro,

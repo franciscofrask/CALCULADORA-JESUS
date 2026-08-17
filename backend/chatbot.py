@@ -2017,13 +2017,28 @@ class NutritionChatbot:
             config = get_food_config(alimento)
             peso_unidad = float(config.get("peso_unidad") or 0)
             if not config.get("por_unidad") or peso_unidad <= 0:
-                # Este alimento NO se mide por unidades (las claras van por gramos,
-                # `unidades=False` en la ficha). Antes se inventaba que una unidad eran
-                # 100 g; ahora se dice, y quien convierta que lo pida en gramos.
-                return {"ok": False, "nombre": alimento.get("nombre", name),
-                        "no_va_por_unidades": True,
-                        "racion": float(alimento.get("racion") or 100)}
-            cantidad_g = cantidad * peso_unidad
+                # MEDIA PIEZA SÍ SE PUEDE RESOLVER (17-08-2026).
+                #
+                # A «ponme 2 huevos y medio aguacate» contestó: «el aguacate aquí va por
+                # gramos, no por "medio aguacate"». Eso venía de aquí: el aguacate no tiene
+                # `unidades` en su ficha, así que se devolvía el error y el modelo lo traducía
+                # literal -- justo la frase que su propio prompt prohíbe («decirle que el
+                # método va por gramos cuando pide medio aguacate es no atenderle»).
+                #
+                # Una FRACCIÓN de pieza se resuelve con la ración de referencia de la ficha, y
+                # se le cuenta en gramos. Solo por debajo de una pieza: ahí el error de escala
+                # es pequeño y el cliente está hablando de la pieza física. De una en adelante
+                # se sigue avisando, que es el fallo de «3 claras = 300 g» que ya se arregló.
+                racion = float(alimento.get("racion") or 100)
+                if 0 < cantidad < 1 and racion > 0:
+                    cantidad_g = cantidad * racion
+                    alimento = dict(alimento, _de_fraccion_de_pieza=round(cantidad_g))
+                else:
+                    return {"ok": False, "nombre": alimento.get("nombre", name),
+                            "no_va_por_unidades": True,
+                            "racion": racion}
+            else:
+                cantidad_g = cantidad * peso_unidad
         else:
             cantidad_g = cantidad
         # Incremento ("agrega un huevo"): sumar lo pedido a lo que ya hay de ese alimento
@@ -2041,13 +2056,20 @@ class NutritionChatbot:
         else:
             self._ensure_meal(key)
             display = self._append_food(key, alimento, cantidad_g, macros)
-        return {"ok": True, "nombre": alimento.get("nombre"),
-                "cantidad_display": display, "macros": macros,
-                "cantidad_g": cantidad_g,
-                "parcial": alimento.get("_match_parcial"),
-                # Errata corregida por parecido: quien llama lo cuenta al usuario.
-                "corregido_a": alimento.get("_corregido_a"),
-                "max_razonable": self._max_auto_g(alimento)}
+        salida = {"ok": True, "nombre": alimento.get("nombre"),
+                  "cantidad_display": display, "macros": macros,
+                  "cantidad_g": cantidad_g,
+                  "parcial": alimento.get("_match_parcial"),
+                  # Errata corregida por parecido: quien llama lo cuenta al usuario.
+                  "corregido_a": alimento.get("_corregido_a"),
+                  "max_razonable": self._max_auto_g(alimento)}
+        # Media pieza de algo que va por gramos: se ha puesto, y se dice en gramos.
+        if alimento.get("_de_fraccion_de_pieza"):
+            salida["convertido_de_pieza"] = (
+                f"lo ha pedido en piezas y esto va por gramos, así que va "
+                f"{alimento['_de_fraccion_de_pieza']} g. Cuéntaselo así, en gramos y sin "
+                f"hablarle de unidades ni del catálogo.")
+        return salida
 
     def _max_auto_g(self, alimento: dict) -> float:
         """Tope de gramos con sentido humano para el dimensionado AUTOMÁTICO de un
@@ -2511,6 +2533,13 @@ class NutritionChatbot:
             "cantidad_g": cantidad_g,
             "cantidad_display": display,
             "macros": macros,
+            # EL ID, ARRIBA Y NO SOLO DENTRO DE LA FICHA (17-08-2026). Todo lo que lee el
+            # estado busca `alimento_id` -- `ver_estado`, el volcado al plan, el atajo que
+            # completa la comida -- y aquí solo iba dentro de `alimento`, así que salía None
+            # y quien lo leyera se quedaba sin saber QUÉ alimento es. Se vio al decir «sí» a
+            # «¿te la completo?»: la comida tenía pollo, arroz y aguacate, los ids llegaron
+            # vacíos y compuso un relleno de jamón y pan en vez de completar lo suyo.
+            "alimento_id": alimento.get("id"),
             "alimento": alimento,
         })
         mm = self.state["comidas_completadas"][key]["macros"]
