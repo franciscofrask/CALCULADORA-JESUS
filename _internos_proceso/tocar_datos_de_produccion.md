@@ -35,7 +35,7 @@ seguridad.
 
 ```bash
 cd backend
-MONGO_URL="mongodb://localhost:27018" DB_NAME=jg12_restored \
+MONGO_URL="mongodb://localhost:27018" DB_NAME=jg12_prod \
   ./venv/Scripts/python.exe _lo_que_sea.py
 ```
 
@@ -43,7 +43,7 @@ Comprobación de que estás donde crees (producción tiene 188 clientes y 3.211 
 en Atlas tiene otros números):
 
 ```bash
-MONGO_URL="mongodb://localhost:27018" DB_NAME=jg12_restored \
+MONGO_URL="mongodb://localhost:27018" DB_NAME=jg12_prod \
   ./venv/Scripts/python.exe -c "
 import asyncio, os
 from motor.motor_asyncio import AsyncIOMotorClient

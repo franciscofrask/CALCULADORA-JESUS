@@ -51,7 +51,7 @@ from pymongo.errors import BulkWriteError
 
 # Produccion, por el tunel SSH. Ojo: el 27018, no el 27017 (el 27017 es el Mongo local).
 PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_restored"
+BASE_PROD = "jg12_prod"
 CLAVE = os.path.join(AQUI, "serviceAccountKey.json")
 
 # Lo insertado se deja anotado en disco. Los documentos salen con el MISMO formato que los

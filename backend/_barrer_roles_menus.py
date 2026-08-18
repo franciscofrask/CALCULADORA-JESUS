@@ -13,7 +13,7 @@ Esto barre los menus enteros y saca la lista, ordenada por lo que mas se repite.
 nada: la decision de que rol lleva cada alimento es de Jesus.
 
     ./venv/Scripts/python.exe _barrer_roles_menus.py
-    ./venv/Scripts/python.exe _barrer_roles_menus.py --mongo mongodb://127.0.0.1:27018 --db jg12_restored
+    ./venv/Scripts/python.exe _barrer_roles_menus.py --mongo mongodb://127.0.0.1:27018 --db jg12_prod
 """
 import argparse
 import asyncio

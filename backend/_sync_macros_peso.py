@@ -9,7 +9,7 @@ Calma (Firestore) sigue vivo: Jesus le sigue tocando los macros a la gente alli 
 se han quedado ajustes fuera. `_delta_calma.py` los conto; este script los trae.
 
     Fuente:   Firestore del proyecto jesusgallegopt, `usuarios/{email}`
-    Destino:  Mongo de produccion (jg12_restored) por el tunel del 27018
+    Destino:  Mongo de produccion (jg12_prod) por el tunel del 27018
 
 QUE trae, y donde lo deja:
 
@@ -67,7 +67,7 @@ sys.path.insert(0, BACKEND)
 sys.stdout.reconfigure(encoding="utf-8")
 
 PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_restored"
+BASE_PROD = "jg12_prod"
 
 ESCRIBIR = "--escribir" in sys.argv
 SOLO_VIVOS = "--vivos" in sys.argv

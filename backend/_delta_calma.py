@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_restored"
+BASE_PROD = "jg12_prod"
 CLAVE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "serviceAccountKey.json")
 
 SOLO_VIVOS = "--todos" not in sys.argv

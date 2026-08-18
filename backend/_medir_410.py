@@ -38,7 +38,7 @@ def de_una_persona(ap):
 
 async def main():
     cli = AsyncIOMotorClient("mongodb://127.0.0.1:27018", serverSelectionTimeoutMS=15000)
-    db = cli["jg12_restored"]
+    db = cli["jg12_prod"]
 
     perfiles = await db.client_profiles.find(
         {"status": "activo"},

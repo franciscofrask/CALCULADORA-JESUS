@@ -17,7 +17,7 @@ Uso:
     python _cuadrar_macros_perfil.py --hazlo    # lo escribe
 
 Contra producción hace falta el túnel (ver _internos_proceso/tocar_datos_de_produccion.md):
-    MONGO_URL="mongodb://localhost:27018" DB_NAME=jg12_restored python _cuadrar_macros_perfil.py
+    MONGO_URL="mongodb://localhost:27018" DB_NAME=jg12_prod python _cuadrar_macros_perfil.py
 """
 import asyncio
 import os

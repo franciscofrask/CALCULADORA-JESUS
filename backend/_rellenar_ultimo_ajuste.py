@@ -18,7 +18,7 @@ Uso:
     venv/Scripts/python.exe _rellenar_ultimo_ajuste.py --escribir       # lo deja escrito
 
 Contra produccion, por el tunel:
-    MONGO_URL="mongodb://localhost:27018" DB_NAME=jg12_restored \
+    MONGO_URL="mongodb://localhost:27018" DB_NAME=jg12_prod \
       venv/Scripts/python.exe _rellenar_ultimo_ajuste.py --escribir
 """
 import asyncio

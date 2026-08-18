@@ -10,7 +10,7 @@ que importa no es que cambien las cantidades -- van a cambiar -- sino:
     - que el error contra el objetivo baje
     - que las verduras dejen de salir en cantidades de plato principal
 
-    ./venv/Scripts/python.exe _medir_guarnicion.py --mongo mongodb://127.0.0.1:27018 --db jg12_restored
+    ./venv/Scripts/python.exe _medir_guarnicion.py --mongo mongodb://127.0.0.1:27018 --db jg12_prod
 """
 import argparse
 import asyncio

@@ -28,7 +28,7 @@ CASOS = [
 
 ENTORNOS = [
     ("DEV  (Atlas)", os.environ.get("MONGO_DEV") or "", "jg12_restored"),
-    ("PROD (tunel 27018)", "mongodb://127.0.0.1:27018", "jg12_restored"),
+    ("PROD (tunel 27018)", "mongodb://127.0.0.1:27018", "jg12_prod"),
 ]
 
 

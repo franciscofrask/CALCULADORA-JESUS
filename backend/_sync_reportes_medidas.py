@@ -57,7 +57,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 from pymongo import MongoClient
 
 PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_restored"
+BASE_PROD = "jg12_prod"
 BASE_CALMA = "forms"
 COL_CALMA = "reportesMensualesCALMA"
 

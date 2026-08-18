@@ -40,7 +40,7 @@ from firebase_admin import auth, credentials, firestore
 from motor.motor_asyncio import AsyncIOMotorClient
 
 PROD = "mongodb://127.0.0.1:27018"
-BASE = "jg12_restored"
+BASE = "jg12_prod"
 ESCRIBIR = "--escribir" in sys.argv
 HOY = datetime.now(timezone.utc)
 

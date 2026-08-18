@@ -45,7 +45,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 PROD = "mongodb://127.0.0.1:27018"
-BASE = "jg12_restored"
+BASE = "jg12_prod"
 ESCRIBIR = "--escribir" in sys.argv
 
 

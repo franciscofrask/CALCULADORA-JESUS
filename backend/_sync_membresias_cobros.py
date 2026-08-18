@@ -101,7 +101,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_restored"
+BASE_PROD = "jg12_prod"
 
 ESCRIBIR = "--escribir" in sys.argv
 SOLO_CICLOS = "--solo-ciclos" in sys.argv
