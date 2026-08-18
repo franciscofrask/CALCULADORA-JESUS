@@ -1061,7 +1061,31 @@ const QuestionnairePage = () => {
             : [{ type: 'fotos_medidas', title: 'Te quedan dos cosas' },
                { type: 'oferta_ajuste', title: 'Una cosa más' }]),
     ];
-    const preguntasDeAjuste = [...STEPS_AJUSTE, ...elCierre];
+    // LO QUE LE FALTA DE LA BASE, PREGUNTADO ANTES DE AJUSTAR NADA.
+    //
+    // El ajuste lee del perfil los cuatro datos de la tabla (peso, sexo, grasa y objetivo) y
+    // no los pregunta, porque se dan en el alta. Pero hay 124 clientes activos a los que les
+    // falta alguno -- 104 sin objetivo, 63 sin grasa, 8 sin peso, casi todos de la migración
+    // de Calma -- y esos contestaban el cuestionario entero para estrellarse en el botón de
+    // calcular con «Faltan tus datos de partida. Completa el alta primero». El alta no se
+    // puede repetir (contesta 409), así que era un callejón sin salida: no había forma de
+    // arreglarlo desde la app.
+    //
+    // Ahora, si falta alguno, se le pregunta AQUÍ, delante de todo, y se guarda con la misma
+    // puerta que usa «nos faltan cosas tuyas»: rellena huecos y no pisa nada.
+    const faltaLaBase = ['goal', 'weight', 'body_fat'].filter(
+        k => profile && (profile[k] === undefined || profile[k] === null || profile[k] === ''));
+    const laBaseQueFalta = useMemo(() => {
+        if (!faltaLaBase.length) return [];
+        const pantallas = [];
+        if (faltaLaBase.includes('goal')) pantallas.push(q('goal'), q('_confirm'));
+        if (faltaLaBase.includes('weight')) pantallas.push(q('weight'));
+        if (faltaLaBase.includes('body_fat')) pantallas.push(porTipo('bf'));
+        return pantallas;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [faltaLaBase.join(',')]);
+
+    const preguntasDeAjuste = [...laBaseQueFalta, ...STEPS_AJUSTE, ...elCierre];
 
     // EL BÁSICO PARA EL QUE YA ESTABA (?completar=1). Solo lo que falte, con la portada que
     // dice por qué se le pregunta y terminando en sus macros nuevos, que es lo que gana.
@@ -1120,8 +1144,10 @@ const QuestionnairePage = () => {
 
     // La ficha se pide al llegar a su pantalla, no antes: hasta ese momento el cliente puede
     // haber cambiado su altura o sus medidas, y la ficha saldria con datos viejos.
+    // Y ANTES DE PEDIRLE FOTOS Y MEDIDAS, TAMBIÉN: de ahí sale cuántas fotos tiene subidas,
+    // que es lo que decide si esa pantalla le sobra o le falta media.
     useEffect(() => {
-        if (flow[idx]?.type !== 'ficha' || ficha) return;
+        if (!['ficha', 'fotos_medidas'].includes(flow[idx]?.type) || ficha) return;
         api.get('/clients/mi-ficha')
             .then(r => setFicha(r.data))
             .catch(() => setFicha({ composicion: null, referencia: null }));
@@ -1528,12 +1554,34 @@ const QuestionnairePage = () => {
     // hay que saltar, y esa comprobacion ocurre justo despues de contestar, cuando el estado de
     // React todavia tiene el valor anterior. Con `answers` a secas, decir "si, sigo una dieta"
     // se saltaba las cuatro preguntas de la dieta, que es justo lo que acababa de habilitar.
-    const visible = (s) => !s.cond || s.cond(answersRef.current);
+    // Lo que YA TIENE, para no pedírselo otra vez. Las medidas se marcan en el perfil y las
+    // fotos se cuentan en su ficha; sin mirar las dos, a quien ya las subió se le seguía
+    // diciendo «sube tus fotos y toma tus medidas», que es pedirle lo que acaba de dar.
+    const yaTieneMedidas = !!(profile?.punto_de_partida_hecho || profile?.medidas_inicio);
+    const yaTieneFotos = (ficha?.fotos_subidas || 0) > 0;
+
+    const visible = (s) => {
+        // Y si tiene las dos, la pantalla entera sobra: no hay nada que pedirle.
+        if (s.type === 'fotos_medidas' && yaTieneMedidas && yaTieneFotos) return false;
+        return !s.cond || s.cond(answersRef.current);
+    };
     const goNext = () => setIdx(i => {
         let j = i + 1;
         while (j < flow.length - 1 && !visible(flow[j])) j++;
         return Math.min(j, flow.length - 1);
     });
+
+    // SI EL PASO EN EL QUE ESTÁ DEJA DE TENER SENTIDO, SE PASA SOLO.
+    //
+    // `visible` se mira al avanzar, así que un paso que se vuelve innecesario CON EL CLIENTE
+    // YA DENTRO se queda en pantalla. Pasa con las fotos y las medidas: cuántas fotos tiene
+    // se pide al llegar, y hasta que llega la respuesta la pantalla ya está pintada, así que
+    // a quien las tenía todas se le seguía pidiendo lo que ya había dado.
+    useEffect(() => {
+        if (idx >= flow.length - 1) return;
+        if (!visible(flow[idx])) goNext();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [idx, ficha, profile]);
     const cancelarAvancePendiente = () => {
         if (avancePendienteRef.current) {
             clearTimeout(avancePendienteRef.current);
@@ -1612,9 +1660,15 @@ const QuestionnairePage = () => {
             // Y TAMBIÉN CUANDO VIENE A COMPLETAR: ese ya tiene el cuestionario dado por
             // hecho, así que sin esto su pasada no llegaba a guardarse (el servidor la
             // rechazaba con un 409) y se quedaba mirando el botón de calcular.
-            if (!profile?.questionnaire_completed || elBasicoQueFalta?.length) {
+            //
+            // Y cuando le falta algo de la base (peso, grasa u objetivo): esas respuestas
+            // TIENEN que estar escritas antes de pedir el ajuste, porque el ajuste las lee
+            // del perfil. Sin esto contestaba las preguntas nuevas y el servidor seguía
+            // diciendo que le faltaban.
+            const rellenandoHuecos = !!elBasicoQueFalta?.length || !!faltaLaBase.length;
+            if (!profile?.questionnaire_completed || rellenandoHuecos) {
                 await api.post('/clients/questionnaire', {
-                    completar: !!elBasicoQueFalta?.length,
+                    completar: !!profile?.questionnaire_completed && rellenandoHuecos,
                     name: answers.name,
                     email: answers.email,
                     phone: answers.phone,
@@ -2322,23 +2376,29 @@ const QuestionnairePage = () => {
         // en «Ya tienes tus macros», así que a quien las acaba de apuntar decirle «te quedan
         // dos cosas» y pedirle las medidas otra vez es tratarle como si no hubiera hecho
         // nada. Si ya están, lo que le queda es una: las fotos.
-        const yaTieneMedidas = !!(profile?.punto_de_partida_hecho || profile?.medidas_inicio);
-        // Y EL DEL QUE SÍ LO LLEVA (pantalla 25, el cierre del completo). Ahí la razón no es
-        // que él vea su evolución: es que su entrenador no puede trabajar sin esto. Se le
-        // dice tal cual, porque es la verdad y porque es lo único que le mueve a hacerlo.
+        // SE CUENTA LO QUE DE VERDAD LE FALTA, mirando las dos cosas. Antes solo miraba las
+        // medidas, así que a quien ya había subido sus fotos se le seguía diciendo «sube tus
+        // fotos y toma tus medidas»: pedirle lo que acaba de dar. Si ya tiene las dos, esta
+        // pantalla ni sale (ver `visible`).
+        //
+        // Y EL DEL QUE SÍ LLEVA ENTRENADOR (pantalla 25, el cierre del completo). Ahí la
+        // razón no es que él vea su evolución: es que su entrenador no puede trabajar sin
+        // esto. Se le dice tal cual, porque es la verdad y porque es lo que le mueve.
+        const leFalta = [!yaTieneFotos && 'tus fotos', !yaTieneMedidas && 'tus medidas']
+            .filter(Boolean);
         body = (
             <div>
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
                     {step.obligatorio
                         ? 'Tus fotos y tus medidas'
-                        : yaTieneMedidas ? 'Te queda una cosa' : 'Te quedan dos cosas'}
+                        : leFalta.length === 2 ? 'Te quedan dos cosas' : 'Te queda una cosa'}
                 </h2>
                 <p className="text-foreground/70 mb-6">
                     {step.obligatorio
                         ? 'Es lo último, y hace falta para arrancar: sin fotos y sin medidas tu entrenador no puede ponerte los macros buenos ni montarte la rutina. Si te puede medir alguien, y siempre el mismo, mejor.'
-                        : yaTieneMedidas
-                            ? 'Sube tus fotos. Con ellas y las medidas que acabas de apuntar ya puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'
-                            : 'Sube tus fotos y toma tus medidas. Sin eso no puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'}
+                        : leFalta.length === 2
+                            ? 'Sube tus fotos y toma tus medidas. Sin eso no puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'
+                            : `Te faltan ${leFalta[0] || 'un par de cosas'}. Con eso ya puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.`}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                     <Button data-testid="ir-a-fotos-medidas" disabled={loading}
@@ -2348,7 +2408,11 @@ const QuestionnairePage = () => {
                         className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
                         {loading ? 'Guardando...' : 'Vamos'} <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
-                    <Button variant="outline" onClick={goNext} disabled={loading} className="px-8 py-6 text-lg">
+                    {/* «Ahora no» NUNCA deja clavado: si esta es la última pantalla del
+                        recorrido, `goNext` se queda donde está -- se topa con el final de la
+                        lista -- y la única salida era el botón de atrás del navegador. */}
+                    <Button variant="outline" disabled={loading} className="px-8 py-6 text-lg"
+                        onClick={() => (esUltimo ? navigate('/welcome') : goNext())}>
                         Ahora no
                     </Button>
                 </div>

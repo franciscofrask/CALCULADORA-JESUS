@@ -837,8 +837,17 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     peso, sexo = profile.get("weight"), (profile.get("sex") or "hombre")
     bf, objetivo = profile.get("body_fat"), profile.get("goal")
     if not all([peso, bf is not None, objetivo]):
-        raise HTTPException(status_code=400,
-                            detail="Faltan tus datos de partida (peso, grasa y objetivo). Completa el alta primero.")
+        # DICIENDO CUAL FALTA, y sin mandarle a repetir el alta. El texto decia «Completa el
+        # alta primero» y el alta no se puede repetir (contesta 409), asi que era un callejon
+        # sin salida: 124 de los 187 clientes activos podian llegar aqui. Desde el 18-08 el
+        # cuestionario se los pregunta antes de llegar a este punto, pero si algun camino
+        # vuelve a traer a alguien, que al menos sepa que le falta.
+        cuales = ", ".join(n for n, v in (("tu peso", peso), ("tu porcentaje de grasa", bf),
+                                          ("tu objetivo", objetivo)) if not v and v != 0)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nos falta {cuales} para poder calcular. Vuelve a entrar al cuestionario "
+                   "y te lo pedimos.")
 
     ajustes = data.model_dump()
 
