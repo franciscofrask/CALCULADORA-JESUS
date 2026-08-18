@@ -758,7 +758,12 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
     ctx = macro_agent.construir_contexto(
         macros_actuales=macros_actuales, sexo=sexo, fase=fase, evolucion_peso=evolucion,
         reporte=reporte, historial_ajustes=historial,
-        biotipo=(profile.get("nivel1") or {}).get("biotype"), porcentaje_graso=profile.get("body_fat"),
+        # EL BIOTIPO, DE DONDE SE GUARDA (18-08). Se leía solo de `nivel1`, que es el
+        # cuestionario largo y lo han hecho 3 clientes. El alta y el ajuste lo escriben en
+        # el campo de arriba, así que el agente proponía ajustes sin biotipo a gente que sí
+        # lo había contestado. Se mira primero el del perfil y `nivel1` queda de reserva.
+        biotipo=profile.get("biotype") or (profile.get("nivel1") or {}).get("biotype"),
+        porcentaje_graso=profile.get("body_fat"),
         casos_gemelos=macro_casos.formatear_gemelos(gemelos),
         perfil=macro_indices.formatear_para_prompt(perfil_ix, reglas_perfil),
         # P9 del cuestionario: con cuanta mano se le puede ajustar (hambre o saturacion).

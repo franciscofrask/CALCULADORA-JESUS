@@ -1,0 +1,581 @@
+
+12EN12 · El cuestionario inicial
+
+12EN12 · Para Francisco · 18 de agosto de 2026
+
+[H1] El cuestionario inicial
+
+Dos cuestionarios, no dos partes: uno básico que hacen todos y uno completo
+que es el básico más un bloque, solo para los planes con entrenador.
+
+Todas las pantallas, con su texto exacto, sus respuestas y el orden. Esto es lo que
+hay que montar.
+
+ - 1 · El flujo
+ - 2 · El básico
+
+ - 3 · El cierre
+ - 4 · El completo
+
+ - 5 · Lo que se queda fuera
+ - 6 · Lo que falta decidir
+
+01
+
+[H2] El flujo
+
+ -
+ -
+
+ -
+
+ -
+ -
+
+ -
+
+EL BÁSICO · 24 pantallas · lo hacen todos
+Tus macrosautomáticos, según su perfil
+Su ficha y su primer día de comidas, ya montado
+menú autoajustable con sus preferencias
+Calculadora · Membresía · Mantenimiento
+no llevan entrenador
+Gold · Premiummacros de su entrenador
+Le quedan dos cosas
+subir sus fotos y tomarse las medidas
+La oferta: 87 €
+ajuste a medida + programa de suplementación
+EL COMPLETO · 21 pantallas
++ fotos y medidas, obligatorio para arrancar
+
+se separa por plansi la compra, hace el completo como un Gold
+El alta entera. El básico es el mismo para todos y termina con sus macros puestos; lo que cambia después es lo que se le pide y lo que se le ofrece.
+
+La regla que ordena todoEl cuestionario no se parte por momento, se parte por plan. Todo el mundo contesta el básico y sale con sus macros puestos y su primer día de comidas montado. A partir de ahí, el que lleva entrenador contesta el bloque completo; el que no, sube sus fotos y sus medidas y recibe la oferta del ajuste a medida.
+El que compra el ajuste de 87 € hace el completo, exactamente igual que un Gold.
+
+Tres cosas de montaje que valen para las dosUna pregunta por pantalla, y una pantalla de título al empezar cada bloque, con su línea de qué viene ahora. Van marcadas en negro a lo largo del documento.
+Barra de progreso arriba, sin números. Que se vea que aquello avanza, pero sin decirle cuántas le quedan.
+Se guarda pregunta a pregunta. Si cierra por la doce, vuelve a la doce.
+
+Y por qué el básico es largoPorque a los que no llevan plan personalizado no se les vuelve a preguntar nunca más. Es la única vez, así que aquí entra todo lo que sirve para conocerles.
+Y las de preferencias del final no son de trámite: son las que permiten dejarle un menú autoajustable puesto desde el primer día, en vez de que entre a una app vacía.
+
+02
+
+[H2] El básico · lo hacen todos
+
+24 pantallas en hombre, 22 en mujer (la mujer no lleva biotipo). Una pregunta por pantalla, sin títulos de sección: la barra de progreso se encarga. Lo marcado en amarillo son opciones que he escrito yo y hay que confirmar; el resto sale de tus formularios.
+
+1
+
+[H4] Antes de empezarcinco campos en una pantalla
+Nombre completo [ texto ]
+Hombre o mujer › Hombre · Mujer
+Fecha de nacimiento — La verdadera, no me engañes. [ fecha ]
+Teléfono — Un whatsapp de contacto. [ teléfono con prefijo ]
+Email — Uno que revises a diario. Si pagaste con otro distinto, no pasa nada: seguirás entrando con el de siempre, pero te escribiremos a este, salvo que nos digas lo contrario. [ email ]
+El nombre y el sexo solo se piden si no vienen del pago. La fecha de nacimiento, el teléfono y el email se piden siempre.
+
+2
+
+[H4] Empecemosportada
+Unas preguntas y tienes tus primeros macros.
+Botón: Al lío
+
+3
+
+[H4] Lo más importante de todo: ¿Cuál es tu objetivo?
+Una de dos: o ganar masa muscular o perder grasa. Las dos cosas a la vez, NO. Piensa, prioriza y elige, por ese orden.
+
+ - Quiero ganar Masa Muscular (VOLUMEN)
+ - Quiero perder Grasa (DEFINICIÓN)
+
+4
+
+[H4] ¿Estás seguro?
+Si eligió VOLUMENMira bien, que luego no quiero que me digas que tú en realidad lo que querías era definir y perder grasa.
+› Sí, lo tengo claro, quiero ganar Masa Muscular (VOLUMEN)
+› No, me equivoqué, en realidad quiero perder Grasa (DEFINICIÓN)
+
+Si eligió DEFINICIÓNSi confirmas que sí, estás asumiendo que a partir de este momento lo de ganar masa muscular pasa a un segundo plano y la prioridad ahora será perder grasa, tratando de mantener el músculo que ya hay.
+› Sí, lo tengo claro, quiero que nos centremos en perder Grasa (DEFINICIÓN)
+› No, me lo he pensado mejor y ahora prefiero centrarme en ganar Masa Muscular (VOLUMEN) para definir después
+
+5
+
+[H4] ¿Cuánto tiempo llevas intentando conseguir este objetivo?
+
+ - Empiezo ahora
+ - Menos de 6 meses
+ - Entre 6 meses y 2 años
+ - Más de 2 años
+ - Llevo toda la vida con esto
+
+6
+
+[H4] ¿Cuánto pesas?
+Pésate siempre en las mismas condiciones: en ayunas, sin ropa y después de ir al baño.
+[ número · kg ]
+
+7
+
+[H4] ¿Cuánto mides?
+Tu altura, en cm.
+[ número · cm ]
+
+8
+
+[H4] ¿Cuál dirías que es tu porcentaje de grasa actual?fotos
+Pasa las fotos y quédate en el punto que más se parezca a cómo te ves ahora. Sin apretar ni meter tripa y con buena luz. (Procura que sean siempre en el mismo sitio.)
+(Frente y espaldas, que coincidan, lógicamente. Si dudas entre dos, tira para arriba.)
+[ carrusel ] · Sube la foto y arrastra las imágenes o usa las flechas hasta situarla entre dos porcentajes.
+Hombre · 22 valoresMás del 50% · 48 · 46 · 44 · 42 · 40 · 38 · 36 · 34 · 32 · 30 · 28 · 26 · 24 · 22 · 20 · 18 · 16 · 14 · 12 · 10 · 8%
+
+Mujer · 6 valoresMás del 45% · 40 · 35 · 30 · 25 · 20%
+
+Si su plan es personalizado: «Esto te lo damos nosotros, no te comas mucho la cabeza, es solo para arrancar. Tu entrenador lo revisará con tus fotos.»
+Si no lo es: «Si tu plan no lo incluye, te toca repetir este ejercicio cada 12 semanas máximo.»
+
+9
+
+[H4] ¿Cuál fue tu máximo peso alcanzado y cuándo?
+Me refiero a cuándo estuviste en tu peor forma física.
+Peso [ número · kg ] Año [ número ]
+Cuéntame lo que quieras de esa época [ texto, opcional ]
+Dos campos, no un texto libre. Este es el techo, y lo usas en todos tus análisis: si viene como «unos 95 hace tres años» no se puede calcular nada con él.
+
+10
+
+[H4] ¿Has estado muy en forma alguna vez? Si es que sí, dime cuándo y tu peso en aquel momento.
+Peso [ número · kg ] Año [ número ]
+Cuéntame lo que quieras [ texto, opcional ]
+Sube la foto de tu mejor forma [ imagen, opcional ]
+La foto de su mejor forma es la que luego va a la izquierda en su análisis, como referencia de hasta dónde ha llegado ya.
+
+11
+
+[H4] ¿Cuál es el peso más bajo al que has llegado siendo adulto, y cuándo?
+No hablo de tu mejor forma, sino de lo más abajo que has estado, aunque no te vieras bien.
+Peso [ número · kg ] Año [ número ]
+Cuéntame lo que quieras de esa época [ texto, opcional ]
+Su peso más bajo no es lo mismo que su mejor forma: se puede haber quedado en 68 kg estando desmejorado y estar en su mejor forma con 74. Con esta y las dos de arriba tienes su recorrido de peso entero, y de todos, no solo de los Gold.
+
+12
+
+[H4] ¿A qué te dedicas y cuánto te mueves en tu día a día?una pantalla, dos campos
+Ir al gimnasio 1 hora 4-5 veces a la semana no te convierte en una persona activa, OJO. Piensa en lo mucho o lo poco que te mueves en tu día a día.
+
+ - Muy sedentario: Paso casi todo el día sentado, apenas me muevo.
+ - Ligeramente activo: Mi trabajo es mayormente sentado, pero intento moverme un poco (doy paseos, subo escaleras en vez de usar el ascensor, evito usar el coche, etc.).
+ - Moderadamente activo: Me mantengo en movimiento durante gran parte del día, aunque tampoco hago esfuerzos físicos importantes.
+ - Muy activo: Mi día a día es muy demandante a nivel físico, no paro.
+Arriba, antes de las opciones: ¿A qué te dedicas? [ texto ]
+Las dos juntas. Si van en pantallas seguidas, le preguntas su trabajo y acto seguido le pides que se clasifique en lo mismo — y suena a que no le has escuchado.
+
+13
+
+[H4] ¿Qué experiencia tienes entrenando fuerza en el gimnasio?
+Me da igual el grado de desarrollo muscular que tengas en este momento, me interesa saber si sabes entrenar y cuánta experiencia tienes.
+
+ - Ninguna, empiezo ahora o hace mucho que no entreno. Parto de cero.
+ - Llevo menos de 1 año entrenando con regularidad (principiante).
+ - Llevo más de un año entrenando, aunque no siempre me lo he tomado en serio (intermedio).
+ - Llevo años entrenando de forma seria (avanzado).
+
+14
+
+[H4] ¿Eres de buen comer?
+
+ - Mucho
+ - Lo normal
+ - Poco
+
+15
+
+[H4] Cuando te pasas comiendo, ¿engordas?
+Piensa en vacaciones, Navidades o épocas en las que comes de más.
+
+ - Enseguida
+ - Lo normal
+ - Casi no
+
+16
+
+[H4] ¿Te cuesta definir?
+
+ - Mucho
+ - Lo normal
+ - Nada
+
+17
+
+[H4] Los siete biotipos, explicadossolo hombres
+Cada uno con su foto y su descripción.
+
+18
+
+[H4] Indica cuál de los 7 biotipos corporales es el tuyosolo hombres
+Si no te identificas claramente con ninguno, elige el que más se acerque a ti.
+
+ - Ectomorfo (el delgado)
+ - Ecto-meso (el «fibrado»)
+ - Ecto-endo (el «gordi-flaco»)
+ - Mesomorfo (el fuerte)
+ - Meso-endo (el «gordi-fuerte»)
+ - Endo-meso (el grande)
+ - Endomorfo (el gordo)
+A las mujeres no se les enseña este bloque. Las siete fotos son de hombre y en el quiz de ELM tampoco se les preguntaba nunca.
+
+19
+
+[H4] Indica un día tipoel lector
+Para que sepamos de dónde partes más o menos.
+Con el lector: Escribirla · Un día mío · Una foto
+
+20
+
+[H4] ¿Has hecho dietas antes? ¿Qué tal te fue?
+Cuáles, cuánto duraste, qué pasó con tu peso...
+[ texto ]
+
+21
+
+[H4] ¿Tienes alguna alergia o intolerancia alimentaria?se pueden marcar varias
+
+ - No, ninguna
+ - Lactosa
+ - Gluten
+ - Otra (dime cuál)
+Si marca lactosa¿Es total o toleras algunos lácteos como yogur, queso curado o queso batido?
+
+Si marca gluten¿Es celiaquía diagnosticada o sensibilidad? ¿Toleras pequeñas cantidades como pan de molde o avena sin gluten?
+
+22
+
+[H4] ¿Qué proteínas comes habitualmente?varias
+Marca al menos tres.
+
+ - Aves
+ - Ternera o buey
+ - Cerdo
+ - Pescados y mariscos
+ - Embutido
+ - Huevos y derivados
+ - Proteínas en polvo y barritas
+ - Proteína vegetal
+ - Legumbres
+ - Lácteos
+
+23
+
+[H4] ¿Cómo me has conocido?
+
+ - De tu newsletter, leo habitualmente tus emails.
+ - Instagram.
+ - Fui antiguo cliente de tus asesorías.
+ - Fui antiguo alumno de una formación.
+ - Por recomendación de otros clientes o personas que te conocen.
+ - Por artículos o noticias que he visto publicadas en medios de comunicación.
+ - Otro
+
+24
+
+[H4] Dime el motivo principal de querer trabajar conmigo, qué esperas y por qué te decides a empezar ahora y no antes.
+[ texto ]
+
+03
+
+[H2] El cierre del básico
+
+Cuatro pantallas que ya existen, y después el camino se separa por plan.
+
+1
+
+[H4] Tus macrosresultado
+Sus números, calculados con lo que acaba de contestar.
+
+2
+
+[H4] Ya tienes tus macrosresultado
+La pantalla que ya montó Francisco.
+
+3
+
+[H4] Tu punto de partidaresultado
+Su ficha: peso, grasa, biotipo, objetivo.
+
+4
+
+[H4] Comidas que puedes comer hoyresultado
+Con el menú autoajustable ya puesto, montado con las preferencias que dio en el alta.
+
+Calculadora · Membresía · MantenimientoLe quedan dos cosasSube tus fotos y toma tus medidasSe le lleva a Seguimiento. Sin esto no puede ver su evolución, que es lo que le hace volver.
+Las preferencias ya están hechas: se las preguntamos en el alta.
+
+Y despuésLa oferta: 87 €«Puedes continuar con tu plan actual y empezar a usar la calculadora con unos macros ajustados según tu perfil y teniendo en cuenta la evolución de otras personas con un perfil parecido al tuyo que ya han pasado por aquí, o puedes solicitar tus macros personalizados y recibir tu ajuste a medida.»
+(Esta segunda opción no está incluida en tu plan, tiene un coste adicional e incluye también tu plan personalizado de suplementación.)
+○ Me vale con la primera opción, la que está incluida en mi plan
+○ Quiero el ajuste a medida, aunque implique pagar más
+— 87 €: macros personalizados + programa de suplementación
+Si la compra, hace el completo entero, como un Gold.
+
+Gold y PremiumSe le da a elegir«Ya puedes empezar a usar la calculadora, o terminamos tu perfil ahora»Los macros que tiene son provisionales. Puede montar su día desde ya.
+En Inicio le queda la tarjeta de «Completa tu perfil» hasta que lo termine.
+
+Pero para arrancar de verdadEl completo, con sus fotos y sus medidasEs obligatorio: sin fotos y sin medidas su entrenador no puede ponerle los macros buenos ni montarle la rutina.
+Se apunta cualquier día · empieza siempre un lunes · el equipo prepara de lunes a jueves.
+
+Lo que no cambiaPara los cinco planesTodos entran el mismo día que paganNadie espera al lunes para poder usar la app. Entra, tiene macros y tiene comida montada.
+Es lo que ya prometías en tu correo de 2024: «seguirás teniendo acceso a la aplicación con los macros provisionales que te puse el otro día».
+
+04
+
+[H2] El completo · Gold, Premium y el de los 87 €
+
+21 pantallas, después de ver sus macros. No repite nada del básico.
+
+5
+
+[H4] Ahora, tu perfil completoportada
+Botón: Seguir
+
+6
+
+[H4] ¿Tienes algún tipo de enfermedad o patología que te condicione a la hora de practicar cualquier tipo de actividad física o iniciar un programa nutricional?
+
+ - Sí
+ - No
+Si contesta que síNecesito que me des más detalles en este sentido para poder confeccionar un programa lo más adaptado posible a tus necesidades, pero sobre todo para evitar correr riesgos de forma innecesaria. [ texto ]
+
+Hoy esta pregunta no existe en la app. Estaba en el cuestionario de siempre y desapareció.
+
+7
+
+[H4] ¿Tomas algún tipo de medicación o estás realizando algún tratamiento con fármacos bajo prescripción médica?
+
+ - Sí
+ - No
+Si contesta que síIndica cuál, en qué dosis, tiempo que llevas usándolo y para qué lo tienes pautado. [ texto ]
+
+Hoy tampoco existe. Misma historia que la anterior.
+
+8
+
+[H4] ¿Sigues algún tratamiento hormonal tipo TRT?
+Es información médica y la trata el equipo. No cambia tus macros.
+
+ - Sí
+ - No
+ - Lo estoy valorando
+
+9
+
+[H4] ¿Usas o has usado ayudas farmacológicas?
+
+ - No.
+ - Actualmente no, lo hice en el pasado, pero no planeo repetirlo.
+ - Ahora mismo no, pero suelo usarlos con frecuencia.
+ - Si te refieres a anabolizantes para ganar masa muscular no, pero en este momento estoy usando fármacos para quemar grasa (Ozempic, efedrina, etc.).
+ - Sí, estoy haciendo un ciclo de esteroides anabolizantes en este momento.
+Si contesta cualquiera menos «No»Necesito que me des todos los detalles en este sentido: cuántos sueles hacer, cuándo terminaste el último, qué dosis usaste, durante cuánto tiempo, si recuperaste bien y lo comprobaste con una analítica, etc. Si tienes previsto hacer más, dímelo también. [ texto ]
+
+10
+
+[H4] ¿Cuántas horas duermes al día normalmente?
+
+ - Mínimo 7 y media
+ - Entre 6 y 7 horas y media
+ - Entre 5 y 6, no más
+ - Menos de 5
+
+11
+
+[H4] ¿Tomas algún suplemento o fármaco para dormir mejor?
+
+ - No, duermo sin problema.
+ - No, aunque no duermo muy bien, no tomo nada, ni quiero.
+ - No, aunque no duermo bien, no tomo nada, pero estaría abierto a tomar algún tipo de suplemento que me ayudara en este sentido.
+ - Sí, tomo suplementos para esto, no fármacos.
+ - Sí, de vez en cuando utilizo benzodiacepinas, pero no las tengo pautadas por mi médico.
+ - Sí, soy incapaz de dormir a no ser que utilice medicación (la tengo pautada).
+
+12
+
+[H4] ¿Tienes algún inconveniente en utilizar suplementación deportiva?
+
+ - No. De hecho, suelo utilizarlos habitualmente. Tienes libertad absoluta para mandarme todo lo que consideres que me vaya a ayudar a avanzar más deprisa.
+ - No. Normalmente no utilizo, pero no tendría problema en empezar a usarlos si lo consideras oportuno.
+ - No, pero ponme 1 o 2 como mucho, no me puedo permitir más o sencillamente no me apetece.
+ - No me pongas nada, el tema de la suplementación lo descarto por completo.
+
+13
+
+[H4] ¿Qué suplementos tomas ahora?
+[ texto ]
+
+14
+
+[H4] ¿Existe algún suplemento en concreto que tengas contraindicado o que no quieras tomar?
+[ texto ]
+
+15
+
+[H4] Ese día tipo que me pusiste, ¿responde a alguna dieta que estés siguiendo ahora mismo?
+
+ - Sí, llevo una dieta estricta y mido todo lo que como.
+ - Estricta en plan pesar la comida, no, pero me cuido bastante.
+ - No llevo ningún tipo de control, pero no como mal.
+ - No. Como mal y de forma totalmente desorganizada.
+Redactada así para que enganche con la del básico y no parezca que se le pregunta dos veces lo mismo.
+
+16
+
+[H4] ¿Cuánto tiempo llevas con esa dieta, o con una parecida?solo si sigue alguna
+
+ - Menos de un mes
+ - Entre 1 y 3 meses
+ - Entre 3 y 6 meses
+ - Más de 6 meses
+
+17
+
+[H4] ¿Cómo te está funcionando?sin subtítulo
+Si su objetivo es DEFINICIÓNBien: estoy bajando a buen ritmo. · Estoy bajando, pero muy lento. · Me mantengo. · Mal: estoy cogiendo peso.
+
+Si su objetivo es VOLUMENBien: estoy subiendo peso. · Regular: subo, pero muy lento. · Regular: subo, pero cojo más grasa de la cuenta. · Me mantengo igual, siento que necesito comer más. · Mal: en lugar de subir, estoy bajando.
+
+18
+
+[H4] ¿Pasas hambre o ansiedad comiendo así?sin subtítulo
+Si DEFINICIÓNMucho. · Lo normal cuando estás a dieta. · Nada: aguanto mucho más que esto.
+
+Si VOLUMEN, la pregunta cambia a «¿Estás saturado de comer?»No estoy saturado, pero tampoco me veo capaz de comer más. · Puedo comer más sin problema.
+
+19
+
+[H4] ¿Entrenas ahora mismo de forma regular?
+
+ - Sí, voy mínimo 3 días y entreno en serio.
+ - Sí, pero voy poco y no entreno en serio.
+ - Actualmente no, pero ha sido una parada muy puntual, generalmente entreno siempre.
+ - No.
+
+20
+
+[H4] ¿Practicas otro deporte con intensidad?
+
+ - Sí
+ - No
+Si contesta que sí¿Cuál, cuántos días y a qué intensidad? [ texto ]
+¿Habría posibilidad de que lo hicieras en días en que no vayas al gimnasio? › Sí · No
+
+21
+
+[H4] ¿Haces cardio?solo si contestó NO a la anterior
+
+ - Sí, además me gusta, pero sé que ahora lo principal es el entrenamiento de fuerza. Por eso, en cuanto al cardio, ponme lo que consideres que me irá mejor.
+ - Sí, pero lo odio. Lo hago porque quiero perder grasa, pero cuanto menos cardio me marques mejor.
+ - No, pero no tendría inconveniente en empezar a hacerlo si lo consideras oportuno.
+ - No, no me gusta y no lo haré en ningún caso. Ahórratelo (aunque soy consciente de que esto implica apretar más la dieta).
+Si ya ha dicho que practica un deporte con intensidad, esta no se le enseña. No tiene sentido.
+
+22
+
+[H4] ¿Arrastras alguna lesión o molestia que te condicione a la hora de entrenar fuerza?
+
+ - Sí
+ - No
+Si contesta que sí, las tres seguidasEspecifica tu lesión [ texto ]
+¿Cuánto tiempo llevas arrastrándola? [ texto ]
+Enumera ejercicios concretos que no puedes hacer a causa de tu lesión [ texto ]
+
+Al pie: «Tanto esta lista como la de la maquinaria las revisaremos todos los meses, por si hubiera cualquier novedad.»
+
+23
+
+[H4] ¿Con qué material cuentas para entrenar?varias
+
+ - Gimnasio completo
+ - Banco
+ - Barra olímpica
+ - Mancuernas
+ - Bandas elásticas
+ - Máquinas de poleas
+ - Solo peso corporal
+
+24
+
+[H4] En lo referente a maquinaria, si se te viene a la cabeza alguna máquina de esas que te encuentras en prácticamente cualquier gimnasio y sepas que en el tuyo no la hay, dímelo para evitar incluirla en tu rutina. Y si tienes alguna máquina más «especial», lo mismo, pónmela aquí.
+[ texto ]
+Al pie: «Tanto esta lista como la de las lesiones las revisaremos todos los meses, por si hubiera cualquier novedad.»
+
+25
+
+[H4] Tus fotos y tus medidasobligatorio para arrancar
+Si te puede medir alguien, y siempre el mismo, mejor.
+
+ - Foto de frente relajado
+ - Foto de espaldas relajado
+ - Foto de perfil relajado
+Medidas, todas en cm: Hombros · Mesoesternal · Brazo derecho relajado · Brazo izquierdo relajado · Muslo derecho · Muslo izquierdo · Cadera · Cintura · Gemelo derecho · Gemelo izquierdo
+
+05
+
+[H2] Lo que se queda fuera, y por qué
+
+ |
+ | Qué | Dónde estaba | Por qué se quita
+ | ¿Cuántos días a la semana puedes entrenar? | La pedía el código | Son siempre cuatro. El campo se rellena solo con 4
+ | La hora de entreno y la bebida intraentreno | El cuestionario largo | Se marcan después, y salen marcadas por defecto
+ | El biotipo, a las mujeres | — | Las siete fotos son de hombre, y en el quiz de ELM nunca se les preguntó
+ | El resto de preferencias de alimentación
+(qué desayunos te apetecen, favoritos, comer fuera, plato imprescindible, freidora de aire, dónde compras) | Cuestionario Menús | Se configuran luego, en Preferencias. En el alta solo van las que hacen falta para dejarle el menú puesto
+ | El nivel de estrés | El cuestionario largo | Decidido: fuera
+ | ¿Dónde acumulas más grasa? | Se planteó y se descartó | Complicaba más de lo que aportaba
+ | Las pantallas de título de bloque | Se planteó y se descartó | Una pantalla en la que el cliente no hace nada. Lo resuelve la barra de progreso
+ | Dirección y código postal | El cuestionario largo | No se envía nada a casa
+ | Instagram | El cuestionario largo | Lo cubre «¿Cómo me has conocido?»
+ | Interés en CBD y en FullGas | El cuestionario largo | Productos que ya no van
+ | ¿Has tenido entrenador antes? | Lo montó Francisco | Se pregunta en el básico, así no se repite en el largo
+ | El motivo de apuntarse, de Francisco | Lo montó Francisco | La versión de siempre dice lo mismo y mejor
+ | ¿Ha variado tu peso en los últimos 3 meses? | Lo montó Francisco | El que acaba de entrar lo contesta a ojo; con dos pesajes lo sabes tú mejor que él
+ | ¿Has contratado algo parecido antes? + ¿Cómo fue la experiencia? + ¿Por qué no fue como esperabas? | El cuestionario largo | Tres pantallas para el mismo dato que ya da «¿Has hecho dietas antes?»
+ | Cocinar o rápido · 4 o 3 comidas · alimentos vetados | Cuestionario Menús | Van por defecto y se cambian en Preferencias. Para el menú de arranque bastan las intolerancias y las proteínas
+ | «Indica un día tipo» repetido en el completo | Se planteó y se descartó | Nadie cambia lo que acaba de escribir diez minutos antes
+ | ¿Y qué suplementos has tomado antes? | Lo montó Francisco | Nadie se acuerda y no cambia lo que se le pauta
+ | «Tu historial de peso», tal y como estaba | Lo montó Francisco | Demasiado vago. Se sustituye por el peso más bajo, con kg y año, y sube al básico
+
+La de los días de entreno se merece un párrafoEn el panel de Rutinas pone hoy «A 158 no se les puede generar todavía: falta saber lo básico de su entrenamiento». De 164 clientes que pagan rutina, ninguno real la tiene puesta — los 5 que el panel da por listos son cuentas de prueba del equipo.
+Si son siempre cuatro días, no hay que preguntárselo a nadie: se rellena con 4 y se desbloquean los 158 de golpe. Era el pendiente que Francisco marcaba como «lo que más vale de todo lo que queda», y se cierra con una línea.
+
+06
+
+[H2] Lo que falta decidir
+
+Lo primero de todo · FranciscoComprobar que las respuestas se guardanMiré la ficha de Usuario Demo, que pasó el cuestionario entero. En la app dice questionnaire_completed: true, pero biotipo, nivel de actividad, experiencia entrenando, altura y fecha de nacimiento estaban todos vacíos.
+Si las respuestas van a un sitio y los campos del perfil a otro, nada de este documento sirve: ni las rutinas, ni los ajustes automáticos, ni el data.
+Antes de montar una sola pantalla: que cada pregunta escriba en el campo del perfil que le toca, y comprobarlo con una cuenta de prueba de punta a punta.
+
+FranciscoEl menú autoajustable por defectoTodo el bloque de Preferencias del alta existe para una cosa: que al terminar, la pantalla «Comidas que puedes comer hoy» no salga vacía.
+Hace falta confirmar que la calculadora puede montar un menú de partida con esas cinco respuestas. Y que esas cinco escriben en el food_preferences que la app ya tiene (con sus 37 categorías), no en un campo nuevo en paralelo.
+Si no se puede, el bloque de Preferencias pierde su razón de estar en el alta y se va entero a después.
+
+FranciscoLos dos emailsHoy la app identifica al cliente por su email: con él entra, con él cruzan los cobros de Stripe y con él se enlaza su ficha. Si en el alta escribe uno distinto, algo se rompe.
+Cómo se resuelve: se guardan los dos. El de Stripe sigue siendo el email de acceso; el nuevo se guarda como email de contacto y es al que se le escribe. Nada toca Stripe.
+Y como el texto promete «salvo que nos digas lo contrario», en Mi perfil tiene que poder elegir a cuál recibe los correos.
+De paso arregla otra cosa: en el panel hay 42 clientes activos sin ningún cobro registrado. Parte son justo esto — gente cuyo email de la app no es el que usó para pagar.
+
+JesúsLas cinco listas de respuestas que he escrito yoVan marcadas en amarillo a lo largo del documento: el tiempo con el objetivo (6), la variación de peso (12), las intolerancias (33) y el material para entrenar (25 del completo).
+Están escritas con tu forma de decir las cosas, pero no salen de ningún formulario tuyo.
+Qué hace falta: un sí, o las tuyas.
+
+Del flujo, sin cerrarCuatro huecos que no son del cuestionario, pero le afectan1 · No se le dice cuándo empieza. Se apunta cualquier día y arranca un lunes, pero ninguna pantalla se lo cuenta. Falta una al final del básico para los personalizados: «Empiezas el lunes X. Tus macros definitivos los tendrás el jueves.»
+2 · Qué pasa si un Gold no termina el completo. No puede quedarse en una tarjeta de Inicio que se ignora, porque sin fotos y medidas su entrenador no puede trabajar. ¿Se le avisa a los tres días? ¿Sale en rojo en el panel?
+3 · La oferta de 87 € no tiene nada montado detrás. ¿Se cobra ahí con Stripe o se manda un enlace? ¿Se le asigna entrenador? ¿Entra en la cola de los lunes? ¿Es una vez o se puede repetir?
+4 · El % de grasa hay que repetirlo cada 12 semanas — lo promete el propio asterisco de la pantalla 11. Hoy no hay ningún sitio donde se le vuelva a pedir. Tendría que ser el reporte mensual de la semana 12, con las condiciones que ya tenías en ELM.
+
+Y los 177 que ya están dentroTodo esto solo lo contesta quien entre a partir de ahora. De los que ya tienes: 91 sin objetivo, 158 sin días de entreno, y ninguno con biotipo, zona de grasa, peso máximo, mejor forma ni preferencias.
+Es el hueco más caro que queda, porque son 177 personas que ya pagan y es el data que alimenta el modelo. Lo barato: pasarles el básico dentro de la app la próxima vez que entren, con la razón por delante — «recalculamos tus macros con esto».
+
+12EN12 · 18 de agosto de 2026. Los textos y las opciones salen de los formularios reales —el cuestionario largo de 12en12, los quiz de ELM hombre y mujer, el cuestionario de menús y los reportes de Gold, Silver y Bronze— y de lo que Jesús ha cerrado hoy. Lo marcado en amarillo es lo único que no viene de ahí.

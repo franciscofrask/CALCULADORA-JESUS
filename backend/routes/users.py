@@ -277,17 +277,33 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     # Sin `weight` ni `body_fat`: los pone `anotar_peso`/`anotar_grasa` al final, a partir
     # de sus series (punto 30). El cálculo de macros de aquí abajo usa `data.weight`
     # directamente, así que no depende de esto.
+    # SOLO SE ESCRIBE LO QUE DE VERDAD LLEGA (punto 0 del doc del 18-08).
+    #
+    # Estos seis campos se escribian siempre, vinieran o no. Y no vienen: la pantalla del
+    # alta manda nombre, email, telefono, objetivo, sexo, peso y grasa, y nada mas. O sea
+    # que cada alta los dejaba vacios -- y a quien ya tuviera altura o edad de la migracion
+    # de Calma, se los borraba. Medido en produccion el 18-08: de 184 fichas con el
+    # cuestionario dado por hecho, 4% con fecha de nacimiento, 5% con biotipo y 4% con
+    # experiencia entrenando.
+    #
+    # Un `None` que llega y un campo que no se pregunta se escriben igual, y no son lo
+    # mismo: lo primero es una respuesta, lo segundo es una pregunta que no existe.
     update = {
         "questionnaire_completed": True,
         "goal": data.goal,
-        "height": data.height,
         "sex": sexo,
-        "birthdate": data.birthdate,
-        "age": _age_from_birthdate(data.birthdate),
-        "training_experience": data.training_experience,
-        "activity_level": data.activity_level,
-        "biotype": data.biotype,
     }
+    if data.height is not None:
+        update["height"] = float(data.height)
+    if data.birthdate:
+        update["birthdate"] = data.birthdate
+        update["age"] = _age_from_birthdate(data.birthdate)
+    if data.training_experience:
+        update["training_experience"] = data.training_experience
+    if data.activity_level:
+        update["activity_level"] = data.activity_level
+    if data.biotype:
+        update["biotype"] = data.biotype
     if ajustes:
         update["ajustes_macros"] = ajustes
 
@@ -639,6 +655,32 @@ async def guardar_progreso_ajuste(data: dict, user = Depends(get_current_user)):
     return {"guardado": True, "paso": progreso["paso"]}
 
 
+# Las cuatro respuestas del ajuste que ADEMÁS son datos del perfil, con el nombre que
+# tienen fuera del cuestionario. Dentro de `ajustes_macros` solo las mira el motor de
+# macros; arriba las leen la ficha del coach, el generador de rutinas y el agente.
+#
+# La actividad se traduce porque las dos escalas nacieron distintas: el perfil viene de
+# Calma con cuatro valores y el quiz usa los suyos. La traducción es la inversa exacta de
+# la que ya hace la calculadora del cliente (`mapActividadLegacy`).
+ACTIVIDAD_A_PERFIL = {"sedentario": "sedentario", "normal": "ligero",
+                      "moderado": "moderado", "muy_activo": "activo"}
+
+
+def _perfil_desde_ajustes(data: AjustesMacros) -> Dict[str, Any]:
+    """Lo que del cuestionario de ajuste vive en el perfil. Solo lo contestado: una
+    respuesta que no viene no borra lo que ya hubiera."""
+    fuera: Dict[str, Any] = {}
+    if data.biotype:
+        fuera["biotype"] = data.biotype
+    if data.height:
+        fuera["height"] = float(data.height)
+    if data.training_experience:
+        fuera["training_experience"] = data.training_experience
+    if data.actividad_diaria in ACTIVIDAD_A_PERFIL:
+        fuera["activity_level"] = ACTIVIDAD_A_PERFIL[data.actividad_diaria]
+    return fuera
+
+
 @router.post("/clients/ajustar-macros")
 async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     """
@@ -652,6 +694,19 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado. Selecciona un plan primero.")
+
+    # LO QUE NO SON MACROS SE GUARDA ANTES DE MIRAR SI PUEDE AJUSTARLOS (18-08).
+    #
+    # En esta misma llamada viajan su altura, su biotipo, su experiencia entrenando y su
+    # actividad diaria, que no tienen nada que ver con los macros: los leen la ficha, el
+    # generador de rutinas y la busqueda de casos parecidos. Al cliente con entrenador y
+    # macros ya puestos esto le contesta 403 -- y esta bien que se los proteja -- pero se
+    # llevaba por delante tambien esos cuatro. Comprobado con dos cuentas: contestaba el
+    # cuestionario entero y su perfil se quedaba igual de vacio que antes.
+    perfil_del_quiz = _perfil_desde_ajustes(data)
+    if perfil_del_quiz:
+        await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": perfil_del_quiz})
+        profile.update(perfil_del_quiz)
 
     # Igual que el guardado manual (punto 4.10): en un plan personalizado esto vale para
     # sacar los macros de arranque, pero no para volver a calcularlos por encima de los que
@@ -687,13 +742,8 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     update = {"ajustes_macros": ajustes, "ajuste_macros_completado": True,
               "ajuste_macros_progreso": None}
 
-    # El biotipo y la altura viajan con el ajuste desde el 06-08-2026 y viven en el perfil,
-    # no dentro de `ajustes_macros`: los lee la ficha, el índice de muscularidad y la
-    # búsqueda de casos parecidos, y ninguno de esos sabe de cuestionarios. No tocan macros.
-    if data.biotype:
-        update["biotype"] = data.biotype
-    if data.height:
-        update["height"] = float(data.height)
+    # El biotipo, la altura, la experiencia y la actividad ya se han guardado arriba, antes
+    # del candado de los macros (`_perfil_desde_ajustes`). Aquí no se repiten.
 
     try:
         resultado = calcular_macros_v2(
