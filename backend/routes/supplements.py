@@ -67,23 +67,68 @@ def _respuesta(doc: dict) -> dict:
         "updated_at": doc.get("updated_at"),
     }
 
+# ── La suplementación general ────────────────────────────────────────────
+# La que se le enseña a quien todavía no tiene la suya escrita. No es una lista aparte que
+# haya que mantener: es el mismo arranque que el panel le propone al coach (`/suggest`),
+# la base y el intra del catálogo con la variante que le toca por sexo. Así lo que ve el
+# cliente y lo que el coach va a partir de ahí son la misma cosa.
+#
+# El quemador NO entra: eso es una decisión de coach para una persona concreta, no algo que
+# se le pone delante a alguien porque su objetivo diga "definición".
+
+def _sexo_de(profile: dict) -> str:
+    """"hombre" o "mujer", tolerante con los nombres de campo que conviven en la base."""
+    crudo = str(profile.get("sexo") or profile.get("sex") or profile.get("genero") or "").lower()
+    es_mujer = "muj" in crudo or "fem" in crudo or crudo in ("f", "female")
+    return "mujer" if es_mujer else "hombre"
+
+
+async def protocolo_generico(profile: dict) -> list:
+    """La base + el intra del catálogo, por orden y con la variante del sexo del cliente."""
+    sexo = _sexo_de(profile)
+    catalogo = await db.supplement_catalog.find(
+        {"activo": True, "categoria": {"$in": ["base", "intra"]}}, {"_id": 0}
+    ).sort("orden", 1).to_list(200)
+    return [_catalog_to_protocol_item(c) for c in catalogo
+            if c.get("sexo", "ambos") in (sexo, "ambos")]
+
+
 # ==================== CLIENTE ====================
 router = APIRouter(prefix="/supplements", tags=["supplements"])
 
 
 @router.get("/current", response_model=Optional[SupplementProtocolResponse])
 async def get_current_protocol(ctx=Depends(require_access("suplementacion"))):
-    """Protocolo de suplementación del cliente (requiere plan con suplementación y suscripción activa)."""
+    """Protocolo de suplementación del cliente (requiere plan con suplementación y suscripción activa).
+
+    SIN PROTOCOLO PROPIO SE DEVUELVE LA GENERAL (Jesús, 18-08). Antes esto devolvía `None`
+    y la pantalla contestaba "de momento no te hemos puesto nada", que es dejar sin nada al
+    94 de cada 193 clientes que todavía no tienen el suyo escrito. Lo que él quiere es lo
+    contrario: que siempre haya algo que tomar delante, la general, hasta que le pongamos
+    la suya. Va marcada con `es_generica` para que nadie la confunda con una pauta personal.
+    """
     profile = ctx["profile"]
 
     protocol = await db.supplement_protocols.find_one(
         {"client_id": profile["id"]}, {"_id": 0}
     )
-    if not protocol:
-        return None
     # Resuelto por fecha: el cliente ve el que le toca HOY, no el ultimo que se guardo. Un
     # protocolo dejado preparado para dentro de dos semanas no se le ensena todavia.
-    return SupplementProtocolResponse(**_respuesta(protocol))
+    resuelto = _respuesta(protocol) if protocol else {
+        "client_id": profile["id"], "actual": [], "siguiente": [], "versiones": [],
+    }
+
+    # Sin nada vigente entra la general. Se mira `actual` y no si existe el documento: al
+    # quitarle la suplementacion a alguien la version vigente se queda sin items, y ese
+    # cliente esta igual de vacio que el que nunca tuvo una.
+    if not resuelto.get("actual"):
+        generica = await protocolo_generico(profile)
+        if generica:
+            resuelto["actual"] = generica
+            resuelto["actual_fecha"] = None
+            resuelto["es_generica"] = True
+
+    return SupplementProtocolResponse(**resuelto)
 
 
 # ==================== ADMIN ====================
@@ -219,8 +264,7 @@ async def suggest_protocol(client_id: str, user=Depends(get_admin_user)):
     assert_client_access(user, profile)
 
     # Sexo y objetivo (tolerante a distintos nombres de campo)
-    sexo_raw = str(profile.get("sexo") or profile.get("sex") or profile.get("genero") or "").lower()
-    sexo = "mujer" if ("muj" in sexo_raw or "fem" in sexo_raw or sexo_raw in ("f", "female")) else "hombre"
+    sexo = _sexo_de(profile)
     objetivo = str(profile.get("objetivo") or profile.get("goal") or "").lower()
     es_definicion = "defin" in objetivo or "cut" in objetivo or "perder" in objetivo
 

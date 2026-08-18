@@ -128,7 +128,13 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                     "clave": f"macros_provisionales:{d_alta.date()}",
                     "tipo": "macros",
                     "titulo": "Tus macros son provisionales",
-                    "cuerpo": "Quince minutos y los tienes finos.",
+                    # SIN PROMETER UN RELOJ (Jesus, 18-08). Decia "Quince minutos y los
+                    # tienes finos": quince minutos no los sabe nadie -- depende de lo que
+                    # tarde en contestar -- y la regla 4 del doc del 16-08 es no prometer lo
+                    # que no se sabe. Lo que si es verdad es lo que le falta, y es justo lo
+                    # que ya dice el banner de Inicio para lo mismo: no puede haber dos
+                    # redacciones distintas del mismo encargo.
+                    "cuerpo": "Unas preguntas más y los tienes finos.",
                     # OJO: la pantalla se llama "Ajustar macros" pero su ruta es
                     # /dashboard/macro-calculator. Aqui ponia /dashboard/ajustar-macros, que
                     # no existe, y al no existir caia en el comodin del router y echaba al

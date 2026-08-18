@@ -70,3 +70,8 @@ class SupplementProtocolResponse(SupplementProtocolSave):
     updated_at: Optional[str] = None
     # El historico completo. `actual` y `siguiente` salen de aqui, resueltos por fecha.
     versiones: List[VersionProtocolo] = []
+    # `actual` NO es lo que le ha pautado el coach, sino la suplementacion general, la que
+    # se ensena mientras no tenga la suya (peticion de Jesus del 18-08). Quien lo consuma
+    # tiene que poder distinguirlo: la pantalla lo dice con otras palabras y en Inicio no
+    # se ensena, porque alli "Tu suplementacion" significa la que le tocan a el.
+    es_generica: bool = False

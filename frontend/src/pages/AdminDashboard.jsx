@@ -547,7 +547,9 @@ const AdminDashboard = () => {
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
                             <div className="absolute right-0 top-11 z-50 w-[min(21rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto bg-[#111] border border-[#333] rounded-xl shadow-xl" data-testid="notif-dropdown">
-                                <p className="px-4 py-2.5 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-[#222]">Novedades</p>
+                                {/* «Avisos» también aquí (Jesús, 18-08): es la misma campana
+                                    con el mismo nombre a los dos lados de la app. */}
+                                <p className="px-4 py-2.5 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-[#222]">Avisos</p>
                                 <button onClick={() => { setNotifOpen(false); navigate('/admin/leads'); }}
                                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left">
                                     <UserPlus className="w-4 h-4 text-[#FF671F]" />

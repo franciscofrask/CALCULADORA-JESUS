@@ -238,29 +238,32 @@ def test_63_lo_sugerido_llega_al_panel_pendiente_de_aprobar(cabeceras_cliente, c
 def test_64_sin_protocolo_se_ensena_la_suplementacion_recomendada(cabeceras_cliente):
     """«Ensena la suplementacion recomendada, no una pantalla vacia».
 
-    Al cliente sin protocolo -- y al que su plan no le incluye suplementación -- hoy no
-    se le ofrece nada: `/supplements/current` devuelve `null` y la pantalla pinta
-    «Todavía no tienes suplementación». La propuesta por perfil (sexo y objetivo) existe,
-    pero vive en `/admin/supplements/suggest`, que es de admin: el cliente no la puede
-    pedir y nadie se la enseña.
+    CERRADO EL 18-08 con la orden de Jesús: «la suplementación tiene que salir siempre la
+    genérica hasta que le pongamos la suya». Antes este caso estaba en rojo a propósito:
+    `/supplements/current` devolvía `null`, la pantalla ponía «de momento no te hemos
+    puesto nada» y la única propuesta por perfil vivía en `/admin/supplements/suggest`,
+    que el cliente no puede pedir.
+
+    Ahora la general viaja en la misma respuesta, marcada con `es_generica` para que
+    nadie la confunda con una pauta suya.
     """
-    actual = requests.get(f"{API}/supplements/current", headers=cabeceras_cliente, timeout=30)
-    tiene_protocolo = actual.status_code == 200 and (actual.json() or {}).get("actual")
-    if tiene_protocolo:
+    r = requests.get(f"{API}/supplements/current", headers=cabeceras_cliente, timeout=30)
+    if r.status_code == 403:
+        pytest.skip("El plan del cliente de pruebas no tiene la suplementación habilitada.")
+    assert r.status_code == 200, r.text
+    datos = r.json() or {}
+
+    if not datos.get("es_generica"):
+        assert datos.get("actual"), (
+            "sin protocolo propio la respuesta llega vacía: la pantalla vuelve a ser la de "
+            f"«Todavía no tienes suplementación». Respuesta: {datos!r}")
         pytest.skip("la cuenta de pruebas tiene protocolo puesto: este caso es el del que no lo tiene")
 
-    perfil = requests.get(f"{API}/clients/profile", headers=cabeceras_cliente, timeout=30).json()
-    # La única suplementación recomendada que sabe calcular la app (por sexo y objetivo).
-    # Se pide como la pediría la pantalla del cliente: con su sesión.
-    propuesta = requests.post(f"{API}/admin/supplements/suggest?client_id={perfil['id']}",
-                              headers=cabeceras_cliente, timeout=30)
-    recomendada = (propuesta.json().get("actual") or []) if propuesta.status_code == 200 else []
-
-    assert recomendada, (
-        "sin protocolo no hay nada que enseñarle: /supplements/current devuelve "
-        f"{actual.json()!r} y la propuesta por perfil le responde {propuesta.status_code} "
-        "porque es de admin. La pantalla se queda en «Todavía no tienes suplementación», "
-        "que es justo la pantalla vacía del caso 64.")
+    assert datos.get("actual"), "se marca como genérica pero no trae ni una línea"
+    for item in datos["actual"]:
+        assert item.get("titulo"), "cada línea necesita su producto"
+        assert (item.get("cuanto") or item.get("cuando")), (
+            f"la general se enseña igual que la suya, con dosis y momento: {item!r}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

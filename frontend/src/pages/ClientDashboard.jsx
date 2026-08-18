@@ -343,7 +343,12 @@ const InicioNuevo = () => {
                 api.get('/reports/due').catch(() => ({ data: { items: [] } })),
                 api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
             ]);
-            setSuplementos(suplRes.data?.actual || []);
+            // EN INICIO, SOLO LA SUYA. Desde el 18-08 el servidor manda la suplementación
+            // general a quien no tiene la suya escrita, y ahí está bien: la pestaña tiene
+            // que enseñar siempre algo. Pero «Lo que toca hoy · Tu suplementación» es lo
+            // que le ha pautado él, y una lista general anunciada como suya en la portada
+            // sería decirle que le hemos puesto algo que no le hemos puesto.
+            setSuplementos(suplRes.data?.es_generica ? [] : (suplRes.data?.actual || []));
             setRutina(rutinaRes.data);
             setEntrenoDeHoy(logRes.data?.log || null);
             // Qué le toca hoy lo dice el SERVIDOR, que cuenta los días en hora de España.
@@ -1327,8 +1332,11 @@ const ClientLayout = () => {
                     </button>
                 </div>
                 <nav className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-1">
+                    {/* «AVISOS», NO «NOVEDADES» (Jesús, 18-08). Dentro de la app todo esto
+                        son avisos -- así se llaman en el doc del 16-08 y así se los nombra
+                        él -- y el rótulo era lo único que seguía diciendo otra cosa. */}
                     <button onClick={openNotifications} data-testid="client-bell-desktop"
-                        title={collapsed ? 'Novedades' : undefined}
+                        title={collapsed ? 'Avisos' : undefined}
                         className={`relative flex items-center gap-3 rounded-xl w-full transition-all text-white/60 hover:text-white hover:bg-white/[0.07] ${collapsed ? 'justify-center px-0 py-3' : 'px-3.5 py-2.5'}`}>
                         <span className="relative flex-shrink-0">
                             <Bell className="w-5 h-5" strokeWidth={2} />
@@ -1336,7 +1344,7 @@ const ClientLayout = () => {
                                 <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 bg-brand text-white text-[10px] rounded-full flex items-center justify-center font-bold border border-ink">{notifCount + unread}</span>
                             )}
                         </span>
-                        {!collapsed && <span className="text-sm">Novedades</span>}
+                        {!collapsed && <span className="text-sm">Avisos</span>}
                     </button>
                     {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={collapsed} unread={unread} />)}
                 </nav>
@@ -1428,13 +1436,13 @@ const ClientLayout = () => {
                 </div>
             </nav>
 
-            {/* ===== Panel de novedades (campanita) ===== */}
+            {/* ===== Panel de avisos (campanita) ===== */}
             {notifOpen && (
                 <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 pt-16 lg:pt-24" data-testid="notif-panel">
                     <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={() => setNotifOpen(false)} />
                     <div className="relative bg-card border border-border rounded-2xl shadow-xl w-full max-w-sm max-h-[70vh] flex flex-col animate-slide-up">
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                            <p className="font-bold text-foreground uppercase tracking-wider text-sm">Novedades</p>
+                            <p className="font-bold text-foreground uppercase tracking-wider text-sm">Avisos</p>
                             <button onClick={() => setNotifOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted">
                                 <X className="w-4 h-4" />
                             </button>
@@ -1479,7 +1487,7 @@ const ClientLayout = () => {
                                 la app se ha colgado. Decir «no hay nada» todavía no se puede:
                                 no se sabe. */}
                             {notifCargando ? (
-                                <p className="text-muted-foreground text-sm text-center py-10">Buscando novedades...</p>
+                                <p className="text-muted-foreground text-sm text-center py-10">Buscando avisos...</p>
                             ) : notifItems.length === 0 && unread === 0 ? (
                                 <p className="text-muted-foreground text-sm text-center py-10">No hay nada pendiente</p>
                             ) : (

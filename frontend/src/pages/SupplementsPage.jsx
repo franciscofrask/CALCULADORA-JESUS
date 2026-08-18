@@ -129,6 +129,8 @@ const SupplementsPage = () => {
 
     const tieneActual = protocol?.actual?.length > 0;
     const tieneSiguiente = protocol?.siguiente?.length > 0;
+    // La general: la que el servidor manda cuando todavía no tiene la suya escrita.
+    const esGenerica = !!protocol?.es_generica;
 
     if (!protocol || (!tieneActual && !tieneSiguiente && !protocol.nota)) {
         return <Wrap>
@@ -153,10 +155,15 @@ const SupplementsPage = () => {
                     cliente compró que le digamos qué tomar. Y «tu entrenador» le habla de
                     una persona que casi nadie tiene asignada en la app: aquí quien contesta
                     es el equipo. */}
+                {/* AQUÍ SOLO SE LLEGA SI NO HAY NI GENERAL (18-08). Este cartel era lo que
+                    veía todo el que no tuviera la suya escrita, y es justo lo que Jesús no
+                    quiere: mientras no le pongamos la suya, se le enseña la general. El
+                    servidor la manda siempre que el catálogo tenga base o intra, así que
+                    esto ya solo sale si el catálogo está vacío. */}
                 <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Todavía no tienes suplementación</h2>
                 <p className="text-muted-foreground text-sm">
-                    De momento no te hemos puesto nada. Si crees que te toca, dínoslo por el
-                    chat y le echamos un ojo.
+                    En cuanto te la pautemos la ves aquí. Si crees que te toca ya, dínoslo
+                    por el chat y le echamos un ojo.
                 </p>
             </div>
         </Wrap>;
@@ -174,9 +181,11 @@ const SupplementsPage = () => {
                 se le dice a quien mira un catálogo general. Esto no es un catálogo: es lo
                 que le ha pautado a él. */}
             <p className="text-muted-foreground text-sm mb-5 max-w-2xl">
-                {nuevo
-                    ? 'Lo que te he pautado y cuándo tomarlo'
-                    : 'Aquí ves algunos de los suplementos más habituales que recomiendo, así como su modo de empleo. Esta información es orientativa: pueden ser necesarios otros suplementos o dosis según tu situación, objetivos o tolerancias.'}
+                {esGenerica
+                    ? 'Todavía no te he pautado la tuya. Mientras tanto, esta es la que recomiendo de base: en cuanto te ponga la tuya, la ves aquí.'
+                    : nuevo
+                        ? 'Lo que te he pautado y cuándo tomarlo'
+                        : 'Aquí ves algunos de los suplementos más habituales que recomiendo, así como su modo de empleo. Esta información es orientativa: pueden ser necesarios otros suplementos o dosis según tu situación, objetivos o tolerancias.'}
             </p>
 
             {protocol.nota && (
@@ -194,7 +203,11 @@ const SupplementsPage = () => {
                     {/* Sin rótulo cuando no hay nada más: la pantalla entera ya dice qué es
                         esto, y «Suplementación actual» solo hace falta para distinguirla de
                         la que entra más adelante. */}
-                    {(!nuevo || tieneSiguiente) && <h2 className="caption mb-3">Suplementación actual</h2>}
+                    {(!nuevo || tieneSiguiente) && (
+                        <h2 className="caption mb-3">
+                            {esGenerica ? 'La suplementación general' : 'Suplementación actual'}
+                        </h2>
+                    )}
                     <div className={nuevo ? 'space-y-3 max-w-2xl' : 'grid md:grid-cols-2 gap-3'}>
                         {protocol.actual.map((it, i) => <Tarjeta key={i} item={it} />)}
                     </div>
