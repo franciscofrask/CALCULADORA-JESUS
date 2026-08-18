@@ -35,10 +35,25 @@ def de_una_persona(ultimo_apunte: Optional[Dict[str, Any]]) -> bool:
     que traiga `origen` y `changed_by`.
 
     Los apuntes viejos no tienen `origen` (se empezo a guardar el 05-08), pero si tienen
-    `changed_by` cuando los escribio una persona, asi que se mira tambien: sin eso, todos los
-    clientes anteriores a esa fecha volverian a contar como "sin nadie detras".
+    `changed_by` cuando los escribio una persona, asi que ahi se mira eso.
+
+    MANDA EL ORIGEN CUANDO EXISTE (18-08). Esto estaba escrito con un `or`:
+
+        origen not in CALCULADOS_POR_LA_APP or bool(changed_by)
+
+    y el apunte del alta lleva las dos cosas -- `origen: quiz_alta` y `changed_by` con el
+    NOMBRE DEL PROPIO CLIENTE, que es quien lo ha rellenado --, asi que contaba como "se los
+    puso una persona". Consecuencia: todo cliente de plan con entrenador se quedaba
+    ATRAPADO al terminar el alta. Su ultima pantalla es «Calcular mis macros»; el
+    cuestionario se guardaba, y la llamada siguiente recibia un 403 con «tus macros los
+    llevamos nosotros». Volver a pulsar daba 409, «el cuestionario ya fue completado». Sin
+    macros que ver y sin forma de seguir.
+
+    El `changed_by` solo decide cuando no hay origen, que es para lo que se puso.
     """
     if not ultimo_apunte:
         return False
     origen = ultimo_apunte.get("origen") or ""
-    return origen not in CALCULADOS_POR_LA_APP or bool(ultimo_apunte.get("changed_by"))
+    if origen:
+        return origen not in CALCULADOS_POR_LA_APP
+    return bool(ultimo_apunte.get("changed_by"))

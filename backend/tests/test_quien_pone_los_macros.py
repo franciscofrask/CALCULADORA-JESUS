@@ -74,8 +74,20 @@ PUSO_SU_CALCULADORA = {"origen": "coach_calculadora", "changed_by": "Jesus Galle
 LO_CALCULO_EL_ALTA = {"origen": "quiz_alta", "changed_by": None, "effective_date": HOY}
 
 
+# CON MACROS PUESTOS, que es cuando hay algo que proteger.
+#
+# Desde el 17-08 la primera puerta de `puede_ajustarlos` es «sin macros no hay nada que
+# proteger y sí hay alguien atrapado»: al que todavía no tiene ninguno se le deja calcular
+# siempre, porque el último paso del alta es justo ese botón. Estos perfiles no traían macros,
+# así que salían por esa puerta y los seis tests de la regla daban verde por el motivo
+# equivocado -- o rojo, cuando la puerta se puso. Se les ponen unos: lo que se prueba aquí es
+# quién puede MOVER unos macros que ya existen.
+UNOS_MACROS = {"protein": 190, "carbs": 200, "fat": 60, "calories": 2100}
+
+
 def perfil(plan="silver", **kw):
-    return {"id": "c1", "plan": plan, "status": "activo", **kw}
+    return {"id": "c1", "plan": plan, "status": "activo",
+            "macros_training": dict(UNOS_MACROS), **kw}
 
 
 class TestLaRegla:

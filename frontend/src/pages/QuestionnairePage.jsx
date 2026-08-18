@@ -1092,19 +1092,43 @@ const QuestionnairePage = () => {
     // Se calcula una vez con las respuestas ya sembradas del perfil: si se recalculara en
     // cada tecla, la pantalla en la que está escribiendo desaparecería al contestarla.
     const pidioCompletar = new URLSearchParams(location.search).get('completar') === '1';
+
+    // LAS PANTALLAS DEL BÁSICO QUE ESTE CLIENTE NO HA CONTESTADO NUNCA. Se calcula una vez,
+    // con las respuestas ya sembradas del perfil: si se recalculara en cada tecla, la
+    // pantalla en la que está escribiendo desaparecería al contestarla.
+    const loQueFaltaDelBasico = useMemo(() => {
+        if (!profile) return [];
+        const a = answersRef.current;
+        // Sin las de la base: esas van por su cuenta, delante de todo, y preguntarle el
+        // objetivo dos veces seguidas es lo que hace que cierre la pestaña.
+        const yaVanDelante = new Set(laBaseQueFalta.map(p => p.key).filter(Boolean));
+        return EL_BASICO.filter(p => falta(p, a) && !yaVanDelante.has(p.key));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profile, laBaseQueFalta]);
+
     const elBasicoQueFalta = useMemo(() => {
         if (!pidioCompletar || !profile) return null;
-        const a = answersRef.current;
-        const pantallas = EL_BASICO.filter(p => falta(p, a));
-        if (!pantallas.length) return [];
-        return [LA_PORTADA_DE_COMPLETAR, ...pantallas, porTipo('final0'), porTipo('result')];
+        if (!loQueFaltaDelBasico.length) return [];
+        return [LA_PORTADA_DE_COMPLETAR, ...loQueFaltaDelBasico,
+                porTipo('final0'), porTipo('result')];
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pidioCompletar, profile]);
+    }, [pidioCompletar, profile, loQueFaltaDelBasico]);
 
+    // Y EL COMPLETO EMPIEZA POR AHÍ CUANDO HACE FALTA (18-08).
+    //
+    // El cuestionario largo da por hecho que el básico está contestado: son las 21 pantallas
+    // que NO se repiten. Pero el cliente que viene de Calma nunca pasó por el básico -- de
+    // los 140 con acceso vivo, a la mayoría le faltan las cinco cosas -- y a ese la app le
+    // metía directo en el largo. Salía de él con su ficha igual de coja: sin objetivo, sin
+    // biotipo, sin sus pesos y sin saber qué come. Y sin macros nuevos, porque el largo no
+    // los toca.
+    //
+    // Así que delante van lo que le falte de la base y lo que le falte del básico. Al que
+    // hizo el alta aquí no le cambia nada: no le falta ninguna y esto queda en cero.
     const flow = elBasicoQueFalta?.length
         ? elBasicoQueFalta
         : retomandoNivel1
-            ? STEPS_NIVEL1
+            ? [...laBaseQueFalta, ...loQueFaltaDelBasico, ...STEPS_NIVEL1]
             : modoAjuste
                 ? preguntasDeAjuste
                 : [...EL_BASICO, ...elCierre];
@@ -1352,6 +1376,27 @@ const QuestionnairePage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, modoAjuste, profile]);
 
+    // SI EL PASO EN EL QUE ESTÁ DEJA DE TENER SENTIDO, SE PASA SOLO.
+    //
+    // Qué pantallas se saltan se mira AL AVANZAR, así que una que se vuelve innecesaria con
+    // el cliente ya dentro se queda pintada. Pasa con las fotos y las medidas: cuántas fotos
+    // tiene se pide al llegar, y hasta que llega la respuesta la pantalla ya está en la
+    // pantalla, así que a quien las tenía todas se le seguía pidiendo lo que ya había dado.
+    //
+    // VA AQUÍ ARRIBA, con los demás hooks, y no junto a `visible`: más abajo hay un `return`
+    // (el «ya completaste el cuestionario»), y un hook detrás de un return se llama unas
+    // veces sí y otras no. React no lo permite y el proyecto entero deja de compilar.
+    useEffect(() => {
+        if (!flow.length || idx >= flow.length - 1) return;
+        const s = flow[idx];
+        const sobra = (s.type === 'fotos_medidas'
+                       && !!(profile?.punto_de_partida_hecho || profile?.medidas_inicio)
+                       && (ficha?.fotos_subidas || 0) > 0)
+                   || (s.cond && !s.cond(answersRef.current));
+        if (sobra) setIdx(i => Math.min(i + 1, flow.length - 1));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [idx, ficha, profile]);
+
     // El progreso se guarda a cada respuesta: si se sale y vuelve, sigue donde lo dejo.
     //
     // TAMBIÉN EN EL ALTA desde el 18-08. Antes esto se cortaba en seco si no era el
@@ -1571,17 +1616,6 @@ const QuestionnairePage = () => {
         return Math.min(j, flow.length - 1);
     });
 
-    // SI EL PASO EN EL QUE ESTÁ DEJA DE TENER SENTIDO, SE PASA SOLO.
-    //
-    // `visible` se mira al avanzar, así que un paso que se vuelve innecesario CON EL CLIENTE
-    // YA DENTRO se queda en pantalla. Pasa con las fotos y las medidas: cuántas fotos tiene
-    // se pide al llegar, y hasta que llega la respuesta la pantalla ya está pintada, así que
-    // a quien las tenía todas se le seguía pidiendo lo que ya había dado.
-    useEffect(() => {
-        if (idx >= flow.length - 1) return;
-        if (!visible(flow[idx])) goNext();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [idx, ficha, profile]);
     const cancelarAvancePendiente = () => {
         if (avancePendienteRef.current) {
             clearTimeout(avancePendienteRef.current);
@@ -1598,6 +1632,43 @@ const QuestionnairePage = () => {
     };
 
     const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+
+    // TODO LO QUE TRAE EL BÁSICO, en un solo sitio: lo mandan el alta y también el cierre del
+    // cuestionario largo cuando el cliente no había pasado nunca por el básico (los de Calma).
+    // Escrito dos veces se quedaría viejo en una de las dos el día que se añada una pregunta.
+    const cuerpoDelBasico = () => ({
+        name: answers.name,
+        email: answers.email,
+        phone: answers.phone,
+        goal: answers.goal,
+        sex: answers.sex,
+        weight: parseFloat(answers.weight),
+        body_fat: parseFloat(answers.body_fat),
+        birthdate: answers.birthdate || null,
+        height: num(answers.height),
+        biotype: answers.biotype || null,
+        training_experience: answers.training_experience || null,
+        profesion: answers.profesion || null,
+        como_me_conociste: answers.como_me_conociste || null,
+        proteinas_habituales: answers.proteinas_habituales || null,
+        peso_maximo: num(answers.peso_maximo),
+        peso_maximo_ano: num(answers.peso_maximo_ano),
+        peso_maximo_nota: answers.peso_maximo_nota || null,
+        peso_mejor_momento: num(answers.peso_mejor_momento),
+        peso_mejor_momento_ano: num(answers.peso_mejor_momento_ano),
+        peso_mejor_momento_nota: answers.peso_mejor_momento_nota || null,
+        foto_mejor_momento: answers.foto_mejor_momento || null,
+        peso_minimo: num(answers.peso_minimo),
+        peso_minimo_ano: num(answers.peso_minimo_ano),
+        peso_minimo_nota: answers.peso_minimo_nota || null,
+        alergias: answers.alergias || null,
+        lactosa: answers.lactosa || null,
+        gluten: answers.gluten || null,
+        alergia_otra: answers.alergia_otra || null,
+        dietas_previas: answers.dietas_previas || null,
+        tiempo_intentandolo: answers.tiempo_intentandolo || null,
+        motivo_apuntarse: answers.motivo_apuntarse || null,
+    });
 
     // Las respuestas que ajustan los macros, en el formato que espera el backend.
     // Recibe las respuestas por parametro para poder calcular con las de ESTE instante: el
@@ -1669,40 +1740,7 @@ const QuestionnairePage = () => {
             if (!profile?.questionnaire_completed || rellenandoHuecos) {
                 await api.post('/clients/questionnaire', {
                     completar: !!profile?.questionnaire_completed && rellenandoHuecos,
-                    name: answers.name,
-                    email: answers.email,
-                    phone: answers.phone,
-                    goal: answers.goal,
-                    sex: answers.sex,
-                    weight: parseFloat(answers.weight),
-                    body_fat: parseFloat(answers.body_fat),
-                    // TODO LO DEMÁS QUE TRAE EL BÁSICO (bloque 2 del doc del 18-08). Antes
-                    // aquí viajaban siete campos y el servidor esperaba trece: por eso el
-                    // perfil se quedaba vacío. Ahora se manda lo que se pregunta.
-                    birthdate: answers.birthdate || null,
-                    height: num(answers.height),
-                    biotype: answers.biotype || null,
-                    training_experience: answers.training_experience || null,
-                    profesion: answers.profesion || null,
-                    como_me_conociste: answers.como_me_conociste || null,
-                    proteinas_habituales: answers.proteinas_habituales || null,
-                    peso_maximo: num(answers.peso_maximo),
-                    peso_maximo_ano: num(answers.peso_maximo_ano),
-                    peso_maximo_nota: answers.peso_maximo_nota || null,
-                    peso_mejor_momento: num(answers.peso_mejor_momento),
-                    peso_mejor_momento_ano: num(answers.peso_mejor_momento_ano),
-                    peso_mejor_momento_nota: answers.peso_mejor_momento_nota || null,
-                    foto_mejor_momento: answers.foto_mejor_momento || null,
-                    peso_minimo: num(answers.peso_minimo),
-                    peso_minimo_ano: num(answers.peso_minimo_ano),
-                    peso_minimo_nota: answers.peso_minimo_nota || null,
-                    alergias: answers.alergias || null,
-                    lactosa: answers.lactosa || null,
-                    gluten: answers.gluten || null,
-                    alergia_otra: answers.alergia_otra || null,
-                    dietas_previas: answers.dietas_previas || null,
-                    tiempo_intentandolo: answers.tiempo_intentandolo || null,
-                    motivo_apuntarse: answers.motivo_apuntarse || null,
+                    ...cuerpoDelBasico(),
                 });
             }
             const res = await api.post('/clients/ajustar-macros', ajustesDelCuestionario());
@@ -1737,6 +1775,16 @@ const QuestionnairePage = () => {
         const irA = typeof destino === 'string' ? destino : '/welcome';
         setLoading(true);
         try {
+            // LO DEL BÁSICO PRIMERO, si este cliente nunca pasó por él (los que vienen de
+            // Calma). El cuestionario largo no escribe el objetivo, ni el peso, ni las
+            // proteínas, ni recalcula macros: eso lo hace la puerta del alta, y sin esta
+            // llamada el cliente contestaba veinte pantallas más y su ficha seguía coja.
+            if (laBaseQueFalta.length || loQueFaltaDelBasico.length) {
+                await api.post('/clients/questionnaire', {
+                    completar: !!profile?.questionnaire_completed,
+                    ...cuerpoDelBasico(),
+                });
+            }
             await api.post('/clients/questionnaire/nivel1', {
                 biotype: answers.biotype || null,
                 height: num(answers.height),
@@ -2412,7 +2460,7 @@ const QuestionnairePage = () => {
                         recorrido, `goNext` se queda donde está -- se topa con el final de la
                         lista -- y la única salida era el botón de atrás del navegador. */}
                     <Button variant="outline" disabled={loading} className="px-8 py-6 text-lg"
-                        onClick={() => (esUltimo ? navigate('/welcome') : goNext())}>
+                        onClick={() => (idx >= flow.length - 1 ? navigate('/welcome') : goNext())}>
                         Ahora no
                     </Button>
                 </div>

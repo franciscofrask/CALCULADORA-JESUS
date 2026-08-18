@@ -124,5 +124,7 @@ def test_no_se_le_piden_las_fotos_que_ya_tiene():
     bloque = pagina[i:i + 400]
     assert "yaTieneMedidas && yaTieneFotos" in bloque, (
         "la pantalla de fotos y medidas vuelve a salirle a quien ya las tiene")
-    assert "if (!visible(flow[idx])) goNext();" in pagina, (
+    # Y el salto solo, que vive con los demás hooks (detrás del `return` de «ya completaste
+    # el cuestionario» React no deja llamar a un hook: el proyecto no compila).
+    assert "if (sobra) setIdx" in pagina, (
         "un paso que deja de hacer falta con el cliente dentro se queda en pantalla")
