@@ -451,6 +451,36 @@ const InicioNuevo = () => {
             detalle: 'Lo rellenas una vez', path: '/dashboard/nutrition',
         });
     }
+    // LOS QUE YA ESTABAN DENTRO (bloque 6 del doc del 18-08). Lo que pregunta el alta nueva
+    // solo lo contesta quien entre a partir de ahora: de los que ya pagan, ninguno tiene
+    // biotipo, ni peso máximo, ni mejor forma. Es el dato que alimenta el modelo, así que se
+    // les pasa el básico aquí dentro -- solo lo que falte -- y CON LA RAZÓN POR DELANTE, que
+    // es lo que hace que lo contesten: no «rellena tu ficha», sino qué ganan.
+    //
+    // No se le enseña al que todavía tiene el perfil largo a medias: ese ya tiene su tarjeta
+    // y son el mismo recorrido; dos avisos de «contesta cosas» a la vez no son dos avisos,
+    // son ruido.
+    const queFaltaDelBasico = (() => {
+        if (!profile || !profile.questionnaire_completed || faltaElNivel1) return [];
+        return [
+            [!profile.biotype && profile.sex !== 'mujer', 'tu biotipo'],
+            [!profile.peso_maximo, 'tu peso máximo'],
+            [!profile.peso_mejor_momento, 'tu mejor forma'],
+            [!(profile.proteinas_habituales || []).length, 'qué proteínas comes'],
+            [!profile.tiempo_intentandolo, 'cuánto llevas intentándolo'],
+            [!profile.training_experience, 'tu experiencia entrenando'],
+            [!profile.birthdate, 'tu fecha de nacimiento'],
+        ].filter(([falta]) => falta).map(([, texto]) => texto);
+    })();
+    if (queFaltaDelBasico.length) {
+        pendientes.push({
+            id: 'completar-basico', icono: ClipboardCheck,
+            titulo: queFaltaDelBasico.length === 1 ? 'Nos falta un dato tuyo' : 'Nos faltan cosas tuyas',
+            detalle: `Con ${queFaltaDelBasico.length === 1 ? 'él' : 'ellas'} te recalculamos los macros`,
+            extra: queFaltaDelBasico.slice(0, 3).join(' · ') + (queFaltaDelBasico.length > 3 ? '...' : ''),
+            path: '/questionnaire?completar=1',
+        });
+    }
     reportes.forEach((r) => {
         // PASADA LA HORA DESAPARECE. Un plazo vencido en Inicio solo sirve para recordarle
         // cada mañana que llega tarde a algo que ya no puede mandar.

@@ -816,6 +816,43 @@ for (let i = 0; i < STEPS_NIVEL1.length; i++) {
     };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// EL BÁSICO, PARA LOS QUE YA ESTABAN DENTRO
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// «Todo esto solo lo contesta quien entre a partir de ahora. De los que ya tienes: 91 sin
+// objetivo, 158 sin días de entreno, y ninguno con biotipo, zona de grasa, peso máximo,
+// mejor forma ni preferencias. Es el hueco más caro que queda, porque son personas que ya
+// pagan y es el dato que alimenta el modelo. Lo barato: pasarles el básico dentro de la app
+// la próxima vez que entren, con la razón por delante.» (bloque 6 del doc del 18-08)
+//
+// No se le vuelve a pasar el básico entero: se le pasan SOLO las pantallas cuya respuesta no
+// tenemos. A quien ya dio su altura no se le pregunta la altura otra vez, que es la forma más
+// rápida de que cierre la pestaña.
+const falta = (paso, a) => {
+    // «¿Estás seguro?» es la confirmación del objetivo: sin la pregunta del objetivo delante
+    // no significa nada, y el que ya está dentro tiene objetivo desde el primer día.
+    if (paso.key === '_confirm') return !a.goal;
+    if (paso.key) return a[paso.key] === undefined || a[paso.key] === null || a[paso.key] === '';
+    // Las pantallas compuestas no tienen clave: se miran los campos que rellenan.
+    if (paso.type === 'contacto') return !a.birthdate || !a.phone;
+    if (paso.type === 'ocupacion') return !a.profesion || !a.actividad_diaria;
+    // Los siete biotipos, solo si le falta el suyo (y en mujer no salen nunca).
+    if (paso.type === 'biotype_intro') return a.sex !== 'mujer' && !a.biotype;
+    // El día tipo, solo si tampoco sabemos qué dieta sigue: si eso ya está, su día tipo lo
+    // dio en su último ajuste y no hace falta pedírselo otra vez.
+    if (paso.type === 'dieta') return a.sigue_dieta === undefined || a.sigue_dieta === null;
+    return false;      // portadas, revisión y resultado: los pone el recorrido, no el filtro
+};
+
+const LA_PORTADA_DE_COMPLETAR = {
+    type: 'statement',
+    title: 'Nos faltan cosas tuyas',
+    desc: 'Son las que no llegamos a preguntarte cuando entraste. Con ellas te recalculamos '
+        + 'los macros y te montamos los menús con lo que de verdad comes.',
+    cta: 'Vamos',
+};
+
 // CUÁNTAS SON, CONTADAS DE LA PROPIA LISTA.
 // La portada deja su `desc` vacía a propósito y se rellena aquí: si el número se escribiera a
 // mano, se quedaría viejo el día que alguien añada una pregunta, y entonces el aviso mentiría,
@@ -1025,11 +1062,28 @@ const QuestionnairePage = () => {
                { type: 'oferta_ajuste', title: 'Una cosa más' }]),
     ];
     const preguntasDeAjuste = [...STEPS_AJUSTE, ...elCierre];
-    const flow = retomandoNivel1
-        ? STEPS_NIVEL1
-        : modoAjuste
-            ? preguntasDeAjuste
-            : [...EL_BASICO, ...elCierre];
+
+    // EL BÁSICO PARA EL QUE YA ESTABA (?completar=1). Solo lo que falte, con la portada que
+    // dice por qué se le pregunta y terminando en sus macros nuevos, que es lo que gana.
+    // Se calcula una vez con las respuestas ya sembradas del perfil: si se recalculara en
+    // cada tecla, la pantalla en la que está escribiendo desaparecería al contestarla.
+    const pidioCompletar = new URLSearchParams(location.search).get('completar') === '1';
+    const elBasicoQueFalta = useMemo(() => {
+        if (!pidioCompletar || !profile) return null;
+        const a = answersRef.current;
+        const pantallas = EL_BASICO.filter(p => falta(p, a));
+        if (!pantallas.length) return [];
+        return [LA_PORTADA_DE_COMPLETAR, ...pantallas, porTipo('final0'), porTipo('result')];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pidioCompletar, profile]);
+
+    const flow = elBasicoQueFalta?.length
+        ? elBasicoQueFalta
+        : retomandoNivel1
+            ? STEPS_NIVEL1
+            : modoAjuste
+                ? preguntasDeAjuste
+                : [...EL_BASICO, ...elCierre];
 
     // PreferencesSetup espera el helper estilo fetch (endpoint, {method, body}).
     const fetchApi = useCallback(async (endpoint, options = {}) => {
@@ -1187,7 +1241,11 @@ const QuestionnairePage = () => {
             ...a,
             name: a.name ?? user.name ?? '',
             email: user.email ?? a.email ?? '',
+            // El teléfono vive en la cuenta, no en la ficha: sin sembrarlo, al que ya lo dio
+            // se le volvía a pedir al completar su ficha.
+            phone: a.phone ?? user.phone ?? '',
         }));
+        if (user.phone) answersRef.current = { ...answersRef.current, phone: user.phone };
     }, [user]);
 
     // El sexo y el objetivo se contestaron en el ALTA y viven en el perfil, no en las
@@ -1208,7 +1266,10 @@ const QuestionnairePage = () => {
                              'lactosa', 'gluten', 'alergias', 'peso_maximo', 'peso_minimo',
                              'peso_mejor_momento', 'profesion', 'como_me_conociste',
                              'proteinas_habituales', 'birthdate', 'height', 'biotype',
-                             'training_experience']) {
+                             'training_experience',
+                             // Y los números que ya tiene, para que al completar su ficha no
+                             // se le vuelva a preguntar el peso y la grasa que ya constan.
+                             'weight', 'body_fat', 'profesion']) {
             const v = profile[clave];
             if (v !== null && v !== undefined && v !== '') delBasico[clave] = v;
         }
@@ -1216,7 +1277,9 @@ const QuestionnairePage = () => {
         // `ajustes_macros`. Sin esto el completo se las volvía a preguntar a todo el mundo,
         // porque aquí no las veía: son las mismas preguntas, guardadas en otro cajón.
         for (const clave of ['sigue_dieta', 'tiempo_dieta', 'como_va', 'hambre_saturacion',
-                             'deporte_extra', 'deporte_cual', 'deporte_en_descanso']) {
+                             'deporte_extra', 'deporte_cual', 'deporte_en_descanso',
+                             'actividad_diaria', 'apetito', 'facilidad_engordar',
+                             'cuesta_definir']) {
             const v = (profile.ajustes_macros || {})[clave];
             if (v !== null && v !== undefined && v !== '') delBasico[clave] = v;
         }
@@ -1288,7 +1351,10 @@ const QuestionnairePage = () => {
 
     // El ALTA no se puede repetir (ni por el enlace). El cuestionario de AJUSTE sí: si cambia de
     // trabajo o empieza a hacer otro deporte, lo vuelve a pasar y sus macros se recalculan.
-    if (!revision && profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1 && !pidioAjustar) {
+    // Y tampoco corta al que viene a COMPLETAR lo que le falta (?completar=1): ese no está
+    // repitiendo el alta, está contestando por primera vez lo que no llegamos a preguntarle.
+    if (!revision && profile?.questionnaire_completed && !nivel0Enviado && !retomandoNivel1
+            && !pidioAjustar && !elBasicoQueFalta?.length) {
         return (
             <Shell progress={100}>
                 <div className="text-center">
@@ -1416,17 +1482,33 @@ const QuestionnairePage = () => {
 
     // La oferta del final: se apunta lo que conteste y se le lleva a su panel. No cobra
     // nada todavía (ver POST /clients/ajuste-a-medida): falta decidir cómo se cobra.
+    // SE COBRA AQUÍ MISMO (Francisco, 18-08). Antes solo se apuntaba lo que contestaba y el
+    // equipo lo veía en su campana: quien decía que sí se quedaba esperando un correo que no
+    // salía de ningún sitio. Ahora el sí va derecho a Stripe, y al volver el ajuste ya está
+    // en la cola del lunes.
+    //
+    // El no se sigue guardando: saber cuánta gente lo rechaza vale igual que saber quién lo
+    // compra, y es lo que dice si la oferta está bien puesta o no.
     const responderOferta = async (quiere) => {
         setLoading(true);
         try {
             await api.post('/clients/ajuste-a-medida', { quiere });
-            toast.success(quiere
-                ? 'Anotado. Te escribimos con los detalles.'
-                : 'Perfecto, seguimos con tu plan.');
+            if (quiere) {
+                const { data } = await api.post('/billing/ajuste-a-medida/checkout', {});
+                if (data?.checkout_url) {
+                    window.location.href = data.checkout_url;   // se va a Stripe
+                    return;
+                }
+                throw new Error('sin checkout_url');
+            }
+            toast.success('Perfecto, seguimos con tu plan.');
         } catch (e) {
-            // Que no se le atasque el final del alta por esto: el aviso al equipo puede
-            // esperar, la persona no.
-            console.error('[alta] no se pudo guardar la respuesta a la oferta', e);
+            // Al usuario nunca la traza: si el cobro no arranca, se le dice que lo tenemos
+            // apuntado -- que es verdad, la respuesta sí se guardó -- y el equipo lo ve.
+            console.error('[alta] la oferta del ajuste a medida', e);
+            if (quiere) {
+                toast.info('Lo tenemos apuntado. Te escribimos para cerrarlo.');
+            }
         } finally {
             setLoading(false);
             navigate('/welcome');
@@ -1527,8 +1609,12 @@ const QuestionnairePage = () => {
             // Los cuatro datos de la tabla van primero, porque son los que crean la ficha y
             // sin ficha no hay nada que ajustar. Pero no se le enseña ningún número todavía:
             // el resultado que ve es uno solo, el de después, ya con los modificadores.
-            if (!profile?.questionnaire_completed) {
+            // Y TAMBIÉN CUANDO VIENE A COMPLETAR: ese ya tiene el cuestionario dado por
+            // hecho, así que sin esto su pasada no llegaba a guardarse (el servidor la
+            // rechazaba con un 409) y se quedaba mirando el botón de calcular.
+            if (!profile?.questionnaire_completed || elBasicoQueFalta?.length) {
                 await api.post('/clients/questionnaire', {
+                    completar: !!elBasicoQueFalta?.length,
                     name: answers.name,
                     email: answers.email,
                     phone: answers.phone,

@@ -80,23 +80,8 @@ async def resolve_macro_revision(revision_id: str, user = Depends(get_admin_user
 
 # ==================== CLIENTS ====================
 
-def _lleva_perfil_completo(plan: Optional[str], catalogo: Optional[Dict[str, Any]]) -> bool:
-    """Si a este plan se le pide el cuestionario largo.
-
-    Es la misma regla que usa la app del cliente para abrírselo: `calculadora ==
-    'personalizado'`, o sea que hay alguien detrás que le va a poner los macros a mano. No
-    hay ninguna feature derivada que lo diga, así que se mira la matriz del plan.
-    """
-    if not catalogo:
-        return False
-    from models.user import codigo_de_plan
-    hab = (catalogo.get(codigo_de_plan(plan)) or {}).get("habilitaciones") or {}
-    return hab.get("calculadora") == "personalizado"
-
-
 def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
-                          ahora: datetime,
-                          catalogo: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                          ahora: datetime) -> Dict[str, Any]:
     """El semaforo de un cliente, celda a celda (punto 32 del 07-08).
 
     Cinco estados y POR CELDA, no por fila: asi se distingue quien va regular de quien va
@@ -151,7 +136,11 @@ def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
     # Al que no lleva entrenador no se le pinta: no tiene cuestionario largo que terminar.
     # Y no se pone en rojo el mismo día: se le dan tres días, que es el plazo que pregunta el
     # documento, y hasta entonces sale en ambar. Antes de eso no ha pasado nada.
-    if _lleva_perfil_completo(plan, catalogo):
+    # Le toca el cuestionario largo al que lleva a alguien detrás poniéndole los macros:
+    # el mismo criterio que usa la app para abrírselo y el aviso para recordárselo.
+    from core.plan_access import modo_calculadora
+
+    if modo_calculadora(plan) == "personalizado":
         if profile.get("questionnaire_nivel1_completed"):
             perfil_largo = semaforo.celda(True, semaforo.OK, "completo")
         else:
@@ -338,7 +327,7 @@ async def get_all_clients(
                     "price": precio_de_ciclo(profile, catalogo),
                     "precio_mensual": round(precio_mensual(profile, catalogo), 2),
                     "acceso": estado_de_acceso(profile),
-                    "semaforo": _semaforo_del_cliente(profile, hablado, ahora, catalogo)}
+                    "semaforo": _semaforo_del_cliente(profile, hablado, ahora)}
             # TU PROPIA FICHA VA MARCADA. Es la única que entra por la excepción de arriba,
             # y no es negocio: los contadores del panel (clientes totales, activos, MRR)
             # siguen sin contarla, así que quien compare la tabla con un contador tiene que
@@ -1609,12 +1598,8 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     reparto = {c: {semaforo.OK: 0, semaforo.REGULAR: 0, semaforo.REGULAR_MALO: 0,
                    semaforo.MALO: 0, semaforo.INFO: 0} for c in CELDAS}
     at_risk = 0
-    # El catálogo hace falta para saber a quién se le pide el cuestionario largo.
-    from routes.plans import _overrides_by_code as _ovr
-    from models.user import merged_catalog as _merged
-    catalogo_semaforo = _merged(await _ovr())
     for p in active_profiles:
-        s = _semaforo_del_cliente(p, hablado_a, now, catalogo_semaforo)
+        s = _semaforo_del_cliente(p, hablado_a, now)
         for c in CELDAS:
             reparto[c][s[c]["estado"]] += 1
         if s["peor"] == semaforo.MALO:

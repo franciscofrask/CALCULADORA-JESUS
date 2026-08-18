@@ -1068,6 +1068,10 @@ class AjustesMacros(BaseModel):
 
 # Cuestionario inicial (ELM) - Nivel 0
 class QuestionnaireSubmit(BaseModel):
+    # LA PASADA DE «NOS FALTAN COSAS TUYAS» (bloque 6 del doc del 18-08). El alta no se
+    # repite, pero al que ya estaba dentro hay que poder preguntarle lo que nunca se le
+    # pregunto. Con esto puesto, el endpoint acepta la segunda pasada y solo rellena huecos.
+    completar: bool = False
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None

@@ -322,6 +322,71 @@ async def comprar_revision_suelta(payload: Dict[str, Any] = Body(default={}), us
     return {"checkout_url": session["url"], "session_id": session["id"], "importe_eur": PRECIO_EUR}
 
 
+@router.post("/ajuste-a-medida/checkout")
+async def comprar_ajuste_a_medida(payload: Dict[str, Any] = Body(default={}),
+                                  user=Depends(get_current_user)):
+    """La oferta de los 87 € del final del alta (bloque 6 del doc del 18-08).
+
+    Se cobra por Stripe, entra en la cola de los lunes y se puede repetir. Lo único que no
+    se permite es tener dos pendientes a la vez: pagar dos veces por el mismo trabajo que
+    todavía no se ha hecho no es repetir, es cobrar de más.
+
+    Al que ya lleva entrenador no se le vende: sus macros los revisa él y ya los paga.
+    """
+    from core.ajuste_a_medida import (
+        DESCRIPCION, NOMBRE_PRODUCTO, PRECIO_EUR, hay_uno_pendiente, importe_centimos)
+    from core.plan_access import tiene_entrenador_detras
+
+    stripe_module = get_stripe_module()
+    require_stripe_test_mode("La compra del ajuste a medida")
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    if tiene_entrenador_detras(profile.get("plan")):
+        raise HTTPException(status_code=400,
+                            detail="Tu plan ya incluye entrenador: tus macros los ajusta él.")
+    if hay_uno_pendiente(profile):
+        raise HTTPException(status_code=409,
+                            detail="Ya tienes un ajuste a medida pagado y pendiente de que lo preparemos.")
+
+    customer_id = await get_or_create_stripe_customer(user, profile)
+    metadata = {"user_id": user["id"], "profile_id": profile["id"], "tipo": "ajuste_a_medida"}
+    session = await stripe_api_call(
+        stripe_module.checkout.Session.create,
+        customer=customer_id,
+        client_reference_id=profile["id"],
+        mode="payment",
+        line_items=[{
+            "price_data": {
+                "currency": "eur",
+                "unit_amount": importe_centimos(),
+                "product_data": {"name": NOMBRE_PRODUCTO, "description": DESCRIPCION},
+            },
+            "quantity": 1,
+        }],
+        invoice_creation={"enabled": True},
+        payment_intent_data={"metadata": metadata},
+        success_url=build_frontend_url(payload.get("success_path") or "/welcome?ajuste=ok",
+                                       include_session_placeholder=True),
+        cancel_url=build_frontend_url(payload.get("cancel_path") or "/welcome"),
+        metadata=metadata,
+    )
+    await db.client_profiles.update_one(
+        {"id": profile["id"]},
+        {"$set": {"ajuste_a_medida": {
+            **(profile.get("ajuste_a_medida") or {}),
+            "quiere": True,
+            "estado": "iniciado",
+            "importe_eur": PRECIO_EUR,
+            "session_id": session["id"],
+            "creado_at": datetime.now(timezone.utc).isoformat(),
+        }}},
+    )
+    return {"checkout_url": session["url"], "session_id": session["id"],
+            "importe_eur": PRECIO_EUR}
+
+
 @router.post("/checkout-session/sync")
 async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depends(get_current_user)):
     """Llamado por el frontend al volver de Stripe (?checkout=success&session_id=...),
@@ -389,6 +454,15 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
             perfil = await db.client_profiles.find_one({"user_id": user["id"]})
             if perfil:
                 await activar_tras_pago(perfil, (session.get("amount_total") or 0) / 100.0)
+                synced_profile = await db.client_profiles.find_one({"id": perfil["id"]}, {"_id": 0})
+        elif (session.get("metadata") or {}).get("tipo") == "ajuste_a_medida":
+            # El ajuste a medida de 87 €, igual: no cambia el plan, entra en la cola del
+            # lunes. Se activa aquí además de en el webhook para que al volver de Stripe ya
+            # lo vea en marcha, y `activar_tras_pago` no duplica si el webhook llegó antes.
+            from core.ajuste_a_medida import activar_tras_pago as activar_ajuste
+            perfil = await db.client_profiles.find_one({"user_id": user["id"]})
+            if perfil:
+                await activar_ajuste(perfil, (session.get("amount_total") or 0) / 100.0)
                 synced_profile = await db.client_profiles.find_one({"id": perfil["id"]}, {"_id": 0})
         else:
             # Checkout de pago único (p.ej. reto60): no hay suscripción que sincronizar.
@@ -537,6 +611,13 @@ async def _process_stripe_event(event: Dict[str, Any]) -> None:
                 perfil = await db.client_profiles.find_one({"id": metadata.get("profile_id")})
                 if perfil:
                     await activar_tras_pago(perfil, (obj.get("amount_total") or 0) / 100.0)
+            elif metadata.get("tipo") == "ajuste_a_medida":
+                # El ajuste a medida de 87 €: tampoco toca el plan ni el acceso. Deja el
+                # trabajo en la cola del lunes y le abre el cuestionario completo.
+                from core.ajuste_a_medida import activar_tras_pago as activar_ajuste
+                perfil = await db.client_profiles.find_one({"id": metadata.get("profile_id")})
+                if perfil:
+                    await activar_ajuste(perfil, (obj.get("amount_total") or 0) / 100.0)
             else:
                 # Pago único (p.ej. reto60): activa el perfil con acceso hasta fin de ciclo.
                 await sync_profile_from_one_time_session(obj)

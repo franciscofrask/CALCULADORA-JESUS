@@ -285,6 +285,7 @@ async def sincronizar_avisos(user_id: str) -> int:
             reporte_sin_fotos=datos["reporte_sin_fotos"],
             dias_sin_cerrar=datos["dias_sin_cerrar"],
             dias_sin_entrar=datos["dias_sin_entrar"],
+            dias_con_el_perfil_a_medias=datos["dias_con_el_perfil_a_medias"],
         )
 
         # Antes de mirar si le toca una nueva, se retiran las que ya no tocan: si no, se
@@ -436,6 +437,10 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
         "cerro_hoy": cerro_hoy,
         "dias_sin_cerrar": dias_sin_cerrar,
         "dias_sin_entrar": await _dias_sin_entrar(perfil, hoy),
+        # Cuánto lleva con el perfil largo a medias, para el aviso de los tres días (18-08).
+        # `None` para quien no tiene que hacerlo: los que no llevan entrenador y los que ya
+        # lo terminaron.
+        "dias_con_el_perfil_a_medias": _dias_con_el_perfil_a_medias(perfil, hoy),
         # El arranque del ciclo, en día de España: es el "día 1" del que habla el doc.
         "arranque": (a_madrid(perfil.get("cycle_start") or perfil.get("created_at")) or ahora).date(),
         # Activado por defecto: el cliente lo apaga desde su perfil, no al revés.
@@ -469,6 +474,37 @@ async def _cierres_del_cliente(client_id: str, hoy) -> tuple:
     except (ValueError, TypeError):
         return False, None
     return d == hoy, max(0, (hoy - d).days)
+
+
+def _dias_con_el_perfil_a_medias(perfil: dict, hoy) -> Optional[int]:
+    """Cuántos días lleva con el cuestionario largo sin terminar, o None si no le toca.
+
+    Le toca al que lleva entrenador -- `calculadora == 'personalizado'` -- y solo desde que
+    terminó el básico: antes de eso ni siquiera tiene el largo abierto. Al que no lleva
+    entrenador se le devuelve None y no se le avisa de un cuestionario que no existe para él.
+    """
+    from datetime import date
+
+    if perfil.get("questionnaire_nivel1_completed"):
+        return None
+    if not perfil.get("questionnaire_completed"):
+        return None
+    # EL MISMO CRITERIO QUE USA LA APP PARA ABRÍRSELO, y el mismo que pinta el panel: su plan
+    # trae la calculadora en modo «personalizado», o sea que hay alguien detrás que le va a
+    # poner los macros a mano. Dos criterios para la misma pregunta acaban contradiciéndose y
+    # avisando a quien no tiene nada que rellenar.
+    from core.plan_access import modo_calculadora
+
+    if modo_calculadora(perfil.get("plan")) != "personalizado":
+        return None
+
+    desde = (perfil.get("questionnaire_completed_at")
+             or perfil.get("cycle_start") or perfil.get("created_at") or "")[:10]
+    try:
+        d = date.fromisoformat(desde)
+    except ValueError:
+        return None
+    return max(0, (hoy - d).days)
 
 
 async def _dias_sin_entrar(perfil: dict, hoy) -> Optional[int]:

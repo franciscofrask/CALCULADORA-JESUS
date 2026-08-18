@@ -268,7 +268,15 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado. Selecciona un plan primero.")
-    if profile.get("questionnaire_completed"):
+    # EL ALTA NO SE REPITE... salvo para COMPLETAR lo que falta (bloque 6 del doc del 18-08).
+    #
+    # A los que ya estaban dentro nunca se les preguntó el basico: no tienen biotipo, ni peso
+    # maximo, ni mejor forma, ni proteinas. Se les pasa dentro de la app, y esa pasada entra
+    # por aqui con `completar: true`. La diferencia con el alta es que NO PISA NADA: solo se
+    # escribe el campo que hoy esta vacio, asi que no puede servir para borrarle a nadie lo
+    # que ya contesto ni para colar un peso nuevo por la puerta de atras.
+    completando = bool(getattr(data, "completar", False)) and bool(profile.get("questionnaire_completed"))
+    if profile.get("questionnaire_completed") and not completando:
         raise HTTPException(status_code=409, detail="El cuestionario ya fue completado.")
 
     sexo = (data.sex or "hombre").strip().lower()
@@ -385,6 +393,17 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         user_update["phone"] = data.phone
     if user_update:
         await db.users.update_one({"id": user["id"]}, {"$set": user_update})
+
+    # COMPLETANDO: solo lo que hoy esta vacio. La pasada de «nos faltan cosas tuyas» rellena
+    # huecos, no reescribe la ficha: si alguien vuelve a pasarla, lo que ya contesto se queda
+    # como esta. Los macros SI se recalculan -- es lo que se le ha prometido a cambio -- y por
+    # eso quedan fuera del filtro.
+    if completando:
+        de_macros = {"macros_training", "macros_rest", "macros_periworkout", "macros_source",
+                     "macros_multiplicadores", "ajustes_macros", "questionnaire_completed",
+                     "questionnaire_completed_at"}
+        update = {k: v for k, v in update.items()
+                  if k in de_macros or profile.get(k) in (None, "", [], {})}
 
     await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
 
@@ -1067,10 +1086,10 @@ async def pedir_ajuste_a_medida(data: Dict[str, Any] = Body(default={}),
                                 user=Depends(get_current_user)):
     """El final del alta de quien no lleva entrenador: «quiero el ajuste a medida».
 
-    NO COBRA NADA, y es a proposito. El documento del 18-08 deja sin decidir como se cobran
-    los 87 € (si con Stripe ahi mismo o mandandole un enlace), asi que lo que se hace aqui
-    es lo unico que se puede hacer sin inventarse esa decision: dejar dicho que lo quiere y
-    avisar al equipo. Cobrarle sin saber como se le entrega seria peor que no cobrarle.
+    APUNTA LO QUE CONTESTA, y el cobro va aparte: quien dice que si sigue por
+    `POST /billing/ajuste-a-medida/checkout`, que es Stripe (Francisco, 18-08). Se separa
+    en dos pasos a proposito: la respuesta se guarda ANTES de mandarle a pagar, asi que si
+    abandona la pasarela sigue constando que lo queria y el equipo puede ir a por el.
 
     Se guarda tambien el «no» a proposito: saber cuanta gente lo ve y lo rechaza vale tanto
     como saber quien lo compra, y hoy eso no se mide en ningun sitio.
@@ -1080,12 +1099,16 @@ async def pedir_ajuste_a_medida(data: Dict[str, Any] = Body(default={}),
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
     quiere = bool(data.get("quiere"))
+    anterior = profile.get("ajuste_a_medida") or {}
+    # `cobrado` NO se pisa: se puede repetir, y quien ya compro uno antes no vuelve a cero
+    # por contestar la oferta otra vez.
     await db.client_profiles.update_one(
         {"user_id": user["id"]},
         {"$set": {"ajuste_a_medida": {
+            **anterior,
             "quiere": quiere,
             "respondido_at": datetime.now(timezone.utc).isoformat(),
-            "cobrado": False,
+            "cobrado": bool(anterior.get("cobrado")),
         }}},
     )
 
@@ -1096,11 +1119,11 @@ async def pedir_ajuste_a_medida(data: Dict[str, Any] = Body(default={}),
             titulo="Quiere el ajuste a medida (87 €)",
             mensaje=f"{profile.get('name') or user.get('name') or 'Un cliente'} ha pedido sus "
                     f"macros personalizados y su programa de suplementación al terminar el alta. "
-                    f"Falta cobrarle: todavía no hay cobro automático montado.",
+                    f"Va a la pasarela: si no llega el cobro, es que se cayó por el camino.",
             client_id=profile.get("id"),
             trainer_id=profile.get("trainer_id"),
         )
-    return {"guardado": True, "quiere": quiere, "cobrado": False}
+    return {"guardado": True, "quiere": quiere, "cobrado": bool(anterior.get("cobrado"))}
 
 
 # ==================== USER PREFERENCES ====================

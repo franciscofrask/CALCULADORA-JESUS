@@ -221,8 +221,18 @@ def avisos_condicionados(*, ahora: datetime,
                          semanas_sin_ajustar: Optional[int] = None,
                          reporte_sin_fotos: bool = False,
                          dias_sin_cerrar: Optional[int] = None,
-                         dias_sin_entrar: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Las CUATRO del doc 16-08, en su orden de prioridad. Ni una mas.
+                         dias_sin_entrar: Optional[int] = None,
+                         dias_con_el_perfil_a_medias: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Las cuatro del doc 16-08 y una quinta del 18-08, en su orden de prioridad.
+
+    LA QUINTA la pide Francisco el 18-08 contestando a la pregunta del documento del
+    cuestionario: «Que pasa si un Gold no termina el completo. No puede quedarse en una
+    tarjeta de Inicio que se ignora, porque sin fotos y medidas su entrenador no puede
+    trabajar. ¿Se le avisa a los tres dias?». Si.
+
+    Va la PRIMERA de todas: mientras no termine su perfil, su entrenador no puede ponerle
+    los macros buenos ni montarle la rutina, asi que cualquier otro aviso llega antes de
+    tiempo. Y sigue valiendo el tope de una condicionada por semana.
 
     Se cayeron tres que existian antes y que el doc no recoge: "¿Quieres que revisemos tu
     caso?" (estancado), "¿Te pesamos esta semana?" (7 dias sin peso) y "¿Todo bien?" (5
@@ -236,6 +246,26 @@ def avisos_condicionados(*, ahora: datetime,
     """
     fuera: List[Dict[str, Any]] = []
     semana_iso = f"{ahora.isocalendar()[0]}-W{ahora.isocalendar()[1]:02d}"
+
+    # 0) EL PERFIL A MEDIAS (18-08). Tres dias, que es el plazo que pide el documento: antes
+    #    de eso no ha pasado nada y meterle prisa el mismo dia es de mal gusto.
+    #    Sin reproche y con el porque delante: no se le pide por pedir, se le pide porque su
+    #    entrenador no puede trabajar sin eso.
+    if dias_con_el_perfil_a_medias is not None and dias_con_el_perfil_a_medias >= 3:
+        fuera.append({
+            "clave": f"perfil_a_medias:{semana_iso}",
+            "familia": "perfil_a_medias",
+            "tipo": "perfil",
+            "variantes": [
+                {"titulo": "Te falta terminar tu perfil",
+                 "cuerpo": "Sin tus fotos y tus medidas no puedo ponerte los macros buenos "
+                           "ni montarte la rutina."},
+                {"titulo": "Me falta lo tuyo para poder empezar",
+                 "cuerpo": "Son unas preguntas, tus fotos y tus medidas. Con eso ya trabajo."},
+            ],
+            "link": "/questionnaire",
+            "calendario": False,
+        })
 
     # 1) Sin fotos no hay comparacion: es lo que mas le cuesta al cliente y lo que mas
     #    bloquea, asi que va primero.
