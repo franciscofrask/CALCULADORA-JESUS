@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, HTTPException, Depends
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 import logging
+import re
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -317,6 +318,14 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         valor = getattr(data, campo, None)
         if valor not in (None, "", []):
             update[campo] = valor
+
+    # Y lo que ha dicho de comida, en el idioma que entiende la calculadora, para que su
+    # primer día no sea un menú cualquiera. No se pisa lo que ya tuviera puesto: quien
+    # llegue aquí con preferencias hechas (las eligió en Nutrición antes de contratar) se
+    # queda con las suyas.
+    for clave, valor in _preferencias_del_basico(data).items():
+        if not profile.get(clave):
+            update[clave] = valor
 
     if ajustes:
         update["ajustes_macros"] = ajustes
@@ -676,6 +685,54 @@ async def guardar_progreso_ajuste(data: dict, user = Depends(get_current_user)):
     if not r.matched_count:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
     return {"guardado": True, "paso": progreso["paso"]}
+
+
+# ── Del básico a las preferencias de comida (bloque 3 del doc del 18-08) ────────
+#
+# «Comidas que puedes comer hoy · con el menú autoajustable ya puesto, montado con las
+# preferencias que dio en el alta.» Para que eso sea verdad, lo que contesta en las dos
+# pantallas de comida del básico tiene que acabar donde la app mira: `food_preferences`
+# (lo que le gusta) y `avoided_categories` / `avoided_keywords` (lo que no puede comer).
+# Si se quedan en un campo suyo aparte, el primer menú sale de un catálogo genérico y le
+# puede plantar lácteos a una intolerante.
+#
+# Las claves son las mismas que usa la pantalla de Preferencias y el filtro de la
+# calculadora (`AVOIDABLE_PREFIXES` en routes/calculator.py): no se inventa vocabulario.
+PROTEINAS_A_PREFERENCIAS = {
+    "aves": "aves", "ternera": "vacuno", "cerdo": "cerdo", "pescado": "pescados",
+    "embutido": "embutidos", "huevos": "huevos", "polvo": "proteina_polvo",
+    "vegetal": "proteina_vegetal", "legumbres": "legumbres", "lacteos": "lacteos",
+}
+
+
+def _preferencias_del_basico(data) -> Dict[str, Any]:
+    """Lo que dice de comida en el básico, en el idioma de las preferencias.
+
+    Solo se bloquea lo que de verdad no puede comer: la lactosa cuando es total (quien
+    tolera el yogur o el queso curado no tiene por qué quedarse sin lácteos) y el gluten
+    cuando es celiaquía. Y lo que escriba en «otra» va como palabra a evitar, que es la
+    forma más directa de que no le salga en ningún menú.
+    """
+    fuera: Dict[str, Any] = {}
+    gustan = [PROTEINAS_A_PREFERENCIAS[p] for p in (data.proteinas_habituales or [])
+              if p in PROTEINAS_A_PREFERENCIAS]
+    if gustan:
+        fuera["food_preferences"] = gustan
+
+    evitar, palabras = [], []
+    alergias = data.alergias or []
+    if "lactosa" in alergias and (data.lactosa or "") == "total":
+        evitar.append("lacteos")
+    if "gluten" in alergias and (data.gluten or "") == "celiaquia":
+        evitar += ["panes", "pasta", "bolleria", "cereales"]
+    if "otra" in alergias and (data.alergia_otra or "").strip():
+        palabras += [t.strip().lower() for t in re.split(r"[,;]| y ", data.alergia_otra)
+                     if len(t.strip()) > 2]
+    if evitar:
+        fuera["avoided_categories"] = evitar
+    if palabras:
+        fuera["avoided_keywords"] = palabras
+    return fuera
 
 
 # Las cuatro respuestas del ajuste que ADEMÁS son datos del perfil, con el nombre que

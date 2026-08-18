@@ -1960,9 +1960,19 @@ async def montar_dia(data: dict, user = Depends(get_current_user)):
 
     from core.menus_vistos import anotar as _anotar_menus, vistos_de
     _perfil_dia = await db.client_profiles.find_one(
-        {"user_id": user["id"]}, {"_id": 0, "id": 1, "menus_vistos": 1})
+        {"user_id": user["id"]},
+        {"_id": 0, "id": 1, "menus_vistos": 1, "avoided_categories": 1, "avoided_keywords": 1})
     _vistos_comida = vistos_de(_perfil_dia, "comida")
     _propuestos = []
+
+    # LO QUE NO PUEDE COMER MANDA SOBRE EL MENÚ (bloque 3 del doc del 18-08). El día que
+    # se monta solo salía de las recetas que cuadran y de nada más: a una intolerante total
+    # a la lactosa se le plantaba queso en su primera comida, el mismo día que acaba de
+    # decirnos que no lo tolera. Y es el primer día, que es el que decide si vuelve.
+    #
+    # El filtro es el mismo que usa el resto de la calculadora, así que lo que aquí se
+    # descarta es exactamente lo que no le sale al buscar a mano.
+    _evitar_prefijos, _evitar_palabras = build_avoided_filter(_perfil_dia)
 
     for meal_key, obj in objetivos.items():
         objetivo = {"P": float(obj.get("P") or 0), "H": float(obj.get("H") or 0),
@@ -1976,9 +1986,19 @@ async def montar_dia(data: dict, user = Depends(get_current_user)):
                 db, "comida", objetivo, vistos=_vistos_comida)
         except Exception:
             opciones = []
-        # Primero las que cuadran, y de esas la que no se haya usado ya hoy.
+        # Primero las que cuadran, y de esas la que no se haya usado ya hoy y no lleve
+        # nada de lo que no puede comer. Se resuelve cada candidata antes de elegirla:
+        # el menú trae ids, y para saber si lleva un lácteo hay que mirar el alimento.
         candidatas = [o for o in opciones if o.get("cuadrada")] + [o for o in opciones if not o.get("cuadrada")]
-        elegida = next((o for o in candidatas if (o.get("nombre") or "") not in usados), None)
+        elegida, alimentos_elegidos = None, []
+        for candidata in candidatas:
+            if (candidata.get("nombre") or "") in usados:
+                continue
+            alimentos = await _items_a_alimentos(candidata.get("items") or [])
+            if any(food_is_avoided(a, _evitar_prefijos, _evitar_palabras) for a in alimentos):
+                continue
+            elegida, alimentos_elegidos = candidata, alimentos
+            break
         if not elegida:
             vacias.append(meal_key)
             comidas[meal_key] = {"alimentos": []}
@@ -1987,7 +2007,7 @@ async def montar_dia(data: dict, user = Depends(get_current_user)):
         _propuestos.append(elegida.get("plantilla_id"))
         _vistos_comida = _vistos_comida | {elegida.get("plantilla_id")}
         comidas[meal_key] = {
-            "alimentos": await _items_a_alimentos(elegida.get("items") or []),
+            "alimentos": alimentos_elegidos,
             "menu_nombre": elegida.get("nombre"),
         }
         montadas.append({"comida": meal_key, "menu": elegida.get("nombre"),
