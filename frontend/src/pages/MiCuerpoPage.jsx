@@ -219,7 +219,8 @@ const MiCuerpoPage = () => {
                         <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
                             ¿Cuál dirías que es tu % de grasa?
                         </label>
-                        <SelectorGrasa value={grasa} onChange={setGrasa} />
+                        {/* Su escala, la de su sexo: 22 valores en hombre y 6 en mujer. */}
+                        <SelectorGrasa value={grasa} onChange={setGrasa} sexo={profile?.sex} />
                     </div>
 
                     <button type="submit" disabled={cargando} data-testid="mi-cuerpo-calcular"

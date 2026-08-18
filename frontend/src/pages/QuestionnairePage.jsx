@@ -78,10 +78,11 @@ const PREGUNTAS_ALTA = [
         type: 'choice', key: 'training_experience', title: '¿Qué experiencia tienes entrenando fuerza en el gimnasio?',
         desc: 'Me da igual el grado de desarrollo muscular que tengas en este momento, me interesa saber si sabes entrenar y cuánta experiencia tienes.',
         options: [
-            { value: 'cero', label: 'Parto de cero' },
-            { value: 'principiante', label: 'Menos de 1 año (principiante)' },
-            { value: 'intermedio', label: 'Más de 1 año (intermedio)' },
-            { value: 'avanzado', label: 'Años, en serio (avanzado)' },
+            // Los cuatro, literales del documento del 18-08.
+            { value: 'cero', label: 'Ninguna, empiezo ahora o hace mucho que no entreno. Parto de cero.' },
+            { value: 'principiante', label: 'Llevo menos de 1 año entrenando con regularidad (principiante).' },
+            { value: 'intermedio', label: 'Llevo más de un año entrenando, aunque no siempre me lo he tomado en serio (intermedio).' },
+            { value: 'avanzado', label: 'Llevo años entrenando de forma seria (avanzado).' },
         ],
     },
     {
@@ -98,8 +99,13 @@ const PREGUNTAS_ALTA = [
         desc: 'Pésate siempre en las mismas condiciones: en ayunas, sin ropa y después de ir al baño.',
         unit: 'kg', required: true,
     },
-    { type: 'bf', key: 'body_fat', title: '¿Cuál dirías que es tu porcentaje de grasa actual?',
-      desc: 'Pasa las fotos y quédate con la que más se parezca a cómo te ves ahora: relajado, sin meter tripa y con la misma luz. Mírate de frente y de perfil, no solo de frente. Si dudas entre dos, elige la de más grasa.' },
+    {
+        type: 'bf', key: 'body_fat', title: '¿Cuál dirías que es tu porcentaje de grasa actual?',
+        // El enunciado del documento del 18-08, con sus dos paréntesis.
+        desc: 'Pasa las fotos y quédate en el punto que más se parezca a cómo te ves ahora. '
+            + 'Sin apretar ni meter tripa y con buena luz. (Procura que sean siempre en el mismo sitio.) '
+            + '(Frente y espaldas, que coincidan, lógicamente. Si dudas entre dos, tira para arriba.)',
+    },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,10 +131,11 @@ const STEPS_AJUSTE = [
         type: 'choice', key: 'actividad_diaria', title: '¿Cómo describirías tu nivel de actividad diaria?',
         desc: 'Ir al gimnasio 1 hora 4-5 veces a la semana no te convierte en una persona activa, OJO. Piensa en lo mucho o lo poco que te mueves en tu día a día.',
         options: [
+            // Los cuatro textos, literales del documento del 18-08.
             { value: 'sedentario', label: 'Muy sedentario: paso casi todo el día sentado, apenas me muevo.' },
-            { value: 'normal', label: 'Ligeramente activo: me muevo algo, pero sin esfuerzos físicos.' },
-            { value: 'moderado', label: 'Moderadamente activo: estoy de pie o en movimiento buena parte del día.' },
-            { value: 'muy_activo', label: 'Muy activo: mi día a día es muy demandante físicamente, no paro.' },
+            { value: 'normal', label: 'Ligeramente activo: mi trabajo es mayormente sentado, pero intento moverme un poco (doy paseos, subo escaleras en vez de usar el ascensor, evito usar el coche, etc.).' },
+            { value: 'moderado', label: 'Moderadamente activo: me mantengo en movimiento durante gran parte del día, aunque tampoco hago esfuerzos físicos importantes.' },
+            { value: 'muy_activo', label: 'Muy activo: mi día a día es muy demandante a nivel físico, no paro.' },
         ],
     },
     {
@@ -288,11 +295,15 @@ const STEPS_AJUSTE = [
         // Nadie sabe lo que come en general; todo el mundo se acuerda de lo que comió
         // ayer. Con un día tipo el sistema ya puede leerlo, y la pregunta imposible se
         // convierte en una fácil.
-        type: 'dieta', title: 'Cuéntanos qué comes',
+        // EL DÍA TIPO SE LO PIDE A TODOS (pantalla 19 del doc del 18-08). Antes solo salía
+        // a quien decía seguir una dieta, y justo el que come «sin control» o «mal y
+        // desorganizado» es del que menos se sabe. Su día no entra en el cálculo si no
+        // trae dieta -- eso lo decide el motor, no esta pantalla -- pero se guarda, que es
+        // de lo que va la pregunta: «para que sepamos de dónde partes más o menos».
+        type: 'dieta', title: 'Indica un día tipo',
         desc: a => (a.sigue_dieta === 'parecido'
             ? 'Aunque no comas siempre lo mismo, ponme un día tipo. El de ayer, por ejemplo.'
-            : 'Con esto partimos de tu dieta real en vez de empezar de cero.'),
-        cond: traeDieta,
+            : 'Para que sepamos de dónde partes más o menos.'),
     },
     { type: 'final0', title: 'Y ya estaría.', desc: 'Si quieres revisar alguna respuesta, ve hacia atrás. Al calcular verás tus macros personalizados.' },
     { type: 'result', title: 'Tus macros' },
@@ -531,21 +542,24 @@ const STEPS_NIVEL1 = [
     // lactosa" no se puede sacar si puede comer yogur o queso curado, y de ahí depende
     // media lista de la compra.
     {
+        // LOS DOS ENUNCIADOS DEL DOCUMENTO (pantalla 21 del 18-08). Preguntaban «¿llevas
+        // bien la lactosa?», que es volver a preguntarle lo que acaba de contestar: estas
+        // dos solo salen si ya ha marcado esa intolerancia. Lo que falta saber es hasta
+        // dónde le llega.
         type: 'choice', key: 'lactosa',
-        title: '¿Llevas bien la lactosa?',
+        title: '¿Es total o toleras algunos lácteos como yogur, queso curado o queso batido?',
         options: [
-            { value: 'bien', label: 'Sí, sin problema' },
-            { value: 'tolera_algo', label: 'Regular: tolero el yogur y el queso curado' },
-            { value: 'nada', label: 'No, nada de lactosa' },
+            { value: 'total', label: 'Total: nada de lácteos' },
+            { value: 'tolera_algo', label: 'Tolero el yogur, el queso curado o el queso batido' },
         ],
     },
     {
         type: 'choice', key: 'gluten',
-        title: '¿Y el gluten?',
+        title: '¿Es celiaquía diagnosticada o sensibilidad?',
+        desc: '¿Toleras pequeñas cantidades como pan de molde o avena sin gluten?',
         options: [
-            { value: 'bien', label: 'Sí, sin problema' },
-            { value: 'sensibilidad', label: 'Sensibilidad: me sienta mal, pero no soy celíaco' },
-            { value: 'celiaquia', label: 'Celiaquía diagnosticada' },
+            { value: 'celiaquia', label: 'Celiaquía diagnosticada: nada de gluten' },
+            { value: 'sensibilidad', label: 'Sensibilidad: tolero pequeñas cantidades' },
         ],
     },
     { type: 'text', key: 'alergias', title: '¿Alguna otra alergia o intolerancia?', desc: 'Frutos secos, marisco, huevo... Si no tienes, escribe "no".', textarea: true },
@@ -2572,7 +2586,17 @@ const QuestionnairePage = () => {
         body = (
             <div>
                 <Title />
-                <BodyFatSlider value={answers.body_fat} onChange={(v) => set('body_fat', v)} />
+                <BodyFatSlider value={answers.body_fat} onChange={(v) => set('body_fat', v)}
+                    sexo={answers.sex} />
+                {/* LA COLETILLA CAMBIA SEGÚN SU PLAN (doc del 18-08, pantalla 8). A quien
+                    lleva entrenador se le quita el peso de encima -- se lo van a revisar con
+                    sus fotos -- y a quien no, se le dice desde el primer día que esto lo
+                    repite él cada doce semanas. */}
+                <p className="text-foreground/50 text-xs mt-3">
+                    {tieneCoach
+                        ? 'Esto te lo damos nosotros, no te comas mucho la cabeza, es solo para arrancar. Tu entrenador lo revisará con tus fotos.'
+                        : 'Si tu plan no lo incluye, te toca repetir este ejercicio cada 12 semanas máximo.'}
+                </p>
                 <div className="flex items-center gap-3 mt-6">
                     <BackBtn />
                     <Button onClick={goNext}
