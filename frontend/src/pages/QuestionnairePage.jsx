@@ -684,8 +684,17 @@ const QuestionnairePage = () => {
     const [leyendoDieta, setLeyendoDieta] = useState(false);
     const [misDias, setMisDias] = useState(null);   // null = sin pedir todavia
 
-    // Nivel 1 solo para planes con coach (calculadora == 'personalizado').
-    const tieneCoach = can(CAP.MACROS_PERSONALIZADOS);
+    // Nivel 1 solo para planes con coach (calculadora == 'personalizado')...
+    const conEntrenador = can(CAP.MACROS_PERSONALIZADOS);
+    // ...Y PARA QUIEN COMPRA EL AJUSTE A MEDIDA. Es la última línea de la regla que ordena
+    // el documento del cuestionario: «el que compra el ajuste de 87 € hace el completo,
+    // exactamente igual que un Gold». Su plan no cambia -- sigue siendo el suyo -- pero el
+    // cuestionario largo se le abre igual, porque es lo que ha pagado.
+    //
+    // Se mira `cobrado`, no `quiere`: querer no es haber pagado. Hoy nadie lo tiene a true
+    // porque todavía no hay cobro montado (ver POST /clients/ajuste-a-medida), así que esto
+    // no se lo abre a nadie por su cuenta; queda puesto para el día que se cobre.
+    const tieneCoach = conEntrenador || !!profile?.ajuste_a_medida?.cobrado;
     // Si ha pulsado "Ajustar macros" manda eso y nada más: sin esta comprobación, un cliente con
     // coach que le diera al botón acababa en el perfil largo en vez de en el cuestionario.
     const pidioAjustar = new URLSearchParams(location.search).get('ajustar') === '1';
@@ -1628,7 +1637,12 @@ const QuestionnairePage = () => {
     } else if (step.type === 'magia') {
         // Momento mágico: comida real, suya, que ya cuadra. Cierra con comida,
         // no con un tutorial.
-        const esUltimo = !tieneCoach;
+        // ÚLTIMA ES LA ÚLTIMA, no «la del que no lleva entrenador» (18-08). Esto estaba
+        // atado al plan, y desde que el final se parte por plan al que no lleva entrenador
+        // le quedan dos pantallas detrás -- las fotos y la oferta --, así que el botón decía
+        // «Ir a mi panel» y se las saltaba las dos. Se vio recorriendo el alta entera con una
+        // cuenta de dev; por API no se ve, porque el recorrido lo compone la pantalla.
+        const esUltimo = idx >= flow.length - 1;
         body = (
             <div>
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
@@ -1729,14 +1743,21 @@ const QuestionnairePage = () => {
     } else if (step.type === 'fotos_medidas') {
         // Y EL DE QUIEN NO LO LLEVA. Sin fotos ni medidas no tiene evolución que mirar, que
         // es lo que le hace volver. No se le obliga: se le dice y se le deja ir.
+        //
+        // Y SE CUENTA LO QUE DE VERDAD LE FALTA. Las medidas se piden dos pantallas antes,
+        // en «Ya tienes tus macros», así que a quien las acaba de apuntar decirle «te quedan
+        // dos cosas» y pedirle las medidas otra vez es tratarle como si no hubiera hecho
+        // nada. Si ya están, lo que le queda es una: las fotos.
+        const yaTieneMedidas = !!(profile?.punto_de_partida_hecho || profile?.medidas_inicio);
         body = (
             <div>
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
-                    Te quedan dos cosas
+                    {yaTieneMedidas ? 'Te queda una cosa' : 'Te quedan dos cosas'}
                 </h2>
                 <p className="text-foreground/70 mb-6">
-                    Sube tus fotos y toma tus medidas. Sin eso no puedes ver tu evolución, que es
-                    lo que de verdad enseña lo que cambia.
+                    {yaTieneMedidas
+                        ? 'Sube tus fotos. Con ellas y las medidas que acabas de apuntar ya puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'
+                        : 'Sube tus fotos y toma tus medidas. Sin eso no puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                     <Button onClick={() => navigate('/dashboard/reports')} data-testid="ir-a-fotos-medidas"

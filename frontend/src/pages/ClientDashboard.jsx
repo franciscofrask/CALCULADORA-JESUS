@@ -1091,7 +1091,11 @@ const ClientDashboard = () => {
                 dos cuestionarios. No los hay: es el mismo recorrido, y el de arriba sigue
                 de largo hasta aquí sin cortes. Este solo tiene sentido cuando el de arriba
                 ya está hecho -- es decir, cuando de verdad se quedó a medias. */}
-            {sale('perfil', can('macros_personalizados') && profile?.questionnaire_completed
+            {/* Y también para quien compró el ajuste a medida: hace el completo igual que un
+                Gold (doc del cuestionario, 18-08), así que la tarjeta que le lleva a
+                terminarlo tiene que salirle a él también. */}
+            {sale('perfil', (can('macros_personalizados') || profile?.ajuste_a_medida?.cobrado)
+                && profile?.questionnaire_completed
                 && (profile?.ajuste_macros_completado || profile?.macros_puestos_por_alguien)
                 && !profile?.questionnaire_nivel1_completed) && (
                 <button onClick={() => navigate('/questionnaire')} data-testid="nivel1-pending-banner"

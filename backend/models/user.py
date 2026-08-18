@@ -851,9 +851,14 @@ class ClientProfile(BaseModel):
     # Cuestionario de ajuste (paso 2) hecho: hasta entonces sus macros son los provisionales
     # que salieron de las cuatro preguntas del alta.
     ajuste_macros_completado: Optional[bool] = None
-    # Progreso del cuestionario de ajuste: {respuestas: {...}, paso: n}. Se guarda a cada
-    # respuesta para que pueda salirse y volver donde lo dejo. Se borra al terminarlo.
+    # Progreso del cuestionario, del alta o del ajuste: {respuestas, paso, flujo}. Se guarda a
+    # cada respuesta para que pueda salirse y volver donde lo dejo. Se borra al terminarlo.
     ajuste_macros_progreso: Optional[Dict[str, Any]] = None
+    # La oferta del final del alta para quien no lleva entrenador (doc del cuestionario,
+    # 18-08): {quiere, respondido_at, cobrado}. TIENE QUE ESTAR DECLARADA AQUI: el modelo
+    # ignora lo que no conoce, asi que un campo sin declarar se guarda en la base y no llega
+    # nunca a la pantalla. Y de `cobrado` depende que se le abra el cuestionario completo.
+    ajuste_a_medida: Optional[Dict[str, Any]] = None
     # Punto de partida (paso 3 del doc): fotos y medidas del dia 1, que son la unica forma de
     # comparar dentro de un mes.
     punto_de_partida_hecho: Optional[bool] = None

@@ -132,6 +132,35 @@ class TestLaOfertaDelFinal:
         p = mongo.client_profiles.find_one({"user_id": persona["user_id"]}, {"_id": 0})
         assert (p.get("ajuste_a_medida") or {}).get("quiere") is False
 
+    def test_la_respuesta_llega_a_la_pantalla(self, alta, mongo):
+        """Guardarlo en la base no basta: el modelo del perfil ignora lo que no declara, y
+        de este campo depende que se le abra el cuestionario completo al que lo compre."""
+        persona = alta(plan="calculadora_jp")
+        requests.post(f"{API}/clients/ajuste-a-medida", headers=persona["cabeceras"],
+                      json={"quiere": True}, timeout=30)
+        perfil = requests.get(f"{API}/clients/profile", headers=persona["cabeceras"],
+                              timeout=30).json()
+        assert "ajuste_a_medida" in perfil, (
+            "la respuesta se guarda en la base pero no viaja al perfil: la pantalla no puede "
+            "saber si lo compró, así que nunca le abriría el cuestionario completo")
+        assert perfil["ajuste_a_medida"]["quiere"] is True
+
+    def test_quien_lo_compra_hace_el_completo(self, alta, mongo):
+        """«El que compra el ajuste de 87 € hace el completo, exactamente igual que un Gold».
+        El interruptor es `cobrado`, y la pantalla lo mira: querer no es haber pagado."""
+        pagina = fuente("pages/QuestionnairePage.jsx")
+        assert "ajuste_a_medida?.cobrado" in pagina, (
+            "quien compra el ajuste a medida no llega al cuestionario completo: la pantalla "
+            "solo mira si su plan lleva entrenador")
+
+        persona = alta(plan="calculadora_jp")
+        requests.post(f"{API}/clients/ajuste-a-medida", headers=persona["cabeceras"],
+                      json={"quiere": True}, timeout=30)
+        perfil = requests.get(f"{API}/clients/profile", headers=persona["cabeceras"],
+                              timeout=30).json()
+        assert perfil["ajuste_a_medida"]["cobrado"] is False, (
+            "pedirlo lo da por cobrado: entonces se le abre el completo sin haber pagado")
+
     def test_pedirla_avisa_al_equipo(self, alta, mongo):
         persona = alta(plan="calculadora_jp")
         requests.post(f"{API}/clients/ajuste-a-medida", headers=persona["cabeceras"],
