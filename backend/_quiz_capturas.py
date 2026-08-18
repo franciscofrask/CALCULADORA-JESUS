@@ -128,60 +128,61 @@ def run():
              wait_title="comidas que puedes comer hoy", pre_wait=1.5)
         click_btn("Continuar con tu perfil")
 
-        # ===== NIVEL 1 (coach) =====
+        # ===== EL COMPLETO (planes con entrenador) =====
+        # Las 21 pantallas del bloque 4 del documento del 18-08. Este recorrido es el de
+        # alguien que ACABA DE HACER EL BÁSICO, así que aquí no vuelven a salir el biotipo, la
+        # altura, la experiencia, los pesos ni las dietas de antes: ya las contestó.
         shot("Ahora, tu perfil completo (intro)", wait_title="tu perfil completo")
         click_btn("Seguir")
 
-        shot("Explicación de biotipos", wait_title="elegir tu biotipo")
-        click_btn("Elegir mi biotipo")
+        shot("¿Alguna enfermedad o patología?", wait_title="enfermedad o patología")
+        click_opt("No")
 
-        shot("Elige tu biotipo (7 opciones)", wait_title="cuál de los 7 biotipos")
-        page.locator("button", has_text="Mesomorfo").first.click()
+        shot("¿Tomas medicación?", wait_title="algún tipo de medicación")
+        click_opt("No")
 
-        shot("¿Cuánto mides?", wait_title="¿Cuánto mides?")
-        page.locator("input").first.fill("178")
+        shot("¿Tratamiento hormonal tipo TRT?", wait_title="tratamiento hormonal")
+        click_opt("No")
+
+        shot("¿Ayudas farmacológicas?", wait_title="ayudas farmacológicas")
+        click_opt("No.")
+
+        shot("¿Cuántas horas duermes?", wait_title="horas duermes")
+        click_opt("Mínimo 7 y media")
+
+        shot("¿Algo para dormir mejor?", wait_title="para dormir mejor")
+        click_opt("No, duermo sin problema.")
+
+        shot("¿Inconveniente con la suplementación?", wait_title="suplementación deportiva")
+        click_opt("No. De hecho, suelo utilizarlos")
+
+        shot("¿Qué suplementos tomas ahora?", wait_title="suplementos tomas ahora")
+        page.locator("textarea").first.fill("Creatina y proteína de suero.")
         click_btn("OK")
 
-        shot("Fecha de nacimiento", wait_title="Fecha de nacimiento")
-        page.locator("input[type=date]").fill("1990-05-15")
+        shot("¿Alguno contraindicado?", wait_title="contraindicado")
+        page.locator("textarea").first.fill("no")
         click_btn("OK")
 
-        shot("Experiencia entrenando fuerza", wait_title="experiencia tienes entrenando")
-        click_opt("Llevo más de un año")
+        shot("¿Entrenas ahora mismo?", wait_title="Entrenas ahora mismo")
+        click_opt("Sí, voy mínimo 3 días")
 
-        shot("Tu historial de peso", wait_title="Tu historial de peso")
-        pesos = page.locator("input")
-        for i, val in enumerate(["95", "72", "82", "88"]):
-            pesos.nth(i).fill(val)
-        click_btn("OK")
+        shot("¿Haces cardio?", wait_title="¿Haces cardio?")
+        click_opt("Sí, además me gusta")
 
-        shot("Salud y descanso", wait_title="Salud y descanso")
-        click_opt("Bien (7-8h)")
-        click_opt("Medio")
-        inputs = page.locator("input")
-        for i in range(inputs.count()):
-            try: inputs.nth(i).fill("no")
-            except Exception: pass
-        click_btn("OK")
-
-        shot("¿Has hecho dietas antes?", wait_title="¿Has hecho dietas antes")
-        page.locator("textarea").first.fill("Alguna dieta por mi cuenta, sin mucho control. Perdí algo y lo recuperé.")
-        click_btn("OK")
-
-        shot("¿Has tenido entrenador antes?", wait_title="¿Has tenido entrenador antes?")
-        page.locator("textarea").first.fill("No, es la primera vez.")
-        click_btn("OK")
+        shot("¿Arrastras alguna lesión?", wait_title="lesión o molestia")
+        click_opt("No")
 
         shot("¿Con qué material cuentas?", wait_title="¿Con qué material cuentas")
         click_opt("Gimnasio completo")
         click_btn("OK")
 
-        shot("¿Haces cardio?", wait_title="¿Haces cardio?")
-        click_opt("1-2 veces por semana")
-
-        shot("¿Alergias o intolerancias?", wait_title="Alergias o intolerancias")
+        shot("Maquinaria que te falta", wait_title="En lo referente a maquinaria")
         page.locator("textarea").first.fill("no")
         click_btn("OK")
+
+        shot("Tus fotos y tus medidas", wait_title="Tus fotos y tus medidas")
+        click_btn("Ahora no")
 
         shot("Perfil completo (final)", wait_title="Perfil completo")
         # no pulsamos Enviar para no cerrar el flujo; ya tenemos todas las pantallas

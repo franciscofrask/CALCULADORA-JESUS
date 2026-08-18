@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import uuid
 
 from core.database import db
+from core.dias_de_entreno import DIAS_DE_ENTRENO_POR_DEFECTO
 from core.security import hash_password, verify_password, verify_firebase_password, create_token, get_current_user, Depends
 from models.user import UserRegister, UserLogin, UserResponse, TokenResponse
 
@@ -69,7 +70,11 @@ async def register(data: UserRegister):
         "body_fat": None,
         "equipment": [],
         "injuries": [],
-        "training_days": None,
+        # CUATRO, NO NULO. La pregunta «¿cuántos días puedes entrenar?» se retira del alta el
+        # 18-08 porque la respuesta es siempre la misma, y el campo se rellena solo. Naciendo
+        # a None el dato no existía en ninguna ficha nueva y el panel de Rutinas dejaba fuera
+        # a 158 de los 164 clientes que pagan rutina por «falta saber lo básico».
+        "training_days": DIAS_DE_ENTRENO_POR_DEFECTO,
         "created_at": ahora,
     })
 

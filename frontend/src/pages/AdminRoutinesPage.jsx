@@ -176,8 +176,12 @@ const PonerlesRutinaAVarios = ({ api, onHecho }) => {
                         {datos.les_faltan_datos > 0 && (
                             <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
                                 <p className="text-white text-sm">
+                                    {/* Decía «falta saber lo básico de su entrenamiento» cuando los días
+                                        de entreno todavía bloqueaban. Ya no: son cuatro para todos y se
+                                        rellenan solos, así que lo único que puede faltar es el objetivo,
+                                        y eso no es «lo básico de su entrenamiento». */}
                                     A <b className="text-yellow-400">{datos.les_faltan_datos}</b> no se les puede
-                                    generar todavía: falta saber lo básico de su entrenamiento.
+                                    generar todavía: falta un dato de su ficha.
                                 </p>
                                 <p className="text-white/50 text-xs mt-1">
                                     {datos.que_les_falta?.map(q => `${q.a_cuantos} sin ${q.dato}`).join(' · ')}

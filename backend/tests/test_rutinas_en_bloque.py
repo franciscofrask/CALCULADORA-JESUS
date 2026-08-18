@@ -10,6 +10,11 @@ plan y sin rutina puesta: 91 sin objetivo, 159 sin días de entreno, 0 con los d
 completos. Una herramienta que les pusiera a los 163 la misma rutina «de 4 días sin
 objetivo» dejaría el contador a cero y el problema intacto.
 
+ACTUALIZADO EL 18-08. De los dos datos que frenaban, uno se cae: los días de entreno son
+siempre cuatro y ya no se preguntan (bloque 5 del documento del cuestionario inicial). Con
+el freno puesto, esos 159 no tenían salida -- ninguna pantalla pedía el dato --, así que el
+freno los dejaba parados para siempre. El del objetivo se queda: ese sí se pregunta.
+
 Sin Mongo y sin OpenAI.
 """
 import os
@@ -28,13 +33,22 @@ def test_los_dias_se_leen_de_los_dos_campos():
     assert _dias_de_entreno({"training_days": 4}) == 4
     assert _dias_de_entreno({"training_days": "3"}) == 3
     assert _dias_de_entreno({"training_weekdays": ["lunes", "miércoles", "viernes"]}) == 3
-    assert _dias_de_entreno({"training_days": []}) is None
+    # Lo que el cliente diga manda: tres son tres, no cuatro.
+    assert _dias_de_entreno({"training_days": 3}) == 3
 
 
-def test_sin_dias_no_se_inventa_un_cuatro():
-    """A quien entrena dos días, una rutina de cuatro no le sirve: mejor no dársela."""
-    assert _dias_de_entreno({}) is None
-    assert "días de entreno" in _que_le_falta({"goal": "definicion"})
+def test_sin_dias_son_cuatro_y_ya_no_frenan():
+    """La lista vacía y la ficha sin el campo son lo mismo: nadie lo ha dicho, son cuatro.
+
+    Antes esto devolvía None y `_que_le_falta` marcaba «días de entreno». Los 159 clientes
+    que caían ahí no podían salir de esa lista, porque la pregunta no existía en ninguna
+    pantalla de la app.
+    """
+    assert _dias_de_entreno({}) == 4
+    assert _dias_de_entreno({"training_days": []}) == 4
+    assert _dias_de_entreno({"training_days": None}) == 4
+    assert _que_le_falta({"goal": "definicion"}) == [], \
+        "los días de entreno ya no bloquean: son cuatro para todos"
 
 
 def test_sin_objetivo_tampoco():
@@ -70,6 +84,21 @@ def test_una_lesion_te_saca_del_grupo():
     sano = {"goal": "volumen", "training_days": 4}
     tocado = dict(sano, injuries=["hombro"])
     assert _id_de_grupo(_clave_de_grupo(sano)) != _id_de_grupo(_clave_de_grupo(tocado))
+
+
+def test_un_no_escrito_a_mano_no_es_una_lesion():
+    """En dev hay una ficha con `injuries: "no"`, texto suelto en vez de lista.
+
+    Al recorrerla se recorrían sus letras, así que esa persona salía sola en un grupo que
+    se llamaba «con n y o» y nadie podía saber qué era eso.
+    """
+    clave = _clave_de_grupo({"goal": "volumen", "injuries": "no"})
+    assert clave["lesiones"] == [], clave["lesiones"]
+    sano = _clave_de_grupo({"goal": "volumen"})
+    assert _id_de_grupo(clave) == _id_de_grupo(sano), "el que no tiene lesiones va al grupo sano"
+
+    de_verdad = _clave_de_grupo({"goal": "volumen", "injuries": "hombro derecho"})
+    assert de_verdad["lesiones"] == ["hombro derecho"], de_verdad["lesiones"]
 
 
 def test_el_nombre_del_grupo_se_lee():

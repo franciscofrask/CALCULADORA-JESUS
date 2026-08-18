@@ -135,8 +135,11 @@ class TestElOrdenYLasPantallasDelDocumento:
         i = pagina.find("const EL_BASICO")
         assert i > 0, "el básico ya no se compone en un solo sitio"
         bloque = pagina[i:pagina.find("];", i)]
+        # Los tres hitos de peso se definen arriba, en `PESO_HITOS`, porque los usan los dos
+        # cuestionarios: el básico se los pregunta a todo el mundo y el completo solo al que
+        # entró antes de que el básico existiera.
         orden = [bloque.find(x) for x in ("'contacto'", "q('goal')", "q('weight')",
-                                          "'peso_hito'", "'ocupacion'",
+                                          "PESO_HITOS", "'ocupacion'",
                                           "q('training_experience')", "q('biotype')",
                                           "q('dietas_previas')", "proteinas_habituales",
                                           "como_me_conociste", "q('motivo_apuntarse')")]

@@ -10,6 +10,7 @@ import json
 import logging
 
 from core.database import db
+from core.dias_de_entreno import dias_de_entreno
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.sin_futuro import hasta_hoy
 from core.plan_access import require_access, rutina_visible_para_el_cliente
@@ -117,7 +118,7 @@ Peso: {profile.get('weight', 'No especificado')} kg
 Altura: {profile.get('height', 'No especificado')} cm
 Edad: {profile.get('age', 'No especificado')} años
 Sexo: {profile.get('sex', 'No especificado')}
-Días de entrenamiento: {profile.get('training_days', 4)}
+Días de entrenamiento: {dias_de_entreno(profile)}
 Equipamiento disponible: {', '.join(profile.get('equipment') or ['Gimnasio completo'])}
 Lesiones/Limitaciones: {', '.join(profile.get('injuries') or ['Ninguna'])}
 
@@ -223,6 +224,17 @@ async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(g
 # se hace desde su ficha, de una en una y mirándola.
 # ─────────────────────────────────────────────────────────────────────────────────────
 
+# Lo que la gente escribe cuando quiere decir que no tiene ninguna.
+_NINGUNA = {"no", "ninguna", "ninguno", "nada", "n/a", "-"}
+
+
+def _lista(valor: Any) -> set:
+    """El campo, en minúsculas y sin vacíos. Un texto suelto es UN elemento, no sus letras."""
+    if isinstance(valor, str):
+        valor = [valor]
+    return {str(v).strip().lower() for v in (valor or []) if str(v).strip()}
+
+
 def _clave_de_grupo(perfil: Dict[str, Any]) -> Dict[str, Any]:
     """Lo que hace que dos clientes puedan compartir rutina.
 
@@ -231,11 +243,13 @@ def _clave_de_grupo(perfil: Dict[str, Any]) -> Dict[str, Any]:
     y las lesiones sí, porque una rutina que ignora una lesión no vale para esa persona:
     quien tenga alguna se queda en su propio grupo y se le genera aparte.
     """
-    equipo = sorted({str(e).strip().lower() for e in (perfil.get("equipment") or []) if str(e).strip()})
-    lesiones = sorted({str(l).strip().lower() for l in (perfil.get("injuries") or []) if str(l).strip()})
+    equipo = sorted(_lista(perfil.get("equipment")))
+    # «no» NO es una lesión. Hay fichas donde `injuries` viene como texto y no como lista, y
+    # al recorrerlas letra a letra salía un grupo entero que se llamaba «con n y o».
+    lesiones = sorted(l for l in _lista(perfil.get("injuries")) if l not in _NINGUNA)
     return {
         "objetivo": (perfil.get("goal") or "sin objetivo").strip().lower(),
-        "dias": _dias_de_entreno(perfil) or 0,
+        "dias": _dias_de_entreno(perfil),
         # EL CAMPO SE LLAMA `training_experience` (17-08). Buscando `experience` salían cero
         # de 163, y no era que nadie lo tuviera: era que ese nombre no existe en la base.
         "nivel": (perfil.get("training_experience") or "sin nivel").strip().lower(),
@@ -244,36 +258,25 @@ def _clave_de_grupo(perfil: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _dias_de_entreno(perfil: Dict[str, Any]) -> Optional[int]:
-    """Cuántos días entrena a la semana, o None si no lo sabemos.
+def _dias_de_entreno(perfil: Dict[str, Any]) -> int:
+    """Cuántos días entrena a la semana. Nunca «no lo sé»: si no consta, cuatro.
 
-    Está guardado de dos formas: `training_days` (un número) y `training_weekdays` (la lista
-    de días: lunes, miércoles...). Las dos contestan a lo mismo. Devuelve None cuando no hay
-    ninguna, y eso NO se rellena con un 4 por defecto: una rutina de cuatro días para quien
-    entrena dos no es una rutina, es un cliente que abandona en la primera semana.
+    Hasta el 18-08 esto devolvía None cuando la ficha no traía el dato, y `_que_le_falta` lo
+    marcaba como pendiente. El freno se puso para no darle a nadie una rutina de cuatro días
+    sin saber si entrena dos, pero medido en producción el 17-08 dejaba fuera a 159 de los
+    163 clientes con rutina en el plan por un dato que NO PEDÍA NINGUNA PANTALLA: no había
+    forma de desbloquearlos. El documento del cuestionario (18-08) lo cierra por el otro
+    lado: son siempre cuatro, así que deja de preguntarse y el campo se rellena solo.
     """
-    for campo in ("training_days", "training_weekdays"):
-        v = perfil.get(campo)
-        if isinstance(v, (list, tuple, set)):
-            n = len([d for d in v if str(d).strip()])
-            if n:
-                return max(1, min(7, n))
-        elif v not in (None, ""):
-            try:
-                return max(1, min(7, int(v)))
-            except (TypeError, ValueError):
-                continue
-    return None
+    return dias_de_entreno(perfil)
 
 
 def _que_le_falta(perfil: Dict[str, Any]) -> List[str]:
     """Los datos sin los cuales no se le puede generar una rutina que valga.
 
-    Medido en producción el 17-08 sobre los 163 clientes con rutina en el plan y sin rutina
-    puesta: 91 no tienen objetivo y 159 no tienen días de entreno. Ninguno de los 163 tenía
-    los datos completos. Por eso este endpoint no le pone rutina a todo el que se le ponga
-    por delante: generar 163 rutinas iguales «de 4 días sin objetivo» es peor que no tener
-    ninguna, porque encima parece que el trabajo está hecho.
+    Queda uno solo: el objetivo, que lo tienen 72 de los 163 medidos en producción el 17-08.
+    Los días de entreno ya no cuentan como falta -- son cuatro para todo el mundo, ver
+    `core.dias_de_entreno` --, y eran justo los que bloqueaban a 159 de esos 163.
 
     El material y el nivel sí se dan por supuestos (gimnasio completo, nivel intermedio):
     ahí equivocarse cambia los ejercicios, no el plan.
@@ -281,8 +284,6 @@ def _que_le_falta(perfil: Dict[str, Any]) -> List[str]:
     falta = []
     if not (perfil.get("goal") or "").strip():
         falta.append("objetivo")
-    if _dias_de_entreno(perfil) is None:
-        falta.append("días de entreno")
     return falta
 
 
@@ -412,7 +413,7 @@ async def asignar_rutinas_en_bloque(data: Dict[str, Any], user = Depends(get_adm
     claves: Dict[str, Dict[str, Any]] = {}
     saltados = 0
     for p in pendientes:
-        # Sin objetivo o sin días no se le pone nada: ver `_que_le_falta`.
+        # Sin objetivo no se le pone nada: ver `_que_le_falta`.
         if _que_le_falta(p):
             saltados += 1
             continue
@@ -427,8 +428,8 @@ async def asignar_rutinas_en_bloque(data: Dict[str, Any], user = Depends(get_adm
         por_grupo = {g: v for g, v in por_grupo.items() if g in pedidos}
     if not por_grupo:
         return {"grupos": [], "asignadas": 0, "sin_datos": saltados,
-                "nota": (f"A {saltados} les faltan datos (objetivo o días de entreno) y no se "
-                         "les puede generar una rutina que valga."
+                "nota": (f"A {saltados} les falta el objetivo y no se les puede generar una "
+                         "rutina que valga."
                          if saltados else "No hay nadie sin rutina en lo que has pedido.")}
 
     resultado, asignadas = [], 0

@@ -330,6 +330,39 @@ const STEPS_ONBOARD = [
 // El biotipo y la altura SE FUERON DE AQUÍ a las preguntas que ven los tres planes
 // (06-08-2026): estando aquí, el de 297 € no los daba nunca, y sin altura no hay índice
 // de muscularidad. Preguntarlos otra vez aquí sería preguntar dos veces lo mismo.
+// Las preguntas que viven en el cuestionario de ajuste y que el completo también usa. Se
+// referencian, no se copian: una pregunta, un sitio donde se define. Si alguien le cambia el
+// texto a una, cambia en los dos cuestionarios, que es lo que se quiere.
+const delAjuste = (clave) => {
+    const paso = STEPS_AJUSTE.find(s => s.key === clave);
+    if (!paso) throw new Error(`El completo pide una pregunta del ajuste que no existe: ${clave}`);
+    return paso;
+};
+
+// LOS TRES HITOS DE PESO, cada uno con su año (pantallas 9, 10 y 11 del básico). Se definen
+// aquí arriba porque los usan los dos cuestionarios: el básico se los pregunta a todo el
+// mundo, y el completo solo al que entró antes de que el básico existiera.
+const PESO_HITOS = [
+    {
+        type: 'peso_hito', key: 'peso_maximo',
+        title: '¿Cuál fue tu máximo peso alcanzado y cuándo?',
+        desc: 'Me refiero a cuándo estuviste en tu peor forma física.',
+        nota: 'Cuéntame lo que quieras de esa época',
+    },
+    {
+        type: 'peso_hito', key: 'peso_mejor_momento', conFoto: true,
+        title: '¿Has estado muy en forma alguna vez?',
+        desc: 'Si es que sí, dime cuándo y tu peso en aquel momento.',
+        nota: 'Cuéntame lo que quieras',
+    },
+    {
+        type: 'peso_hito', key: 'peso_minimo',
+        title: '¿Cuál es el peso más bajo al que has llegado siendo adulto, y cuándo?',
+        desc: 'No hablo de tu mejor forma, sino de lo más abajo que has estado, aunque no te vieras bien.',
+        nota: 'Cuéntame lo que quieras de esa época',
+    },
+];
+
 const STEPS_NIVEL1 = [
     // Sin el «estas ya no cambian tus macros» del final (punto 4.18, decisión de Jesús): el
     // cliente no tiene por qué saber qué pregunta mueve qué número, y decírselo solo invita
@@ -344,32 +377,114 @@ const STEPS_NIVEL1 = [
     // de textos de Jesús), y con sus cuatro opciones, no con los cinco tramos por años que
     // había. Aquí solo la veían los planes con entrenador; ahora la contestan los tres, que
     // es lo que él quiere: le interesa saber si sabe entrenar, no cuántos años lleva.
+    //
+    // ── Pantallas 6 y 7 · lo médico ─────────────────────────────────────────────
+    // LAS DOS FALTABAN. Estaban en el cuestionario de siempre y desaparecieron por el
+    // camino, así que hoy se le monta una rutina y una dieta sin saber si tiene una
+    // patología que se lo desaconseje o si está medicado. Vuelven con su enunciado literal.
+    {
+        type: 'choice', key: 'patologia',
+        title: '¿Tienes algún tipo de enfermedad o patología que te condicione a la hora de practicar cualquier tipo de actividad física o iniciar un programa nutricional?',
+        options: [
+            { value: 'si', label: 'Sí' },
+            { value: 'no', label: 'No' },
+        ],
+    },
+    {
+        type: 'text', key: 'patologia_detalle', textarea: true,
+        title: 'Necesito que me des más detalles en este sentido para poder confeccionar un programa lo más adaptado posible a tus necesidades, pero sobre todo para evitar correr riesgos de forma innecesaria.',
+        cond: a => a.patologia === 'si',
+    },
+    {
+        type: 'choice', key: 'medicacion',
+        title: '¿Tomas algún tipo de medicación o estás realizando algún tratamiento con fármacos bajo prescripción médica?',
+        options: [
+            { value: 'si', label: 'Sí' },
+            { value: 'no', label: 'No' },
+        ],
+    },
+    {
+        type: 'text', key: 'medicacion_detalle', textarea: true,
+        title: 'Indica cuál, en qué dosis, tiempo que llevas usándolo y para qué lo tienes pautado.',
+        cond: a => a.medicacion === 'si',
+    },
     {
         // P14. La respuesta se guarda; la regla de como afecta a los macros la dara Jesus.
+        // La tercera opción es «Lo estoy valorando», no «lo seguí antes»: lo que hay que
+        // saber es si va a empezar, que es cuando el equipo tiene algo que decir. Las fichas
+        // viejas pueden traer `antes`, y se siguen leyendo.
         type: 'choice', key: 'trt', title: '¿Sigues algún tratamiento hormonal tipo TRT?',
         desc: 'Es información médica y la trata el equipo. No cambia tus macros.',
         options: [
             { value: 'si', label: 'Sí' },
             { value: 'no', label: 'No' },
-            { value: 'antes', label: 'Lo seguí antes, ahora no' },
+            { value: 'valorando', label: 'Lo estoy valorando' },
         ],
     },
     {
         // Bloque 4: la intención cuenta tanto como el uso. Quien piensa empezar hay que
         // saberlo ANTES, no cuando ya lo ha hecho.
+        //
+        // LAS CINCO RESPUESTAS DEL DOCUMENTO, literales. Las cuatro que había las escribí yo
+        // y se quedaban cortas justo donde importa: metían en el mismo saco al que usó hace
+        // años y al que está con un quemagrasas ahora mismo. Los valores viejos
+        // (`uso` / `use` / `intencion` / `nunca`) se siguen leyendo en las fichas antiguas.
         type: 'choice', key: 'farmacologia_uso',
         title: '¿Usas o has usado ayudas farmacológicas?',
         desc: 'Sin juicios: se pregunta porque cambia lo que se te puede pedir y lo que hay que vigilar.',
         options: [
-            { value: 'uso', label: 'Sí, ahora mismo' },
-            { value: 'use', label: 'He usado antes, ahora no' },
-            { value: 'intencion', label: 'No, pero tengo intención' },
-            { value: 'nunca', label: 'No, ni me lo planteo' },
+            { value: 'no', label: 'No.' },
+            { value: 'pasado', label: 'Actualmente no, lo hice en el pasado, pero no planeo repetirlo.' },
+            { value: 'frecuente', label: 'Ahora mismo no, pero suelo usarlos con frecuencia.' },
+            { value: 'quemagrasas', label: 'Si te refieres a anabolizantes para ganar masa muscular no, pero en este momento estoy usando fármacos para quemar grasa (Ozempic, efedrina, etc.).' },
+            { value: 'ciclo', label: 'Sí, estoy haciendo un ciclo de esteroides anabolizantes en este momento.' },
         ],
     },
-    // ── Bloque 5 · Tu suplementación ────────────────────────────────────────────
+    {
+        type: 'text', key: 'farmacologia_detalle', textarea: true,
+        title: 'Necesito que me des todos los detalles en este sentido: cuántos sueles hacer, cuándo terminaste el último, qué dosis usaste, durante cuánto tiempo, si recuperaste bien y lo comprobaste con una analítica, etc. Si tienes previsto hacer más, dímelo también.',
+        cond: a => !!a.farmacologia_uso && a.farmacologia_uso !== 'no' && a.farmacologia_uso !== 'nunca',
+    },
+    // ── Pantallas 10 y 11 · el descanso ─────────────────────────────────────────
+    // Estaban dentro de una pantalla de «Salud y descanso» con cinco campos sueltos, con
+    // tres respuestas de andar por casa («Bien (7-8h)») en vez de los tramos de Jesús. Y el
+    // nivel de estrés, que compartía pantalla con ellas, se va: decisión suya, bloque 5.
+    {
+        type: 'choice', key: 'horas_sueno', title: '¿Cuántas horas duermes al día normalmente?',
+        options: [
+            { value: 'min_7_30', label: 'Mínimo 7 y media' },
+            { value: '6_7_30', label: 'Entre 6 y 7 horas y media' },
+            { value: '5_6', label: 'Entre 5 y 6, no más' },
+            { value: 'menos_5', label: 'Menos de 5' },
+        ],
+    },
+    {
+        type: 'choice', key: 'ayuda_dormir', title: '¿Tomas algún suplemento o fármaco para dormir mejor?',
+        options: [
+            { value: 'duermo_bien', label: 'No, duermo sin problema.' },
+            { value: 'nada_ni_quiero', label: 'No, aunque no duermo muy bien, no tomo nada, ni quiero.' },
+            { value: 'abierto', label: 'No, aunque no duermo bien, no tomo nada, pero estaría abierto a tomar algún tipo de suplemento que me ayudara en este sentido.' },
+            { value: 'suplementos', label: 'Sí, tomo suplementos para esto, no fármacos.' },
+            { value: 'benzos_sin_pauta', label: 'Sí, de vez en cuando utilizo benzodiacepinas, pero no las tengo pautadas por mi médico.' },
+            { value: 'medicacion_pautada', label: 'Sí, soy incapaz de dormir a no ser que utilice medicación (la tengo pautada).' },
+        ],
+    },
+    // ── Pantallas 12, 13 y 14 · su suplementación ───────────────────────────────
     // No existía. El equipo le pauta suplementos sin saber qué está tomando ya, que es
     // la forma más rápida de repetirle algo o de chocar con lo que lleva.
+    {
+        // Las cuatro del documento. La pregunta no es si la quiere, es hasta dónde le
+        // dejas llegar: las cuatro empiezan por «no» y lo que cambia es cuánto acepta.
+        // Los valores `lo_justo` y `no` son los de antes, así que lo contestado se conserva.
+        type: 'choice', key: 'quiere_pauta_suplementos',
+        title: '¿Tienes algún inconveniente en utilizar suplementación deportiva?',
+        options: [
+            { value: 'libertad', label: 'No. De hecho, suelo utilizarlos habitualmente. Tienes libertad absoluta para mandarme todo lo que consideres que me vaya a ayudar a avanzar más deprisa.' },
+            { value: 'abierto', label: 'No. Normalmente no utilizo, pero no tendría problema en empezar a usarlos si lo consideras oportuno.' },
+            { value: 'lo_justo', label: 'No, pero ponme 1 o 2 como mucho, no me puedo permitir más o sencillamente no me apetece.' },
+            { value: 'no', label: 'No me pongas nada, el tema de la suplementación lo descarto por completo.' },
+        ],
+    },
     {
         type: 'text', key: 'suplementos_ahora',
         title: '¿Qué suplementos tomas ahora?',
@@ -377,44 +492,28 @@ const STEPS_NIVEL1 = [
         textarea: true,
     },
     {
-        type: 'text', key: 'suplementos_antes',
-        title: '¿Y cuáles has tomado antes?',
-        desc: 'Sobre todo si notaste algo, bueno o malo. Si no has tomado nada, escribe "nada".',
+        // Sustituye a «¿Y cuáles has tomado antes?», que se va (bloque 5: nadie se acuerda y
+        // no cambia lo que se le pauta). Esta sí: lo que no puede o no quiere tomar es lo
+        // único de las dos que cambia la pauta que se le manda.
+        type: 'text', key: 'suplementos_veto',
+        title: '¿Existe algún suplemento en concreto que tengas contraindicado o que no quieras tomar?',
+        desc: 'Si no hay ninguno, escribe "no".',
         textarea: true,
     },
-    {
-        type: 'choice', key: 'quiere_pauta_suplementos',
-        title: '¿Quieres que te pautemos suplementación?',
-        desc: 'Nunca hace falta para conseguir resultados. Es tu decisión.',
-        options: [
-            { value: 'si', label: 'Sí, quiero que me lo pautéis' },
-            { value: 'lo_justo', label: 'Solo lo imprescindible' },
-            { value: 'no', label: 'No, prefiero no tomar nada' },
-        ],
-    },
-    {
-        // P15
-        type: 'choice', key: 'zona_grasa', title: '¿Dónde acumulas más grasa?',
-        options: [
-            { value: 'abdomen', label: 'Abdomen' },
-            { value: 'cintura', label: 'Cintura y flancos' },
-            { value: 'espalda_baja', label: 'Espalda baja' },
-            { value: 'pecho', label: 'Pecho' },
-            { value: 'piernas', label: 'Piernas y glúteos' },
-            { value: 'reparto', label: 'Se me reparte por igual' },
-        ],
-    },
-    { type: 'pesos', title: 'Tu historial de peso', desc: 'Aproximado, en kg. Ayuda al equipo a entender tu recorrido.' },
-    { type: 'historia', title: 'Tu recorrido', desc: 'Cuándo fue cada cosa y hasta dónde quieres llegar.' },
-    {
-        // P22
-        type: 'choice', key: 'vario_peso_3m', title: '¿Ha variado tu peso de forma significativa en los últimos 3 meses?',
-        options: [
-            { value: 'subido', label: 'Sí, he subido' },
-            { value: 'bajado', label: 'Sí, he bajado' },
-            { value: 'estable', label: 'No, sigo más o menos igual' },
-        ],
-    },
+    // ── Pantallas 15 a 18 y 20 · las que ya contestó en el básico ───────────────
+    // Están en el orden del documento porque el documento las pone aquí, pero al que ha
+    // pasado por el básico no se le enseña ninguna: se las salta porque ya las tiene
+    // contestadas. Siguen aquí por el que entró antes de que el básico existiera, que si no
+    // llegaría al entrenador sin saber si sigue una dieta ni qué deporte practica.
+    //
+    // Son las mismas preguntas, no copias: se referencian del cuestionario de ajuste, que es
+    // donde viven. La condición se les pone abajo, junto a las demás.
+    delAjuste('sigue_dieta'), delAjuste('tiempo_dieta'), delAjuste('como_va'),
+    delAjuste('hambre_saturacion'),
+    delAjuste('deporte_extra'), delAjuste('deporte_cual'), delAjuste('deporte_en_descanso'),
+    // Y sus tres hitos de peso, por lo mismo: subieron al básico y el que no pasó por él no
+    // los ha dado nunca.
+    ...PESO_HITOS,
     {
         // P23
         type: 'choice', key: 'tiempo_intentandolo', title: '¿Cuánto tiempo llevas intentando conseguir este objetivo?',
@@ -437,106 +536,90 @@ const STEPS_NIVEL1 = [
         type: 'text', textarea: true, key: 'motivo_apuntarse',
         title: 'Dime el motivo principal de querer trabajar conmigo, qué esperas y por qué te decides a empezar ahora y no antes.',
     },
-    { type: 'salud', title: 'Salud y descanso', desc: 'Sé sincero: todo esto condiciona tu estrategia.' },
     { type: 'text', key: 'dietas_previas', title: '¿Has hecho dietas antes? ¿Qué tal te fue?', desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...', textarea: true },
-    { type: 'text', key: 'entrenador_anterior', title: '¿Has tenido entrenador antes?', desc: 'Quién, cuánto tiempo y por qué lo dejaste. Si no, escribe "no".', textarea: true },
-    // Comidas al día, días de entreno y cuándo entrena YA se preguntan en el
-    // bloque de preferencias del Nivel 0 (no repetir); los alimentos a evitar
-    // se eligen con el selector visual de preferencias, no en texto libre.
+    // ── Pantallas 19, 20 y 21 · cómo entrena hoy ────────────────────────────────
+    // Comidas al día, días de entreno y cuándo entrena YA no se preguntan: van por defecto
+    // y se cambian en Preferencias (bloque 5 del doc del 18-08).
     {
         // Bloque 3: si entrena AHORA no es lo mismo que cuántos años lleva. Uno puede
         // llevar diez años entrenando y estar parado desde marzo.
+        //
+        // Las CUATRO del documento. Las tres de antes no distinguían al que está parado por
+        // una temporada del que no entrena, y a uno le montas la rutina de vuelta y al otro
+        // una de empezar de cero.
         type: 'choice', key: 'entrena_ahora', title: '¿Entrenas ahora mismo de forma regular?',
         options: [
-            { value: 'si', label: 'Sí, con constancia' },
-            { value: 'irregular', label: 'Voy, pero de forma irregular' },
-            { value: 'no', label: 'Ahora mismo no entreno' },
+            { value: 'si', label: 'Sí, voy mínimo 3 días y entreno en serio.' },
+            { value: 'irregular', label: 'Sí, pero voy poco y no entreno en serio.' },
+            { value: 'parada_puntual', label: 'Actualmente no, pero ha sido una parada muy puntual, generalmente entreno siempre.' },
+            { value: 'no', label: 'No.' },
         ],
     },
     {
+        // SOLO AL QUE NO PRACTICA OTRO DEPORTE (pantalla 21 del doc): «Si ya ha dicho que
+        // practica un deporte con intensidad, esta no se le enseña. No tiene sentido.»
+        // Y las cuatro respuestas de Jesús, que no preguntan cuánto cardio hace sino qué
+        // relación tiene con él, que es lo que decide cuánto se le puede mandar.
+        type: 'choice', key: 'cardio', title: '¿Haces cardio?',
+        cond: a => a.deporte_extra !== true,
+        options: [
+            { value: 'si_me_gusta', label: 'Sí, además me gusta, pero sé que ahora lo principal es el entrenamiento de fuerza. Por eso, en cuanto al cardio, ponme lo que consideres que me irá mejor.' },
+            { value: 'si_lo_odio', label: 'Sí, pero lo odio. Lo hago porque quiero perder grasa, pero cuanto menos cardio me marques mejor.' },
+            { value: 'no_pero_abierto', label: 'No, pero no tendría inconveniente en empezar a hacerlo si lo consideras oportuno.' },
+            { value: 'no_jamas', label: 'No, no me gusta y no lo haré en ningún caso. Ahórratelo (aunque soy consciente de que esto implica apretar más la dieta).' },
+        ],
+    },
+    // ── Pantalla 22 · las lesiones ──────────────────────────────────────────────
+    // Antes era una sola pregunta suelta («¿hay algún ejercicio que no puedas hacer?») y
+    // un campo perdido dentro de la pantalla de salud. Ahora son la pregunta y sus tres
+    // detalles, que es lo que el entrenador necesita para no mandarle lo que le duele.
+    {
+        type: 'choice', key: 'lesion',
+        title: '¿Arrastras alguna lesión o molestia que te condicione a la hora de entrenar fuerza?',
+        options: [
+            { value: 'si', label: 'Sí' },
+            { value: 'no', label: 'No' },
+        ],
+    },
+    {
+        type: 'text', key: 'lesion_cual', title: 'Especifica tu lesión', textarea: true,
+        cond: a => a.lesion === 'si',
+    },
+    {
+        type: 'text', key: 'lesion_tiempo', title: '¿Cuánto tiempo llevas arrastrándola?',
+        cond: a => a.lesion === 'si',
+    },
+    {
+        type: 'text', key: 'ejercicios_imposibles', textarea: true,
+        title: 'Enumera ejercicios concretos que no puedes hacer a causa de tu lesión',
+        cond: a => a.lesion === 'si',
+        pie: 'Tanto esta lista como la de la maquinaria las revisaremos todos los meses, por si hubiera cualquier novedad.',
+    },
+    // ── Pantallas 23 y 24 · con qué cuenta para entrenar ────────────────────────
+    {
+        // LAS SIETE DEL DOCUMENTO. Iba una lista mía de seis que mezclaba cosas («Máquinas»
+        // a secas) y se dejaba fuera el banco, que decide media rutina de empuje.
+        // OJO: esta lista es una de las cinco que Jesús marcó en amarillo para revisar.
         type: 'multiselect', key: 'material', title: '¿Con qué material cuentas para entrenar?',
         desc: 'Marca todo lo que tengas disponible.',
         options: [
             { value: 'gimnasio_completo', label: 'Gimnasio completo' },
+            { value: 'banco', label: 'Banco' },
+            { value: 'barra_olimpica', label: 'Barra olímpica' },
             { value: 'mancuernas', label: 'Mancuernas' },
-            { value: 'barra_discos', label: 'Barra y discos' },
-            { value: 'maquinas', label: 'Máquinas' },
             { value: 'bandas', label: 'Bandas elásticas' },
-            { value: 'nada', label: 'Nada (solo peso corporal)' },
+            { value: 'poleas', label: 'Máquinas de poleas' },
+            { value: 'peso_corporal', label: 'Solo peso corporal' },
         ],
     },
     {
         // Lo que NO tiene importa tanto como lo que tiene: una rutina con jaula de
-        // sentadilla no vale de nada si en su gimnasio no hay.
+        // sentadilla no vale de nada si en su gimnasio no hay. Con el enunciado de Jesús,
+        // que además pide lo contrario: la máquina rara que sí tiene.
         type: 'text', key: 'maquinas_que_faltan',
-        title: '¿Hay alguna máquina básica que no tengas?',
-        desc: 'Jaula de sentadilla, prensa, poleas... Si lo tienes todo, escribe "no".',
+        title: 'En lo referente a maquinaria, si se te viene a la cabeza alguna máquina de esas que te encuentras en prácticamente cualquier gimnasio y sepas que en el tuyo no la hay, dímelo para evitar incluirla en tu rutina. Y si tienes alguna máquina más «especial», lo mismo, pónmela aquí.',
         textarea: true,
-    },
-    {
-        type: 'text', key: 'ejercicios_imposibles',
-        title: '¿Hay algún ejercicio que no puedas hacer?',
-        desc: 'Por una lesión, por dolor o porque nunca te ha ido bien. Si no hay ninguno, escribe "no".',
-        textarea: true,
-    },
-    {
-        type: 'choice', key: 'cardio', title: '¿Haces cardio?',
-        options: [
-            { value: 'no', label: 'No hago cardio' },
-            { value: '1-2_semana', label: '1-2 veces por semana' },
-            { value: '3+_semana', label: '3 o más veces por semana' },
-        ],
-    },
-    // ── Bloque 6 · Tu comida ────────────────────────────────────────────────────
-    // Lo que decide si sus menús le encajan en la vida o los abandona en tres días. Las
-    // 36 categorías y el momento del día se preguntan aparte, en las preferencias.
-    {
-        type: 'choice', key: 'cocina_o_rapido',
-        title: '¿Te gusta cocinar o prefieres cosas rápidas?',
-        desc: 'No hay respuesta buena. Lo que hay que evitar es mandarte recetas de media hora si no vas a hacerlas.',
-        options: [
-            { value: 'cocinar', label: 'Me gusta cocinar y tengo tiempo' },
-            { value: 'normal', label: 'Cocino lo justo, sin complicarme' },
-            { value: 'rapido', label: 'Cuanto más rápido, mejor' },
-        ],
-    },
-    {
-        type: 'choice', key: 'conserva_o_fresco',
-        title: '¿Te vale la conserva o lo quieres fresco?',
-        options: [
-            { value: 'conserva', label: 'La conserva me facilita la vida' },
-            { value: 'ambos', label: 'Me da igual, según el día' },
-            { value: 'fresco', label: 'Lo prefiero fresco' },
-        ],
-    },
-    {
-        type: 'choice', key: 'come_fuera',
-        title: '¿Comes fuera de casa entre semana?',
-        desc: 'Si comes fuera casi todos los días, la dieta tiene que contar con eso desde el principio.',
-        options: [
-            { value: 'no', label: 'No, como en casa' },
-            { value: '1_2', label: '1 o 2 días por semana' },
-            { value: '3_4', label: '3 o 4 días' },
-            { value: 'casi_todos', label: 'Casi todos los días' },
-        ],
-    },
-    {
-        type: 'text', key: 'que_le_apetece',
-        title: '¿Qué tipo de desayuno, comida, merienda y cena te apetecen?',
-        desc: 'Cuéntamelo con tus palabras: qué sueles comer o qué te gustaría comer en cada momento del día.',
-        textarea: true,
-    },
-    {
-        type: 'text', key: 'favoritos_y_no_gustos',
-        title: '¿Qué alimentos te encantan y cuáles no piensas comer?',
-        desc: 'Por grupos: carnes, pescados, verduras, lácteos, hidratos... Lo que no te gusta pesa tanto como lo que sí.',
-        textarea: true,
-    },
-    {
-        type: 'text', key: 'plato_imprescindible',
-        title: '¿Hay algún plato que quieras sí o sí?',
-        desc: 'Ese que si no está, la dieta no te dura. Si no hay ninguno, escribe "no".',
-        textarea: true,
+        pie: 'Tanto esta lista como la de las lesiones las revisaremos todos los meses, por si hubiera cualquier novedad.',
     },
     // Las intolerancias, por separado y no en texto libre: de "soy intolerante a la
     // lactosa" no se puede sacar si puede comer yogur o queso curado, y de ahí depende
@@ -548,6 +631,12 @@ const STEPS_NIVEL1 = [
         // dónde le llega.
         type: 'choice', key: 'lactosa',
         title: '¿Es total o toleras algunos lácteos como yogur, queso curado o queso batido?',
+        // SOLO SI HA DICHO QUE LE PASA ALGO CON LA LACTOSA. La condición vive aquí, con la
+        // pregunta, y no solo en el básico: en el cuestionario largo salía siempre, y el que
+        // no tiene ninguna intolerancia se encontraba «¿es total o toleras algunos lácteos?»
+        // sin haber dicho nunca que le sentaran mal. Vale para la lista del básico y para el
+        // texto libre del cuestionario viejo, porque `includes` sirve para las dos cosas.
+        cond: a => !!(a.alergias || []).includes('lactosa'),
         options: [
             { value: 'total', label: 'Total: nada de lácteos' },
             { value: 'tolera_algo', label: 'Tolero el yogur, el queso curado o el queso batido' },
@@ -557,24 +646,21 @@ const STEPS_NIVEL1 = [
         type: 'choice', key: 'gluten',
         title: '¿Es celiaquía diagnosticada o sensibilidad?',
         desc: '¿Toleras pequeñas cantidades como pan de molde o avena sin gluten?',
+        cond: a => !!(a.alergias || []).includes('gluten'),
         options: [
             { value: 'celiaquia', label: 'Celiaquía diagnosticada: nada de gluten' },
             { value: 'sensibilidad', label: 'Sensibilidad: tolero pequeñas cantidades' },
         ],
     },
     { type: 'text', key: 'alergias', title: '¿Alguna otra alergia o intolerancia?', desc: 'Frutos secos, marisco, huevo... Si no tienes, escribe "no".', textarea: true },
-    { type: 'final1', title: 'Perfil completo.', desc: 'El equipo usará todo esto para tu estrategia. Las fotos de progreso te las pedirán por el chat. Si quieres revisar algo, ve hacia atrás.' },
+    // ── Pantalla 25 · sus fotos y sus medidas ───────────────────────────────────
+    // El completo termina aquí, no en una pantalla de «ya está». Es obligatorio para
+    // arrancar: sin fotos y sin medidas su entrenador no puede ponerle los macros buenos ni
+    // montarle la rutina. No se le bloquea el paso (qué hacer con el que no las sube sigue
+    // sin decidirse, bloque 6 del doc), pero se le dice por qué hacen falta.
+    { type: 'fotos_medidas', obligatorio: true },
+    { type: 'final1', title: 'Perfil completo.', desc: 'El equipo usará todo esto para tu estrategia. Si quieres revisar algo, ve hacia atrás.' },
 ];
-
-// CUÁNTAS SON, CONTADAS DE LA PROPIA LISTA.
-// El aviso de arriba deja su `desc` vacía a propósito y se rellena aquí: si el número se
-// escribiera a mano, se quedaría viejo el día que alguien añada una pregunta, y entonces el
-// aviso mentiría, que es peor que no decir nada. Los `statement` no cuentan: son pantallas de
-// texto, no preguntas.
-STEPS_NIVEL1[0].desc =
-    `Son ${STEPS_NIVEL1.filter(s => s.type !== 'statement').length} preguntas más y con ellas `
-    + 'montamos tu estrategia, tu rutina y tus menús.';
-
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EL BÁSICO · las pantallas del bloque 2 del doc del 18-08, en su orden
@@ -620,24 +706,7 @@ const EL_BASICO = [
     q('weight'), q('height'), q('body_fat'),
     // 9, 10 y 11 · su recorrido de peso, cada hito con su año. Antes era UNA pantalla con
     // cuatro casillas sueltas, sin años y solo para quien llevaba entrenador.
-    {
-        type: 'peso_hito', key: 'peso_maximo',
-        title: '¿Cuál fue tu máximo peso alcanzado y cuándo?',
-        desc: 'Me refiero a cuándo estuviste en tu peor forma física.',
-        nota: 'Cuéntame lo que quieras de esa época',
-    },
-    {
-        type: 'peso_hito', key: 'peso_mejor_momento', conFoto: true,
-        title: '¿Has estado muy en forma alguna vez?',
-        desc: 'Si es que sí, dime cuándo y tu peso en aquel momento.',
-        nota: 'Cuéntame lo que quieras',
-    },
-    {
-        type: 'peso_hito', key: 'peso_minimo',
-        title: '¿Cuál es el peso más bajo al que has llegado siendo adulto, y cuándo?',
-        desc: 'No hablo de tu mejor forma, sino de lo más abajo que has estado, aunque no te vieras bien.',
-        nota: 'Cuéntame lo que quieras de esa época',
-    },
+    ...PESO_HITOS,
     // 12 · a qué se dedica y cuánto se mueve, JUNTAS. En pantallas seguidas se le pregunta
     // su trabajo y acto seguido se le pide que se clasifique en lo mismo, y suena a que no
     // se le ha escuchado.
@@ -666,8 +735,9 @@ const EL_BASICO = [
             { value: 'otra', label: 'Otra (dime cuál)' },
         ],
     },
-    { ...q('lactosa'), cond: a => (a.alergias || []).includes('lactosa') },
-    { ...q('gluten'), cond: a => (a.alergias || []).includes('gluten') },
+    // Las dos llevan su condición puesta en la propia pregunta: solo salen si ha marcado esa
+    // intolerancia.
+    q('lactosa'), q('gluten'),
     {
         type: 'text', key: 'alergia_otra', title: '¿Cuál?',
         desc: 'Dime a qué eres alérgico o intolerante.',
@@ -720,20 +790,45 @@ const EL_BASICO = [
 // Se sustituyen por una copia con la condición puesta, no se muta el objeto: es el mismo que
 // usa el básico, y mutarlo le pondría al básico la condición de no preguntar lo que no está
 // contestado, que es justo lo contrario.
-const YA_ESTAN_EN_EL_BASICO = ['tiempo_intentandolo', 'motivo_apuntarse', 'dietas_previas',
-                               'lactosa', 'gluten', 'alergias'];
+const YA_ESTAN_EN_EL_BASICO = [
+    'birthdate', 'tiempo_intentandolo', 'motivo_apuntarse', 'dietas_previas',
+    'lactosa', 'gluten', 'alergias',
+    // Los tres hitos de peso, con sus años
+    'peso_maximo', 'peso_mejor_momento', 'peso_minimo',
+    // Las cinco que se quedaron en el básico porque mueven los macros (decisión del 18-08)
+    'sigue_dieta', 'tiempo_dieta', 'como_va', 'hambre_saturacion',
+    'deporte_extra', 'deporte_cual', 'deporte_en_descanso',
+];
+
+// «No contestada» NO ES «vacía». Media docena de estas respuestas valen `false` -- el que
+// dice que no practica otro deporte, el que come sin control -- y darlas por no contestadas
+// se las volvía a preguntar a quien las acababa de responder, que es justo lo que el
+// documento no quiere.
+const sinContestar = (a, k) => a[k] === undefined || a[k] === null || a[k] === '';
+
 for (let i = 0; i < STEPS_NIVEL1.length; i++) {
     const paso = STEPS_NIVEL1[i];
-    const yaContestada = YA_ESTAN_EN_EL_BASICO.includes(paso.key)
-        ? (a) => !a[paso.key]
-        : paso.type === 'pesos'
-            ? (a) => !a.peso_maximo && !a.peso_minimo && !a.peso_mejor_momento
-            : null;
-    if (yaContestada) {
-        const antes = paso.cond;
-        STEPS_NIVEL1[i] = { ...paso, cond: (a) => yaContestada(a) && (!antes || antes(a)) };
-    }
+    if (!YA_ESTAN_EN_EL_BASICO.includes(paso.key)) continue;
+    const antes = paso.cond;
+    STEPS_NIVEL1[i] = {
+        ...paso,
+        cond: (a) => sinContestar(a, paso.key) && (!antes || antes(a)),
+    };
 }
+
+// CUÁNTAS SON, CONTADAS DE LA PROPIA LISTA.
+// La portada deja su `desc` vacía a propósito y se rellena aquí: si el número se escribiera a
+// mano, se quedaría viejo el día que alguien añada una pregunta, y entonces el aviso mentiría,
+// que es peor que no decir nada.
+//
+// SE CUENTAN SOLO LAS QUE VE TODO EL MUNDO: las que tienen condición o no salen (el detalle de
+// la lesión) o solo le salen al que entró antes del básico. Y se cuenta AQUÍ ABAJO, después de
+// ponerles la condición, no arriba: contado antes de eso prometía 26 preguntas cuando de
+// verdad son 13, y el que se ve 26 por delante cierra la pestaña.
+STEPS_NIVEL1[0].desc =
+    `Son ${STEPS_NIVEL1.filter(s => !s.cond && !['statement', 'final1', 'fotos_medidas']
+        .includes(s.type)).length} preguntas más y con ellas `
+    + 'montamos tu estrategia, tu rutina y tus menús.';
 
 // A nivel de módulo para que los inputs conserven el FOCO al teclear: definidos
 // dentro del componente de la página se recrean en cada render (tipo nuevo para
@@ -950,9 +1045,8 @@ const QuestionnairePage = () => {
         if (answers.pref_num_comidas != null) cfg.num_comidas = answers.pref_num_comidas;
         if (answers.pref_momento != null) cfg.momento_entreno = answers.pref_momento;
         if (Object.keys(cfg).length) api.patch('/user/diet-config', cfg).catch(() => {});
-        if (answers.pref_dias_entreno != null) {
-            api.put('/clients/profile', { training_days: answers.pref_dias_entreno }).catch(() => {});
-        }
+        // Los días de entreno ya no se preguntan aquí (bloque 5 del doc del 18-08: son cuatro
+        // siempre y la ficha nace con cuatro), así que no hay nada que persistir.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx]);
 
@@ -1104,6 +1198,14 @@ const QuestionnairePage = () => {
             const v = profile[clave];
             if (v !== null && v !== undefined && v !== '') delBasico[clave] = v;
         }
+        // Y LAS CINCO QUE MUEVEN LOS MACROS, que no viven sueltas en el perfil sino dentro de
+        // `ajustes_macros`. Sin esto el completo se las volvía a preguntar a todo el mundo,
+        // porque aquí no las veía: son las mismas preguntas, guardadas en otro cajón.
+        for (const clave of ['sigue_dieta', 'tiempo_dieta', 'como_va', 'hambre_saturacion',
+                             'deporte_extra', 'deporte_cual', 'deporte_en_descanso']) {
+            const v = (profile.ajustes_macros || {})[clave];
+            if (v !== null && v !== undefined && v !== '') delBasico[clave] = v;
+        }
         answersRef.current = {
             ...delBasico,
             ...answersRef.current,
@@ -1238,22 +1340,6 @@ const QuestionnairePage = () => {
             await api.post('/clients/punto-de-partida', { medidas, altura: num(answers.height) });
         } catch (e) { /* no bloquea: lo importante son las fotos, que ya estan subidas */ }
         goNext();
-    };
-
-    // Igual que la de la dieta, pero para la foto del peso maximo (P19).
-    const elegirFotoPesoMaximo = () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = (ev) => {
-            const file = ev.target.files?.[0];
-            if (!file) return;
-            if (file.size > 8 * 1024 * 1024) { toast.error('La foto pesa demasiado (máximo 8 MB)'); return; }
-            const reader = new FileReader();
-            reader.onload = (e) => set('foto_peso_maximo', e.target.result);
-            reader.readAsDataURL(file);
-        };
-        input.click();
     };
 
     const elegirFotoDieta = () => {
@@ -1486,7 +1572,15 @@ const QuestionnairePage = () => {
     };
 
     // Nivel 1 -> guardar perfil largo (no toca macros).
-    const submitNivel1 = async () => {
+    //
+    // `destino` es a dónde se le manda después. Por defecto a su Inicio, pero desde la última
+    // pantalla del completo -- las fotos y las medidas -- se le manda a subirlas, y ahí hay
+    // que GUARDAR ANTES de sacarle del cuestionario: si no, se va a la pantalla de reportes y
+    // las veinte respuestas que acaba de dar se quedan sin escribir en su ficha.
+    // Se comprueba que sea texto porque este mismo método es el `onClick` del botón de
+    // enviar, y un onClick recibe el evento del clic como primer argumento.
+    const submitNivel1 = async (destino) => {
+        const irA = typeof destino === 'string' ? destino : '/welcome';
         setLoading(true);
         try {
             await api.post('/clients/questionnaire/nivel1', {
@@ -1496,62 +1590,47 @@ const QuestionnairePage = () => {
                 training_experience: answers.training_experience || null,
                 peso_maximo: num(answers.peso_maximo),
                 peso_minimo: num(answers.peso_minimo),
-                peso_habitual: num(answers.peso_habitual),
                 peso_mejor_momento: num(answers.peso_mejor_momento),
-                salud: {
-                    sueno: answers.salud_sueno || null,
-                    estres: answers.salud_estres || null,
-                    medicacion: answers.salud_medicacion || null,
-                    hormonal: answers.salud_hormonal || null,
-                    lesiones: answers.salud_lesiones || null,
-                },
                 dietas_previas: answers.dietas_previas || null,
-                entrenador_anterior: answers.entrenador_anterior || null,
-                // Preguntados en las preferencias del Nivel 0 (aquí no se repiten);
-                // los alimentos evitados viven en las preferencias del perfil.
-                dias_entreno: answers.pref_dias_entreno ?? null,
-                hora_entreno: null,
+                // Los días de entreno y la hora ya no se preguntan: van por defecto y se
+                // cambian en Preferencias (bloque 5 del doc del 18-08).
                 material: answers.material || null,
                 cardio: answers.cardio || null,
                 // Bloque 3: lo que hace falta para montarle la rutina. Entrenar AHORA no es
                 // lo mismo que llevar años, y lo que NO tiene pesa tanto como lo que tiene.
                 entrena_ahora: answers.entrena_ahora || null,
                 maquinas_que_faltan: answers.maquinas_que_faltan || null,
+                // Pantalla 22: la lesión y sus tres detalles.
+                lesion: answers.lesion || null,
+                lesion_cual: answers.lesion_cual || null,
+                lesion_tiempo: answers.lesion_tiempo || null,
                 ejercicios_imposibles: answers.ejercicios_imposibles || null,
-                // Bloque 5: su suplementación. Sin esto se le pauta a ciegas.
+                // Pantallas 6 y 7: lo médico, que faltaba entero.
+                patologia: answers.patologia || null,
+                patologia_detalle: answers.patologia_detalle || null,
+                medicacion: answers.medicacion || null,
+                medicacion_detalle: answers.medicacion_detalle || null,
+                // Pantallas 10 y 11: el descanso, con los tramos de Jesús.
+                horas_sueno: answers.horas_sueno || null,
+                ayuda_dormir: answers.ayuda_dormir || null,
+                // Pantallas 12, 13 y 14: su suplementación. Sin esto se le pauta a ciegas.
                 suplementos_ahora: answers.suplementos_ahora || null,
-                suplementos_antes: answers.suplementos_antes || null,
+                suplementos_veto: answers.suplementos_veto || null,
                 quiere_pauta_suplementos: answers.quiere_pauta_suplementos || null,
-                // Bloque 4: la intención cuenta tanto como el uso.
+                // Pantalla 9: la intención cuenta tanto como el uso.
                 farmacologia_uso: answers.farmacologia_uso || null,
-                // Bloque 6: lo que decide si sus menús le encajan en la vida.
-                cocina_o_rapido: answers.cocina_o_rapido || null,
-                conserva_o_fresco: answers.conserva_o_fresco || null,
-                come_fuera: answers.come_fuera || null,
-                que_le_apetece: answers.que_le_apetece || null,
-                favoritos_y_no_gustos: answers.favoritos_y_no_gustos || null,
-                plato_imprescindible: answers.plato_imprescindible || null,
+                farmacologia_detalle: answers.farmacologia_detalle || null,
                 lactosa: answers.lactosa || null,
                 gluten: answers.gluten || null,
-                alimentos_evitados: null,
                 alergias: answers.alergias || null,
-                num_comidas: answers.pref_num_comidas ?? null,
-                // Bloque 4 del doc: no mueven macros, sirven para emparejarlo con casos anteriores.
+                // Pantalla 8: no mueve macros, sirve para emparejarlo con casos anteriores.
                 trt: answers.trt || null,
-                zona_grasa: answers.zona_grasa || null,
-                peso_maximo_cuando: answers.peso_maximo_cuando || null,
-                foto_peso_maximo: answers.foto_peso_maximo || null,
-                mejor_definicion_cuando: answers.mejor_definicion_cuando || null,
-                hasta_donde: answers.hasta_donde || null,
-                vario_peso_3m: answers.vario_peso_3m || null,
                 tiempo_intentandolo: answers.tiempo_intentandolo || null,
-                dieta_que_funciona: answers.dieta_que_funciona || null,
-                por_que_fallaron: answers.por_que_fallaron || null,
                 motivo_apuntarse: answers.motivo_apuntarse || null,
             });
             await refreshProfile();
             toast.success('¡Perfil completo! El equipo ya tiene toda la información.');
-            navigate('/welcome');
+            navigate(irA);
         } catch (e) {
             toast.error(mensajeDeError(e, 'Error al guardar el perfil'));
         } finally {
@@ -1625,12 +1704,22 @@ const QuestionnairePage = () => {
     // que se formulan distinto segun el objetivo (definicion o volumen).
     const segunRespuestas = (v) => (typeof v === 'function' ? v(answers) : v);
 
-    const Title = () => (
-        <>
-            <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">{segunRespuestas(step.title)}</h2>
-            {step.desc && <p className="text-foreground/60 mb-8 text-sm md:text-base">{segunRespuestas(step.desc)}</p>}
-        </>
-    );
+    // EL TAMAÑO, SEGÚN LO LARGA QUE SEA LA PREGUNTA. Los enunciados de Jesús son de dos y de
+    // cuatro líneas -- el de la maquinaria tiene 250 caracteres -- y a tamaño de titular
+    // llenaban la pantalla entera: el campo para contestar y el botón se iban por debajo, y
+    // el cliente veía un muro de letras sin nada que hacer.
+    const Title = () => {
+        const texto = segunRespuestas(step.title) || '';
+        const tam = texto.length > 160 ? 'text-xl md:text-2xl'
+            : texto.length > 90 ? 'text-2xl md:text-3xl'
+                : 'text-3xl md:text-4xl';
+        return (
+            <>
+                <h2 className={`font-heading font-bold ${tam} text-foreground mb-2 leading-tight`}>{texto}</h2>
+                {step.desc && <p className="text-foreground/60 mb-8 text-sm md:text-base">{segunRespuestas(step.desc)}</p>}
+            </>
+        );
+    };
 
     const BackBtn = () => (idx > 0 ? (
         <Button variant="ghost" onClick={goBack} className="text-foreground/60">
@@ -2092,22 +2181,32 @@ const QuestionnairePage = () => {
         // dos cosas» y pedirle las medidas otra vez es tratarle como si no hubiera hecho
         // nada. Si ya están, lo que le queda es una: las fotos.
         const yaTieneMedidas = !!(profile?.punto_de_partida_hecho || profile?.medidas_inicio);
+        // Y EL DEL QUE SÍ LO LLEVA (pantalla 25, el cierre del completo). Ahí la razón no es
+        // que él vea su evolución: es que su entrenador no puede trabajar sin esto. Se le
+        // dice tal cual, porque es la verdad y porque es lo único que le mueve a hacerlo.
         body = (
             <div>
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
-                    {yaTieneMedidas ? 'Te queda una cosa' : 'Te quedan dos cosas'}
+                    {step.obligatorio
+                        ? 'Tus fotos y tus medidas'
+                        : yaTieneMedidas ? 'Te queda una cosa' : 'Te quedan dos cosas'}
                 </h2>
                 <p className="text-foreground/70 mb-6">
-                    {yaTieneMedidas
-                        ? 'Sube tus fotos. Con ellas y las medidas que acabas de apuntar ya puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'
-                        : 'Sube tus fotos y toma tus medidas. Sin eso no puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'}
+                    {step.obligatorio
+                        ? 'Es lo último, y hace falta para arrancar: sin fotos y sin medidas tu entrenador no puede ponerte los macros buenos ni montarte la rutina. Si te puede medir alguien, y siempre el mismo, mejor.'
+                        : yaTieneMedidas
+                            ? 'Sube tus fotos. Con ellas y las medidas que acabas de apuntar ya puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'
+                            : 'Sube tus fotos y toma tus medidas. Sin eso no puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
-                    <Button onClick={() => navigate('/dashboard/reports')} data-testid="ir-a-fotos-medidas"
+                    <Button data-testid="ir-a-fotos-medidas" disabled={loading}
+                        onClick={() => (step.obligatorio
+                            ? submitNivel1('/dashboard/reports')
+                            : navigate('/dashboard/reports'))}
                         className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                        Vamos <ArrowRight className="w-5 h-5 ml-2" />
+                        {loading ? 'Guardando...' : 'Vamos'} <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
-                    <Button variant="outline" onClick={goNext} className="px-8 py-6 text-lg">
+                    <Button variant="outline" onClick={goNext} disabled={loading} className="px-8 py-6 text-lg">
                         Ahora no
                     </Button>
                 </div>
@@ -2274,24 +2373,6 @@ const QuestionnairePage = () => {
                 )}
             </div>
         );
-    } else if (step.type === 'pesos') {
-        body = (
-            <div>
-                <Title />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                    <MiniInput {...mini} k="peso_maximo" label="Peso máximo que has tenido" type="number" unit="kg" />
-                    <MiniInput {...mini} k="peso_minimo" label="Peso mínimo (de adulto)" type="number" unit="kg" />
-                    <MiniInput {...mini} k="peso_habitual" label="Peso habitual" type="number" unit="kg" />
-                    <MiniInput {...mini} k="peso_mejor_momento" label="Peso en tu mejor momento físico" type="number" unit="kg" />
-                </div>
-                <div className="flex gap-3">
-                    <BackBtn />
-                    <Button onClick={goNext} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
-                        OK <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                </div>
-            </div>
-        );
     } else if (step.type === 'partida') {
         // Las medidas del día 1. Las fotos ya NO se piden aquí: van con el reporte (punto 19
         // del doc del 07-08), que es donde el cliente entiende para qué son.
@@ -2410,81 +2491,6 @@ const QuestionnairePage = () => {
                 <div className="mt-8">
                     <Button onClick={goNext} className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
                         Continuar <ArrowRight className="w-5 h-5 ml-2" />
-                    </Button>
-                </div>
-            </div>
-        );
-    } else if (step.type === 'historia') {
-        // P18-P21 y P24-P25 juntas: son de texto corto y preguntarlas de una en una serian seis
-        // pantallas seguidas sin devolverle nada, que es justo lo que el doc quiere evitar.
-        body = (
-            <div>
-                <Title />
-                <div className="space-y-4 mb-8 max-h-[55vh] overflow-y-auto pr-1">
-                    <MiniInput {...mini} k="peso_maximo_cuando" label="¿Cuándo tuviste tu peso máximo?" placeholder="Por ejemplo: en 2019, o hace 3 años" />
-                    {/* P19 del doc: la foto de aquel momento, opcional. Al coach le dice mucho mas
-                        que el numero, porque el mismo peso es otra cosa segun como lo llevaras. */}
-                    <div>
-                        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-1.5">
-                            Foto de aquel momento (opcional)
-                        </label>
-                        <button type="button" onClick={elegirFotoPesoMaximo}
-                            className="w-full rounded-xl border-2 border-dashed border-[#333] py-5 text-center hover:border-brand transition-colors">
-                            {answers.foto_peso_maximo ? (
-                                <span className="inline-flex items-center gap-2 text-foreground/70 text-sm">
-                                    <Check className="w-4 h-4 text-emerald-500" /> Foto elegida. Toca para cambiarla
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-2 text-foreground/50 text-sm">
-                                    <ImagePlus className="w-5 h-5" /> Subir una foto
-                                </span>
-                            )}
-                        </button>
-                    </div>
-                    <MiniInput {...mini} k="mejor_definicion_cuando"
-                        label="¿Cuál ha sido tu mejor punto de definición? ¿Cuándo?"
-                        placeholder='Cuándo fue, o escribe "nunca" si no has estado definido' />
-                    <MiniInput {...mini} k="hasta_donde" label="¿Hasta dónde quieres llegar?" placeholder="Tu meta real: un peso, un aspecto, una talla..." />
-                    <MiniInput {...mini} k="dieta_que_funciona" label="¿Qué tipo de dieta consideras que te funciona mejor?" placeholder="Y por qué crees que contigo funciona" />
-                    <MiniInput {...mini} k="por_que_fallaron" label="¿Por qué crees que no te han funcionado las dietas anteriores?" placeholder='Si nunca has hecho, escribe "no he hecho"' />
-                </div>
-                <div className="flex gap-3">
-                    <BackBtn />
-                    <Button onClick={goNext} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
-                        OK <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                </div>
-            </div>
-        );
-    } else if (step.type === 'salud') {
-        body = (
-            <div>
-                <Title />
-                <div className="space-y-5 mb-8 max-h-[55vh] overflow-y-auto pr-1">
-                    <div>
-                        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">¿Cómo duermes?</label>
-                        <MiniChoice {...mini} k="salud_sueno" options={[
-                            { value: 'bien', label: 'Bien (7-8h)' },
-                            { value: 'regular', label: 'Regular' },
-                            { value: 'mal', label: 'Mal (poco o roto)' },
-                        ]} />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">¿Nivel de estrés en tu día a día?</label>
-                        <MiniChoice {...mini} k="salud_estres" options={[
-                            { value: 'bajo', label: 'Bajo' },
-                            { value: 'medio', label: 'Medio' },
-                            { value: 'alto', label: 'Alto' },
-                        ]} />
-                    </div>
-                    <MiniInput {...mini} k="salud_medicacion" label="¿Tomas medicación? ¿Cuál?" placeholder='Si no, escribe "no"' />
-                    <MiniInput {...mini} k="salud_hormonal" label="¿Algún problema hormonal (tiroides, etc.)?" placeholder='Si no, escribe "no"' />
-                    <MiniInput {...mini} k="salud_lesiones" label="¿Lesiones o molestias a tener en cuenta?" placeholder='Si no, escribe "no"' />
-                </div>
-                <div className="flex gap-3">
-                    <BackBtn />
-                    <Button onClick={goNext} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
-                        OK <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                 </div>
             </div>
@@ -2674,6 +2680,15 @@ const QuestionnairePage = () => {
                 : null}
         >
             {body}
+            {/* El pie de la pantalla, cuando lo lleva. Hoy solo lo llevan las dos del
+                documento -- las lesiones y la maquinaria -- y dicen lo mismo: que esa lista
+                se revisa cada mes. Va aquí, en un solo sitio, y no repetido en cada pantalla
+                que lo necesite. */}
+            {step.pie && (
+                <p className="mt-6 text-sm text-foreground/50 border-t border-border pt-4 max-w-2xl">
+                    {step.pie}
+                </p>
+            )}
         </Shell>
     );
 };

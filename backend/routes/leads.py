@@ -11,6 +11,7 @@ import bcrypt
 from pymongo.errors import DuplicateKeyError
 
 from core.database import db
+from core.dias_de_entreno import DIAS_DE_ENTRENO_POR_DEFECTO
 from core.security import get_admin_user, get_current_user, generate_temp_password
 from core.notion_sync import upsert_lead_to_notion
 from models.user import PLAN_CATALOG, planes_contratables
@@ -485,7 +486,10 @@ async def convert_lead_to_client(lead_id: str, data: dict, user=Depends(get_admi
         "body_fat": None,
         "equipment": [],
         "injuries": [],
-        "training_days": None,
+        # Cuatro, como en el alta normal: la pregunta se retira del cuestionario el 18-08
+        # porque la respuesta es siempre la misma. Un lead convertido a cliente entra por
+        # aquí, así que si aquí sigue naciendo a None su rutina queda bloqueada igual.
+        "training_days": DIAS_DE_ENTRENO_POR_DEFECTO,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.client_profiles.insert_one(profile)

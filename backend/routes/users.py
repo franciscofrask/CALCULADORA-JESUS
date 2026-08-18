@@ -997,6 +997,21 @@ async def submit_questionnaire_nivel1(data: Nivel1Submit, user = Depends(get_cur
     if data.num_comidas is not None:
         update["diet_num_comidas"] = data.num_comidas
 
+    # EL MATERIAL Y LAS LESIONES, AL SITIO DONDE SE LEEN. El generador de rutinas agrupa por
+    # `equipment` e `injuries` del perfil, y esos dos campos nacen vacios al registrarse y no
+    # los rellenaba NADIE: lo que el cliente contesta aqui se guardaba dentro de `nivel1`, que
+    # el generador no mira. Resultado: todo el mundo entraba en el grupo "gimnasio completo,
+    # sin lesiones", tuviera lo que tuviera y le doliera lo que le doliera.
+    if data.material:
+        update["equipment"] = list(data.material)
+    # De la lesion se guarda lo que escribio, no un "si": el grupo de rutina se hace por
+    # lesion, y "si" no distingue un hombro de una rodilla.
+    lesiones = [t for t in (data.lesion_cual, data.ejercicios_imposibles) if (t or "").strip()]
+    if data.lesion == "si" and lesiones:
+        update["injuries"] = lesiones
+    elif data.lesion == "no":
+        update["injuries"] = []
+
     client_id = profile.get("id") or str(uuid.uuid4())
     if not profile.get("id"):
         update["id"] = client_id

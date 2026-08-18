@@ -1107,7 +1107,11 @@ class Nivel1Submit(BaseModel):
     material: Optional[List[str]] = None
     cardio: Optional[str] = None
     alimentos_evitados: Optional[List[str]] = None
-    alergias: Optional[str] = None
+    # TEXTO O LISTA. En el cuestionario largo era un texto libre («frutos secos, marisco»);
+    # desde el básico del 18-08 es un multiselect y llega una lista. Con el tipo antiguo, el
+    # cliente que pasaba por el básico y luego hacía el completo recibía un 422 al enviarlo
+    # -- «Error al guardar el perfil» -- y perdía las veinte respuestas de golpe.
+    alergias: Optional[Union[str, List[str]]] = None
     num_comidas: Optional[int] = None
     # Bloque 4 del doc del 29-07. Ninguna toca los macros: son las que permiten emparejar al
     # cliente con los que ya han pasado por aqui.
@@ -1134,12 +1138,36 @@ class Nivel1Submit(BaseModel):
     # Bloque 5: su suplementacion. No existia, y sin esto se le pauta a ciegas: repitiendole
     # algo que ya toma o chocando con lo que lleva.
     suplementos_ahora: Optional[str] = None
-    suplementos_antes: Optional[str] = None
-    quiere_pauta_suplementos: Optional[str] = None  # si | lo_justo | no
+    suplementos_antes: Optional[str] = None         # ya no se pregunta (bloque 5 del 18-08)
+    # Pantalla 14 del completo: lo que NO puede o NO quiere tomar. Es la unica de las dos que
+    # cambia lo que se le manda.
+    suplementos_veto: Optional[str] = None
+    # libertad | abierto | lo_justo | no  (las fichas viejas traen `si`)
+    quiere_pauta_suplementos: Optional[str] = None
 
     # Bloque 4: la intencion cuenta tanto como el uso. Hay que saberlo ANTES, no cuando ya
     # lo ha hecho.
-    farmacologia_uso: Optional[str] = None          # uso | use | intencion | nunca
+    # no | pasado | frecuente | quemagrasas | ciclo  (viejos: uso | use | intencion | nunca)
+    farmacologia_uso: Optional[str] = None
+    farmacologia_detalle: Optional[str] = None
+
+    # ── El completo del 18-08 · lo que faltaba ────────────────────────────────────────
+    # Las pantallas 6 y 7 estaban en el cuestionario de siempre y desaparecieron por el
+    # camino: hoy se le monta una rutina y una dieta sin saber si tiene una patologia que se
+    # lo desaconseje o si esta medicado.
+    patologia: Optional[str] = None                 # si | no
+    patologia_detalle: Optional[str] = None
+    medicacion: Optional[str] = None                # si | no
+    medicacion_detalle: Optional[str] = None
+    # Pantallas 10 y 11: el descanso, con los tramos de Jesus. Antes era un campo suelto
+    # dentro de una pantalla de cinco, con tres respuestas de andar por casa.
+    horas_sueno: Optional[str] = None               # min_7_30 | 6_7_30 | 5_6 | menos_5
+    ayuda_dormir: Optional[str] = None
+    # Pantalla 22: la lesion y sus tres detalles. Lo que va a `injuries`, que es de donde
+    # lee el generador de rutinas.
+    lesion: Optional[str] = None                    # si | no
+    lesion_cual: Optional[str] = None
+    lesion_tiempo: Optional[str] = None
 
     # Bloque 6: su comida. Lo que decide si los menus le encajan en la vida o los abandona
     # en tres dias. Las 36 categorias y el momento del dia van aparte, en las preferencias.

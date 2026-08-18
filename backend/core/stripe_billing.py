@@ -19,6 +19,7 @@ from .config import (
     DEFAULT_BILLING_CYCLE_DAYS,
 )
 from .database import db
+from .dias_de_entreno import DIAS_DE_ENTRENO_POR_DEFECTO
 from models.user import PLAN_TYPES
 
 try:
@@ -254,6 +255,10 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
             "age": None,
             "sex": None,
             "goal": None,
+            # Cuatro días, como en las otras dos puertas de entrada (alta y lead convertido).
+            # Este es el camino por el que entra el que paga con Stripe, y hasta ahora el
+            # campo ni se escribía: su ficha nacía sin él y su rutina quedaba bloqueada.
+            "training_days": DIAS_DE_ENTRENO_POR_DEFECTO,
             # OJO: stripe_customer_id / stripe_subscription_id NO se ponen aquí: tienen índice
             # único parcial y escribir null explícito choca entre varios perfiles.
             "stripe_price_id": stripe_price_id,
