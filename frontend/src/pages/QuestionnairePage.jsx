@@ -1635,11 +1635,20 @@ const QuestionnairePage = () => {
         if (s.type === 'fotos_medidas' && yaTieneMedidas && yaTieneFotos) return false;
         return !s.cond || s.cond(answersRef.current);
     };
-    const goNext = () => setIdx(i => {
-        let j = i + 1;
-        while (j < flow.length - 1 && !visible(flow[j])) j++;
-        return Math.min(j, flow.length - 1);
-    });
+    // PEDIR «SIGUIENTE» EN LA ÚLTIMA PANTALLA ES HABER TERMINADO.
+    //
+    // `goNext` se topaba con el final de la lista y se quedaba donde estaba, en silencio. Con
+    // eso, cualquier botón de la última pantalla es un botón muerto: el cliente lo pulsa, no
+    // pasa nada y no tiene forma de salir salvo el botón de atrás del navegador. Pasaba en la
+    // pantalla de macros de «nos faltan cosas tuyas», que ahí es la última.
+    const goNext = () => {
+        if (idx >= flow.length - 1) { navigate('/welcome'); return; }
+        setIdx(i => {
+            let j = i + 1;
+            while (j < flow.length - 1 && !visible(flow[j])) j++;
+            return Math.min(j, flow.length - 1);
+        });
+    };
 
     const cancelarAvancePendiente = () => {
         if (avancePendienteRef.current) {

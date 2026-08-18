@@ -114,6 +114,22 @@ def test_el_cuestionario_los_pregunta_antes_de_llegar_al_final():
         "las preguntas que le faltan ya no van delante del ajuste")
 
 
+def test_ningun_boton_de_la_ultima_pantalla_es_un_boton_muerto():
+    """«Continuar» en la última pantalla no hacía nada.
+
+    `goNext` se topaba con el final de la lista y se quedaba donde estaba, en silencio. En la
+    pasada de «nos faltan cosas tuyas» la última pantalla es la de los macros, y su botón es
+    justo ese: el cliente lo pulsaba, no pasaba nada, y la única salida era el botón de atrás
+    del navegador.
+    """
+    pagina = (RAIZ / "frontend/src/pages/QuestionnairePage.jsx").read_text(encoding="utf-8")
+    i = pagina.find("const goNext = ")
+    assert i > 0
+    bloque = pagina[i:i + 500]
+    assert "navigate('/welcome')" in bloque, (
+        "pedir «siguiente» en la última pantalla vuelve a no hacer nada")
+
+
 def test_no_se_le_piden_las_fotos_que_ya_tiene():
     """Y ninguna pantalla se queda pidiendo lo que el cliente acaba de dar: si ya tiene sus
     fotos y sus medidas, esa pantalla no sale, y si deja de hacer falta con él dentro, se
