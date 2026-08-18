@@ -859,6 +859,31 @@ class ClientProfile(BaseModel):
     # ignora lo que no conoce, asi que un campo sin declarar se guarda en la base y no llega
     # nunca a la pantalla. Y de `cobrado` depende que se le abra el cuestionario completo.
     ajuste_a_medida: Optional[Dict[str, Any]] = None
+
+    # ── Lo que trae el básico (bloque 2 del doc del 18-08) ──────────────────────────
+    # Lo contesta todo el mundo, así que vive aquí y no dentro de `nivel1`. Y por lo mismo
+    # que arriba: sin declararlo, se guarda en la base y no lo ve ni la ficha del coach.
+    profesion: Optional[str] = None
+    como_me_conociste: Optional[str] = None
+    proteinas_habituales: Optional[List[str]] = None
+    # Su recorrido de peso, cada hito con su año.
+    peso_maximo: Optional[float] = None
+    peso_maximo_ano: Optional[int] = None
+    peso_maximo_nota: Optional[str] = None
+    peso_mejor_momento: Optional[float] = None
+    peso_mejor_momento_ano: Optional[int] = None
+    peso_mejor_momento_nota: Optional[str] = None
+    foto_mejor_momento: Optional[str] = None
+    peso_minimo: Optional[float] = None
+    peso_minimo_ano: Optional[int] = None
+    peso_minimo_nota: Optional[str] = None
+    alergias: Optional[List[str]] = None
+    lactosa: Optional[str] = None
+    gluten: Optional[str] = None
+    alergia_otra: Optional[str] = None
+    dietas_previas: Optional[str] = None
+    tiempo_intentandolo: Optional[str] = None
+    motivo_apuntarse: Optional[str] = None
     # Punto de partida (paso 3 del doc): fotos y medidas del dia 1, que son la unica forma de
     # comparar dentro de un mes.
     punto_de_partida_hecho: Optional[bool] = None
@@ -1032,6 +1057,36 @@ class QuestionnaireSubmit(BaseModel):
     biotype: Optional[str] = None
     body_fat: float  # %
     ajustes: Optional[AjustesMacros] = None  # preguntas 5-8 del quiz nuevo
+
+    # LO QUE TRAE EL BASICO DEL DOC DEL 18-08. Lo contesta TODO EL MUNDO, no solo quien
+    # lleva entrenador, y por eso vive en el perfil y no dentro de `nivel1`: «a los que no
+    # llevan plan personalizado no se les vuelve a preguntar nunca mas».
+    profesion: Optional[str] = None
+    como_me_conociste: Optional[str] = None
+    # Las que come habitualmente, de la lista de diez del documento. Alimentan las
+    # preferencias con las que se le monta el primer menu.
+    proteinas_habituales: Optional[List[str]] = None
+    # Su recorrido de peso, cada hito con su año: el techo, su mejor forma y lo más abajo
+    # que ha estado. Sin el año no se puede calcular nada con ellos, que es justo lo que
+    # pasaba cuando venían como «unos 95 hace tres años».
+    peso_maximo: Optional[float] = None
+    peso_maximo_ano: Optional[int] = None
+    peso_maximo_nota: Optional[str] = None
+    peso_mejor_momento: Optional[float] = None
+    peso_mejor_momento_ano: Optional[int] = None
+    peso_mejor_momento_nota: Optional[str] = None
+    foto_mejor_momento: Optional[str] = None
+    peso_minimo: Optional[float] = None
+    peso_minimo_ano: Optional[int] = None
+    peso_minimo_nota: Optional[str] = None
+    # Alergias e intolerancias, con el detalle de las dos que tienen seguimiento.
+    alergias: Optional[List[str]] = None
+    lactosa: Optional[str] = None
+    gluten: Optional[str] = None
+    alergia_otra: Optional[str] = None
+    dietas_previas: Optional[str] = None
+    tiempo_intentandolo: Optional[str] = None
+    motivo_apuntarse: Optional[str] = None
 
 # Cuestionario Nivel 1 (solo planes con coach: calculadora == 'personalizado').
 # Alimenta perfil, caso gemelo y estrategia; NO toca los macros.

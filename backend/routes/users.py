@@ -304,6 +304,20 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         update["activity_level"] = data.activity_level
     if data.biotype:
         update["biotype"] = data.biotype
+
+    # EL RESTO DEL BASICO (bloque 2 del doc del 18-08). Mismo criterio que arriba: se
+    # escribe lo que llega y nada mas. Van al perfil, no dentro de `nivel1`, porque esto lo
+    # contesta todo el mundo y a quien no lleva entrenador no se le vuelve a preguntar.
+    for campo in ("profesion", "como_me_conociste", "proteinas_habituales",
+                  "peso_maximo", "peso_maximo_ano", "peso_maximo_nota",
+                  "peso_mejor_momento", "peso_mejor_momento_ano", "peso_mejor_momento_nota",
+                  "foto_mejor_momento", "peso_minimo", "peso_minimo_ano", "peso_minimo_nota",
+                  "alergias", "lactosa", "gluten", "alergia_otra",
+                  "dietas_previas", "tiempo_intentandolo", "motivo_apuntarse"):
+        valor = getattr(data, campo, None)
+        if valor not in (None, "", []):
+            update[campo] = valor
+
     if ajustes:
         update["ajustes_macros"] = ajustes
 

@@ -192,8 +192,10 @@ class TestElFinalSeParteporPlan:
 
     def test_el_reparto_va_por_plan_y_no_por_momento(self):
         pagina = fuente("pages/QuestionnairePage.jsx")
-        i = pagina.find("const preguntasDeAjuste")
-        assert i > 0
+        # El cierre es lo que va detrás de los macros, y es donde se parte por plan. Vive
+        # en `elCierre` desde que el alta pasó a ser el básico del documento.
+        i = pagina.find("const elCierre")
+        assert i > 0, "el cierre del alta ya no se compone en un solo sitio"
         bloque = pagina[i:i + 700]
         assert "tieneCoach" in bloque, (
             "el final del alta no mira el plan: el documento dice que el cuestionario se "

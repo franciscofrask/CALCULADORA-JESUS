@@ -92,7 +92,12 @@ const PREGUNTAS_ALTA = [
             { value: 'mujer', label: 'Mujer' },
         ],
     },
-    { type: 'number', key: 'weight', title: 'Peso.', desc: 'En ayunas, sin ropa y después de ir al baño.', unit: 'kg', required: true },
+    // El enunciado del documento, que es una pregunta y no una etiqueta.
+    {
+        type: 'number', key: 'weight', title: '¿Cuánto pesas?',
+        desc: 'Pésate siempre en las mismas condiciones: en ayunas, sin ropa y después de ir al baño.',
+        unit: 'kg', required: true,
+    },
     { type: 'bf', key: 'body_fat', title: '¿Cuál dirías que es tu porcentaje de grasa actual?',
       desc: 'Pasa las fotos y quédate con la que más se parezca a cómo te ves ahora: relajado, sin meter tripa y con la misma luz. Mírate de frente y de perfil, no solo de frente. Si dudas entre dos, elige la de más grasa.' },
 ];
@@ -402,23 +407,24 @@ const STEPS_NIVEL1 = [
     {
         // P23
         type: 'choice', key: 'tiempo_intentandolo', title: '¿Cuánto tiempo llevas intentando conseguir este objetivo?',
+        // CINCO, las del documento del 18-08. Faltaba «Empiezo ahora», que es justo la del
+        // que se acaba de dar de alta sin haberlo intentado nunca: sin esa opción se veía
+        // obligado a decir que lleva menos de seis meses, que no es verdad.
         options: [
+            { value: 'ahora', label: 'Empiezo ahora' },
             { value: 'menos_6m', label: 'Menos de 6 meses' },
             { value: '6m_2a', label: 'Entre 6 meses y 2 años' },
             { value: 'mas_2a', label: 'Más de 2 años' },
-            { value: 'siempre', label: 'Toda la vida' },
+            { value: 'siempre', label: 'Llevo toda la vida con esto' },
         ],
     },
     {
-        // P26, el cierre
-        type: 'choice', key: 'motivo_apuntarse', title: '¿Cuál ha sido el motivo principal para apuntarte?',
-        options: [
-            { value: 'saturado', label: 'Estoy saturado de dietas' },
-            { value: 'esfuerzo_sin_premio', label: 'Me esfuerzo mucho y mejoro poco' },
-            { value: 'no_se_como', label: 'No sé cómo hacerlo por mi cuenta' },
-            { value: 'evento', label: 'Tengo una fecha concreta (boda, verano, competición...)' },
-            { value: 'salud', label: 'Por salud' },
-        ],
+        // P26, el cierre. EN TEXTO LIBRE, no con cinco opciones (doc del 18-08: «el motivo
+        // de apuntarse, de Francisco: la versión de siempre dice lo mismo y mejor»). Las
+        // opciones cerradas le hacen elegir el motivo que más se parece al suyo; el texto
+        // libre es donde de verdad cuenta por qué ahora y no antes, que es lo que se lee.
+        type: 'text', textarea: true, key: 'motivo_apuntarse',
+        title: 'Dime el motivo principal de querer trabajar conmigo, qué esperas y por qué te decides a empezar ahora y no antes.',
     },
     { type: 'salud', title: 'Salud y descanso', desc: 'Sé sincero: todo esto condiciona tu estrategia.' },
     { type: 'text', key: 'dietas_previas', title: '¿Has hecho dietas antes? ¿Qué tal te fue?', desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...', textarea: true },
@@ -554,6 +560,166 @@ const STEPS_NIVEL1 = [
 STEPS_NIVEL1[0].desc =
     `Son ${STEPS_NIVEL1.filter(s => s.type !== 'statement').length} preguntas más y con ellas `
     + 'montamos tu estrategia, tu rutina y tus menús.';
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EL BÁSICO · las pantallas del bloque 2 del doc del 18-08, en su orden
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// «24 pantallas en hombre, 22 en mujer (la mujer no lleva biotipo). Una pregunta por
+// pantalla, sin títulos de sección: la barra de progreso se encarga.»
+//
+// Lo hace TODO EL MUNDO y es la única vez: «a los que no llevan plan personalizado no se
+// les vuelve a preguntar nunca más». Por eso el básico es largo, y por eso lo que se
+// conteste aquí va al perfil y no a un cuestionario de segunda fila.
+//
+// LAS PREGUNTAS NO SE DUPLICAN: las que ya existían se referencian por su clave, así que
+// cada una sigue teniendo un solo sitio donde se define, con sus opciones y sus textos.
+//
+// Y VAN CINCO MÁS DE LAS QUE PIDE EL DOCUMENTO (decisión de Francisco, 18-08): el deporte
+// y las cuatro de la dieta. El documento se las lleva al completo, que solo hacen los de
+// entrenador, y son las que mueven los macros: al de Calculadora se le habrían calculado
+// con menos información que hoy. Se quedan aquí, sumadas, y NO se repiten en el completo.
+const _TODAS = [...PREGUNTAS_ALTA, ...STEPS_AJUSTE, ...STEPS_NIVEL1];
+const q = (clave) => {
+    const paso = _TODAS.find(s => s.key === clave);
+    if (!paso) throw new Error(`El básico pide una pregunta que no existe: ${clave}`);
+    return paso;
+};
+const porTipo = (tipo) => {
+    const paso = _TODAS.find(s => s.type === tipo);
+    if (!paso) throw new Error(`El básico pide una pantalla que no existe: ${tipo}`);
+    return paso;
+};
+
+const EL_BASICO = [
+    // 1 · cinco campos en una pantalla. El nombre y el sexo solo se piden si no vienen del
+    // pago; la fecha de nacimiento, el teléfono y el email se piden siempre.
+    { type: 'contacto', title: 'Antes de empezar', desc: 'Cinco datos y arrancamos.' },
+    // 2 · la portada
+    porTipo('statement'),
+    // 3 y 4 · el objetivo y su confirmación
+    q('goal'), q('_confirm'),
+    // 5 · cuánto tiempo lleva intentándolo (estaba en el cuestionario largo)
+    q('tiempo_intentandolo'),
+    // 6, 7 y 8 · peso, altura y porcentaje de grasa
+    q('weight'), q('height'), q('body_fat'),
+    // 9, 10 y 11 · su recorrido de peso, cada hito con su año. Antes era UNA pantalla con
+    // cuatro casillas sueltas, sin años y solo para quien llevaba entrenador.
+    {
+        type: 'peso_hito', key: 'peso_maximo',
+        title: '¿Cuál fue tu máximo peso alcanzado y cuándo?',
+        desc: 'Me refiero a cuándo estuviste en tu peor forma física.',
+        nota: 'Cuéntame lo que quieras de esa época',
+    },
+    {
+        type: 'peso_hito', key: 'peso_mejor_momento', conFoto: true,
+        title: '¿Has estado muy en forma alguna vez?',
+        desc: 'Si es que sí, dime cuándo y tu peso en aquel momento.',
+        nota: 'Cuéntame lo que quieras',
+    },
+    {
+        type: 'peso_hito', key: 'peso_minimo',
+        title: '¿Cuál es el peso más bajo al que has llegado siendo adulto, y cuándo?',
+        desc: 'No hablo de tu mejor forma, sino de lo más abajo que has estado, aunque no te vieras bien.',
+        nota: 'Cuéntame lo que quieras de esa época',
+    },
+    // 12 · a qué se dedica y cuánto se mueve, JUNTAS. En pantallas seguidas se le pregunta
+    // su trabajo y acto seguido se le pide que se clasifique en lo mismo, y suena a que no
+    // se le ha escuchado.
+    { type: 'ocupacion', title: '¿A qué te dedicas y cuánto te mueves en tu día a día?' },
+    // 13 · la experiencia entrenando
+    q('training_experience'),
+    // Las del deporte: se quedan (decisión del 18-08), pegadas a la de entrenamiento.
+    q('deporte_extra'), q('deporte_cual'), q('deporte_en_descanso'),
+    // 14, 15 y 16 · cómo come, si engorda y si le cuesta definir
+    q('apetito'), q('facilidad_engordar'), q('cuesta_definir'),
+    // 17 y 18 · los siete biotipos y el suyo (en mujer no salen)
+    porTipo('biotype_intro'), q('biotype'),
+    // 19 · el día tipo, con el lector. Y con él las cuatro de la dieta, que se quedan.
+    q('sigue_dieta'), q('tiempo_dieta'), porTipo('dieta'), q('como_va'), q('hambre_saturacion'),
+    // 20 · las dietas de antes (estaba en el cuestionario largo)
+    q('dietas_previas'),
+    // 21 · alergias e intolerancias, y el detalle de las dos que lo llevan
+    {
+        type: 'multiselect', key: 'alergias',
+        title: '¿Tienes alguna alergia o intolerancia alimentaria?',
+        desc: 'Se pueden marcar varias.',
+        options: [
+            { value: 'ninguna', label: 'No, ninguna' },
+            { value: 'lactosa', label: 'Lactosa' },
+            { value: 'gluten', label: 'Gluten' },
+            { value: 'otra', label: 'Otra (dime cuál)' },
+        ],
+    },
+    { ...q('lactosa'), cond: a => (a.alergias || []).includes('lactosa') },
+    { ...q('gluten'), cond: a => (a.alergias || []).includes('gluten') },
+    {
+        type: 'text', key: 'alergia_otra', title: '¿Cuál?',
+        desc: 'Dime a qué eres alérgico o intolerante.',
+        cond: a => (a.alergias || []).includes('otra'),
+    },
+    // 22 · las proteínas que come habitualmente. Con esto y las intolerancias se le monta
+    // el primer menú, que es lo que hace que no entre a una app vacía.
+    {
+        type: 'multiselect', key: 'proteinas_habituales',
+        title: '¿Qué proteínas comes habitualmente?',
+        desc: 'Marca al menos tres.',
+        options: [
+            { value: 'aves', label: 'Aves' },
+            { value: 'ternera', label: 'Ternera o buey' },
+            { value: 'cerdo', label: 'Cerdo' },
+            { value: 'pescado', label: 'Pescados y mariscos' },
+            { value: 'embutido', label: 'Embutido' },
+            { value: 'huevos', label: 'Huevos y derivados' },
+            { value: 'polvo', label: 'Proteínas en polvo y barritas' },
+            { value: 'vegetal', label: 'Proteína vegetal' },
+            { value: 'legumbres', label: 'Legumbres' },
+            { value: 'lacteos', label: 'Lácteos' },
+        ],
+    },
+    // 23 · cómo le conoció
+    {
+        type: 'choice', key: 'como_me_conociste', title: '¿Cómo me has conocido?',
+        options: [
+            { value: 'newsletter', label: 'De tu newsletter, leo habitualmente tus emails.' },
+            { value: 'instagram', label: 'Instagram.' },
+            { value: 'ex_cliente', label: 'Fui antiguo cliente de tus asesorías.' },
+            { value: 'ex_alumno', label: 'Fui antiguo alumno de una formación.' },
+            { value: 'recomendacion', label: 'Por recomendación de otros clientes o personas que te conocen.' },
+            { value: 'medios', label: 'Por artículos o noticias que he visto publicadas en medios de comunicación.' },
+            { value: 'otro', label: 'Otro' },
+        ],
+    },
+    // 24 · y por qué ahora
+    q('motivo_apuntarse'),
+    // El cierre del básico: revisar y calcular.
+    porTipo('final0'), porTipo('result'),
+];
+
+// EL COMPLETO NO REPITE NADA DEL BÁSICO (doc del 18-08). Estas seis subieron al básico y
+// en el cuestionario largo dejan de preguntarse... pero SOLO a quien ya las tenga
+// contestadas: los que entraron antes de esto no pasaron por el básico nuevo, y quitárselas
+// del completo sería perder su respuesta para siempre. Por eso se condicionan al dato en vez
+// de borrarlas.
+//
+// Se sustituyen por una copia con la condición puesta, no se muta el objeto: es el mismo que
+// usa el básico, y mutarlo le pondría al básico la condición de no preguntar lo que no está
+// contestado, que es justo lo contrario.
+const YA_ESTAN_EN_EL_BASICO = ['tiempo_intentandolo', 'motivo_apuntarse', 'dietas_previas',
+                               'lactosa', 'gluten', 'alergias'];
+for (let i = 0; i < STEPS_NIVEL1.length; i++) {
+    const paso = STEPS_NIVEL1[i];
+    const yaContestada = YA_ESTAN_EN_EL_BASICO.includes(paso.key)
+        ? (a) => !a[paso.key]
+        : paso.type === 'pesos'
+            ? (a) => !a.peso_maximo && !a.peso_minimo && !a.peso_mejor_momento
+            : null;
+    if (yaContestada) {
+        const antes = paso.cond;
+        STEPS_NIVEL1[i] = { ...paso, cond: (a) => yaContestada(a) && (!antes || antes(a)) };
+    }
+}
 
 // A nivel de módulo para que los inputs conserven el FOCO al teclear: definidos
 // dentro del componente de la página se recrean en cada render (tipo nuevo para
@@ -726,18 +892,21 @@ const QuestionnairePage = () => {
     // ordena todo»). Hasta aquí llegan todos igual, con sus macros y su primer día montado.
     // A partir de aquí: quien lleva entrenador elige entre empezar ya o terminar su perfil;
     // quien no lo lleva sube fotos y medidas y recibe la oferta del ajuste a medida.
-    const preguntasDeAjuste = [
-        ...STEPS_AJUSTE, ...STEPS_ONBOARD,
+    // El cierre, que es igual para los dos recorridos: los macros, la ficha, el primer día
+    // de comidas y, a partir de ahí, lo que cambia por plan.
+    const elCierre = [
+        ...STEPS_ONBOARD,
         ...(tieneCoach
             ? [{ type: 'elegir_perfil', title: 'Ya puedes empezar' }, ...STEPS_NIVEL1]
             : [{ type: 'fotos_medidas', title: 'Te quedan dos cosas' },
                { type: 'oferta_ajuste', title: 'Una cosa más' }]),
     ];
+    const preguntasDeAjuste = [...STEPS_AJUSTE, ...elCierre];
     const flow = retomandoNivel1
         ? STEPS_NIVEL1
         : modoAjuste
             ? preguntasDeAjuste
-            : [...PREGUNTAS_ALTA, ...preguntasDeAjuste];
+            : [...EL_BASICO, ...elCierre];
 
     // PreferencesSetup espera el helper estilo fetch (endpoint, {method, body}).
     const fetchApi = useCallback(async (endpoint, options = {}) => {
@@ -908,12 +1077,27 @@ const QuestionnairePage = () => {
         if (!profile) return;
         // También en la ref: quien decide qué pantallas se saltan (`visible`) lee de
         // answersRef, no del estado, así que sembrar solo el estado no cambiaba nada.
+        // Y LO QUE YA CONTESTÓ DEL BÁSICO, por lo mismo: el cuestionario largo no repite lo
+        // que ya está en su ficha, y para saberlo tiene que verlo aquí. Al que entró antes
+        // del básico nuevo esto le llega vacío y sus preguntas siguen saliendo, que es lo
+        // que se quiere.
+        const delBasico = {};
+        for (const clave of ['tiempo_intentandolo', 'motivo_apuntarse', 'dietas_previas',
+                             'lactosa', 'gluten', 'alergias', 'peso_maximo', 'peso_minimo',
+                             'peso_mejor_momento', 'profesion', 'como_me_conociste',
+                             'proteinas_habituales', 'birthdate', 'height', 'biotype',
+                             'training_experience']) {
+            const v = profile[clave];
+            if (v !== null && v !== undefined && v !== '') delBasico[clave] = v;
+        }
         answersRef.current = {
+            ...delBasico,
             ...answersRef.current,
             sex: answersRef.current.sex ?? profile.sex ?? undefined,
             goal: answersRef.current.goal ?? profile.goal ?? undefined,
         };
         setAnswers(a => ({
+            ...delBasico,
             ...a,
             sex: a.sex ?? profile.sex ?? undefined,
             goal: a.goal ?? profile.goal ?? undefined,
@@ -1238,6 +1422,33 @@ const QuestionnairePage = () => {
                     sex: answers.sex,
                     weight: parseFloat(answers.weight),
                     body_fat: parseFloat(answers.body_fat),
+                    // TODO LO DEMÁS QUE TRAE EL BÁSICO (bloque 2 del doc del 18-08). Antes
+                    // aquí viajaban siete campos y el servidor esperaba trece: por eso el
+                    // perfil se quedaba vacío. Ahora se manda lo que se pregunta.
+                    birthdate: answers.birthdate || null,
+                    height: num(answers.height),
+                    biotype: answers.biotype || null,
+                    training_experience: answers.training_experience || null,
+                    profesion: answers.profesion || null,
+                    como_me_conociste: answers.como_me_conociste || null,
+                    proteinas_habituales: answers.proteinas_habituales || null,
+                    peso_maximo: num(answers.peso_maximo),
+                    peso_maximo_ano: num(answers.peso_maximo_ano),
+                    peso_maximo_nota: answers.peso_maximo_nota || null,
+                    peso_mejor_momento: num(answers.peso_mejor_momento),
+                    peso_mejor_momento_ano: num(answers.peso_mejor_momento_ano),
+                    peso_mejor_momento_nota: answers.peso_mejor_momento_nota || null,
+                    foto_mejor_momento: answers.foto_mejor_momento || null,
+                    peso_minimo: num(answers.peso_minimo),
+                    peso_minimo_ano: num(answers.peso_minimo_ano),
+                    peso_minimo_nota: answers.peso_minimo_nota || null,
+                    alergias: answers.alergias || null,
+                    lactosa: answers.lactosa || null,
+                    gluten: answers.gluten || null,
+                    alergia_otra: answers.alergia_otra || null,
+                    dietas_previas: answers.dietas_previas || null,
+                    tiempo_intentandolo: answers.tiempo_intentandolo || null,
+                    motivo_apuntarse: answers.motivo_apuntarse || null,
                 });
             }
             const res = await api.post('/clients/ajustar-macros', ajustesDelCuestionario());
@@ -1701,6 +1912,124 @@ const QuestionnairePage = () => {
                             {tieneCoach ? 'Continuar con tu perfil' : 'Continuar'} <ArrowRight className="w-5 h-5 ml-2" />
                         </Button>
                     )}
+                </div>
+            </div>
+        );
+    } else if (step.type === 'contacto') {
+        // PANTALLA 1 DEL BÁSICO: cinco campos juntos, que es la excepción que hace el
+        // propio documento a lo de una pregunta por pantalla. El nombre y el sexo solo se
+        // piden si no vienen del pago; el resto siempre.
+        const faltaNombre = !user?.name;
+        const faltaSexo = !profile?.sex;
+        const listo = answers.birthdate && answers.phone && answers.email
+            && (!faltaNombre || answers.name) && (!faltaSexo || answers.sex);
+        body = (
+            <div>
+                <Title />
+                <div className="space-y-4 mb-8">
+                    {faltaNombre && (
+                        <MiniInput {...mini} k="name" label="Nombre completo" />
+                    )}
+                    {faltaSexo && (
+                        <div>
+                            <p className="text-sm text-foreground/60 mb-2">Hombre o mujer</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[['hombre', 'Hombre'], ['mujer', 'Mujer']].map(([v, etiqueta]) => (
+                                    <button key={v} onClick={() => set('sex', v)}
+                                        className={`px-5 py-3 rounded-xl border-2 transition-all ${
+                                            answers.sex === v
+                                                ? 'border-[#FF671F] bg-[#FF671F]/10 text-foreground'
+                                                : 'border-[#222222] hover:border-white/30 text-foreground'}`}>
+                                        {etiqueta}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    <MiniInput {...mini} k="birthdate" label="Fecha de nacimiento" type="date"
+                        placeholder="La verdadera, no me engañes." />
+                    <MiniInput {...mini} k="phone" label="Teléfono" type="tel"
+                        placeholder="Un whatsapp de contacto." />
+                    <MiniInput {...mini} k="email" label="Email" type="email"
+                        placeholder="Uno que revises a diario." />
+                    <p className="text-xs text-foreground/50">
+                        Si pagaste con otro email distinto, no pasa nada: seguirás entrando con el
+                        de siempre, pero te escribiremos a este, salvo que nos digas lo contrario.
+                    </p>
+                </div>
+                <Button onClick={goNext} disabled={!listo}
+                    className="bg-brand hover:bg-brand/90 text-white font-bold px-8 disabled:opacity-40">
+                    Seguir <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+            </div>
+        );
+    } else if (step.type === 'ocupacion') {
+        // PANTALLA 12: la profesión y el sedentarismo, juntas. En pantallas seguidas se le
+        // pregunta a qué se dedica y acto seguido se le pide que se clasifique en lo mismo,
+        // y eso suena a que no se le ha escuchado.
+        const actividad = q('actividad_diaria');
+        body = (
+            <div>
+                <Title />
+                <div className="mb-6">
+                    <MiniInput {...mini} k="profesion" label="¿A qué te dedicas?" />
+                </div>
+                <p className="text-sm text-foreground/60 mb-3">{actividad.desc}</p>
+                <div className="space-y-3">
+                    {actividad.options.map(o => (
+                        <button key={o.value}
+                            onClick={() => { set('actividad_diaria', o.value); trasResponder('actividad_diaria', o.value); goNext(); }}
+                            className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all ${
+                                answers.actividad_diaria === o.value
+                                    ? 'border-[#FF671F] bg-[#FF671F]/10'
+                                    : 'border-[#222222] hover:border-white/30'} text-foreground`}>
+                            {o.label}
+                        </button>
+                    ))}
+                </div>
+                <div className="mt-6"><BackBtn /></div>
+            </div>
+        );
+    } else if (step.type === 'peso_hito') {
+        // PANTALLAS 9, 10 y 11: cada hito de su peso con SU AÑO. Antes eran cuatro casillas
+        // sueltas en una sola pantalla, sin años y solo para quien llevaba entrenador: «si
+        // viene como "unos 95 hace tres años" no se puede calcular nada con él».
+        const kPeso = step.key, kAno = `${step.key}_ano`, kNota = `${step.key}_nota`;
+        body = (
+            <div>
+                <Title />
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <MiniInput {...mini} k={kPeso} label="Peso" type="number" unit="kg" />
+                    <MiniInput {...mini} k={kAno} label="Año" type="number" placeholder="2019" />
+                </div>
+                <div className="mb-4">
+                    <MiniInput {...mini} k={kNota} label={step.nota} placeholder="Opcional." />
+                </div>
+                {step.conFoto && (
+                    <div className="mb-6">
+                        <p className="text-sm text-foreground/60 mb-2">
+                            Sube la foto de tu mejor forma <span className="text-foreground/40">(opcional)</span>
+                        </p>
+                        <input type="file" accept="image/*" data-testid="foto-mejor-forma"
+                            onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                const reader = new FileReader();
+                                reader.onload = (ev) => set('foto_mejor_momento', ev.target.result);
+                                reader.readAsDataURL(f);
+                            }}
+                            className="text-sm text-foreground/70" />
+                        {answers.foto_mejor_momento && (
+                            <p className="text-xs text-brand mt-2">Foto lista.</p>
+                        )}
+                    </div>
+                )}
+                <div className="flex gap-3">
+                    <BackBtn />
+                    <Button onClick={goNext}
+                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8">
+                        OK <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
                 </div>
             </div>
         );
