@@ -845,13 +845,21 @@ const falta = (paso, a) => {
     return false;      // portadas, revisión y resultado: los pone el recorrido, no el filtro
 };
 
-const LA_PORTADA_DE_COMPLETAR = {
+// LO QUE GANA, SEGÚN QUIÉN LE LLEVE LOS MACROS. Al de autogestión se le recalculan al
+// terminar; al que los lleva el equipo NO se le tocan -- y está bien que no se le toquen --,
+// así que prometerle un recálculo es prometerle lo que no va a pasar. Lo que gana él es que
+// su entrenador trabaje con la ficha entera.
+const LA_PORTADA_DE_COMPLETAR = (conEquipoDetras) => ({
     type: 'statement',
     title: 'Nos faltan cosas tuyas',
-    desc: 'Son las que no llegamos a preguntarte cuando entraste. Con ellas te recalculamos '
-        + 'los macros y te montamos los menús con lo que de verdad comes.',
+    desc: 'Son las que no llegamos a preguntarte cuando entraste. '
+        + (conEquipoDetras
+            ? 'Con ellas tu entrenador ajusta tus macros con todo delante, y te montamos los '
+              + 'menús con lo que de verdad comes.'
+            : 'Con ellas te recalculamos los macros y te montamos los menús con lo que de '
+              + 'verdad comes.'),
     cta: 'Vamos',
-};
+});
 
 // CUÁNTAS SON, CONTADAS DE LA PROPIA LISTA.
 // La portada deja su `desc` vacía a propósito y se rellena aquí: si el número se escribiera a
@@ -1073,8 +1081,16 @@ const QuestionnairePage = () => {
     //
     // Ahora, si falta alguno, se le pregunta AQUÍ, delante de todo, y se guarda con la misma
     // puerta que usa «nos faltan cosas tuyas»: rellena huecos y no pisa nada.
-    const faltaLaBase = ['goal', 'weight', 'body_fat'].filter(
-        k => profile && (profile[k] === undefined || profile[k] === null || profile[k] === ''));
+    // SE MIRA UNA VEZ Y NO SE VUELVE A MIRAR. Lo que le falta decide qué pantallas tiene su
+    // recorrido, y al terminar se guarda y se refresca su ficha: si esto se recalculara ahí,
+    // el recorrido cambiaría DEBAJO del cliente en el último clic y le devolvía a la primera
+    // pantalla en vez de enseñarle sus macros.
+    const loQueLeFaltabaRef = useRef(null);
+    if (profile && !loQueLeFaltabaRef.current) {
+        loQueLeFaltabaRef.current = ['goal', 'weight', 'body_fat'].filter(
+            k => profile[k] === undefined || profile[k] === null || profile[k] === '');
+    }
+    const faltaLaBase = loQueLeFaltabaRef.current || [];
     const laBaseQueFalta = useMemo(() => {
         if (!faltaLaBase.length) return [];
         const pantallas = [];
@@ -1096,23 +1112,32 @@ const QuestionnairePage = () => {
     // LAS PANTALLAS DEL BÁSICO QUE ESTE CLIENTE NO HA CONTESTADO NUNCA. Se calcula una vez,
     // con las respuestas ya sembradas del perfil: si se recalculara en cada tecla, la
     // pantalla en la que está escribiendo desaparecería al contestarla.
+    // Igual que arriba: se decide una vez, con la ficha tal y como estaba al entrar.
+    const delBasicoRef = useRef(null);
     const loQueFaltaDelBasico = useMemo(() => {
         if (!profile) return [];
+        if (delBasicoRef.current) return delBasicoRef.current;
         const a = answersRef.current;
         // Sin las de la base: esas van por su cuenta, delante de todo, y preguntarle el
         // objetivo dos veces seguidas es lo que hace que cierre la pestaña.
         const yaVanDelante = new Set(laBaseQueFalta.map(p => p.key).filter(Boolean));
-        return EL_BASICO.filter(p => falta(p, a) && !yaVanDelante.has(p.key));
+        delBasicoRef.current = EL_BASICO.filter(p => falta(p, a) && !yaVanDelante.has(p.key));
+        return delBasicoRef.current;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profile, laBaseQueFalta]);
 
     const elBasicoQueFalta = useMemo(() => {
         if (!pidioCompletar || !profile) return null;
-        if (!loQueFaltaDelBasico.length) return [];
-        return [LA_PORTADA_DE_COMPLETAR, ...loQueFaltaDelBasico,
+        if (!laBaseQueFalta.length && !loQueFaltaDelBasico.length) return [];
+        // CON LAS DE LA BASE DELANTE. `loQueFaltaDelBasico` las deja fuera a propósito -- para
+        // no preguntar el objetivo dos veces cuando van por su cuenta -- y aquí no iba nadie a
+        // ponerlas: al cliente de Calma sin objetivo no se le preguntaba, y al calcular se
+        // estrellaba con «Revisa tu objetivo: no hemos podido guardarlo así», que es el
+        // servidor diciendo que le llegó vacío.
+        return [LA_PORTADA_DE_COMPLETAR(conEntrenador), ...laBaseQueFalta, ...loQueFaltaDelBasico,
                 porTipo('final0'), porTipo('result')];
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pidioCompletar, profile, loQueFaltaDelBasico]);
+    }, [pidioCompletar, profile, laBaseQueFalta, loQueFaltaDelBasico, conEntrenador]);
 
     // Y EL COMPLETO EMPIEZA POR AHÍ CUANDO HACE FALTA (18-08).
     //
@@ -1739,22 +1764,43 @@ const QuestionnairePage = () => {
             const rellenandoHuecos = !!elBasicoQueFalta?.length || !!faltaLaBase.length;
             if (!profile?.questionnaire_completed || rellenandoHuecos) {
                 await api.post('/clients/questionnaire', {
-                    completar: !!profile?.questionnaire_completed && rellenandoHuecos,
+                    // SIEMPRE `true` cuando se van a rellenar huecos, sin mirar la bandera del
+                    // perfil que hay en memoria: si esa llega vieja -- y llega, justo después
+                    // del alta -- se mandaba `false` sobre un cuestionario ya guardado y el
+                    // servidor contestaba «el cuestionario ya fue completado». El servidor solo
+                    // le hace caso si de verdad estaba completado, así que mandarlo de más no
+                    // abre ninguna puerta.
+                    completar: rellenandoHuecos,
                     ...cuerpoDelBasico(),
                 });
             }
-            const res = await api.post('/clients/ajustar-macros', ajustesDelCuestionario());
-            setResultado(res.data?.resultado || null);
+            // EL AJUSTE PUEDE DECIR QUE NO, Y NO ES UN ERROR.
+            //
+            // Al cliente cuyos macros lleva el equipo se le contesta 403 -- «tus macros los
+            // llevamos nosotros» -- y eso es correcto: nadie va a machacar lo que le puso su
+            // entrenador. Lo que no puede pasar es que se le caiga encima al final de veinte
+            // pantallas, en rojo y sin dejarle salir, cuando sus respuestas YA se han
+            // guardado en la línea de arriba. Se sigue adelante y ve los macros que tiene.
+            let res = null;
+            try {
+                res = await api.post('/clients/ajustar-macros', ajustesDelCuestionario());
+            } catch (e) {
+                if (e?.response?.status !== 403) throw e;
+                console.info('[alta] sus macros los lleva el equipo: no se recalculan', e);
+            }
+            setResultado(res?.data?.resultado || null);
             // Con los macros ya calculados, se le deja el día de hoy montado. Va en segundo
             // plano y sin bloquear: si falla, se queda como estaba (con su día por montar) y
             // no se le estropea el final del alta por esto.
             api.post('/calculator/montar-dia', { guardar: true })
                 .then(r => setDiaMontado(r.data || null))
                 .catch(() => {});
-            setEntrega(res.data?.entrega || null);
+            setEntrega(res?.data?.entrega || null);
             setNivel0Enviado(true);
             await refreshProfile();
-            toast.success('¡Macros calculados!');
+            // Y lo que se le dice, según lo que haya pasado de verdad: al que se los llevamos
+            // nosotros no se le canta «macros calculados», porque no se le han calculado.
+            toast.success(res ? '¡Macros calculados!' : 'Guardado. Tu entrenador lo tiene ya.');
             goNext(); // -> pantalla de resultados
         } catch (e) {
             toast.error(mensajeDeError(e, 'Error al enviar el cuestionario'));
@@ -1781,7 +1827,7 @@ const QuestionnairePage = () => {
             // llamada el cliente contestaba veinte pantallas más y su ficha seguía coja.
             if (laBaseQueFalta.length || loQueFaltaDelBasico.length) {
                 await api.post('/clients/questionnaire', {
-                    completar: !!profile?.questionnaire_completed,
+                    completar: true,     // ver el comentario en el envío del alta
                     ...cuerpoDelBasico(),
                 });
             }

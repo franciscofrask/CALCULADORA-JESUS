@@ -822,9 +822,14 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     # llevaba por delante tambien esos cuatro. Comprobado con dos cuentas: contestaba el
     # cuestionario entero y su perfil se quedaba igual de vacio que antes.
     perfil_del_quiz = _perfil_desde_ajustes(data)
-    if perfil_del_quiz:
-        await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": perfil_del_quiz})
-        profile.update(perfil_del_quiz)
+    # Y LAS RESPUESTAS TAMBIEN (18-08). `ajustes_macros` es lo que ha contestado -- su
+    # actividad, si practica otro deporte, que dieta sigue y como le va --, no sus macros.
+    # Se guardaba DESPUES del cerrojo, asi que al cliente con entrenador se le tiraban: el
+    # que viene de Calma contestaba quince pantallas y su ficha se quedaba con
+    # `ajustes_macros` vacio, que es justo lo que su entrenador necesita leer para ajustarle.
+    perfil_del_quiz["ajustes_macros"] = data.model_dump()
+    await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": perfil_del_quiz})
+    profile.update(perfil_del_quiz)
 
     # Igual que el guardado manual (punto 4.10): en un plan personalizado esto vale para
     # sacar los macros de arranque, pero no para volver a calcularlos por encima de los que
