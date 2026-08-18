@@ -183,6 +183,16 @@ class ReportResponse(BaseModel):
     # El informe que se monta al enviar (T9): mientras esté "pendiente_revision" el
     # cliente no lo ve; pasa a "entregado" cuando el coach lo publica.
     informe_estado: Optional[str] = None
+    # LO QUE CONTESTÓ EN EL REPORTE MENSUAL DE CALMA: las ocho preguntas del formulario de
+    # siempre, con sus palabras. No se meten en `training_compliance` y compañía porque allí
+    # va un número y aquí lo que hay es una frase («Salvo algún día puntual, he cumplido con
+    # todo lo que me has marcado»): convertirla en un porcentaje sería inventárselo.
+    #
+    # Sin declararlas aquí no llegan a ninguna pantalla. El modelo ignora lo que no conoce,
+    # así que estaban escritas en la base de producción -- 1.796 reportes -- y no las veía
+    # nadie, ni el cliente ni su entrenador.
+    calma_respuestas: Optional[Dict[str, str]] = None
+    photo_urls_calma: Optional[List[str]] = None
     created_at: str
 
 # Check-In Models (3 niveles: daily, weekly, monthly) - portado de calmajp

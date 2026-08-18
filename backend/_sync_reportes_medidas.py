@@ -467,7 +467,8 @@ def main():
     # --- reportes que ya hay, por cliente
     reports = defaultdict(list)
     for r in prod.reports.find({}, {"_id": 0, "id": 1, "client_id": 1, "created_at": 1,
-                                    "weight": 1, "measurements": 1, "measurements_origen": 1}):
+                                    "weight": 1, "measurements": 1, "measurements_origen": 1,
+                                    "notes": 1, "calma_respuestas": 1, "photo_urls_calma": 1}):
         d = dia(r.get("created_at"))
         if d:
             reports[r["client_id"]].append({**r, "dia": d})
@@ -480,6 +481,12 @@ def main():
     sin_peso = 0
     medidas_sin_reporte = []
     por_cliente = []
+    # LO QUE CONTESTO EL CLIENTE, que hasta ahora solo llegaba a los reportes que creaba este
+    # script. Los 3.149 que ya existian se quedaron con el peso y con un `notes` que pone
+    # "Importado de Calma": el comentario que escribio y las ocho respuestas del formulario
+    # siguen en Calma y nadie las ve. Aqui se les ponen.
+    set_respuestas = []
+    respuestas_respetadas = 0
 
     for email, cid in sorted(padron.items()):
         mios = sorted(envios.get(email, {}).values(), key=lambda e: e["dia"])
@@ -489,6 +496,25 @@ def main():
 
         n_set = n_nuevo = 0
         for envio, rep in parejas:
+            # 1) LO QUE CONTESTO, antes que las medidas: no depende de que la serie sea
+            #    creible. Un envio sin medidas buenas sigue trayendo su comentario y sus ocho
+            #    respuestas, que es de donde Jesus saca el ajuste del mes.
+            cambio = {}
+            nota_ahora = (rep.get("notes") or "").strip()
+            # «Importado de Calma» no es una nota: es la etiqueta que dejo la migracion. Lo
+            # que escriba una persona desde 12EN12 no se toca nunca.
+            if envio["comentario"] and nota_ahora in ("", "Importado de Calma"):
+                cambio["notes"] = envio["comentario"]
+            if envio["respuestas"] and not rep.get("calma_respuestas"):
+                cambio["calma_respuestas"] = envio["respuestas"]
+            if envio["fotos"] and not rep.get("photo_urls_calma"):
+                cambio["photo_urls_calma"] = envio["fotos"]
+            if cambio:
+                set_respuestas.append((rep["id"], cambio))
+            elif envio["comentario"] and nota_ahora not in ("", "Importado de Calma"):
+                respuestas_respetadas += 1
+
+            # 2) las medidas
             medidas, motivo, caidos = decodificar_medidas(envio["medidas_raw"])
             caidos_sueltos += caidos
             if motivo:
@@ -526,6 +552,18 @@ def main():
             por_cliente.append((email, len(mios), n_set, n_nuevo))
 
     # --- lo que se ha decidido
+    print("\n" + "-" * 78)
+    print("LO QUE CONTESTO EL CLIENTE (comentario y respuestas del formulario)")
+    print("-" * 78)
+    con_nota = sum(1 for _, c in set_respuestas if "notes" in c)
+    con_resp = sum(1 for _, c in set_respuestas if "calma_respuestas" in c)
+    con_fotos = sum(1 for _, c in set_respuestas if "photo_urls_calma" in c)
+    print(f"  reportes que ya existen y se completan:    {len(set_respuestas)}")
+    print(f"       se les pone el comentario de verdad:  {con_nota}")
+    print(f"       se les ponen las respuestas:          {con_resp}")
+    print(f"       se les ponen las rutas de sus fotos:  {con_fotos}")
+    print(f"  se respetan (nota escrita desde 12EN12):   {respuestas_respetadas}")
+
     print("\n" + "-" * 78)
     print("MEDIDAS")
     print("-" * 78)
@@ -608,6 +646,12 @@ def main():
         for i in range(0, len(ops), 500):
             prod.reports.bulk_write(ops[i:i + 500], ordered=False)
         print(f"  medidas escritas sobre reportes existentes: {len(ops)}")
+
+    if set_respuestas:
+        ops = [UpdateOne({"id": rid}, {"$set": cambio}) for rid, cambio in set_respuestas]
+        for i in range(0, len(ops), 500):
+            prod.reports.bulk_write(ops[i:i + 500], ordered=False)
+        print(f"  reportes completados con lo que contesto el cliente: {len(ops)}")
 
     if nuevos:
         # Idempotente por clave natural: si ya existe un reporte con esa `calma_form_key` no

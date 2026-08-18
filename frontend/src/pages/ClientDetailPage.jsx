@@ -3467,6 +3467,45 @@ const Fila = ({ que, valor }) => (valor ? (
     <p className="text-white/50">{que} <b className="text-white">{valor}</b></p>
 ) : null);
 
+// LO QUE CONTESTÓ EN EL REPORTE MENSUAL DE CALMA. Las ocho preguntas de siempre, con las
+// palabras del cliente. Se traen tal cual y no como un porcentaje: la respuesta es «Salvo
+// algún día puntual, he cumplido con todo lo que me has marcado», y convertir eso en un
+// «85 %» es inventárselo.
+//
+// El orden es el del formulario, que es el que Jesús lee: primero cómo fue el mes, luego el
+// entreno y el cardio, luego la dieta y el esfuerzo que le costó, y al final el descanso, la
+// suplementación y hacia dónde quiere ir el mes que viene.
+const PREGUNTAS_CALMA = [
+    ['compromiso', 'Su compromiso'],
+    ['cumplimientoEntrenamiento', 'El entreno'],
+    ['problemasParaEntrenar', 'Problemas para entrenar'],
+    ['cumplimientoCardio', 'El cardio'],
+    ['cumplimientoDieta', 'La dieta'],
+    ['esfuerzoParaCumplirDieta', 'Lo que le costó'],
+    ['descanso', 'El descanso'],
+    ['tomaDeSuplementos', 'Suplementos'],
+    ['detalleSuplementos', 'Cuáles'],
+    ['objetivo', 'Su objetivo ahora'],
+];
+
+const RespuestasDeCalma = ({ respuestas }) => {
+    const filas = PREGUNTAS_CALMA.filter(([k]) => (respuestas || {})[k]);
+    if (!filas.length) return null;
+    return (
+        <div className="space-y-1.5 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]"
+            data-testid="respuestas-calma">
+            <p className="text-white/40 text-[11px] uppercase tracking-wider">
+                Lo que contestó en su reporte mensual
+            </p>
+            {filas.map(([k, etiqueta]) => (
+                <p key={k} className="text-white/50 leading-snug">
+                    {etiqueta} <b className="text-white font-normal">{respuestas[k]}</b>
+                </p>
+            ))}
+        </div>
+    );
+};
+
 const RespuestasDelReporte = ({ reporte: r }) => {
     const e = r.entreno || {};
     const s = r.suplementacion || {};
@@ -3654,6 +3693,12 @@ const ReportsFeedbackList = ({ initialReports }) => {
                             lo que el cliente cuenta del entreno, las lesiones, el cardio o
                             la suplementación se quedaba guardado y sin ver. */}
                         <RespuestasDelReporte reporte={abierto} />
+
+                        {/* Y LO QUE CONTESTÓ EN CALMA, para los meses de antes de la app. Es
+                            el mismo formulario mensual, y hasta hoy de esos meses solo se
+                            guardaba el peso: las respuestas estaban escritas en la base y no
+                            las enseñaba ninguna pantalla. */}
+                        <RespuestasDeCalma respuestas={abierto.calma_respuestas} />
 
                         {abierto.notes && <p className="text-white/70 text-sm italic">"{abierto.notes}"</p>}
 
