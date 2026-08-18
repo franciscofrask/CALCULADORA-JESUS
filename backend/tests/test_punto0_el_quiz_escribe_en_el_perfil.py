@@ -19,6 +19,7 @@ Tres averías distintas, una prueba por cada una:
 Se corre con el backend vivo (REACT_APP_BACKEND_URL) y se limpia lo que crea.
 """
 import uuid
+from datetime import date
 
 import pytest
 import requests
@@ -26,6 +27,10 @@ import requests
 from conftest import API
 
 CLAVE = "Prueba1234"
+
+
+def _hoy():
+    return date.today().isoformat()
 
 
 @pytest.fixture(scope="module")
@@ -164,13 +169,16 @@ class TestElAjusteSubeLoQueNoSonMacros:
         alta_como_la_manda_la_pantalla(persona)
         perfil = perfil_de(mongo, persona)
         # Su último apunte del historial lo escribió alguien: eso es lo que cierra la puerta.
-        mongo.macro_history.insert_one({
-            "id": str(uuid.uuid4()), "client_id": perfil.get("id"),
-            "user_id": persona["user_id"], "effective_date": "2026-08-18",
-            "training": {"protein": 200, "carbs": 250, "fat": 60},
-            "rest": {"protein": 200, "carbs": 150, "fat": 60},
-            "origen": "coach", "changed_by": "una persona",
-        })
+        # Upsert y con la fecha de HOY: el alta ya dejó su propia fila de ese día y
+        # `macro_history` tiene un índice único por cliente y fecha, que llegó a dev con la
+        # copia de producción del 18-08. Insertar otra se cae con un duplicado.
+        mongo.macro_history.update_one(
+            {"client_id": perfil.get("id"), "effective_date": _hoy()},
+            {"$set": {"id": str(uuid.uuid4()), "user_id": persona["user_id"],
+                      "training": {"protein": 200, "carbs": 250, "fat": 60},
+                      "rest": {"protein": 200, "carbs": 150, "fat": 60},
+                      "origen": "coach", "changed_by": "una persona"}},
+            upsert=True)
         mongo.client_profiles.update_one(
             {"user_id": persona["user_id"]},
             {"$unset": {"biotype": "", "height": "", "training_experience": "",
@@ -193,13 +201,16 @@ class TestElAjusteSubeLoQueNoSonMacros:
         persona = alta(plan="gold")
         alta_como_la_manda_la_pantalla(persona)
         perfil = perfil_de(mongo, persona)
-        mongo.macro_history.insert_one({
-            "id": str(uuid.uuid4()), "client_id": perfil.get("id"),
-            "user_id": persona["user_id"], "effective_date": "2026-08-18",
-            "training": {"protein": 200, "carbs": 250, "fat": 60},
-            "rest": {"protein": 200, "carbs": 150, "fat": 60},
-            "origen": "coach", "changed_by": "una persona",
-        })
+        # Upsert y con la fecha de HOY: el alta ya dejó su propia fila de ese día y
+        # `macro_history` tiene un índice único por cliente y fecha, que llegó a dev con la
+        # copia de producción del 18-08. Insertar otra se cae con un duplicado.
+        mongo.macro_history.update_one(
+            {"client_id": perfil.get("id"), "effective_date": _hoy()},
+            {"$set": {"id": str(uuid.uuid4()), "user_id": persona["user_id"],
+                      "training": {"protein": 200, "carbs": 250, "fat": 60},
+                      "rest": {"protein": 200, "carbs": 150, "fat": 60},
+                      "origen": "coach", "changed_by": "una persona"}},
+            upsert=True)
         antes = perfil_de(mongo, persona).get("macros_training")
 
         ajuste_como_lo_manda_la_pantalla(persona)

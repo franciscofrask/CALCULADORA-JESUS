@@ -713,8 +713,17 @@ const QuestionnairePage = () => {
     // cuestionario: por eso el alta es el mismo flujo que el ajuste con las cuatro preguntas
     // de partida delante. Quien vuelve más adelante por el botón "Ajustar macros" ya tiene
     // esos cuatro datos en su ficha, así que entra directo por el tramo de ajuste.
-    const preguntasDeAjuste = [...STEPS_AJUSTE, ...STEPS_ONBOARD,
-                               ...(tieneCoach ? STEPS_NIVEL1 : [])];
+    // EL FINAL SE PARTE POR PLAN, no por momento (doc del cuestionario, 18-08: «la regla que
+    // ordena todo»). Hasta aquí llegan todos igual, con sus macros y su primer día montado.
+    // A partir de aquí: quien lleva entrenador elige entre empezar ya o terminar su perfil;
+    // quien no lo lleva sube fotos y medidas y recibe la oferta del ajuste a medida.
+    const preguntasDeAjuste = [
+        ...STEPS_AJUSTE, ...STEPS_ONBOARD,
+        ...(tieneCoach
+            ? [{ type: 'elegir_perfil', title: 'Ya puedes empezar' }, ...STEPS_NIVEL1]
+            : [{ type: 'fotos_medidas', title: 'Te quedan dos cosas' },
+               { type: 'oferta_ajuste', title: 'Una cosa más' }]),
+    ];
     const flow = retomandoNivel1
         ? STEPS_NIVEL1
         : modoAjuste
@@ -835,10 +844,16 @@ const QuestionnairePage = () => {
         // principio, y reanudarlo por la mitad deja fuera justo las pantallas que se quieren
         // repasar. Las respuestas guardadas siguen intactas: aquí solo no se cargan.
         if (revision) return;
-        if (!modoAjuste || progresoCargadoRef.current || !profile) return;
+        if (progresoCargadoRef.current || !profile) return;
         progresoCargadoRef.current = true;
         const guardado = profile.ajuste_macros_progreso;
-        if (guardado?.respuestas && Object.keys(guardado.respuestas).length) {
+        // CADA RECORRIDO RETOMA EL SUYO (doc del cuestionario, 18-08). El alta y el ajuste
+        // guardan en el mismo sitio, y el número de pantalla de uno no significa nada en el
+        // otro: sin esta comprobación, quien dejó el ajuste por la séptima aterrizaría en la
+        // séptima del alta, que es otra pregunta. Lo guardado sin `flujo` es de antes de
+        // esto y solo puede ser del ajuste, que era el único que se guardaba.
+        const suyo = (guardado?.flujo || 'ajuste') === (modoAjuste ? 'ajuste' : 'alta');
+        if (suyo && guardado?.respuestas && Object.keys(guardado.respuestas).length) {
             answersRef.current = { ...answersRef.current, ...guardado.respuestas };
             setAnswers(a => ({ ...a, ...guardado.respuestas }));
             // AL REANUDAR, SALTARSE LAS QUE YA NO APLICAN (punto 4.12 del 09-08).
@@ -926,11 +941,17 @@ const QuestionnairePage = () => {
     }, [api, modoAjuste, profile]);
 
     // El progreso se guarda a cada respuesta: si se sale y vuelve, sigue donde lo dejo.
+    //
+    // TAMBIÉN EN EL ALTA desde el 18-08. Antes esto se cortaba en seco si no era el
+    // cuestionario de ajuste, así que el alta -- que es el recorrido largo, y el único que
+    // se hace una sola vez en la vida -- era justo el que no se guardaba. Va con el nombre
+    // del recorrido para que cada uno retome el suyo.
     const guardarProgreso = useCallback((respuestas, paso) => {
-        if (!modoAjuste) return;
-        api.put('/clients/ajuste-progreso', { respuestas, paso }).catch(() => {});
+        if (revision) return;   // en modo revisión no se escribe nada
+        api.put('/clients/ajuste-progreso',
+                { respuestas, paso, flujo: modoAjuste ? 'ajuste' : 'alta' }).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, modoAjuste]);
+    }, [api, modoAjuste, revision]);
 
     // ── P10: leer la dieta que trae el cliente ────────────────────────────────
     const cargarMisDias = useCallback(async () => {
@@ -1084,6 +1105,25 @@ const QuestionnairePage = () => {
         guardarProgreso(respuestas, idx);
         setLecturaDieta(null);
         goNext();
+    };
+
+    // La oferta del final: se apunta lo que conteste y se le lleva a su panel. No cobra
+    // nada todavía (ver POST /clients/ajuste-a-medida): falta decidir cómo se cobra.
+    const responderOferta = async (quiere) => {
+        setLoading(true);
+        try {
+            await api.post('/clients/ajuste-a-medida', { quiere });
+            toast.success(quiere
+                ? 'Anotado. Te escribimos con los detalles.'
+                : 'Perfecto, seguimos con tu plan.');
+        } catch (e) {
+            // Que no se le atasque el final del alta por esto: el aviso al equipo puede
+            // esperar, la persona no.
+            console.error('[alta] no se pudo guardar la respuesta a la oferta', e);
+        } finally {
+            setLoading(false);
+            navigate('/welcome');
+        }
     };
 
     // Una respuesta contestada: se recalcula y se guarda, las dos cosas con lo de este instante.
@@ -1644,9 +1684,108 @@ const QuestionnairePage = () => {
                     ) : (
                         <Button onClick={goNext}
                             className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                            Continuar con tu perfil <ArrowRight className="w-5 h-5 ml-2" />
+                            {tieneCoach ? 'Continuar con tu perfil' : 'Continuar'} <ArrowRight className="w-5 h-5 ml-2" />
                         </Button>
                     )}
+                </div>
+            </div>
+        );
+    } else if (step.type === 'elegir_perfil') {
+        // EL FINAL DE QUIEN LLEVA ENTRENADOR (doc del cuestionario, 18-08). Antes de esto se
+        // le metía de cabeza en el cuestionario largo sin preguntarle: veinticinco pantallas
+        // más justo cuando acaba de terminar veinticuatro. Ahora elige, y si se va a la
+        // calculadora le queda la tarjeta de «Completa tu perfil» en Inicio.
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
+                    Ya puedes empezar a usar la calculadora
+                </h2>
+                <p className="text-foreground/70 mb-4">
+                    O terminamos tu perfil ahora. Los macros que tienes son provisionales, pero
+                    puedes montar tu día desde ya.
+                </p>
+                <div className="surface p-4 mb-6 border-l-4 border-l-brand">
+                    <p className="text-sm text-foreground/80">
+                        Para arrancar de verdad necesitamos <strong className="text-foreground">tus fotos y tus
+                        medidas</strong>: sin eso no podemos ponerte los macros buenos ni montarte la rutina.
+                    </p>
+                    <p className="text-xs text-foreground/50 mt-2">
+                        Te apuntas cualquier día y empiezas siempre un lunes.
+                    </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <Button onClick={goNext} data-testid="terminar-perfil-ahora"
+                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                        Terminar mi perfil ahora <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                    <Button variant="outline" data-testid="empezar-calculadora"
+                        onClick={() => navigate('/welcome')}
+                        className="px-8 py-6 text-lg">
+                        Empezar a usar la calculadora
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (step.type === 'fotos_medidas') {
+        // Y EL DE QUIEN NO LO LLEVA. Sin fotos ni medidas no tiene evolución que mirar, que
+        // es lo que le hace volver. No se le obliga: se le dice y se le deja ir.
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
+                    Te quedan dos cosas
+                </h2>
+                <p className="text-foreground/70 mb-6">
+                    Sube tus fotos y toma tus medidas. Sin eso no puedes ver tu evolución, que es
+                    lo que de verdad enseña lo que cambia.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <Button onClick={() => navigate('/dashboard/reports')} data-testid="ir-a-fotos-medidas"
+                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                        Vamos <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                    <Button variant="outline" onClick={goNext} className="px-8 py-6 text-lg">
+                        Ahora no
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (step.type === 'oferta_ajuste') {
+        // LA OFERTA DE LOS 87 €, CON SU TEXTO LITERAL. Todavía no cobra: el documento deja sin
+        // decidir cómo se cobra, así que se apunta lo que contesta -- el sí y el no, que
+        // saber cuánta gente lo rechaza vale igual -- y el equipo lo ve en su campana.
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-4 leading-tight">
+                    Una cosa más
+                </h2>
+                <p className="text-foreground/80 mb-3 leading-relaxed">
+                    Puedes continuar con tu plan actual y empezar a usar la calculadora con unos
+                    macros ajustados según tu perfil y teniendo en cuenta la evolución de otras
+                    personas con un perfil parecido al tuyo que ya han pasado por aquí, o puedes
+                    solicitar tus macros personalizados y recibir tu ajuste a medida.
+                </p>
+                <p className="text-sm text-foreground/50 mb-6">
+                    Esta segunda opción no está incluida en tu plan, tiene un coste adicional e
+                    incluye también tu plan personalizado de suplementación.
+                </p>
+                <div className="space-y-3">
+                    <button data-testid="oferta-no" disabled={loading}
+                        onClick={() => responderOferta(false)}
+                        className="w-full text-left p-4 rounded-xl border-2 border-border hover:border-brand/50 transition-all disabled:opacity-50">
+                        <span className="font-semibold text-foreground">
+                            Me vale con la primera opción, la que está incluida en mi plan
+                        </span>
+                    </button>
+                    <button data-testid="oferta-si" disabled={loading}
+                        onClick={() => responderOferta(true)}
+                        className="w-full text-left p-4 rounded-xl border-2 border-border hover:border-brand transition-all disabled:opacity-50">
+                        <span className="font-semibold text-foreground">
+                            Quiero el ajuste a medida, aunque implique pagar más
+                        </span>
+                        <span className="block text-sm text-brand font-bold mt-1">
+                            87 € · macros personalizados + programa de suplementación
+                        </span>
+                    </button>
                 </div>
             </div>
         );

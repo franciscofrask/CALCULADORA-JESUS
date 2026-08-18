@@ -1,7 +1,7 @@
 """
 Rutas de usuarios: perfiles, preferencias y macros.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Body, HTTPException, Depends
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 import logging
@@ -632,10 +632,17 @@ async def leer_dieta(data: dict, user = Depends(get_current_user)):
 @router.put("/clients/ajuste-progreso")
 async def guardar_progreso_ajuste(data: dict, user = Depends(get_current_user)):
     """
-    Guarda el cuestionario de ajuste a medias, respuesta a respuesta.
+    Guarda el cuestionario a medias, respuesta a respuesta.
 
-    Sin esto, salirse a mitad significaba empezar de cero, y son nueve preguntas. Se guarda lo
-    contestado y en que pantalla iba; al volver, sigue donde lo dejo.
+    Sin esto, salirse a mitad significaba empezar de cero. Se guarda lo contestado y en que
+    pantalla iba; al volver, sigue donde lo dejo.
+
+    DESDE EL 18-08 TAMBIEN EL ALTA (doc del cuestionario, "se guarda pregunta a pregunta:
+    si cierra por la doce, vuelve a la doce"). Antes solo se guardaba el cuestionario de
+    ajuste, que son nueve preguntas; el alta pasa a ser de veinticuatro y ahi perder lo
+    contestado es perder al cliente. Se apunta `flujo` para que el alta no restaure el
+    progreso del ajuste ni al reves: son dos recorridos distintos y el numero de pantalla
+    de uno no significa nada en el otro.
     """
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Cuerpo inválido")
@@ -643,9 +650,11 @@ async def guardar_progreso_ajuste(data: dict, user = Depends(get_current_user)):
     if not isinstance(respuestas, dict):
         raise HTTPException(status_code=400, detail="Faltan las respuestas")
     paso = data.get("paso")
+    flujo = data.get("flujo")
     progreso = {
         "respuestas": respuestas,
         "paso": int(paso) if isinstance(paso, (int, float)) else 0,
+        "flujo": flujo if flujo in ("alta", "ajuste") else "ajuste",
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     r = await db.client_profiles.update_one(
@@ -946,6 +955,48 @@ async def submit_questionnaire_nivel1(data: Nivel1Submit, user = Depends(get_cur
 
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
+
+
+@router.post("/clients/ajuste-a-medida")
+async def pedir_ajuste_a_medida(data: Dict[str, Any] = Body(default={}),
+                                user=Depends(get_current_user)):
+    """El final del alta de quien no lleva entrenador: «quiero el ajuste a medida».
+
+    NO COBRA NADA, y es a proposito. El documento del 18-08 deja sin decidir como se cobran
+    los 87 € (si con Stripe ahi mismo o mandandole un enlace), asi que lo que se hace aqui
+    es lo unico que se puede hacer sin inventarse esa decision: dejar dicho que lo quiere y
+    avisar al equipo. Cobrarle sin saber como se le entrega seria peor que no cobrarle.
+
+    Se guarda tambien el «no» a proposito: saber cuanta gente lo ve y lo rechaza vale tanto
+    como saber quien lo compra, y hoy eso no se mide en ningun sitio.
+    """
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    quiere = bool(data.get("quiere"))
+    await db.client_profiles.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"ajuste_a_medida": {
+            "quiere": quiere,
+            "respondido_at": datetime.now(timezone.utc).isoformat(),
+            "cobrado": False,
+        }}},
+    )
+
+    if quiere:
+        await avisar_al_equipo(
+            db,
+            tipo="ajuste_a_medida",
+            titulo="Quiere el ajuste a medida (87 €)",
+            mensaje=f"{profile.get('name') or user.get('name') or 'Un cliente'} ha pedido sus "
+                    f"macros personalizados y su programa de suplementación al terminar el alta. "
+                    f"Falta cobrarle: todavía no hay cobro automático montado.",
+            client_id=profile.get("id"),
+            trainer_id=profile.get("trainer_id"),
+        )
+    return {"guardado": True, "quiere": quiere, "cobrado": False}
+
 
 # ==================== USER PREFERENCES ====================
 
