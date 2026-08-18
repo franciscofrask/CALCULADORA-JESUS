@@ -291,6 +291,10 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     # mismo: lo primero es una respuesta, lo segundo es una pregunta que no existe.
     update = {
         "questionnaire_completed": True,
+        # CUANDO lo terminó, no solo que lo terminó. Sin la fecha no hay forma de saber si
+        # el que tiene el perfil largo a medias lleva un día o tres semanas, que es justo lo
+        # que el panel necesita para pintarlo (bloque 6 del doc del 18-08).
+        "questionnaire_completed_at": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "goal": data.goal,
         "sex": sexo,
     }
@@ -318,6 +322,21 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         valor = getattr(data, campo, None)
         if valor not in (None, "", []):
             update[campo] = valor
+
+    # EL CORREO QUE ESCRIBE EN EL ALTA (bloque 6 del doc del 18-08). Se guarda aparte y NO
+    # se toca el de acceso: con el de acceso entra, cruzan los cobros de Stripe y se enlaza
+    # su ficha, asi que cambiarlo aqui rompe las tres cosas. Hasta hoy este correo se pedia
+    # en la primera pantalla y no lo guardaba nadie, con lo que la promesa que le hace esa
+    # misma pantalla -- «te escribiremos a este» -- no se cumplia.
+    #
+    # Si escribe el mismo que ya tiene, no hay dos correos y no se apunta nada.
+    nuevo_correo = (data.email or "").strip().lower()
+    if nuevo_correo and nuevo_correo != (user.get("email") or "").strip().lower():
+        update["email_contacto"] = nuevo_correo
+        # «salvo que nos digas lo contrario»: por defecto se le escribe al que acaba de dar.
+        # Si ya habia elegido en Mi perfil, manda lo suyo.
+        if not profile.get("email_preferido"):
+            update["email_preferido"] = "contacto"
 
     # Y lo que ha dicho de comida, en el idioma que entiende la calculadora, para que su
     # primer día no sea un menú cualquiera. No se pisa lo que ya tuviera puesto: quien

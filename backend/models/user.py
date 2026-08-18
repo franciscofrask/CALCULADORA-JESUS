@@ -860,6 +860,26 @@ class ClientProfile(BaseModel):
     # nunca a la pantalla. Y de `cobrado` depende que se le abra el cuestionario completo.
     ajuste_a_medida: Optional[Dict[str, Any]] = None
 
+    # ── LOS DOS CORREOS (bloque 6 del doc del 18-08) ────────────────────────────────
+    # La app identifica al cliente por su correo: con el entra, con el cruzan los cobros de
+    # Stripe y con el se enlaza su ficha. Si en el alta escribe otro distinto no se puede
+    # cambiar el de acceso sin romper las tres cosas, asi que se guardan LOS DOS.
+    #
+    # `email_contacto` es el que escribio en el alta, y `email_preferido` dice a cual se le
+    # escribe: "contacto" por defecto, porque es lo que le promete la pantalla («te
+    # escribiremos a este, salvo que nos digas lo contrario»). Hasta hoy ese correo se tiraba
+    # -- el alta lo pedia y no lo guardaba nadie -- y la promesa era mentira.
+    #
+    # OJO: el correo de recuperar la contraseña va SIEMPRE al de acceso, elija lo que elija.
+    # Ese no es un aviso, es la llave de su cuenta.
+    email_contacto: Optional[str] = None
+    email_preferido: Optional[str] = None       # acceso | contacto
+
+    # El dia que termino el basico. Con `questionnaire_completed` a secas no se sabe si el
+    # que tiene el perfil largo a medias lleva un dia o tres semanas, que es justo lo que el
+    # panel necesita para pintarlo.
+    questionnaire_completed_at: Optional[str] = None
+
     # ── Lo que trae el básico (bloque 2 del doc del 18-08) ──────────────────────────
     # Lo contesta todo el mundo, así que vive aquí y no dentro de `nivel1`. Y por lo mismo
     # que arriba: sin declararlo, se guarda en la base y no lo ve ni la ficha del coach.
@@ -928,6 +948,10 @@ class ClientProfileCreate(BaseModel):
     trainer_id: Optional[str] = None
 
 class ClientProfileUpdate(BaseModel):
+    # Los dos correos: el cliente puede cambiar a cuál se le escribe desde Mi perfil. El de
+    # acceso NO se toca por aquí -- es con el que entra y con el que cruzan los cobros.
+    email_contacto: Optional[str] = None
+    email_preferido: Optional[str] = None       # acceso | contacto
     plan: Optional[str] = None
     price: Optional[float] = None
     week: Optional[int] = None

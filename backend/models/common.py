@@ -95,6 +95,10 @@ class ReportCreate(BaseModel):
     # porque en la base ya hay pesos imposibles de antes y ponerselos haria que un reporte
     # viejo reventara al leerlo, que es peor que enseñarlo raro.
     weight: float = Field(..., ge=25, le=300)
+    # El % de grasa, cada 12 semanas (bloque 6 del doc del 18-08). Es opcional porque solo se
+    # le pregunta en el reporte que toca; el resto de meses no viaja. Con rango, por lo mismo
+    # que el peso: un 300 aqui no se queda quieto, entra en el calculo de macros.
+    body_fat: Optional[float] = Field(None, ge=3, le=70)
     measurements: Optional[Dict[str, float]] = None
     photos: Optional[List[str]] = None
     # Confirmación de huecos: {"dieta": "no_lo_hice"|"si_pero_no_apunte", "entrenamiento": ...}.

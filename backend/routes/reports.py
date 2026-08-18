@@ -157,6 +157,13 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     # El peso NO se escribe aqui: va a la serie con la fecha del reporte, y el "actual"
     # sale de la serie (punto 30). Es lo que arregla los dos pesos distintos del punto 9.
     await anotar_peso(profile["id"], data.weight, report["created_at"][:10], origen="reporte")
+    # Y EL % DE GRASA, cuando toca (cada 12 semanas). Va a su serie igual que el peso, con la
+    # fecha del reporte: es un dato que se estima mirando fotos, y sin fecha no hay forma de
+    # saber si el que se está usando para calcular macros es de hace un mes o de hace un año.
+    if data.body_fat is not None:
+        from core.series_cliente import anotar_grasa
+        await anotar_grasa(profile["id"], data.body_fat, report["created_at"][:10],
+                           origen="reporte")
     if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
         if profile.get("goal") != data.proximo_objetivo:
             set_perfil["goal"] = data.proximo_objetivo
@@ -493,8 +500,16 @@ async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(ge
     d0, d1 = _periodo_del_reporte(perfil, tipo)
     datos = await datos_del_reporte(perfil, tipo, d0, d1)
 
-    bloques = bloques_del_mensual(perfil_rep) if tipo == "mensual" else [
+    # EL % DE GRASA, CADA DOCE SEMANAS. Lo promete el pie de la pantalla donde se lo pide la
+    # primera vez, y no había ningún sitio donde se le volviera a preguntar: el dato se
+    # quedaba con la edad que tuviera. La regla de las doce semanas ya existía y ya se sabe
+    # calcular; lo que faltaba era el sitio donde preguntarlo.
+    from core.series_cliente import grasa_vigente
+    grasa = grasa_vigente(perfil)
+    bloques = bloques_del_mensual(perfil_rep, pedir_grasa=bool(grasa.get("hay_que_pedirlo"))) \
+        if tipo == "mensual" else [
         "entreno_previo", "peso", "molestias", "sensaciones", "libre"]
+    datos["grasa"] = grasa
     # SE MIRA EL DATO, NO EL PLAN (regla 3 del doc): sin rutina cargada, el bloque del
     # entreno no tiene ni dato que enseñar ni pregunta que hacer, así que no sale y los de
     # abajo se renumeran solos. El del plan sin rutina SÍ se queda: ahí ese bloque no

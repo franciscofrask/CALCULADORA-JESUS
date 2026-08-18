@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CAP } from '../lib/planAccess';
@@ -970,6 +970,20 @@ const QuestionnairePage = () => {
     // porque todavía no hay cobro montado (ver POST /clients/ajuste-a-medida), así que esto
     // no se lo abre a nadie por su cuenta; queda puesto para el día que se cobre.
     const tieneCoach = conEntrenador || !!profile?.ajuste_a_medida?.cobrado;
+
+    // CUÁNDO EMPIEZA. Todo el mundo arranca en lunes, pague el día que pague, y ese lunes se
+    // calcula y se guarda al cobrar (`current_period_start`, el que ancla su ciclo). Lo que
+    // faltaba era decírselo. El jueves sale de ahí: el equipo tiene 48 horas para revisar sus
+    // macros, así que los definitivos caen a mitad de esa primera semana.
+    const arranque = useMemo(() => {
+        const inicio = profile?.current_period_start;
+        if (!inicio) return null;
+        const lunes = new Date(inicio);
+        if (isNaN(lunes)) return null;
+        const jueves = new Date(lunes.getTime() + 3 * 24 * 3600 * 1000);
+        const comoSeDice = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+        return { lunes: comoSeDice(lunes), jueves: comoSeDice(jueves) };
+    }, [profile?.current_period_start]);
     // Si ha pulsado "Ajustar macros" manda eso y nada más: sin esta comprobación, un cliente con
     // coach que le diera al botón acababa en el perfil largo en vez de en el cuestionario.
     const pidioAjustar = new URLSearchParams(location.search).get('ajustar') === '1';
@@ -2155,8 +2169,17 @@ const QuestionnairePage = () => {
                         Para arrancar de verdad necesitamos <strong className="text-foreground">tus fotos y tus
                         medidas</strong>: sin eso no podemos ponerte los macros buenos ni montarte la rutina.
                     </p>
+                    {/* CON LA FECHA, no con «siempre un lunes» (bloque 6 del doc del 18-08:
+                        «No se le dice cuándo empieza»). El lunes de arranque ya está
+                        calculado y guardado desde que paga -- es el que ancla su ciclo -- y
+                        aun así ninguna pantalla se lo decía. Los macros definitivos son el
+                        jueves de esa semana: el equipo tiene 48 horas para revisarlos, que
+                        es la misma regla que decide el lunes. */}
                     <p className="text-xs text-foreground/50 mt-2">
-                        Te apuntas cualquier día y empiezas siempre un lunes.
+                        {arranque
+                            ? <>Empiezas el <b className="text-foreground/80">lunes {arranque.lunes}</b>.
+                                Tus macros definitivos los tendrás el {arranque.jueves}.</>
+                            : 'Te apuntas cualquier día y empiezas siempre un lunes.'}
                     </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">

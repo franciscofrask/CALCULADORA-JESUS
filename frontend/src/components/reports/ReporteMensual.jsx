@@ -121,6 +121,33 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                 )}
             </Bloque>
 
+            {/* ── EL % DE GRASA · solo cada 12 semanas ──
+                La pantalla donde se lo pedimos la primera vez se lo promete al pie, y no
+                había ningún sitio donde volviera a pedirse: el dato se quedaba con la edad
+                que tuviera y con él se calculan los macros. Sale detrás del peso, que es
+                cuando está mirándose los números, y solo el mes que toca. */}
+            {lleva('grasa') && (
+                <Bloque numero={numero('grasa')} titulo="Tu porcentaje de grasa"
+                    sub="Toca repetirlo: se estima cada 12 semanas." testid="mensual-grasa">
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="number" step="0.5" min="3" max="70" inputMode="decimal"
+                            value={valores.body_fat ?? ''} onChange={(e) => set('body_fat', e.target.value)}
+                            placeholder="—" data-testid="body-fat-input"
+                            className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-foreground/20 focus:outline-none focus:border-[#FF671F] transition-colors"
+                        />
+                        <span className="text-lg text-foreground/40 font-bold">%</span>
+                    </div>
+                    {datos?.grasa?.valor != null && (
+                        <p className="text-[13px] text-muted-foreground">
+                            El último fue {datos.grasa.valor} %
+                            {datos.grasa.semanas != null && `, hace ${datos.grasa.semanas} semanas`}.
+                            Con las fotos de referencia de tu perfil.
+                        </p>
+                    )}
+                </Bloque>
+            )}
+
             {/* ── 02 · TUS MEDIDAS · con la del mes pasado al lado ── */}
             <Bloque numero={numero('medidas')} titulo="Tus medidas" sub="Las diez, en centímetros."
                 testid="medidas">

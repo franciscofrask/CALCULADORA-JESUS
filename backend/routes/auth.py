@@ -204,6 +204,10 @@ async def forgot_password(data: dict):
 
     base = (os.environ.get("APP_URL") or "https://12en12app.jesusgallegopt.com").rstrip("/")
     enlace = f"{base}/recuperar?token={token}"
+    # AL CORREO DE ACCESO, no al de contacto. Desde el 18-08 un cliente puede tener dos y
+    # elegir a cuál se le escribe, pero este no es un aviso: es la llave de su cuenta, y va
+    # al mismo correo con el que entra. Si fuera al otro, quien escribió mal el de contacto
+    # en el alta se quedaría fuera de su propia cuenta sin forma de volver.
     await enviar(db, email, "Cambiar tu contraseña de 12EN12",
                  texto_recuperar(user.get("name"), enlace, HORAS_VALIDEZ_ENLACE),
                  tipo="recuperar_password")

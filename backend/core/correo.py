@@ -108,6 +108,24 @@ async def enviar(db, destinatario: str, asunto: str, cuerpo: str,
     return registro["estado"] == "enviado"
 
 
+async def correo_del_cliente(db, user_id: str, de_acceso: str) -> str:
+    """A qué correo se le escribe a este cliente.
+
+    Son dos y no son intercambiables (bloque 6 del doc del 18-08). El de ACCESO es con el que
+    entra y con el que cruzan los cobros de Stripe: ese no se cambia nunca. El de CONTACTO es
+    el que dio en el alta, y es al que se le escribe salvo que en Mi perfil diga lo contrario.
+
+    NO se usa para recuperar la contraseña: ese enlace va siempre al de acceso, porque es la
+    llave de la cuenta y no un aviso. Mandarlo al de contacto dejaría a alguien fuera de su
+    propia cuenta si escribió mal el correo en el alta.
+    """
+    perfil = await db.client_profiles.find_one(
+        {"user_id": user_id}, {"_id": 0, "email_contacto": 1, "email_preferido": 1}) or {}
+    if (perfil.get("email_preferido") or "contacto") == "contacto":
+        return perfil.get("email_contacto") or de_acceso
+    return de_acceso
+
+
 def texto_recuperar(nombre: Optional[str], enlace: str, horas: int) -> str:
     """El correo de recuperar contraseña. En su tono: corto y sin florituras."""
     saludo = f"Hola {nombre.split()[0]}," if nombre else "Hola,"

@@ -600,6 +600,7 @@ const AdminDashboard = () => {
                             <span>peso <b className="text-red-400">{stats.semaforo.peso?.malo || 0}</b></span>
                             <span>contacto <b className="text-red-400">{stats.semaforo.contacto?.malo || 0}</b></span>
                             <span>ajuste <b className="text-red-400">{stats.semaforo.ajuste?.malo || 0}</b></span>
+                            <span>perfil <b className="text-red-400">{stats.semaforo.perfil_largo?.malo || 0}</b></span>
                         </span>
                     )} />
                 {/* Punto 2.4g: «"0 bajas" con 188 totales y 184 activos: faltan cuatro por
@@ -1220,6 +1221,10 @@ const AdminClientsList = () => {
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Últ. reporte</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Contacto</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden lg:table-cell">Peso</TableHead>
+                                    {/* EL PERFIL LARGO. Al que lleva entrenador no se le puede
+                                        trabajar sin él, y hasta ahora la única señal era una
+                                        tarjeta en SU Inicio, que es justo la que ignora. */}
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Perfil</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Estado</TableHead>
                                     <TableHead className="text-right text-white/50 uppercase tracking-wider text-xs">Acciones</TableHead>
                                 </TableRow>
@@ -1289,6 +1294,9 @@ const AdminClientsList = () => {
                                         </TableCell>
                                         <TableCell className="hidden lg:table-cell">
                                             <CeldaSemaforo celda={client.semaforo?.peso} />
+                                        </TableCell>
+                                        <TableCell className="hidden xl:table-cell">
+                                            <CeldaSemaforo celda={client.semaforo?.perfil_largo} />
                                         </TableCell>
                                         <TableCell>
                                             {/* El estado con palabras, no con el código de la base

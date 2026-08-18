@@ -36,20 +36,47 @@ const UPGRADE_PLAN_UI = false;
 
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const { user, profile, logout, api, refreshUser, myPlan, planUnpaid, can } = useAuth();
+    const { user, profile, logout, api, refreshUser, refreshProfile, myPlan, planUnpaid, can } = useAuth();
     const { startTour, available: recorridoDisponible } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [verIncluye, setVerIncluye] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
-    const [formData, setFormData] = useState({ name: user?.name || '', phone: user?.phone || '' });
+    const [formData, setFormData] = useState({
+        name: user?.name || '', phone: user?.phone || '',
+        email_contacto: profile?.email_contacto || '',
+        email_preferido: profile?.email_preferido || 'contacto',
+    });
     const [saving, setSaving] = useState(false);
+
+    // El perfil llega después que el usuario (son dos peticiones), así que los dos correos se
+    // siembran cuando aparece. Sin esto, abrir «editar» antes de que cargue enseñaba el campo
+    // vacío y guardarlo le borraba el correo de contacto.
+    useEffect(() => {
+        if (!profile) return;
+        setFormData(f => ({
+            ...f,
+            email_contacto: f.email_contacto || profile.email_contacto || '',
+            email_preferido: f.email_preferido || profile.email_preferido || 'contacto',
+        }));
+    }, [profile]);
 
     const handleSave = async () => {
         if (!formData.name.trim()) { toast.error('El nombre no puede estar vacío'); return; }
+        const contacto = (formData.email_contacto || '').trim().toLowerCase();
+        if (contacto && !/\S+@\S+\.\S+/.test(contacto)) {
+            toast.error('Ese email de contacto no parece un email'); return;
+        }
         setSaving(true);
         try {
             await api.put('/auth/me', { name: formData.name.trim(), phone: formData.phone });
+            // Los dos correos viven en el perfil del cliente, no en la cuenta: el de la
+            // cuenta es el de acceso y no se toca desde aquí.
+            await api.put('/clients/profile', {
+                email_contacto: contacto || null,
+                email_preferido: contacto ? (formData.email_preferido || 'contacto') : 'acceso',
+            });
             await refreshUser();
+            if (refreshProfile) await refreshProfile();
             toast.success('Perfil actualizado');
             setEditing(false);
         } catch (error) {
@@ -183,6 +210,41 @@ const ProfilePage = () => {
                                         <Label className="text-foreground/70 text-xs uppercase tracking-wider">Teléfono</Label>
                                         <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+34 612 345 678" className="bg-background border-input text-foreground mt-1" />
                                     </div>
+                                    {/* LOS DOS CORREOS. El de acceso es con el que entra y con el que
+                                        cruzan sus pagos: ese no se cambia desde aquí. El otro es el que
+                                        dio en el alta, y en esa pantalla se le prometió que le
+                                        escribiríamos ahí «salvo que nos digas lo contrario». Esto es
+                                        decirlo. */}
+                                    <div>
+                                        <Label className="text-foreground/70 text-xs uppercase tracking-wider">Email de contacto</Label>
+                                        <Input type="email" value={formData.email_contacto}
+                                            onChange={(e) => setFormData({ ...formData, email_contacto: e.target.value })}
+                                            placeholder="Uno que revises a diario"
+                                            data-testid="email-contacto"
+                                            className="bg-background border-input text-foreground mt-1" />
+                                        <p className="text-foreground/40 text-xs mt-1.5">
+                                            Entras siempre con <b className="text-foreground/60">{user?.email}</b>, y ahí
+                                            te llega el enlace si olvidas la contraseña. Eso no cambia.
+                                        </p>
+                                    </div>
+                                    {formData.email_contacto?.trim() && (
+                                        <div>
+                                            <Label className="text-foreground/70 text-xs uppercase tracking-wider">¿A cuál te escribimos?</Label>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                                                {[['contacto', formData.email_contacto], ['acceso', user?.email]].map(([cual, dir]) => (
+                                                    <button key={cual} type="button"
+                                                        data-testid={`email-preferido-${cual}`}
+                                                        onClick={() => setFormData({ ...formData, email_preferido: cual })}
+                                                        className={`px-3 py-2 rounded-xl border-2 text-sm text-left truncate transition-all ${
+                                                            (formData.email_preferido || 'contacto') === cual
+                                                                ? 'border-[#FF671F] bg-[#FF671F]/10 text-foreground'
+                                                                : 'border-input text-foreground/70 hover:border-white/30'}`}>
+                                                        {dir}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex gap-2 justify-end">
                                     <Button variant="outline" onClick={() => setEditing(false)} className="bg-transparent border-input text-foreground hover:border-white/50 text-sm">Cancelar</Button>

@@ -80,8 +80,23 @@ async def resolve_macro_revision(revision_id: str, user = Depends(get_admin_user
 
 # ==================== CLIENTS ====================
 
+def _lleva_perfil_completo(plan: Optional[str], catalogo: Optional[Dict[str, Any]]) -> bool:
+    """Si a este plan se le pide el cuestionario largo.
+
+    Es la misma regla que usa la app del cliente para abrírselo: `calculadora ==
+    'personalizado'`, o sea que hay alguien detrás que le va a poner los macros a mano. No
+    hay ninguna feature derivada que lo diga, así que se mira la matriz del plan.
+    """
+    if not catalogo:
+        return False
+    from models.user import codigo_de_plan
+    hab = (catalogo.get(codigo_de_plan(plan)) or {}).get("habilitaciones") or {}
+    return hab.get("calculadora") == "personalizado"
+
+
 def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
-                          ahora: datetime) -> Dict[str, Any]:
+                          ahora: datetime,
+                          catalogo: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """El semaforo de un cliente, celda a celda (punto 32 del 07-08).
 
     Cinco estados y POR CELDA, no por fila: asi se distingue quien va regular de quien va
@@ -129,8 +144,28 @@ def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
     pago = semaforo.celda(al_corriente, semaforo.OK if al_corriente else semaforo.MALO,
                           "al día" if al_corriente else "pendiente")
 
+    # EL PERFIL SIN TERMINAR, solo para los planes con entrenador (bloque 6 del doc del
+    # 18-08: «Qué pasa si un Gold no termina el completo. No puede quedarse en una tarjeta de
+    # Inicio que se ignora, porque sin fotos y medidas su entrenador no puede trabajar»).
+    #
+    # Al que no lleva entrenador no se le pinta: no tiene cuestionario largo que terminar.
+    # Y no se pone en rojo el mismo día: se le dan tres días, que es el plazo que pregunta el
+    # documento, y hasta entonces sale en ambar. Antes de eso no ha pasado nada.
+    if _lleva_perfil_completo(plan, catalogo):
+        if profile.get("questionnaire_nivel1_completed"):
+            perfil_largo = semaforo.celda(True, semaforo.OK, "completo")
+        else:
+            dias = dias_desde((profile.get("questionnaire_completed_at")
+                               or profile.get("cycle_start")
+                               or profile.get("created_at") or "")[:10], ahora)
+            perfil_largo = semaforo.celda(
+                False, semaforo.MALO if (dias or 0) >= 3 else semaforo.REGULAR,
+                "sin terminar", f"lleva {dias} días" if dias is not None else None)
+    else:
+        perfil_largo = semaforo.no_aplica("su plan no lleva perfil completo")
+
     celdas = {"reporte": reporte, "ajuste": ajuste, "contacto": contacto,
-              "peso": peso, "pago": pago}
+              "peso": peso, "pago": pago, "perfil_largo": perfil_largo}
     # `peor` va SOLO para poder ordenar la tabla por quien esta peor. No se usa como
     # etiqueta ni se cuenta: con cuatro celdas, "alguna en rojo" vuelve a ser cierto para
     # casi todos, que es exactamente la alerta binaria que el punto manda quitar.
@@ -303,7 +338,7 @@ async def get_all_clients(
                     "price": precio_de_ciclo(profile, catalogo),
                     "precio_mensual": round(precio_mensual(profile, catalogo), 2),
                     "acceso": estado_de_acceso(profile),
-                    "semaforo": _semaforo_del_cliente(profile, hablado, ahora)}
+                    "semaforo": _semaforo_del_cliente(profile, hablado, ahora, catalogo)}
             # TU PROPIA FICHA VA MARCADA. Es la única que entra por la excepción de arriba,
             # y no es negocio: los contadores del panel (clientes totales, activos, MRR)
             # siguen sin contarla, así que quien compare la tabla con un contador tiene que
@@ -1570,12 +1605,16 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     # POR CELDA, no por fila. Con cuatro celdas, "tiene alguna en rojo" es cierto para casi
     # todo el mundo y volveriamos a la alerta que nadie mira. Lo que sirve es saber CUANTOS
     # y EN QUE: "78 sin mandar reporte a tiempo, 72 sin pesarse, 33 sin que nadie les hable".
-    CELDAS = ("reporte", "ajuste", "contacto", "peso", "pago")
+    CELDAS = ("reporte", "ajuste", "contacto", "peso", "pago", "perfil_largo")
     reparto = {c: {semaforo.OK: 0, semaforo.REGULAR: 0, semaforo.REGULAR_MALO: 0,
                    semaforo.MALO: 0, semaforo.INFO: 0} for c in CELDAS}
     at_risk = 0
+    # El catálogo hace falta para saber a quién se le pide el cuestionario largo.
+    from routes.plans import _overrides_by_code as _ovr
+    from models.user import merged_catalog as _merged
+    catalogo_semaforo = _merged(await _ovr())
     for p in active_profiles:
-        s = _semaforo_del_cliente(p, hablado_a, now)
+        s = _semaforo_del_cliente(p, hablado_a, now, catalogo_semaforo)
         for c in CELDAS:
             reparto[c][s[c]["estado"]] += 1
         if s["peor"] == semaforo.MALO:

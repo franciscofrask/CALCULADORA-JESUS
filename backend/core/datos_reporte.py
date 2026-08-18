@@ -75,13 +75,20 @@ def perfil_de_reporte(habilitaciones: Optional[Dict[str, Any]]) -> str:
     return "con_rutina" if hab.get("rutina") in ("personalizada", "del_mes") else "sin_rutina"
 
 
-def bloques_del_mensual(perfil_rep: str) -> List[str]:
+def bloques_del_mensual(perfil_rep: str, pedir_grasa: bool = False) -> List[str]:
     """Los bloques del mensual, en el orden del doc y con su numeración por plan.
 
     Gold 13, los otros dos 11: los que se caen son lesiones y cardio, que no van en su
     plan, y en el que no lleva rutina el bloque de entreno cambia entero.
+
+    Y uno más cada doce semanas: el % de grasa. La pantalla del alta se lo promete al pie
+    («lo repetiremos cada 12 semanas») y hasta hoy no había NINGÚN sitio donde se le
+    volviera a pedir. Va detrás del peso, que es cuando está mirándose los números.
     """
-    bloques = ["peso", "medidas", "fotos", "dieta", "entreno"]
+    bloques = ["peso"]
+    if pedir_grasa:
+        bloques.append("grasa")
+    bloques += ["medidas", "fotos", "dieta", "entreno"]
     if perfil_rep == "completo":
         bloques += ["lesiones", "cardio"]
     bloques += ["suplementacion", "energia", "valoracion", "objetivo", "libre", "sugerencias"]

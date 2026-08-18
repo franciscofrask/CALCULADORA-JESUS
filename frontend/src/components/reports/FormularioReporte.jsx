@@ -26,6 +26,8 @@ const ORANGE = '#FF671F';
 
 const valoresIniciales = (objetivoActual) => ({
     weight: '',
+    // El % de grasa solo sale en el reporte que toca, cada 12 semanas.
+    body_fat: '',
     measurements: Object.fromEntries(MEDIDAS.map(m => [m.key, ''])),
     // Quincenal
     entreno_huecos: '',
@@ -159,6 +161,10 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
             const payload = {
                 tipo: ficha?.tipo,
                 weight: parseFloat(String(valores.weight).replace(',', '.')),
+                // Solo viaja el mes que toca (cada 12 semanas): el resto no se le pregunta,
+                // así que va a null y el servidor no toca su serie.
+                body_fat: valores.body_fat
+                    ? parseFloat(String(valores.body_fat).replace(',', '.')) : null,
                 measurements: Object.fromEntries(
                     Object.entries(valores.measurements).filter(([, v]) => v)
                         .map(([k, v]) => [k, parseFloat(String(v).replace(',', '.'))])),
