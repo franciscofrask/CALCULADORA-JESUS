@@ -1738,8 +1738,36 @@ const QuestionnairePage = () => {
         }
     };
 
+    // LO QUE ESTÁ MAL, DICHO EN SU PANTALLA Y NO AL FINAL.
+    //
+    // El servidor tiene rangos para el peso, la altura y la grasa, pero solo los comprueba al
+    // enviar: quien escribía 80 en la altura contestaba veinte pantallas más y se estrellaba
+    // en el botón de calcular con «Revisa el campo height», sin saber a cuál de las veinte
+    // tenía que volver. Ahora se dice aquí, con el rango que esperamos, y el botón no deja
+    // pasar hasta que cuadre.
+    const RANGOS = {
+        height: [120, 230, 'Tu altura, en centímetros. Entre 120 y 230.'],
+        weight: [25, 300, 'Tu peso, en kilos. Entre 25 y 300.'],
+        peso_maximo: [25, 300, 'En kilos, entre 25 y 300.'],
+        peso_minimo: [25, 300, 'En kilos, entre 25 y 300.'],
+        peso_mejor_momento: [25, 300, 'En kilos, entre 25 y 300.'],
+    };
+
+    // El aviso de este paso, o null si lo que ha escrito está bien. Se enseña solo cuando ya
+    // ha escrito algo: en blanco no hay nada que corregir todavía.
+    const avisoDelPaso = (() => {
+        const rango = RANGOS[step.key];
+        if (!rango) return null;
+        const v = answers[step.key];
+        if (v === undefined || v === null || `${v}`.trim() === '') return null;
+        const n = parseFloat(String(v).replace(',', '.'));
+        const [min, max, texto] = rango;
+        return (isNaN(n) || n < min || n > max) ? texto : null;
+    })();
+
     // Validación del paso actual (para inputs de texto/número).
     const inputValid = () => {
+        if (avisoDelPaso) return false;
         if (!step.key || !step.required) return true;
         const v = answers[step.key];
         if (v === undefined || v === null || `${v}`.trim() === '') return false;
@@ -2205,6 +2233,11 @@ const QuestionnairePage = () => {
                     <MiniInput {...mini} k={kPeso} label="Peso" type="number" unit="kg" />
                     <MiniInput {...mini} k={kAno} label="Año" type="number" placeholder="2019" />
                 </div>
+                {avisoDelPaso && (
+                    <p className="text-sm text-amber-500 -mt-2 mb-4" data-testid="aviso-del-paso">
+                        {avisoDelPaso}
+                    </p>
+                )}
                 <div className="mb-4">
                     <MiniInput {...mini} k={kNota} label={step.nota} placeholder="Opcional." />
                 </div>
@@ -2757,6 +2790,12 @@ const QuestionnairePage = () => {
                     />
                     {step.unit && <span className="text-foreground/50 text-lg">{step.unit}</span>}
                 </div>
+                {/* El aviso, aquí y no veinte pantallas después. */}
+                {avisoDelPaso && (
+                    <p className="text-sm text-amber-500 -mt-4 mb-6" data-testid="aviso-del-paso">
+                        {avisoDelPaso}
+                    </p>
+                )}
                 <div className="flex gap-3">
                     <BackBtn />
                     <Button onClick={goNext} disabled={!inputValid()}

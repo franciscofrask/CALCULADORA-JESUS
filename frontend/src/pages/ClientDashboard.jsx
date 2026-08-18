@@ -607,6 +607,30 @@ const InicioNuevo = () => {
                     {varianteDelDia(CIERRES, user?.id)}
                 </p>
             )}
+
+            {/* LA REVISIÓN PERSONALIZADA, siempre a mano. Su pantalla de venta
+                (/dashboard/revision) no está en el menú a propósito -- «una línea pequeña, sin
+                botón grande», documento del 06-08 --, pero la única línea que llevaba a ella
+                en Inicio se quedó en el Inicio viejo. Con el Inicio nuevo encendido, quien
+                salía de esa pantalla no tenía forma de volver salvo escribiendo la URL.
+                También se entra desde Mis macros, que es el otro momento del documento. */}
+            {profile?.ajuste_macros_completado && seLeOfreceLaRevision(profile, can) && (
+                <p className="text-xs text-muted-foreground" data-testid="revision-suelta-linea">
+                    ¿Prefieres que lo miremos nosotros?{' '}
+                    <button onClick={() => navigate('/dashboard/revision')}
+                        className="underline text-brand hover:text-brand/80 font-medium">
+                        Solicita tu revisión personalizada
+                    </button>.
+                </p>
+            )}
+
+            {/* Y si ya la pagó, en qué punto está: si no, la pantalla de venta le vuelve a
+                ofrecer lo que acaba de comprar. */}
+            {profile?.revision_suelta?.estado === 'pendiente' && (
+                <p className="text-xs text-muted-foreground" data-testid="revision-suelta-pendiente">
+                    Tu revisión personalizada está pagada. La estamos mirando y te avisamos aquí.
+                </p>
+            )}
         </div>
     );
 };

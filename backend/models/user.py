@@ -1079,11 +1079,15 @@ class QuestionnaireSubmit(BaseModel):
     sex: Optional[str] = None  # "hombre" | "mujer"
     training_experience: Optional[str] = None  # cero | principiante | intermedio | avanzado
     birthdate: Optional[str] = None  # YYYY-MM-DD
-    height: Optional[float] = None  # cm
-    weight: float  # kg
+    # CON RANGO, y por lo que costo verlo (18-08): sin el, una altura de 80 se GUARDABA en la
+    # ficha y el error saltaba despues, al devolver el perfil ya escrito -- ese si valida --,
+    # asi que el cliente veia «Revisa el campo height» con el dato malo ya dentro. Los topes
+    # son los mismos que los del perfil, que es el sitio donde acaba el numero.
+    height: Optional[float] = Field(default=None, ge=120, le=230)   # cm
+    weight: float = Field(..., ge=25, le=300)                        # kg
     activity_level: Optional[str] = None  # sedentario | ligero | moderado | activo
     biotype: Optional[str] = None
-    body_fat: float  # %
+    body_fat: float = Field(..., ge=3, le=70)                        # %
     ajustes: Optional[AjustesMacros] = None  # preguntas 5-8 del quiz nuevo
 
     # LO QUE TRAE EL BASICO DEL DOC DEL 18-08. Lo contesta TODO EL MUNDO, no solo quien
