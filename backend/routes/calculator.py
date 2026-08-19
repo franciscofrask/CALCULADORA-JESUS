@@ -2191,7 +2191,9 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
                     "clientes": 1, "usos_calma": 1, "fuente": 1}
     campos = {"_id": 0, "id": 1, "macros": 1, "macros_reales": 1, "veces": 1,
               "usos": 1, "clientes": 1, "usos_calma": 1, "fuente": 1, "menu": 1,
-              "origen": 1, "alimentos": 1, "alimento_ids": 1}
+              # `nombre` es el título que le pone el equipo desde el panel. Sin pedirlo
+              # aquí, la respuesta lo lleva siempre a nulo aunque esté guardado.
+              "origen": 1, "alimentos": 1, "alimento_ids": 1, "nombre": 1}
     candidatos = await db.meal_library.find(q, campos_orden).to_list(_LIBRARY_CANDIDATOS_MAX)
 
     # Las comidas de los menús de Jesús se piden APARTE, y no es un capricho: la
@@ -2397,6 +2399,9 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
             # "clientes" lo que monta la gente. Al cliente se le dice cuál es cuál.
             "de_jesus": c.get("fuente") == "elm_menus",
             "menu_elm": c.get("menu"),
+            # El título que le haya puesto el equipo desde el panel. Estos menús nacen sin
+            # nombre -- son la lista de lo que llevan --, así que casi ninguno lo tiene.
+            "nombre": c.get("nombre"),
             "ajustado": ajustado,
             "cuadrada": bool(ajuste and ajuste.get("cuadrada")),
             "clavado": err <= 0.5,

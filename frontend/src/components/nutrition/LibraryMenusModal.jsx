@@ -16,12 +16,20 @@
  * Esa diferencia sigue existiendo por dentro -- cada tarjeta hace lo suyo al pulsarla --,
  * pero ya no se le pide al cliente que elija primero de qué cajón quiere sacar la comida.
  *
- * EL ORDEN: primero las recetas, después los menús reales. No es capricho ni es alfabético:
- * las recetas son material terminado de Jesús (con su foto y su enlace) y los menús reales
- * son comidas de relleno sacadas de dietas. Ordenar los dos juntos por lo bien que encajan
- * habría sido mejor, y se midió: cuadrar las 159 recetas contra un objetivo cuesta 52 s,
- * así que no se puede hacer mientras el cliente espera. Los menús reales sí llegan ya
- * ordenados por cercanía, porque eso lo hace el servidor.
+ * EL ORDEN: NI UNAS NI OTROS PRIMERO (Francisco, 19-08: «siempre salen primero las recetas
+ * y no quiero eso»). Hasta hoy se pintaban las 159 recetas y detrás los menús reales, así
+ * que para ver un menú de la gente había que bajar toda la lista. Ahora las dos poblaciones
+ * se van alternando en proporción a lo que hay de cada una -- si hay 20 recetas y 100 menús,
+ * sale una receta cada cinco menús --, cada una en su propio orden: los menús reales por
+ * cercanía a tu objetivo (eso lo hace el servidor) y las recetas como vienen del catálogo.
+ *
+ * No se mezclan ordenando los dos juntos por lo bien que encajan, que habría sido lo ideal:
+ * se midió y cuadrar las 159 recetas contra un objetivo cuesta 52 s, así que no se puede
+ * hacer mientras el cliente espera. Alternar no inventa una precisión que no tenemos.
+ *
+ * Y SE PUEDE FILTRAR, que no es lo mismo que separar: «Recetas» es un chip más, al lado de
+ * los momentos del día, y se queda solo con ellas igual que «Cenas» se queda con las cenas.
+ * Por defecto no está puesto y sale todo junto.
  *
  * Y LA CARGA VA EN PARALELO. Antes la biblioteca solo se pedía al entrar en su pestaña y
  * podía tardar más de 30 segundos (Jesús se quedó mirándola). Ahora se pide al abrir, a la
@@ -188,19 +196,48 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
-    const filtrados = textFilter.trim()
-        ? menus.filter(menu => menu.items.some(it => normalizar(it.nombre).includes(normalizar(textFilter))))
-        : menus;
+    // Con el chip «Recetas» puesto, los menús de la gente no salen: es el propio filtro.
+    const soloRecetas = momento === 'recetas';
+    const filtrados = soloRecetas ? []
+        : textFilter.trim()
+            ? menus.filter(menu => normalizar(menu.nombre || '').includes(normalizar(textFilter))
+                || menu.items.some(it => normalizar(it.nombre).includes(normalizar(textFilter))))
+            : menus;
 
     const obj = objetivo || target || { P: 0, H: 0, G: 0 };
 
     const recetasFiltradas = (recetario || []).filter(receta => {
-        if (momento !== 'todos' && !(receta.momentos || []).includes(momento)) return false;
+        if (momento !== 'todos' && !soloRecetas && !(receta.momentos || []).includes(momento)) return false;
         const q = normalizar(textFilter.trim());
         if (!q) return true;
         return normalizar(receta.nombre).includes(q)
             || (receta.alimentos || []).some(a => normalizar(a).includes(q));
     });
+
+    // LA LISTA ÚNICA, ALTERNANDO. Cada elemento sabe de dónde viene y qué número hace
+    // DENTRO DE SU POBLACIÓN: la tarjeta que se pinta es distinta y las pruebas buscan por
+    // ese número (`recetario-menu-3`, `library-menu-3`), que no cambia al mezclarlas.
+    //
+    // El reparto es proporcional: en cada paso entra el que va más atrasado respecto a lo
+    // que le toca. Así ninguna de las dos se queda para el final aunque haya diez veces más
+    // de una que de otra, y el orden interno de cada una se respeta entero.
+    const mostrados = React.useMemo(() => {
+        const recetas = recetasFiltradas.map((dato, i) => ({ tipo: 'receta', dato, i }));
+        const reales = filtrados.map((dato, i) => ({ tipo: 'menu', dato, i }));
+        const salida = [];
+        let a = 0, b = 0;
+        while (a < recetas.length || b < reales.length) {
+            const avanceRecetas = recetas.length ? a / recetas.length : 1;
+            const avanceReales = reales.length ? b / reales.length : 1;
+            if (b >= reales.length || (a < recetas.length && avanceRecetas <= avanceReales)) {
+                salida.push(recetas[a++]);
+            } else {
+                salida.push(reales[b++]);
+            }
+        }
+        return salida;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recetasFiltradas, filtrados]);
 
     const aplicar = async (menu) => {
         if (applying) return;
@@ -248,7 +285,14 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
         await onApply(menu);
     };
 
-    const chips = ['todos', ...recetarioMomentos];
+    // «Recetas» es un chip más, al lado de los momentos (Francisco, 19-08). No separa la
+    // lista: solo se queda con las recetas, igual que «Cenas» se queda con las cenas.
+    //
+    // Está SIEMPRE, no solo cuando ya han llegado los menús de la gente. Si apareciera y
+    // desapareciera según la carga, quien lo hubiera pulsado se quedaba con el filtro
+    // puesto y sin el botón para quitarlo: la lista se le quedaba en recetas y parecía que
+    // los menús habían desaparecido.
+    const chips = ['todos', 'recetas', ...recetarioMomentos];
 
     return (
         <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -289,7 +333,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                             <button key={m}
                                 className={`px-2.5 py-1 text-xs font-bold rounded-full border transition-colors ${momento === m ? 'bg-brand text-white border-brand' : 'bg-muted text-muted-foreground border-border'}`}
                                 onClick={() => setMomento(m)} data-testid={`recetario-momento-${m}`}>
-                                {m === 'todos' ? 'Todas' : (MOMENTO_LABEL[m] || m)}
+                                {m === 'todos' ? 'Todas' : m === 'recetas' ? 'Recetas' : (MOMENTO_LABEL[m] || m)}
                             </button>
                         ))}
                     </div>
@@ -378,7 +422,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                             <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-orange border-t-transparent mb-4" />
                             <p className="text-muted-foreground">Cargando los menús...</p>
                         </div>
-                    ) : (recetasFiltradas.length + filtrados.length) === 0 && !loading ? (
+                    ) : mostrados.length === 0 && !loading ? (
                         /* Vacío de verdad: no hay ni recetas ni menús que enseñar. Se
                            distingue el porqué, que no es lo mismo «no hay nada con esa
                            palabra» que «la biblioteca no está preparada» (punto 10.3). */
@@ -404,7 +448,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 contaba lo suyo, y el cliente no tenía forma de saber
                                 cuántas opciones tenía en total. */}
                             <p className="text-xs text-muted-foreground" data-testid="menus-recuento">
-                                <span className="font-bold text-foreground">{recetasFiltradas.length + filtrados.length}</span>
+                                <span className="font-bold text-foreground">{mostrados.length}</span>
                                 {' '}para elegir
                                 {recetasFiltradas.length > 0 && filtrados.length > 0
                                     ? ` · ${recetasFiltradas.length} recetas y ${filtrados.length} menús ya cuadrados`
@@ -415,7 +459,11 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                 <p className="text-xs text-amber-500 font-medium">{error || recetarioError}</p>
                             )}
 
-                            {recetasFiltradas.map((receta, index) => (
+                            {mostrados.map((fila) => {
+                                const index = fila.i;
+                                if (fila.tipo === 'receta') {
+                                    const receta = fila.dato;
+                                    return (
                                     <button key={receta.id}
                                         className="w-full text-left bg-card rounded-2xl shadow-md hover:shadow-lg hover:ring-1 hover:ring-brand-orange/40 transition-all disabled:opacity-60 overflow-hidden"
                                         onClick={() => aplicarReceta(receta)} disabled={!!aplicandoId}
@@ -468,13 +516,21 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                         </p>
                                         </div>
                                     </button>
-                                ))}
-
-                            {filtrados.map((menu, index) => (
+                                    );
+                                }
+                                const menu = fila.dato;
+                                return (
                                     <button key={menu.biblioteca_id}
                                         className="w-full text-left p-4 bg-card rounded-2xl shadow-md hover:shadow-lg hover:ring-1 hover:ring-brand-orange/40 transition-all disabled:opacity-60"
                                         onClick={() => aplicar(menu)} disabled={applying}
                                         data-testid={`library-menu-${index}`}>
+                                        {/* El título que le haya puesto el equipo desde el
+                                            panel. Casi ninguno lo tiene -- estos menús son
+                                            la lista de lo que llevan --, así que solo se
+                                            reserva sitio cuando existe. */}
+                                        {menu.nombre && (
+                                            <h3 className="font-bold text-foreground text-lg lg:text-sm leading-snug mb-1.5">{menu.nombre}</h3>
+                                        )}
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                             <MacroTrio macros={verReales ? menu.macros_reales : menu.macros_metodo} />
                                             <div className="flex items-center gap-1.5">
@@ -544,7 +600,8 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                             </p>
                                         </div>
                                     </button>
-                                ))}
+                                );
+                            })}
 
                             {/* La biblioteca llega después que las recetas y puede tardar:
                                 se dice al pie, sin tapar lo que ya se puede elegir. */}

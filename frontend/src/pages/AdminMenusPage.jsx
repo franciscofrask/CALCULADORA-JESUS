@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
-import { Utensils, Plus, Pencil, Trash2, Loader2, Save, X } from 'lucide-react';
+import { Utensils, Plus, Pencil, Trash2, Loader2, Save, X, Search } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
 
 const MOMENTOS = ['desayuno', 'comida', 'merienda', 'cena'];
@@ -97,12 +97,221 @@ function FoodPicker({ api, nombre, onPick }) {
     );
 }
 
+// LOS MENÚS DE LA GENTE (Francisco, 19-08: «los menús de la gente quiero que salgan en el
+// panel también, ahora solo se ven los de las recetas»).
+//
+// Al cliente se le proponen dos cosas en «Elige tu menú»: las recetas de aquí arriba
+// (`menu_templates`) y las 266.000 comidas cosechadas de las dietas reales
+// (`meal_library`). Las segundas no se veían en ningún sitio, así que nadie podía corregir
+// una cantidad absurda ni retirar un menú que no debería proponerse. Ahora se ven, se
+// editan y se borran, con su buscador y por páginas: son demasiados para una lista.
+const PageMenusDeLaGente = ({ api, confirm }) => {
+    const [datos, setDatos] = useState({ menus: [], total: 0, pagina: 1, paginas: 0 });
+    const [cargando, setCargando] = useState(true);
+    const [busqueda, setBusqueda] = useState('');
+    const [texto, setTexto] = useState('');
+    const [momentos, setMomentos] = useState([]);
+    const [momento, setMomento] = useState('');
+    const [pagina, setPagina] = useState(1);
+    const [edit, setEdit] = useState(null);
+    const [guardando, setGuardando] = useState(false);
+
+    const cargar = async () => {
+        setCargando(true);
+        try {
+            const r = await api.get('/admin/biblioteca-menus', {
+                params: { q: busqueda, tipo_comida: momento, pagina },
+            });
+            setDatos(r.data || { menus: [], total: 0, pagina: 1, paginas: 0 });
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudieron cargar los menús')); }
+        finally { setCargando(false); }
+    };
+    useEffect(() => { cargar(); }, [busqueda, momento, pagina]); // eslint-disable-line
+    useEffect(() => {
+        api.get('/admin/biblioteca-menus/momentos')
+            .then(r => setMomentos(r.data?.momentos || []))
+            .catch(() => { });
+    }, []); // eslint-disable-line
+
+    // El buscador espera a que se deje de teclear: cada letra es una consulta contra
+    // 266.000 documentos.
+    useEffect(() => {
+        const t = setTimeout(() => { setPagina(1); setBusqueda(texto.trim()); }, 400);
+        return () => clearTimeout(t);
+    }, [texto]);
+
+    const guardar = async () => {
+        const alimentos = (edit.alimentos || []).filter(a => a.alimento_id && Number(a.cantidad_g) > 0);
+        if (!alimentos.length) { toast.error('El menú tiene que llevar al menos un alimento con su cantidad'); return; }
+        setGuardando(true);
+        try {
+            await api.put(`/admin/biblioteca-menus/${edit.id}`, {
+                alimentos: alimentos.map(a => ({ alimento_id: a.alimento_id, cantidad_g: Number(a.cantidad_g) })),
+                tipo_comida: edit.tipo_comida,
+                nombre: (edit.nombre || '').trim(),
+            });
+            toast.success('Menú actualizado');
+            setEdit(null);
+            cargar();
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo guardar')); }
+        finally { setGuardando(false); }
+    };
+
+    const borrar = async (m) => {
+        if (!await confirm({
+            title: '¿Borrar este menú de la biblioteca?',
+            description: `${(m.alimentos || []).map(a => a.nombre).join(', ')}. Deja de proponerse a los clientes.`,
+            confirmLabel: 'Borrar', danger: true,
+        })) return;
+        try { await api.delete(`/admin/biblioteca-menus/${m.id}`); toast.success('Menú borrado'); cargar(); }
+        catch (e) { toast.error(mensajeDeError(e, 'No se pudo borrar')); }
+    };
+
+    const gente = (m) => (m.clientes > 1 ? `${m.clientes} personas lo montan`
+        : m.clientes === 1 ? 'Lo monta una persona'
+            : m.origen === 'variante' ? 'Variante de un menú real' : 'Sin uso todavía');
+
+    return (
+        <>
+            <div className="flex flex-wrap gap-2 items-center">
+                <div className="relative flex-1 min-w-[220px]">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <Input value={texto} onChange={e => setTexto(e.target.value)}
+                        placeholder="Buscar por alimento (pollo, avena...)"
+                        className="pl-8 bg-[#0A0A0A] border-[#333] text-white h-9"
+                        data-testid="biblioteca-buscar" />
+                </div>
+                <select value={momento} onChange={e => { setPagina(1); setMomento(e.target.value); }}
+                    className="bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2"
+                    data-testid="biblioteca-momento">
+                    <option value="">Todos los momentos</option>
+                    {momentos.map(m => <option key={m.tipo_comida} value={m.tipo_comida}>{m.tipo_comida} ({m.n})</option>)}
+                </select>
+            </div>
+
+            <p className="text-white/40 text-sm">
+                {cargando ? 'Buscando...' : <>
+                    <span className="text-white font-semibold">{datos.total.toLocaleString('es-ES')}</span>
+                    {' '}menús de la gente{busqueda ? ` con «${busqueda}»` : ''}
+                    {datos.paginas > 1 ? ` · página ${datos.pagina} de ${datos.paginas}` : ''}
+                </>}
+            </p>
+
+            {cargando ? (
+                <div className="animate-pulse space-y-3"><div className="h-16 bg-[#111] rounded-xl" /><div className="h-16 bg-[#111] rounded-xl" /></div>
+            ) : (
+                <div className="grid md:grid-cols-2 gap-3">
+                    {datos.menus.map(m => (
+                        <Card key={m.id} className="bg-[#111] border-[#222]"><CardContent className="p-4 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="text-white/40 text-xs">{m.tipo_comida} · {gente(m)}</p>
+                                {m.nombre && <p className="text-white font-medium mt-0.5">{m.nombre}</p>}
+                                <ul className="mt-1 space-y-0.5">
+                                    {(m.alimentos || []).map((a, i) => (
+                                        <li key={i} className="text-white text-sm">
+                                            <span className="text-[#FF671F] font-semibold">{Math.round(a.cantidad_g)} g</span> {a.nombre}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <p className="text-white/40 text-xs mt-1.5">
+                                    {['P', 'H', 'G'].map(k => `${coma(m.macros?.[k] ?? 0)} ${k}`).join(' · ')}
+                                </p>
+                            </div>
+                            <div className="flex gap-1 flex-shrink-0">
+                                <button onClick={() => setEdit({ ...m, alimentos: (m.alimentos || []).map(a => ({ ...a })) })}
+                                    className="text-white/40 hover:text-white p-1" data-testid={`biblioteca-editar-${m.id}`}><Pencil className="w-4 h-4" /></button>
+                                <button onClick={() => borrar(m)} className="text-white/40 hover:text-red-400 p-1"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                        </CardContent></Card>
+                    ))}
+                    {datos.menus.length === 0 && (
+                        <p className="text-white/40 text-sm">No hay ningún menú con eso. Prueba con otro alimento.</p>
+                    )}
+                </div>
+            )}
+
+            {datos.paginas > 1 && (
+                <div className="flex items-center justify-center gap-2">
+                    <Button variant="outline" disabled={datos.pagina <= 1} onClick={() => setPagina(p => p - 1)}
+                        className="border-[#333] text-white">Anterior</Button>
+                    <span className="text-white/40 text-sm">{datos.pagina} / {datos.paginas}</span>
+                    <Button variant="outline" disabled={datos.pagina >= datos.paginas} onClick={() => setPagina(p => p + 1)}
+                        className="border-[#333] text-white">Siguiente</Button>
+                </div>
+            )}
+
+            <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
+                <DialogContent className="bg-[#111] border-[#222] text-white max-w-xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader><DialogTitle>Editar el menú de la gente</DialogTitle></DialogHeader>
+                    {edit && (
+                        <div className="space-y-3">
+                            <p className="text-white/40 text-xs">
+                                Los macros se recalculan solos con lo que pongas aquí: son los que deciden a
+                                quién se le propone este menú.
+                            </p>
+                            <div><Label className="text-white/60 text-xs">Título (opcional)</Label>
+                                <Input value={edit.nombre || ''} onChange={e => setEdit(x => ({ ...x, nombre: e.target.value }))}
+                                    className="bg-[#0A0A0A] border-[#333] text-white"
+                                    placeholder="Ej. Pollo con arroz y ensalada"
+                                    data-testid="biblioteca-titulo" />
+                                <p className="text-white/30 text-[11px] mt-1">
+                                    Si le pones uno, es el que ve el cliente en su tarjeta. Sin título sale
+                                    la lista de lo que lleva, como hasta ahora.
+                                </p>
+                            </div>
+                            <div><Label className="text-white/60 text-xs">Momento</Label>
+                                <select value={edit.tipo_comida || ''} onChange={e => setEdit(x => ({ ...x, tipo_comida: e.target.value }))}
+                                    className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2">
+                                    {momentos.map(m => <option key={m.tipo_comida} value={m.tipo_comida}>{m.tipo_comida}</option>)}
+                                </select></div>
+                            <div>
+                                <Label className="text-white/60 text-xs">Alimentos y cantidades</Label>
+                                <div className="space-y-1.5 mt-1">
+                                    {(edit.alimentos || []).map((a, idx) => (
+                                        <div key={idx} className="grid grid-cols-12 gap-1.5 items-center">
+                                            <div className="col-span-8">
+                                                <FoodPicker api={api} nombre={a.nombre}
+                                                    onPick={(f) => setEdit(x => ({
+                                                        ...x, alimentos: x.alimentos.map((y, i) => i === idx
+                                                            ? { ...y, alimento_id: f.id, nombre: f.nombre } : y),
+                                                    }))} />
+                                            </div>
+                                            <Input type="number" min="1" value={a.cantidad_g ?? ''}
+                                                onChange={e => setEdit(x => ({
+                                                    ...x, alimentos: x.alimentos.map((y, i) => i === idx
+                                                        ? { ...y, cantidad_g: e.target.value } : y),
+                                                }))}
+                                                className="col-span-3 bg-[#0A0A0A] border-[#333] text-white text-xs h-9" placeholder="g" />
+                                            <button onClick={() => setEdit(x => ({ ...x, alimentos: x.alimentos.filter((_, i) => i !== idx) }))}
+                                                className="col-span-1 text-white/30 hover:text-red-400"><X className="w-4 h-4" /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <Button variant="outline" onClick={() => setEdit(x => ({ ...x, alimentos: [...(x.alimentos || []), { alimento_id: null, nombre: '', cantidad_g: '' }] }))}
+                                    className="mt-2 border-[#333] text-white text-xs h-8"><Plus className="w-3 h-3 mr-1" />Añadir alimento</Button>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setEdit(null)} className="text-white/60">Cancelar</Button>
+                        <Button onClick={guardar} disabled={guardando} className="bg-[#FF671F] text-white">
+                            {guardando ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}Guardar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+};
+
 const AdminMenusPage = () => {
     const { api } = useAuth();
     const { confirm } = useConfirm();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filtro, setFiltro] = useState('todos');
+    // De qué población se está mirando: las recetas del recetario o los menús de la gente.
+    const [fuente, setFuente] = useState('recetas');
     const [modal, setModal] = useState({ open: false, item: null });
     const [form, setForm] = useState(EMPTY);
     const [saving, setSaving] = useState(false);
@@ -239,13 +448,13 @@ const AdminMenusPage = () => {
             <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-2" style={{ fontFamily: 'Barlow Condensed' }}>
-                        <Utensils className="w-6 h-6 text-[#FF671F]" /> MENÚS PREESTABLECIDOS
+                        <Utensils className="w-6 h-6 text-[#FF671F]" /> MENÚS
                     </h1>
                     {/* EL TÍTULO CUENTA LO MISMO QUE LAS PESTAÑAS (#67 del 15-08: «30 + 56 +
                         17 + 56 = 159, y arriba pone 103 recetas»). Las pestañas cuentan
                         fichas, así que el número de delante son fichas; las recetas van
                         detrás, explicadas. */}
-                    {!loading && items.length > 0 && (
+                    {fuente === 'recetas' && !loading && items.length > 0 && (
                         <p className="text-white/40 text-sm mt-1">
                             {items.length} {items.length === 1 ? 'ficha' : 'fichas'}
                             {items.length !== recetas
@@ -253,9 +462,32 @@ const AdminMenusPage = () => {
                                 : ''}
                         </p>
                     )}
+                    {fuente === 'gente' && (
+                        <p className="text-white/40 text-sm mt-1">
+                            Las comidas sacadas de las dietas reales. Son las que el cliente ve junto a
+                            las recetas cuando pide un menú.
+                        </p>
+                    )}
                 </div>
-                <Button onClick={openNew} className="bg-[#FF671F] text-white"><Plus className="w-4 h-4 mr-1" />Nuevo menú</Button>
+                {fuente === 'recetas' && (
+                    <Button onClick={openNew} className="bg-[#FF671F] text-white"><Plus className="w-4 h-4 mr-1" />Nuevo menú</Button>
+                )}
             </div>
+
+            {/* De dónde: el recetario o la biblioteca de la gente. Son dos poblaciones muy
+                distintas de tamaño -- 159 contra 266.000 --, así que aquí sí se miran por
+                separado; en la pantalla del cliente van juntas. */}
+            <div className="flex flex-wrap gap-1.5">
+                {[['recetas', 'Recetas'], ['gente', 'Menús de la gente']].map(([v, etiqueta]) => (
+                    <button key={v} onClick={() => setFuente(v)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors ${fuente === v ? 'bg-[#FF671F] text-white' : 'bg-[#111] text-white/50 border border-[#222] hover:text-white'}`}
+                        data-testid={`admin-menus-fuente-${v}`}>
+                        {etiqueta}
+                    </button>
+                ))}
+            </div>
+
+            {fuente === 'gente' ? <PageMenusDeLaGente api={api} confirm={confirm} /> : (<>
 
             {/* Filtro por momento */}
             <div className="flex flex-wrap gap-1.5">
@@ -290,6 +522,7 @@ const AdminMenusPage = () => {
                     {mostrados.length === 0 && <p className="text-white/40 text-sm">No hay menús en este momento. Crea el primero.</p>}
                 </div>
             )}
+            </>)}
 
             <Dialog open={modal.open} onOpenChange={(o) => setModal(m => ({ ...m, open: o }))}>
                 <DialogContent className="bg-[#111] border-[#222] text-white max-w-xl max-h-[90vh] overflow-y-auto">
