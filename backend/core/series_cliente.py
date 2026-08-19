@@ -92,8 +92,18 @@ def actual(serie: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
 
     Un pesaje del futuro no es el peso de nadie. Si algun dia hace falta programar algo a
     futuro, sera con otro campo y a proposito.
+
+    EL «HOY» ES EL DE ESPAÑA (19-08), no el del reloj del servidor. Toda la app fecha en hora
+    de España -- `hoy_madrid()` --, asi que entre las 00:00 y las 02:00 de aqui el servidor
+    todavia esta en el dia anterior y un dato apuntado en esa franja quedaba «en el futuro»:
+    se guardaba en la serie y a la vez BORRABA el campo que lee el resto de la app, porque
+    esta funcion no encontraba ningun punto valido y devolvia None. Visto con un cliente real:
+    su porcentaje de grasa entraba en la serie con fecha de hoy y su ficha se quedaba sin
+    porcentaje de grasa, que es justo lo que hace falta para calcularle los macros.
     """
-    hoy = datetime.now().strftime("%Y-%m-%d")
+    from core.tiempo import hoy_madrid
+
+    hoy = hoy_madrid().isoformat()
     puntos = [x for x in (serie or [])
               if x.get("valor") is not None and x.get("fecha") and _dia(x.get("fecha")) <= hoy]
     if not puntos:

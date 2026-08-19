@@ -1253,10 +1253,19 @@ const QuestionnairePage = () => {
     // Se compara contra el modo anterior en un ref (y no con la lista de dependencias) porque
     // este componente ya reinicia `idx` por otras vias y un setState suelto en un efecto se
     // encadenaba con ellas.
-    const modoAnteriorRef = useRef(modoAjuste);
+    // SE MIRA EL RECORRIDO, NO EL MODO (19-08). Estaba atado a `modoAjuste`, y ese cambia
+    // solo al ENVIAR -- en cuanto se marca que el cuestionario ya está mandado --, aunque las
+    // pantallas sean exactamente las mismas. Resultado en la pasada de «nos faltan cosas
+    // tuyas»: el cliente contestaba las quince, pulsaba «Calcular mis macros», sus respuestas
+    // se guardaban... y la pantalla volvía a la primera pregunta en vez de enseñarle sus
+    // macros. Comparando la lista de pasos, el reinicio solo ocurre cuando de verdad es otro
+    // cuestionario.
+    const recorridoAnteriorRef = useRef(null);
     useEffect(() => {
-        if (modoAnteriorRef.current !== modoAjuste) {
-            modoAnteriorRef.current = modoAjuste;
+        const firma = flow.map(s => s.key || s.type).join('|');
+        if (recorridoAnteriorRef.current === null) { recorridoAnteriorRef.current = firma; return; }
+        if (recorridoAnteriorRef.current !== firma) {
+            recorridoAnteriorRef.current = firma;
             setIdx(0);
         }
     });
@@ -1635,6 +1644,12 @@ const QuestionnairePage = () => {
         if (s.type === 'fotos_medidas' && yaTieneMedidas && yaTieneFotos) return false;
         return !s.cond || s.cond(answersRef.current);
     };
+    // Solo en desarrollo: deja a mano el recorrido y en qué paso va, para poder mirar desde
+    // la consola por qué una pantalla no avanza. En producción no se ejecuta.
+    if (process.env.NODE_ENV === 'development') {
+        window.__quiz = { idx, pasos: flow.map(s => s.key || s.type), respuestas: answersRef.current };
+    }
+
     // PEDIR «SIGUIENTE» EN LA ÚLTIMA PANTALLA ES HABER TERMINADO.
     //
     // `goNext` se topaba con el final de la lista y se quedaba donde estaba, en silencio. Con
