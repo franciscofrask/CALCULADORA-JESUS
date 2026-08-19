@@ -12,6 +12,8 @@ editan y se borran. Al editar se recalculan los macros desde los alimentos, con 
 varas que usa la app: la del método (`macros`, que es la que decide si un menú cuadra) y
 la de la etiqueta (`macros_reales`, la que se enseña en «Reales»).
 """
+import re
+import unicodedata
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -23,6 +25,20 @@ router = APIRouter(prefix="/admin/biblioteca-menus", tags=["biblioteca-menus"])
 
 # Cuántos caben en una página. Con 266.000 documentos, traerlos todos tumba la pantalla.
 POR_PAGINA = 40
+
+# BUSCAR SIN PONER LAS TILDES. Nadie escribe «salmón» con tilde en un buscador, y el
+# catálogo sí las lleva: buscando «salmon» salían cero resultados aunque hubiera cientos de
+# menús con salmón. Mongo no aplica la intercalación del idioma a las expresiones
+# regulares, así que la tolerancia se construye en el propio patrón.
+_LETRAS = {"a": "[aáàäâ]", "e": "[eéèëê]", "i": "[iíìïî]", "o": "[oóòöô]",
+           "u": "[uúùüû]", "n": "[nñ]", "c": "[cç]"}
+
+
+def _como_lo_escriba(termino: str) -> str:
+    """El término convertido en un patrón que encuentra la palabra con y sin tildes."""
+    plano = "".join(c for c in unicodedata.normalize("NFD", termino.lower())
+                    if unicodedata.category(c) != "Mn")
+    return "".join(_LETRAS.get(c, re.escape(c)) for c in plano)
 
 
 def _macros_de(alimentos: list, foods: dict) -> tuple:
@@ -90,10 +106,11 @@ async def listar(q: str = "", tipo_comida: str = "", origen: str = "",
         # Se busca el alimento en el catálogo y luego los menús que lo llevan: la
         # colección tiene índice por `alimento_ids`, así que esto va por índice y no
         # recorre los 266.000 documentos.
+        patron = _como_lo_escriba(termino)
         ids = [f["id"] async for f in db.foods.find(
-            {"nombre": {"$regex": termino, "$options": "i"}}, {"_id": 0, "id": 1}).limit(60)]
+            {"nombre": {"$regex": patron, "$options": "i"}}, {"_id": 0, "id": 1}).limit(60)]
         # Y por el título que le haya puesto el equipo, si lo tiene.
-        por_titulo = {"nombre": {"$regex": termino, "$options": "i"}}
+        por_titulo = {"nombre": {"$regex": patron, "$options": "i"}}
         filtro["$or"] = [{"alimento_ids": {"$in": ids}}, por_titulo] if ids else [por_titulo]
 
     total = await db.meal_library.count_documents(filtro)
