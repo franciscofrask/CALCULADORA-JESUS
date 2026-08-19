@@ -1022,8 +1022,18 @@ const QuestionnairePage = () => {
     // macros, así que los definitivos caen a mitad de esa primera semana.
     const arranque = useMemo(() => {
         const inicio = profile?.current_period_start;
-        if (!inicio) return null;
-        const lunes = new Date(inicio);
+        // SI NO TIENE CICLO GUARDADO, SE CALCULA IGUAL. Ese campo lo escribe el cobro por
+        // Stripe, así que el que entró de otra forma -- los de Calma, las altas a mano -- se
+        // quedaba con el «empiezas siempre un lunes» sin fecha, que es lo que el documento
+        // manda quitar. La regla es la misma que aplica el servidor: el lunes que viene, y si
+        // faltan menos de 48 horas, el siguiente.
+        const lunes = inicio ? new Date(inicio) : (() => {
+            const hoy = new Date();
+            const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+            d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));   // el próximo lunes
+            if ((d - hoy) < 48 * 3600 * 1000) d.setDate(d.getDate() + 7);
+            return d;
+        })();
         if (isNaN(lunes)) return null;
         const jueves = new Date(lunes.getTime() + 3 * 24 * 3600 * 1000);
         const comoSeDice = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
