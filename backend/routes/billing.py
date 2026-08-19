@@ -253,13 +253,22 @@ async def get_renovacion(user=Depends(get_current_user)):
     ajustes = await _dias_con_ajuste(perfil["id"], d0)
     catalogo = merged_catalog(await _overrides_by_code())
 
+    # Los pesos que viajaron dentro de un ajuste. La mayoria de los clientes de Calma NO tienen
+    # serie de peso -- se importaron antes de que existiera -- y sin esto su tarjeta de
+    # renovacion salia sin peso y sin cambio mientras «Mis macros» le pintaba la curva entera.
+    apuntes_de_peso = await db.macro_history.find(
+        {"client_id": perfil["id"]},
+        {"_id": 0, "effective_date": 1, "created_at": 1, "peso": 1, "client_weight": 1},
+    ).sort([("effective_date", 1)]).to_list(2000)
+
     return montar_renovacion(
         perfil=perfil,
         catalogo=catalogo,
         opciones_catalogo=opciones_de_renovacion(perfil.get("plan"), catalogo),
         resumen=resumen_del_ciclo(
             reporte_primero=primero, reporte_ultimo=ultimo, perfil=perfil,
-            dias_dieta=dias_dieta, dias_totales=dias_totales, ajustes_de_macros=ajustes),
+            dias_dieta=dias_dieta, dias_totales=dias_totales, ajustes_de_macros=ajustes,
+            apuntes_de_peso=apuntes_de_peso),
     )
 
 

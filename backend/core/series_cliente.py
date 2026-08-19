@@ -112,6 +112,39 @@ def actual(serie: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
     return {"valor": ultimo["valor"], "fecha": _dia(ultimo.get("fecha"))}
 
 
+def curva_de_peso(serie: Optional[List[Dict[str, Any]]],
+                  apuntes: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Todos los pesajes del cliente ordenados por dia: [{'fecha', 'peso'}, ...].
+
+    UNA SOLA CURVA PARA TODA LA APP (19-08). «Mis macros» ya la montaba asi -- la serie mas
+    los pesos que viajaron dentro de un ajuste y nunca llegaron a la serie, que son casi todos
+    los de Calma --, pero la tarjeta de renovacion miraba solo la serie y los reportes. Con un
+    cliente que se habia movido 41 kg entre marzo y agosto, «Mis macros» pintaba la curva
+    entera y la renovacion resumia el ciclo sin peso y sin cambio. Dos pantallas de la misma
+    app contando cosas distintas del mismo cliente.
+
+    `apuntes` son las filas de macro_history (o cualquier lista con `fecha`/`peso`). El peso
+    se sanea igual que en el panel del entrenador: en produccion hay ajustes viejos con 0,0 kg,
+    con un porcentaje de grasa metido donde va el peso y con errores de coma.
+    """
+    from core.tiempo import hoy_madrid
+
+    hoy = hoy_madrid().isoformat()
+    por_dia: Dict[str, float] = {}
+    for p in (serie or []):
+        fecha, valor = _dia(p.get("fecha")), sanea_peso(p.get("valor"))
+        if fecha and valor is not None and fecha <= hoy:
+            por_dia[fecha] = valor
+    for a in (apuntes or []):
+        fecha = _dia(a.get("fecha") or a.get("effective_date") or a.get("created_at"))
+        crudo = a.get("peso") if a.get("peso") is not None else a.get("client_weight")
+        valor = sanea_peso(crudo)
+        # La serie manda: si ese dia ya tiene pesaje propio, el del ajuste no lo pisa.
+        if fecha and valor is not None and fecha <= hoy and fecha not in por_dia:
+            por_dia[fecha] = valor
+    return [{"fecha": f, "peso": p} for f, p in sorted(por_dia.items())]
+
+
 async def _anotar(cual, client_id: Optional[str], valor: Any,
                   fecha: Optional[str] = None, origen: Optional[str] = None) -> Optional[float]:
     """Mete un valor en la serie y deja el campo 'actual' en el ultimo de la serie.

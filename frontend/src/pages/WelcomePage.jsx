@@ -18,6 +18,17 @@ const getH = (m) => m?.carbs || m?.hidratos || 0;
 const getG = (m) => m?.fat || m?.grasas || 0;
 const getKcal = (m) => Math.round(getP(m) * 4 + getH(m) * 4 + getG(m) * 9);
 
+// UNA FECHA «2026-08-24» ES UN DÍA, NO UN INSTANTE. `new Date('2026-08-24')` la lee como
+// medianoche en Londres, y al pintarla en la hora del navegador puede retroceder al día
+// anterior: la pantalla decía «lunes 23» con el 24 guardado. Se parte a mano y no se
+// convierte nada.
+const MESES_DEL_ANO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+    'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const diaDelMes = (iso) => {
+    const [, mes, dia] = String(iso).slice(0, 10).split('-');
+    return `${Number(dia)} de ${MESES_DEL_ANO[Number(mes) - 1] || ''}`.trim();
+};
+
 const MacroPill = ({ label, value, color }) => (
     <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-[#222222] bg-card px-4 py-5 flex-1 min-w-[92px]">
         <span className="font-data font-extrabold text-3xl md:text-4xl leading-none" style={{ color }}>{Math.round(value)}</span>
@@ -28,8 +39,31 @@ const MacroPill = ({ label, value, color }) => (
 
 const WelcomePage = () => {
     const navigate = useNavigate();
-    const { user, profile } = useAuth();
+    const { user, profile, api, refreshProfile } = useAuth();
     const { startTour, skipTour, available: recorridoDisponible } = useOnboarding();
+
+    // LA VUELTA DE LA PASARELA (19-08). El ajuste a medida de 87 € manda aquí con
+    // `?ajuste=ok&session_id=...`, y aquí no lo miraba nadie: el cliente pagaba, Stripe
+    // cobraba y su ficha se quedaba en «iniciado» -- sin la cola del lunes, sin aviso al
+    // equipo y sin abrirle el cuestionario completo. En local no hay webhook que lo salve,
+    // y en producción tampoco se puede depender solo de él: por eso existe esta llamada.
+    // Comprobado pagando de verdad en el entorno de prueba de Stripe.
+    const [avisandoDelPago, setAvisandoDelPago] = React.useState(false);
+    React.useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const sesion = params.get('session_id');
+        if (!sesion) return;
+        setAvisandoDelPago(true);
+        api.post('/billing/checkout-session/sync', { session_id: sesion })
+            .then(() => refreshProfile && refreshProfile())
+            .catch((e) => console.error('[pago] no se pudo confirmar la sesión', e))
+            .finally(() => {
+                setAvisandoDelPago(false);
+                // La dirección se limpia para que recargar no vuelva a lanzar la confirmación.
+                window.history.replaceState({}, '', window.location.pathname);
+            });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const beginTour = () => {
         navigate('/dashboard');
@@ -59,6 +93,21 @@ const WelcomePage = () => {
 
             <div className="flex-1 flex items-center justify-center p-6 relative z-10">
                 <div className="w-full max-w-xl text-center">
+                    {/* Mientras se confirma el pago, que sepa que estamos en ello: si no, ve
+                        su pantalla de siempre y no sabe si su dinero ha llegado. */}
+                    {avisandoDelPago && (
+                        <p className="caption text-brand mb-2" data-testid="confirmando-pago">
+                            Confirmando tu pago...
+                        </p>
+                    )}
+                    {!avisandoDelPago && profile?.ajuste_a_medida?.cobrado && (
+                        <p className="caption text-brand mb-2" data-testid="ajuste-pagado">
+                            Tu ajuste a medida está pagado. Lo preparamos para el lunes
+                            {profile.ajuste_a_medida.para_el_lunes
+                                ? ` ${diaDelMes(profile.ajuste_a_medida.para_el_lunes)}`
+                                : ''}.
+                        </p>
+                    )}
                     <p className="caption text-brand mb-2">Todo listo{firstName ? `, ${firstName}` : ''}</p>
                     <h1 className="font-heading font-bold text-4xl md:text-5xl uppercase tracking-tight text-foreground mb-3 leading-none">
                         Tus macros están calculados

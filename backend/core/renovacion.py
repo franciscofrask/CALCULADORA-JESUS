@@ -64,14 +64,35 @@ def resumen_del_ciclo(*, reporte_primero: Optional[Dict[str, Any]],
                       reporte_ultimo: Optional[Dict[str, Any]],
                       perfil: Dict[str, Any],
                       dias_dieta: int, dias_totales: int,
-                      ajustes_de_macros: int) -> Dict[str, Any]:
+                      ajustes_de_macros: int,
+                      apuntes_de_peso: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Lo que ha conseguido en estas 12 semanas. Es lo primero que ve.
 
     El peso va en porcentaje, igual que en el informe mensual: medio kilo no significa
     lo mismo en alguien de 60 kg que en alguien de 120.
     """
+    # EL PESO DE AHORA SALE DE SU SERIE, no del ultimo reporte (19-08).
+    #
+    # La serie es donde caen TODOS los pesajes vengan de donde vengan -- del reporte, de la
+    # calculadora, del ajuste del coach -- y es de donde lee «Mis macros» (punto 30). Mirando
+    # solo el ultimo reporte pasaban dos cosas: al que se peso despues de su ultimo reporte se
+    # le resumia el ciclo con un peso viejo, y al que no tiene ningun reporte -- pero si
+    # pesajes -- se le enseñaba el resumen sin peso y con «0 kg» de cambio.
+    # Y es LA MISMA CURVA que pinta «Mis macros» -- serie mas los pesos que viajaron dentro de
+    # un ajuste --, no solo la serie: si no, dos pantallas de la misma app cuentan cosas
+    # distintas del mismo cliente. Y si no hay ni eso -- perfiles de antes de que existiera la
+    # serie -- queda el peso suelto de la ficha, que es el que el cliente ve en su pantalla.
+    from core.series_cliente import curva_de_peso
+
+    curva = curva_de_peso((perfil or {}).get("pesos"), apuntes_de_peso)
     p0 = (reporte_primero or {}).get("weight")
-    p1 = (reporte_ultimo or {}).get("weight")
+    p1 = ((curva[-1]["peso"] if curva else None)
+          or (reporte_ultimo or {}).get("weight")
+          or (perfil or {}).get("weight"))
+    # Y sin reporte de partida, el primer pesaje suyo hace de «antes»: es el mismo dato y es
+    # mejor que no enseñarle nada.
+    if not p0 and curva:
+        p0 = curva[0]["peso"]
     cambio_pct = None
     if p0 and p1 and p0 > 0:
         cambio_pct = round((p1 - p0) / p0 * 100, 1)

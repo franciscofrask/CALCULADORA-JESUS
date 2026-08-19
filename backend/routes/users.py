@@ -1463,19 +1463,15 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
     # que pintaba el peso crudo, y en produccion los ajustes viejos traen 0,0 kg, un 0,433 (un
     # porcentaje de grasa metido donde va el peso) y errores de coma de tres cifras. El coach
     # veia la curva limpia y el cliente, en «Mis macros», veia la sucia. Jesus, 12-08.
-    from core.series_cliente import sanea_peso
+    # La curva la monta `curva_de_peso`, la misma que usa la tarjeta de renovacion: aqui habia
+    # una copia y las dos pantallas se separaron (19-08).
+    from core.series_cliente import curva_de_peso, sanea_peso
     hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    pesos: Dict[str, float] = {}
-    for p in (profile.get("pesos") or []):
-        fecha, valor = str(p.get("fecha") or "")[:10], sanea_peso(p.get("valor"))
-        if fecha and fecha <= hoy and valor is not None:
-            pesos[fecha] = valor
     for e in entradas:
-        limpio = sanea_peso(e["peso"])
-        # Tambien en la FILA, no solo en la curva: la tabla enseña el peso de cada ajuste.
-        e["peso"] = limpio
-        if limpio is not None and e["fecha"] and e["fecha"] not in pesos:
-            pesos[e["fecha"]] = limpio
+        # El saneado tambien en la FILA, no solo en la curva: la tabla enseña el peso de cada
+        # ajuste.
+        e["peso"] = sanea_peso(e["peso"])
+    curva = curva_de_peso(profile.get("pesos"), entradas)
 
     # «HOY · ENTRENO»: si tiene el dia montado en su calculadora, ya dijo si entrena o descansa,
     # y entonces la tarjeta puede decirle cual de los tres bloques le toca. Si no lo ha montado
@@ -1491,7 +1487,7 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
         # salen siempre: son sus numeros de hoy y su peso, no el registro de ajustes.
         "entradas": entradas if con_historico else [],
         "vigente": vigente,
-        "evolucion_peso": [{"fecha": f, "peso": p} for f, p in sorted(pesos.items())],
+        "evolucion_peso": curva,
     }
 
 
