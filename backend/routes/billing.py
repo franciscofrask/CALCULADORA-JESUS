@@ -188,7 +188,12 @@ async def _dias_con_ajuste(client_id: str, desde) -> int:
     # Las 9 filas hechas en la app no traen `effective_date`; para esas, el dia en que se
     # guardaron ES el dia del ajuste.
     marcas = [f.get("effective_date") or f.get("created_at") for f in filas]
-    return dias_distintos(marcas, desde, date.today())
+    # EL «HOY» ES EL DE ESPAÑA, no el del reloj del servidor (19-08). El servidor va en UTC,
+    # asi que entre las 00:00 y las 02:00 de aqui se queda en el dia anterior y el ajuste de
+    # hoy no se contaba: la tarjeta de renovacion decia 4 y «Mis macros» enseñaba 5. Es el
+    # mismo fallo que se arreglo en la serie de peso, en otro sitio.
+    from core.tiempo import hoy_madrid
+    return dias_distintos(marcas, desde, hoy_madrid())
 
 
 def dias_distintos(marcas, desde=None, hasta=None) -> int:
