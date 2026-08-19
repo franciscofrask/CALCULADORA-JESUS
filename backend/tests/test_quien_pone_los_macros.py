@@ -115,11 +115,20 @@ class TestLaRegla:
         assert puede is True
 
     def test_el_plan_sin_ajuste_no_ajusta_nunca(self):
-        """`mantenimiento`, `rutina_mes` y `formaciones` son los `sin_ajuste` del catalogo.
-        Ojo: `membresia` NO lo es -- es `autogestion` -- por mucho que sea la de salida."""
-        puede, motivo = correr(puede_ajustarlos(FakeDB(None), perfil(plan="mantenimiento")))
+        """Tras el 19-08 los `sin_ajuste` que quedan son los complementos (`rutina_mes`,
+        `formaciones`...): todo plan cuyo cliente edita sus macros es autogestion.
+
+        OJO: `mantenimiento` y `basica` YA NO lo son (doc 19-08: «edita sus macros: sí»)
+        -- el cliente se lleva sus macros el mismo, lo que no hay es revision del equipo.
+        Su caso esta abajo."""
+        puede, motivo = correr(puede_ajustarlos(FakeDB(None), perfil(plan="formaciones")))
         assert puede is False
         assert "no incluye ajustes" in motivo
+
+    def test_el_de_mantenimiento_se_los_lleva_el(self):
+        """Fallo 06 del 19-08: Mantenimiento edita sus macros, sin ajuste del equipo."""
+        puede, _ = correr(puede_ajustarlos(FakeDB(None), perfil(plan="mantenimiento")))
+        assert puede is True
 
     def test_y_el_de_autogestion_se_los_lleva_el(self):
         """Aunque se los haya puesto alguien: en ese plan los ajusta el cliente."""

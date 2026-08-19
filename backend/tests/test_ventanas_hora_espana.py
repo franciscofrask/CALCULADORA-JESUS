@@ -1,10 +1,11 @@
 """
-Las ventanas de envío, en hora de España (doc 16-08, regla 1 y criterios de T7 y T8).
+Las ventanas de envío, en hora de España, con el RELOJ del doc del 19-08.
 
-El doc lo dice con hora y con día: el quincenal va de miércoles 09:00 a jueves 20:00 y el
-mensual de viernes a lunes 18:00. Antes todos compartían la misma ventana y en UTC, que es
-de donde salían las dos quejas: el quincenal cerraba el lunes cuando al cliente se le
-prometía el jueves a las 20:00, y la hora bailaba según la época del año.
+El reloj lo dice con hora y con día: el quincenal va de miércoles 10:00 a jueves 20:00 y
+el mensual de viernes 10:00 a lunes 18:00. (El del 16-08 decía miércoles 09:00 y el
+mensual sin hora; manda el del 19-08.) Antes de todo eso compartían la misma ventana y en
+UTC, que es de donde salían las dos quejas: el quincenal cerraba el lunes cuando al
+cliente se le prometía el jueves a las 20:00, y la hora bailaba según la época del año.
 
 Se comprueba en las DOS estaciones a propósito: el desfase con UTC es de dos horas en
 verano y de una en invierno, así que una ventana escrita a mano en UTC solo puede acertar
@@ -24,17 +25,17 @@ def _local(dt):
     return d.weekday(), d.hour, d.minute
 
 
-def test_el_quincenal_abre_el_miercoles_a_las_nueve_y_cierra_el_jueves_a_las_ocho():
+def test_el_quincenal_abre_el_miercoles_a_las_diez_y_cierra_el_jueves_a_las_ocho():
     for semana in (VERANO, INVIERNO):
         abre, cierra = _submission_window(semana, "quincenal")
-        assert _local(abre) == (2, 9, 0), "el quincenal no abre el miércoles a las 09:00"
+        assert _local(abre) == (2, 10, 0), "el quincenal no abre el miércoles a las 10:00"
         assert _local(cierra) == (3, 20, 0), "el quincenal no cierra el jueves a las 20:00"
 
 
-def test_el_mensual_va_del_viernes_al_lunes_a_las_seis_de_la_tarde():
+def test_el_mensual_va_del_viernes_a_las_diez_al_lunes_a_las_seis_de_la_tarde():
     for semana in (VERANO, INVIERNO):
         abre, cierra = _submission_window(semana, "mensual")
-        assert _local(abre) == (4, 0, 0), "el mensual no abre el viernes a las 00:00"
+        assert _local(abre) == (4, 10, 0), "el mensual no abre el viernes a las 10:00"
         assert _local(cierra) == (0, 18, 0), "el mensual no cierra el lunes a las 18:00"
 
 
@@ -62,7 +63,7 @@ def test_la_ventana_del_quincenal_cae_antes_que_la_del_mensual():
     abre_m, _ = _submission_window(VERANO, "mensual")
     assert cierra_q < abre_m
     assert abre_q < abre_m
-    assert cierra_q - abre_q == timedelta(days=1, hours=11)
+    assert cierra_q - abre_q == timedelta(days=1, hours=10)
 
 
 # ── Lo que se le DICE al cliente ─────────────────────────────────────────────

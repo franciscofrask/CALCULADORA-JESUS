@@ -9,11 +9,12 @@ import { MEDIDAS, VIDEO_MEDIDAS } from '../lib/medidas';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowRight, ArrowLeft, Loader2, Check, ImagePlus } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Loader2, Check, ClipboardList, ImagePlus } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import BrandArrow from '../components/BrandArrow';
 import DesgloseChips from '../components/DesgloseChips';
 import PreferencesSetup from '../components/nutrition/PreferencesSetup';
+import TresFotos from '../components/reports/TresFotos';
 
 // Cuestionario inicial en DOS NIVELES (spec 18-07-2026):
 //  - Nivel 0 (todo el mundo): las 8 preguntas que mueven los macros -> CALCULAR.
@@ -500,16 +501,18 @@ const STEPS_NIVEL1 = [
         desc: 'Si no hay ninguno, escribe "no".',
         textarea: true,
     },
-    // ── Pantallas 15 a 18 y 20 · las que ya contestó en el básico ───────────────
-    // Están en el orden del documento porque el documento las pone aquí, pero al que ha
-    // pasado por el básico no se le enseña ninguna: se las salta porque ya las tiene
-    // contestadas. Siguen aquí por el que entró antes de que el básico existiera, que si no
-    // llegaría al entrenador sin saber si sigue una dieta ni qué deporte practica.
+    // ── Las cuatro de la dieta: AQUÍ, no en el básico (punto 26 del doc del 19-08) ──
+    // «Las cuatro de la dieta se van al cuestionario largo: si sigue una, cuánto lleva,
+    // cómo le va y si pasa hambre.» El cliente nuevo con entrenador las contesta aquí; al
+    // que ya las tenga contestadas de antes no se le repiten (la condición de abajo).
     //
     // Son las mismas preguntas, no copias: se referencian del cuestionario de ajuste, que es
     // donde viven. La condición se les pone abajo, junto a las demás.
     delAjuste('sigue_dieta'), delAjuste('tiempo_dieta'), delAjuste('como_va'),
     delAjuste('hambre_saturacion'),
+    // ── Las que ya contestó en el básico ────────────────────────────────────────
+    // El deporte se queda en el básico (lo necesita el motor); aquí solo sale para el que
+    // entró antes de que el básico existiera.
     delAjuste('deporte_extra'), delAjuste('deporte_cual'), delAjuste('deporte_en_descanso'),
     // Y sus tres hitos de peso, por lo mismo: subieron al básico y el que no pasó por él no
     // los ha dado nunca.
@@ -676,10 +679,14 @@ const STEPS_NIVEL1 = [
 // LAS PREGUNTAS NO SE DUPLICAN: las que ya existían se referencian por su clave, así que
 // cada una sigue teniendo un solo sitio donde se define, con sus opciones y sus textos.
 //
-// Y VAN CINCO MÁS DE LAS QUE PIDE EL DOCUMENTO (decisión de Francisco, 18-08): el deporte
-// y las cuatro de la dieta. El documento se las lleva al completo, que solo hacen los de
-// entrenador, y son las que mueven los macros: al de Calculadora se le habrían calculado
-// con menos información que hoy. Se quedan aquí, sumadas, y NO se repiten en el completo.
+// EL DEPORTE SE QUEDA Y LAS CUATRO DE LA DIETA SE VAN (punto 26 del doc del 19-08). El
+// 18-08 se quedaron aquí las cinco para no calcularle al de autogestión con menos
+// información; Jesús contesta: «"¿Practicas otro deporte con intensidad?" se queda en el
+// básico, con sus dos preguntas de detalle. Esa la necesita el motor. Las cuatro de la
+// dieta se van al cuestionario largo. Sé lo que implica: al de autogestión se le
+// calcularán los macros desde la tabla, sin ajustar por lo que ya come. Está decidido
+// así.» El día tipo no es una de las cuatro y se queda: se guarda para el perfil, entre
+// o no en el cálculo.
 const _TODAS = [...PREGUNTAS_ALTA, ...STEPS_AJUSTE, ...STEPS_NIVEL1];
 const q = (clave) => {
     const paso = _TODAS.find(s => s.key === clave);
@@ -691,6 +698,31 @@ const porTipo = (tipo) => {
     if (!paso) throw new Error(`El básico pide una pantalla que no existe: ${tipo}`);
     return paso;
 };
+
+// ¿HA TENIDO ENTRENADOR ANTES? Las dos pantallas, con los textos literales del punto 42.
+//
+// Estuvo en el cuestionario largo como un texto libre («quién, cuánto tiempo y por qué lo
+// dejaste») y se cayó con el reparto del 18-08. Jesús la quiere de vuelta, y en el básico:
+// saber si alguien ya le ha pagado a otro y cómo acabó es lo que dice con qué llega, y eso
+// no se lo puede preguntar solo al que contrata plan personalizado.
+//
+// El «qué tal te fue» solo sale si dice que sí: al que nunca ha tenido no hay nada que
+// contarle.
+const PREGUNTA_DEL_ENTRENADOR_ANTERIOR = [
+    {
+        type: 'choice', key: 'entrenador_anterior',
+        title: '¿Has tenido entrenador o has seguido un plan de nutrición antes?',
+        options: [
+            { value: 'si', label: 'Sí' },
+            { value: 'no', label: 'No' },
+        ],
+    },
+    {
+        type: 'text', key: 'entrenador_anterior_que_tal', title: '¿Qué tal te fue?',
+        cond: a => a.entrenador_anterior === 'si',
+        textarea: true,
+    },
+];
 
 const EL_BASICO = [
     // 1 · cinco campos en una pantalla. El nombre y el sexo solo se piden si no vienen del
@@ -713,14 +745,20 @@ const EL_BASICO = [
     { type: 'ocupacion', title: '¿A qué te dedicas y cuánto te mueves en tu día a día?' },
     // 13 · la experiencia entrenando
     q('training_experience'),
+    // Y SI YA LE HA PAGADO A ALGUIEN (corrección del punto 42, doc del 19-08). Va aquí,
+    // pegada a la anterior, porque es justo la que se confunde con ella y no son lo mismo:
+    // «una dice cuántos años lleva levantando peso, la otra si ya le ha pagado a alguien y
+    // qué tal le fue». En el básico, para todos, con el texto literal de Jesús.
+    ...PREGUNTA_DEL_ENTRENADOR_ANTERIOR,
     // Las del deporte: se quedan (decisión del 18-08), pegadas a la de entrenamiento.
     q('deporte_extra'), q('deporte_cual'), q('deporte_en_descanso'),
     // 14, 15 y 16 · cómo come, si engorda y si le cuesta definir
     q('apetito'), q('facilidad_engordar'), q('cuesta_definir'),
     // 17 y 18 · los siete biotipos y el suyo (en mujer no salen)
     porTipo('biotype_intro'), q('biotype'),
-    // 19 · el día tipo, con el lector. Y con él las cuatro de la dieta, que se quedan.
-    q('sigue_dieta'), q('tiempo_dieta'), porTipo('dieta'), q('como_va'), q('hambre_saturacion'),
+    // 19 · el día tipo, con el lector. Las cuatro de la dieta ya no van con él: se
+    // preguntan en el cuestionario largo (punto 26 del doc del 19-08).
+    porTipo('dieta'),
     // 20 · las dietas de antes (estaba en el cuestionario largo)
     q('dietas_previas'),
     // 21 · alergias e intolerancias, y el detalle de las dos que lo llevan
@@ -796,6 +834,10 @@ const YA_ESTAN_EN_EL_BASICO = [
     // Los tres hitos de peso, con sus años
     'peso_maximo', 'peso_mejor_momento', 'peso_minimo',
     // Las cinco que se quedaron en el básico porque mueven los macros (decisión del 18-08)
+    // Las cuatro de la dieta YA NO están en el básico (punto 26 del doc del 19-08): al
+    // cliente nuevo el completo se las pregunta siempre, porque llega sin contestarlas. En
+    // esta lista siguen por lo mismo de todas: al que las contestó -- en el básico de
+    // agosto o en un ajuste -- no se le repiten.
     'sigue_dieta', 'tiempo_dieta', 'como_va', 'hambre_saturacion',
     'deporte_extra', 'deporte_cual', 'deporte_en_descanso',
 ];
@@ -1003,6 +1045,13 @@ const QuestionnairePage = () => {
     const [lecturaDieta, setLecturaDieta] = useState(null);
     const [leyendoDieta, setLeyendoDieta] = useState(false);
     const [misDias, setMisDias] = useState(null);   // null = sin pedir todavia
+    // LA VENTANA DEL CUESTIONARIO LARGO (el reloj del 19-08): abre el viernes a las 10:00
+    // y cierra el lunes a las 18:00, hora de España. La pregunta el que lleva entrenador y
+    // tiene el largo pendiente; al resto ni se consulta. null = sin contestar todavía (no
+    // se corta a nadie por una petición que aún no volvió).
+    const [ventanaLargo, setVentanaLargo] = useState(null);
+    // Las medidas del encadenado del final del alta (doc 19-08, apartado 06).
+    const [medidasAlta, setMedidasAlta] = useState({});
 
     // Nivel 1 solo para planes con coach (calculadora == 'personalizado')...
     const conEntrenador = can(CAP.MACROS_PERSONALIZADOS);
@@ -1016,10 +1065,21 @@ const QuestionnairePage = () => {
     // no se lo abre a nadie por su cuenta; queda puesto para el día que se cobre.
     const tieneCoach = conEntrenador || !!profile?.ajuste_a_medida?.cobrado;
 
+    // La ventana del largo se pregunta al servidor -- la regla vive allí -- y solo cuando
+    // aplica: con entrenador (o los 87 € pagados) y el perfil largo sin terminar.
+    useEffect(() => {
+        if (!profile || !tieneCoach || profile?.questionnaire_nivel1_completed) return;
+        api.get('/clients/questionnaire/nivel1/ventana')
+            .then(r => setVentanaLargo(r.data))
+            .catch(() => setVentanaLargo(null));   // sin respuesta no se corta a nadie
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profile?.id, tieneCoach]);
+
     // CUÁNDO EMPIEZA. Todo el mundo arranca en lunes, pague el día que pague, y ese lunes se
     // calcula y se guarda al cobrar (`current_period_start`, el que ancla su ciclo). Lo que
-    // faltaba era decírselo. El jueves sale de ahí: el equipo tiene 48 horas para revisar sus
-    // macros, así que los definitivos caen a mitad de esa primera semana.
+    // faltaba era decírselo. Y solo eso: el día de sus macros definitivos NO se le dice
+    // (punto 46 del doc del 19-08), porque los recibe el miércoles anterior a su lunes y
+    // cualquier fecha que le demos aquí le sonaría a que empieza antes de tenerlos.
     const arranque = useMemo(() => {
         const inicio = profile?.current_period_start;
         // SI NO TIENE CICLO GUARDADO, SE CALCULA IGUAL. Ese campo lo escribe el cobro por
@@ -1035,9 +1095,8 @@ const QuestionnairePage = () => {
             return d;
         })();
         if (isNaN(lunes)) return null;
-        const jueves = new Date(lunes.getTime() + 3 * 24 * 3600 * 1000);
         const comoSeDice = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
-        return { lunes: comoSeDice(lunes), jueves: comoSeDice(jueves) };
+        return { lunes: comoSeDice(lunes) };
     }, [profile?.current_period_start]);
     // Si ha pulsado "Ajustar macros" manda eso y nada más: sin esta comprobación, un cliente con
     // coach que le diera al botón acababa en el perfil largo en vez de en el cuestionario.
@@ -1076,7 +1135,16 @@ const QuestionnairePage = () => {
         ...STEPS_ONBOARD,
         ...(tieneCoach
             ? [{ type: 'elegir_perfil', title: 'Ya puedes empezar' }, ...STEPS_NIVEL1]
-            : [{ type: 'fotos_medidas', title: 'Te quedan dos cosas' },
+            // EL FINAL DEL QUE NO LLEVA ENTRENADOR, ENCADENADO (doc 19-08, apartado 06):
+            // «Tres cosas y terminamos» → fotos → medidas → preferencias → «Ya está
+            // todo», y detrás la oferta de los 87 €. Se guarda al pasar de pantalla, no
+            // al final: las fotos suben al elegirlas y las medidas al continuar. «Lo hago
+            // luego» salta directo a la oferta y deja el aviso pendiente.
+            : [{ type: 'tres_cosas', title: 'Tres cosas y terminamos' },
+               { type: 'fotos_alta', title: 'Tus fotos' },
+               { type: 'medidas_alta', title: 'Tus medidas' },
+               { type: 'prefs' },
+               { type: 'ya_esta_todo', title: 'Ya está todo' },
                { type: 'oferta_ajuste', title: 'Una cosa más' }]),
     ];
     // LO QUE LE FALTA DE LA BASE, PREGUNTADO ANTES DE AJUSTAR NADA.
@@ -1361,6 +1429,7 @@ const QuestionnairePage = () => {
                              'peso_mejor_momento', 'profesion', 'como_me_conociste',
                              'proteinas_habituales', 'birthdate', 'height', 'biotype',
                              'training_experience',
+                             'entrenador_anterior', 'entrenador_anterior_que_tal',
                              // Y los números que ya tiene, para que al completar su ficha no
                              // se le vuelva a preguntar el peso y la grasa que ya constan.
                              'weight', 'body_fat', 'profesion']) {
@@ -1493,8 +1562,49 @@ const QuestionnairePage = () => {
         );
     }
 
+    // LA PUERTA DEL CUESTIONARIO LARGO (el reloj del 19-08). Se abre el viernes a las
+    // 10:00 y se cierra el lunes a las 18:00: fuera de ahí, al que viene a hacerlo se le
+    // dice cuándo abre en vez de dejarle entrar. Solo cierra el COMPLETO del cliente: el
+    // ajuste, el completar-huecos y el modo revisión del equipo pasan siempre, y el que
+    // está en mitad del ALTA tampoco se corta (su puerta es la pantalla de elegir, que
+    // con la ventana cerrada no le ofrece entrar).
+    if (!revision && retomandoNivel1 && ventanaLargo && !ventanaLargo.abierta) {
+        return (
+            <Shell progress={0}>
+                <div className="text-center" data-testid="ventana-largo-cerrada">
+                    <div className="w-16 h-16 rounded-full bg-brand/10 flex items-center justify-center mx-auto mb-6">
+                        <ClipboardList className="w-8 h-8 text-brand" />
+                    </div>
+                    <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
+                        Tu cuestionario se abre el {ventanaLargo.abre_label}
+                    </h2>
+                    <p className="text-foreground/60 mb-8 text-sm md:text-base">
+                        Lo tendrás abierto hasta el {ventanaLargo.cierra_label}, hora de España.
+                        Mientras tanto puedes usar la calculadora con tus macros de ahora.
+                    </p>
+                    <div className="flex justify-center">
+                        <Button onClick={() => navigate('/dashboard')}
+                            className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg">
+                            Ir a mi panel <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                    </div>
+                </div>
+            </Shell>
+        );
+    }
+
     const step = flow[idx] || flow[0];
     const progress = ((idx + 1) / flow.length) * 100;
+
+    // «LO HAGO LUEGO» (doc 19-08): salta directo a la oferta de los 87 € y le deja el
+    // aviso pendiente de las preferencias («Son 2 minutos y nos ayudará a mostrarte las
+    // cosas que te gustan»). Si por lo que sea no hay oferta en el recorrido, al panel.
+    const saltarAOferta = () => {
+        api.post('/clients/me/aviso-preferencias').catch(() => {});
+        const i = flow.findIndex(s => s.type === 'oferta_ajuste');
+        if (i > idx) setIdx(i);
+        else navigate('/welcome');
+    };
 
     const set = (key, value) => {
         // El ref se actualiza a la vez que el estado para que `visible()` vea la respuesta que
@@ -1652,6 +1762,13 @@ const QuestionnairePage = () => {
     const visible = (s) => {
         // Y si tiene las dos, la pantalla entera sobra: no hay nada que pedirle.
         if (s.type === 'fotos_medidas' && yaTieneMedidas && yaTieneFotos) return false;
+        // El encadenado del 19-08 no pide lo que ya está dado.
+        if (s.type === 'fotos_alta' && yaTieneFotos) return false;
+        if (s.type === 'medidas_alta' && yaTieneMedidas) return false;
+        // Sin entrenador, las medidas del día 1 se piden en el encadenado («2 · Tomar las
+        // medidas»), no aquí: con las dos pantallas se le pedían las mismas diez medidas
+        // dos veces seguidas, y la segunda ni salía porque la primera ya la marcaba hecha.
+        if (s.type === 'partida' && !tieneCoach) return false;
         return !s.cond || s.cond(answersRef.current);
     };
     // Solo en desarrollo: deja a mano el recorrido y en qué paso va, para poder mirar desde
@@ -1727,6 +1844,11 @@ const QuestionnairePage = () => {
         dietas_previas: answers.dietas_previas || null,
         tiempo_intentandolo: answers.tiempo_intentandolo || null,
         motivo_apuntarse: answers.motivo_apuntarse || null,
+        entrenador_anterior: answers.entrenador_anterior || null,
+        // El relato solo si ha dicho que sí: si contesta «sí», escribe, y luego se vuelve
+        // atrás y lo cambia a «no», lo escrito deja de tener a qué referirse.
+        entrenador_anterior_que_tal: answers.entrenador_anterior === 'si'
+            ? (answers.entrenador_anterior_que_tal || null) : null,
     });
 
     // Las respuestas que ajustan los macros, en el formato que espera el backend.
@@ -1864,6 +1986,20 @@ const QuestionnairePage = () => {
                     completar: true,     // ver el comentario en el envío del alta
                     ...cuerpoDelBasico(),
                 });
+            }
+            // LAS QUE MUEVEN LOS MACROS, TAMBIÉN DESDE AQUÍ (punto 26 del doc del 19-08).
+            // Las cuatro de la dieta ya no se preguntan en el alta: el que lleva entrenador
+            // las contesta en este cuestionario, y el envío de abajo no las lleva -- el
+            // nivel1 no toca macros --. Van por el mismo camino que en el alta: ese
+            // endpoint guarda las respuestas ANTES de su candado, así que al de plan
+            // personalizado le contesta 403 sin recalcular nada -- que es lo que se quiere
+            // -- pero su `ajustes_macros` queda escrito y su entrenador lo puede leer.
+            // Si falla por otra cosa no se le estropea el cierre del completo: sus veinte
+            // respuestas van en la llamada de abajo, que es la que manda.
+            try {
+                await api.post('/clients/ajustar-macros', ajustesDelCuestionario());
+            } catch (e) {
+                console.info('[completo] los ajustes no se recalcularon', e?.response?.status, e);
             }
             await api.post('/clients/questionnaire/nivel1', {
                 biotype: answers.biotype || null,
@@ -2473,27 +2609,191 @@ const QuestionnairePage = () => {
                     {/* CON LA FECHA, no con «siempre un lunes» (bloque 6 del doc del 18-08:
                         «No se le dice cuándo empieza»). El lunes de arranque ya está
                         calculado y guardado desde que paga -- es el que ancla su ciclo -- y
-                        aun así ninguna pantalla se lo decía. Los macros definitivos son el
-                        jueves de esa semana: el equipo tiene 48 horas para revisarlos, que
-                        es la misma regla que decide el lunes. */}
+                        aun así ninguna pantalla se lo decía.
+
+                        Y NADA MÁS (corrección del punto 46, doc del 19-08). Aquí ponía además
+                        «Tus macros definitivos los tendrás el jueves», y el jueves cae DESPUÉS
+                        del lunes: le estábamos diciendo que arrancara su programa y que tres
+                        días más tarde le llegarían sus macros. Los recibe el miércoles
+                        ANTERIOR a su lunes. Las 48 horas son el margen del equipo para
+                        trabajar; al cliente ni le va ni le viene. */}
                     <p className="text-xs text-foreground/50 mt-2">
                         {arranque
-                            ? <>Empiezas el <b className="text-foreground/80">lunes {arranque.lunes}</b>.
-                                Tus macros definitivos los tendrás el {arranque.jueves}.</>
+                            ? <>Empiezas el <b className="text-foreground/80">lunes {arranque.lunes}</b>.</>
                             : 'Te apuntas cualquier día y empiezas siempre un lunes.'}
                     </p>
                 </div>
+                {/* CON LA VENTANA CERRADA NO SE LE OFRECE ENTRAR (el reloj del 19-08: el
+                    largo abre el viernes a las 10:00 y cierra el lunes a las 18:00). Al
+                    que se apunta un martes se le dice cuándo, y su única salida es la
+                    calculadora, que es exactamente lo que el documento describe. */}
+                {ventanaLargo && !ventanaLargo.abierta && !revision ? (
+                    <>
+                        <p className="text-sm text-foreground/70 mb-4" data-testid="largo-abre-el">
+                            Tu cuestionario se abre el <b className="text-foreground">{ventanaLargo.abre_label}</b> y
+                            lo tendrás hasta el {ventanaLargo.cierra_label}, hora de España. Te avisaremos.
+                        </p>
+                        <Button onClick={() => navigate('/welcome')} data-testid="empezar-calculadora"
+                            className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                            Empezar a usar la calculadora <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                    </>
+                ) : (
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <Button onClick={goNext} data-testid="terminar-perfil-ahora"
+                            className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                            Terminar mi perfil ahora <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                        <Button variant="outline" data-testid="empezar-calculadora"
+                            onClick={() => navigate('/welcome')}
+                            className="px-8 py-6 text-lg">
+                            Empezar a usar la calculadora
+                        </Button>
+                    </div>
+                )}
+            </div>
+        );
+    } else if (step.type === 'tres_cosas') {
+        // LA PANTALLA DEL DOC 19-08, con su texto literal. «Lo hago luego» va directo a
+        // la oferta de los 87 € y le deja el aviso pendiente de las preferencias.
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
+                    Tres cosas y terminamos
+                </h2>
+                <p className="text-foreground/70 mb-6">
+                    Déjalo hecho cuanto antes. Las dos primeras son para que puedas llevar un
+                    control objetivo de tus progresos y la tercera nos ayudará a conocerte mejor
+                    y ofrecerte las cosas que más te gustan.
+                </p>
+                <div className="space-y-3 mb-6">
+                    {[['1 · Subir tus fotos', 'Frente, espaldas y perfil (elige un perfil y no cambies)'],
+                      ['2 · Tomar las medidas', 'Aquí vas a necesitar que te ayude alguien (y si puede ser siempre el mismo, mejor)'],
+                      ['3 · Completar las preferencias', 'Sabiendo lo que te gusta, te haremos la dieta más fácil']]
+                        .map(([t, d]) => (
+                            <div key={t} className="surface p-4">
+                                <p className="font-semibold text-foreground">{t}</p>
+                                <p className="text-sm text-foreground/50">{d}</p>
+                            </div>
+                        ))}
+                </div>
                 <div className="flex flex-col sm:flex-row gap-3">
-                    <Button onClick={goNext} data-testid="terminar-perfil-ahora"
+                    <Button onClick={goNext} data-testid="empezar-por-las-fotos"
                         className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                        Terminar mi perfil ahora <ArrowRight className="w-5 h-5 ml-2" />
+                        Empezar por las fotos <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
-                    <Button variant="outline" data-testid="empezar-calculadora"
-                        onClick={() => navigate('/welcome')}
+                    <Button variant="outline" onClick={saltarAOferta} data-testid="lo-hago-luego"
                         className="px-8 py-6 text-lg">
-                        Empezar a usar la calculadora
+                        Lo hago luego
                     </Button>
                 </div>
+            </div>
+        );
+    } else if (step.type === 'fotos_alta') {
+        // PASO 1 · Tus fotos, con el texto literal. Se guardan al elegirlas (TresFotos
+        // sube cada una al momento), así que salir por aquí no pierde nada.
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
+                    Tus fotos
+                </h2>
+                <p className="text-foreground/70 mb-4 text-sm">
+                    Hazlas con buena luz y siempre en el mismo sitio. Solo si haces las fotos en
+                    las mismas condiciones podrás ser objetivo a la hora de comparar. Te
+                    recomiendo repetirlas cada 4 semanas, que es un tiempo prudencial para
+                    apreciar cambios.
+                </p>
+                <div className="mb-6">
+                    <TresFotos api={api} token={token} esMensual={false} />
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <Button onClick={goNext} data-testid="fotos-continuar"
+                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                        Continuar <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                    <Button variant="outline" onClick={saltarAOferta} className="px-8 py-6 text-lg">
+                        Lo hago luego
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (step.type === 'medidas_alta') {
+        // PASO 2 · Tus medidas. Se guardan al continuar («se guarda al pasar de pantalla,
+        // no al final»): quien salga después no las pierde.
+        const guardarMedidasAlta = async () => {
+            const conValor = Object.fromEntries(
+                Object.entries(medidasAlta).filter(([, v]) => v !== '' && v != null));
+            if (Object.keys(conValor).length) {
+                try {
+                    // Son las medidas del DÍA 1: van al punto de partida (medidas_inicio y
+                    // la marca de hecho), no a la serie de Seguimiento. Así la ficha y la
+                    // comparativa del mes que viene salen de aquí, y al que vuelva al alta
+                    // no se le piden otra vez.
+                    await api.post('/clients/punto-de-partida', { medidas: conValor });
+                } catch (e) {
+                    console.error('[alta] las medidas no se guardaron', e);
+                    toast.error('No se pudieron guardar las medidas. Puedes añadirlas después en Seguimiento.');
+                }
+            }
+            goNext();
+        };
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
+                    Tus medidas
+                </h2>
+                <p className="text-foreground/70 mb-4 text-sm">
+                    Si te puede medir alguien, y siempre el mismo, mejor. Cada 4 semanas. En cm.
+                </p>
+                <div className="grid grid-cols-2 gap-2 mb-6">
+                    {MEDIDAS.map(({ key, label }) => (
+                        <label key={key} className="text-xs text-foreground/50">
+                            {label}
+                            <Input type="number" inputMode="decimal" step="0.5"
+                                value={medidasAlta[key] ?? ''} data-testid={`alta-medida-${key}`}
+                                onChange={e => setMedidasAlta(m => ({ ...m, [key]: e.target.value }))}
+                                className="mt-0.5 bg-card border-[#222222]" />
+                        </label>
+                    ))}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <Button onClick={guardarMedidasAlta} data-testid="medidas-continuar"
+                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                        Continuar <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                    <Button variant="outline" onClick={saltarAOferta} className="px-8 py-6 text-lg">
+                        Lo hago luego
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (step.type === 'ya_esta_todo') {
+        // PASO 4 · después de las preferencias, con el literal del doc. Y detrás, la
+        // oferta de la revisión: el botón sigue de largo hasta ella.
+        body = (
+            <div>
+                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
+                    Ya está todo
+                </h2>
+                <p className="text-foreground/70 mb-6">Ya lo tienes todo listo.</p>
+                <div className="space-y-3 mb-8">
+                    {[['Tus macros están calculados', 'Y tu primer día montado'],
+                      ['Tus fotos y tus medidas, guardadas', 'Te avisaré en 4 semanas'],
+                      ['Tus preferencias, puestas', 'Ya te podemos montar los menús']]
+                        .map(([t, d]) => (
+                            <div key={t} className="flex items-start gap-3">
+                                <Check className="w-5 h-5 text-brand mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-semibold text-foreground">{t}</p>
+                                    <p className="text-sm text-foreground/50">{d}</p>
+                                </div>
+                            </div>
+                        ))}
+                </div>
+                <Button onClick={goNext} data-testid="ir-a-mi-panel"
+                    className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                    Ir a mi panel <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
             </div>
         );
     } else if (step.type === 'fotos_medidas') {

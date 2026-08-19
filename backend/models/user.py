@@ -69,28 +69,44 @@ def lista_desde_texto(v):
 #   precio_nota    Detalle textual del precio tal cual el catálogo.
 #   precios        Opciones estructuradas [{label, importe, periodo}].
 #   responsable    Quién gestiona el plan.
-#   habilitaciones Qué habilita el plan al usuario:
+#   habilitaciones Qué habilita el plan al usuario. LOS SIETE INTERRUPTORES del doc del
+#   19-08 («un solo sitio enciende y apaga todo lo demás») más los que ya había:
 #       calculadora     personalizado | autogestion | sin_ajuste
+#       edita_macros    bool · si el cliente puede tocar sus macros. De él sale si se le
+#                       enseña la pestaña «Mis macros» (fallo 08 del doc del 19-08)
 #       rutina          personalizada | del_mes | ninguna | opcional
 #       reportes        lista de: quincenal, mensual, semanal
-#       suplementacion  bool
-#       harbiz          bool
+#       suplementacion  ninguna | guia | protocolo (fallo 10: eran un sí/no y son dos
+#                       cosas distintas; True/False viejos se leen con
+#                       `suplementacion_incluida`)
+#       frecuencia_ajuste  ninguna | mensual | quincenal | semanal | al_renovar (fallo 09:
+#                       es la que decide a quién se le abre la ventana cada semana)
+#       feedback        texto: cada cuánto le escribe su entrenador (fallo 11, mitad 1)
+#       canal_contacto  texto: dónde puede preguntar (fallo 11, mitad 2)
+#       videollamadas   texto/número (fallo 09)
+#       grupo_privado   bool (fallo 09)
+#       tiempo_respuesta  texto (fallo 09)
+#       audio_feedback  bool · el audio está incluido en los programas antiguos y solo
+#                       estaba marcado en cuatro (doc 19-08)
+#       materiales_recursos  bool · el catálogo premium de la Membresía
 #       acompanamiento  solo_app | con_entrenador | con_entrenador_y_llamadas
-#       frecuencia_contacto  semanal | quincenal | mensual | ninguna
+#       frecuencia_contacto  semanal | quincenal | mensual | ninguna (heredado; el doc lo
+#                       parte en feedback + canal_contacto, se conserva para lo que ya lo lee)
 #
-#   Los dos ultimos son de la especificacion del 31-07-2026 (parte 1). Sin ellos, dos
-#   planes que solo se diferencian en si hay alguien detras y cada cuanto te escribe
-#   quedaban identicos salvo el precio, y eso no habia donde configurarlo.
+#   HARBIZ MURIÓ (fallo 07 del doc del 19-08): la fila se quitó de las 21 fichas.
+#
+#   renovacion     {automatica: bool, cada: texto} · quién renueva solo y quién no (doc
+#                  19-08: «este campo no es informativo — de él salen a quién avisar de que
+#                  se le acaba el ciclo y a quién no molestar»). No toca el cobro: cómo se
+#                  cobra lo dice el Price de Stripe; esto dice qué debe ESPERAR la app.
 #   stripe_price_env  Variable .env con el Price ID de Stripe ("" si no aplica).
 #   billing_cycle_weeks  Longitud del ciclo de cobro recurrente (semanas).
 #   en_una_linea    Que te llevas, en una frase. Va debajo del nombre donde se elige plan.
 #
-#   EL NOMBRE TIENE QUE DECIR QUE TE LLEVAS (Jesus, 11-08-2026).
-#   "Nivel 1 / 2 / 3 funciona por dentro pero no dice nada delante de alguien que no te
-#   conoce". Los tres pasan a llamarse por lo que dan -- El metodo, Con seguimiento,
-#   Acompanamiento total -- y cada uno lleva su frase, que es la que explica en que se
-#   diferencia del de al lado. El codigo del plan NO cambia: por dentro siguen siendo
-#   nivel1/2/3, asi que ni los perfiles ni Stripe ni el historial se enteran de esto.
+#   LOS NOMBRES SON LOS DEL DOC DEL 19-08 (fallo 01): Calculadora, Gold y Premium. «El
+#   método / Con seguimiento / Acompañamiento total» eran de una versión anterior y eran
+#   los que veía el cliente en su ficha. El codigo del plan NO cambia: por dentro siguen
+#   siendo nivel1/2/3, asi que ni los perfiles ni Stripe ni el historial se enteran.
 
 PLAN_CATALOG = {
     # ---------------- LOS TRES NIVELES (especificacion 31-07-2026, parte 1) ----------
@@ -102,155 +118,236 @@ PLAN_CATALOG = {
     # de .env de abajo estan vacias a proposito: hasta que se creen, el checkout devuelve
     # un 503 con un mensaje claro en vez de cobrar mal.
     "nivel1": {
-        "name": "El método", "en_una_linea": "Menos acompañamiento, mismo método",
+        # La ficha del doc del 19-08, campo a campo ("Calculadora · 247 € · 12 semanas").
+        # OJO CON EL COBRO: el importe real sale del Price de Stripe
+        # (STRIPE_PRICE_NIVEL1); cambiarlo aquí cambia el escaparate. El Price de 247 lo
+        # tiene que crear Francisco en Stripe y poner su id en el .env.
+        "name": "Calculadora", "en_una_linea": "Menos acompañamiento, mismo método",
         "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
-        "precio": 297.0, "precio_nota": "297€ por ciclo de 12 semanas",
-        "precios": [{"label": "Ciclo", "importe": 297.0, "periodo": "12 semanas"}],
-        "responsable": "Operaciones",
-        "habilitaciones": {"calculadora": "autogestion", "rutina": "ninguna",
-                           "reportes": ["mensual"], "suplementacion": False, "harbiz": False,
+        "precio": 247.0, "precio_nota": "247€ por ciclo de 12 semanas",
+        "precios": [{"label": "Ciclo", "importe": 247.0, "periodo": "12 semanas"}],
+        "responsable": "Ninguno (autogestión)",
+        "habilitaciones": {"calculadora": "autogestion", "edita_macros": True,
+                           "frecuencia_ajuste": "mensual",
+                           # «Rutina: La del mes» (antes ninguna: la ficha del doc manda).
+                           "rutina": "del_mes",
+                           "reportes": ["mensual"], "suplementacion": "guia",
+                           "feedback": "Ninguno",
+                           "canal_contacto": "Solo incidencias técnicas",
+                           "videollamadas": "0", "grupo_privado": False,
+                           "tiempo_respuesta": "", "audio_feedback": False,
+                           "materiales_recursos": False,
                            "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
+        # «Renovación automática: Sí · cada 12 semanas». Informa a la app (avisos, panel);
+        # el modo de cobro real lo dice Stripe.
+        "renovacion": {"automatica": True, "cada": "cada 12 semanas"},
         "stripe_price_env": "STRIPE_PRICE_NIVEL1", "billing_cycle_weeks": 12,
-        # Doc 03-08: PAGO UNICO del ciclo. No es una suscripcion: al llegar la
-        # semana 12 se le habla y decide, nunca se le cobra solo.
+        # Doc 03-08: PAGO UNICO del ciclo en el checkout actual. La tabla del 19-08 lo
+        # marca con renovación automática; cambiar el cobro a suscripción es un Price
+        # recurrente en Stripe, no un flag de aquí.
         "pago_unico": True,
     },
     "nivel2": {
-        "name": "Con seguimiento", "en_una_linea": "Más gente encima de tus números",
+        # La ficha del doc del 19-08 ("Gold · 847 € · 12 semanas"). El Price de 847 lo
+        # tiene que crear Francisco en Stripe.
+        "name": "Gold", "en_una_linea": "Más gente encima de tus números",
         "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
-        "precio": 897.0, "precio_nota": "897€ por ciclo de 12 semanas",
-        "precios": [{"label": "Ciclo", "importe": 897.0, "periodo": "12 semanas"}],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                           "reportes": ["quincenal", "mensual"], "suplementacion": True,
-                           "harbiz": False, "acompanamiento": "con_entrenador",
+        "precio": 847.0, "precio_nota": "847€ por ciclo de 12 semanas",
+        "precios": [{"label": "Ciclo", "importe": 847.0, "periodo": "12 semanas"}],
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "frecuencia_ajuste": "quincenal",
+                           "rutina": "personalizada",
+                           "reportes": ["quincenal", "mensual"],
+                           "suplementacion": "protocolo",
+                           "feedback": "Con cada reporte",
+                           "canal_contacto": "Chat de dudas",
+                           "tiempo_respuesta": "menos de 24 h",
+                           "videollamadas": "0", "grupo_privado": False,
+                           "audio_feedback": True, "materiales_recursos": False,
+                           "acompanamiento": "con_entrenador",
                            "frecuencia_contacto": "quincenal"},
+        # «Renovación automática: No · se recontrata».
+        "renovacion": {"automatica": False, "cada": "se recontrata"},
         "stripe_price_env": "STRIPE_PRICE_NIVEL2", "billing_cycle_weeks": 12,
-        # Doc 03-08: PAGO UNICO del ciclo. No es una suscripcion: al llegar la
-        # semana 12 se le habla y decide, nunca se le cobra solo.
         "pago_unico": True,
     },
     "nivel3": {
+        # EL PREMIUM DE VERDAD (fallo 03 del doc del 19-08): estaba por duplicado, esta
+        # ficha a 1.500 € con 0 clientes y un «Premium» en especiales a 0 € con los 9.
+        # Queda UNO, este, en activos; los 9 se mueven aquí con el precio que tienen
+        # (script _mover_premium_a_nivel3.py, se ejecuta en prod con el OK de Francisco).
         # "Cómo se compra: por llamada". No lleva a un pago, lleva a agendar.
-        "name": "Acompañamiento total", "en_una_linea": "Hablamos antes de entrar",
+        "name": "Premium", "en_una_linea": "Hablamos antes de entrar",
         "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 1500.0, "precio_nota": "1.500€ por ciclo de 12 semanas · se contrata por llamada",
         "precios": [{"label": "Ciclo", "importe": 1500.0, "periodo": "12 semanas"}],
-        "responsable": "CEO",
-        # REPORTE SEMANAL (punto 46 del doc del 07-08: "Nivel 3 lleva reporte semanal").
-        # Estaba con quincenal+mensual, igual que el Nivel 2, mientras la pagina de planes
-        # le prometia "Seguimiento: Semanal" -- o sea que la pagina de venta ofrecia algo
-        # que el plan no daba. Con el calendario del punto 44, esto ya tiene efecto de
-        # verdad: su patron pasa a ser semanal todas las semanas y mensual la tercera.
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                           "reportes": ["semanal", "mensual"], "suplementacion": True,
-                           "harbiz": False, "acompanamiento": "con_entrenador_y_llamadas",
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "frecuencia_ajuste": "semanal",
+                           "rutina": "personalizada",
+                           "reportes": ["semanal", "mensual"],
+                           "suplementacion": "protocolo",
+                           "feedback": "Semanal",
+                           "canal_contacto": "Chat + WhatsApp del entrenador",
+                           "tiempo_respuesta": "",
+                           "videollamadas": "Una al mes · 3 por ciclo",
+                           "grupo_privado": True,   # con clase en directo al mes
+                           "audio_feedback": True, "materiales_recursos": False,
+                           "acompanamiento": "con_entrenador_y_llamadas",
                            "frecuencia_contacto": "semanal"},
+        # «Renovación automática: No · se renueva por llamada».
+        "renovacion": {"automatica": False, "cada": "se renueva por llamada"},
         "stripe_price_env": "STRIPE_PRICE_NIVEL3", "billing_cycle_weeks": 12,
-        # Doc 03-08: PAGO UNICO del ciclo. No es una suscripcion: al llegar la
-        # semana 12 se le habla y decide, nunca se le cobra solo.
         "pago_unico": True,
-    },
-    "membresia": {
-        # "Membresia 97 EUR/mes: ya no es la entrada, es la SALIDA para el que no renueva."
-        # Nueva y separada de ELM a proposito, para que el de salida no arrastre las
-        # condiciones antiguas (ELM tenia precios de 67 y 87 EUR, anual de 800 y Harbiz).
-        #
-        # `solo_salida` es lo que la distingue: no se ofrece al comprar -- ahi solo estan
-        # los tres niveles -- pero si a quien acaba su ciclo y no renueva.
-        "name": "Membresía", "estado": "activo", "asignable": True, "solo_salida": True,
-        "ciclo": {"tipo": "mensual", "semanas": None},
-        "precio": 97.0, "precio_nota": "97€/mes · para quien no renueva su ciclo",
-        "precios": [{"label": "Mensual", "importe": 97.0, "periodo": "mes"}],
-        "responsable": "Operaciones",
-        "habilitaciones": {"calculadora": "autogestion", "rutina": "ninguna",
-                           "reportes": [], "suplementacion": False, "harbiz": False,
-                           "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
-        "stripe_price_env": "STRIPE_PRICE_MEMBRESIA", "billing_cycle_weeks": 4,
     },
     # ---------------- ACTIVOS ----------------
     "elm": {
-        # Legacy desde el 31-07-2026: deja de ser la entrada. El documento lo nombra entre
-        # los que dejan de contratarse. Quien lo tiene sigue igual.
-        "name": "ELM (El Lunes Empiezo)", "estado": "legacy", "asignable": True,
+        # EL LUNES EMPIEZO SUBE A ACTIVOS (fallos 04 y 05 del doc del 19-08). Había una
+        # ficha «Membresía» vacía a 97 € sin un solo cliente duplicándolo: se borró y esta
+        # es la buena (el alias «membresia» cae aquí, para que nada que apuntara a aquella
+        # se quede sin plan). Es la membresía: la entrada barata y la SALIDA del que no
+        # renueva su ciclo (`solo_salida` lo pone en la pantalla de renovación).
+        #
+        # Y SU FICHA YA NO SE CONTRADICE: decía «macros por tu entrenador» (personalizado)
+        # y «sin entrenador» a la vez. Es autogestión con ajuste automático, como dice su
+        # ficha del doc, y el que lo tiene edita sus macros.
+        #
+        # A los 55 no se les toca el precio: hay quien paga 67 y quien paga 87 (el precio
+        # de cada cliente vive en su perfil; este es el de catálogo para el que entre).
+        "name": "El Lunes Empiezo", "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
-        "precio": 97.0, "precio_nota": "97€/mes (antiguos 67€ u 87€) · 800€/año",
+        "precio": 97.0, "precio_nota": "97€/mes · la membresía (antiguos 67€ u 87€ · 800€/año)",
         "precios": [{"label": "Mensual", "importe": 97.0, "periodo": "mes"},
                     {"label": "Anual", "importe": 800.0, "periodo": "año"}],
-        "responsable": "Operaciones",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "del_mes",
-                            "reportes": [], "suplementacion": False, "harbiz": True},
+        "responsable": "Ninguno (autogestión)",
+        "habilitaciones": {"calculadora": "autogestion", "edita_macros": True,
+                           "frecuencia_ajuste": "al_renovar",   # si lo pide · máx. 72 h
+                           "rutina": "del_mes",                 # la del mes, cada renovación
+                           "reportes": [],                      # el rápido va con la renovación
+                           "suplementacion": "guia",
+                           "feedback": "Ninguno",
+                           "canal_contacto": "Apartado de contacto · viernes",
+                           "videollamadas": "0", "grupo_privado": False,
+                           "tiempo_respuesta": "máx. 72 h", "audio_feedback": False,
+                           "materiales_recursos": True,         # sí · catálogo premium
+                           "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
+        # «Renovación automática: Sí · mensual».
+        "renovacion": {"automatica": True, "cada": "mensual"},
         "stripe_price_env": "STRIPE_PRICE_ELM", "billing_cycle_weeks": 4,
+        # La ficha «Membresía» borrada apuntaba aquí; los perfiles de prueba que la tengan
+        # escrita caen en ELM en vez de quedarse sin plan.
+        "alias": ["membresia", "membresía", "Membresía"],
     },
     "reto12en12_gold": {
-        # El "Reto de 1.500" del documento. Legacy desde el 31-07-2026.
+        # El "Reto de 1.500" del documento. Legacy. El doc del 19-08 lo manda RETIRAR
+        # después de mover a sus 2 clientes (script preparado); mientras tanto se queda
+        # asignable para no dejar a esos 2 sin habilitaciones.
         "name": "Reto 12en12 - Gold", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 1500.0, "precio_nota": "1.500€/trimestre o 600€/mes",
         "precios": [{"label": "Trimestral", "importe": 1500.0, "periodo": "trimestre"},
                     {"label": "Mensual", "importe": 600.0, "periodo": "mes"}],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                            "reportes": ["quincenal", "mensual"], "suplementacion": True, "harbiz": False},
+        "responsable": "Jesús",
+        # Con entrenador → no toca sus macros (regla de los legacy, doc 19-08).
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "personalizada",
+                           "reportes": ["quincenal", "mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_RETO12EN12_GOLD", "billing_cycle_weeks": 12,
     },
     "reto12en12_silver": {
-        # Misma familia que el Reto Gold: legacy desde el 31-07-2026.
-        "name": "Reto 12en12 - Silver", "estado": "legacy", "asignable": True,
+        # Misma familia que el Reto Gold. Sin clientes: el doc del 19-08 lo retira.
+        "name": "Reto 12en12 - Silver", "estado": "legacy", "asignable": False,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
-        "precio": 600.0, "precio_nota": "600€/trimestre o 250€/mes",
+        "precio": 600.0, "precio_nota": "600€/trimestre o 250€/mes · retirado (0 clientes)",
         "precios": [{"label": "Trimestral", "importe": 600.0, "periodo": "trimestre"},
                     {"label": "Mensual", "importe": 250.0, "periodo": "mes"}],
-        "responsable": "CEO / José Luis",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "del_mes",
-                            "reportes": ["mensual"], "suplementacion": True, "harbiz": False},
+        "responsable": "José Luis",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "del_mes",
+                           "reportes": ["mensual"], "suplementacion": "protocolo"},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_RETO12EN12_SILVER", "billing_cycle_weeks": 12,
     },
     "reto60": {
-        # Legacy desde el 31-07-2026: los tres niveles son lo unico contratable.
-        "name": "Reto 60 días", "estado": "legacy", "asignable": True,
+        # Sin clientes: el doc del 19-08 lo retira. (Y Harbiz murió: fallo 07.)
+        "name": "Reto 60 días", "estado": "legacy", "asignable": False,
         "ciclo": {"tipo": "bimestral", "semanas": 8},
-        "precio": 547.0, "precio_nota": "547€ (pago único)",
+        "precio": 547.0, "precio_nota": "547€ (pago único) · retirado (0 clientes)",
         "precios": [{"label": "Único", "importe": 547.0, "periodo": "único"}],
-        "responsable": "Operaciones",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "del_mes",
-                            "reportes": [], "suplementacion": False, "harbiz": True},
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "del_mes",
+                           "reportes": [], "suplementacion": "ninguna"},
+        "renovacion": {"automatica": False, "cada": "pago único"},
         "stripe_price_env": "STRIPE_PRICE_RETO60", "billing_cycle_weeks": 8,
     },
     "calculadora_jp": {
-        # Legacy desde el 31-07-2026: se solapa con el Nivel 1.
+        # Legacy. El doc del 19-08: migrar a sus 11 a Mantenimiento -- «pueden editar sus
+        # macros pero sin ajuste» -- y después retirar (script preparado).
         "name": "Calculadora JP", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
         "precio": 60.0, "precio_nota": "60€/mes",
         "precios": [{"label": "Mensual", "importe": 60.0, "periodo": "mes"}],
         "responsable": "Ninguno (autogestión)",
-        "habilitaciones": {"calculadora": "autogestion", "rutina": "ninguna",
-                            "reportes": [], "suplementacion": False, "harbiz": False},
+        # Autogestión → sí toca sus macros (regla de los legacy, doc 19-08).
+        "habilitaciones": {"calculadora": "autogestion", "edita_macros": True,
+                           "frecuencia_ajuste": "ninguna", "rutina": "ninguna",
+                           "reportes": [], "suplementacion": "ninguna"},
+        "renovacion": {"automatica": True, "cada": "mensual"},
         "stripe_price_env": "STRIPE_PRICE_CALCULADORA_JP", "billing_cycle_weeks": 4,
     },
     "mantenimiento": {
-        # Legacy desde el 31-07-2026: su sitio lo ocupa la Membresia de salida.
-        "name": "Mantenimiento", "estado": "legacy", "asignable": True,
+        # SUBE A ACTIVOS (fallo 06 del doc del 19-08): «es donde aterriza todo el que
+        # termina un ciclo y no renueva. Son cinco los que se venden, no cuatro». Su ficha
+        # del doc: calculadora sí SIN ajuste — puede editar sus macros, pero nadie se los
+        # revisa (frecuencia de ajuste: ninguna).
+        #
+        # `solo_salida`: es la salida que ofrece la pantalla de renovación al que no
+        # renueva (antes lo era la «Membresía» vacía que se borró). ELM se vende por su
+        # embudo; a Mantenimiento se aterriza.
+        "name": "Mantenimiento", "estado": "activo", "asignable": True,
+        "solo_salida": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
         "precio": 60.0, "precio_nota": "60€/mes",
         "precios": [{"label": "Mensual", "importe": 60.0, "periodo": "mes"}],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "opcional",
-                            "reportes": [], "suplementacion": False, "harbiz": False},
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "autogestion", "edita_macros": True,
+                           "frecuencia_ajuste": "ninguna",
+                           "rutina": "opcional",
+                           "reportes": [], "suplementacion": "guia",
+                           "feedback": "Ninguno", "canal_contacto": "Ninguno",
+                           "videollamadas": "0", "grupo_privado": False,
+                           "tiempo_respuesta": "", "audio_feedback": False,
+                           "materiales_recursos": False,
+                           "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
+        # «Renovación automática: Sí · mensual».
+        "renovacion": {"automatica": True, "cada": "mensual"},
         "stripe_price_env": "STRIPE_PRICE_MANTENIMIENTO", "billing_cycle_weeks": 4,
     },
     # ---------------- LEGACY (inactivos, se respetan) ----------------
+    # La regla del doc del 19-08 para todos ellos: al legacy CON entrenador (Gold, Silver,
+    # Bronze, Reto Gold, Personalizado y 6M) «edita sus macros: no» -- sin el campo, 68
+    # personas seguían viendo una pestaña que les invita a mover unos macros que no pueden
+    # mover --. A los de autogestión (Calculadora JP, Básica y CALMA 12), «sí». Y el audio
+    # de feedback, que está incluido en los programas antiguos, marcado también en Silver,
+    # Bronze, Premium, 6M, Personalizado y CALMA 12.
     "gold": {
         "name": "Gold (legacy)", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 450.0, "precio_nota": "450-847€/trimestre (según antigüedad)",
         "precios": [{"label": "Trimestral", "importe": 450.0, "periodo": "trimestre"}],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                            "reportes": ["quincenal", "mensual"], "suplementacion": True, "harbiz": False},
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "personalizada",
+                           "reportes": ["quincenal", "mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_GOLD", "billing_cycle_weeks": 12,
     },
     "silver": {
@@ -258,9 +355,12 @@ PLAN_CATALOG = {
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 267.0, "precio_nota": "267-435€/trimestre (según antigüedad)",
         "precios": [{"label": "Trimestral", "importe": 267.0, "periodo": "trimestre"}],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "del_mes",
-                            "reportes": ["mensual"], "suplementacion": True, "harbiz": False},
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "del_mes",
+                           "reportes": ["mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_SILVER", "billing_cycle_weeks": 12,
     },
     "bronze": {
@@ -268,24 +368,34 @@ PLAN_CATALOG = {
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 177.0, "precio_nota": "177-397€/trimestre (según antigüedad)",
         "precios": [{"label": "Trimestral", "importe": 177.0, "periodo": "trimestre"}],
-        "responsable": "CEO",
+        "responsable": "Jesús",
         # Doc 16-08 (T8): el Bronze SÍ hace el reporte mensual (11 bloques) y el cierre
         # del día, que van detrás de la habilitación de reportes. Sin "mensual" aquí, un
         # bronze no podía abrir ni el reporte ni el "¿Cómo fuiste hoy?" (403 en
         # /checkins). El quincenal sigue siendo solo de quien lo tenga (gold).
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "opcional",
-                            "reportes": ["mensual"], "suplementacion": True, "harbiz": False},
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "opcional",
+                           "reportes": ["mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_BRONZE", "billing_cycle_weeks": 12,
     },
     # ---------------- ESPECIALES ----------------
     "premium": {
-        "name": "Premium", "estado": "especial", "asignable": True,
+        # FUSIONADO CON EL NUEVO PREMIUM (fallo 03 del doc del 19-08): el Premium que se
+        # vende es `nivel3`, a 1.500 € por 12 semanas. Esta ficha era la de «especiales» a
+        # 0 € con los 9 clientes; queda en legacy hasta que el script los mueva a nivel3
+        # con el precio que tiene cada uno, y entonces se retira.
+        "name": "Premium (fusionado con el nuevo)", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "variable", "semanas": None},
-        "precio": 0.0, "precio_nota": "Variable (ej: 1.500€ cada dos semanas)",
+        "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el contrato · se fusiona con Premium (nivel3)",
         "precios": [],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                            "reportes": ["semanal", "mensual"], "suplementacion": True, "harbiz": False},
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "personalizada",
+                           "reportes": ["semanal", "mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "", "billing_cycle_weeks": 4,
     },
     "plan_6m": {
@@ -293,10 +403,16 @@ PLAN_CATALOG = {
         "ciclo": {"tipo": "semestral", "semanas": 26},
         "precio": 2500.0, "precio_nota": "2.500€ (6 meses); a veces 7 meses por 2.500€",
         "precios": [{"label": "Único", "importe": 2500.0, "periodo": "6 meses"}],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                            "reportes": ["semanal", "mensual"], "suplementacion": True, "harbiz": False},
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "personalizada",
+                           "reportes": ["semanal", "mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True},
+        # «Plan Personalizado · 6M: No — manda el contrato».
+        "renovacion": {"automatica": False, "cada": "manda el contrato"},
         "stripe_price_env": "", "billing_cycle_weeks": 26,
+        # El «Plan 6 M (pero de 28 semanas, le regalo 1 mes)» de Calma, literal.
+        "alias": ["Plan 6 M", "6M", "plan 6m"],
     },
     "calma12": {
         # CALMA 12 sale en el catálogo del equipo (bloque E del doc del 07-08) con dos
@@ -314,10 +430,16 @@ PLAN_CATALOG = {
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
         "precios": [],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                           "reportes": ["mensual"], "suplementacion": True, "harbiz": False,
+        "responsable": "Jesús",
+        # De autogestión según la regla de los legacy del 19-08: «A los de autogestión
+        # —Calculadora JP, Básica y CALMA 12— "sí"» (edita sus macros). Y con el audio
+        # marcado, que está en su programa.
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": True,
+                           "rutina": "personalizada",
+                           "reportes": ["mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True,
                            "acompanamiento": "con_entrenador", "frecuencia_contacto": "mensual"},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "", "billing_cycle_weeks": 12,
         # Los perfiles migrados lo traen escrito asi, sin normalizar.
         "alias": ["CalMa", "calma", "calma_12", "calma 12"],
@@ -341,13 +463,20 @@ PLAN_CATALOG = {
         # compraron se llama asi.
         "name": "Reto 12en12", "estado": "legacy", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
-        "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
+        # El doc del 19-08 los destapa: no es un plan, son los clientes Premium de José
+        # Luis y de Montse, cada uno con su precio en la hoja de control de pagos. «A
+        # revisar uno a uno y después retirar»: hasta esa revisión (decisión de Jesús y
+        # los entrenadores, no un script) se queda tal cual.
+        "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda la hoja de control de pagos · a revisar uno a uno",
         "precios": [],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "personalizada",
-                           "reportes": ["quincenal", "mensual"], "suplementacion": True,
-                           "harbiz": False, "acompanamiento": "con_entrenador",
+        "responsable": "José Luis",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "personalizada",
+                           "reportes": ["quincenal", "mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True,
+                           "acompanamiento": "con_entrenador",
                            "frecuencia_contacto": "quincenal"},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "", "billing_cycle_weeks": 12,
         "alias": ["Reto 12en12", "Reto12en12", "reto 12 en 12"],
     },
@@ -360,10 +489,14 @@ PLAN_CATALOG = {
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
         "precios": [],
-        "responsable": "CEO",
-        "habilitaciones": {"calculadora": "personalizado", "rutina": "del_mes",
-                           "reportes": ["mensual"], "suplementacion": True, "harbiz": False,
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "del_mes",
+                           "reportes": ["mensual"], "suplementacion": "protocolo",
+                           "audio_feedback": True,
                            "acompanamiento": "con_entrenador", "frecuencia_contacto": "mensual"},
+        # «Plan Personalizado · 6M: No — manda el contrato».
+        "renovacion": {"automatica": False, "cada": "manda el contrato"},
         "stripe_price_env": "", "billing_cycle_weeks": 12,
         "alias": ["Plan Personalizado 500", "Plan Personalizado 550"],
     },
@@ -377,25 +510,67 @@ PLAN_CATALOG = {
         "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
         "precios": [],
         "responsable": "Ninguno (autogestión)",
-        "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "ninguna",
-                           "reportes": [], "suplementacion": False, "harbiz": False,
+        # De autogestión → edita sus macros sí (la regla de los legacy del 19-08 manda
+        # sobre el item 2 de Calma que no lo incluía: al que se lleva solo no se le
+        # enseña una pestaña que le prohíbe tocar). Y si edita, su calculadora es
+        # autogestión: «sin ajuste» con permiso de editar es una contradicción.
+        "habilitaciones": {"calculadora": "autogestion", "edita_macros": True,
+                           "frecuencia_ajuste": "ninguna", "rutina": "ninguna",
+                           "reportes": [], "suplementacion": "ninguna",
                            "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
+        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
         "stripe_price_env": "", "billing_cycle_weeks": 4,
         "alias": ["Basica", "básica"],
     },
     # ---------------- COMPLEMENTOS (no asignables como membresía) ----------------
+    # «Hay dos y tienen que ser cuatro» (doc del 19-08): Rutina del Mes, Rutina
+    # personalizada, Revisión de macros y Formaciones.
     "rutina_mes": {
         "name": "Rutina del Mes", "estado": "complemento", "asignable": False,
         "ciclo": {"tipo": "unico", "semanas": None},
-        # 57 EUR: el mismo precio que se cobra desde el reporte mensual (T8 del doc del
-        # 16-08). Estaba a 55 y eran dos puertas al mismo producto con dos precios; lo
-        # cierra Francisco el 16-08. El número de verdad, el que se cobra, vive en
-        # `core/rutina_del_mes.PRECIO_EUR`, y un test vigila que estos dos no se separen.
-        "precio": 57.0, "precio_nota": "57€ (pago único)",
-        "precios": [{"label": "Único", "importe": 57.0, "periodo": "único"}],
-        "responsable": "Operaciones",
+        # DOS PRECIOS (doc 19-08): 57 EUR dentro de un plan -- el que se cobra desde el
+        # reporte mensual, vive en `core/rutina_del_mes.PRECIO_EUR` y un test vigila que
+        # no se separen -- y 67 EUR suelta, para el que no tiene ningún plan que la
+        # incluya. «Calculadora y Bronze la llevan a 57. Suelta, cualquiera.»
+        "precio": 57.0, "precio_nota": "57€ dentro de un plan · 67€ suelta",
+        "precios": [{"label": "Dentro de un plan", "importe": 57.0, "periodo": "único"},
+                    {"label": "Suelta", "importe": 67.0, "periodo": "único"}],
+        "responsable": "Jesús",
         "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "del_mes",
-                            "reportes": [], "suplementacion": False, "harbiz": False},
+                           "reportes": [], "suplementacion": "ninguna"},
+        "renovacion": {"automatica": False, "cada": "pago único"},
+        "stripe_price_env": "", "billing_cycle_weeks": 4,
+        # Las variantes de Calma que apuntan a este producto.
+        "alias": ["Rutina del Mes Trimestral", "Rutina Premium Mensual"],
+    },
+    "rutina_personalizada": {
+        # FALTABA CREARLO (doc 19-08): «Montada para esa persona · 97 € · quien quiera la
+        # suya en vez de la del mes».
+        "name": "Rutina personalizada", "estado": "complemento", "asignable": False,
+        "ciclo": {"tipo": "unico", "semanas": None},
+        "precio": 97.0, "precio_nota": "97€ (pago único) · la suya en vez de la del mes",
+        "precios": [{"label": "Único", "importe": 97.0, "periodo": "único"}],
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "personalizada",
+                           "reportes": [], "suplementacion": "ninguna"},
+        "renovacion": {"automatica": False, "cada": "pago único"},
+        "stripe_price_env": "", "billing_cycle_weeks": 4,
+    },
+    "revision_macros": {
+        # FALTABA CREARLO (doc 19-08): «Incluye el ajuste a medida y el plan personalizado
+        # de suplementación · 87 € · todo el que no lleve entrenador». El cobro ya está
+        # montado (`core/ajuste_a_medida.py`, PRECIO_EUR = 87, punto 25); lo que no
+        # existía era la ficha del catálogo, y sin ella la app no sabe a quién enseñarle
+        # la oferta y a quién no. Se ofrece al terminar el alta y al final de la guía de
+        # suplementación, y solo a quien no la tiene pagada.
+        "name": "Revisión de macros", "estado": "complemento", "asignable": False,
+        "ciclo": {"tipo": "unico", "semanas": None},
+        "precio": 87.0, "precio_nota": "87€ · ajuste a medida + plan personalizado de suplementación",
+        "precios": [{"label": "Único", "importe": 87.0, "periodo": "único"}],
+        "responsable": "Jesús",
+        "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "ninguna",
+                           "reportes": [], "suplementacion": "protocolo"},
+        "renovacion": {"automatica": False, "cada": "pago único"},
         "stripe_price_env": "", "billing_cycle_weeks": 4,
     },
     "formaciones": {
@@ -403,12 +578,87 @@ PLAN_CATALOG = {
         "ciclo": {"tipo": "unico", "semanas": None},
         "precio": 0.0, "precio_nota": "Variable (según cada lanzamiento)",
         "precios": [],
-        "responsable": "CEO",
+        "responsable": "Jesús",
         "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "ninguna",
-                            "reportes": [], "suplementacion": False, "harbiz": False},
+                           "reportes": [], "suplementacion": "ninguna"},
+        "renovacion": {"automatica": False, "cada": "pago único"},
         "stripe_price_env": "", "billing_cycle_weeks": 4,
     },
+    # ---------------- LO QUE YA SE VENDIÓ Y HAY QUE PODER COLGAR ----------------
+    "optimizacion_hormonal": {
+        # «El Plan de Optimización Hormonal a 1.000 € —que lleva Benito Velasco— va al
+        # catálogo como legacy: ya se vendió y no se vende más, pero esos cobros tienen
+        # que tener dónde colgar» (doc del 19-08).
+        "name": "Plan de Optimización Hormonal", "estado": "legacy", "asignable": False,
+        "ciclo": {"tipo": "unico", "semanas": None},
+        "precio": 1000.0, "precio_nota": "1.000€ · ya vendido, no se vende más",
+        "precios": [{"label": "Único", "importe": 1000.0, "periodo": "único"}],
+        "responsable": "José Luis",
+        "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "ninguna",
+                           "reportes": [], "suplementacion": "ninguna"},
+        "renovacion": {"automatica": False, "cada": "pago único"},
+        "stripe_price_env": "", "billing_cycle_weeks": 4,
+        "alias": ["Optimización Hormonal", "Optimizacion Hormonal"],
+    },
+    "entrenamiento_personal": {
+        # Los «Entrenamiento Personal 2, 3 y 4 (1.200, 1.800 y 2.000 €)» de Calma, que no
+        # existían en el catálogo nuevo: cuando se migren los 143 tienen que caer en algún
+        # sitio «o pasará lo del CalMa que bloquea el alta» (doc del 19-08). Presencial de
+        # los entrenadores; sin precio de catálogo, manda lo pactado.
+        "name": "Entrenamiento Personal", "estado": "legacy", "asignable": True,
+        "ciclo": {"tipo": "variable", "semanas": None},
+        "precio": 0.0, "precio_nota": "Sin precio de catálogo: 1.200-2.000€ según acuerdo",
+        "precios": [],
+        "responsable": "José Luis",
+        "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
+                           "rutina": "personalizada",
+                           "reportes": ["mensual"], "suplementacion": "protocolo",
+                           "acompanamiento": "con_entrenador_y_llamadas"},
+        "renovacion": {"automatica": False, "cada": "manda el acuerdo"},
+        "stripe_price_env": "", "billing_cycle_weeks": 4,
+        "alias": ["Entrenamiento Personal 2", "Entrenamiento Personal 3",
+                  "Entrenamiento Personal 4"],
+    },
 }
+
+# Los «Premium 423,50 mensual · 250 a 5 semanas · 177 mensual · 200 mensual» y los ELM con
+# apellido de Calma: variantes con precio propio de planes que ya existen. Caen en su plan
+# por alias -- el precio de cada cliente va en su perfil, nunca en el catálogo.
+ALIAS_EXTRA = {
+    "premium 423,50 mensual": "premium", "premium 423.50 mensual": "premium",
+    "premium 250 a 5 semanas": "premium", "premium 177 mensual": "premium",
+    "premium 200 mensual": "premium",
+    "lunes empiezo (anual)": "elm", "el lunes empiezo (julio)": "elm",
+    "el lunes empiezo (agosto)": "elm", "lunes empiezo": "elm",
+    "silver 4-trimestral": "silver",
+}
+
+
+def suplementacion_incluida(habilitaciones: Dict[str, Any]) -> bool:
+    """Si el plan incluye algo de suplementación (la guía o el protocolo).
+
+    El campo pasó de sí/no a tres opciones -- ninguna | guia | protocolo -- con el fallo
+    10 del doc del 19-08, y los overrides guardados en la base pueden traer todavía el
+    booleano viejo. «ninguna» es un texto y un texto es truthy: mirar el campo a pelo
+    diría que un plan sin nada la incluye.
+    """
+    v = (habilitaciones or {}).get("suplementacion")
+    if isinstance(v, str):
+        return v.strip().lower() in ("guia", "guía", "protocolo")
+    return bool(v)
+
+
+def nivel_suplementacion(habilitaciones: Dict[str, Any]) -> str:
+    """ninguna | guia | protocolo, tolerando el booleano viejo de los overrides.
+
+    True viejo era «este plan lleva suplementación del coach»: se lee como protocolo,
+    que es lo que era en todos los planes que lo tenían marcado.
+    """
+    v = (habilitaciones or {}).get("suplementacion")
+    if isinstance(v, str):
+        v = v.strip().lower().replace("guía", "guia")
+        return v if v in ("ninguna", "guia", "protocolo") else "ninguna"
+    return "protocolo" if v else "ninguna"
 
 
 def derive_features(habilitaciones: Dict[str, Any]) -> List[str]:
@@ -429,11 +679,14 @@ def derive_features(habilitaciones: Dict[str, Any]) -> List[str]:
         features.append("reporte_mensual")
     if "semanal" in reportes:
         features.append("reporte_semanal")
-    if h.get("suplementacion"):
+    if suplementacion_incluida(h):
         features.append("suplementacion")
     if h.get("rutina") == "personalizada":
         features.append("cardio")
-    if "quincenal" in reportes:
+    # El audio con su campo propio (doc 19-08): estaba deducido del quincenal y por eso
+    # solo constaba en cuatro planes cuando lo incluyen los programas antiguos. El
+    # quincenal se mantiene como respaldo para overrides que no traigan el campo.
+    if h.get("audio_feedback") or "quincenal" in reportes:
         features.append("audio")
     return features
 
@@ -462,9 +715,10 @@ PLAN_TYPES = {
 # suplementacion, ni cadencia. Es lo que avisa el punto 38 del 07-08 -- la app tiene que saber
 # representar los planes viejos, no convertirlos.
 ALIAS_DE_PLAN: Dict[str, str] = {
-    alias.lower().strip(): code
-    for code, p in PLAN_CATALOG.items()
-    for alias in (p.get("alias") or [])
+    **{alias.lower().strip(): code
+       for code, p in PLAN_CATALOG.items()
+       for alias in (p.get("alias") or [])},
+    **ALIAS_EXTRA,
 }
 
 
@@ -634,6 +888,10 @@ PLAN_EDITABLE_FIELDS = {
     # tienda ni en el checkout. Vive en el catálogo y no en un ajuste suelto porque es una
     # propiedad del plan, y así se ve al lado de su estado en el mismo sitio.
     "renovable_por_los_suyos",
+    # QUIÉN RENUEVA SOLO Y QUIÉN NO (doc 19-08): {automatica: bool, cada: texto}. No es
+    # informativo: de él salen a quién avisar de que se le acaba el ciclo y a quién no
+    # molestar. No toca el cobro (eso es el Price de Stripe).
+    "renovacion",
     # QUE INCLUYE, ESCRITO A MANO (punto 6.4 de la revision del 09-08). Hasta ahora «Tu plan
     # incluye» de Mi perfil se derivaba de la matriz de habilitaciones, y de ahi solo salen
     # frases de sistema: «Macros personalizados por tu entrenador», «Reporte quincenal». Eso
@@ -665,13 +923,25 @@ def merged_catalog(overrides_by_code: Optional[Dict[str, Dict[str, Any]]] = None
         entry = {**base}
         ov = overrides_by_code.get(code) or {}
         for field, value in ov.items():
-            if field in PLAN_EDITABLE_FIELDS:
+            if field not in PLAN_EDITABLE_FIELDS:
+                continue
+            # LAS HABILITACIONES SE MEZCLAN CLAVE A CLAVE, no de golpe (19-08). Los
+            # overrides guardados antes de los interruptores nuevos traen el dict viejo
+            # entero, y pisando de golpe borraban `edita_macros`, la suplementación de
+            # tres valores y la renovación: el catálogo nuevo desaparecía justo en los
+            # planes que alguien había tocado desde el panel.
+            if field == "habilitaciones" and isinstance(value, dict):
+                entry[field] = {**(base.get("habilitaciones") or {}), **value}
+            else:
                 entry[field] = value
         entry["code"] = code
         # Ningún plan del código lo declara: sin esto el panel no tendría qué pintar en el
         # interruptor hasta que alguien lo encendiera una vez.
         entry["renovable_por_los_suyos"] = bool(entry.get("renovable_por_los_suyos"))
         entry["habilitaciones"] = completar_acompanamiento(entry.get("habilitaciones", {}))
+        # HARBIZ MURIÓ (fallo 07 del 19-08): la fila se quitó de las 21 fichas, y los
+        # overrides viejos que la traen guardada no pueden resucitarla.
+        entry["habilitaciones"].pop("harbiz", None)
         entry["features"] = derive_features(entry["habilitaciones"])
         out[code] = entry
     return out
@@ -779,6 +1049,11 @@ class ClientProfile(BaseModel):
     # Su % graso vigente y si toca volver a pedirlo (punto 47): {valor, fecha, semanas,
     # hay_que_pedirlo}. Se pide cada 12 semanas, no en cada ajuste.
     grasa: Optional[Dict[str, Any]] = None
+    # «No quiero renovar» (doc 19-08): {motivo, motivo_clave, cuando}. Sin esto, el modelo
+    # se comía la marca y a quien acababa de pedir la baja se le volvía a ofrecer el enlace.
+    no_renovar: Optional[Dict[str, Any]] = None
+    # Las medidas tomadas fuera del reporte (los botones de Seguimiento, doc 19-08).
+    medidas_sueltas: Optional[List[Dict[str, Any]]] = None
     # ¿Sus macros los puso ALGUIEN, o salieron del calculo del alta? (punto 4.1)
     # Lo calcula el servidor mirando el ultimo apunte del historial. Sirve para no decirle a
     # un cliente al que su coach le acaba de ajustar los macros que los tiene "provisionales"
@@ -1119,6 +1394,17 @@ class QuestionnaireSubmit(BaseModel):
     dietas_previas: Optional[str] = None
     tiempo_intentandolo: Optional[str] = None
     motivo_apuntarse: Optional[str] = None
+    # SI YA LE HA PAGADO A ALGUIEN, y qué tal le fue (corrección del punto 42, doc del
+    # 19-08). No es lo mismo que `training_experience`: una dice cuántos años lleva
+    # levantando peso, esta si ya ha estado en manos de otro y cómo acabó. Va en el
+    # básico, para todos.
+    #
+    # `entrenador_anterior` viene del cuestionario largo de antes, donde era un texto
+    # libre («quién, cuánto tiempo y por qué lo dejaste»). Ahora es «si» / «no» y el relato
+    # va aparte; lo que ya está guardado como texto se queda como está y no se le vuelve a
+    # preguntar a nadie que lo tenga.
+    entrenador_anterior: Optional[str] = None
+    entrenador_anterior_que_tal: Optional[str] = None
 
 # Cuestionario Nivel 1 (solo planes con coach: calculadora == 'personalizado').
 # Alimenta perfil, caso gemelo y estrategia; NO toca los macros.

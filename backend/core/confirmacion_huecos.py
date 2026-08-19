@@ -23,6 +23,26 @@ NO_LO_HICE = "no_lo_hice"
 SI_PERO_NO_APUNTE = "si_pero_no_apunte"
 RESPUESTAS = (NO_LO_HICE, SI_PERO_NO_APUNTE)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# EL HUECO DE ENTRENAMIENTO, APAGADO (punto 41 del doc del 19-08)
+#
+#     «El reporte va a decir "no registraste 16 entrenamientos". Los entrenos previstos se
+#      calculan multiplicando los días de entreno. Con el cuatro por defecto empieza a
+#      salir, y no hay ningún sitio donde marcar que has entrenado.
+#      LA RESPUESTA: quita ese dato del reporte. Decirle a alguien que no ha entrenado
+#      cuando sí ha entrenado es peor que no decirle nada.
+#      Cuando exista dónde marcarlo, se vuelve a encender.»
+#
+# Los previstos son una MULTIPLICACIÓN (días de entreno por semana × semanas), y los
+# hechos salen de `checkins.trained`, que solo se escribe si el cliente cierra el día. O
+# sea: un lado inventado y el otro incompleto. El que entrena cinco veces y no cierra
+# ningún día lee que no ha entrenado ni una vez.
+#
+# Se apaga AQUÍ y no en quien llama, para que sea una sola línea la que lo encienda el día
+# que exista un registro de sesiones de verdad. Los previstos se siguen recibiendo y
+# devolviendo: el dato no se pierde, solo deja de convertirse en una acusación.
+SE_REGISTRAN_LOS_ENTRENOS = False
+
 
 def _pct(hechos: float, total: float) -> int:
     return int(round(100 * hechos / total)) if total > 0 else 0
@@ -59,7 +79,7 @@ def huecos_del_periodo(dias_periodo: int, dias_con_dieta: int, dias_con_entreno:
             ),
         })
 
-    if entrenos_previstos:
+    if entrenos_previstos and SE_REGISTRAN_LOS_ENTRENOS:
         previstos = max(0, int(entrenos_previstos))
         hechos = max(0, min(int(dias_con_entreno or 0), previstos))
         sin_entreno = previstos - hechos
@@ -111,7 +131,10 @@ def cumplimiento(estado: Dict[str, Any], respuestas: Dict[str, str]) -> Dict[str
 
     hueco_entreno = por_tipo.get("entrenamiento")
     previstos = estado.get("entrenos_previstos")
-    if previstos:
+    # Y tampoco se saca un porcentaje de entrenamiento mientras el hueco esté apagado: sin
+    # el hueco no hay forma de decir «los hice y no los apunté», así que el porcentaje sería
+    # siempre el de los días que casualmente cerró.
+    if previstos and SE_REGISTRAN_LOS_ENTRENOS:
         hechos = min(estado.get("dias_con_entreno") or 0, previstos)
         if hueco_entreno and (respuestas or {}).get("entrenamiento") == SI_PERO_NO_APUNTE:
             hechos += hueco_entreno["dias"]

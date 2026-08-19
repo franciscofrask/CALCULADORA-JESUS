@@ -41,8 +41,8 @@ def _semana_con_reporte():
 def test_sin_aplazar_la_ventana_es_la_de_siempre():
     _, estado = _semana_con_reporte()
     assert estado["due"] is True
-    # El mensual: viernes 00:00 -> lunes 18:00, hora de España (doc 16-08).
-    assert estado["window_close"] - estado["window_open"] == timedelta(days=3, hours=18)
+    # El mensual: viernes 10:00 -> lunes 18:00, hora de España (el reloj del 19-08).
+    assert estado["window_close"] - estado["window_open"] == timedelta(days=3, hours=8)
 
 
 def test_aplazar_corre_la_ventana_siete_dias():

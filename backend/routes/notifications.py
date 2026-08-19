@@ -24,7 +24,7 @@ import uuid
 from core.database import db
 from core.sin_futuro import hasta_hoy
 from core.security import get_current_user, get_admin_user
-from core.tiempo import a_madrid, hoy_madrid
+from core.tiempo import MADRID, a_madrid, hoy_madrid
 from core.avisos_equipo import TIPOS_EQUIPO, es_de_dinero
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -121,18 +121,52 @@ async def _avisar(user_id: str, familia: str, tipo: str, link: str,
         pass
 
 
+# ── LOS DOS AVISOS DE ENTREGA DEL RELOJ (doc 19-08, apartados 02 y 10) ────────
+#
+# «Dos avisos nuevos que no existen: uno el miércoles cuando tiene sus macros y su
+# suplementación, otro el jueves cuando tiene su rutina. Cada uno lleva a su pantalla.»
+#
+# Los textos son LITERALES del documento y van tal cual, sin variantes que roten: el doc
+# les da una sola redacción, y los literales «no se reescriben». Se disparan por el EVENTO
+# de entrega (el equipo guarda macros / rutina), que es cuando de verdad los tiene: el
+# miércoles y el jueves son cuándo ocurre eso en el reloj de la semana, no un cron.
+#
+# Y salen SIN el interruptor t10: el cliente se enteraba de que le habían cambiado los
+# macros porque entraba y los veía. Un aviso de entrega no es un experimento que se pueda
+# dejar apagado.
+
+def _arranque_del_dia_es() -> str:
+    """Las 00:00 de HOY en Madrid, como instante UTC comparable con `created_at`.
+
+    Comparar contra `hoy_madrid().isoformat()` (la fecha a secas) parece lo mismo y no lo
+    es: un aviso de las 00:30 de Madrid se guarda con las 22:30 UTC del día ANTERIOR, y el
+    string «2026-08-18T22:30» pierde contra «2026-08-19». Es la trampa del día de España
+    que ya mordió tres veces.
+    """
+    hoy = hoy_madrid()
+    return datetime(hoy.year, hoy.month, hoy.day, tzinfo=MADRID) \
+        .astimezone(timezone.utc).isoformat()
+
+
+async def _hay_aviso_de_hoy(user_id: str, familia: str) -> Optional[Dict[str, Any]]:
+    """El aviso de esa familia mandado HOY (día de España), si existe."""
+    return await db.notifications.find_one(
+        {"user_id": user_id, "familia": familia,
+         "created_at": {"$gte": _arranque_del_dia_es()}},
+        {"_id": 0, "id": 1})
+
+
 async def avisar_macros(user_id: str, nota: Optional[str] = None,
                         sin_cambios: bool = False) -> None:
-    """"Tienes macros nuevos", o "Este mes no te toco nada" si le guardó los mismos.
+    """La entrega del miércoles: «Ya tienes tus macros nuevos».
 
     Lo dispara SOLO guardar la pestaña Macros del cliente (`PUT .../macros` y
     `POST .../calculator/apply`), nunca guardar la dieta de un día: montando una dieta se
-    guarda muchas veces y no puede saltar un aviso cada vez (T12 del doc)."""
-    from routes.settings import pantalla_activa
-    if not await pantalla_activa("t10_avisos_nuevos"):
-        await notify(user_id, "macros", "Hemos actualizado tus macros",
-                     "/dashboard/nutrition", body=nota)
-        return
+    guarda muchas veces y no puede saltar un aviso cada vez (T12 del doc).
+
+    El cuerpo nombra la suplementación solo si TAMBIÉN se le ha entregado hoy: la entrega
+    del miércoles son las dos cosas juntas, pero prometerle una suplementación que no se
+    le ha tocado sería mentirle en la misma frase que le avisa."""
     if sin_cambios:
         # Que no le toquen nada también es una decisión, y el cliente que la recibe en
         # silencio cree que se han olvidado de él.
@@ -141,20 +175,34 @@ async def avisar_macros(user_id: str, nota: Optional[str] = None,
              "cuerpo": "Vas bien con lo que tienes. Seguimos igual."},
         ], nota)
         return
-    await _avisar(user_id, "macros_nuevos", "macros", "/dashboard/nutrition", [
-        {"titulo": "Tienes macros nuevos",
-         "cuerpo": "Los he ajustado con lo que me contaste."},
-        {"titulo": "Te he tocado los macros",
-         "cuerpo": "Ya los tienes en Nutrición."},
+    con_supl = await _hay_aviso_de_hoy(user_id, "suplementos")
+    if con_supl:
+        # Un solo recado para la entrega completa: el suyo de suplementación de hoy se
+        # marca leído para que no lea el mismo miércoles dos veces.
+        await db.notifications.update_many(
+            {"user_id": user_id, "familia": "suplementos",
+             "created_at": {"$gte": _arranque_del_dia_es()}},
+            {"$set": {"read": True}})
+    await _avisar(user_id, "macros_nuevos", "macros", "/dashboard/macro-calculator", [
+        {"titulo": "Ya tienes tus macros nuevos",
+         "cuerpo": ("Y tu suplementación. Échales un ojo antes del lunes." if con_supl
+                    else "Échales un ojo antes del lunes.")},
     ], nota)
 
 
 async def avisar_suplementos(user_id: str, nota: Optional[str] = None) -> None:
-    """Al guardar la suplementación del cliente."""
-    from routes.settings import pantalla_activa
-    if not await pantalla_activa("t10_avisos_nuevos"):
-        await notify(user_id, "suplementos", "Tu protocolo de suplementos se ha actualizado",
-                     "/dashboard/supplements", body=nota)
+    """Al guardar la suplementación del cliente.
+
+    Si HOY ya salió el aviso de macros, no se manda otro: se reescribe aquel para que
+    diga la entrega completa. Es el «máximo uno al día» del doc aplicado al miércoles,
+    que es el día en que las dos cosas llegan juntas."""
+    de_macros = await _hay_aviso_de_hoy(user_id, "macros_nuevos")
+    if de_macros:
+        await db.notifications.update_many(
+            {"user_id": user_id, "familia": "macros_nuevos",
+             "created_at": {"$gte": _arranque_del_dia_es()}},
+            {"$set": {"body": "Y tu suplementación. Échales un ojo antes del lunes.",
+                      "read": False}})
         return
     await _avisar(user_id, "suplementos", "suplementos", "/dashboard/supplements", [
         {"titulo": "Te he cambiado la suplementación", "cuerpo": None},
@@ -164,15 +212,10 @@ async def avisar_suplementos(user_id: str, nota: Optional[str] = None) -> None:
 
 
 async def avisar_rutina_nueva(user_id: str) -> None:
-    """Al subir una rutina desde el apartado Rutinas, del plan que sea."""
-    from routes.settings import pantalla_activa
-    if not await pantalla_activa("t10_avisos_nuevos"):
-        await notify(user_id, "rutina", "Te hemos preparado una rutina nueva",
-                     "/dashboard/routine")
-        return
+    """La entrega del jueves: «Ya tienes tu rutina». Al subirla, del plan que sea."""
     await _avisar(user_id, "rutina_nueva", "rutina", "/dashboard/routine", [
-        {"titulo": "Tienes rutina nueva", "cuerpo": "Ya la tienes en tu entreno de mañana."},
-        {"titulo": "Rutina nueva cargada", "cuerpo": "La verás en cuanto entres a entrenar."},
+        {"titulo": "Ya tienes tu rutina",
+         "cuerpo": "La de este mes. Empiezas el lunes."},
     ])
 
 
@@ -263,6 +306,7 @@ async def sincronizar_avisos(user_id: str) -> int:
             proximo_ajuste=datos["proximo_ajuste"],
             semanas_ciclo=datos["semanas_ciclo"],
             macros_puestos_por_alguien=datos["macros_puestos_por_alguien"],
+            va_a_recibir_definitivos=datos["va_a_recibir_definitivos"],
             rutina_visible=rutina_visible,
             nuevos=nuevos,
         )
@@ -283,6 +327,7 @@ async def sincronizar_avisos(user_id: str) -> int:
             ahora=ahora,
             semanas_sin_ajustar=datos["semanas_sin_ajustar"],
             reporte_sin_fotos=datos["reporte_sin_fotos"],
+            faltan_fotos_o_medidas=datos.get("faltan_fotos_o_medidas"),
             dias_sin_cerrar=datos["dias_sin_cerrar"],
             dias_sin_entrar=datos["dias_sin_entrar"],
             dias_con_el_perfil_a_medias=datos["dias_con_el_perfil_a_medias"],
@@ -422,6 +467,8 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     # vive en un solo sitio porque la usan dos pantallas -- los avisos y el Inicio -- y si
     # cada una tuviera la suya volveriamos a tener dos verdades.
     from core.macros_de_quien import de_una_persona
+    from core.plan_access import tiene_entrenador_detras
+    from core.ventana_completo import ventana_del_completo
 
     hoy = hoy_madrid()
     cerro_hoy, dias_sin_cerrar = await _cierres_del_cliente(client_id, hoy)
@@ -429,23 +476,88 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     return {
         "semanas_sin_ajustar": (dias_sin_ajustar // 7) if dias_sin_ajustar is not None else None,
         "reporte_sin_fotos": sin_fotos,
+        # «Han pasado cuatro semanas» (doc 19-08): solo autogestión (donde las fotos y
+        # las medidas se recomiendan, no se piden en un reporte), y nombrando solo lo que
+        # falte de las dos.
+        "faltan_fotos_o_medidas": await _fotos_o_medidas_viejas(perfil, hoy_madrid()),
         "proximo_ajuste": proximo_ajuste,
         "semanas_ciclo": semanas_ciclo,
         "semana": semana,
         "ventanas": ventanas,
         "macros_puestos_por_alguien": de_una_persona(ultimos_macros),
+        # ¿VA A RECIBIR UNOS DEFINITIVOS? (punto 04 del doc del 19-08). El aviso de macros
+        # provisionales promete unos definitivos y eso solo se cumple en dos casos: que
+        # tenga un entrenador detrás -- Gold, Silver, Bronze, Premium y los legacy con
+        # coach -- o que haya pagado el ajuste a medida de los 87 €. Al resto le estaríamos
+        # prometiendo algo que no le va a llegar.
+        "va_a_recibir_definitivos": (
+            tiene_entrenador_detras(perfil.get("plan"))
+            or bool((perfil.get("ajuste_a_medida") or {}).get("cobrado"))
+        ),
         "cerro_hoy": cerro_hoy,
         "dias_sin_cerrar": dias_sin_cerrar,
         "dias_sin_entrar": await _dias_sin_entrar(perfil, hoy),
         # Cuánto lleva con el perfil largo a medias, para el aviso de los tres días (18-08).
         # `None` para quien no tiene que hacerlo: los que no llevan entrenador y los que ya
         # lo terminaron.
-        "dias_con_el_perfil_a_medias": _dias_con_el_perfil_a_medias(perfil, hoy),
+        #
+        # Y SOLO CON LA VENTANA ABIERTA (el reloj del 19-08): el cuestionario largo abre
+        # del viernes 10:00 al lunes 18:00, así que avisarle un martes de que le faltan
+        # preguntas es mandarle a una puerta cerrada. Con la ventana cerrada el aviso se
+        # calla y vuelve a contar el viernes.
+        "dias_con_el_perfil_a_medias": (
+            _dias_con_el_perfil_a_medias(perfil, hoy)
+            if ventana_del_completo(ahora)["abierta"] else None),
         # El arranque del ciclo, en día de España: es el "día 1" del que habla el doc.
         "arranque": (a_madrid(perfil.get("cycle_start") or perfil.get("created_at")) or ahora).date(),
         # Activado por defecto: el cliente lo apaga desde su perfil, no al revés.
         "quiere_cierre_dia": bool((perfil.get("avisos") or {}).get("cierre_dia", True)),
     }
+
+
+async def _fotos_o_medidas_viejas(perfil: dict, hoy) -> Optional[list]:
+    """Qué lleva más de 4 semanas sin renovarse, para el aviso único del doc 19-08.
+
+    Solo en autogestión: al de plan personalizado se lo pide su reporte mensual y tiene
+    sus propios avisos. Devuelve ['tus fotos'], ['tus medidas'], las dos, o None.
+    """
+    from core.plan_access import tiene_entrenador_detras
+    if tiene_entrenador_detras(perfil.get("plan")) or not perfil.get("id"):
+        return None
+
+    CUATRO_SEMANAS = 28
+
+    def _dias(iso):
+        try:
+            return (hoy - date.fromisoformat(str(iso)[:10])).days
+        except (ValueError, TypeError):
+            return None
+
+    # Desde cuándo contar si no hay ninguna toma: desde que arrancó, y a un recién
+    # llegado no se le reclama nada.
+    base = _dias(perfil.get("cycle_start") or perfil.get("created_at"))
+    if base is None or base < CUATRO_SEMANAS:
+        return None
+
+    ultima_foto = await db.client_photos.find_one(
+        {"client_id": perfil["id"]}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+    dias_foto = _dias((ultima_foto or {}).get("created_at")) if ultima_foto else base
+
+    # La última toma de medidas: la de un reporte o una suelta, la más reciente.
+    con_medidas = await db.reports.find_one(
+        {"client_id": perfil["id"], "measurements": {"$nin": [None, {}]}},
+        {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+    fechas = [c.get("fecha") for c in (perfil.get("medidas_sueltas") or [])]
+    if con_medidas:
+        fechas.append(con_medidas.get("created_at"))
+    dias_medidas = min([d for d in (_dias(f) for f in fechas) if d is not None], default=base)
+
+    faltan = []
+    if dias_foto is not None and dias_foto >= CUATRO_SEMANAS:
+        faltan.append("tus fotos")
+    if dias_medidas is not None and dias_medidas >= CUATRO_SEMANAS:
+        faltan.append("tus medidas")
+    return faltan or None
 
 
 async def _cierres_del_cliente(client_id: str, hoy) -> tuple:
@@ -538,8 +650,9 @@ async def _ventanas_de_reporte(perfil: dict, catalogo: dict, ahora: datetime) ->
     """
     from core.calendario_reportes import reporte_de_la_semana, ventana_del_reporte
     from core.cycle import compute_cycle
+    from core.semana_rutina import lunes_de_la_semana, semana_de_rutina
     from core.tiempo import a_utc
-    from routes.report_cadence import _cal, _week_window_start
+    from routes.report_cadence import _cal, _week_window_start, rutina_activa_de
 
     # La semana del ciclo se devuelve SIEMPRE, tenga reportes o no: de ella depende el
     # aviso de "tu ciclo acaba en una semana", que le toca a los tres planes.
@@ -550,9 +663,21 @@ async def _ventanas_de_reporte(perfil: dict, catalogo: dict, ahora: datetime) ->
 
     inicio = _week_window_start(perfil, ahora)
 
+    # QUÉ SEMANA DECIDE EL REPORTE: la de su rutina si la tiene (doc 19-08), la de ciclo
+    # si no. La misma regla que `compute_client_report_state` — el aviso de «tu quincenal
+    # está abierto» no puede salir en una semana distinta de la que abre la ventana.
+    rutina = await rutina_activa_de(perfil.get("id"))
+    hoy_es = (a_madrid(ahora) or ahora).date()
+    semana_rutina = semana_de_rutina(rutina, hoy_es)
+    semana_reporte = semana_rutina if semana_rutina is not None else semana
+    if semana_rutina:
+        lunes = lunes_de_la_semana(rutina, semana_rutina)
+        if lunes:
+            inicio = datetime(lunes.year, lunes.month, lunes.day, tzinfo=MADRID)
+
     ventanas: List[Dict[str, Any]] = []
     for atras in (1, 0):
-        n = semana - atras
+        n = semana_reporte - atras
         if n < 1:
             continue
         tipo = reporte_de_la_semana(cal, n)

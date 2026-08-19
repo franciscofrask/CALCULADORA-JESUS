@@ -14,6 +14,7 @@ import {
 import { useEsTelefono } from '../lib/esTelefono';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
+import BodyFatSlider from '../components/SelectorGrasa';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
@@ -155,16 +156,96 @@ const OnboardingChecklist = ({ steps, onDismiss, navigate, onResume, showResume 
 // WhatsApp y el número nunca llegó a ponerse, así que lo que salía era «escríbenos y lo
 // vemos» sin decir a quién ni dónde. Ahora deja su correo y entra en Leads, que es donde
 // alguien lo va a ver: «que deje su mail y queda como lead».
+// LA VENTANA DE LAS 12 SEMANAS (doc 19-08, «Fotos, medidas y % de grasa: la regla»).
+//
+//     «Llevas 12 semanas sin actualizar tu porcentaje de grasa — Te recomiendo medirlo
+//      cada 12 semanas.» Tres salidas, y una vez al día como mucho aunque abra la app
+//      varias veces.
+//
+// El servidor decide si toca (`profile.grasa.mostrar_ventana`): aquí solo se pinta, se
+// apunta que hoy ya salió, y se ejecuta la salida que elija.
+const VentanaGrasa = ({ api, profile, onCerrada }) => {
+    const [abierta, setAbierta] = useState(true);
+    const [eligiendo, setEligiendo] = useState(false);
+    const [grasa, setGrasa] = useState(profile?.grasa?.valor ?? profile?.body_fat ?? null);
+    const [guardando, setGuardando] = useState(false);
+
+    useEffect(() => {
+        // Se apunta nada más salir: si cierra la app sin tocar nada, hoy ya no vuelve.
+        api.post('/clients/me/grasa/ventana', { accion: 'vista' }).catch(() => {});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const salida = async (accion) => {
+        try { await api.post('/clients/me/grasa/ventana', { accion }); } catch { /* ya quedó vista */ }
+        setAbierta(false);
+        onCerrada?.();
+    };
+
+    const guardar = async () => {
+        setGuardando(true);
+        try {
+            await api.post('/clients/me/grasa', { valor: grasa });
+            toast.success('Porcentaje actualizado');
+            setAbierta(false);
+            onCerrada?.();
+        } catch (e) {
+            console.error('[grasa] no se pudo guardar', e);
+            toast.error('No se pudo guardar. Inténtalo en un momento.');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    if (!abierta) return null;
+    return (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+            data-testid="ventana-grasa">
+            <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+                <h2 className="text-xl font-bold text-foreground leading-tight mb-1">
+                    Llevas 12 semanas sin actualizar tu porcentaje de grasa
+                </h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                    Te recomiendo medirlo cada 12 semanas.
+                </p>
+                {eligiendo ? (
+                    <div className="space-y-3">
+                        <BodyFatSlider value={grasa} onChange={setGrasa} sexo={profile?.sex || 'hombre'} />
+                        <button onClick={guardar} disabled={guardando || grasa == null}
+                            data-testid="grasa-guardar" className="btn-brand w-full disabled:opacity-60">
+                            {guardando ? 'Guardando…' : 'Guardar mi porcentaje'}
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        <button onClick={() => setEligiendo(true)} data-testid="grasa-actualizar"
+                            className="btn-brand w-full">Actualizarlo ahora</button>
+                        <button onClick={() => salida('recordar')} data-testid="grasa-recordar"
+                            className="w-full text-sm text-foreground/70 hover:text-foreground py-2">
+                            Recordármelo la semana que viene
+                        </button>
+                        <button onClick={() => salida('nunca')} data-testid="grasa-nunca"
+                            className="w-full text-xs text-foreground/40 hover:text-foreground/60 py-1">
+                            No volver a mostrar
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
 const PlanCaducado = ({ navigate, nombre, api, email }) => {
-    const [correo, setCorreo] = useState(email || '');
     const [enviando, setEnviando] = useState(false);
     const [hecho, setHecho] = useState('');
 
-    const pedirContacto = async (e) => {
-        e.preventDefault();
+    // SIN PEDIRLE EL CORREO (doc 19-08, «Mi plan y la baja»): «hoy dice "déjanos tu
+    // correo y te escribimos", y el correo ya lo tenemos». Es SU sesión: un botón y ya.
+    const pedirContacto = async () => {
         setEnviando(true);
         try {
-            const r = await api.post('/leads/quiero-volver', { email: correo.trim() });
+            const r = await api.post('/leads/quiero-volver', { email: (email || '').trim() });
             setHecho(r.data?.mensaje || 'Hecho. Te escribimos enseguida.');
         } catch (err) {
             // Al cliente no se le enseña el detalle del backend: frase humana aquí y el
@@ -182,23 +263,26 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
                 <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Clock className="w-8 h-8 text-brand" />
                 </div>
-                <h2 className="heading-2 text-foreground mb-2">Tu suscripción ha caducado</h2>
+                <h2 className="heading-2 text-foreground mb-2">Tu suscripción ha terminado</h2>
                 <p className="text-muted-foreground mb-6 text-sm">
-                    Déjanos tu correo y te escribimos para ver cómo sigues.
+                    Para seguir entrenando con nosotros, renueva tu plan. Y si quieres que te
+                    llamemos y lo vemos juntos, dínoslo.
                 </p>
 
                 {hecho ? (
                     <p className="text-brand font-medium text-sm" data-testid="caducado-hecho">{hecho}</p>
                 ) : (
-                    <form onSubmit={pedirContacto} className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
-                        <input type="email" required value={correo} onChange={(e) => setCorreo(e.target.value)}
-                            placeholder="tu@correo.com" data-testid="caducado-email"
-                            className="flex-1 bg-muted border border-border rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand/40" />
-                        <button type="submit" disabled={enviando} className="btn-brand whitespace-nowrap disabled:opacity-60"
+                    <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                        <button onClick={() => navigate('/renovacion')} className="btn-brand whitespace-nowrap"
+                            data-testid="caducado-renovar">
+                            Renovar mi plan
+                        </button>
+                        <button onClick={pedirContacto} disabled={enviando}
+                            className="text-brand text-sm hover:underline disabled:opacity-60 px-4 py-2.5"
                             data-testid="caducado-enviar">
                             {enviando ? 'Enviando...' : 'Que me escriban'}
                         </button>
-                    </form>
+                    </div>
                 )}
 
                 {/* La alternativa de la que se habló: seguir con la Membresía en vez de irse. */}
@@ -638,7 +722,15 @@ const InicioNuevo = () => {
 // =============== CLIENT DASHBOARD ===============
 
 const ClientDashboard = () => {
-    const { user, profile, api, myPlan, planUnpaid, can, pantalla } = useAuth();
+    const { user, profile, api, myPlan, planUnpaid, can, pantalla, refreshProfile } = useAuth();
+    // LA VENTANA DE LAS 12 SEMANAS SE ARMA UNA VEZ Y SE QUEDA (fallo cazado en el
+    // navegador): montarla marca «vista hoy», el perfil se refresca, la condición del
+    // servidor pasa a false y el modal se desmontaba solo antes de que nadie lo viera.
+    // El gate se fija al detectarlo y solo lo cierra una salida del propio modal.
+    const [ventanaGrasaArmada, setVentanaGrasaArmada] = useState(false);
+    useEffect(() => {
+        if (profile?.grasa?.mostrar_ventana) setVentanaGrasaArmada(true);
+    }, [profile?.grasa?.mostrar_ventana]);
     // El Inicio nuevo del doc del 16-08 (T1), detrás de su interruptor. Apagado -- que es
     // como nace -- aquí no cambia nada: se sigue viendo el Inicio de siempre.
     const inicioNuevo = pantalla('t1_inicio_nuevo');
@@ -774,7 +866,18 @@ const ClientDashboard = () => {
     // A partir de aquí, el Inicio de siempre. El nuevo se pinta entero aparte para no
     // dejar la pantalla vieja llena de condiciones: mientras el interruptor esté apagado,
     // lo de abajo es exactamente lo que había.
-    if (inicioNuevo) return <InicioNuevo />;
+    // La ventana de las 12 semanas sale en los DOS Inicios (doc 19-08): con el nuevo
+    // encendido este return corta antes de llegar al bloque de abajo, y sin esto el
+    // cliente del Inicio nuevo no la veía nunca.
+    if (inicioNuevo) return (
+        <>
+            {ventanaGrasaArmada && (
+                <VentanaGrasa api={api} profile={profile}
+                    onCerrada={() => { setVentanaGrasaArmada(false); refreshProfile(); }} />
+            )}
+            <InicioNuevo />
+        </>
+    );
 
     const mt = macros?.training || profile?.macros_training;
     const mr = macros?.rest || profile?.macros_rest;
@@ -835,6 +938,11 @@ const ClientDashboard = () => {
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto space-y-6 animate-fade-in" data-testid="client-dashboard">
+            {/* La ventana de las 12 semanas (doc 19-08): el servidor decide si toca hoy. */}
+            {ventanaGrasaArmada && (
+                <VentanaGrasa api={api} profile={profile}
+                    onCerrada={() => { setVentanaGrasaArmada(false); refreshProfile(); }} />
+            )}
             {/* LA CABECERA SE QUEDA como estaba: «Panel del cliente», el saludo y el plan
                 contratado. La quité en la primera pasada por ganar los 300 px que ocupa, y
                 Francisco la devolvió: «era info que no molestaba». Y es verdad que no

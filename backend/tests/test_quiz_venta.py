@@ -157,7 +157,7 @@ class TestElResultadoQueSeLeEnsena:
 
     def test_trae_los_precios_del_catalogo(self):
         precios = {n["plan"]: n["precio"] for n in self._resultado("C")["niveles"]}
-        assert precios == {"nivel1": 297.0, "nivel2": 897.0, "nivel3": 1500.0}
+        assert precios == {"nivel1": 247.0, "nivel2": 847.0, "nivel3": 1500.0}
 
     def test_el_nivel_3_se_propone_con_los_tres_precios_delante(self):
         """Va a llamada: se propone y lo elige el, viendo los otros dos."""

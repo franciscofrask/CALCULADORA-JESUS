@@ -140,8 +140,11 @@ const ComparativaCliente = ({ api, reports, faseDesde }) => {
                 <Camera className="w-5 h-5 text-foreground/25 shrink-0 mt-0.5" />
                 <div>
                     <p className="text-sm font-bold text-foreground">Tu comparativa</p>
+                    {/* Ya no es un callejón: los botones de arriba dejan subirlas cuando
+                        quiera (doc 19-08, «Lo que falta en Seguimiento»). */}
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Todavía no has subido fotos. Se piden en el reporte mensual, junto con las medidas.
+                        Todavía no has subido fotos. Puedes subirlas cuando quieras con el botón
+                        de arriba; te las recomendamos cada 4 semanas.
                     </p>
                 </div>
             </div>

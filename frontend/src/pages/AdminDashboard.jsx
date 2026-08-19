@@ -14,12 +14,13 @@ import { AvisosDelEquipo, PeticionesDeCompra } from '../components/AvisosDelEqui
 import { prettyToken } from '../lib/labels';
 import { estadoClienteLabel, estadoDeAcceso } from '../lib/labels';
 import { contarClientes, contarRegistrosSinTerminar, cuentaComoCliente } from '../lib/cuentaClientes';
+import AsignarTarea from '../components/AsignarTarea';
 import {
     LayoutDashboard, Users, CreditCard, Dumbbell,
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
     AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple, Layers,
-    Menu, X, Phone, Receipt
+    Menu, X, Phone, Receipt, ClipboardList
 } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
 
@@ -1008,6 +1009,16 @@ const AdminClientsList = () => {
     // ordenado así (/admin/clients?orden=sin_tocar).
     const [orden, setOrden] = useState(
         new URLSearchParams(window.location.search).get('orden') === 'sin_tocar' ? 'sin_tocar' : 'ninguno');
+    // ASIGNAR A VARIOS DE GOLPE (doc 19-08, apartado 05): «los nueve que renuevan el 21 de
+    // septiembre: los marcas, "contactar", a Jenny, y ya está». Las casillas seleccionan y
+    // la barra de abajo abre el formulario con todos dentro.
+    const [seleccionados, setSeleccionados] = useState(new Set());
+    const [modalTarea, setModalTarea] = useState(false);
+    const alternar = (id) => setSeleccionados(s => {
+        const n = new Set(s);
+        n.has(id) ? n.delete(id) : n.add(id);
+        return n;
+    });
 
     useEffect(() => {
         fetchClients();
@@ -1203,6 +1214,18 @@ const AdminClientsList = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow className="border-[#333] hover:bg-transparent">
+                                    {/* La casilla de asignar en bloque (doc 19-08). La de la
+                                        cabecera marca lo que se está viendo con los filtros. */}
+                                    <TableHead className="w-8">
+                                        <input type="checkbox" data-testid="marcar-todos"
+                                            className="accent-[#FF671F] w-4 h-4 align-middle"
+                                            checked={filteredClients.filter(c => c.id).length > 0
+                                                && filteredClients.filter(c => c.id).every(c => seleccionados.has(c.id))}
+                                            onChange={(e) => {
+                                                const ids = filteredClients.filter(c => c.id).map(c => c.id);
+                                                setSeleccionados(e.target.checked ? new Set(ids) : new Set());
+                                            }} />
+                                    </TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Cliente</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Plan</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Precio</TableHead>
@@ -1220,6 +1243,10 @@ const AdminClientsList = () => {
                                     </TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Últ. reporte</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Contacto</TableHead>
+                                    {/* «Tiempo dentro de la app» (doc 19-08): lo que se registra
+                                        hoy es su última entrada; el tiempo de verdad no lo
+                                        registra nada, y el propio doc lo admite. */}
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Entrada</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden lg:table-cell">Peso</TableHead>
                                     {/* EL PERFIL LARGO. Al que lleva entrenador no se le puede
                                         trabajar sin él, y hasta ahora la única señal era una
@@ -1238,6 +1265,14 @@ const AdminClientsList = () => {
                                             ? navigate(`/admin/clients/${client.id}`)
                                             : toast.info(`${client.user?.name || client.user?.email} se registró pero no completó el alta (no eligió plan). Aún no tiene ficha.`)}
                                     >
+                                        <TableCell onClick={(e) => e.stopPropagation()} className="w-8">
+                                            {client.id && (
+                                                <input type="checkbox" data-testid={`marcar-${client.id}`}
+                                                    className="accent-[#FF671F] w-4 h-4 align-middle"
+                                                    checked={seleccionados.has(client.id)}
+                                                    onChange={() => alternar(client.id)} />
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             <div>
                                                 <p className="font-medium text-white flex items-center gap-1.5">
@@ -1257,14 +1292,34 @@ const AdminClientsList = () => {
                                         <TableCell>
                                             {client.id ? <PlanBadge plan={client.plan} /> : <span className="text-white/30 text-sm">-</span>}
                                         </TableCell>
-                                        <TableCell className="font-bold text-[#FF671F] hidden md:table-cell" style={{ fontFamily: 'Barlow Condensed' }}>
-                                            {client.id && client.price != null ? `${client.price}€` : '-'}
+                                        {/* Lo que paga y el DESGLOSE AL MES (doc 19-08): «si es
+                                            trimestral, lo que ese plan deja al mes». Solo se pinta
+                                            cuando difiere del precio del ciclo. */}
+                                        <TableCell className="hidden md:table-cell">
+                                            <p className="font-bold text-[#FF671F]" style={{ fontFamily: 'Barlow Condensed' }}>
+                                                {client.id && client.price != null ? `${client.price}€` : '-'}
+                                            </p>
+                                            {client.id && client.precio_mensual != null
+                                                && client.precio_mensual !== client.price && (
+                                                <p className="text-[11px] text-white/40">{client.precio_mensual}€/mes</p>
+                                            )}
                                         </TableCell>
+                                        {/* Las DOS semanas (doc 19-08): la de plan y la de rutina,
+                                            que es la que decide cuándo le llega el reporte. Sin
+                                            rutina cargada no hay contador y se dice. */}
                                         <TableCell className="hidden md:table-cell">
                                             {client.id ? (
-                                                <Badge variant="outline" className="border-[#333] text-white">
-                                                    Sem {client.week}
-                                                </Badge>
+                                                <div>
+                                                    <Badge variant="outline" className="border-[#333] text-white">
+                                                        Sem {client.week}
+                                                    </Badge>
+                                                    <p className="text-[11px] text-white/40 mt-0.5"
+                                                        data-testid={`semana-rutina-${client.id}`}>
+                                                        {client.semana_rutina != null
+                                                            ? `rutina S${client.semana_rutina}`
+                                                            : 'sin rutina'}
+                                                    </p>
+                                                </div>
                                             ) : <span className="text-white/30 text-sm">-</span>}
                                         </TableCell>
                                         <TableCell className="hidden sm:table-cell">
@@ -1288,9 +1343,27 @@ const AdminClientsList = () => {
                                         </TableCell>
                                         <TableCell className="hidden xl:table-cell">
                                             <CeldaSemaforo celda={client.semaforo?.reporte} />
+                                            {/* Las dos cuentas del 19-08: recogidas del lunes en
+                                                vacío y reportes que le tocaban y no mandó. Solo
+                                                cuando debe algo: al que está al día, ni una línea. */}
+                                            {(client.semanas_sin_reporte > 0 || client.reportes_sin_responder > 0) && (
+                                                <p className="text-[11px] text-white/40 mt-0.5"
+                                                    data-testid={`sin-reporte-${client.id}`}>
+                                                    {client.semanas_sin_reporte > 0 && `${client.semanas_sin_reporte} sem sin reporte`}
+                                                    {client.semanas_sin_reporte > 0 && client.reportes_sin_responder > 0 && ' · '}
+                                                    {client.reportes_sin_responder > 0 && `debe ${client.reportes_sin_responder}`}
+                                                </p>
+                                            )}
                                         </TableCell>
                                         <TableCell className="hidden xl:table-cell">
                                             <CeldaSemaforo celda={client.semaforo?.contacto} />
+                                        </TableCell>
+                                        <TableCell className="hidden xl:table-cell">
+                                            <span className="text-sm text-white/60" data-testid={`entrada-${client.id}`}>
+                                                {client.ultima_entrada
+                                                    ? new Date(client.ultima_entrada + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+                                                    : <span className="text-white/25">—</span>}
+                                            </span>
                                         </TableCell>
                                         <TableCell className="hidden lg:table-cell">
                                             <CeldaSemaforo celda={client.semaforo?.peso} />
@@ -1339,6 +1412,27 @@ const AdminClientsList = () => {
                     )}
                 </CardContent>
             </Card>
+
+            {/* LA BARRA DEL «A VARIOS DE GOLPE» (doc 19-08): con gente marcada, flota abajo
+                y abre el formulario con todos dentro. Una tarea por cliente. */}
+            {seleccionados.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#181818] border border-[#333] rounded-xl shadow-xl px-4 py-2.5 flex items-center gap-3"
+                    data-testid="barra-asignar-bloque">
+                    <span className="text-sm text-white/80">
+                        {seleccionados.size} {seleccionados.size === 1 ? 'cliente marcado' : 'clientes marcados'}
+                    </span>
+                    <Button size="sm" onClick={() => setModalTarea(true)} data-testid="asignar-a-marcados"
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs h-8">
+                        Asignar tarea
+                    </Button>
+                    <button onClick={() => setSeleccionados(new Set())}
+                        className="text-white/40 hover:text-white text-xs">Quitar</button>
+                </div>
+            )}
+            <AsignarTarea abierto={modalTarea} onClose={() => setModalTarea(false)}
+                sobre={clients.filter(c => seleccionados.has(c.id))
+                    .map(c => ({ id: c.id, nombre: c.user?.name || c.user?.email }))}
+                onCreada={() => setSeleccionados(new Set())} />
         </div>
     );
 };
@@ -1387,6 +1481,9 @@ const AdminLayout = () => {
     const navItems = [
         { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
         { path: '/admin/clients', icon: Users, label: 'Clientes' },
+        // Las tareas (doc 19-08, apartado 05): lo que cada uno tiene hoy, lo vencido y lo
+        // que asignó. Sustituye al «todo va por WhatsApp y no queda en ningún sitio».
+        { path: '/admin/tareas', icon: ClipboardList, label: 'Tareas' },
         { path: '/admin/planes', icon: Layers, label: 'Planes', adminOnly: true },
         { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios', adminOnly: true },
         { path: '/admin/pagos', icon: Receipt, label: 'Cobros', adminOnly: true },

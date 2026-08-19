@@ -41,6 +41,24 @@ const ProfilePage = () => {
     const [editing, setEditing] = useState(false);
     const [verIncluye, setVerIncluye] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+    // La baja (doc 19-08): el modal del porqué y su envío.
+    const [bajaAbierta, setBajaAbierta] = useState(false);
+    const [motivoBaja, setMotivoBaja] = useState('');
+    const [pidiendoBaja, setPidiendoBaja] = useState(false);
+
+    const confirmarBaja = async () => {
+        setPidiendoBaja(true);
+        try {
+            const r = await api.post('/billing/no-renovar', { motivo: motivoBaja });
+            toast.success(r.data?.mensaje || 'Hecho. Sigues teniendo acceso hasta el final de tu ciclo.');
+            setBajaAbierta(false);
+            refreshProfile();
+        } catch (e) {
+            toast.error(mensajeDeError(e, 'No se pudo registrar. Inténtalo en un momento.'));
+        } finally {
+            setPidiendoBaja(false);
+        }
+    };
     const [formData, setFormData] = useState({
         name: user?.name || '', phone: user?.phone || '',
         email_contacto: profile?.email_contacto || '',
@@ -331,6 +349,13 @@ const ProfilePage = () => {
                                     </div>
                                 )}
                             </div>
+                            {/* «Estás en la semana 7» (la pantalla Mi plan del doc 19-08). */}
+                            {profile.week && (
+                                <p className="text-sm text-foreground/60" data-testid="perfil-semana">
+                                    Estás en la semana {profile.week}
+                                    {myPlan?.ciclo?.semanas ? ` de ${myPlan.ciclo.semanas}` : ''}
+                                </p>
+                            )}
                             <Separator className="bg-white/10" />
                             <div>
                                 {/* LO QUE INCLUYE EL PLAN, EN EL TELÉFONO DETRÁS DE UNA LÍNEA.
@@ -365,9 +390,65 @@ const ProfilePage = () => {
                                     <TrendingUp className="w-4 h-4 mr-2" /> Mejorar mi plan
                                 </Button>
                             )}
+
+                            {/* EL «NO QUIERO RENOVAR» (doc 19-08, «Mi plan y la baja»):
+                                «abajo, en pequeño y sin botón naranja. No se esconde, pero
+                                tampoco se invita.» Hoy el cliente no tenía por dónde darse
+                                de baja: solo existía el botón del equipo en el panel. */}
+                            {!profile.no_renovar ? (
+                                <p className="text-center pt-1">
+                                    <button type="button" onClick={() => setBajaAbierta(true)}
+                                        data-testid="no-quiero-renovar"
+                                        className="text-xs text-foreground/40 hover:text-foreground/70 underline underline-offset-2">
+                                        No quiero renovar
+                                    </button>
+                                </p>
+                            ) : (
+                                <p className="text-xs text-foreground/50 text-center pt-1" data-testid="baja-pedida">
+                                    Ya nos dijiste que no quieres renovar: no se te vuelve a cobrar y
+                                    tienes acceso hasta el final de tu ciclo.
+                                </p>
+                            )}
                         </CardContent>
                     </Card>
                 )}
+
+                {/* «¿Por qué lo dejas?» — una sola pregunta, con los cinco motivos del doc.
+                    «Es lo más valioso que se saca de una baja y hoy no se pregunta nunca.» */}
+                <Dialog open={bajaAbierta} onOpenChange={setBajaAbierta}>
+                    <DialogContent className="bg-card border-border max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="text-foreground">¿Por qué lo dejas?</DialogTitle>
+                        </DialogHeader>
+                        <p className="text-sm text-muted-foreground -mt-1">
+                            Solo para saberlo. Sigues teniendo acceso hasta el final de tu ciclo
+                            {fechaDeRenovacion ? ` (el ${new Date(fechaDeRenovacion).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })})` : ''}.
+                        </p>
+                        <div className="space-y-2">
+                            {[['no_consegui', 'No he conseguido lo que quería'],
+                              ['caro', 'Me sale caro'],
+                              ['no_lo_use', 'No lo he usado'],
+                              ['consegui', 'He conseguido lo que quería'],
+                              ['otra', 'Otra cosa']].map(([clave, texto]) => (
+                                <button key={clave} type="button" onClick={() => setMotivoBaja(clave)}
+                                    data-testid={`baja-motivo-${clave}`}
+                                    className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
+                                        motivoBaja === clave
+                                            ? 'border-[#FF671F] bg-[#FF671F]/10 text-foreground'
+                                            : 'border-border text-foreground/70 hover:border-foreground/30'}`}>
+                                    {texto}
+                                </button>
+                            ))}
+                        </div>
+                        <DialogFooter>
+                            <Button onClick={confirmarBaja} disabled={!motivoBaja || pidiendoBaja}
+                                data-testid="baja-confirmar"
+                                className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold">
+                                {pidiendoBaja ? 'Un momento…' : 'Confirmar'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
                 {/* TODO LO DEMÁS, CON SU NOMBRE.
                     La barra de abajo bajó a cuatro (Inicio · Nutrición · Seguimiento ·

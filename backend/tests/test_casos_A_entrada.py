@@ -383,8 +383,10 @@ def catalogo(api_disponible):
 
 class TestCaso05LaPantallaDePlanes:
 
-    def test_el_catalogo_trae_los_tres_niveles_y_la_membresia(self, catalogo):
-        for code in ("nivel1", "nivel2", "nivel3", "membresia"):
+    def test_el_catalogo_trae_los_cinco_activos(self, catalogo):
+        """Doc 19-08: «son cinco los que se venden, no cuatro». La «Membresía» vacía se
+        borró (fallo 04): la membresía ES El Lunes Empiezo."""
+        for code in ("nivel1", "nivel2", "nivel3", "elm", "mantenimiento"):
             assert code in catalogo, f"«{code}» no esta entre los planes activos"
 
     def test_en_la_pantalla_salen_los_tres_niveles(self, api_disponible):
@@ -408,10 +410,11 @@ class TestCaso05LaPantallaDePlanes:
 
         Sigue activa en el catalogo y marcada `solo_salida`: se vende, pero no desde aqui.
         """
-        assert catalogo.get("membresia", {}).get("estado") == "activo"
+        assert catalogo.get("elm", {}).get("estado") == "activo"
         planes = fuente("pages/PlanesPage.jsx")
         pintados = re.findall(r"'([^']+)'", re.search(r"const ORDEN = \[([^\]]*)\]", planes).group(1))
-        assert "membresia" not in pintados, (
+        # Desde el 19-08 la membresía es ELM: la decisión de Jesús aplica igual a él.
+        assert "membresia" not in pintados and "elm" not in pintados, (
             "/planes ensena la membresia al lado de los niveles, y Jesus decidio que no: "
             "se come la entrada del Nivel 1")
 

@@ -148,16 +148,24 @@ class TestElOrdenYLasPantallasDelDocumento:
             "el básico no va en el orden del documento: primero quién es, luego el objetivo, "
             "luego sus números, luego su historia y al final por qué está aquí")
 
-    def test_las_cinco_que_mueven_macros_siguen_en_el_basico(self):
-        """Decisión del 18-08: no se tocan, se quedan sumadas a las del documento."""
+    def test_el_deporte_se_queda_y_las_cuatro_de_la_dieta_se_van(self):
+        """Punto 26 del doc del 19-08, que revierte la decisión del 18-08: «¿Practicas
+        otro deporte?» se queda en el básico (la necesita el motor) y las cuatro de la
+        dieta se van al cuestionario largo. «Sé lo que implica: al de autogestión se le
+        calcularán los macros desde la tabla, sin ajustar por lo que ya come. Está
+        decidido así.»"""
         pagina = fuente("pages/QuestionnairePage.jsx")
         i = pagina.find("const EL_BASICO")
         bloque = pagina[i:pagina.find("];", i)]
-        for clave in ("deporte_extra", "sigue_dieta", "tiempo_dieta", "como_va",
-                      "hambre_saturacion"):
-            assert f"q('{clave}')" in bloque, (
-                f"«{clave}» ha desaparecido del básico: al que no lleva entrenador se le "
-                "calcularían los macros con menos información que antes")
+        assert "q('deporte_extra')" in bloque, (
+            "«deporte_extra» ha desaparecido del básico y sin ella el servidor no calcula")
+        for clave in ("sigue_dieta", "tiempo_dieta", "como_va", "hambre_saturacion"):
+            assert f"q('{clave}')" not in bloque, (
+                f"«{clave}» sigue en el básico y el punto 26 la manda al cuestionario largo")
+        # Y en el largo están, referenciadas del ajuste (no copiadas).
+        i2 = pagina.find("delAjuste('sigue_dieta')")
+        assert i2 > -1 and i2 > pagina.find("const STEPS_NIVEL1"), (
+            "las cuatro de la dieta no están en el cuestionario largo: se perdieron")
 
     def test_el_completo_no_repite_lo_que_ya_esta_en_el_basico(self):
         pagina = fuente("pages/QuestionnairePage.jsx")

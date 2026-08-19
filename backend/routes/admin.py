@@ -282,6 +282,15 @@ async def get_all_clients(
                    "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
                    "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
                    "current_period_end": 1, "checkout_status": 1,
+                   # «Tiempo dentro de la app» (columna del 19-08): lo más cercano que se
+                   # registra hoy es su última entrada (la escribe la campanita). El
+                   # tiempo de verdad no se registra en ningún sitio, y el doc lo admite
+                   # («si se puede registrar»).
+                   "ultima_entrada": 1,
+                   # Overrides del calendario de reportes: sin ellos las columnas de
+                   # reportes se calcularían con el patrón del plan aunque el contrato
+                   # del cliente diga otro.
+                   "calendario_reportes": 1, "ciclo_semanas": 1, "semana_de_entrada": 1,
                    # La excepcion viaja en el listado (punto 39): si solo estuviera dentro
                    # de la ficha, para verla habria que entrar en las 232, que es lo mismo
                    # que tenerla en una hoja aparte.
@@ -310,8 +319,20 @@ async def get_all_clients(
     # clientes que vinieron de Calma llegaron con `price` a cero y la lista les ponía 0 €
     # aunque estuvieran pagando; ver `precio_de_ciclo`.
     from routes.plans import _overrides_by_code
-    from models.user import merged_catalog
+    from models.user import codigo_de_plan, merged_catalog
     catalogo = merged_catalog(await _overrides_by_code())
+
+    # LA SEMANA DE RUTINA, EN BLOQUE (doc 19-08, apartado 04): «es la que manda: en la
+    # semana 2 recibe el quincenal y en la 3 el mensual». Una consulta para toda la lista.
+    from core.cartera import reportes_sin_responder, semanas_sin_reporte
+    from core.calendario_reportes import calendario_del_cliente
+    from core.semana_rutina import semana_de_rutina
+    from core.tiempo import a_madrid as _a_madrid
+    rutinas = await db.routines.find(
+        {"client_id": {"$in": [p["id"] for p in profiles if p.get("id")]}, "status": "active"},
+        {"_id": 0, "client_id": 1, "created_at": 1}).to_list(len(profiles) or 1)
+    rutina_de = {r["client_id"]: r for r in rutinas if r.get("client_id")}
+    hoy_es = (_a_madrid(ahora) or ahora).date()
 
     result = []
     for profile in profiles:
@@ -328,6 +349,23 @@ async def get_all_clients(
                     "precio_mensual": round(precio_mensual(profile, catalogo), 2),
                     "acceso": estado_de_acceso(profile),
                     "semaforo": _semaforo_del_cliente(profile, hablado, ahora)}
+            # LAS COLUMNAS DEL 19-08. La semana de rutina (None sin rutina cargada), las
+            # recogidas del lunes sin reporte nuevo, y cuántos reportes le tocaban por su
+            # calendario y no mandó. La semana que decide los reportes es la de rutina si
+            # existe, como en todo lo demás desde el bloque 02.
+            sem_rutina = semana_de_rutina(rutina_de.get(profile.get("id")), hoy_es)
+            sem_reporte = sem_rutina if sem_rutina is not None else fila.get("week")
+            cal = calendario_del_cliente(profile, catalogo.get(codigo_de_plan(profile.get("plan"))))
+            fila["semana_rutina"] = sem_rutina
+            fila["semanas_sin_reporte"] = semanas_sin_reporte(
+                profile.get("ultimo_reporte"),
+                profile.get("cycle_start") or profile.get("created_at"), hoy_es)
+            fila["reportes_sin_responder"] = reportes_sin_responder(
+                cal, sem_reporte, profile.get("ultimo_reporte"), hoy_es)
+            fila["ultima_entrada"] = profile.get("ultima_entrada")
+            # El último contacto PERSONAL (chat del equipo), como fecha cruda: el
+            # semáforo dice «hace N días» y esta es la fecha para quien la quiera ver.
+            fila["ultimo_contacto_personal"] = (hablado.get(profile.get("user_id")) or "")[:10] or None
             # TU PROPIA FICHA VA MARCADA. Es la única que entra por la excepción de arriba,
             # y no es negocio: los contadores del panel (clientes totales, activos, MRR)
             # siguen sin contarla, así que quien compare la tabla con un contador tiene que
@@ -687,7 +725,17 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
     fase = profile.get("goal") or "definicion"
     if fm:
         r = fm[-1]
-        gt = lambda k: (r.get(k) or {}).get("texto") if isinstance(r.get(k), dict) else r.get(k)
+
+        def gt(k):
+            v = (r.get(k) or {}).get("texto") if isinstance(r.get(k), dict) else r.get(k)
+            # «Sin calificar cumplimiento» es el relleno del select de Calma, no una
+            # respuesta (doc 19-08): al agente no se le pasa como si el cliente lo hubiera
+            # dicho. Si detras hay algo escrito por el cliente, eso si se le pasa.
+            if isinstance(v, str):
+                limpio = re.sub(r"^sin calificar (el )?cumplimiento[.,]?\s*", "", v,
+                                flags=re.IGNORECASE).strip()
+                return limpio or None
+            return v
         reporte = {k: v for k, v in {
             "cumplimiento_dieta": gt("cumplimientoDieta"), "esfuerzo_dieta": gt("esfuerzoParaCumplirDieta"),
             "cumplimiento_entreno": gt("cumplimientoEntrenamiento"), "cardio": gt("cumplimientoCardio"),
@@ -1749,8 +1797,13 @@ async def get_todo_semana(user = Depends(get_admin_user)):
     ).to_list(len(uids) or 1)
     umap = {u["id"]: u for u in users}
 
-    # Rutinas activas y reportes recientes: una consulta cada uno (no N+1).
-    active_routine_clients = set(await db.routines.distinct("client_id", {"status": "active"}))
+    # Rutinas activas y reportes recientes: una consulta cada uno (no N+1). De la rutina
+    # se trae también su fecha: desde el doc del 19-08 la semana de RUTINA es la que
+    # decide qué reporte toca, y este panel tiene que contar igual que el cliente.
+    rutinas_activas = await db.routines.find(
+        {"status": "active"}, {"_id": 0, "client_id": 1, "created_at": 1}).to_list(3000)
+    rutina_por_cliente = {r["client_id"]: r for r in rutinas_activas if r.get("client_id")}
+    active_routine_clients = set(rutina_por_cliente)
     cutoff = (now - timedelta(days=10)).isoformat()
     # Con tope hoy (punto 22): un reporte fechado en 2027 cumple el «>= cutoff» y contaba
     # como reporte reciente, o sea que tapaba a su cliente en «Reporte pendiente».
@@ -1841,8 +1894,10 @@ async def get_todo_semana(user = Depends(get_admin_user)):
                 "nunca_ajustado": not p.get("ultimo_ajuste"),
             })
 
-        # Reporte de esta semana pendiente (no enviado dentro de la semana de ciclo).
-        state = compute_client_report_state(p, catalog, now)
+        # Reporte de esta semana pendiente (no enviado dentro de la semana que manda:
+        # la de su rutina si la tiene, la de ciclo si no — doc 19-08).
+        state = compute_client_report_state(p, catalog, now,
+                                            rutina=rutina_por_cliente.get(p["id"]))
         if state["due"]:
             reported = last_report.get(p["id"])
             if not (reported and reported >= state["window_start"].isoformat()):

@@ -378,14 +378,33 @@ class TestLoQueSeQuedaDelSistemaViejo:
 
     def test_los_macros_provisionales_avisan_a_las_dos_horas(self):
         perfil = {"created_at": (AHORA - timedelta(hours=2, minutes=1)).isoformat()}
-        assert _claves(avisos_de_calendario(perfil=perfil, ahora=AHORA)) == ["macros_provisionales"]
+        assert _claves(avisos_de_calendario(perfil=perfil, ahora=AHORA,
+                                            va_a_recibir_definitivos=True)) == ["macros_provisionales"]
 
     def test_si_se_los_puso_su_coach_no_son_provisionales(self):
         """El fallo del punto 4.1, que en produccion afectaba a los 174 clientes activos."""
         perfil = {"created_at": (AHORA - timedelta(days=40)).isoformat()}
-        assert _claves(avisos_de_calendario(perfil=perfil, ahora=AHORA)) == ["macros_provisionales"]
+        assert _claves(avisos_de_calendario(perfil=perfil, ahora=AHORA,
+                                            va_a_recibir_definitivos=True)) == ["macros_provisionales"]
         assert avisos_de_calendario(perfil=perfil, ahora=AHORA,
+                                    va_a_recibir_definitivos=True,
                                     macros_puestos_por_alguien=True) == []
+
+    def test_solo_le_sale_a_quien_va_a_recibir_unos_definitivos(self):
+        """Punto 04 del doc del 19-08: «ese mensaje promete unos definitivos, y eso solo se
+        cumple en tres casos... Si le sale a alguien más, le estamos prometiendo algo que no
+        va a recibir». Al de Calculadora y al de Mantenimiento no le manda nadie nada el
+        miércoles: sus macros son los que salieron de su cuestionario."""
+        perfil = {"created_at": (AHORA - timedelta(days=1)).isoformat()}
+        assert avisos_de_calendario(perfil=perfil, ahora=AHORA,
+                                    va_a_recibir_definitivos=False) == []
+
+    def test_el_texto_es_el_de_jesus(self):
+        """Literal del punto 04. «"Finos" no lo digo yo. El texto es este.»"""
+        perfil = {"created_at": (AHORA - timedelta(days=1)).isoformat()}
+        a = avisos_de_calendario(perfil=perfil, ahora=AHORA, va_a_recibir_definitivos=True)[0]
+        assert a["titulo"] == "Estos son tus macros provisionales."
+        assert a["cuerpo"] == "Unas preguntas más y recibirás los definitivos."
 
     def test_la_rutina_avisa_tres_dias_antes_y_solo_si_esta_encendida(self):
         base = {"perfil": {"ajuste_macros_completado": True}, "ahora": AHORA}
@@ -532,10 +551,12 @@ class TestLosEnlacesLlevanADondeDicen:
         assert link in rutas
 
     def test_el_de_los_macros_provisionales_va_a_la_pantalla_de_macros(self):
-        """El caso concreto que echaba al cliente al login: lo recibe casi todo el mundo a
-        las dos horas de darse de alta, así que suele ser lo primero que toca de la app."""
+        """El caso concreto que echaba al cliente al login: lo recibe todo el que espera
+        unos definitivos a las dos horas de darse de alta, así que suele ser lo primero
+        que toca de la app."""
         perfil = {"created_at": (AHORA - timedelta(days=1)).isoformat()}
-        provisionales = [a for a in avisos_de_calendario(perfil=perfil, ahora=AHORA)
-                         if a["titulo"] == "Tus macros son provisionales"]
+        provisionales = [a for a in avisos_de_calendario(perfil=perfil, ahora=AHORA,
+                                                         va_a_recibir_definitivos=True)
+                         if a["clave"].startswith("macros_provisionales")]
         assert provisionales, "ya no existe ese aviso: si se quitó, quitar también este test"
         assert provisionales[0]["link"] == "/dashboard/macro-calculator"

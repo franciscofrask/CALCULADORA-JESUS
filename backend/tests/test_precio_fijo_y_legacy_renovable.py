@@ -75,8 +75,10 @@ class _Db:
         self.plan_overrides = _Coleccion(overrides or [])
 
 
-def _catalogo_con_elm_reabierto():
-    return merged_catalog({"elm": {"renovable_por_los_suyos": True}})
+def _catalogo_con_gold_reabierto():
+    # ELM ya no vale de ejemplo: el doc del 19-08 lo sube a activos. El legacy con
+    # gente y con Price en Stripe es gold.
+    return merged_catalog({"gold": {"renovable_por_los_suyos": True}})
 
 
 # --------------------------------------------------------------- 1 · el precio
@@ -122,13 +124,13 @@ class TestElInterruptorDelPlanAntiguo:
         assert not any(p["renovable_por_los_suyos"] for p in merged_catalog().values())
 
     def test_sin_el_interruptor_al_legacy_no_se_le_deja_seguir(self):
-        r = opciones_de_renovacion("elm", merged_catalog())
+        r = opciones_de_renovacion("gold", merged_catalog())
         assert r["puede_seguir_igual"] is False
         assert r["mantiene_precio"] is False
         assert r["motivo"]
 
     def test_con_el_interruptor_el_suyo_puede_seguir_igual_y_con_su_precio(self):
-        r = opciones_de_renovacion("elm", _catalogo_con_elm_reabierto())
+        r = opciones_de_renovacion("gold", _catalogo_con_gold_reabierto())
         assert r["puede_seguir_igual"] is True
         assert r["mantiene_precio"] is True, "el precio se congela mientras no se de de baja"
         assert r["renovacion_legacy"] is True
@@ -136,14 +138,14 @@ class TestElInterruptorDelPlanAntiguo:
 
     def test_reabrirlo_no_lo_devuelve_a_la_tienda(self):
         """Es no echar de su plan al que ya esta, no volver a venderlo."""
-        r = opciones_de_renovacion("elm", _catalogo_con_elm_reabierto())
-        assert "elm" not in r["opciones"]
+        r = opciones_de_renovacion("gold", _catalogo_con_gold_reabierto())
+        assert "gold" not in r["opciones"]
 
     def test_al_que_tiene_otro_plan_ese_legacy_le_sigue_sin_existir(self):
-        cat = _catalogo_con_elm_reabierto()
+        cat = _catalogo_con_gold_reabierto()
         assert puede_renovar_su_plan_legacy("nivel2", cat) is False
         assert puede_renovar_su_plan_legacy("reto60", cat) is False
-        assert "elm" not in opciones_de_renovacion("nivel2", cat)["opciones"]
+        assert "gold" not in opciones_de_renovacion("nivel2", cat)["opciones"]
 
     def test_encenderlo_en_un_plan_activo_no_significa_nada(self):
         cat = merged_catalog({"nivel2": {"renovable_por_los_suyos": True}})
@@ -158,10 +160,10 @@ class TestElInterruptorDelPlanAntiguo:
 
 
 class TestLoQueVeElClienteAlRenovar:
-    def _perfil(self, plan="elm"):
+    def _perfil(self, plan="gold"):
         return {"plan": plan, "week": 11, "precio_alta": 87.0}
 
-    def _pantalla(self, catalogo, plan="elm"):
+    def _pantalla(self, catalogo, plan="gold"):
         return montar_renovacion(
             perfil=self._perfil(plan), catalogo=catalogo,
             opciones_catalogo=opciones_de_renovacion(plan, catalogo),
@@ -169,16 +171,16 @@ class TestLoQueVeElClienteAlRenovar:
         )
 
     def test_le_sale_seguir_igual_y_pasa_por_la_pasarela(self):
-        cat = _catalogo_con_elm_reabierto()
+        cat = _catalogo_con_gold_reabierto()
         pantalla = self._pantalla(cat)
         seguir = [s for s in pantalla["salidas"] if s["tipo"] == "renovar"]
         assert len(seguir) == 1
-        assert seguir[0]["plan"] == "elm"
+        assert seguir[0]["plan"] == "gold"
         assert seguir[0]["por_checkout"] is True, "su suscripcion no renueva sola: hay que cobrarla"
         assert seguir[0]["precio"] == 87.0, "el precio congelado que trae su perfil"
 
     def test_no_se_le_dice_que_se_renueva_solo(self):
-        assert self._pantalla(_catalogo_con_elm_reabierto())["renueva_solo"] is False
+        assert self._pantalla(_catalogo_con_gold_reabierto())["renueva_solo"] is False
 
     def test_al_del_plan_vivo_se_le_sigue_diciendo_que_no_haga_nada(self):
         cat = merged_catalog()
@@ -195,8 +197,8 @@ class TestLoQueVeElClienteAlRenovar:
         """Si su suscripcion sigue viva, «seguir igual» es no hacer nada, como siempre."""
         pantalla = montar_renovacion(
             perfil={**self._perfil(), "subscription_status": "active"},
-            catalogo=_catalogo_con_elm_reabierto(),
-            opciones_catalogo=opciones_de_renovacion("elm", _catalogo_con_elm_reabierto()),
+            catalogo=_catalogo_con_gold_reabierto(),
+            opciones_catalogo=opciones_de_renovacion("gold", _catalogo_con_gold_reabierto()),
             resumen={})
         seguir = [s for s in pantalla["salidas"] if s["tipo"] == "renovar"]
         assert seguir and seguir[0]["por_checkout"] is False
@@ -204,8 +206,8 @@ class TestLoQueVeElClienteAlRenovar:
 
     def test_la_salida_a_la_membresia_sigue_estando(self):
         """Reabrirle su plan no le quita la puerta de salir."""
-        fuera = salidas(plan_actual="elm", catalogo=_catalogo_con_elm_reabierto(),
-                        opciones_catalogo=opciones_de_renovacion("elm", _catalogo_con_elm_reabierto()),
+        fuera = salidas(plan_actual="gold", catalogo=_catalogo_con_gold_reabierto(),
+                        opciones_catalogo=opciones_de_renovacion("gold", _catalogo_con_gold_reabierto()),
                         precio_alta=None)
         assert fuera[-1]["tipo"] == "salida"
 
@@ -228,8 +230,8 @@ class TestGuardarElInterruptor:
             plans.audit = audit_original
 
     def test_se_puede_encender_en_un_legacy_con_precio_en_stripe(self, monkeypatch):
-        monkeypatch.setenv("STRIPE_PRICE_ELM", "price_de_prueba")
-        resultado, db = self._guardar("elm", {"renovable_por_los_suyos": True})
+        monkeypatch.setenv("STRIPE_PRICE_GOLD", "price_de_prueba")
+        resultado, db = self._guardar("gold", {"renovable_por_los_suyos": True})
         assert resultado["renovable_por_los_suyos"] is True
         (_, cambio), = db.plan_overrides.updates
         assert cambio["$set"]["fields"]["renovable_por_los_suyos"] is True
@@ -249,9 +251,9 @@ class TestGuardarElInterruptor:
         assert "Stripe" in e.value.detail
 
     def test_tampoco_si_la_variable_de_entorno_esta_vacia(self, monkeypatch):
-        monkeypatch.setenv("STRIPE_PRICE_MANTENIMIENTO", "")
+        monkeypatch.setenv("STRIPE_PRICE_RETO60", "")
         with pytest.raises(HTTPException) as e:
-            self._guardar("mantenimiento", {"renovable_por_los_suyos": True})
+            self._guardar("reto60", {"renovable_por_los_suyos": True})
         assert e.value.status_code == 400
 
     def test_apagarlo_no_pide_nada(self):
@@ -300,33 +302,33 @@ def _pedir_checkout(db, plan, user_id="u-1"):
 
 
 class TestLaPuertaDelCobro:
-    OVERRIDE_ENCENDIDO = [{"code": "elm", "fields": {"renovable_por_los_suyos": True}}]
+    OVERRIDE_ENCENDIDO = [{"code": "gold", "fields": {"renovable_por_los_suyos": True}}]
 
     def test_el_que_ya_lo_tiene_llega_a_stripe(self, checkout_de_mentira):
-        db = _Db(perfiles=[{"user_id": "u-1", "id": "perfil-1", "plan": "elm"}],
+        db = _Db(perfiles=[{"user_id": "u-1", "id": "perfil-1", "plan": "gold"}],
                  overrides=self.OVERRIDE_ENCENDIDO)
-        res = _pedir_checkout(db, "elm")
+        res = _pedir_checkout(db, "gold")
         assert res.checkout_url.startswith("https://checkout.stripe.com/")
-        assert checkout_de_mentira["line_items"][0]["price"] == "price_elm"
+        assert checkout_de_mentira["line_items"][0]["price"] == "price_gold"
 
     def test_el_que_no_lo_tiene_se_queda_fuera(self, checkout_de_mentira):
         db = _Db(perfiles=[{"user_id": "u-1", "id": "perfil-1", "plan": "nivel1"}],
                  overrides=self.OVERRIDE_ENCENDIDO)
         with pytest.raises(HTTPException) as e:
-            _pedir_checkout(db, "elm")
+            _pedir_checkout(db, "gold")
         assert e.value.status_code == 400
         assert "nuevas contrataciones" in e.value.detail
 
     def test_el_que_no_tiene_perfil_tampoco(self, checkout_de_mentira):
         db = _Db(perfiles=[], overrides=self.OVERRIDE_ENCENDIDO)
         with pytest.raises(HTTPException) as e:
-            _pedir_checkout(db, "elm")
+            _pedir_checkout(db, "gold")
         assert e.value.status_code == 400
 
     def test_con_el_interruptor_apagado_ni_el_suyo(self, checkout_de_mentira):
-        db = _Db(perfiles=[{"user_id": "u-1", "id": "perfil-1", "plan": "elm"}], overrides=[])
+        db = _Db(perfiles=[{"user_id": "u-1", "id": "perfil-1", "plan": "gold"}], overrides=[])
         with pytest.raises(HTTPException) as e:
-            _pedir_checkout(db, "elm")
+            _pedir_checkout(db, "gold")
         assert e.value.status_code == 400
 
     def test_el_interruptor_de_un_plan_no_abre_el_de_al_lado(self, checkout_de_mentira):

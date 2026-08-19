@@ -99,7 +99,7 @@ class TestElResumen:
 
 
 class TestLasTresSalidas:
-    def _salidas(self, plan="nivel2", precio_alta=897.0):
+    def _salidas(self, plan="nivel2", precio_alta=847.0):
         return salidas(plan_actual=plan, opciones_catalogo=opciones_de_renovacion(plan),
                        catalogo=PLAN_CATALOG, precio_alta=precio_alta)
 
@@ -117,7 +117,7 @@ class TestLasTresSalidas:
         assert s["precio_congelado"] is True
 
     def test_si_su_precio_es_el_de_hoy_no_se_marca_como_congelado(self):
-        s = [x for x in self._salidas(precio_alta=897.0) if x["tipo"] == "renovar"][0]
+        s = [x for x in self._salidas(precio_alta=847.0) if x["tipo"] == "renovar"][0]
         assert s["precio_congelado"] is False
 
     def test_cambiar_de_plan_cuesta_el_precio_nuevo(self):
@@ -130,7 +130,7 @@ class TestLasTresSalidas:
         """Su plan ya no se vende: al renovar elige entre los nuevos."""
         s = self._salidas(plan="reto12en12_gold", precio_alta=1500.0)
         assert "renovar" not in [x["tipo"] for x in s]
-        assert {x["plan"] for x in s if x["tipo"] == "cambiar"} == {"nivel1", "nivel2", "nivel3"}
+        assert {x["plan"] for x in s if x["tipo"] == "cambiar"} == {"nivel1", "nivel2", "nivel3", "elm"}
 
     def test_subir_se_ofrece_antes_que_bajar(self):
         cambios = [s for s in self._salidas(plan="nivel1") if s["tipo"] == "cambiar"]

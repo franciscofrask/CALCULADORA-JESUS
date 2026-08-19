@@ -73,10 +73,17 @@ def _dias_desde(iso: Optional[str], ahora: datetime) -> Optional[int]:
     return max(0, (ahora - d).days)
 
 
-def _fecha_es(d: datetime) -> str:
-    meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-             "agosto", "septiembre", "octubre", "noviembre", "diciembre")
-    return f"{d.day} de {meses[d.month - 1]}"
+def _dia_es(d: datetime) -> str:
+    """«miércoles 26». El formato que pide la última regla del doc del 19-08:
+
+        «Ninguno promete un plazo en horas. Se dice el día -- "el miércoles 26" -- o no se
+         dice nada.»
+
+    Un aviso que dice "en 6 días" obliga al cliente a hacer la cuenta, y la hace mal: lo
+    lee el jueves por la noche, cuenta desde el viernes y se le pasa.
+    """
+    dias = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+    return f"{dias[d.weekday()]} {d.day}"
 
 
 # ── Las de calendario ─────────────────────────────────────────────────────────
@@ -88,6 +95,7 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                          rutina_caduca: Optional[datetime] = None,
                          semanas_ciclo: Optional[int] = None,
                          macros_puestos_por_alguien: bool = False,
+                         va_a_recibir_definitivos: bool = False,
                          rutina_visible: bool = False,
                          nuevos: bool = False) -> List[Dict[str, Any]]:
     """Los avisos de calendario que ya existían antes del doc 16-08.
@@ -114,7 +122,21 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
     #
     # Provisional es el que acaba de entrar y no ha terminado. En cuanto alguien -- el coach,
     # el equipo, la migracion -- le ha puesto unos macros, ya no lo son.
-    if not perfil.get("ajuste_macros_completado") and not macros_puestos_por_alguien:
+    #
+    # Y SOLO A QUIEN VA A RECIBIR UNOS DEFINITIVOS (punto 04 del doc del 19-08):
+    #
+    #     «Y dime a quién le sale. Ese mensaje promete unos definitivos, y eso solo se
+    #      cumple en tres casos: plan personalizado, quien paga los 87 €, y la membresía
+    #      cuando le toca pedirlos. Si le sale a alguien más, le estamos prometiendo algo
+    #      que no va a recibir.»
+    #
+    # La tabla del apartado 10 lo cierra: sí a Gold, Silver, Bronze, Premium y a quien haya
+    # pagado los 87 €; no a Mantenimiento ni a ninguno de los demás. Al de Calculadora nadie
+    # le va a mandar nada el miércoles: sus macros son los que salen de su cuestionario, y
+    # decirle que son provisionales es dejarle esperando una llamada que no existe.
+    if (va_a_recibir_definitivos
+            and not perfil.get("ajuste_macros_completado")
+            and not macros_puestos_por_alguien):
         alta = perfil.get("created_at")
         try:
             d_alta = datetime.fromisoformat(str(alta).replace("Z", "+00:00")) if alta else None
@@ -127,14 +149,13 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                 fuera.append({
                     "clave": f"macros_provisionales:{d_alta.date()}",
                     "tipo": "macros",
-                    "titulo": "Tus macros son provisionales",
-                    # SIN PROMETER UN RELOJ (Jesus, 18-08). Decia "Quince minutos y los
-                    # tienes finos": quince minutos no los sabe nadie -- depende de lo que
-                    # tarde en contestar -- y la regla 4 del doc del 16-08 es no prometer lo
-                    # que no se sabe. Lo que si es verdad es lo que le falta, y es justo lo
-                    # que ya dice el banner de Inicio para lo mismo: no puede haber dos
-                    # redacciones distintas del mismo encargo.
-                    "cuerpo": "Unas preguntas más y los tienes finos.",
+                    # EL TEXTO ES DE JESUS Y VA LITERAL (punto 04 del doc del 19-08). Decia
+                    # "Quince minutos y los tienes finos", y despues "Unas preguntas mas y
+                    # los tienes finos", que era la propuesta de Francisco. Su respuesta:
+                    # «"Finos" no lo digo yo. El texto es este.» Y estas dos lineas son las
+                    # que escribio, tal cual.
+                    "titulo": "Estos son tus macros provisionales.",
+                    "cuerpo": "Unas preguntas más y recibirás los definitivos.",
                     # OJO: la pantalla se llama "Ajustar macros" pero su ruta es
                     # /dashboard/macro-calculator. Aqui ponia /dashboard/ajustar-macros, que
                     # no existe, y al no existir caia en el comodin del router y echaba al
@@ -161,23 +182,22 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                 "calendario": True,
             })
 
-    # El ajuste: aviso 6 dias antes y el dia que toca.
+    # El ajuste: aviso 6 dias antes, CON EL DIA (punto 06 del doc del 19-08).
+    #
+    #     «"Tu próximo ajuste: en 6 días" se queda y se reescribe: "Tu próximo ajuste es el
+    #      miércoles 26".»
+    #
+    # Y el del mismo dia -- «Te tenemos los macros listos, solo faltan tus datos» -- SE CAE:
+    # «dice lo mismo que el aviso de macros provisionales que acabamos de reescribir: es un
+    # duplicado». Los dos le pedian lo mismo con dos redacciones distintas, y el cliente que
+    # recibia los dos no sabia si eran dos encargos o uno.
     if proximo_ajuste:
         faltan = (proximo_ajuste.date() - hoy).days
         if faltan == 6:
             fuera.append({
                 "clave": f"ajuste_pronto:{proximo_ajuste.date()}",
                 "tipo": "reporte",
-                "titulo": "Tu próximo ajuste: en 6 días",
-                "cuerpo": None,
-                "link": "/dashboard/reports",
-                "calendario": True,
-            })
-        elif faltan == 0:
-            fuera.append({
-                "clave": f"ajuste_hoy:{proximo_ajuste.date()}",
-                "tipo": "reporte",
-                "titulo": "Te tenemos los macros listos, solo faltan tus datos",
+                "titulo": f"Tu próximo ajuste es el {_dia_es(proximo_ajuste)}",
                 "cuerpo": None,
                 "link": "/dashboard/reports",
                 "calendario": True,
@@ -186,14 +206,18 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
     # "Tu rutina acaba el X": tres dias antes, no el dia que caduca. Con la Rutina apagada
     # este aviso no se manda: entero va de algo que el cliente no puede ver, y decirle
     # "renuevala" cuando no tiene donde es peor que no decirle nada.
+    #
+    # REESCRITO (punto 06 del doc del 19-08): «"Tu rutina acaba el 20 de agosto" se queda,
+    # reescrito: "Tu rutina acaba el 20. Renuévala y sigues sin parar"». Solo el numero:
+    # el aviso sale tres dias antes, asi que el mes no aporta nada y alarga el titulo.
     if rutina_caduca and rutina_visible:
         faltan = (rutina_caduca.date() - hoy).days
         if faltan == 3:
             fuera.append({
                 "clave": f"rutina_caduca:{rutina_caduca.date()}",
                 "tipo": "rutina",
-                "titulo": f"Tu rutina acaba el {_fecha_es(rutina_caduca)}",
-                "cuerpo": "Renuévala y sigue sin parar.",
+                "titulo": f"Tu rutina acaba el {rutina_caduca.day}",
+                "cuerpo": "Renuévala y sigues sin parar.",
                 "link": "/dashboard/routine",
                 "calendario": True,
             })
@@ -220,6 +244,7 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
 def avisos_condicionados(*, ahora: datetime,
                          semanas_sin_ajustar: Optional[int] = None,
                          reporte_sin_fotos: bool = False,
+                         faltan_fotos_o_medidas: Optional[List[str]] = None,
                          dias_sin_cerrar: Optional[int] = None,
                          dias_sin_entrar: Optional[int] = None,
                          dias_con_el_perfil_a_medias: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -264,6 +289,26 @@ def avisos_condicionados(*, ahora: datetime,
                  "cuerpo": "Son unas preguntas, tus fotos y tus medidas. Con eso ya trabajo."},
             ],
             "link": "/questionnaire",
+            "calendario": False,
+        })
+
+    # 0.5) «HAN PASADO CUATRO SEMANAS» (doc 19-08): fotos y medidas en UN solo aviso, cada
+    #    4 semanas, para los planes de autogestión -- donde no se piden, se recomiendan.
+    #    Si ya hizo una de las dos, el aviso solo nombra la que falte. Antes llegaba cada
+    #    semana y con otro texto, que es justo lo que el doc corrige.
+    if faltan_fotos_o_medidas:
+        que_falta = " y ".join(faltan_fotos_o_medidas)
+        fuera.append({
+            "clave": f"cuatro_semanas:{semana_iso}",
+            "familia": "cuatro_semanas",
+            "tipo": "seguimiento",
+            "variantes": [
+                {"titulo": "Han pasado cuatro semanas",
+                 "cuerpo": f"Buen momento para repetir {que_falta}."},
+                {"titulo": "Toca ponerse al día",
+                 "cuerpo": f"Hace cuatro semanas de {que_falta}."},
+            ],
+            "link": "/dashboard/reports",
             "calendario": False,
         })
 
@@ -448,9 +493,10 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                 })
 
         if tipo == "mensual":
-            # 5 · El viernes que abre. Sin hora: el doc no le pone ninguna y el mensual
-            # lleva fotos y medidas, o sea que cuanto antes lo vea, mejor.
-            if hoy == abre.date():
+            # 5 · El viernes que abre, desde su hora (el reloj del 19-08 la pone: 10:00).
+            # Antes salía sin hora porque el doc del 16-08 no le ponía ninguna; avisarle
+            # antes de que la ventana abra es mandarle a una puerta cerrada.
+            if hoy == abre.date() and ahora_es >= abre:
                 fuera.append({
                     "clave": f"mensual_abierto:{abre.date()}",
                     "familia": "mensual_abierto",

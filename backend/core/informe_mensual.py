@@ -26,6 +26,11 @@ inventar una comparacion, para que la pantalla lo pueda ocultar sin fingir un da
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+# El interruptor del punto 41 vive en un solo sitio: mientras no haya donde marcar una
+# sesion, ni el reporte pregunta por los entrenos que faltan ni el informe saca un
+# porcentaje de ellos.
+from core.confirmacion_huecos import SE_REGISTRAN_LOS_ENTRENOS
+
 
 # ── El ritmo que le toca ──────────────────────────────────────────────────────
 # En porcentaje del peso corporal POR SEMANA, que es como lo pide el documento: medio
@@ -157,10 +162,17 @@ def evaluar_cumplimiento(dias_periodo: int, dias_dieta: int, dias_entreno: int,
     dias_periodo = max(1, int(dias_periodo or 0))
     pct_dieta = min(100, round(dias_dieta / dias_periodo * 100))
 
-    previstos = entrenos_previstos if entrenos_previstos else None
+    # LOS PREVISTOS NO SALEN (punto 41 del doc del 19-08): «quita ese dato del reporte,
+    # decirle a alguien que no ha entrenado cuando si ha entrenado es peor que no decirle
+    # nada». Son una multiplicacion -- dias de entreno por semana x semanas -- contra unos
+    # "hechos" que solo existen si el cliente cierra el dia, asi que el porcentaje calculado
+    # no mide entrenamientos: mide cierres de dia. Se apagan con el mismo interruptor que el
+    # hueco del reporte, para que los dos se enciendan a la vez el dia que haya donde
+    # marcar una sesion.
+    previstos = entrenos_previstos if (entrenos_previstos and SE_REGISTRAN_LOS_ENTRENOS) else None
     pct_entreno = min(100, round(dias_entreno / previstos * 100)) if previstos else None
-    # Lo que el dice manda sobre la cuenta de registros: los registros de entreno no
-    # existen, asi que un 0% "calculado" solo significa que nadie apunto nada.
+    # Lo unico que queda del entrenamiento es lo que EL dice en el reporte. Eso no es un
+    # numero inventado: es su respuesta, y la barra dice que sale de ahi.
     declarado = CUMPLIMIENTO_ENTRENO_PCT.get(cumplimiento_entreno)
     if declarado is not None:
         pct_entreno = declarado

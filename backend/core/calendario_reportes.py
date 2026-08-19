@@ -151,18 +151,18 @@ def toca_en_la_semana(cal: Dict[str, Any], tipo: str, semana: int) -> bool:
 
 # ── Cuándo abre y cuándo cierra cada reporte, en hora de España ───────────────
 #
-# Las horas son las del doc 16-08: el quincenal del miércoles 09:00 al jueves 20:00, y el
-# mensual del viernes al lunes 18:00. Están AQUÍ, en el calendario, y no repartidas por los
-# avisos, porque son el mismo dato que necesitan tres sitios: el aviso de apertura, el de
-# último día y el de "no me llegó".
+# Las horas son las del RELOJ del doc del 19-08 (que corrige al del 16-08): el quincenal
+# del miércoles 10:00 al jueves 20:00, y el mensual del viernes 10:00 al lunes 18:00.
+# Están AQUÍ, en el calendario, y no repartidas por los avisos, porque son el mismo dato
+# que necesitan tres sitios: el aviso de apertura, el de último día y el de "no me llegó".
 #
-# OJO: la ventana con la que hoy se ACEPTA el envío sigue viviendo en `report_cadence.py`
-# (`_submission_window`, viernes 00:00 -> lunes 06:00 UTC). Son dos cosas que tienen que
-# acabar siendo una: cuando T7/T8 muevan la ventana real, que la lean de aquí.
+# OJO: la ventana con la que se ACEPTA el envío vive en `report_cadence.py`
+# (`_submission_window`), con estas mismas horas desde el 19-08. Son dos cosas que tienen
+# que acabar siendo una: cuando T7/T8 muevan la ventana real, que la lean de aquí.
 HORAS_DEL_DOC = {
     # (hora a la que abre, días hasta el cierre, hora del cierre)
-    "quincenal": (9, 1, 20),
-    "mensual": (0, 3, 18),
+    "quincenal": (10, 1, 20),
+    "mensual": (10, 3, 18),
     "semanal": (0, 0, 23),
 }
 

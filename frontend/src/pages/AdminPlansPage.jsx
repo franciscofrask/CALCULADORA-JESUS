@@ -10,11 +10,21 @@ import { Layers, Pencil, RotateCcw, Check, X } from 'lucide-react';
 import { queIncluyeElPlan, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia, etiquetaCalculadora } from '../lib/planAccess';
 import { mensajeDeError } from '../lib/mensajeDeError';
 
+// Los tres valores del fallo 10 del 19-08, tolerando el booleano viejo de un override.
+const etiquetaSuplementacion = (v) => {
+    if (typeof v === 'string') {
+        const s = v.trim().toLowerCase();
+        return s === 'guia' || s === 'guía' ? 'La guía'
+            : s === 'protocolo' ? 'Protocolo personalizado' : 'Ninguna';
+    }
+    return v ? 'Protocolo personalizado' : 'Ninguna';
+};
+
 // Orden y etiquetas de las categorías (pestañas del catálogo original).
 const ESTADOS = [
     { key: 'activo', label: 'Planes activos', hint: 'Se venden hoy' },
     { key: 'legacy', label: 'Planes legacy', hint: 'Ya no se venden; se respetan a quien los tiene' },
-    { key: 'especial', label: 'Planes especiales', hint: 'A medida, pactados con el CEO' },
+    { key: 'especial', label: 'Planes especiales', hint: 'A medida, pactados con Jesús' },
     { key: 'complemento', label: 'Productos complementarios', hint: 'Compra suelta, no es una membresía' },
 ];
 
@@ -181,20 +191,36 @@ const PlanCard = ({ plan, onEdit }) => {
                 </div>
                 {plan.precio_nota && <p className="text-[11px] text-white/40 -mt-1">{plan.precio_nota}</p>}
 
+                {/* LOS SIETE INTERRUPTORES del doc del 19-08, más lo que ya había. La fila
+                    Harbiz se quitó de las 21 fichas: Harbiz muere (fallo 07). */}
                 <div className="border-t border-[#222] pt-2 space-y-1">
                     {/* Con nombre, no con el código de la casilla («personalizado»). */}
                     <HabRow label="Calculadora" value={h.calculadora ? etiquetaCalculadora(h.calculadora) : '-'} />
+                    <div className="flex items-center justify-between text-xs py-0.5">
+                        <span className="text-white/50">Edita sus macros</span>
+                        <Dot on={h.edita_macros !== undefined ? !!h.edita_macros : h.calculadora !== 'personalizado'} />
+                    </div>
+                    <HabRow label="Frecuencia de ajuste" value={h.frecuencia_ajuste || 'ninguna'} />
                     <HabRow label="Rutina" value={h.rutina || '-'} />
                     <HabRow label="Reportes" value={(h.reportes && h.reportes.length) ? h.reportes.join(' + ') : 'ninguno'} />
-                    <HabRow label="Acompañamiento" value={etiquetaAcompanamiento(h.acompanamiento)} />
-                    <HabRow label="Contacto" value={etiquetaFrecuencia(h.frecuencia_contacto)} />
+                    <HabRow label="Suplementación" value={etiquetaSuplementacion(h.suplementacion)} />
+                    <HabRow label="Feedback" value={h.feedback || 'Ninguno'} />
+                    <HabRow label="Canal de contacto" value={h.canal_contacto || 'Ninguno'} />
+                    <HabRow label="Videollamadas" value={h.videollamadas || '0'} />
                     <div className="flex items-center justify-between text-xs py-0.5">
-                        <span className="text-white/50">Suplementación</span><Dot on={!!h.suplementacion} />
+                        <span className="text-white/50">Grupo privado</span><Dot on={!!h.grupo_privado} />
                     </div>
                     <div className="flex items-center justify-between text-xs py-0.5">
-                        <span className="text-white/50">Harbiz</span><Dot on={!!h.harbiz} />
+                        <span className="text-white/50">Audio de feedback</span><Dot on={!!h.audio_feedback} />
+                    </div>
+                    <div className="flex items-center justify-between text-xs py-0.5">
+                        <span className="text-white/50">Materiales y recursos</span><Dot on={!!h.materiales_recursos} />
                     </div>
                     <HabRow label="Responsable" value={plan.responsable || '-'} />
+                    <HabRow label="Renovación automática"
+                        value={plan.renovacion
+                            ? (plan.renovacion.automatica ? `Sí · ${plan.renovacion.cada}` : `No · ${plan.renovacion.cada}`)
+                            : '-'} />
                     {/* Si el «Tu plan incluye» de este plan está escrito a mano o se deriva de
                         las habilitaciones (punto 6.4). */}
                     <HabRow label="Qué incluye" value={plan.que_incluye ? 'escrito' : 'derivado'} />
@@ -240,10 +266,27 @@ const AdminPlansPage = () => {
             ciclo_tipo: plan.ciclo?.tipo || 'mensual',
             ciclo_semanas: plan.ciclo?.semanas ?? '',
             calculadora: plan.habilitaciones?.calculadora || 'personalizado',
+            // Los interruptores del 19-08. El de editar macros, si el override guardado no
+            // lo trae, arranca con lo que era verdad hasta hoy: autogestión sí, coach no.
+            edita_macros: plan.habilitaciones?.edita_macros !== undefined
+                ? !!plan.habilitaciones.edita_macros
+                : plan.habilitaciones?.calculadora !== 'personalizado',
+            frecuencia_ajuste: plan.habilitaciones?.frecuencia_ajuste || 'ninguna',
             rutina: plan.habilitaciones?.rutina || 'ninguna',
             reportes: [...(plan.habilitaciones?.reportes || [])],
-            suplementacion: !!plan.habilitaciones?.suplementacion,
-            harbiz: !!plan.habilitaciones?.harbiz,
+            // Tres opciones (fallo 10); el booleano viejo de un override se traduce.
+            suplementacion: typeof plan.habilitaciones?.suplementacion === 'string'
+                ? plan.habilitaciones.suplementacion
+                : (plan.habilitaciones?.suplementacion ? 'protocolo' : 'ninguna'),
+            feedback: plan.habilitaciones?.feedback || '',
+            canal_contacto: plan.habilitaciones?.canal_contacto || '',
+            videollamadas: plan.habilitaciones?.videollamadas || '0',
+            grupo_privado: !!plan.habilitaciones?.grupo_privado,
+            tiempo_respuesta: plan.habilitaciones?.tiempo_respuesta || '',
+            audio_feedback: !!plan.habilitaciones?.audio_feedback,
+            materiales_recursos: !!plan.habilitaciones?.materiales_recursos,
+            renovacion_automatica: !!plan.renovacion?.automatica,
+            renovacion_cada: plan.renovacion?.cada || '',
             // Lo que separa a dos planes que por lo demás son idénticos salvo el precio:
             // si hay alguien detrás y cada cuánto le escribe.
             acompanamiento: plan.habilitaciones?.acompanamiento || 'solo_app',
@@ -277,12 +320,24 @@ const AdminPlansPage = () => {
                 },
                 habilitaciones: {
                     calculadora: form.calculadora,
+                    edita_macros: form.edita_macros,
+                    frecuencia_ajuste: form.frecuencia_ajuste,
                     rutina: form.rutina,
                     reportes: form.reportes,
                     suplementacion: form.suplementacion,
-                    harbiz: form.harbiz,
+                    feedback: form.feedback,
+                    canal_contacto: form.canal_contacto,
+                    videollamadas: form.videollamadas,
+                    grupo_privado: form.grupo_privado,
+                    tiempo_respuesta: form.tiempo_respuesta,
+                    audio_feedback: form.audio_feedback,
+                    materiales_recursos: form.materiales_recursos,
                     acompanamiento: form.acompanamiento,
                     frecuencia_contacto: form.frecuencia_contacto,
+                },
+                renovacion: {
+                    automatica: form.renovacion_automatica,
+                    cada: form.renovacion_cada.trim(),
                 },
             };
             await api.put(`/admin/plans/${editing.code}`, payload);
@@ -493,14 +548,73 @@ const AdminPlansPage = () => {
                                         ))}
                                     </div>
                                 </div>
-                                <div className="flex gap-6 mt-3">
+                                {/* LOS INTERRUPTORES DEL 19-08. La suplementación ya no es un
+                                    sí/no: son dos cosas distintas (la guía, igual para todos, y
+                                    el protocolo escrito para esa persona). Y Harbiz murió. */}
+                                <div className="grid grid-cols-2 gap-3 mt-3">
+                                    <div><Label className="text-white/60 text-xs">Suplementación</Label>
+                                        <select value={form.suplementacion} onChange={e => setForm(f => ({ ...f, suplementacion: e.target.value }))}
+                                            data-testid="plan-suplementacion"
+                                            className="w-full bg-[#111] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
+                                            <option value="ninguna">Ninguna</option>
+                                            <option value="guia">La guía</option>
+                                            <option value="protocolo">Protocolo personalizado</option>
+                                        </select>
+                                    </div>
+                                    <div><Label className="text-white/60 text-xs">Frecuencia de ajuste</Label>
+                                        <select value={form.frecuencia_ajuste} onChange={e => setForm(f => ({ ...f, frecuencia_ajuste: e.target.value }))}
+                                            data-testid="plan-frecuencia-ajuste"
+                                            className="w-full bg-[#111] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
+                                            <option value="ninguna">Ninguna</option>
+                                            <option value="mensual">Mensual</option>
+                                            <option value="quincenal">Cada dos semanas</option>
+                                            <option value="semanal">Semanal</option>
+                                            <option value="al_renovar">Al renovar, si lo pide</option>
+                                        </select>
+                                    </div>
+                                    <div><Label className="text-white/60 text-xs">Feedback del entrenador</Label>
+                                        <Input value={form.feedback} onChange={e => setForm(f => ({ ...f, feedback: e.target.value }))}
+                                            placeholder="Ninguno · Con cada reporte · Semanal" className="bg-[#111] border-[#333] text-white mt-1" />
+                                    </div>
+                                    <div><Label className="text-white/60 text-xs">Canal de contacto</Label>
+                                        <Input value={form.canal_contacto} onChange={e => setForm(f => ({ ...f, canal_contacto: e.target.value }))}
+                                            placeholder="Chat de dudas · WhatsApp · Ninguno" className="bg-[#111] border-[#333] text-white mt-1" />
+                                    </div>
+                                    <div><Label className="text-white/60 text-xs">Videollamadas</Label>
+                                        <Input value={form.videollamadas} onChange={e => setForm(f => ({ ...f, videollamadas: e.target.value }))}
+                                            placeholder="0 · Una al mes" className="bg-[#111] border-[#333] text-white mt-1" />
+                                    </div>
+                                    <div><Label className="text-white/60 text-xs">Tiempo de respuesta</Label>
+                                        <Input value={form.tiempo_respuesta} onChange={e => setForm(f => ({ ...f, tiempo_respuesta: e.target.value }))}
+                                            placeholder="menos de 24 h" className="bg-[#111] border-[#333] text-white mt-1" />
+                                    </div>
+                                    <div><Label className="text-white/60 text-xs">Renovación · cada</Label>
+                                        <Input value={form.renovacion_cada} onChange={e => setForm(f => ({ ...f, renovacion_cada: e.target.value }))}
+                                            placeholder="mensual · cada 12 semanas · se recontrata" className="bg-[#111] border-[#333] text-white mt-1" />
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3">
                                     <label className="flex items-center gap-2 text-sm text-white/80 cursor-pointer">
-                                        <input type="checkbox" checked={form.suplementacion} onChange={e => setForm(f => ({ ...f, suplementacion: e.target.checked }))} className="accent-[#FF671F] w-4 h-4" />
-                                        Suplementación
+                                        <input type="checkbox" checked={form.edita_macros} onChange={e => setForm(f => ({ ...f, edita_macros: e.target.checked }))}
+                                            data-testid="plan-edita-macros" className="accent-[#FF671F] w-4 h-4" />
+                                        Puede editar sus macros
                                     </label>
                                     <label className="flex items-center gap-2 text-sm text-white/80 cursor-pointer">
-                                        <input type="checkbox" checked={form.harbiz} onChange={e => setForm(f => ({ ...f, harbiz: e.target.checked }))} className="accent-[#FF671F] w-4 h-4" />
-                                        Harbiz
+                                        <input type="checkbox" checked={form.grupo_privado} onChange={e => setForm(f => ({ ...f, grupo_privado: e.target.checked }))} className="accent-[#FF671F] w-4 h-4" />
+                                        Grupo privado
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-white/80 cursor-pointer">
+                                        <input type="checkbox" checked={form.audio_feedback} onChange={e => setForm(f => ({ ...f, audio_feedback: e.target.checked }))} className="accent-[#FF671F] w-4 h-4" />
+                                        Audio de feedback
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-white/80 cursor-pointer">
+                                        <input type="checkbox" checked={form.materiales_recursos} onChange={e => setForm(f => ({ ...f, materiales_recursos: e.target.checked }))} className="accent-[#FF671F] w-4 h-4" />
+                                        Materiales y recursos
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-white/80 cursor-pointer">
+                                        <input type="checkbox" checked={form.renovacion_automatica} onChange={e => setForm(f => ({ ...f, renovacion_automatica: e.target.checked }))}
+                                            data-testid="plan-renovacion-automatica" className="accent-[#FF671F] w-4 h-4" />
+                                        Renovación automática
                                     </label>
                                 </div>
                             </div>
@@ -515,7 +629,7 @@ const AdminPlansPage = () => {
                                         habilitaciones: {
                                             calculadora: form.calculadora, rutina: form.rutina,
                                             reportes: form.reportes, suplementacion: form.suplementacion,
-                                            harbiz: form.harbiz, acompanamiento: form.acompanamiento,
+                                            acompanamiento: form.acompanamiento,
                                             frecuencia_contacto: form.frecuencia_contacto,
                                         },
                                     }).map((x, i) => <li key={i}>{x}</li>)}

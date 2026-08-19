@@ -35,6 +35,7 @@ import RevisionPage from "./pages/RevisionPage";
 import FoodSearchPage from "./pages/FoodSearchPage";
 import AdminFoodSuggestionsPage from "./pages/AdminFoodSuggestionsPage";
 import AdminPlansPage from "./pages/AdminPlansPage";
+import AdminTareasPage from "./pages/AdminTareasPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 import WelcomePage from "./pages/WelcomePage";
 import PlanesPage from "./pages/PlanesPage";
@@ -262,6 +263,9 @@ function AppRoutes() {
                 } />
                 <Route path="clients" element={<AdminClientsList />} />
                 <Route path="clients/:clientId" element={<ClientDetailPage />} />
+                {/* Las tareas del equipo (doc 19-08, apartado 05): admin y entrenadores,
+                    cada uno ve las suyas y las que asignó. */}
+                <Route path="tareas" element={<AdminTareasPage />} />
                 <Route path="leads" element={<LeadsPage />} />
                 <Route path="messages" element={<AdminMessagesPage />} />
                 <Route path="routines" element={<AdminRoutinesPage />} />

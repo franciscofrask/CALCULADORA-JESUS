@@ -62,6 +62,19 @@ async def get_client_profile(user = Depends(get_current_user)):
     # Su % graso vigente y si toca volver a pedirlo (punto 47). Lo decide el servidor para
     # que las pantallas no tengan cada una su version de "cuanto hace de esto".
     datos["grasa"] = grasa_vigente(profile)
+    # Y si la VENTANA de las 12 semanas se enseña hoy (doc 19-08): toca pedirlo, no dijo
+    # «no volver a mostrar», no está aplazada, y hoy todavía no salió (una vez al día como
+    # mucho aunque abra la app varias veces).
+    from core.tiempo import hoy_madrid
+    hoy_iso = hoy_madrid().isoformat()
+    # OJO: `hay_que_pedirlo` también es True para el que no tiene ninguna fecha (el recién
+    # llegado con el % del alta sin serie): a ese no se le dice «llevas 12 semanas sin
+    # actualizar» el primer día, porque no las lleva. La ventana es para el dato VIEJO.
+    datos["grasa"]["mostrar_ventana"] = bool(
+        (datos["grasa"].get("semanas") or 0) >= 12
+        and not profile.get("grasa_aviso_nunca")
+        and str(profile.get("grasa_aviso_snooze_hasta") or "") <= hoy_iso
+        and str(profile.get("grasa_aviso_vista_el") or "") != hoy_iso)
     # ¿Hay alguien detras de sus macros? (punto 4.1). De esto depende que Inicio le diga o no
     # que le falta terminar de ajustarlos, y en produccion se lo estaba diciendo a 169 de los
     # 174 activos -- gente que lleva meses con Jesus y a la que el mismo les pone los numeros.
@@ -121,6 +134,103 @@ async def update_onboarding(data: OnboardingUpdate, user = Depends(get_current_u
         await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return ClientProfile(**updated)
+
+# ── LOS TRES BOTONES DE SEGUIMIENTO (doc 19-08, «Lo que falta en Seguimiento») ─────────
+# «Subir fotos · Cuando quieras / Añadir medidas · Cuando quieras / Actualizar mi % de
+# grasa. Estos tres botones hoy no existen. La pantalla de Evolución dice "Se piden en el
+# reporte mensual" y no deja hacer nada. Si puede subirlas cuando quiera, tiene que haber
+# por dónde.» Las fotos ya tenían su puerta (POST /reports/photos); estas son las otras dos.
+
+@router.post("/clients/me/medidas")
+async def anadir_medidas(data: Dict[str, Any] = Body(...), user = Depends(get_current_user)):
+    """Medidas sueltas, fuera del reporte. Van a su serie (`medidas_sueltas`) y la
+    Evolución las pinta junto a las de los reportes: una toma es una toma, venga de donde
+    venga. Se guardan solo las que llegan con número."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]},
+                                                {"_id": 0, "id": 1, "medidas_sueltas": 1})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    crudas = (data or {}).get("medidas") or {}
+    medidas = {}
+    for k, v in crudas.items():
+        try:
+            n = float(v)
+            if 5 <= n <= 250:      # centímetros de persona, no un tecleo
+                medidas[str(k)] = n
+        except (TypeError, ValueError):
+            continue
+    if not medidas:
+        raise HTTPException(status_code=400, detail="No llegó ninguna medida válida.")
+    from core.tiempo import hoy_madrid
+    toma = {"fecha": hoy_madrid().isoformat(), "measurements": medidas,
+            "created_at": datetime.now(timezone.utc).isoformat()}
+    # Una toma por día: repetir el mismo día corrige, no duplica.
+    serie = [t for t in (profile.get("medidas_sueltas") or [])
+             if t.get("fecha") != toma["fecha"]] + [toma]
+    await db.client_profiles.update_one({"user_id": user["id"]},
+                                        {"$set": {"medidas_sueltas": serie}})
+    return {"ok": True, "toma": toma}
+
+
+@router.post("/clients/me/grasa")
+async def actualizar_mi_grasa(data: Dict[str, Any] = Body(...), user = Depends(get_current_user)):
+    """El % de grasa que el cliente actualiza él mismo (con el carrusel de fotos). Va a
+    su serie con la fecha de hoy, que es lo que resetea la cuenta de las 12 semanas."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    try:
+        valor = float((data or {}).get("valor"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Ese porcentaje no se entiende.")
+    if not (3 <= valor <= 60):
+        raise HTTPException(status_code=400, detail="Ese porcentaje no parece real.")
+    await anotar_grasa(profile["id"], valor, origen="el cliente, desde Seguimiento")
+    # Y la ventana de las 12 semanas se cierra sola: acaba de actualizarlo.
+    await db.client_profiles.update_one(
+        {"user_id": user["id"]},
+        {"$unset": {"grasa_aviso_snooze_hasta": ""}})
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    from core.series_cliente import grasa_vigente
+    return {"ok": True, "grasa": grasa_vigente(perfil)}
+
+
+@router.post("/clients/me/grasa/ventana")
+async def ventana_de_grasa(data: Dict[str, Any] = Body(default={}),
+                           user = Depends(get_current_user)):
+    """Las tres salidas de la ventana de las 12 semanas (doc 19-08): `recordar` la
+    aplaza una semana, `nunca` no la vuelve a enseñar, y `vista` apunta que hoy ya salió
+    (como mucho una vez al día aunque abra la app varias veces)."""
+    accion = (data or {}).get("accion")
+    from core.tiempo import hoy_madrid
+    hoy = hoy_madrid()
+    if accion == "recordar":
+        cambio = {"$set": {"grasa_aviso_snooze_hasta": (hoy + timedelta(days=7)).isoformat()}}
+    elif accion == "nunca":
+        cambio = {"$set": {"grasa_aviso_nunca": True}}
+    elif accion == "vista":
+        cambio = {"$set": {"grasa_aviso_vista_el": hoy.isoformat()}}
+    else:
+        raise HTTPException(status_code=400, detail="Acción desconocida.")
+    await db.client_profiles.update_one({"user_id": user["id"]}, cambio)
+    return {"ok": True}
+
+
+@router.post("/clients/me/aviso-preferencias")
+async def aviso_de_preferencias_pendiente(user = Depends(get_current_user)):
+    """El aviso que deja «Lo hago luego» en el final del alta (doc 19-08), con su texto
+    literal: «Completar preferencias — Son 2 minutos y nos ayudará a mostrarte las cosas
+    que te gustan.» Uno como mucho: repetir el botón no lo duplica."""
+    from routes.notifications import notify
+    ya = await db.notifications.find_one(
+        {"user_id": user["id"], "title": "Completar preferencias", "read": False},
+        {"_id": 0, "id": 1})
+    if not ya:
+        await notify(user["id"], "perfil", "Completar preferencias",
+                     "/dashboard/nutrition",
+                     body="Son 2 minutos y nos ayudará a mostrarte las cosas que te gustan.")
+    return {"ok": True}
+
 
 @router.put("/clients/profile", response_model=ClientProfile)
 async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_current_user)):
@@ -326,7 +436,8 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
                   "peso_mejor_momento", "peso_mejor_momento_ano", "peso_mejor_momento_nota",
                   "foto_mejor_momento", "peso_minimo", "peso_minimo_ano", "peso_minimo_nota",
                   "alergias", "lactosa", "gluten", "alergia_otra",
-                  "dietas_previas", "tiempo_intentandolo", "motivo_apuntarse"):
+                  "dietas_previas", "tiempo_intentandolo", "motivo_apuntarse",
+                  "entrenador_anterior", "entrenador_anterior_que_tal"):
         valor = getattr(data, campo, None)
         if valor not in (None, "", []):
             update[campo] = valor
@@ -1019,6 +1130,28 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     updated = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"profile": ClientProfile(**updated).model_dump(), "resultado": resultado,
             "entrega": entrega}
+
+
+@router.get("/clients/questionnaire/nivel1/ventana")
+async def ventana_del_cuestionario_largo(user = Depends(get_current_user)):
+    """Cuándo se puede entrar al cuestionario largo (el reloj del 19-08): del viernes
+    10:00 al lunes 18:00, hora de España. La regla vive en el servidor y el front la
+    pregunta: escrita en dos idiomas acabaría diciendo dos horas distintas.
+
+    Solo informa; el envío del nivel 1 se acepta siempre (la ventana cierra la ENTRADA,
+    no tritura veinte respuestas porque el reloj marque las 18:05)."""
+    from core.ventana_completo import ventana_del_completo
+
+    v = ventana_del_completo(datetime.now(timezone.utc))
+    dias = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+    return {
+        "abierta": v["abierta"],
+        "abre": v["abre"].isoformat(),
+        "cierra": v["cierra"].isoformat(),
+        # «el viernes 21 a las 10:00» / «el lunes 24 a las 18:00»: lo que se le enseña.
+        "abre_label": f"{dias[v['abre'].weekday()]} {v['abre'].day} a las {v['abre'].hour}:00",
+        "cierra_label": f"{dias[v['cierra'].weekday()]} {v['cierra'].day} a las {v['cierra'].hour}:00",
+    }
 
 
 @router.post("/clients/questionnaire/nivel1", response_model=ClientProfile)

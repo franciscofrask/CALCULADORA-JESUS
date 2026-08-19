@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -33,6 +33,7 @@ import {
 import { etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
 import { revisarPeso } from '../lib/pesoValido';
 import { mensajeDeError } from '../lib/mensajeDeError';
+import AsignarTarea from '../components/AsignarTarea';
 
 const USER_ROLES = [
     { value: 'client', label: 'Cliente' },
@@ -979,6 +980,12 @@ const ClientDetailPage = () => {
                             <InfoItem icon={Target} label="Objetivo" value={objetivoLabel(profile?.goal)} />
                         </div>
                     </CardContent></Card>
+
+                    {/* LAS TAREAS SOBRE ESTE CLIENTE (doc 19-08, apartado 05). El registro
+                        que sustituye al WhatsApp: qué se le pidió, quién lo hizo y cuándo —
+                        «el mes que viene, al abrir esta ficha, se ve que se le contactó». */}
+                    <TareasDelCliente api={api} clientId={clientId}
+                        nombre={user?.name || user?.email} />
                 </TabsContent>
 
                 {/* ========== TAB 2: MACROS ========== */}
@@ -1509,8 +1516,16 @@ const ClientDetailPage = () => {
                     <AjustesDelCuestionario ajustes={profile?.ajustes_macros} />
                     {/* El cuestionario largo. Se rellenaba entero y NO se veía en ninguna
                         parte de la ficha: treinta preguntas de historia, salud, entreno,
-                        suplementación y comida que el cliente contestaba para nadie. */}
-                    <PerfilLargo nivel1={profile?.nivel1} />
+                        suplementación y comida que el cliente contestaba para nadie.
+
+                        Y CON LO QUE VIENE DEL BÁSICO (19-08). Media docena de estas preguntas
+                        -- su historia de pesos, las dietas de antes, por qué se apuntó, si ha
+                        tenido entrenador -- se le hacen a TODO EL MUNDO en el básico desde el
+                        18-08, y el básico las guarda en la raíz del perfil, no dentro de
+                        `nivel1`. Así que el que no lleva plan personalizado las contestaba y
+                        no las veía nadie, igual que antes. Manda lo de `nivel1` cuando está
+                        en los dos sitios: es la respuesta del que hizo el largo de verdad. */}
+                    <PerfilLargo nivel1={{ ...(profile || {}), ...(profile?.nivel1 || {}) }} />
                     {calma_raw?.formulario_inicial && <CalmaCuestionario fi={calma_raw.formulario_inicial} />}
                 </TabsContent>
 
@@ -1911,6 +1926,77 @@ const MacroCeldas = ({ m, prev, showG = true, apagado = false, cambios = null })
 //
 // Cuando hay excepción se ve SIEMPRE, en naranja y arriba del todo. Cuando no la hay, un
 // enlace pequeño que no molesta: la mayoría de los clientes no tienen ninguna.
+// LAS TAREAS SOBRE ESTE CLIENTE (doc 19-08, apartado 05): las pendientes, el registro de
+// lo hecho, y el botón de asignar con «sobre quién» ya rellenado.
+const TareasDelCliente = ({ api, clientId, nombre }) => {
+    const [datos, setDatos] = useState(null);
+    const [modal, setModal] = useState(false);
+    const [verHechas, setVerHechas] = useState(false);
+
+    const cargar = useCallback(() => {
+        api.get(`/admin/tareas/de-cliente/${clientId}`)
+            .then(r => setDatos(r.data)).catch(() => setDatos({ pendientes: [], hechas: [] }));
+    }, [api, clientId]);
+    useEffect(() => { cargar(); }, [cargar]);
+
+    const marcar = async (t) => {
+        try {
+            await api.put(`/admin/tareas/${t.id}/hecha`, { hecha: !t.hecha });
+            cargar();
+        } catch (e) { toast.error(mensajeDeError(e, 'No se pudo marcar')); }
+    };
+
+    const Fila = ({ t }) => (
+        <div className="flex items-start gap-2.5 py-2 border-b border-[#1c1c1c] last:border-0">
+            <button onClick={() => marcar(t)} title={t.hecha ? 'Deshacer' : 'Marcar hecha'}
+                className={t.hecha ? 'text-emerald-500 mt-0.5' : 'text-white/25 hover:text-[#FF671F] mt-0.5'}>
+                <CheckCircle2 className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+                <p className={`text-sm ${t.hecha ? 'text-white/40 line-through' : 'text-white/90'}`}>{t.que}</p>
+                <p className="text-[11px] text-white/35">
+                    {t.a_quien_nombre && `para ${t.a_quien_nombre}`}
+                    {t.para_cuando && ` · para el ${t.para_cuando}`}
+                    {t.hecha && t.hecha_at && ` · hecha el ${String(t.hecha_at).slice(0, 10)}${t.hecha_por_nombre ? ` por ${t.hecha_por_nombre}` : ''}`}
+                    {!t.hecha && t.origen !== 'manual' && ' · automática'}
+                </p>
+            </div>
+        </div>
+    );
+
+    return (
+        <Card className="bg-[#111] border-[#222] mt-4" data-testid="tareas-del-cliente">
+            <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-white/40 uppercase tracking-wider font-bold">Tareas</p>
+                    <Button size="sm" onClick={() => setModal(true)} data-testid="asignar-tarea-ficha"
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs h-7 px-2">
+                        Asignar tarea
+                    </Button>
+                </div>
+                {!datos ? <p className="text-white/30 text-sm">Cargando…</p> : (
+                    <>
+                        {datos.pendientes.length === 0 && (
+                            <p className="text-white/40 text-sm">Nada pendiente sobre este cliente.</p>
+                        )}
+                        {datos.pendientes.map(t => <Fila key={t.id} t={t} />)}
+                        {datos.hechas.length > 0 && (
+                            <button onClick={() => setVerHechas(v => !v)}
+                                className="text-xs text-white/40 hover:text-white mt-2">
+                                {verHechas ? 'Ocultar el registro' : `Registro (${datos.hechas.length} hechas)`}
+                            </button>
+                        )}
+                        {verHechas && datos.hechas.map(t => <Fila key={t.id} t={t} />)}
+                    </>
+                )}
+            </CardContent>
+            <AsignarTarea abierto={modal} onClose={() => setModal(false)}
+                sobre={[{ id: clientId, nombre }]} onCreada={cargar} />
+        </Card>
+    );
+};
+
+
 const ExcepcionDelCliente = ({ excepcion, guardando, onGuardar }) => {
     const [editando, setEditando] = useState(false);
     const [texto, setTexto] = useState(excepcion || '');
@@ -2544,7 +2630,8 @@ const ETIQUETAS_NIVEL1 = {
     dietas_previas: 'Dietas que ha hecho',
     dieta_que_funciona: 'La que mejor le funcionó',
     por_que_fallaron: 'Por qué fallaron',
-    entrenador_anterior: 'Entrenador anterior',
+    entrenador_anterior: '¿Ha tenido entrenador o plan antes?',
+    entrenador_anterior_que_tal: 'Qué tal le fue',
     // Tu entrenamiento
     training_experience: 'Años entrenando',
     entrena_ahora: '¿Entrena ahora?',
@@ -2580,7 +2667,7 @@ const BLOQUES_NIVEL1 = [
                      'peso_mejor_momento', 'mejor_definicion_cuando', 'hasta_donde',
                      'vario_peso_3m', 'tiempo_intentandolo', 'motivo_apuntarse',
                      'dietas_previas', 'dieta_que_funciona', 'por_que_fallaron',
-                     'entrenador_anterior']],
+                     'entrenador_anterior', 'entrenador_anterior_que_tal']],
     ['Su entrenamiento', ['training_experience', 'entrena_ahora', 'material',
                           'maquinas_que_faltan', 'ejercicios_imposibles', 'cardio',
                           'dias_entreno']],
@@ -2698,33 +2785,39 @@ const PerfilLargo = ({ nivel1 }) => {
     const salud = nivel1.salud || {};
     const hayAlgoDeSalud = Object.values(salud).some(v => v);
 
+    // LOS BLOQUES SE CALCULAN ANTES DE PINTAR, no dentro del map. Aquí llega ahora el perfil
+    // entero (el básico guarda sus respuestas en la raíz, no en `nivel1`), así que
+    // «¿tiene claves?» ya no sirve para saber si hay algo que enseñar: lo tiene siempre.
+    // Sin esto, la ficha de quien no ha contestado ninguna de estas preguntas pintaba una
+    // tarjeta con el título y nada debajo.
+    const bloques = BLOQUES_NIVEL1
+        .map(([titulo, claves]) => [titulo, claves
+            .map(k => [ETIQUETAS_NIVEL1[k] || k, valor(nivel1[k])])
+            .filter(([, v]) => v)])
+        .filter(([, filas]) => filas.length);
+    if (!bloques.length && !hayAlgoDeSalud) return null;
+
     return (
         <Card className="bg-[#111] border-[#222]" data-testid="perfil-largo">
             <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2">
-                    <ClipboardList className="w-4 h-4" />Cuestionario completo
+                    <ClipboardList className="w-4 h-4" />Su cuestionario
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
-                {BLOQUES_NIVEL1.map(([titulo, claves]) => {
-                    const filas = claves
-                        .map(k => [ETIQUETAS_NIVEL1[k] || k, valor(nivel1[k])])
-                        .filter(([, v]) => v);
-                    if (!filas.length) return null;
-                    return (
-                        <div key={titulo}>
-                            <p className="text-xs text-[#FF671F] uppercase tracking-wider font-bold mb-2">{titulo}</p>
-                            <div className="space-y-2">
-                                {filas.map(([etiqueta, v]) => (
-                                    <div key={etiqueta} className="grid grid-cols-[minmax(0,11rem)_1fr] gap-3 text-sm">
-                                        <span className="text-white/40">{etiqueta}</span>
-                                        <span className="text-white/90 whitespace-pre-wrap break-words">{v}</span>
-                                    </div>
-                                ))}
-                            </div>
+                {bloques.map(([titulo, filas]) => (
+                    <div key={titulo}>
+                        <p className="text-xs text-[#FF671F] uppercase tracking-wider font-bold mb-2">{titulo}</p>
+                        <div className="space-y-2">
+                            {filas.map(([etiqueta, v]) => (
+                                <div key={etiqueta} className="grid grid-cols-[minmax(0,11rem)_1fr] gap-3 text-sm">
+                                    <span className="text-white/40">{etiqueta}</span>
+                                    <span className="text-white/90 whitespace-pre-wrap break-words">{v}</span>
+                                </div>
+                            ))}
                         </div>
-                    );
-                })}
+                    </div>
+                ))}
 
                 {hayAlgoDeSalud && (
                     <div>
@@ -2792,8 +2885,12 @@ const CalmaCuestionario = ({ fi }) => {
 
 const _resp = (r) => {
     if (!r) return null;
+    // El mismo filtro del «Sin calificar cumplimiento»: si tras quitarlo no queda nada
+    // escrito por el cliente, la fila entera no se pinta (texto null → se filtra arriba).
+    const texto = sinElRelleno(r.texto);
+    if (!texto) return null;
     const extra = [r.nota, r.score != null ? r.score : null].filter(v => v != null && v !== '').join(' · ');
-    return [r.texto, extra ? `(${extra})` : ''].filter(Boolean).join(' ');
+    return [texto, extra ? `(${extra})` : ''].filter(Boolean).join(' ');
 };
 
 const CalmaReportItem = ({ r, hideHeader }) => {
@@ -2803,7 +2900,7 @@ const CalmaReportItem = ({ r, hideHeader }) => {
         ['Compromiso', r.compromiso], ['Objetivo', r.objetivo], ['Cumplimiento dieta', r.cumplimientoDieta],
         ['Esfuerzo con la dieta', r.esfuerzoParaCumplirDieta], ['Suplementación', r.suplementacion],
         ['Entrenamiento', r.cumplimientoEntrenamiento], ['Cardio', r.cumplimientoCardio], ['Descanso', r.descanso],
-    ].filter(([, v]) => v && v.texto);
+    ].filter(([, v]) => v && sinElRelleno(v.texto));
     return (
         <div className="p-3.5 bg-[#0A0A0A] rounded-xl border border-[#222]">
             {!hideHeader && (
@@ -3488,8 +3585,21 @@ const PREGUNTAS_CALMA = [
     ['objetivo', 'Su objetivo ahora'],
 ];
 
+// «SIN CALIFICAR CUMPLIMIENTO» NO ES UNA RESPUESTA (doc 19-08, apartado 02). Es el valor
+// que Calma deja en el select del cardio cuando el cliente no lo toca -- 91 formularios,
+// sigue pasando en 2026 -- y la ficha lo pintaba como si el cliente lo hubiera dicho:
+// «el cliente pone que no se ha saltado nada y a mí me sale sin calificar el
+// cumplimiento». Si detrás del relleno hay algo escrito por el cliente («Sin calificar
+// cumplimiento. Este mes lo haré 100 %»), eso sí es suyo y eso es lo que se enseña.
+const sinElRelleno = (v) => {
+    const limpio = String(v ?? '').replace(/^sin calificar (el )?cumplimiento[.,]?\s*/i, '').trim();
+    return limpio || null;
+};
+
 const RespuestasDeCalma = ({ respuestas }) => {
-    const filas = PREGUNTAS_CALMA.filter(([k]) => (respuestas || {})[k]);
+    const filas = PREGUNTAS_CALMA
+        .map(([k, etiqueta]) => [k, etiqueta, sinElRelleno((respuestas || {})[k])])
+        .filter(([, , v]) => v);
     if (!filas.length) return null;
     return (
         <div className="space-y-1.5 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]"
@@ -3497,9 +3607,9 @@ const RespuestasDeCalma = ({ respuestas }) => {
             <p className="text-white/40 text-[11px] uppercase tracking-wider">
                 Lo que contestó en su reporte mensual
             </p>
-            {filas.map(([k, etiqueta]) => (
+            {filas.map(([k, etiqueta, v]) => (
                 <p key={k} className="text-white/50 leading-snug">
-                    {etiqueta} <b className="text-white font-normal">{respuestas[k]}</b>
+                    {etiqueta} <b className="text-white font-normal">{v}</b>
                 </p>
             ))}
         </div>

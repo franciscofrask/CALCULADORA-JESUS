@@ -1,0 +1,304 @@
+"""
+Las tareas que se generan solas (doc del 19-08, apartado 05, parte 3).
+
+    «Estas no las asigna nadie: salen del calendario y de los datos. Son la diferencia
+     entre una lista de tareas y un sistema — lo primero depende de que alguien se
+     acuerde.»
+
+No hay cron: se generan al consultar la lista de tareas (el mismo patrón que las alertas
+de report_overdue), con un freno para no escanear la cartera entera en cada carga. La
+deduplicación es la `clave` de cada tarea: mientras exista una con esa clave, no se
+vuelve a crear — por eso las condiciones que se repiten llevan el periodo en la clave.
+
+A QUIÉN VA CADA UNA. El doc reparte entre «Jenny», «su entrenador» y «Operaciones».
+Jenny se busca por nombre entre el staff; si no tiene usuario, sus tareas van al primer
+administrador (y el día que se le dé de alta, empiezan a caerle a ella sin tocar nada).
+Operaciones es el administrador. Las del entrenador van al asignado, y si el cliente no
+tiene, la tarea que salta es justamente la de asignárselo.
+
+LO QUE AQUÍ NO ESTÁ, Y POR QUÉ:
+  - «Cobrar a Luigi Mazzali · Javier Marcos · Jorge Gabas» (cobro a mano): no hay ningún
+    campo que diga quién paga por transferencia; está en la hoja de control de pagos.
+    Cuando ese dato viva en la ficha, se engancha aquí.
+  - «Ha pedido la baja»: el flujo de pedir la baja no existe todavía (apartado «Mi plan y
+    la baja» del mismo doc). `tarea_baja_pedida` queda lista para llamarla desde ahí.
+"""
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+from core.calendario_reportes import calendario_del_cliente
+from core.cartera import reportes_sin_responder
+from core.semana_rutina import semana_de_rutina
+from core.tareas import crear_tarea
+from core.tiempo import a_madrid
+
+# El freno: como mucho una pasada cada tantos minutos, la dispare quien la dispare.
+CADA_MINUTOS = 10
+
+# En qué semana del ciclo se avisa de la renovación: «Un cliente llega a semana 10.
+# Se cobra en la 12» — dos semanas antes del final, sea el ciclo de 12 o de 8.
+SEMANAS_ANTES_DE_RENOVAR = 2
+
+
+async def _destinatarios(db) -> Dict[str, Optional[str]]:
+    """{jenny, operaciones}: a quién van las tareas de dinero y las de operaciones."""
+    jenny = None
+    primer_admin = None
+    async for u in db.users.find({"role": {"$in": ["admin", "trainer"]}},
+                                 {"_id": 0, "id": 1, "name": 1, "role": 1}).sort("name", 1):
+        nombre = (u.get("name") or "").lower()
+        if "jenny" in nombre and not jenny:
+            jenny = u["id"]
+        if u.get("role") == "admin" and not primer_admin:
+            primer_admin = u["id"]
+    return {"jenny": jenny or primer_admin, "operaciones": primer_admin}
+
+
+async def _toca_pasar(db, ahora: datetime) -> bool:
+    doc = await db.app_state.find_one({"clave": "tareas_auto"}, {"_id": 0, "cuando": 1})
+    if doc and doc.get("cuando"):
+        try:
+            ultima = datetime.fromisoformat(doc["cuando"])
+            if ahora - ultima < timedelta(minutes=CADA_MINUTOS):
+                return False
+        except (ValueError, TypeError):
+            pass
+    await db.app_state.update_one({"clave": "tareas_auto"},
+                                  {"$set": {"cuando": ahora.isoformat()}}, upsert=True)
+    return True
+
+
+async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
+    """Una pasada por la cartera. Devuelve cuántas tareas nuevas dejó."""
+    ahora = datetime.now(timezone.utc)
+    if not forzar and not await _toca_pasar(db, ahora):
+        return 0
+
+    from core.plan_access import has_active_access, tiene_entrenador_detras
+    from models.user import codigo_de_plan, merged_catalog, PLAN_CATALOG
+    from routes.plans import _overrides_by_code
+    from models.user import precio_de_ciclo
+
+    catalogo = merged_catalog(await _overrides_by_code())
+    quien = await _destinatarios(db)
+    jenny, operaciones = quien["jenny"], quien["operaciones"]
+    if not jenny and not operaciones:
+        return 0                                   # base sin staff: no hay a quién asignar
+
+    hoy_es = (a_madrid(ahora) or ahora).date()
+    mes = hoy_es.isoformat()[:7]
+    semana_iso = f"{hoy_es.isocalendar()[0]}-W{hoy_es.isocalendar()[1]:02d}"
+
+    del_equipo = await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}})
+    perfiles = await db.client_profiles.find(
+        {"user_id": {"$nin": del_equipo}, "status": {"$in": ["activo", "pago_pendiente"]}},
+        {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "comp_plan": 1, "week": 1,
+         "trainer_id": 1, "cycle_start": 1, "created_at": 1, "current_period_end": 1,
+         "subscription_status": 1, "stripe_subscription_id": 1, "access_until": 1,
+         "checkout_status": 1, "status": 1, "ultimo_reporte": 1, "ultima_entrada": 1,
+         "aplazamientos_seguidos": 1, "height": 1, "goal": 1, "body_fat": 1,
+         "calendario_reportes": 1, "ciclo_semanas": 1, "semana_de_entrada": 1},
+    ).to_list(3000)
+
+    nombres = {u["id"]: u.get("name") async for u in db.users.find(
+        {"id": {"$in": [p["user_id"] for p in perfiles]}}, {"_id": 0, "id": 1, "name": 1})}
+
+    # Rutinas activas (la semana que manda) y última foto, en bloque.
+    rutina_de = {r["client_id"]: r for r in await db.routines.find(
+        {"client_id": {"$in": [p["id"] for p in perfiles]}, "status": "active"},
+        {"_id": 0, "client_id": 1, "created_at": 1}).to_list(3000)}
+    ultima_foto: Dict[str, str] = {}
+    async for f in db.client_photos.aggregate([
+            {"$group": {"_id": "$client_id", "ultima": {"$max": "$created_at"}}}]):
+        if f.get("_id"):
+            ultima_foto[f["_id"]] = f.get("ultima") or ""
+
+    creadas = 0
+
+    async def tarea(**kw):
+        nonlocal creadas
+        if await crear_tarea(db, **kw):
+            creadas += 1
+
+    for p in perfiles:
+        cid, nombre = p.get("id"), nombres.get(p.get("user_id")) or "cliente"
+        plan_code = codigo_de_plan(p.get("plan"))
+        plan = catalogo.get(plan_code) or {}
+        entrenador = p.get("trainer_id")
+        con_coach = tiene_entrenador_detras(plan_code)
+        # La semana que manda: la de rutina si la tiene (bloque 02).
+        sem_rutina = semana_de_rutina(rutina_de.get(cid), hoy_es)
+        semana = sem_rutina if sem_rutina is not None else p.get("week")
+        cal = calendario_del_cliente(p, plan)
+
+        # ── EL DINERO («las cinco que se pagan solas») ────────────────────────
+        ciclo_sem = (plan.get("ciclo") or {}).get("semanas")
+        renueva_solo = bool((plan.get("renovacion") or {}).get("automatica")) \
+            and p.get("subscription_status") in ("active", "trialing")
+        if (ciclo_sem and p.get("week")
+                and int(p["week"]) >= int(ciclo_sem) - SEMANAS_ANTES_DE_RENOVAR
+                and int(p["week"]) <= int(ciclo_sem)
+                and not renueva_solo):
+            await tarea(a_quien=jenny, que=f"Contactar a {nombre} para renovación. "
+                                          f"Se cobra en la semana {ciclo_sem}",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"renovacion:{cid}:{str(p.get('cycle_start'))[:10]}",
+                        origen="auto:renovacion")
+
+        if p.get("subscription_status") in ("past_due", "unpaid", "incomplete"):
+            await tarea(a_quien=jenny, que=f"Problema de pago de {nombre}: contactar por WhatsApp",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"rebote:{cid}:{mes}", origen="auto:rebote_pago")
+
+        if p.get("status") == "activo" and not has_active_access(p):
+            await tarea(a_quien=jenny, que=f"{nombre} ha causado baja (venció sin renovar). "
+                                          "Mandarle lo de recuperación",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"vencido:{cid}:{str(p.get('current_period_end') or p.get('access_until'))[:10]}",
+                        origen="auto:vencido")
+
+        if not p.get("comp_plan") and precio_de_ciclo(p, catalogo) == 0:
+            await tarea(a_quien=jenny, que=f"Poner el precio de {nombre}: sale de la hoja "
+                                          "de control de pagos",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"sin_precio:{cid}", origen="auto:sin_precio")
+
+        # ── EL CLIENTE SE ESTÁ CAYENDO ────────────────────────────────────────
+        a_su_coach = entrenador or operaciones
+        if con_coach:
+            debe = reportes_sin_responder(cal, semana, p.get("ultimo_reporte"), hoy_es)
+            if debe is not None and debe >= 2:
+                await tarea(a_quien=a_su_coach,
+                            que=f"{nombre} se está cayendo: {debe} reportes seguidos sin mandar. Contactar",
+                            sobre_quien=cid, sobre_quien_nombre=nombre,
+                            clave=f"se_cae_reportes:{cid}:{mes}", origen="auto:se_cae")
+
+        if int(p.get("aplazamientos_seguidos") or 0) >= 2:
+            await tarea(a_quien=a_su_coach,
+                        que=f"{nombre} lleva 2 aplazamientos seguidos: ya no es un imprevisto. Contactar",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"aplazamientos:{cid}:{int(p.get('aplazamientos_seguidos') or 0)}",
+                        origen="auto:aplazamientos")
+
+        entrada = p.get("ultima_entrada")
+        if entrada:
+            try:
+                sin_entrar = (hoy_es - datetime.fromisoformat(str(entrada)[:10]).date()).days
+            except (ValueError, TypeError):
+                sin_entrar = None
+            if sin_entrar is not None and sin_entrar >= 14:
+                await tarea(a_quien=a_su_coach,
+                            que=f"{nombre} lleva {sin_entrar} días sin entrar en la app. Contactar",
+                            sobre_quien=cid, sobre_quien_nombre=nombre,
+                            clave=f"no_entra:{cid}:{mes}", origen="auto:no_entra")
+
+        if not con_coach and cid:
+            foto = ultima_foto.get(cid)
+            base = foto or p.get("cycle_start") or p.get("created_at")
+            try:
+                dias_sin_fotos = (hoy_es - datetime.fromisoformat(str(base)[:10]).date()).days if base else None
+            except (ValueError, TypeError):
+                dias_sin_fotos = None
+            if dias_sin_fotos is not None and dias_sin_fotos >= 56:      # ocho semanas
+                await tarea(a_quien=jenny,
+                            que=f"{nombre} lleva 8 semanas sin fotos (autogestión): recordárselo",
+                            sobre_quien=cid, sobre_quien_nombre=nombre,
+                            clave=f"sin_fotos:{cid}:{mes}", origen="auto:sin_fotos")
+
+        # ── LO QUE ESTÁ INCOMPLETO ────────────────────────────────────────────
+        if con_coach and not entrenador:
+            await tarea(a_quien=operaciones, que=f"Asignar entrenador a {nombre}",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"sin_entrenador:{cid}", origen="auto:sin_entrenador")
+
+        faltan = [n for n, v in (("altura", p.get("height")), ("objetivo", p.get("goal")),
+                                 ("% de grasa", p.get("body_fat"))) if v in (None, "", 0)]
+        if faltan and cid:
+            await tarea(a_quien=jenny,
+                        que=f"Pedirle a {nombre} los datos que faltan: {', '.join(faltan)} "
+                            "(con eso se le están calculando los macros)",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"sin_datos:{cid}:{mes}", origen="auto:sin_datos")
+
+        if p.get("plan") and plan_code not in PLAN_CATALOG:
+            await tarea(a_quien=operaciones,
+                        que=f"Asignar plan a {nombre}: el suyo («{p.get('plan')}») no existe en el catálogo",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"plan_inexistente:{cid}", origen="auto:plan_inexistente")
+        elif not p.get("plan"):
+            await tarea(a_quien=operaciones, que=f"Asignar plan a {nombre}: no tiene ninguno",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"sin_plan:{cid}", origen="auto:sin_plan")
+
+    # ── EL TRABAJO DE LA SEMANA, POR ENTRENADOR ──────────────────────────────
+    # Con el recuento delante («Tienes 14 reportes para el miércoles»): se cuentan los
+    # reportes llegados esta semana (desde el viernes anterior) por entrenador.
+    dia = hoy_es.weekday()
+    hora_es = (a_madrid(ahora) or ahora).hour
+    if dia in (0, 2, 3, 4):
+        desde = hoy_es - timedelta(days=(hoy_es.weekday() - 4) % 7 or 7)   # el viernes pasado
+        por_coach: Dict[str, int] = {}
+        quincenal_por_coach: Dict[str, int] = {}
+        trainer_por_cliente = {p["id"]: p.get("trainer_id") for p in perfiles if p.get("id")}
+        async for r in db.reports.find({"created_at": {"$gte": desde.isoformat()}},
+                                       {"_id": 0, "client_id": 1, "tipo": 1, "created_at": 1}):
+            t = trainer_por_cliente.get(r.get("client_id"))
+            if not t:
+                continue
+            por_coach[t] = por_coach.get(t, 0) + 1
+            if r.get("tipo") == "quincenal":
+                quincenal_por_coach[t] = quincenal_por_coach.get(t, 0) + 1
+
+        def _plural(n, cosa):
+            return f"{n} {cosa}" if n != 1 else f"1 {cosa[:-1] if cosa.endswith('s') else cosa}"
+
+        for t, n in por_coach.items():
+            if dia == 0 and hora_es >= 18:      # lunes 18:01, al cerrar el mensual
+                await tarea(a_quien=t, que=f"Tienes {_plural(n, 'reportes')} para el miércoles",
+                            clave=f"semana_lunes:{t}:{semana_iso}", origen="auto:semana")
+            elif dia == 2:                       # miércoles: macros y suplementación
+                await tarea(a_quien=t, que=f"Entregar macros y suplementación de {n}",
+                            clave=f"semana_miercoles:{t}:{semana_iso}", origen="auto:semana")
+            elif dia == 3:                       # jueves: rutinas
+                await tarea(a_quien=t, que=f"Entregar rutinas de {n}",
+                            clave=f"semana_jueves:{t}:{semana_iso}", origen="auto:semana")
+        if dia == 4:                             # viernes: feedback del quincenal
+            for t, n in quincenal_por_coach.items():
+                await tarea(a_quien=t, que=f"Dar feedback del quincenal a {n}",
+                            clave=f"semana_viernes:{t}:{semana_iso}", origen="auto:semana")
+
+    # ── EL CALENDARIO DEL EQUIPO ─────────────────────────────────────────────
+    if dia == 4:
+        await tarea(a_quien=jenny, que="Mandar la newsletter y comprobar que sale bien",
+                    clave=f"newsletter:{semana_iso}", origen="auto:calendario")
+        await tarea(a_quien=jenny, que="Control de calidad de las conversaciones de ZeroChats",
+                    clave=f"zerochats:{semana_iso}", origen="auto:calendario")
+    if dia == 0:
+        await tarea(a_quien=operaciones, que="Reunión con los entrenadores",
+                    clave=f"reunion:{semana_iso}", origen="auto:calendario")
+
+    return creadas
+
+
+async def tarea_reporte_nuevo(db, *, client_id: str, nombre: str,
+                              trainer_id: Optional[str]) -> None:
+    """«Un cliente manda su reporte → Reporte nuevo de Nuria Garrido → su entrenador».
+    Por evento, desde POST /reports; sin entrenador va a operaciones."""
+    quien = await _destinatarios(db)
+    await crear_tarea(db, a_quien=trainer_id or quien["operaciones"],
+                      que=f"Reporte nuevo de {nombre}",
+                      sobre_quien=client_id, sobre_quien_nombre=nombre,
+                      clave=f"reporte_nuevo:{client_id}:{datetime.now(timezone.utc).date().isoformat()}",
+                      origen="auto:reporte_nuevo")
+
+
+async def tarea_baja_pedida(db, *, client_id: str, nombre: str, motivo: str) -> None:
+    """«Ha pedido la baja. Motivo: me sale caro» → Jenny, «con tiempo de sobra para hablar
+    con ella antes de que se acabe el ciclo». La llamará el flujo de la baja cuando exista
+    (apartado «Mi plan y la baja»)."""
+    quien = await _destinatarios(db)
+    await crear_tarea(db, a_quien=quien["jenny"],
+                      que=f"{nombre} ha pedido la baja. Motivo: «{motivo}». Hablar antes de que acabe su ciclo",
+                      sobre_quien=client_id, sobre_quien_nombre=nombre,
+                      clave=f"baja:{client_id}:{datetime.now(timezone.utc).date().isoformat()}",
+                      origen="auto:baja_pedida")

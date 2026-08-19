@@ -70,6 +70,16 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
         if not (el_suyo == plan_info["code"] and puede_renovar_su_plan_legacy(el_suyo, catalogo)):
             raise HTTPException(status_code=400, detail="Este plan ya no está disponible para nuevas contrataciones.")
 
+    # EL PREMIUM SE CONTRATA POR LLAMADA (doc 19-08, y era el rojo del caso 05): «nunca con
+    # botón de pagar». La pantalla no lo ofrece, pero este endpoint devolvía una URL de
+    # Stripe a cualquiera que lo pidiera a mano. El enlace de cobro del Premium lo genera
+    # el equipo después de la llamada, por la ficha del lead (su propio endpoint).
+    from core.renovacion import es_por_llamada
+    if es_por_llamada(plan_info["code"]):
+        raise HTTPException(
+            status_code=400,
+            detail="Este plan se contrata por llamada: agenda la tuya y te mandamos el enlace de pago.")
+
     profile = await ensure_checkout_profile(user, plan_info["code"])
     customer_id = await get_or_create_stripe_customer(user, profile)
 
@@ -275,6 +285,76 @@ async def get_renovacion(user=Depends(get_current_user)):
             dias_dieta=dias_dieta, dias_totales=dias_totales, ajustes_de_macros=ajustes,
             apuntes_de_peso=apuntes_de_peso),
     )
+
+
+# Los cinco motivos del doc del 19-08 («Mi plan y la baja»), literales. «Es lo más
+# valioso que se saca de una baja y hoy no se pregunta nunca.»
+MOTIVOS_DE_BAJA = {
+    "no_consegui": "No he conseguido lo que quería",
+    "caro": "Me sale caro",
+    "no_lo_use": "No lo he usado",
+    "consegui": "He conseguido lo que quería",
+    "otra": "Otra cosa",
+}
+
+
+@router.post("/no-renovar")
+async def no_quiero_renovar(payload: Dict[str, Any] = Body(default={}),
+                            user=Depends(get_current_user)):
+    """El «no quiero renovar» de Mi plan (doc del 19-08).
+
+    Lo que pasa al pedirla, tal cual el doc:
+      1 · NO pierde el acceso: ha pagado su ciclo y lo termina. Lo único que se marca es
+          que no se le va a volver a cobrar (si hay suscripción viva en Stripe, se le pone
+          cancel_at_period_end; si no la hay, con la marca basta porque nada cobra solo).
+      2 · Salta la tarea a soporte con su nombre y su motivo, con tiempo de sobra para
+          hablar antes de que acabe el ciclo.
+      3 · Cuando el ciclo acaba, la pantalla de caducado ya no le pide el correo.
+    """
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    motivo_clave = (payload.get("motivo") or "").strip()
+    if motivo_clave not in MOTIVOS_DE_BAJA:
+        raise HTTPException(status_code=400, detail="Dinos el motivo, aunque sea «otra cosa».")
+    motivo = MOTIVOS_DE_BAJA[motivo_clave]
+
+    # La marca en su ficha: es lo que leen la renovación, el panel y los avisos.
+    ahora = datetime.now(timezone.utc).isoformat()
+    await db.client_profiles.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"no_renovar": {"motivo": motivo, "motivo_clave": motivo_clave,
+                                 "cuando": ahora}}})
+
+    # Si Stripe le iba a cobrar solo, se le dice que no lo haga MÁS -- no que corte ahora:
+    # `cancel_at_period_end` respeta el ciclo pagado, que es exactamente la promesa.
+    sub_id = perfil.get("stripe_subscription_id")
+    if sub_id and perfil.get("subscription_status") in ("active", "trialing"):
+        try:
+            stripe_module = get_stripe_module()
+            await stripe_api_call(stripe_module.Subscription.modify, sub_id,
+                                  cancel_at_period_end=True)
+        except Exception as e:
+            # La marca ya está puesta y la tarea va a salir: que Stripe esté caído no
+            # puede tragarse la petición del cliente. El equipo lo verá en la tarea.
+            logger.error(f"[baja] no se pudo marcar cancel_at_period_end en {sub_id}: {e}")
+
+    # La tarea automática a soporte: «Nuria Garrido ha pedido la baja. Motivo: me sale
+    # caro» — con tiempo de sobra para hablar con ella antes de que se acabe el ciclo.
+    try:
+        from core.tareas_automaticas import tarea_baja_pedida
+        await tarea_baja_pedida(db, client_id=perfil.get("id"),
+                                nombre=user.get("name") or user.get("email") or "cliente",
+                                motivo=motivo)
+    except Exception as e:
+        logger.error(f"[baja] no se pudo crear la tarea: {e}")
+
+    hasta = perfil.get("current_period_end") or perfil.get("access_until")
+    return {"ok": True,
+            "mensaje": "Hecho. No se te vuelve a cobrar y sigues teniendo acceso hasta el "
+                       "final de tu ciclo.",
+            "acceso_hasta": hasta}
 
 
 @router.post("/revision-suelta/checkout")

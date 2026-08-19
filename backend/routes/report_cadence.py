@@ -128,6 +128,17 @@ async def get_report_cadence(user=Depends(get_admin_user)):
     ).to_list(len(user_ids) or 1)
     users_by_id = {u["id"]: u for u in users}
 
+    # Las rutinas activas, también en bloque: desde el doc del 19-08 el reporte se decide
+    # por la semana de RUTINA cuando la hay, y buscarla cliente a cliente serían doscientas
+    # consultas por carga del panel.
+    from core.semana_rutina import lunes_de_la_semana, semana_de_rutina
+    rutinas = await db.routines.find(
+        {"client_id": {"$in": [p["id"] for p in profiles]}, "status": "active"},
+        {"_id": 0, "client_id": 1, "created_at": 1},
+    ).to_list(len(profiles) or 1)
+    rutina_de = {r["client_id"]: r for r in rutinas}
+    hoy_es = (a_madrid(now) or now).date()
+
     items: List[Dict[str, Any]] = []
     keys = []  # (client_id, tipo, due_date_iso) para buscar los envíos en bloque
     for p in profiles:
@@ -144,7 +155,17 @@ async def get_report_cadence(user=Depends(get_admin_user)):
         # contrato (punto 44). Antes se recorrian los tipos del plan aplicando una regla
         # fija; ahora el patron ya dice cual toca, si es que toca alguno.
         cal = _cal(p, catalog)
-        tipo = reporte_de_la_semana(cal, cycle["week"])
+        # La semana que manda es la de su rutina, si la tiene (doc 19-08). La misma regla
+        # que aplica `compute_client_report_state`: cambiarla en un sitio y no en el otro
+        # dejaría al panel esperando un reporte que al cliente no se le ha abierto.
+        rutina = rutina_de.get(p["id"])
+        semana_rutina = semana_de_rutina(rutina, hoy_es)
+        semana_reporte = semana_rutina if semana_rutina is not None else cycle["week"]
+        if semana_rutina:
+            lunes = lunes_de_la_semana(rutina, semana_rutina)
+            if lunes:
+                window_start = datetime(lunes.year, lunes.month, lunes.day, tzinfo=MADRID)
+        tipo = reporte_de_la_semana(cal, semana_reporte)
         for tipo in ([tipo] if tipo else []):
             due = _due_date_in_window(window_start, dia_de_envio(cal, tipo))
             due_iso = due.date().isoformat()
@@ -161,6 +182,9 @@ async def get_report_cadence(user=Depends(get_admin_user)):
                 "tipo_label": rule["label"],
                 "due_label": rule["due_label"],
                 "week": cycle["week"],
+                # El contador que decidió ESTE reporte (la semana de rutina si la tiene).
+                "semana_rutina": semana_rutina,
+                "semana_reporte": semana_reporte,
                 "cycle_number": cycle["cycle_number"],
                 "due_date": due_iso,
             })
@@ -247,17 +271,18 @@ def _client_deadline(tipo: str, due: datetime, window_start: datetime):
 
 # ==================== Ventana de envío del cliente, EN HORA DE ESPAÑA ====================
 #
-# Cada reporte tiene la suya (doc 16-08, regla 1: "todo en hora de España, nada en UTC"):
+# Cada reporte tiene la suya, con las horas del RELOJ del doc del 19-08 (apartado 02):
 #
-#   quincenal   miércoles 09:00 -> jueves 20:00
-#   mensual     viernes 00:00   -> lunes 18:00
+#   quincenal   miércoles 10:00 -> jueves 20:00
+#   mensual     viernes 10:00   -> lunes 18:00
 #   semanal     viernes 00:00   -> lunes 06:00   (no lo cubre el doc: se queda como estaba)
 #
-# Antes iban todos en UTC y con el mismo horario, y de ahí salían los dos desajustes que
-# denuncia el doc: el quincenal se cerraba el lunes cuando el correo prometía el jueves a
-# las 20:00, y las horas bailaban una o dos según la época del año. Se guarda y se compara
-# en UTC, como el resto del módulo; lo que cambia es que la hora que se le promete al
-# cliente es la suya.
+# El doc del 16-08 decía miércoles 09:00 y el mensual sin hora de apertura; el del 19-08
+# pone las dos a las 10:00 y manda («si algo de un documento anterior dice lo contrario,
+# manda este»). Antes de todo eso iban en UTC y con el mismo horario, y de ahí salían los
+# desajustes que denunciaba: el quincenal se cerraba el lunes cuando el correo prometía el
+# jueves a las 20:00. Se guarda y se compara en UTC, como el resto del módulo; lo que
+# cambia es que la hora que se le promete al cliente es la suya.
 
 
 def _en_madrid(dia: datetime, hora: int, minuto: int = 0) -> datetime:
@@ -270,11 +295,12 @@ def _submission_window(window_start: datetime, tipo: Optional[str] = None):
     """(apertura, cierre) de la ventana de envío del tipo de reporte que toque."""
     if tipo == "quincenal":
         miercoles = _due_date_in_window(window_start, 2)
-        return _en_madrid(miercoles, 9), _en_madrid(miercoles + timedelta(days=1), 20)
+        return _en_madrid(miercoles, 10), _en_madrid(miercoles + timedelta(days=1), 20)
 
     viernes = _due_date_in_window(window_start, 4)
+    abre = 10 if tipo == "mensual" else 0
     cierra = 18 if tipo == "mensual" else 6
-    return _en_madrid(viernes, 0), _en_madrid(viernes + timedelta(days=3), cierra)
+    return _en_madrid(viernes, abre), _en_madrid(viernes + timedelta(days=3), cierra)
 
 
 def _principal_label(tipos: List[str]) -> str:
@@ -320,14 +346,49 @@ def _proximo_reporte(cal: Dict[str, Any], semana_actual: int, window_start: date
     return None
 
 
-def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any], now: datetime) -> Dict[str, Any]:
-    """Estado del reporte del cliente esta semana de ciclo: qué tipos tocan y la
-    ventana de envío (abierta/cerrada). Compartido por /reports/due y POST /reports."""
+async def rutina_activa_de(client_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """La rutina activa del cliente, con lo mínimo que necesita el contador de semanas.
+
+    Vive aquí y no en cada caller para que todos los que deciden un reporte busquen la
+    rutina de la MISMA manera; `compute_client_report_state` la recibe ya buscada porque
+    ese cálculo es puro y se prueba sin base.
+    """
+    if not client_id:
+        return None
+    return await db.routines.find_one(
+        {"client_id": client_id, "status": "active"}, {"_id": 0, "created_at": 1})
+
+
+def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any], now: datetime,
+                                rutina: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Estado del reporte del cliente esta semana: qué tipos tocan y la ventana de envío
+    (abierta/cerrada). Compartido por /reports/due y POST /reports.
+
+    LA SEMANA QUE DECIDE ES LA DE SU RUTINA cuando la tiene (el reloj del doc del 19-08:
+    «el quincenal se abre en la semana 2 de la rutina, no de su ciclo»). `rutina` es su
+    rutina activa -- basta con que traiga `created_at` -- y la busca quien llama, porque
+    este cálculo es puro a propósito. Sin rutina manda la semana de ciclo, que es lo que
+    la app hacía hasta hoy: nadie se queda sin reporte por no tener rutina cargada.
+    """
+    from core.semana_rutina import lunes_de_la_semana, semana_de_rutina
+
     cycle = compute_cycle(profile, now)
     window_start = _week_window_start(profile, now)
     # El calendario de su plan y de su contrato (punto 44), no una regla fija.
     cal = _cal(profile, catalog)
-    tipo = reporte_de_la_semana(cal, cycle["week"])
+
+    hoy_es = (a_madrid(now) or now).date()
+    semana_rutina = semana_de_rutina(rutina, hoy_es)
+    semana_reporte = semana_rutina if semana_rutina is not None else cycle["week"]
+    if semana_rutina:
+        # La ventana vive en la semana de la RUTINA, y esa sí empieza en lunes: el
+        # miércoles del quincenal es el miércoles de esa semana, no el de la semana de
+        # ciclo (que arranca el día del mes en que pagó).
+        lunes = lunes_de_la_semana(rutina, semana_rutina)
+        if lunes:
+            window_start = datetime(lunes.year, lunes.month, lunes.day, tzinfo=MADRID)
+
+    tipo = reporte_de_la_semana(cal, semana_reporte)
     tipos = [tipo] if tipo else []
     win_open, win_close = _submission_window(window_start, tipo)
 
@@ -345,8 +406,13 @@ def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any]
             tipos = [profile["reporte_aplazado_tipo"]]
 
     return {
-        "proximo": _proximo_reporte(cal, cycle["week"], window_start),
+        "proximo": _proximo_reporte(cal, semana_reporte, window_start),
         "cycle": cycle,
+        # Los DOS contadores, con nombre: la semana de rutina (None sin rutina) y la que
+        # de verdad decidió el reporte de esta semana. La pestaña de Clientes (bloque 04)
+        # y el panel los leen de aquí para no volver a tener dos verdades.
+        "semana_rutina": semana_rutina,
+        "semana_reporte": semana_reporte,
         "window_start": window_start,
         "tipos": tipos,
         # Cuanto dura su ciclo y desde que semana entra: del contrato, no un supuesto.
@@ -374,7 +440,8 @@ async def get_my_due_report(user=Depends(get_current_user)):
 
     catalog = merged_catalog(await _overrides_by_code())
     now = datetime.now(timezone.utc)
-    state = compute_client_report_state(profile, catalog, now)
+    state = compute_client_report_state(profile, catalog, now,
+                                        rutina=await rutina_activa_de(profile.get("id")))
 
     # Aunque esta semana no le toque nada, se le dice QUÉ VIENE Y CUÁNDO: es su calendario,
     # y hasta ahora solo veía «todavía no toca».
@@ -403,6 +470,10 @@ async def get_my_due_report(user=Depends(get_current_user)):
         # Los tipos en crudo: el formulario los necesita porque no pide lo mismo en el
         # quincenal que en el mensual (las medidas solo van en el mensual, parte 7.3).
         "tipos": state["tipos"],
+        # El contador que decidió este reporte (doc 19-08): la semana de su rutina si la
+        # tiene, y si no la de su ciclo. El front lo enseña en la cabecera del formulario.
+        "semana_rutina": state.get("semana_rutina"),
+        "semana_reporte": state.get("semana_reporte"),
         # Lo que viene después de este, para que vea su calendario y no solo el de hoy.
         "proximo": state.get("proximo"),
     }
@@ -456,11 +527,14 @@ async def get_my_due_report(user=Depends(get_current_user)):
                     "title": {"$regex": "^Último día"},
                 }, {"_id": 0, "id": 1})
                 if not ya_recordado:
+                    # Con la hora REAL de su ventana: el «a las 6:00» escrito a mano era la
+                    # hora del horario único de antes, y al del mensual (cierra 18:00) le
+                    # prometía doce horas menos de las que tenía.
                     await notify(
                         user["id"], "reporte",
                         f"Último día para tu {label.lower()}",
                         "/dashboard/reports",
-                        body="Se cierra mañana a las 6:00 y sin él no podemos ajustarte los macros.",
+                        body=f"Se cierra el {closes_label} y sin él no podemos ajustarte los macros.",
                     )
 
     return {"items": items, "window": window}

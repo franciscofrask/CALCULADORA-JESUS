@@ -31,15 +31,35 @@ class TestLaPregunta:
 
 
 class TestElEntrenamiento:
+    """APAGADO POR EL PUNTO 41 (doc del 19-08).
+
+    «Quita ese dato del reporte. Decirle a alguien que no ha entrenado cuando sí ha
+    entrenado es peor que no decirle nada. Cuando exista dónde marcarlo, se vuelve a
+    encender.»
+
+    Los previstos son una multiplicación y los hechos salen de los días que cerró, así
+    que el hueco acusaba al que entrena y no cierra el día. Lo que se fija aquí es que NO
+    sale por ninguna vía, ni siquiera pasándole los previstos.
+    """
+
     def test_no_se_pregunta_si_no_sabemos_cuantos_tocaban(self):
         """Contar los días de descanso como entrenos fallados sería acusarle en falso."""
         e = huecos_del_periodo(14, 14, 2, entrenos_previstos=None)
         assert not any(h["tipo"] == "entrenamiento" for h in e["huecos"])
 
-    def test_se_pregunta_por_los_que_faltan_de_los_previstos(self):
+    def test_tampoco_se_pregunta_aunque_sepamos_cuantos_tocaban(self):
         e = huecos_del_periodo(14, 14, 4, entrenos_previstos=8)
-        h = next(h for h in e["huecos"] if h["tipo"] == "entrenamiento")
-        assert h["dias"] == 4 and h["de"] == 8
+        assert not any(h["tipo"] == "entrenamiento" for h in e["huecos"])
+
+    def test_el_de_la_dieta_sigue_saliendo(self):
+        """Apagar el del entreno no puede llevarse por delante el que sí es un hecho."""
+        e = huecos_del_periodo(14, 10, 4, entrenos_previstos=8)
+        assert [h["tipo"] for h in e["huecos"]] == ["dieta"]
+
+    def test_los_previstos_se_siguen_devolviendo(self):
+        """El dato no se pierde: deja de convertirse en una pregunta, nada más."""
+        e = huecos_del_periodo(14, 14, 4, entrenos_previstos=8)
+        assert e["entrenos_previstos"] == 8 and e["dias_con_entreno"] == 4
 
     def test_si_hizo_todos_los_previstos_no_hay_hueco(self):
         e = huecos_del_periodo(14, 14, 8, entrenos_previstos=8)
@@ -66,11 +86,13 @@ class TestElCumplimiento:
         c = cumplimiento(huecos_del_periodo(14, 10, 0), {})
         assert c["origen"] == "registro"
 
-    def test_el_entreno_solo_aparece_si_sabemos_los_previstos(self):
+    def test_el_entreno_no_da_porcentaje_mientras_este_apagado(self):
+        """Punto 41: sin hueco no hay «lo hice y no lo apunté», así que el porcentaje
+        sería siempre el de los días que casualmente cerró. No sale ninguno."""
         assert "entreno_pct" not in cumplimiento(huecos_del_periodo(14, 14, 3), {})
         c = cumplimiento(huecos_del_periodo(14, 14, 3, entrenos_previstos=8),
                          {"entrenamiento": SI_PERO_NO_APUNTE})
-        assert c["entreno_pct"] == 100
+        assert "entreno_pct" not in c
 
     def test_periodo_vacio_no_revienta(self):
         c = cumplimiento(huecos_del_periodo(0, 0, 0), {})

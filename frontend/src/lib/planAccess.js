@@ -8,13 +8,25 @@ export const CAP = {
     RUTINA: 'rutina',
     SUPLEMENTACION: 'suplementacion',
     MACROS_PERSONALIZADOS: 'macros_personalizados',
+    // Si el cliente puede TOCAR sus macros (fallo 08 del doc del 19-08): es el campo del
+    // que sale la pestaña «Mis macros». No es lo contrario de MACROS_PERSONALIZADOS: un
+    // Mantenimiento no tiene entrenador Y edita; un Gold tiene entrenador y NO edita.
+    EDITA_MACROS: 'edita_macros',
     REPORTES: 'reportes',
-    HARBIZ: 'harbiz',
     // Chat con el entrenador. Sale del `acompanamiento` del plan, que es el único campo de
     // la matriz que no se estaba mirando: al plan «solo app», que por definición no lleva
     // entrenador, se le enseñaba el Chat igual, y lo que encontraba dentro era «Soporte
     // JG12» y un vacío que le decía «envía un mensaje a tu entrenador» (TABLA 20 y 4.16).
     CHAT: 'chat',
+};
+
+// Suplementación con sus tres valores (fallo 10 del 19-08: «ninguna · la guía · protocolo
+// personalizado»), tolerando el booleano viejo de los overrides guardados. «ninguna» es un
+// texto y un texto es truthy: mirarlo a pelo diría que un plan sin nada la incluye.
+export const suplementacionIncluida = (h) => {
+    const v = (h || {}).suplementacion;
+    if (typeof v === 'string') return ['guia', 'guía', 'protocolo'].includes(v.trim().toLowerCase());
+    return !!v;
 };
 
 // Deriva capacidades booleanas a partir de la matriz de habilitaciones del plan.
@@ -32,10 +44,14 @@ export function deriveCapabilities(habilitaciones, { rutinaVisible = false } = {
         // tarjeta "Entreno de hoy", paso del tour y las rutas directas (CapabilityRoute).
         // El panel de admin de rutinas NO se toca.
         [CAP.RUTINA]: !!rutinaVisible && !!h.rutina && h.rutina !== 'ninguna',
-        [CAP.SUPLEMENTACION]: !!h.suplementacion,
+        [CAP.SUPLEMENTACION]: suplementacionIncluida(h),
         [CAP.MACROS_PERSONALIZADOS]: h.calculadora === 'personalizado',
+        // Si el campo no viene (overrides guardados antes del 19-08), se deduce de lo que
+        // era verdad hasta hoy: el de autogestión editaba, el de entrenador no.
+        [CAP.EDITA_MACROS]: h.edita_macros !== undefined
+            ? !!h.edita_macros
+            : h.calculadora !== 'personalizado',
         [CAP.REPORTES]: reportes.length > 0,
-        [CAP.HARBIZ]: !!h.harbiz,
         // Con entrenador o con entrenador y llamadas, sí; «solo app», no. Si el campo no
         // viene (planes viejos sin normalizar) se deja pasar: quitarle el chat a alguien por
         // un dato que falta es peor que enseñárselo de más.
@@ -91,8 +107,11 @@ export function habilitacionesToList(habilitaciones) {
     if (h.calculadora && CLIENTE_CALCULADORA[h.calculadora]) out.push(CLIENTE_CALCULADORA[h.calculadora]);
     if (h.rutina && h.rutina !== 'ninguna' && RUTINA_LABEL[h.rutina]) out.push(RUTINA_LABEL[h.rutina]);
     (h.reportes || []).forEach((r) => REPORTE_LABEL[r] && out.push(REPORTE_LABEL[r]));
-    if (h.suplementacion) out.push('Suplementación personalizada');
-    if (h.harbiz) out.push('Rutina en Harbiz (app calendario)');
+    if (suplementacionIncluida(h)) {
+        out.push(String(h.suplementacion).toLowerCase() === 'guia' || String(h.suplementacion).toLowerCase() === 'guía'
+            ? 'Guía de suplementación'
+            : 'Protocolo de suplementación personalizado');
+    }
     if (h.acompanamiento && h.acompanamiento !== 'solo_app') {
         out.push(CLIENTE_ACOMPANAMIENTO[h.acompanamiento] || ACOMPANAMIENTO_LABEL[h.acompanamiento]);
         if (h.frecuencia_contacto && CLIENTE_CONTACTO[h.frecuencia_contacto]) {

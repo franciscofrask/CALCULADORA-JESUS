@@ -164,12 +164,17 @@ def test_el_precio_es_el_del_documento():
 
 
 def test_el_precio_que_se_enseña_es_el_que_se_cobra():
-    """La rutina del mes se vende por dos puertas -- la compra suelta del catálogo y el
-    bloque del reporte mensual -- y un cliente no puede verla a un precio y que se le cobre
-    otro. Si alguien cambia uno, esto avisa (Francisco, 16-08: los dos a 57)."""
+    """La rutina del mes tiene DOS precios desde el 19-08: 57 € dentro de un plan -- el
+    que se cobra desde el reporte mensual, `rm.PRECIO_EUR` -- y 67 € suelta. Lo que se
+    vigila es que el interno no se separe del «dentro de un plan» del catálogo: un
+    cliente no puede verla a un precio y que se le cobre otro."""
     from models.user import PLAN_CATALOG
 
     catalogo = PLAN_CATALOG["rutina_mes"]
     assert catalogo["precio"] == rm.PRECIO_EUR
-    assert all(p["importe"] == rm.PRECIO_EUR for p in catalogo["precios"])
+    dentro = next(p for p in catalogo["precios"] if "plan" in p["label"].lower())
+    assert dentro["importe"] == rm.PRECIO_EUR
     assert f"{rm.PRECIO_EUR:.0f}€" in catalogo["precio_nota"]
+    # Y el suelto existe y es más caro: es la puerta del que no tiene plan que la incluya.
+    suelta = next(p for p in catalogo["precios"] if p["label"].lower() == "suelta")
+    assert suelta["importe"] == 67.0

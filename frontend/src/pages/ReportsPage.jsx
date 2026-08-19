@@ -11,6 +11,7 @@ import EvolucionMedidas from '../components/EvolucionMedidas';
 import ComparativaCliente from '../components/ComparativaCliente';
 import Diario from '../components/Diario';
 import TresFotos from '../components/reports/TresFotos';
+import TusFotosYMetricas from '../components/TusFotosYMetricas';
 import FormularioReporte from '../components/reports/FormularioReporte';
 import { verComo } from '../lib/modoRevision';
 
@@ -448,7 +449,9 @@ const ReportsPage = () => {
                             tipoRevision={tipoRevision}
                             windowState={{
                                 ...windowState,
-                                semana: profile?.week,
+                                // La semana que decidió ESTE reporte (doc 19-08): la de su
+                                // rutina si la tiene; sin rutina, la de su ciclo de siempre.
+                                semana: windowState?.semana_reporte ?? profile?.week,
                                 plazoLabel: _plazoEnEspana(windowState?.closes_at),
                                 quedaLabel: _cuantoQueda(windowState?.closes_at),
                             }}
@@ -476,6 +479,14 @@ const ReportsPage = () => {
                         <p className="text-lg font-bold text-foreground">Evolución</p>
                         <p className="text-[15px] text-muted-foreground">Tus fotos y tus métricas</p>
                     </div>
+
+                    {/* LOS TRES BOTONES (doc 19-08, «Lo que falta en Seguimiento»): subir
+                        fotos, añadir medidas y actualizar el % de grasa, cuando quiera. La
+                        pantalla decía «se piden en el reporte mensual» y no dejaba hacer
+                        nada. */}
+                    <TusFotosYMetricas api={api} token={token} profile={profile}
+                        onGuardado={fetchData} />
+
 
                     {weightData.length > 0 ? (
                         <div className="bg-card border border-border rounded-2xl p-4">

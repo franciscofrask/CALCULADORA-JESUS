@@ -135,6 +135,19 @@ class TestCumplimientoDeLoRegistrado:
         c = evaluar_cumplimiento(dias_periodo=28, dias_dieta=20, dias_entreno=10)
         assert c["entreno"]["pct"] is None and c["entreno"]["color"] == "sin_dato"
 
+    def test_con_previstos_tampoco_saca_porcentaje(self):
+        """Punto 41 del doc del 19-08: los previstos son una multiplicacion y los hechos
+        solo constan si cerro el dia, asi que ese porcentaje mide cierres, no entrenos."""
+        c = evaluar_cumplimiento(dias_periodo=28, dias_dieta=20, dias_entreno=4,
+                                 entrenos_previstos=16)
+        assert c["entreno"]["pct"] is None and c["entreno"]["previstos"] is None
+
+    def test_lo_que_el_contesta_si_manda(self):
+        """Lo unico que queda del entrenamiento es su respuesta, y la barra lo dice."""
+        c = evaluar_cumplimiento(dias_periodo=28, dias_dieta=20, dias_entreno=0,
+                                 entrenos_previstos=16, cumplimiento_entreno="todos")
+        assert c["entreno"]["pct"] == 100 and c["entreno"]["declarado"] is True
+
     def test_periodo_cero_no_revienta(self):
         assert evaluar_cumplimiento(0, 0, 0)["dias_periodo"] == 1
 

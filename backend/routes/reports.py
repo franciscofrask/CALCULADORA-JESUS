@@ -44,11 +44,12 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     # Ventana de envío: fuera de ella se bloquea. Cada reporte tiene la suya (el quincenal
     # de miércoles a jueves, el mensual de viernes a lunes), así que lo que se le dice al
     # cliente sale de SU ventana y no de una frase fija.
-    from routes.report_cadence import compute_client_report_state, _fecha_es, _hora_es
+    from routes.report_cadence import compute_client_report_state, rutina_activa_de, _fecha_es, _hora_es
     from routes.plans import _overrides_by_code
     from models.user import merged_catalog
     now = datetime.now(timezone.utc)
-    state = compute_client_report_state(profile, merged_catalog(await _overrides_by_code()), now)
+    state = compute_client_report_state(profile, merged_catalog(await _overrides_by_code()), now,
+                                        rutina=await rutina_activa_de(profile.get("id")))
     if not state["due"]:
         raise HTTPException(status_code=403, detail="Esta semana no toca reporte. Te avisaremos cuando abra la ventana.")
     if now < state["window_open"]:
@@ -185,12 +186,23 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     profile.update(set_perfil)
 
     # El aplazamiento se cierra al mandarlo: si ya está el reporte, no hay nada que correr.
-    if profile.get("reporte_aplazado_hasta"):
-        await db.client_profiles.update_one(
-            {"id": profile["id"]},
-            {"$unset": {"reporte_aplazado_hasta": "", "reporte_aplazado_tipo": ""}})
+    # Y el contador de seguidos vuelve a cero: mandar un reporte corta la racha (doc 19-08).
+    await db.client_profiles.update_one(
+        {"id": profile["id"]},
+        {"$unset": {"reporte_aplazado_hasta": "", "reporte_aplazado_tipo": ""},
+         "$set": {"aplazamientos_seguidos": 0}})
 
     await _avisar_de_lo_que_pidio(profile, user, data, report_id)
+
+    # LA TAREA DEL EVENTO (doc 19-08, apartado 05): «un cliente manda su reporte →
+    # Reporte nuevo de Nuria Garrido → su entrenador». Cae en su lista de hoy.
+    try:
+        from core.tareas_automaticas import tarea_reporte_nuevo
+        await tarea_reporte_nuevo(db, client_id=profile["id"],
+                                  nombre=user.get("name") or "cliente",
+                                  trainer_id=profile.get("trainer_id"))
+    except Exception:
+        pass    # quedarse sin la tarea no puede tumbar el envío del reporte
 
     # EL INFORME SE GENERA AL ENVIAR (T9). Hasta ahora se montaba al vuelo cada vez que
     # alguien abría la pantalla, así que no existía como cosa: no se podía revisar, ni
@@ -489,11 +501,12 @@ async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(ge
     hab = await _habilitaciones_de(perfil)
     reportes = hab.get("reportes") or []
     if tipo not in ("quincenal", "mensual", "semanal"):
-        from routes.report_cadence import compute_client_report_state
+        from routes.report_cadence import compute_client_report_state, rutina_activa_de
         from routes.plans import _overrides_by_code
         from models.user import merged_catalog
         estado = compute_client_report_state(
-            perfil, merged_catalog(await _overrides_by_code()), datetime.now(timezone.utc))
+            perfil, merged_catalog(await _overrides_by_code()), datetime.now(timezone.utc),
+            rutina=await rutina_activa_de(perfil.get("id")))
         tipo = (estado["tipos"] or ["mensual"])[0]
 
     perfil_rep = perfil_de_reporte(hab)
@@ -553,13 +566,14 @@ async def aplazar_reporte(user=Depends(get_current_user)):
     if not perfil:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
-    from routes.report_cadence import compute_client_report_state
+    from routes.report_cadence import compute_client_report_state, rutina_activa_de
     from routes.plans import _overrides_by_code
     from models.user import merged_catalog
 
     ahora = datetime.now(timezone.utc)
     estado = compute_client_report_state(
-        perfil, merged_catalog(await _overrides_by_code()), ahora)
+        perfil, merged_catalog(await _overrides_by_code()), ahora,
+        rutina=await rutina_activa_de(perfil.get("id")))
     if not estado["due"]:
         raise HTTPException(status_code=403,
                             detail="Esta semana no te toca reporte, así que no hay nada que aplazar.")
@@ -579,7 +593,10 @@ async def aplazar_reporte(user=Depends(get_current_user)):
                       # puede que no le toque ninguno, y sin esto la ventana ampliada no
                       # sabría de qué reporte está hablando.
                       "reporte_aplazado_tipo": (estado["tipos"] or [None])[0],
-                      "reporte_aplazado_at": ahora.isoformat()}},
+                      "reporte_aplazado_at": ahora.isoformat()},
+             # Y CUÁNTOS SEGUIDOS LLEVA (doc 19-08, tareas automáticas): «dos aplazamientos
+             # seguidos ya no es un imprevisto». Lo resetea mandar un reporte de verdad.
+             "$inc": {"aplazamientos_seguidos": 1}},
         )
 
     # El aviso de confirmación del doc (T10, "el de confirmación"). El texto no se escribe
