@@ -46,8 +46,8 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from motor.motor_asyncio import AsyncIOMotorClient
 
-PROD = "mongodb://127.0.0.1:27018"
-BASE = "jg12_prod"
+PROD = os.environ.get("SYNC_MONGO_URL", "mongodb://127.0.0.1:27018")
+BASE = os.environ.get("SYNC_MONGO_DB", "jg12_prod")
 ESCRIBIR = "--escribir" in sys.argv
 HOY = datetime.now(timezone.utc)
 
