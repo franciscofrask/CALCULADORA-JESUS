@@ -411,14 +411,30 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
     created_ts = session.get("created")
     pago = (datetime.fromtimestamp(created_ts, tz=timezone.utc)
             if created_ts else datetime.now(timezone.utc))
-    # "Todos arrancan en lunes" (parte 2 de la especificacion): el ciclo empieza el lunes
-    # que le toca y los dias sueltos hasta entonces son la Semana 0, que se le regalan (ya
-    # tiene acceso desde que paga). Los pagos unicos lo hacian a su aire, contando el ciclo
-    # desde el minuto del pago; ahora usan el mismo calendario que las suscripciones.
-    from core.calendario_arranque import plan_de_arranque
-    arranque = plan_de_arranque(pago, semanas_ciclo=plan_info["billing_cycle_weeks"])
-    start = arranque["arranque"]
-    end = arranque["fin_de_ciclo"]
+    # RENOVAR ANTES DE VENCER NO ROMPE EL CICLO (Francisco, 20-08: «que puedan renovar
+    # una semana antes... y no tengan que perder una semana de trabajo»). Si paga el
+    # MISMO plan y su ciclo aun no ha vencido, el nuevo se ENCADENA: arranca donde acaba
+    # el viejo, no hoy. Sin esto, pagar 7 dias antes recalculaba el fin desde hoy y le
+    # comia los dias que ya tenia pagados.
+    fin_actual = None
+    try:
+        fin_actual = datetime.fromisoformat(
+            str(profile.get("current_period_end") or "").replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        pass
+    mismo_plan = plan_info["code"] == (profile.get("plan") or "").lower().strip()
+    if mismo_plan and fin_actual and fin_actual > pago:
+        start = fin_actual
+        end = fin_actual + timedelta(weeks=plan_info["billing_cycle_weeks"])
+    else:
+        # "Todos arrancan en lunes" (parte 2 de la especificacion): el ciclo empieza el
+        # lunes que le toca y los dias sueltos hasta entonces son la Semana 0, que se le
+        # regalan (ya tiene acceso desde que paga). Un cambio de plan si empieza ya: lo
+        # nuevo que ha comprado no se le hace esperar.
+        from core.calendario_arranque import plan_de_arranque
+        arranque = plan_de_arranque(pago, semanas_ciclo=plan_info["billing_cycle_weeks"])
+        start = arranque["arranque"]
+        end = arranque["fin_de_ciclo"]
     await db.client_profiles.update_one(
         {"id": profile["id"]},
         {"$set": {
@@ -482,7 +498,54 @@ async def upsert_payment_from_invoice(invoice, *, profile=None, status_override=
     else:
         payment_doc["id"] = str(uuid.uuid4())
         await db.payments.insert_one(payment_doc)
+
+    # Y EL MISMO COBRO AL HISTÓRICO DE NEGOCIO (bloque 12 del doc 19-08). El panel de
+    # Dirección lee db.pagos_historicos, que hasta hoy solo llenaba el importador a mano:
+    # los cobros nuevos no aparecían hasta volver a ejecutarlo. Escribirlo aquí lo deja en
+    # tiempo real. La `referencia` es la MISMA que usa el importador (stripe:<invoice>),
+    # así que si el script se vuelve a pasar no duplica: se salta lo que ya existe.
+    if status == "success":
+        try:
+            await anotar_cobro_en_historicos(invoice, profile)
+        except Exception:
+            # El histórico es un espejo: si falla, el pago ya quedó registrado en
+            # db.payments y el webhook no debe reintentarse por esto.
+            logger.exception("No se pudo anotar el cobro en pagos_historicos (invoice %s)",
+                             invoice.get("id"))
     return payment_doc
+
+
+async def anotar_cobro_en_historicos(invoice, profile) -> None:
+    """Upsert de una factura PAGADA en db.pagos_historicos, con el formato del importador
+    (_sync_membresias_cobros.py): mismos campos y misma clave, para que el histórico sea
+    uno solo lo llene quien lo llene."""
+    user = await db.users.find_one({"id": profile.get("user_id")},
+                                   {"_id": 0, "email": 1, "name": 1})
+    email = (invoice.get("customer_email") or (user or {}).get("email") or "").strip().lower()
+    importe = cents_to_amount(invoice.get("amount_paid") or invoice.get("total"))
+    fila = {
+        "referencia": f"stripe:{invoice.get('id')}",
+        "origen": "stripe",
+        "es_dinero": True,
+        # Renovación si viene de una suscripción; alta si es un cobro suelto (checkout).
+        "tipo": "renovacion" if invoice.get("subscription") else "alta",
+        "fecha": stripe_timestamp_to_iso((invoice.get("status_transitions") or {}).get("paid_at"))
+                 or stripe_timestamp_to_iso(invoice.get("created"))
+                 or datetime.now(timezone.utc).isoformat(),
+        "email": email or None,
+        "nombre": (user or {}).get("name") or invoice.get("customer_name"),
+        "importe": importe,
+        "moneda": (invoice.get("currency") or "eur").upper(),
+        "concepto": ((invoice.get("lines") or {}).get("data") or [{}])[0].get("description")
+                    or "Cobro de Stripe",
+        "sku": None,
+        "cliente_stripe": invoice.get("customer"),
+        "transaccion": (str(invoice.get("payment_intent")) if invoice.get("payment_intent") else None),
+        # Para poder distinguir en una auditoría lo que entró en vivo de lo importado.
+        "via": "webhook",
+    }
+    await db.pagos_historicos.update_one(
+        {"referencia": fila["referencia"]}, {"$setOnInsert": fila}, upsert=True)
 
 
 # ==================== Alertas ====================

@@ -72,6 +72,7 @@ const PantallasDeLaApp = () => {
     const { api } = useAuth();
     const [ajustes, setAjustes] = useState(null);
     const [frase, setFrase] = useState('');
+    const [fechaFrase, setFechaFrase] = useState('');
     const [guardandoFrase, setGuardandoFrase] = useState(false);
 
     useEffect(() => {
@@ -95,10 +96,13 @@ const PantallasDeLaApp = () => {
         if (!frase.trim()) return;
         setGuardandoFrase(true);
         try {
-            const res = await api.put('/admin/settings', { frase_del_dia: { texto: frase.trim() } });
+            const res = await api.put('/admin/settings', {
+                frase_del_dia: { texto: frase.trim(), ...(fechaFrase ? { fecha: fechaFrase } : {}) },
+            });
             setAjustes(res.data);
             setFrase('');
-            toast.success('Frase del día guardada');
+            setFechaFrase('');
+            toast.success(fechaFrase ? 'Frase programada' : 'Frase del día guardada');
         } catch (e) {
             toast.error('No se pudo guardar la frase');
         } finally {
@@ -147,11 +151,30 @@ const PantallasDeLaApp = () => {
                             placeholder="El único secreto que tiene esto es no dejarlo."
                             className="bg-black/30 border-[#333] text-white text-sm"
                         />
+                        {/* PROGRAMABLE CON UNA SEMANA (doc 19-08): sin fecha entra hoy;
+                            con fecha se queda en la cola y sale su día sola. */}
+                        <Input
+                            type="date"
+                            value={fechaFrase}
+                            onChange={(e) => setFechaFrase(e.target.value)}
+                            min={new Date().toISOString().slice(0, 10)}
+                            max={new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)}
+                            className="bg-black/30 border-[#333] text-white text-sm w-40 shrink-0"
+                        />
                         <Button onClick={guardarFrase} disabled={guardandoFrase || !frase.trim()} className="bg-[#FF671F] hover:bg-[#e55b1a] text-white">
-                            Guardar
+                            {fechaFrase ? 'Programar' : 'Guardar'}
                         </Button>
                     </div>
-                    <p className="text-[11px] text-white/40">Si un día no hay frase nueva, el cliente sigue viendo la última.</p>
+                    <p className="text-[11px] text-white/40">Si un día no hay frase nueva, el cliente sigue viendo la última. Con fecha, la frase se programa (hasta una semana) y entra sola su día.</p>
+                    {(ajustes.frases_programadas || []).length > 0 && (
+                        <div className="space-y-0.5">
+                            {ajustes.frases_programadas.map((f) => (
+                                <p key={f.fecha} className="text-[11px] text-white/50">
+                                    {f.fecha} · «{f.texto}»
+                                </p>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </CardContent>
         </Card>

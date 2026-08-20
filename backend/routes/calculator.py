@@ -1268,6 +1268,65 @@ async def suggest_foods_endpoint(
     
     return {"suggestions": sugerencias, "count": len(sugerencias)}
 
+
+@router.post("/preferencias/cuadra")
+async def preferencias_cuadran(data: dict, user = Depends(get_current_user)):
+    """¿Con lo marcado se pueden cuadrar 20 g de proteína y 20 g de hidratos? (doc 19-08).
+
+    La comprobación es directa contra el motor de sugerencias, no contra una tabla aparte:
+    «la calculadora ya sabe cuánto macro hace falta para poder sugerir cada alimento», así
+    que se le pregunta a ella con el catálogo recortado a las categorías marcadas. La grasa
+    no se comprueba porque las de buena calidad se ofrecen siempre, y por eso sus categorías
+    entran en el recorte aunque no vengan marcadas.
+
+    Se comprueba EN VIVO (el front llama a cada cambio, antes de guardar) y no se le dice
+    qué marcar: eso sería decirle qué comer.
+    """
+    from core.preferencias import a_nombres
+    from calma_suggest import food_in_any, hay_suficiente
+
+    marcadas = data.get("marcadas") if isinstance(data, dict) else None
+    if not isinstance(marcadas, list):
+        raise HTTPException(status_code=400, detail="Falta la lista de categorías marcadas.")
+
+    nombres = set(a_nombres(marcadas))
+    nombres.add("grasas_buenas")   # se ofrecen siempre: el motor las tiene aunque no se marquen
+    prefijos = [p for n in nombres for p in AVOIDABLE_PREFIXES.get(n, [])]
+
+    foods_list = await get_all_foods_cached(db)
+    elegibles = [f for f in foods_list if food_in_any(f, prefijos)]
+
+    def se_cuadra(macro: str) -> bool:
+        # El mismo bucle que hace el cliente: sugerir, añadir, volver a sugerir. Si en
+        # seis pasos no llega al 80% de los 20 g (el `hay_suficiente` del motor), con lo
+        # marcado no se cuadra. `cabe` filtra las sugerencias que el motor devuelve solo
+        # como relleno, con cantidad cero.
+        objetivo = 20.0
+        restante = {"P": 0.0, "H": 0.0, "G": 0.0}
+        restante[macro] = objetivo
+        usados: list = []
+        for _ in range(6):
+            if hay_suficiente(objetivo - restante[macro], objetivo):
+                return True
+            sugerencias = sugerir_alimentos(
+                alimentos_disponibles=elegibles,
+                macros_restantes=restante,
+                tipo_comida="normal",
+                max_resultados=3,
+                excluir_ids=usados,
+            )
+            con_algo = next((s for s in sugerencias
+                             if s.get("cabe") and (s.get("macros_efectivos") or {}).get(macro, 0) > 0), None)
+            if not con_algo:
+                break
+            aporta = con_algo["macros_efectivos"]
+            for k in restante:
+                restante[k] = max(0.0, restante[k] - (aporta.get(k) or 0))
+            usados.append((con_algo.get("alimento") or {}).get("id"))
+        return hay_suficiente(objetivo - restante[macro], objetivo)
+
+    return {"proteina": se_cuadra("P"), "hidratos": se_cuadra("H")}
+
 # ==================== FOOD SUGGESTIONS (user submitted) ====================
 #
 # Proceso "Sugerencia e inclusión de alimentos": el cliente propone un alimento

@@ -97,12 +97,184 @@ const LineaSuplemento = ({ item }) => {
     );
 };
 
+/**
+ * LA FICHA DE LA GUÍA (doc 19-08, bloque 08): Qué es · ¿Cuándo? · ¿Cuánto? y sus notas
+ * sueltas, tal cual vienen de la web de Jesús.
+ */
+const FichaDeLaGuia = ({ ficha }) => {
+    const [imgError, setImgError] = useState(false);
+    return (
+        <div className="surface p-4 flex items-start gap-4" data-testid="ficha-guia">
+            <div className="w-12 h-12 rounded-xl bg-muted/40 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {ficha.imagen && !imgError
+                    ? <img src={ficha.imagen} alt={ficha.nombre} className="max-h-12 object-contain" onError={() => setImgError(true)} />
+                    : <Pill className="w-6 h-6 text-brand/50" />}
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="font-bold text-foreground text-sm">{ficha.nombre}</p>
+                {ficha.que_es && <p className="text-muted-foreground text-sm mt-0.5">{ficha.que_es}</p>}
+                {ficha.cuando && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                        <span className="font-semibold text-foreground">¿Cuándo? </span>{ficha.cuando}
+                    </p>
+                )}
+                {ficha.cuanto && (
+                    <p className="text-sm text-muted-foreground">
+                        <span className="font-semibold text-foreground">¿Cuánto? </span>{ficha.cuanto}
+                    </p>
+                )}
+                {ficha.notas && <p className="text-muted-foreground text-xs italic mt-1">{ficha.notas}</p>}
+                {ficha.enlaces?.length > 0 && (
+                    <div className="flex flex-wrap gap-3 mt-1.5">
+                        {ficha.enlaces.map((e, i) => (
+                            <a key={i} href={e.url || e} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-semibold">
+                                <Link2 className="w-3 h-3" /> Dónde comprarlo
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+/**
+ * LA GUÍA ENTERA (doc 19-08): las ocho categorías con su filtro y su orden, la ficha de
+ * cada suplemento, el descuento, y el remate que toque por plan (el aviso del plan
+ * personalizado o la oferta de los 87). La guía habla en singular porque es de Jesús;
+ * el aviso y la oferta en plural, porque los hace el equipo.
+ */
+const GuiaDeSuplementacion = ({ api, guia }) => {
+    const [filtro, setFiltro] = useState('todo');
+    const [subfiltro, setSubfiltro] = useState(null);
+    const [pidiendo, setPidiendo] = useState(false);
+
+    if (!guia) return null;
+    const secciones = (guia.secciones || []).filter(s => s.suplementos.length > 0);
+    const sinSeccion = guia.sin_seccion || [];
+    const visibles = filtro === 'todo' ? secciones : secciones.filter(s => s.clave === filtro);
+    const seccionSalud = secciones.find(s => s.clave === 'salud');
+
+    const pedirRevision = async () => {
+        setPidiendo(true);
+        try {
+            const { data } = await api.post('/billing/ajuste-a-medida/checkout', {});
+            if (data?.checkout_url) window.location.href = data.checkout_url;
+        } catch (e) {
+            console.error('[oferta 87] no se pudo abrir el checkout', e);
+        } finally {
+            setPidiendo(false);
+        }
+    };
+
+    return (
+        <section className="max-w-2xl" data-testid="guia-suplementacion">
+            {/* El aviso de arriba: solo al del plan personalizado (o los 87 ya pagados)
+                que todavía no tiene el suyo. Habla en plural: es el equipo. */}
+            {guia.aviso_plan_personalizado && (
+                <div className="surface bg-brand/[0.06] border-brand/30 p-4 mb-5" data-testid="aviso-guia-basica">
+                    <p className="text-sm text-foreground font-medium">
+                        Esto es solo la guía básica. En unos días recibirás tu plan de
+                        suplementación personalizado.
+                    </p>
+                </div>
+            )}
+
+            {/* El texto de entrada es de Jesús y viene de su web: si aún no está traído,
+                no se pinta nada (no se inventa). */}
+            {guia.texto_entrada && (
+                <p className="text-muted-foreground text-sm mb-5 whitespace-pre-line">{guia.texto_entrada}</p>
+            )}
+
+            {/* El filtro de las ocho, en su orden. Solo las que tienen fichas. */}
+            {secciones.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                    <button onClick={() => { setFiltro('todo'); setSubfiltro(null); }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold ${filtro === 'todo' ? 'bg-brand text-white' : 'bg-muted text-muted-foreground'}`}>
+                        Todo
+                    </button>
+                    {secciones.map(s => (
+                        <button key={s.clave} onClick={() => { setFiltro(s.clave); setSubfiltro(null); }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold ${filtro === s.clave ? 'bg-brand text-white' : 'bg-muted text-muted-foreground'}`}>
+                            {s.nombre}
+                        </button>
+                    ))}
+                </div>
+            )}
+            {/* Los seis apartados de Salud, cuando se filtra por ella. */}
+            {filtro === 'salud' && seccionSalud?.subfiltros?.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                    {seccionSalud.subfiltros.map(sf => (
+                        <button key={sf} onClick={() => setSubfiltro(subfiltro === sf ? null : sf)}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${subfiltro === sf ? 'bg-brand/20 text-brand' : 'bg-muted text-muted-foreground'}`}>
+                            {sf}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            <div className="space-y-6">
+                {visibles.map(s => (
+                    <div key={s.clave}>
+                        <h2 className="caption mb-1">{s.nombre}</h2>
+                        {s.explicacion && <p className="text-muted-foreground text-sm mb-3">{s.explicacion}</p>}
+                        <div className="space-y-3">
+                            {(subfiltro && s.clave === 'salud'
+                                ? s.suplementos.filter(f => (f.subfiltros || []).some(x => x.toLowerCase() === subfiltro.toLowerCase()))
+                                : s.suplementos
+                            ).map(f => <FichaDeLaGuia key={f.id} ficha={f} />)}
+                        </div>
+                    </div>
+                ))}
+                {filtro === 'todo' && sinSeccion.length > 0 && (
+                    <div>
+                        {secciones.length > 0 && <h2 className="caption mb-3">El resto de la guía</h2>}
+                        <div className="space-y-3">
+                            {sinSeccion.map(f => <FichaDeLaGuia key={f.id} ficha={f} />)}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* El descuento, tal cual: GALLEGOVIP de FullGas, 20 %. */}
+            {guia.descuento && (
+                <div className="surface p-4 mt-6 border-dashed" data-testid="descuento-guia">
+                    <p className="text-sm text-foreground">
+                        <span className="font-bold">{guia.descuento.codigo}</span>
+                        {' · '}{guia.descuento.porcentaje} % de descuento en {guia.descuento.tienda}.
+                        {' '}{guia.descuento.nota}
+                    </p>
+                </div>
+            )}
+
+            {/* LA OFERTA, AL FINAL Y SOLO A QUIEN NO LO TIENE (doc 19-08): «entra a
+                consultar qué tomar y lo último que ve es lo que le falta». El botón va al
+                mismo checkout que la oferta del final del alta. */}
+            {guia.oferta_87 && (
+                <div className="surface p-5 mt-6 border-brand/30" data-testid="oferta-87-guia">
+                    <p className="font-bold text-foreground mb-1">¿Quieres tu plan de suplementación personalizado?</p>
+                    <p className="text-sm text-muted-foreground mb-3">
+                        Va incluido con la revisión de tus macros: te los ajustamos a medida
+                        y te preparamos tu suplementación con ellos.
+                    </p>
+                    <button onClick={pedirRevision} disabled={pidiendo} data-testid="solicitar-revision-87"
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-brand text-white text-sm font-bold hover:opacity-90 disabled:opacity-50">
+                        {pidiendo ? 'Abriendo el pago...' : 'Solicitar la revisión de mis macros · 87 €'}
+                    </button>
+                </div>
+            )}
+        </section>
+    );
+};
+
 const SupplementsPage = () => {
     const { api, pantalla } = useAuth();
     // El interruptor del panel (doc 16-08): encendido -- que es como nace -- la pantalla
     // habla como el documento; apagado se queda la de siempre, sin desplegar nada.
     const nuevo = pantalla('t2_suplementos', true);
     const [protocol, setProtocol] = useState(null);
+    const [guia, setGuia] = useState(null);
     const [loading, setLoading] = useState(true);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,6 +286,14 @@ const SupplementsPage = () => {
             setProtocol(res.data);
         } catch (e) {
             console.error('Error fetching supplements:', e);
+        }
+        // La guía la ven todos, tenga o no protocolo; si falla, la pantalla sigue con lo
+        // que haya.
+        try {
+            const g = await api.get('/supplements/guia');
+            setGuia(g.data);
+        } catch (e) {
+            console.error('No se pudo traer la guía de suplementación:', e);
         } finally {
             setLoading(false);
         }
@@ -129,8 +309,23 @@ const SupplementsPage = () => {
 
     const tieneActual = protocol?.actual?.length > 0;
     const tieneSiguiente = protocol?.siguiente?.length > 0;
-    // La general: la que el servidor manda cuando todavía no tiene la suya escrita.
+    // La general compuesta murió con el doc 19-08: sin protocolo propio, lo que se ve es
+    // LA GUÍA entera de Jesús.
     const esGenerica = !!protocol?.es_generica;
+    const hayGuia = (guia?.secciones || []).some(s => s.suplementos.length > 0) || (guia?.sin_seccion || []).length > 0;
+
+    if (!tieneActual && !tieneSiguiente && !protocol?.nota && hayGuia) {
+        // SIN PAUTA PROPIA: la pantalla ES la guía (doc 19-08, bloque 08).
+        return <Wrap>
+            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-2">
+                Suplementación
+            </h1>
+            <p className="text-muted-foreground text-sm mb-5 max-w-2xl">
+                La guía de suplementación, con los suplementos que más utilizo y recomiendo.
+            </p>
+            <GuiaDeSuplementacion api={api} guia={guia} />
+        </Wrap>;
+    }
 
     if (!protocol || (!tieneActual && !tieneSiguiente && !protocol.nota)) {
         return <Wrap>
@@ -227,6 +422,18 @@ const SupplementsPage = () => {
                     <div className={nuevo ? 'space-y-3 max-w-2xl' : 'grid md:grid-cols-2 gap-3'}>
                         {protocol.siguiente.map((it, i) => <Tarjeta key={i} item={it} />)}
                     </div>
+                </section>
+            )}
+
+            {/* Y DEBAJO, LA GUÍA: la ven todos (doc 19-08), también quien ya tiene su
+                pauta. Con su rótulo, para que nadie confunda la guía con lo suyo. */}
+            {hayGuia && (
+                <section className="mt-10">
+                    <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-1">La guía de suplementación</h2>
+                    <p className="text-muted-foreground text-sm mb-4 max-w-2xl">
+                        Los suplementos que más utilizo y recomiendo, por si quieres consultarla.
+                    </p>
+                    <GuiaDeSuplementacion api={api} guia={guia} />
                 </section>
             )}
         </Wrap>

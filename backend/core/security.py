@@ -97,6 +97,15 @@ async def get_current_user(
     if user.get("deleted_at"):
         raise HTTPException(status_code=403, detail="Cuenta desactivada")
 
+    # CUÁNDO ENTRÓ POR ÚLTIMA VEZ (bloque 12 del doc 19-08: «no se sabe cuándo entra
+    # alguien... no se puede ver a nadie irse antes de que se vaya»). Se apunta el DÍA,
+    # una sola escritura por día y usuario: con la primera petición autenticada del día
+    # basta, y así esto no añade una escritura a cada request.
+    hoy = datetime.now(timezone.utc).date().isoformat()
+    if str(user.get("last_seen") or "")[:10] != hoy:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"last_seen": hoy}})
+        user["last_seen"] = hoy
+
     from .actuar_como import CABECERA, CLAVE
 
     objetivo_id = (request.headers.get(CABECERA) or "").strip()

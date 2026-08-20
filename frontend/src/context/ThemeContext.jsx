@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { guardarAjusteEnFicha } from '../lib/ajustesEnFicha';
 
 const ThemeContext = createContext(null);
 
@@ -11,7 +12,9 @@ export const useTheme = () => {
 export const ThemeProvider = ({ children }) => {
     const [theme, setTheme] = useState(() => {
         const stored = localStorage.getItem('theme');
-        return stored === 'dark' || stored === 'light' ? stored : 'light';
+        // EL OSCURO ES EL DE FÁBRICA (doc 19-08, «en toda la app»): sin elección guardada
+        // (ni en el navegador ni en la ficha), la app sale oscura. Lo elegido manda igual.
+        return stored === 'dark' || stored === 'light' ? stored : 'dark';
     });
 
     useEffect(() => {
@@ -22,7 +25,22 @@ export const ThemeProvider = ({ children }) => {
         localStorage.setItem('theme', theme);
     }, [theme]);
 
-    const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));
+    // El tema guardado en la ficha llega DESPUÉS de montarse esto (lo trae el perfil, ver
+    // lib/ajustesEnFicha): se escucha el aviso y se aplica. Así el que eligió claro en el
+    // móvil entra claro también en el portátil (doc 19-08, bloque 07).
+    useEffect(() => {
+        const alLlegarDeLaFicha = (e) => {
+            if (e.detail === 'dark' || e.detail === 'light') setTheme(e.detail);
+        };
+        window.addEventListener('tema-de-ficha', alLlegarDeLaFicha);
+        return () => window.removeEventListener('tema-de-ficha', alLlegarDeLaFicha);
+    }, []);
+
+    const toggleTheme = () => setTheme(t => {
+        const siguiente = t === 'dark' ? 'light' : 'dark';
+        guardarAjusteEnFicha('tema', siguiente);
+        return siguiente;
+    });
 
     return (
         <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, isDark: theme === 'dark' }}>

@@ -85,14 +85,11 @@ class TestLosCincoActivos:
         for code, p in PLAN_CATALOG.items():
             assert "harbiz" not in (p.get("habilitaciones") or {}), f"{code} aún lleva harbiz"
 
-    def test_quien_renueva_solo_y_quien_no(self):
-        """La tabla del doc: Calculadora sí (12 semanas), Gold no (recontrata), Premium
-        no (por llamada), ELM y Mantenimiento sí (mensual)."""
-        assert PLAN_CATALOG["nivel1"]["renovacion"]["automatica"] is True
-        assert PLAN_CATALOG["nivel2"]["renovacion"]["automatica"] is False
-        assert PLAN_CATALOG["nivel3"]["renovacion"]["automatica"] is False
-        assert PLAN_CATALOG["elm"]["renovacion"]["automatica"] is True
-        assert PLAN_CATALOG["mantenimiento"]["renovacion"]["automatica"] is True
+    def test_nadie_renueva_solo(self):
+        """Francisco, 20-08: «ningún plan renueva automáticamente». Sustituye a la tabla
+        del doc, que decía que Calculadora, ELM y Mantenimiento renovaban solos."""
+        for code, p in PLAN_CATALOG.items():
+            assert (p.get("renovacion") or {}).get("automatica") is False, code
 
     def test_el_premium_no_esta_duplicado(self):
         """Fallo 03: el Premium que se vende es nivel3; el especial viejo queda en legacy
@@ -112,9 +109,11 @@ class TestLosCincoActivos:
         assert h["calculadora"] == "autogestion"
         assert h["acompanamiento"] == "solo_app"
 
-    def test_elm_sigue_siendo_mensual_recurrente(self):
+    def test_elm_es_mensual_pero_de_pago_unico(self):
+        # Francisco, 20-08: ninguna venta crea suscripción; la membresía se cobra el mes
+        # y se renueva desde la app.
         from models.user import PLAN_TYPES
-        assert PLAN_TYPES["elm"]["one_time"] is False
+        assert PLAN_TYPES["elm"]["one_time"] is True
         assert PLAN_CATALOG["elm"]["ciclo"]["tipo"] == "mensual"
 
     def test_el_responsable_no_se_llama_ceo(self):
@@ -160,9 +159,14 @@ class TestAQuienYaTienePlanNoSeLeToca:
             assert plan_habilitaciones(code)["edita_macros"] is True, code
 
     def test_el_audio_esta_marcado_donde_el_doc_lo_pide(self):
-        """«Falta marcarlo en Silver, Bronze, Premium, 6M, Personalizado y CALMA 12.»"""
-        for code in ("silver", "bronze", "premium", "plan_6m", "personalizado", "calma12"):
+        """«Falta marcarlo en Silver, Bronze, Premium, 6M, Personalizado y CALMA 12.»
+
+        SIN EL BRONZE: la tabla de «quién recibe qué» del bloque 11 del mismo doc dice
+        Bronze audio No (el audio es del Silver para arriba), y entre las dos páginas
+        manda la tabla, que es la específica. Se marcó así en el bloque 11 (20-08)."""
+        for code in ("silver", "premium", "plan_6m", "personalizado", "calma12"):
             assert "audio" in derive_features(plan_habilitaciones(code)), code
+        assert "audio" not in derive_features(plan_habilitaciones("bronze"))
 
 
 class TestLosPlanesDeCalmaCaenEnAlgunSitio:
@@ -220,11 +224,13 @@ class TestLosComplementos:
 
 
 class TestLaRenovacion:
-    def test_el_que_viene_de_un_plan_viejo_elige_entre_los_nuevos(self):
+    def test_el_que_viene_de_un_plan_viejo_puede_seguir_o_elegir_entre_los_nuevos(self):
+        # Desde el 20-08 todos los legacy son renovables por los suyos (Francisco:
+        # «deben poder renovar su mismo plan»); la tienda sigue siendo solo la nueva.
         r = opciones_de_renovacion("reto12en12_gold")
-        assert r["puede_seguir_igual"] is False
+        assert r["puede_seguir_igual"] is True
+        assert r["renovacion_legacy"] is True
         assert set(r["opciones"]) == set(NIVELES) | {"elm"}
-        assert r["motivo"]
 
     def test_el_que_ya_esta_en_un_nivel_puede_seguir_igual(self):
         r = opciones_de_renovacion("nivel2")

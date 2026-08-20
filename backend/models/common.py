@@ -81,7 +81,8 @@ class EntrenoDelReporte(BaseModel):
     regularidad: Optional[str] = Field(
         None, pattern="^(a_mi_manera_sigo|a_mi_manera_quiero_rutina|con_tu_rutina_sigo)$")
     # La rutina del mes por 57 EUR: básica, avanzada o ahora no.
-    rutina_del_mes: Optional[str] = Field(None, pattern="^(basica|avanzada|ahora_no)$")
+    # `aplazar_una_semana` (doc 19-08): la marca y se le vuelve a preguntar en 7 días.
+    rutina_del_mes: Optional[str] = Field(None, pattern="^(basica|avanzada|ahora_no|aplazar_una_semana)$")
     # "¿O prefieres tenerla todos los meses?" -> el equipo le cuenta el plan de arriba.
     quiere_saber_del_silver: Optional[bool] = None
 

@@ -36,6 +36,7 @@ import FoodSearchPage from "./pages/FoodSearchPage";
 import AdminFoodSuggestionsPage from "./pages/AdminFoodSuggestionsPage";
 import AdminPlansPage from "./pages/AdminPlansPage";
 import AdminTareasPage from "./pages/AdminTareasPage";
+import AdminPanelesPage from "./pages/AdminPanelesPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
 import WelcomePage from "./pages/WelcomePage";
 import PlanesPage from "./pages/PlanesPage";
@@ -266,6 +267,10 @@ function AppRoutes() {
                 {/* Las tareas del equipo (doc 19-08, apartado 05): admin y entrenadores,
                     cada uno ve las suyas y las que asignó. */}
                 <Route path="tareas" element={<AdminTareasPage />} />
+                {/* Los cuatro paneles (doc 19-08, bloque 12). Admin ve los cuatro; el
+                    entrenador entra a la misma ruta y la página le enseña solo el suyo.
+                    Dirección la protege el backend con get_admin_only_user. */}
+                <Route path="paneles" element={<AdminPanelesPage />} />
                 <Route path="leads" element={<LeadsPage />} />
                 <Route path="messages" element={<AdminMessagesPage />} />
                 <Route path="routines" element={<AdminRoutinesPage />} />

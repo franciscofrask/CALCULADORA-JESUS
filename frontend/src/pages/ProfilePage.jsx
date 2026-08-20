@@ -273,24 +273,31 @@ const ProfilePage = () => {
                     </CardContent>
                 </Card>
 
-                {/* Checkout iniciado pero no pagado: ofrecer terminar la compra */}
-                {profile && planUnpaid && (
+                {/* SIN PLAN: checkout a medias O cuenta recién creada que volvió atrás
+                    desde /planes (bug del 20-08: no tenía ningún camino para volver a
+                    verlos). La misma tarjeta para los dos, con el texto de su caso. */}
+                {profile && (planUnpaid || !profile.plan) && (
                     <Card className="bg-card border-[#FF671F]/30">
                         <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center gap-4">
                             <div className="flex-1">
                                 <p className="font-bold text-foreground uppercase tracking-wider text-sm mb-1">Sin plan activo</p>
-                                <p className="text-sm text-foreground/60">El pago de tu plan no llegó a completarse. Elige un plan para terminar la compra.</p>
+                                <p className="text-sm text-foreground/60">
+                                    {planUnpaid
+                                        ? 'El pago de tu plan no llegó a completarse. Elige un plan para terminar la compra.'
+                                        : 'Todavía no tienes plan. Mira los planes y elige el tuyo para desbloquear la app entera.'}
+                                </p>
                             </div>
                             <Button className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold uppercase tracking-wider"
-                                onClick={() => navigate('/onboarding')} data-testid="finish-checkout-btn">
-                                Elegir plan
+                                onClick={() => navigate('/planes')} data-testid="finish-checkout-btn">
+                                {planUnpaid ? 'Elegir plan' : 'Ver los planes'}
                             </Button>
                         </CardContent>
                     </Card>
                 )}
 
-                {/* Plan Info (un checkout sin pagar no cuenta como plan contratado) */}
-                {profile && !planUnpaid && (
+                {/* Plan Info. Sin plan no hay tarjeta de plan: aquí vivía el bug del
+                    «No quiero renovar» saliéndole a quien no tiene nada que renovar. */}
+                {profile && !planUnpaid && profile.plan && (
                     <Card className="bg-gradient-to-br from-[#FF671F]/10 to-[#FF671F]/5 border-[#FF671F]/30">
                         <CardHeader className="pb-2">
                             <CardTitle className="flex items-center justify-between">

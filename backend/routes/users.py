@@ -1350,6 +1350,28 @@ async def get_diet_config(user = Depends(get_current_user)):
         "opcion_peri": profile.get("diet_opcion_peri", "intra_post"),
     }
 
+@router.post("/user/ajustes-app")
+async def guardar_ajustes_app(data: dict, user = Depends(get_current_user)):
+    """Los tres ajustes de la app que iban en el navegador, a la ficha (doc 19-08).
+
+    «El del tema claro/oscuro, el de MACROS · Método / Reales y el de VISTA se guardan en
+    el navegador, no en su ficha. Si entra desde otro móvil, le sale la vista por defecto
+    otra vez. Los tres a la ficha.»
+
+    Solo lo que venga y solo con valores conocidos: un valor raro no pisa lo guardado.
+    """
+    VALIDOS = {
+        "tema": {"light", "dark"},
+        "modo_macros": {"metodo", "reales"},
+        "vista": {"actual", "pestanas", "continua"},
+    }
+    update = {f"ajustes_app.{k}": v for k, v in (data or {}).items()
+              if k in VALIDOS and v in VALIDOS[k]}
+    if update:
+        await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
+    return {"ok": True, "guardado": sorted(k.split(".", 1)[1] for k in update)}
+
+
 @router.patch("/user/diet-config")
 async def save_diet_config(data: dict, user = Depends(get_current_user)):
     """Guardar configuración de dieta para el usuario (persiste entre dispositivos)."""
@@ -1613,12 +1635,30 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
                                          {"_id": 0, "tipo_dia": 1})
 
     vigente = entradas[0] if entradas else None
+
+    # LA CABECERA DEL DOC 19-08: «Última revisión: 2 de julio · Próxima: 30 de julio». La
+    # última es la fecha del ajuste vigente; la próxima, esa fecha más el ritmo del plan
+    # (el mismo `dias_hasta_la_revision` que usa la entrega del cuestionario).
+    ultima_revision = vigente.get("fecha") if vigente else None
+    proxima_revision = None
+    if ultima_revision:
+        try:
+            d = datetime.strptime(ultima_revision, "%Y-%m-%d")
+            proxima_revision = (d + timedelta(days=dias_hasta_la_revision(profile.get("plan")))).strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+
     return {
-        "con_historico": con_historico,
+        # EL HISTÓRICO ES PARA TODOS (doc 19-08, bloque 09): lo que cambia por plan es
+        # DÓNDE se ve -- el que se los calcula lo tiene en su pestaña, y al que se los
+        # lleva un entrenador se le enseña en Seguimiento → Evolución --. La TABLA 20
+        # (personalizado sí / sin ajuste no) queda sustituida por esa regla.
+        "con_historico": True,
+        "modo_calculadora": modo,
+        "ultima_revision": ultima_revision,
+        "proxima_revision": proxima_revision,
         "tipo_dia_hoy": (dia_de_hoy or {}).get("tipo_dia"),
-        # La tabla solo va en los planes que la TABLA 20 dice. `vigente` y la curva de peso
-        # salen siempre: son sus numeros de hoy y su peso, no el registro de ajustes.
-        "entradas": entradas if con_historico else [],
+        "entradas": entradas,
         "vigente": vigente,
         "evolucion_peso": curva,
     }

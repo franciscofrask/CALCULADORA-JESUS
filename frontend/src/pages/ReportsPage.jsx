@@ -13,9 +13,28 @@ import Diario from '../components/Diario';
 import TresFotos from '../components/reports/TresFotos';
 import TusFotosYMetricas from '../components/TusFotosYMetricas';
 import FormularioReporte from '../components/reports/FormularioReporte';
+import HistorialDeMacros from '../components/HistorialDeMacros';
 import { verComo } from '../lib/modoRevision';
 
 const ORANGE = '#FF671F';
+
+/**
+ * LOS AJUSTES DE MACROS DENTRO DE EVOLUCIÓN (doc 19-08, bloque 09): para el cliente con
+ * entrenador, que ya no tiene la pestaña de Mis macros. Trae su historial y pinta la misma
+ * tabla que verían los demás allí.
+ */
+const HistorialDeAjustes = ({ api }) => {
+    const [entradas, setEntradas] = useState(null);
+    useEffect(() => {
+        let vivo = true;
+        api.get('/macros/historial')
+            .then(r => { if (vivo) setEntradas(r.data?.entradas || []); })
+            .catch(() => { if (vivo) setEntradas([]); });
+        return () => { vivo = false; };
+    }, [api]);
+    if (!entradas || entradas.length < 2) return null;
+    return <HistorialDeMacros entradas={entradas} />;
+};
 
 // Estado de la ventana de envío (viernes 00:00 -> lunes 06:00).
 const WindowBanner = ({ w }) => {
@@ -282,7 +301,15 @@ const ReportsPage = () => {
     // Es el mismo cliente y el mismo trámite, así que es la misma solución.
 
     // En modo revisión se entra directamente al formulario: es lo que se viene a mirar.
-    const [seccionAbierta, setSeccionAbierta] = useState(tipoRevision ? 'form' : null);
+    // Y «?abrir=evolucion» aterriza en Evolución: es a donde apuntan el botón «Ver mi
+    // evolución» de Mis macros y la ruta vieja de macros para los planes con entrenador
+    // (doc 19-08, bloque 09).
+    // Y «?aplazar=1» aterriza en el formulario con el aplazamiento abierto: es el camino
+    // desde «No puedo esta semana» del aviso (doc 19-08, bloque 11).
+    const abrirPedida = new URLSearchParams(window.location.search).get('abrir');
+    const aplazarPedido = new URLSearchParams(window.location.search).get('aplazar') === '1';
+    const [seccionAbierta, setSeccionAbierta] = useState(
+        tipoRevision || aplazarPedido ? 'form' : abrirPedida === 'evolucion' ? 'evolution' : null);
     const vista = seccionAbierta;
     const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
     // Si el plazo ya pasó. Lo dice el servidor en `items[].overdue` y no se calcula aquí:
@@ -515,6 +542,15 @@ const ReportsPage = () => {
                                 cliente: la diferencia con la toma anterior y la columna Total. */}
                             <EvolucionMedidas reports={reports} />
                         </>
+                    )}
+
+                    {/* SUS AJUSTES DE MACROS, AQUÍ, para el que se los lleva un entrenador
+                        (doc 19-08, bloque 09): la pestaña de Mis macros ya no existe para él
+                        y su histórico va «al lado de su peso, sus medidas y sus fotos. Que
+                        es donde se ve que estás trabajando». La misma tabla que ve el que
+                        se los calcula, del mismo componente. */}
+                    {profile?.macros_ajustables?.puede === false && (
+                        <HistorialDeAjustes api={api} />
                     )}
                 </div>
             )}

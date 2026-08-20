@@ -126,10 +126,12 @@ class TestLasTresSalidas:
                 assert s["precio"] == PLAN_CATALOG[s["plan"]]["precio"]
                 assert s["precio_congelado"] is False
 
-    def test_al_que_viene_de_un_plan_viejo_no_se_le_ofrece_seguir(self):
-        """Su plan ya no se vende: al renovar elige entre los nuevos."""
+    def test_al_que_viene_de_un_plan_viejo_se_le_ofrece_seguir_en_el_suyo(self):
+        """Desde el 20-08 (Francisco): todos los legacy son renovables por los suyos.
+        Sigue eligiendo tambien entre los nuevos, pero «seguir igual» esta."""
         s = self._salidas(plan="reto12en12_gold", precio_alta=1500.0)
-        assert "renovar" not in [x["tipo"] for x in s]
+        renovar = [x for x in s if x["tipo"] == "renovar"]
+        assert len(renovar) == 1 and renovar[0]["por_checkout"] is True
         assert {x["plan"] for x in s if x["tipo"] == "cambiar"} == {"nivel1", "nivel2", "nivel3", "elm"}
 
     def test_subir_se_ofrece_antes_que_bajar(self):
@@ -164,9 +166,11 @@ class TestLaPantallaEntera:
         """No es un paywall: Stripe cobra solo el dia que acaba el ciclo."""
         assert self._montar()["renueva_solo"] is True
 
-    def test_al_que_viene_de_un_plan_viejo_se_le_explica_por_que(self):
+    def test_al_que_viene_de_un_plan_viejo_ya_no_hay_motivo_que_explicar(self):
+        # Con «seguir igual» disponible (20-08), el texto de «tu plan ya no se ofrece»
+        # sobra: seguir en el suyo es justo lo que ahora puede hacer.
         r = self._montar(perfil(plan="gold", precio_alta=450.0))
-        assert r["motivo_cambio"]
+        assert r["motivo_cambio"] is None
 
 
 # ---------------------------------------------------------------------------

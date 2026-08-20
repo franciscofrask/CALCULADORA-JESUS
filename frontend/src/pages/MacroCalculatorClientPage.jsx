@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SlidersHorizontal, Calculator, Loader2, CheckCircle2, CalendarDays, Save, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import { MACRO } from './ClientDashboard';
@@ -133,6 +133,8 @@ const MacroCalculatorClientPage = () => {
     });
     const [effectiveDate, setEffectiveDate] = useState(todayISO());
     const [note, setNote] = useState('');
+    // La portada de la pestaña es «Mis macros» (doc 19-08); esto abre el formulario.
+    const [ajustando, setAjustando] = useState(false);
     const [loadingMacros, setLoadingMacros] = useState(true);
     const [saving, setSaving] = useState(false);
     // Macros escritos a mano y sin guardar. Si cambias la fecha de aplicacion NO se
@@ -305,17 +307,21 @@ const MacroCalculatorClientPage = () => {
     };
 
     // ¿PUEDE ESTE CLIENTE AJUSTARSE LOS MACROS? (punto 4.10). Lo decide el servidor a partir
-    // del campo `calculadora` de su plan. Si no puede, esta pantalla enseña sus números y le
-    // dice quién se los lleva, pero sin formulario ni botón de Guardar: dejarle contestar
-    // quince preguntas para negárselo al final sería peor que decírselo de entrada.
+    // del campo `calculadora` de su plan.
     const ajustables = profile?.macros_ajustables;
     const puedeAjustar = ajustables ? ajustables.puede !== false : true;
 
-    // SI NO PUEDE, ESTA PANTALLA NO ES LA SUYA (punto 6.2). Aquí se le enseñaba la calculadora
-    // capada: los mismos campos editables, sin quiz y sin botón de Guardar. Lo que le toca es
-    // «Mis macros», que en vez de un formulario que no hace nada le enseña sus números, lo que
-    // le escribió su entrenador en este ajuste, su histórico y su peso.
-    if (!puedeAjustar) return <MisMacrosPage />;
+    // «MIS MACROS» SOLO LA VE QUIEN SE LOS CALCULA (doc 19-08, bloque 09). Para el que se
+    // los pone un entrenador esta pestaña «es un papel colgado en la pared»: ya no existe
+    // en el menú, y quien llegue por la URL aterriza en Seguimiento → Evolución, que es
+    // donde vive su histórico, al lado de su peso, sus medidas y sus fotos.
+    if (!puedeAjustar) return <Navigate to="/dashboard/reports?abrir=evolucion" replace />;
+
+    // Y PARA QUIEN SÍ ES SU HERRAMIENTA, la portada es el mock del doc: última y próxima
+    // revisión, el último ajuste en una frase, los ocho números, el histórico y «Ver mi
+    // evolución». El formulario de ajustar queda a un botón. Quien todavía no tiene ningún
+    // número entra directo al ajuste: no hay nada que resumir.
+    if (!ajustando && profile?.macros_training) return <MisMacrosPage onAjustar={() => setAjustando(true)} />;
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1200px] mx-auto space-y-6 animate-fade-in">

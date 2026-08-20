@@ -278,6 +278,66 @@ const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
  * Si la biblioteca está vacía no se pinta nada: una tarjeta que solo dice «no hay nada» es
  * ruido en una pantalla que ya tiene diez.
  */
+// EL PDF DE LA RUTINA (bloque 11, doc 19-08): se sigue generando fuera, como hasta ahora;
+// aquí solo se sube, y el cliente lo abre desde Entreno. Se abre vía blob porque el visor
+// del navegador no manda la cabecera de autenticación.
+const PdfDeRutina = ({ api, clientId }) => {
+    const [info, setInfo] = useState(null);
+    const [subiendo, setSubiendo] = useState(false);
+
+    const cargar = useCallback(() => {
+        api.get(`/admin/routines/pdf/${clientId}/info`)
+            .then(r => setInfo(r.data)).catch(() => setInfo(null));
+    }, [api, clientId]);
+    useEffect(() => { cargar(); }, [cargar]);
+
+    const subir = async (e) => {
+        const f = e.target.files?.[0];
+        e.target.value = '';
+        if (!f) return;
+        setSubiendo(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', f);
+            await api.post(`/admin/routines/pdf/${clientId}`, fd);
+            toast.success('Rutina en PDF subida');
+            cargar();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || 'No se pudo subir el PDF');
+        } finally {
+            setSubiendo(false);
+        }
+    };
+
+    const ver = async () => {
+        try {
+            const r = await api.get(`/admin/routines/pdf/${clientId}`, { responseType: 'blob' });
+            window.open(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })), '_blank');
+        } catch { toast.error('No se pudo abrir el PDF'); }
+    };
+
+    return (
+        <Card className="bg-[#111] border-[#222]" data-testid="pdf-rutina">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Rutina en PDF</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+                {info?.hay ? (
+                    <p className="text-xs text-white/60">
+                        {info.filename} · subida el {new Date(info.uploaded_at).toLocaleDateString('es-ES')}
+                        <button onClick={ver} className="ml-2 text-[#FF671F] hover:underline" data-testid="ver-pdf-rutina">ver</button>
+                    </p>
+                ) : (
+                    <p className="text-xs text-white/40">Todavía no hay ninguna. El cliente verá la última que subas.</p>
+                )}
+                <label className="inline-flex items-center gap-2 text-xs text-white bg-[#0A0A0A] border border-[#333] rounded-lg px-3 py-2 cursor-pointer hover:border-[#FF671F]/50">
+                    {subiendo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    {info?.hay ? 'Subir una nueva' : 'Subir PDF'}
+                    <input type="file" accept="application/pdf" className="hidden" onChange={subir} data-testid="input-pdf-rutina" />
+                </label>
+            </CardContent>
+        </Card>
+    );
+};
+
 const RutinasGuardadas = ({ api, clientId, onAsignada }) => {
     const [rutinas, setRutinas] = useState([]);
     const [poniendo, setPoniendo] = useState(null);
@@ -1599,6 +1659,9 @@ const ClientDetailPage = () => {
                         podían reutilizar. Al asignarla se copia, así que retocársela luego a
                         este cliente no se la cambia a los demás. */}
                     <RutinasGuardadas api={api} clientId={clientId} onAsignada={fetchClient} />
+
+                    {/* La rutina en PDF, la que el cliente abre desde Entreno (doc 19-08). */}
+                    <PdfDeRutina api={api} clientId={clientId} />
 
                     {/* Current routine */}
                     {activeRoutine ? (

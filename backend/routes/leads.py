@@ -658,6 +658,14 @@ async def ghl_webhook(request: Request):
     phone = (body.get("phone", "") or body.get("phone_number", "")).strip()
     now = datetime.now(timezone.utc).isoformat()
 
+    # SOLO LEADS (Francisco, 20-08). El disparador de GHL pasa a ser «contacto creado» a
+    # secas -- su constructor no dejó ponerle el filtro --, así que el filtro vive AQUÍ:
+    # lo que no sea un lead (contact_type de GHL) se agradece y se ignora. Los payloads
+    # viejos sin contact_type se aceptan, que los formularios de siempre no lo mandaban.
+    tipo_contacto = str(body.get("contact_type") or "").strip().lower()
+    if tipo_contacto and tipo_contacto != "lead":
+        return {"status": "ok", "skipped": f"contact_type:{tipo_contacto}"}
+
     # Un cliente actual no es un prospecto: no crear lead
     if email and await db.users.find_one({"email": email, "deleted_at": None}):
         return {"status": "ok", "skipped": "already_client"}
@@ -691,6 +699,13 @@ async def ghl_webhook(request: Request):
     if existing:
         return await _apply_reentry(existing)
 
+    # LO QUE GHL SABE Y ANTES TIRÁBAMOS (20-08): las etiquetas («caliente», «whatsapp»)
+    # y la atribución (de qué anuncio o canal vino). Se guardan aparte del raw para que
+    # la bandeja de Leads y el bloque «De dónde vienen» del panel puedan usarlas.
+    tags = [t.strip().lower() for t in str(body.get("tags") or "").split(",") if t.strip()]
+    origen_detalle = (body.get("contact_source") or body.get("attribution_source")
+                      or body.get("utm_source") or body.get("session_source") or None)
+
     lead = {
         "id": str(uuid.uuid4()),
         "name": name,
@@ -698,6 +713,8 @@ async def ghl_webhook(request: Request):
         "phone": phone,
         "source": "ghl",
         "status": "nuevo",
+        "tags": tags,
+        "origen_detalle": (str(origen_detalle).strip() or None) if origen_detalle else None,
         "notes": f"Entrada automática desde GoHighLevel. Raw: {str(body)[:500]}",
         "created_at": now,
         "updated_at": now,
@@ -716,3 +733,63 @@ async def ghl_webhook(request: Request):
         raise
     await upsert_lead_to_notion(lead)
     return {"status": "ok", "lead_id": lead["id"]}
+
+
+@router.post("/webhook/ghl-contacto")
+async def ghl_webhook_contacto(request: Request):
+    """EL ÚLTIMO CONTACTO REAL (Francisco, 20-08). El equipo habla con los clientes por
+    WhatsApp a través de GHL, y «Sin contactar» solo contaba los mensajes de dentro de
+    la app: al cliente atendido ayer por WhatsApp el panel lo pintaba de abandonado.
+
+    Lo llama un workflow de GHL cuando el equipo manda un mensaje a un contacto. Aquí
+    solo se apunta la fecha en la ficha del cliente (`ultimo_contacto_externo`); si el
+    contacto no es cliente de la app, no hay nada que apuntar y se contesta que ok.
+
+    La misma puerta que el webhook de leads: sin secreto configurado NO atiende, y la
+    comparación es en tiempo constante (ver el porqué en `ghl_webhook`).
+    """
+    expected_secret = os.environ.get("GHL_WEBHOOK_SECRET", "").strip()
+    if not expected_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="El webhook de GHL no está configurado (falta GHL_WEBHOOK_SECRET).")
+    provided = request.query_params.get("secret", "") or request.headers.get("x-webhook-secret", "")
+    if not secrets.compare_digest(provided, expected_secret):
+        raise HTTPException(status_code=401, detail="Webhook secret inválido")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    email = str(body.get("email") or "").strip().lower()
+    telefono = "".join(c for c in str(body.get("phone") or body.get("phone_number") or "")
+                       if c.isdigit())[-9:]  # los 9 últimos: sin prefijos ni espacios
+    if not email and not telefono:
+        return {"status": "ok", "skipped": "sin_email_ni_telefono"}
+
+    user = None
+    if email:
+        user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0, "id": 1})
+    if not user and telefono:
+        # Por teléfono solo si el email no casó: se comparan los 9 últimos dígitos para
+        # que «+34 600...» y «600...» sean el mismo número.
+        async for u in db.users.find({"phone": {"$nin": [None, ""]}, "deleted_at": None},
+                                     {"_id": 0, "id": 1, "phone": 1}):
+            suyo = "".join(c for c in str(u["phone"]) if c.isdigit())[-9:]
+            if suyo and suyo == telefono:
+                user = u
+                break
+    if not user:
+        return {"status": "ok", "skipped": "no_es_cliente"}
+
+    ahora = datetime.now(timezone.utc).isoformat()
+    r = await db.client_profiles.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"ultimo_contacto_externo": {
+            "fecha": ahora,
+            # El canal lo manda el workflow como dato personalizado; si no, WhatsApp,
+            # que es por donde habla el equipo.
+            "canal": str(body.get("canal") or "whatsapp").strip().lower()[:30],
+        }}})
+    return {"status": "ok", "apuntado": bool(r.matched_count)}

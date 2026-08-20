@@ -3,6 +3,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { deriveCapabilities } from '../lib/planAccess';
 import { limpiarLoDeLaPersona } from '../lib/almacenLocal';
+import { aplicarAjustesDeFicha } from '../lib/ajustesEnFicha';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -116,6 +117,10 @@ export const AuthProvider = ({ children }) => {
             try {
                 const profileRes = await api.get('/clients/profile');
                 setProfile(profileRes.data);
+                // Los ajustes de la ficha (tema, modo de macros, vista) pisan lo que haya
+                // en ESTE navegador: es lo que hace que sobrevivan al cambio de móvil
+                // (doc 19-08, bloque 07).
+                aplicarAjustesDeFicha(profileRes.data?.ajustes_app);
                 setPerfilNoCargado(false);
             } catch (e) {
                 setProfile(null);
@@ -204,6 +209,7 @@ export const AuthProvider = ({ children }) => {
                 headers: { Authorization: `Bearer ${access_token}` }
             });
             setProfile(profileRes.data);
+            aplicarAjustesDeFicha(profileRes.data?.ajustes_app);
         } catch (e) {
             setProfile(null);
         }
@@ -251,6 +257,10 @@ export const AuthProvider = ({ children }) => {
             try {
                 const profileRes = await api.get('/clients/profile');
                 setProfile(profileRes.data);
+                // Los ajustes de la ficha (tema, modo de macros, vista) pisan lo que haya
+                // en ESTE navegador: es lo que hace que sobrevivan al cambio de móvil
+                // (doc 19-08, bloque 07).
+                aplicarAjustesDeFicha(profileRes.data?.ajustes_app);
                 setPerfilNoCargado(false);
             } catch (e) {
                 setProfile(null);

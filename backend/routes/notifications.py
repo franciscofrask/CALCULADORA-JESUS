@@ -135,6 +135,15 @@ async def _avisar(user_id: str, familia: str, tipo: str, link: str,
 # macros porque entraba y los veía. Un aviso de entrega no es un experimento que se pueda
 # dejar apagado.
 
+def _fecha_es_de(iso) -> Optional[date]:
+    """La fecha (día de España) de un instante ISO del perfil, o None si no hay."""
+    try:
+        d = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        return (a_madrid(d) or d).date()
+    except (ValueError, TypeError):
+        return None
+
+
 def _arranque_del_dia_es() -> str:
     """Las 00:00 de HOY en Madrid, como instante UTC comparable con `created_at`.
 
@@ -322,6 +331,8 @@ async def sincronizar_avisos(user_id: str) -> int:
                 semana=datos["semana"],
                 semanas_ciclo=datos["semanas_ciclo"],
                 rutina_visible=rutina_visible,
+                ciclo_vencido=datos.get("ciclo_vencido", False),
+                fin_de_ciclo=datos.get("fin_de_ciclo"),
             )
         condicionados = avisos_condicionados(
             ahora=ahora,
@@ -331,6 +342,10 @@ async def sincronizar_avisos(user_id: str) -> int:
             dias_sin_cerrar=datos["dias_sin_cerrar"],
             dias_sin_entrar=datos["dias_sin_entrar"],
             dias_con_el_perfil_a_medias=datos["dias_con_el_perfil_a_medias"],
+            dias_sin_preferencias=datos.get("dias_sin_preferencias"),
+            dias_en_mantenimiento=datos.get("dias_en_mantenimiento"),
+            rutina_mes_aplazada_hasta=datos.get("rutina_mes_aplazada_hasta"),
+            con_ajuste=datos.get("con_ajuste", True),
         )
 
         # Antes de mirar si le toca una nueva, se retiran las que ya no tocan: si no, se
@@ -347,7 +362,14 @@ async def sincronizar_avisos(user_id: str) -> int:
         claves = {p.get("clave") for p in previas if p.get("clave")}
         ultima_cond = max((p["created_at"] for p in previas if p.get("condicionada")), default=None)
 
-        elegidos = elegir_avisos(calendario, condicionados, claves, ultima_cond, ahora)
+        # MÁXIMO UNO AL DÍA (doc 19-08): si hoy ya le nació un aviso -- de aquí o de un
+        # evento, como la entrega de macros del miércoles --, lo demás espera a mañana.
+        # «Hoy» es el día de España, no el del servidor.
+        arranque_del_dia = _arranque_del_dia_es()
+        hubo_aviso_hoy = any((p.get("created_at") or "") >= arranque_del_dia for p in previas)
+
+        elegidos = elegir_avisos(calendario, condicionados, claves, ultima_cond, ahora,
+                                 hubo_aviso_hoy=hubo_aviso_hoy)
         for aviso in elegidos:
             # El texto se elige AQUI, no al montar la regla: la rotacion solo puede
             # avanzar cuando el aviso se manda de verdad. Si se resolviera antes,
@@ -452,13 +474,17 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     semanas_ciclo = None
     proximo_ajuste = None
     semana = None
+    con_ajuste = True
     ventanas: List[Dict[str, Any]] = []
     try:
         from routes.plans import _overrides_by_code
-        from models.user import merged_catalog
+        from models.user import merged_catalog, codigo_de_plan
         catalogo = merged_catalog(await _overrides_by_code())
-        plan = catalogo.get(perfil.get("plan") or "", {})
+        plan = catalogo.get(codigo_de_plan(perfil.get("plan")) or "", {})
         semanas_ciclo = (plan.get("ciclo") or {}).get("semanas")
+        # Regla 1 del doc 19-08: los avisos leen las habilitaciones del plan. Al que su
+        # plan no le incluye ajuste no se le dice que lleva semanas sin ajustar.
+        con_ajuste = (plan.get("habilitaciones") or {}).get("frecuencia_ajuste") not in (None, "", "ninguna")
         semana, ventanas = await _ventanas_de_reporte(perfil, catalogo, ahora)
     except Exception:
         pass
@@ -467,7 +493,7 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     # vive en un solo sitio porque la usan dos pantallas -- los avisos y el Inicio -- y si
     # cada una tuviera la suya volveriamos a tener dos verdades.
     from core.macros_de_quien import de_una_persona
-    from core.plan_access import tiene_entrenador_detras
+    from core.plan_access import tiene_entrenador_detras, estado_de_acceso
     from core.ventana_completo import ventana_del_completo
 
     hoy = hoy_madrid()
@@ -483,6 +509,25 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
         "proximo_ajuste": proximo_ajuste,
         "semanas_ciclo": semanas_ciclo,
         "semana": semana,
+        "con_ajuste": con_ajuste,
+        # «Configura lo que comes» (doc 19-08): los dias que lleva sin preferencias, o
+        # None si ya las marcó (entonces no hay nada que pedirle).
+        "dias_sin_preferencias": (None if (perfil.get("food_preferences") or [])
+                                  else _dias_desde(perfil.get("created_at"), ahora)),
+        # «¿Volvemos?» (doc 19-08): cuanto lleva aterrizado en Mantenimiento.
+        "dias_en_mantenimiento": (_dias_desde(perfil.get("plan_start") or perfil.get("created_at"), ahora)
+                                  if (perfil.get("plan") or "").lower() == "mantenimiento" else None),
+        # «¿Te preparo la rutina del mes?» (doc 19-08): la fecha que eligió al marcar
+        # «pregúntame en una semana» en su reporte. None si no aplazó nada.
+        "rutina_mes_aplazada_hasta": perfil.get("rutina_mes_aplazada_hasta") or None,
+        # «Tu ciclo ha terminado» (doc 19-08). Desde el 20-08 ningún plan renueva solo
+        # (Francisco), así que vale para todos los vencidos de verdad; la única excepción
+        # es quien aún tiene una suscripción viva de Stripe (legacy), que sí renueva.
+        "ciclo_vencido": bool((estado_de_acceso(perfil) or {}).get("motivo") == "caducado"
+                              and not (perfil.get("stripe_subscription_id")
+                                       and (perfil.get("subscription_status") or "") == "active")),
+        # Cuándo se le acaba lo pagado, para el aviso de «acaba en una semana» por fecha.
+        "fin_de_ciclo": _fecha_es_de(perfil.get("current_period_end")),
         "ventanas": ventanas,
         "macros_puestos_por_alguien": de_una_persona(ultimos_macros),
         # ¿VA A RECIBIR UNOS DEFINITIVOS? (punto 04 del doc del 19-08). El aviso de macros
@@ -693,8 +738,14 @@ async def _ventanas_de_reporte(perfil: dict, catalogo: dict, ahora: datetime) ->
              "created_at": {"$gte": a_utc(v["abre"]).isoformat(),
                             "$lte": a_utc(v["cierra"] + timedelta(days=1)).isoformat()}},
             {"_id": 0, "id": 1})
+        # ¿PIDIÓ APLAZARLO? «No puedo esta semana» apaga los recordatorios de ESE reporte
+        # (doc 19-08: «no se le insiste más»). El aplazamiento guarda hasta cuándo se corre
+        # la ventana: si esa fecha pasa del cierre de esta, el aplazado es este reporte.
+        aplazado_hasta = str(perfil.get("reporte_aplazado_hasta") or "")
+        aplazado = bool(aplazado_hasta) and aplazado_hasta > a_utc(v["cierra"]).isoformat()
         ventanas.append({"tipo": tipo, "semana": n, "abre": v["abre"],
-                         "cierra": v["cierra"], "mandado": bool(mandado)})
+                         "cierra": v["cierra"], "mandado": bool(mandado),
+                         "aplazado": aplazado})
     return semana, ventanas
 
 

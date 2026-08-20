@@ -12,6 +12,7 @@
  * dieta va bien.
  */
 import React from 'react';
+import { guardarAjusteEnFicha } from '../../lib/ajustesEnFicha';
 
 export const MODOS = [
     { id: 'metodo', nombre: 'Método', titulo: 'Lo que cuenta el método' },
@@ -31,6 +32,8 @@ export const leerModoMacros = () => {
 
 export const guardarModoMacros = (v) => {
     try { localStorage.setItem(CLAVE, v); } catch (e) {}
+    // Y a la ficha, que el navegador se queda en este móvil (doc 19-08, bloque 07).
+    guardarAjusteEnFicha('modo_macros', v);
 };
 
 /** Los macros a ENSEÑAR de un alimento. Nunca para contar: para eso, macros_efectivos. */

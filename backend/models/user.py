@@ -132,7 +132,11 @@ PLAN_CATALOG = {
                            "frecuencia_ajuste": "mensual",
                            # «Rutina: La del mes» (antes ninguna: la ficha del doc manda).
                            "rutina": "del_mes",
-                           "reportes": ["mensual"], "suplementacion": "guia",
+                           # «El rápido, mensual — el mismo que tiene hoy ELM» (tabla del
+                           # bloque 11, doc 19-08): la cadencia es mensual pero el
+                           # formulario es el corto, no el de bloques.
+                           "reportes": ["mensual"], "reporte_rapido": True,
+                           "suplementacion": "guia",
                            "feedback": "Ninguno",
                            "canal_contacto": "Solo incidencias técnicas",
                            "videollamadas": "0", "grupo_privado": False,
@@ -141,7 +145,7 @@ PLAN_CATALOG = {
                            "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
         # «Renovación automática: Sí · cada 12 semanas». Informa a la app (avisos, panel);
         # el modo de cobro real lo dice Stripe.
-        "renovacion": {"automatica": True, "cada": "cada 12 semanas"},
+        "renovacion": {"automatica": False, "cada": "cada 12 semanas"},
         "stripe_price_env": "STRIPE_PRICE_NIVEL1", "billing_cycle_weeks": 12,
         # Doc 03-08: PAGO UNICO del ciclo en el checkout actual. La tabla del 19-08 lo
         # marca con renovación automática; cambiar el cobro a suscripción es un Price
@@ -228,6 +232,10 @@ PLAN_CATALOG = {
                            "frecuencia_ajuste": "al_renovar",   # si lo pide · máx. 72 h
                            "rutina": "del_mes",                 # la del mes, cada renovación
                            "reportes": [],                      # el rápido va con la renovación
+                           # Si algún día su calendario trae un reporte, es el corto: «el
+                           # rápido, al renovar» (tabla del bloque 11). El disparo POR
+                           # RENOVACIÓN aún no existe; esto deja dicho el formulario.
+                           "reporte_rapido": True,
                            "suplementacion": "guia",
                            "feedback": "Ninguno",
                            "canal_contacto": "Apartado de contacto · viernes",
@@ -235,8 +243,11 @@ PLAN_CATALOG = {
                            "tiempo_respuesta": "máx. 72 h", "audio_feedback": False,
                            "materiales_recursos": True,         # sí · catálogo premium
                            "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
-        # «Renovación automática: Sí · mensual».
-        "renovacion": {"automatica": True, "cada": "mensual"},
+        # NINGÚN PLAN RENUEVA SOLO (Francisco, 20-08): la membresía también se cobra como
+        # pago único del mes y se renueva desde la app. La ficha del doc decía «Sí ·
+        # mensual», pero la renovación real del negocio es manual.
+        "renovacion": {"automatica": False, "cada": "mensual"},
+        "pago_unico": True,
         "stripe_price_env": "STRIPE_PRICE_ELM", "billing_cycle_weeks": 4,
         # La ficha «Membresía» borrada apuntaba aquí; los perfiles de prueba que la tengan
         # escrita caen en ELM en vez de quedarse sin plan.
@@ -246,7 +257,7 @@ PLAN_CATALOG = {
         # El "Reto de 1.500" del documento. Legacy. El doc del 19-08 lo manda RETIRAR
         # después de mover a sus 2 clientes (script preparado); mientras tanto se queda
         # asignable para no dejar a esos 2 sin habilitaciones.
-        "name": "Reto 12en12 - Gold", "estado": "legacy", "asignable": True,
+        "name": "Reto 12en12 - Gold", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 1500.0, "precio_nota": "1.500€/trimestre o 600€/mes",
         "precios": [{"label": "Trimestral", "importe": 1500.0, "periodo": "trimestre"},
@@ -257,12 +268,12 @@ PLAN_CATALOG = {
                            "rutina": "personalizada",
                            "reportes": ["quincenal", "mensual"], "suplementacion": "protocolo",
                            "audio_feedback": True},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_RETO12EN12_GOLD", "billing_cycle_weeks": 12,
     },
     "reto12en12_silver": {
         # Misma familia que el Reto Gold. Sin clientes: el doc del 19-08 lo retira.
-        "name": "Reto 12en12 - Silver", "estado": "legacy", "asignable": False,
+        "name": "Reto 12en12 - Silver", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": False,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 600.0, "precio_nota": "600€/trimestre o 250€/mes · retirado (0 clientes)",
         "precios": [{"label": "Trimestral", "importe": 600.0, "periodo": "trimestre"},
@@ -271,12 +282,12 @@ PLAN_CATALOG = {
         "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
                            "rutina": "del_mes",
                            "reportes": ["mensual"], "suplementacion": "protocolo"},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_RETO12EN12_SILVER", "billing_cycle_weeks": 12,
     },
     "reto60": {
         # Sin clientes: el doc del 19-08 lo retira. (Y Harbiz murió: fallo 07.)
-        "name": "Reto 60 días", "estado": "legacy", "asignable": False,
+        "name": "Reto 60 días", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": False,
         "ciclo": {"tipo": "bimestral", "semanas": 8},
         "precio": 547.0, "precio_nota": "547€ (pago único) · retirado (0 clientes)",
         "precios": [{"label": "Único", "importe": 547.0, "periodo": "único"}],
@@ -290,7 +301,7 @@ PLAN_CATALOG = {
     "calculadora_jp": {
         # Legacy. El doc del 19-08: migrar a sus 11 a Mantenimiento -- «pueden editar sus
         # macros pero sin ajuste» -- y después retirar (script preparado).
-        "name": "Calculadora JP", "estado": "legacy", "asignable": True,
+        "name": "Calculadora JP", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
         "precio": 60.0, "precio_nota": "60€/mes",
         "precios": [{"label": "Mensual", "importe": 60.0, "periodo": "mes"}],
@@ -299,7 +310,7 @@ PLAN_CATALOG = {
         "habilitaciones": {"calculadora": "autogestion", "edita_macros": True,
                            "frecuencia_ajuste": "ninguna", "rutina": "ninguna",
                            "reportes": [], "suplementacion": "ninguna"},
-        "renovacion": {"automatica": True, "cada": "mensual"},
+        "renovacion": {"automatica": False, "cada": "mensual"},
         "stripe_price_env": "STRIPE_PRICE_CALCULADORA_JP", "billing_cycle_weeks": 4,
     },
     "mantenimiento": {
@@ -326,8 +337,9 @@ PLAN_CATALOG = {
                            "tiempo_respuesta": "", "audio_feedback": False,
                            "materiales_recursos": False,
                            "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
-        # «Renovación automática: Sí · mensual».
-        "renovacion": {"automatica": True, "cada": "mensual"},
+        # Ningún plan renueva solo (Francisco, 20-08): también el Mantenimiento.
+        "renovacion": {"automatica": False, "cada": "mensual"},
+        "pago_unico": True,
         "stripe_price_env": "STRIPE_PRICE_MANTENIMIENTO", "billing_cycle_weeks": 4,
     },
     # ---------------- LEGACY (inactivos, se respetan) ----------------
@@ -338,7 +350,7 @@ PLAN_CATALOG = {
     # de feedback, que está incluido en los programas antiguos, marcado también en Silver,
     # Bronze, Premium, 6M, Personalizado y CALMA 12.
     "gold": {
-        "name": "Gold (legacy)", "estado": "legacy", "asignable": True,
+        "name": "Gold (legacy)", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 450.0, "precio_nota": "450-847€/trimestre (según antigüedad)",
         "precios": [{"label": "Trimestral", "importe": 450.0, "periodo": "trimestre"}],
@@ -346,12 +358,15 @@ PLAN_CATALOG = {
         "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
                            "rutina": "personalizada",
                            "reportes": ["quincenal", "mensual"], "suplementacion": "protocolo",
+                           # La tabla del bloque 11 (doc 19-08): «el feedback es solo del
+                           # Gold y del Premium».
+                           "feedback": "Con cada reporte",
                            "audio_feedback": True},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_GOLD", "billing_cycle_weeks": 12,
     },
     "silver": {
-        "name": "Silver (legacy)", "estado": "legacy", "asignable": True,
+        "name": "Silver (legacy)", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 267.0, "precio_nota": "267-435€/trimestre (según antigüedad)",
         "precios": [{"label": "Trimestral", "importe": 267.0, "periodo": "trimestre"}],
@@ -359,12 +374,15 @@ PLAN_CATALOG = {
         "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
                            "rutina": "del_mes",
                            "reportes": ["mensual"], "suplementacion": "protocolo",
+                           # «Ninguno — recibe ajustes, no feedback» (bloque 11 del 19-08).
+                           # El audio sí: es la diferencia con el Bronze.
+                           "feedback": "Ninguno · recibe ajustes, no feedback",
                            "audio_feedback": True},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_SILVER", "billing_cycle_weeks": 12,
     },
     "bronze": {
-        "name": "Bronze (legacy)", "estado": "legacy", "asignable": True,
+        "name": "Bronze (legacy)", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 177.0, "precio_nota": "177-397€/trimestre (según antigüedad)",
         "precios": [{"label": "Trimestral", "importe": 177.0, "periodo": "trimestre"}],
@@ -376,8 +394,12 @@ PLAN_CATALOG = {
         "habilitaciones": {"calculadora": "personalizado", "edita_macros": False,
                            "rutina": "opcional",
                            "reportes": ["mensual"], "suplementacion": "protocolo",
-                           "audio_feedback": True},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+                           # La tabla del bloque 11 (doc 19-08): el Bronze no lleva ni
+                           # feedback ni audio; recibe ajustes. El audio es del Silver
+                           # para arriba.
+                           "feedback": "Ninguno · recibe ajustes, no feedback",
+                           "audio_feedback": False},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "STRIPE_PRICE_BRONZE", "billing_cycle_weeks": 12,
     },
     # ---------------- ESPECIALES ----------------
@@ -386,7 +408,7 @@ PLAN_CATALOG = {
         # vende es `nivel3`, a 1.500 € por 12 semanas. Esta ficha era la de «especiales» a
         # 0 € con los 9 clientes; queda en legacy hasta que el script los mueva a nivel3
         # con el precio que tiene cada uno, y entonces se retira.
-        "name": "Premium (fusionado con el nuevo)", "estado": "legacy", "asignable": True,
+        "name": "Premium (fusionado con el nuevo)", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "variable", "semanas": None},
         "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el contrato · se fusiona con Premium (nivel3)",
         "precios": [],
@@ -395,7 +417,7 @@ PLAN_CATALOG = {
                            "rutina": "personalizada",
                            "reportes": ["semanal", "mensual"], "suplementacion": "protocolo",
                            "audio_feedback": True},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "", "billing_cycle_weeks": 4,
     },
     "plan_6m": {
@@ -426,7 +448,7 @@ PLAN_CATALOG = {
         # Las habilitaciones son las de un plan con coach detrás, que es lo que era. El
         # precio va vacío a propósito: el catálogo del equipo tampoco lo trae, y el que
         # manda es el del contrato de cada cliente (punto 36).
-        "name": "CALMA 12", "estado": "legacy", "asignable": True,
+        "name": "CALMA 12", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
         "precios": [],
@@ -439,7 +461,7 @@ PLAN_CATALOG = {
                            "reportes": ["mensual"], "suplementacion": "protocolo",
                            "audio_feedback": True,
                            "acompanamiento": "con_entrenador", "frecuencia_contacto": "mensual"},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "", "billing_cycle_weeks": 12,
         # Los perfiles migrados lo traen escrito asi, sin normalizar.
         "alias": ["CalMa", "calma", "calma_12", "calma 12"],
@@ -461,7 +483,7 @@ PLAN_CATALOG = {
         # un plan con menos: es Gold con otro nombre comercial, y son 14 clientes activos.
         # Se le deja su nombre en vez de meterlos en "Reto 12en12 - Gold" porque lo que
         # compraron se llama asi.
-        "name": "Reto 12en12", "estado": "legacy", "asignable": True,
+        "name": "Reto 12en12", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         # El doc del 19-08 los destapa: no es un plan, son los clientes Premium de José
         # Luis y de Montse, cada uno con su precio en la hoja de control de pagos. «A
@@ -476,7 +498,7 @@ PLAN_CATALOG = {
                            "audio_feedback": True,
                            "acompanamiento": "con_entrenador",
                            "frecuencia_contacto": "quincenal"},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "", "billing_cycle_weeks": 12,
         "alias": ["Reto 12en12", "Reto12en12", "reto 12 en 12"],
     },
@@ -485,7 +507,7 @@ PLAN_CATALOG = {
         # rutina «adaptada a tu nivel» (item 13) en vez de la 100 % personalizada y sin
         # reporte quincenal. El numero del nombre es lo que paga cada uno, y por eso el
         # precio va vacio: son dos acuerdos distintos.
-        "name": "Plan Personalizado", "estado": "legacy", "asignable": True,
+        "name": "Plan Personalizado", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
         "precios": [],
@@ -505,7 +527,7 @@ PLAN_CATALOG = {
         # macros y buscador de alimentos. Ni siquiera puede editarse los macros (item 2, que
         # si tienen ELM y Calculadora JP), asi que la calculadora va en "sin_ajuste": ve lo
         # que le pongan y come con ello.
-        "name": "Básica", "estado": "legacy", "asignable": True,
+        "name": "Básica", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "mensual", "semanas": None},
         "precio": 0.0, "precio_nota": "Sin precio de catálogo: manda el del contrato de cada cliente",
         "precios": [],
@@ -518,7 +540,7 @@ PLAN_CATALOG = {
                            "frecuencia_ajuste": "ninguna", "rutina": "ninguna",
                            "reportes": [], "suplementacion": "ninguna",
                            "acompanamiento": "solo_app", "frecuencia_contacto": "ninguna"},
-        "renovacion": {"automatica": True, "cada": "su ciclo de siempre"},
+        "renovacion": {"automatica": False, "cada": "su ciclo de siempre"},
         "stripe_price_env": "", "billing_cycle_weeks": 4,
         "alias": ["Basica", "básica"],
     },
@@ -589,7 +611,7 @@ PLAN_CATALOG = {
         # «El Plan de Optimización Hormonal a 1.000 € —que lleva Benito Velasco— va al
         # catálogo como legacy: ya se vendió y no se vende más, pero esos cobros tienen
         # que tener dónde colgar» (doc del 19-08).
-        "name": "Plan de Optimización Hormonal", "estado": "legacy", "asignable": False,
+        "name": "Plan de Optimización Hormonal", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": False,
         "ciclo": {"tipo": "unico", "semanas": None},
         "precio": 1000.0, "precio_nota": "1.000€ · ya vendido, no se vende más",
         "precios": [{"label": "Único", "importe": 1000.0, "periodo": "único"}],
@@ -605,7 +627,7 @@ PLAN_CATALOG = {
         # existían en el catálogo nuevo: cuando se migren los 143 tienen que caer en algún
         # sitio «o pasará lo del CalMa que bloquea el alta» (doc del 19-08). Presencial de
         # los entrenadores; sin precio de catálogo, manda lo pactado.
-        "name": "Entrenamiento Personal", "estado": "legacy", "asignable": True,
+        "name": "Entrenamiento Personal", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
         "ciclo": {"tipo": "variable", "semanas": None},
         "precio": 0.0, "precio_nota": "Sin precio de catálogo: 1.200-2.000€ según acuerdo",
         "precios": [],
@@ -1052,6 +1074,9 @@ class ClientProfile(BaseModel):
     # «No quiero renovar» (doc 19-08): {motivo, motivo_clave, cuando}. Sin esto, el modelo
     # se comía la marca y a quien acababa de pedir la baja se le volvía a ofrecer el enlace.
     no_renovar: Optional[Dict[str, Any]] = None
+    # Los tres ajustes que antes vivían en el navegador y se perdían al cambiar de móvil
+    # (doc 19-08, bloque 07): {tema, modo_macros, vista}.
+    ajustes_app: Optional[Dict[str, Any]] = None
     # Las medidas tomadas fuera del reporte (los botones de Seguimiento, doc 19-08).
     medidas_sueltas: Optional[List[Dict[str, Any]]] = None
     # ¿Sus macros los puso ALGUIEN, o salieron del calculo del alta? (punto 4.1)

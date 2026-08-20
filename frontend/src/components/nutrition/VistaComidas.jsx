@@ -12,6 +12,7 @@
  */
 import React from 'react';
 import { PanelLeft, LayoutPanelTop, AlignJustify } from 'lucide-react';
+import { guardarAjusteEnFicha } from '../../lib/ajustesEnFicha';
 
 export const VISTAS = [
     { id: 'actual', nombre: 'Lista y detalle', Icono: PanelLeft },
@@ -32,6 +33,8 @@ export const leerVista = () => {
 
 export const guardarVista = (v) => {
     try { localStorage.setItem(CLAVE, v); } catch (e) {}
+    // Y a la ficha, que el navegador se queda en este móvil (doc 19-08, bloque 07).
+    guardarAjusteEnFicha('vista', v);
 };
 
 export const VistaComidasSelector = ({ vista, onCambiar }) => (

@@ -247,7 +247,11 @@ def avisos_condicionados(*, ahora: datetime,
                          faltan_fotos_o_medidas: Optional[List[str]] = None,
                          dias_sin_cerrar: Optional[int] = None,
                          dias_sin_entrar: Optional[int] = None,
-                         dias_con_el_perfil_a_medias: Optional[int] = None) -> List[Dict[str, Any]]:
+                         dias_con_el_perfil_a_medias: Optional[int] = None,
+                         dias_sin_preferencias: Optional[int] = None,
+                         dias_en_mantenimiento: Optional[int] = None,
+                         rutina_mes_aplazada_hasta: Optional[str] = None,
+                         con_ajuste: bool = True) -> List[Dict[str, Any]]:
     """Las cuatro del doc 16-08 y una quinta del 18-08, en su orden de prioridad.
 
     LA QUINTA la pide Francisco el 18-08 contestando a la pregunta del documento del
@@ -292,6 +296,25 @@ def avisos_condicionados(*, ahora: datetime,
             "calendario": False,
         })
 
+    # 0.2) LA RUTINA DEL MES QUE APLAZÓ (doc 19-08): marcó «pregúntame en una semana» en el
+    #    reporte, así que este aviso lo pidió él. Sale el día que él eligió, una sola vez
+    #    (la clave lleva la fecha), y lleva al chat, que es donde puede contestar: su
+    #    reporte ya está cerrado.
+    if rutina_mes_aplazada_hasta and ahora.date().isoformat() >= rutina_mes_aplazada_hasta:
+        fuera.append({
+            "clave": f"rutina_mes_aplazada:{rutina_mes_aplazada_hasta}",
+            "familia": "rutina_mes_aplazada",
+            "tipo": "programa",
+            "variantes": [
+                {"titulo": "¿Te preparo la rutina del mes?",
+                 "cuerpo": "Me dijiste que te lo preguntara esta semana. Escríbeme y te la dejo lista."},
+                {"titulo": "Lo de tu rutina del mes",
+                 "cuerpo": "Quedamos en hablarlo esta semana. Dime algo y te la preparo."},
+            ],
+            "link": "/dashboard/messages",
+            "calendario": False,
+        })
+
     # 0.5) «HAN PASADO CUATRO SEMANAS» (doc 19-08): fotos y medidas en UN solo aviso, cada
     #    4 semanas, para los planes de autogestión -- donde no se piden, se recomiendan.
     #    Si ya hizo una de las dos, el aviso solo nombra la que falte. Antes llegaba cada
@@ -332,7 +355,9 @@ def avisos_condicionados(*, ahora: datetime,
     # 2) La unica directa del documento. Factual, sin reproche, y el momento natural
     #    para ofrecerle que alguien le mire el caso. El numero de semanas va dentro del
     #    titulo, asi que las variantes se montan con el dato ya puesto.
-    if semanas_sin_ajustar and semanas_sin_ajustar >= 2:
+    #    SOLO SI SU PLAN LLEVA AJUSTE (regla 1 del doc 19-08: «hoy al de Mantenimiento le
+    #    llega "llevas 4 semanas con los mismos macros" y su plan no incluye ajuste»).
+    if con_ajuste and semanas_sin_ajustar and semanas_sin_ajustar >= 2:
         fuera.append({
             "clave": f"sin_ajustar:{semana_iso}",
             "familia": "sin_ajustar",
@@ -365,18 +390,54 @@ def avisos_condicionados(*, ahora: datetime,
             "calendario": False,
         })
 
-    # 4) La mas suave de todas, y la ultima: el que lleva dos semanas sin aparecer no
-    #    necesita que le recuerden lo que no ha hecho.
-    if dias_sin_entrar is not None and dias_sin_entrar >= 14:
+    # 4) «¿Todo bien?» a los SIETE dias sin entrar (la tabla del doc 19-08; el 16-08 decia
+    #    catorce y este manda). Sigue siendo la mas suave: el que no aparece no necesita
+    #    que le recuerden lo que no ha hecho.
+    if dias_sin_entrar is not None and dias_sin_entrar >= 7:
         fuera.append({
             "clave": f"sin_entrar:{semana_iso}",
             "familia": "sin_entrar",
             "tipo": "programa",
             "variantes": [
-                {"titulo": "Tu plan sigue aquí", "cuerpo": "Retomamos cuando quieras."},
+                {"titulo": "¿Todo bien?", "cuerpo": "Tu plan sigue aquí. Retomamos cuando quieras."},
                 {"titulo": "Cuando quieras volver, aquí está", "cuerpo": "Sin prisa."},
             ],
             "link": "/dashboard",
+            "calendario": False,
+        })
+
+    # 5) «Configura lo que comes» (tabla del doc 19-08): tres dias sin tocar las
+    #    preferencias, EN TODOS LOS PLANES. Sin ellas la calculadora sugiere a ciegas.
+    if dias_sin_preferencias is not None and dias_sin_preferencias >= 3:
+        fuera.append({
+            "clave": f"sin_preferencias:{semana_iso}",
+            "familia": "sin_preferencias",
+            "tipo": "perfil",
+            "variantes": [
+                {"titulo": "Configura lo que comes",
+                 "cuerpo": "Marca lo que te gusta y lo que no, y te lo ponemos más fácil."},
+                {"titulo": "Dinos qué te gusta comer",
+                 "cuerpo": "Son 2 minutos y la calculadora te sugerirá mejor."},
+            ],
+            "link": "/dashboard/nutrition",
+            "calendario": False,
+        })
+
+    # 6) «¿Volvemos?» (tabla del doc 19-08): SOLO Mantenimiento, al mes de aterrizar ahi.
+    #    Una sola vez -- la clave es la fecha en que cayo al plan --, y con la puerta de
+    #    vuelta delante.
+    if dias_en_mantenimiento is not None and dias_en_mantenimiento >= 30:
+        fuera.append({
+            "clave": "volvemos:mantenimiento",
+            "familia": "volvemos",
+            "tipo": "programa",
+            "variantes": [
+                {"titulo": "¿Volvemos?",
+                 "cuerpo": "Llevas un mes por tu cuenta. Si quieres que te llevemos otra vez, aquí estamos."},
+                {"titulo": "Un mes ya por tu cuenta",
+                 "cuerpo": "Cuando quieras retomar un plan con seguimiento, dínoslo."},
+            ],
+            "link": "/planes",
             "calendario": False,
         })
 
@@ -404,7 +465,10 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                              ventanas: Optional[List[Dict[str, Any]]] = None,
                              semana: Optional[int] = None,
                              semanas_ciclo: Optional[int] = None,
-                             rutina_visible: bool = False) -> List[Dict[str, Any]]:
+                             rutina_visible: bool = False,
+                             ciclo_vencido: bool = False,
+                             fin_de_ciclo: Optional[date] = None,
+                             con_correo_de_novedades: bool = True) -> List[Dict[str, Any]]:
     """Los ocho del calendario. Siempre salen: no gastan el cupo de las condicionadas.
 
     `ventanas` son las ventanas de reporte que le tocan (la de esta semana de ciclo y la
@@ -457,6 +521,10 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
         if not tipo or not abre or not cierra:
             continue
         mandado = bool(v.get("mandado"))
+        # «No puedo esta semana» apaga los recordatorios de ese reporte (doc 19-08): el que
+        # avisó de que no puede no necesita que se le repita que no lo ha mandado. El aviso
+        # de apertura no se toca: se dispara antes de que exista el aplazamiento.
+        aplazado = bool(v.get("aplazado"))
 
         # 3 y 4 · El quincenal. Quién lo tiene no se pregunta por el nombre del plan: si
         # su calendario no trae quincenal, aquí no llega ninguna ventana de ese tipo.
@@ -477,7 +545,7 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                     "link": "/dashboard/reports",
                     "calendario": True,
                 })
-            if not mandado and hoy == abre.date() + timedelta(days=1) and ahora_es.hour >= 9:
+            if not mandado and not aplazado and hoy == abre.date() + timedelta(days=1) and ahora_es.hour >= 9:
                 fuera.append({
                     "clave": f"quincenal_ultimo:{abre.date()}",
                     "familia": "quincenal_ultimo",
@@ -513,7 +581,7 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                     "calendario": True,
                 })
             # 6 · El domingo a las 10:00, si sigue sin mandarlo.
-            if not mandado and hoy == abre.date() + timedelta(days=2) and ahora_es.hour >= 10:
+            if not mandado and not aplazado and hoy == abre.date() + timedelta(days=2) and ahora_es.hour >= 10:
                 fuera.append({
                     "clave": f"mensual_ultimo:{abre.date()}",
                     "familia": "mensual_ultimo",
@@ -532,7 +600,7 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
             # correo que sustituye ("Reporte Mensual · No Enviado", el más abierto de
             # todos con un 18,9 %). El quincenal cierra el jueves y para el martes ya ha
             # empezado otra semana de ciclo.
-            if not mandado and ahora_es > cierra and hoy == cierra.date() + timedelta(days=1):
+            if not mandado and not aplazado and ahora_es > cierra and hoy == cierra.date() + timedelta(days=1):
                 fuera.append({
                     "clave": f"reporte_no_llego:{cierra.date()}",
                     "familia": "reporte_no_llego",
@@ -547,11 +615,32 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                     "calendario": True,
                 })
 
-    # 8 · "Tu ciclo acaba en una semana", en la penúltima y CON EL MENSUAL: el doc lo pone
-    # al lado del reporte, no suelto a mitad de semana. Si esa semana no llevara mensual
-    # (ningún plan de hoy está así, pero el patrón se puede configurar) sale igual: el
-    # cliente tiene que enterarse de que su ciclo se acaba.
-    if semanas_ciclo and semana and int(semana) == max(1, int(semanas_ciclo) - 1):
+    # 8 · "Tu ciclo acaba en una semana". Desde el 20-08 NINGÚN plan renueva solo, así
+    # que este aviso es la puerta de la renovación anticipada para todos. Dos caminos:
+    #
+    # 8a · POR FECHA, si se sabe cuándo se le acaba lo pagado (current_period_end): a 7
+    #      días o menos del fin, una vez por vencimiento. Vale para el de 12 semanas y
+    #      también para el mensual (ELM, Mantenimiento), que no tiene semanas de ciclo y
+    #      con la regla de la penúltima semana se quedaba sin aviso.
+    if fin_de_ciclo and 0 < (fin_de_ciclo - hoy).days <= 7:
+        fuera.append({
+            "clave": f"fin_ciclo:{cliente_id}:{fin_de_ciclo}",
+            "familia": "fin_ciclo",
+            "tipo": "programa",
+            "variantes": [
+                {"titulo": "Tu ciclo acaba en una semana",
+                 "cuerpo": "Mira lo que has cambiado. Si renuevas ya, seguimos sin cortes: "
+                           "el ciclo nuevo empieza donde acaba este."},
+                {"titulo": "Queda una semana",
+                 "cuerpo": "Compara tu primera foto con la de ahora, y deja renovado lo "
+                           "que viene: no pierdes ni un día de los pagados."},
+            ],
+            "link": "/renovacion",
+            "calendario": True,
+        })
+    # 8b · POR SEMANA (la penúltima, con el mensual), SOLO si no hay fecha: los perfiles
+    #      viejos sin current_period_end no pueden quedarse sin enterarse.
+    elif not fin_de_ciclo and semanas_ciclo and semana and int(semana) == max(1, int(semanas_ciclo) - 1):
         mensual = next((v for v in ventanas
                         if v.get("tipo") == "mensual" and v.get("semana") == semana), None)
         if not mensual or ahora_es >= mensual["abre"]:
@@ -561,15 +650,55 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                 "tipo": "programa",
                 "variantes": [
                     {"titulo": "Tu ciclo acaba en una semana",
-                     "cuerpo": "Mira lo que has cambiado."},
+                     "cuerpo": "Mira lo que has cambiado. Si renuevas ya, seguimos sin cortes: "
+                               "el ciclo nuevo empieza donde acaba este."},
                     {"titulo": "Queda una semana",
-                     "cuerpo": "Entra en tu evolución y compara la primera foto con la de ahora."},
+                     "cuerpo": "Compara tu primera foto con la de ahora, y deja renovado lo "
+                               "que viene: no pierdes ni un día de los pagados."},
                 ],
-                # A su evolución, que es lo que los dos textos le piden mirar. La pantalla
-                # de renovación llega sola cuando el ciclo se acaba de verdad.
-                "link": "/dashboard/reports",
+                # A LA RENOVACIÓN, no a la evolución (Francisco, 20-08): la pantalla de
+                # renovar ya enseña lo conseguido (fotos del día 1 y de hoy) y, desde ese
+                # mismo día, pagar por adelantado encadena el ciclo en vez de pisarlo.
+                "link": "/renovacion",
                 "calendario": True,
             })
+
+    # 9 · «Tu ciclo ha terminado», AL VENCER SIN RENOVAR (tabla del doc 19-08). Solo los
+    # planes de ciclo cerrado llegan aquí (`ciclo_vencido` ya viene decidido: a los
+    # mensuales que renuevan solos no les vence nada). Es de entrega -- un hecho, no una
+    # prisa -- y su clave dura el vencimiento entero: no se repite cada día.
+    if ciclo_vencido:
+        fuera.append({
+            "clave": f"ciclo_terminado:{cliente_id}",
+            "familia": "ciclo_terminado",
+            "tipo": "programa",
+            "variantes": [
+                {"titulo": "Tu ciclo ha terminado",
+                 "cuerpo": "Renueva tu plan y sigues sin parar."},
+                {"titulo": "Se acabaron tus 12 semanas",
+                 "cuerpo": "Cuando quieras seguimos: tienes la renovación dentro."},
+            ],
+            "link": "/renovacion",
+            "calendario": True,
+        })
+
+    # 10 · «Te hemos mandado el correo de novedades», los viernes (tabla del doc 19-08).
+    # El correo se queda como correo; esto solo lo anuncia en la app. Desde mediodía, que
+    # es cuando ya ha salido, y a todos los planes.
+    if con_correo_de_novedades and ahora_es.weekday() == 4 and ahora_es.hour >= 12:
+        fuera.append({
+            "clave": f"correo_viernes:{hoy}",
+            "familia": "correo_viernes",
+            "tipo": "programa",
+            "variantes": [
+                {"titulo": "Te hemos mandado el correo de novedades",
+                 "cuerpo": "Échale un ojo al correo: va lo de esta semana."},
+                {"titulo": "El correo del viernes ya está fuera",
+                 "cuerpo": "Mira tu bandeja: novedades de esta semana."},
+            ],
+            "link": None,
+            "calendario": True,
+        })
 
     return fuera
 
@@ -586,21 +715,35 @@ def textos_de(aviso: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def elegir_avisos(calendario: List[Dict[str, Any]], condicionados: List[Dict[str, Any]],
                   claves_ya_enviadas: set, ultima_condicionada: Optional[str],
-                  ahora: datetime) -> List[Dict[str, Any]]:
-    """Lo que de verdad se manda: todas las de calendario y como mucho UNA condicionada.
+                  ahora: datetime, hubo_aviso_hoy: bool = False) -> List[Dict[str, Any]]:
+    """Lo que de verdad se manda hoy: COMO MUCHO UNO (regla del doc 19-08).
+
+        «Máximo uno al día, y por orden: primero el de entrega, después el de
+         recordatorio. Si le llegan tres a la vez, no lee ninguno.»
+
+    - `hubo_aviso_hoy` cierra el día entero: si ya le nació uno (de aquí o de un evento,
+      como la entrega de macros del miércoles), lo demás espera a mañana. Lo que siga
+      siendo verdad mañana saldrá mañana; lo que no, es que ya no hacía falta.
+    - Con el día libre, gana la primera de CALENDARIO sin mandar (las de entrega y el
+      programa). Solo si no hay ninguna entra UNA condicionada, respetando además su
+      tope de una cada siete días.
 
     `claves_ya_enviadas` evita repetir un aviso que ya salio. `ultima_condicionada` es
-    la fecha ISO de la ultima condicionada que se le mando, para respetar el tope.
+    la fecha ISO de la ultima condicionada que se le mando.
     """
-    salida = [a for a in calendario if a["clave"] not in claves_ya_enviadas]
+    if hubo_aviso_hoy:
+        return []
+
+    for aviso in calendario:
+        if aviso["clave"] not in claves_ya_enviadas:
+            return [aviso]
 
     dias = _dias_desde(ultima_condicionada, ahora)
     if dias is not None and dias < DIAS_ENTRE_CONDICIONADAS:
-        return salida   # esta semana ya tuvo la suya
+        return []   # esta semana ya tuvo la suya
 
     for aviso in condicionados:
         if aviso["clave"] not in claves_ya_enviadas:
-            salida.append(aviso)
-            break   # una y no mas
+            return [aviso]
 
-    return salida
+    return []

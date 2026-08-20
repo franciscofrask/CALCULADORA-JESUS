@@ -232,7 +232,10 @@ def montar_renovacion(*, perfil: Dict[str, Any], catalogo: Dict[str, Dict[str, A
     # Los estados de Stripe en los que se le sigue cobrando sin que haga nada.
     suscripcion_viva = perfil.get("subscription_status") in ("active", "trialing")
     fuera = salidas(plan_actual=perfil.get("plan"), opciones_catalogo=opciones_catalogo,
-                    catalogo=catalogo, precio_alta=perfil.get("precio_alta"),
+                    # La MISMA cascada que el cobro (routes/billing.py): lo que tiene
+                    # apuntado el perfil manda; sin ella la pantalla enseñaba el precio de
+                    # catálogo y el checkout cobraba el congelado.
+                    catalogo=catalogo, precio_alta=perfil.get("price") or perfil.get("precio_alta"),
                     suscripcion_viva=suscripcion_viva)
     return {
         "ciclo": estado,

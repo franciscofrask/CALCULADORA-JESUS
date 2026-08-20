@@ -34,6 +34,11 @@ const EntrenoPage = () => {
 
     const [cargando, setCargando] = useState(true);
     const [guardando, setGuardando] = useState(false);
+    // ¿Hay rutina en PDF subida por su entrenador? El botón solo sale si existe.
+    const [hayPdf, setHayPdf] = useState(false);
+    useEffect(() => {
+        api.get('/routines/pdf/info').then(r => setHayPdf(!!r.data?.hay)).catch(() => {});
+    }, [api]);
     const [dia, setDia] = useState(null);
     const [hecho, setHecho] = useState(null);
     const [estrellas, setEstrellas] = useState(0);
@@ -144,14 +149,27 @@ const EntrenoPage = () => {
                 )}
             </header>
 
-            {/* «Ver la rutina» y nada más: el PDF se hace en la segunda pasada de T3
-                (decisión 9 del plan), y ofrecer una descarga que no existe es peor que no
-                ofrecerla. */}
+            {/* «Ver la rutina» y, si su entrenador la subió, el PDF (bloque 11, doc
+                19-08). Solo sale si existe: ofrecer una descarga que no existe es peor
+                que no ofrecerla. Se abre vía blob porque el visor no manda el token. */}
             <button onClick={() => navigate('/dashboard/routine')} data-testid="entreno-ver-rutina"
                 className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
                 <span className="font-bold text-foreground">Ver la rutina</span>
                 <ChevronRight className="w-4 h-4 text-foreground/40" />
             </button>
+            {hayPdf && (
+                <button data-testid="entreno-pdf-rutina"
+                    onClick={async () => {
+                        try {
+                            const r = await api.get('/routines/pdf', { responseType: 'blob' });
+                            window.open(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })), '_blank');
+                        } catch { toast.error('No hemos podido abrir tu rutina. Inténtalo en un momento.'); }
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
+                    <span className="font-bold text-foreground">Tu rutina en PDF</span>
+                    <ChevronRight className="w-4 h-4 text-foreground/40" />
+                </button>
+            )}
 
             <Card className="p-5 space-y-6">
                 {/* ¿Lo has completado? */}

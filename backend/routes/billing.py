@@ -62,13 +62,33 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     campos = (override or {}).get("fields", {})
     base = PLAN_CATALOG.get(plan_info["code"], {})
     estado = campos.get("estado") or base.get("estado")
+    renovacion_legacy = False
+    precio_congelado = None
     if estado != "activo":
         from routes.plans import _overrides_by_code
-        perfil_previo = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "plan": 1})
+        perfil_previo = await db.client_profiles.find_one(
+            {"user_id": user["id"]}, {"_id": 0, "plan": 1, "price": 1, "precio_alta": 1})
         catalogo = merged_catalog(await _overrides_by_code())
         el_suyo = codigo_de_plan((perfil_previo or {}).get("plan"))
         if not (el_suyo == plan_info["code"] and puede_renovar_su_plan_legacy(el_suyo, catalogo)):
             raise HTTPException(status_code=400, detail="Este plan ya no está disponible para nuevas contrataciones.")
+        # ES LA RENOVACIÓN DE SU PLAN ANTIGUO. Se cobra con SU precio congelado (parte 1:
+        # «el precio se congela mientras no se dé de baja»), en línea y como pago único:
+        # los legacy no tienen Price en Stripe -- se retiraron de la venta -- y su importe
+        # es el de cada cliente, no uno de tarifa. Cascada: lo que tiene apuntado su
+        # perfil, si no su último cobro real, y si no el precio de catálogo del plan.
+        renovacion_legacy = True
+        precio_congelado = (perfil_previo or {}).get("price") or (perfil_previo or {}).get("precio_alta")
+        if not precio_congelado:
+            pago = await db.pagos_historicos.find_one(
+                {"email": (user.get("email") or "").lower(), "importe": {"$gt": 0},
+                 "duplicado_de": {"$exists": False}, "es_dinero": {"$ne": False}},
+                {"_id": 0, "importe": 1}, sort=[("fecha", -1)])
+            precio_congelado = (pago or {}).get("importe")
+        precio_congelado = float(precio_congelado or plan_info.get("price") or 0)
+        if precio_congelado <= 0:
+            raise HTTPException(status_code=400,
+                                detail="No sabemos tu precio de renovación. Escríbenos y te lo dejamos listo.")
 
     # EL PREMIUM SE CONTRATA POR LLAMADA (doc 19-08, y era el rojo del caso 05): «nunca con
     # botón de pagar». La pantalla no lo ofrece, pero este endpoint devolvía una URL de
@@ -85,7 +105,17 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
 
     success_url = build_frontend_url(data.success_path, include_session_placeholder=True)
     cancel_url = build_frontend_url(data.cancel_path)
-    stripe_price_id = get_stripe_price_id_for_plan(plan_info["code"])
+    # La renovación del legacy va con precio EN LÍNEA (el congelado de este cliente), no
+    # con un Price de catálogo: esos planes no tienen Price en Stripe y pedirlo daría 503.
+    if renovacion_legacy:
+        stripe_price_id = None
+        linea = {"price_data": {"currency": "eur",
+                                "unit_amount": int(round(precio_congelado * 100)),
+                                "product_data": {"name": f"Renovación · {plan_info['name']}"}},
+                 "quantity": 1}
+    else:
+        stripe_price_id = get_stripe_price_id_for_plan(plan_info["code"])
+        linea = {"price": stripe_price_id, "quantity": 1}
 
     checkout_metadata = {"user_id": user["id"], "profile_id": profile["id"], "plan": plan_info["code"]}
 
@@ -111,16 +141,18 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     session_kwargs = dict(
         customer=customer_id,
         client_reference_id=profile["id"],
-        line_items=[{"price": stripe_price_id, "quantity": 1}],
+        line_items=[linea],
         billing_address_collection="auto",
         customer_update={"address": "auto", "name": "auto"},
         success_url=success_url,
         cancel_url=cancel_url,
         metadata=checkout_metadata,
     )
-    if plan_info.get("one_time"):
-        # Pago único (p.ej. reto60): un solo cobro, sin suscripción. La factura se genera
-        # para que invoice.payment_succeeded registre el pago igual que en suscripciones.
+    if plan_info.get("one_time") or renovacion_legacy:
+        # Pago único: un solo cobro, sin suscripción. Desde el 20-08 es el modo de TODO
+        # lo que se vende (ningún plan renueva solo: Francisco) y de la renovación del
+        # legacy, cuyo precio va en línea. La factura se genera para que
+        # invoice.payment_succeeded registre el pago igual que en suscripciones.
         session_kwargs["mode"] = "payment"
         session_kwargs["invoice_creation"] = {"enabled": True}
         session_kwargs["payment_intent_data"] = {"metadata": checkout_metadata}

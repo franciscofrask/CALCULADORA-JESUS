@@ -64,6 +64,12 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
     const [paso, setPaso] = useState('form');          // form | resumen | enviado
     const [enviando, setEnviando] = useState(false);
     const [aplazado, setAplazado] = useState(false);
+    // El aplazamiento en dos pasos (doc 19-08): «No puedo esta semana» abre la línea
+    // opcional de «¿Quieres decirme algo?». Con ?aplazar=1 llega ya abierto: es el
+    // camino desde el botón del aviso.
+    const [pidiendoAplazar, setPidiendoAplazar] = useState(() =>
+        new URLSearchParams(window.location.search).get('aplazar') === '1');
+    const [notaAplazar, setNotaAplazar] = useState('');
     const [mensajeFinal, setMensajeFinal] = useState('');
 
     const set = (campo, valor) => setValores(v => ({ ...v, [campo]: valor }));
@@ -93,7 +99,9 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
 
     useEffect(() => { cargar(); }, [cargar]);
 
-    const esMensual = ficha?.tipo === 'mensual';
+    // «El rápido, mensual» (doc 19-08): en la Calculadora (y ELM) el mensual va con el
+    // formulario corto. La cadencia la decide el servidor; aquí solo se elige pantalla.
+    const esMensual = ficha?.tipo === 'mensual' && ficha?.forma !== 'rapido';
     const bloques = ficha?.bloques || [];
 
     // El plazo, en hora de España y con lo que queda. Lo calcula quien nos llama
@@ -104,10 +112,11 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
         queda: windowState?.quedaLabel || null,
     };
 
-    const aplazar = async () => {
+    const aplazar = async (nota) => {
         try {
-            const r = await api.post('/reports/aplazar');
+            const r = await api.post('/reports/aplazar', nota ? { nota } : {});
             setAplazado(true);
+            setPidiendoAplazar(false);
             toast.success(r.data?.titulo || 'Te lo he aplazado 7 días', {
                 description: r.data?.mensaje, duration: 8000,
             });
@@ -246,10 +255,46 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                 <ReporteMensual
                     datos={ficha.datos} perfil={ficha.perfil} bloques={bloques}
                     valores={valores} set={set} setEntreno={setEntreno} plazo={plazo}
-                    api={api} token={token} prev={prev}
-                    aplazado={aplazado} onAplazar={aplazar} />
+                    api={api} token={token} prev={prev} />
             ) : (
-                <ReporteQuincenal datos={ficha.datos} valores={valores} set={set} plazo={plazo} />
+                <ReporteQuincenal datos={ficha.datos} valores={valores} set={set} plazo={plazo}
+                    titulo={ficha?.tipo === 'mensual' ? 'Tu reporte mensual' : 'Tu reporte quincenal'} />
+            )}
+
+            {/* ── «NO PUEDO ESTA SEMANA», ABAJO (doc 19-08) ── En los dos reportes. Lo
+                pide él y se le concede: no depende de que no conteste un correo. Al
+                pulsarlo, la línea opcional de «¿Quieres decirme algo?», que es lo que su
+                entrenador verá junto al aplazamiento en el panel. */}
+            {aplazado ? (
+                <div data-testid="aplazar"
+                    className="w-full rounded-2xl p-4 border text-sm border-green-500/40 bg-green-500/5 text-foreground">
+                    Te lo he aplazado 7 días. Tu reporte se vuelve a abrir el viernes que viene. Sigue registrando como siempre.
+                </div>
+            ) : !pidiendoAplazar ? (
+                <button type="button" onClick={() => setPidiendoAplazar(true)} data-testid="aplazar"
+                    className="w-full text-center rounded-2xl p-3 border text-sm transition-colors border-border bg-card text-foreground/70 hover:border-foreground/30">
+                    No puedo esta semana
+                </button>
+            ) : (
+                <div className="w-full rounded-2xl p-4 border border-border bg-card space-y-3" data-testid="aplazar-confirmar">
+                    <p className="text-sm text-foreground/80">Te lo aplazo 7 días. ¿Quieres decirme algo? <span className="text-muted-foreground">(opcional)</span></p>
+                    <textarea value={notaAplazar} onChange={(e) => setNotaAplazar(e.target.value)}
+                        rows={2} maxLength={500} placeholder="Estoy de viaje hasta el jueves..."
+                        data-testid="aplazar-nota"
+                        className="w-full bg-muted border border-input rounded-xl px-3 py-2 text-sm text-foreground placeholder-foreground/30 focus:outline-none focus:border-[#FF671F] resize-none" />
+                    <div className="flex gap-2">
+                        <button type="button" data-testid="aplazar-si"
+                            onClick={() => aplazar(notaAplazar.trim() || undefined)}
+                            className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white"
+                            style={{ backgroundColor: ORANGE }}>
+                            Aplázamelo
+                        </button>
+                        <button type="button" onClick={() => setPidiendoAplazar(false)}
+                            className="rounded-xl px-4 py-2.5 text-sm text-foreground/70 border border-border hover:border-foreground/30">
+                            Sí puedo
+                        </button>
+                    </div>
+                </div>
             )}
 
             {/* El mensual pasa por el resumen; el quincenal son cuatro preguntas que caben

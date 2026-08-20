@@ -399,7 +399,17 @@ const LeadsPage = () => {
                                         const src = getSourceObj(lead.source);
                                         return (
                                             <tr key={lead.id} className="border-b border-[#1A1A1A] hover:bg-white/5 cursor-pointer" onClick={() => setDetailLead(lead)} data-testid={`table-row-${lead.id}`}>
-                                                <td className="px-4 py-3 text-white text-sm font-medium">{lead.name}</td>
+                                                <td className="px-4 py-3 text-white text-sm font-medium">
+                                                    {lead.name}
+                                                    {/* Las etiquetas de GHL, por fin usadas (20-08): el
+                                                        «caliente» se ve de lejos; el resto, discretas. */}
+                                                    {(lead.tags || []).map(t => (
+                                                        <span key={t} className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+                                                            t === 'caliente' ? 'bg-red-500/15 text-red-400' : 'bg-white/5 text-white/40'}`}>
+                                                            {t}
+                                                        </span>
+                                                    ))}
+                                                </td>
                                                 <td className="px-4 py-3 text-white/50 text-sm hidden sm:table-cell">{lead.email || '-'}</td>
                                                 <td className="px-4 py-3 text-white/50 text-sm hidden md:table-cell">{lead.phone || '-'}</td>
                                                 <td className="px-4 py-3"><Badge className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-[10px]">{src.label}</Badge></td>
@@ -789,6 +799,10 @@ const KanbanCard = ({ lead, onClick, assignedName, dragging, onDragStart, onDrag
             <CardContent className="p-3">
                 <div className="flex items-center gap-2">
                     <p className="text-white text-sm font-medium truncate flex-1">{lead.name || lead.email || 'Sin nombre'}</p>
+                    {/* La etiqueta «caliente» de GHL, a la vista: es el lead que no puede esperar. */}
+                    {(lead.tags || []).includes('caliente') && (
+                        <span className="text-[9px] font-bold uppercase tracking-wide text-red-400 bg-red-500/15 rounded px-1.5 py-0.5 flex-shrink-0">caliente</span>
+                    )}
                     {lead.status === 'descartado' && lead.discard_reason && (
                         <span className="text-[9px] text-red-400/70 bg-red-500/10 rounded px-1.5 py-0.5 flex-shrink-0">{discardLabel(lead.discard_reason)}</span>
                     )}

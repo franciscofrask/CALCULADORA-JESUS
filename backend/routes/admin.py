@@ -286,7 +286,7 @@ async def get_all_clients(
                    # registra hoy es su última entrada (la escribe la campanita). El
                    # tiempo de verdad no se registra en ningún sitio, y el doc lo admite
                    # («si se puede registrar»).
-                   "ultima_entrada": 1,
+                   "ultima_entrada": 1, "ultimo_contacto_externo": 1,
                    # Overrides del calendario de reportes: sin ellos las columnas de
                    # reportes se calcularían con el patrón del plan aunque el contrato
                    # del cliente diga otro.
@@ -363,9 +363,13 @@ async def get_all_clients(
             fila["reportes_sin_responder"] = reportes_sin_responder(
                 cal, sem_reporte, profile.get("ultimo_reporte"), hoy_es)
             fila["ultima_entrada"] = profile.get("ultima_entrada")
-            # El último contacto PERSONAL (chat del equipo), como fecha cruda: el
-            # semáforo dice «hace N días» y esta es la fecha para quien la quiera ver.
-            fila["ultimo_contacto_personal"] = (hablado.get(profile.get("user_id")) or "")[:10] or None
+            # El último contacto PERSONAL (chat del equipo o WhatsApp via GHL), como
+            # fecha cruda: el semáforo dice «hace N días» y esta es la fecha para quien
+            # la quiera ver. Manda el canal más reciente.
+            _c_int = hablado.get(profile.get("user_id"))
+            _c_ext = (profile.get("ultimo_contacto_externo") or {}).get("fecha")
+            fila["ultimo_contacto_personal"] = (max((f for f in (_c_int, _c_ext) if f),
+                                                    default="") or "")[:10] or None
             # TU PROPIA FICHA VA MARCADA. Es la única que entra por la excepción de arriba,
             # y no es negocio: los contadores del panel (clientes totales, activos, MRR)
             # siguen sin contarla, así que quien compare la tabla con un contador tiene que
@@ -1629,7 +1633,8 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         # "pago pendiente" a todo el mundo y el semaforo salia rojo entero.
         {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "created_at": 1, "cycle_start": 1,
          "status": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
-         "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1},
+         "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
+         "ultimo_contacto_externo": 1},
     ).to_list(2000)
     staff_ids = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
     hablado_a: Dict[str, str] = {}
@@ -1638,6 +1643,13 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         uid, ca = m.get("receiver_id"), m.get("created_at")
         if uid and ca and (uid not in hablado_a or ca > hablado_a[uid]):
             hablado_a[uid] = ca
+    # El WhatsApp del equipo (via GHL, webhook ghl-contacto) también es contacto: el
+    # semáforo tiene que contar el más reciente de los dos canales.
+    for p in active_profiles:
+        ext = (p.get("ultimo_contacto_externo") or {}).get("fecha")
+        uid = p.get("user_id")
+        if ext and uid and ext > (hablado_a.get(uid) or ""):
+            hablado_a[uid] = ext
 
     # POR CELDA, no por fila. Con cuatro celdas, "tiene alguna en rojo" es cierto para casi
     # todo el mundo y volveriamos a la alerta que nadie mira. Lo que sirve es saber CUANTOS
@@ -1788,7 +1800,9 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         {**await _fuera_el_equipo(), "status": {"$in": ["activo", "pago_pendiente"]}},
         {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "status": 1, "macros_training": 1,
          "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
-         "cycle_start": 1, "created_at": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1},
+         "cycle_start": 1, "created_at": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1,
+         "reporte_aplazado_hasta": 1, "reporte_aplazado_nota": 1, "aplazamientos_seguidos": 1,
+         "ultimo_contacto_externo": 1},
     ).to_list(3000)
 
     uids = [p["user_id"] for p in profiles if p.get("user_id")]
@@ -1830,7 +1844,7 @@ async def get_todo_semana(user = Depends(get_admin_user)):
             ultimo_contacto[uid] = ca
 
     sin_macros, sin_rutina, reporte_pendiente, sin_contacto = [], [], [], []
-    te_tocan = []
+    te_tocan, reporte_aplazado = [], []
     con_rutina_en_plan = 0
     for p in profiles:
         u = umap.get(p.get("user_id"), {})
@@ -1866,7 +1880,11 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         # El chat NO está en `habilitaciones` (ahí viven calculadora, rutina, reportes,
         # suplementación, harbiz y acompañamiento): está en las features del plan.
         if plan_grants_feature(p.get("plan"), "chat"):
-            visto = ultimo_contacto.get(p.get("user_id"))
+            # Desde el 20-08 el WhatsApp del equipo (via GHL) también cuenta: llega por
+            # el webhook ghl-contacto y queda en la ficha. Manda el más reciente.
+            _ext = (p.get("ultimo_contacto_externo") or {}).get("fecha")
+            _int = ultimo_contacto.get(p.get("user_id"))
+            visto = max((f for f in (_int, _ext) if f), default=None)
             desde = visto or p.get("cycle_start") or p.get("created_at")
             dias = None
             if desde:
@@ -1901,16 +1919,31 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         if state["due"]:
             reported = last_report.get(p["id"])
             if not (reported and reported >= state["window_start"].isoformat()):
-                reporte_pendiente.append({
+                fila = {
                     **base, "tipo": state["tipos"][0],
                     "is_open": state["is_open"], "overdue": now > state["window_close"],
-                })
+                }
+                # EL QUE PULSÓ «NO PUEDO ESTA SEMANA» NO ESTÁ FALTANDO: ha avisado. Sale
+                # de la lista de pendientes y va a su propio grupo, con lo que haya
+                # escrito (doc 19-08: «así no ensucia la lista de los que faltan y se
+                # sabe que no se está cayendo»).
+                if p.get("reporte_aplazado_hasta"):
+                    reporte_aplazado.append({
+                        **fila,
+                        "aplazado_hasta": p["reporte_aplazado_hasta"],
+                        "nota": p.get("reporte_aplazado_nota") or None,
+                        "seguidos": int(p.get("aplazamientos_seguidos") or 0),
+                    })
+                else:
+                    reporte_pendiente.append(fila)
 
     return {
         "sin_macros": sin_macros,
         "sin_rutina": sin_rutina,
         "con_rutina_en_plan": con_rutina_en_plan,
         "reporte_pendiente": reporte_pendiente,
+        # «Aplazados a la semana que viene»: avisaron con el botón, no están faltando.
+        "reporte_aplazado": reporte_aplazado,
         # De más abandonado a menos: el que lleva más tiempo sin que nadie le hable va
         # arriba, que es donde hay que mirar primero.
         "sin_contacto": sorted(sin_contacto, key=lambda x: -(x["dias"] or 0)),

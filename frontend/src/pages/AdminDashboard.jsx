@@ -20,7 +20,7 @@ import {
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
     AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple, Layers,
-    Menu, X, Phone, Receipt, ClipboardList
+    Menu, X, Phone, Receipt, ClipboardList, CalendarClock, Gauge
 } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
 
@@ -63,6 +63,12 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
             { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina, sin una activa', items: flt(sinRutina) },
         ]),
         { key: 'reportes', label: 'Reporte pendiente', icon: FileText, color: '#EAB308', sub: 'No enviado esta semana', items: flt(todo.reporte_pendiente) },
+        // «No puedo esta semana»: avisaron con el botón, así que no ensucian la lista de
+        // los que faltan (doc 19-08). Con lo que hayan escrito, y en rojo el que ya lleva
+        // dos seguidos (ese además dispara la tarea automática de contactarle).
+        ...((todo.reporte_aplazado || []).length ? [
+            { key: 'aplazados', label: 'Aplazados a la semana que viene', icon: CalendarClock, color: '#22C55E', sub: 'Pidieron aplazarlo: han avisado', items: flt(todo.reporte_aplazado) },
+        ] : []),
         // "Hoy no puedes ver si un cliente de 1.500 lleva tres semanas sin que nadie le
         // hable". Solo salen los planes con chat, ordenados de más abandonado a menos, y
         // con los días a la vista para que se note de un vistazo.
@@ -92,9 +98,11 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
                                 {col.items.length === 0 && <p className="text-white/25 text-xs py-3 text-center">Nada pendiente</p>}
                                 {col.items.map(c => (
                                     <button key={c.client_id} onClick={() => navigate(`/admin/clients/${c.client_id}`)}
-                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 text-left">
+                                        className="w-full px-2 py-1.5 rounded-lg hover:bg-white/5 text-left">
+                                        <span className="flex items-center gap-2 w-full">
                                         <span className="flex-1 min-w-0 truncate text-sm text-white/80">{c.name}</span>
                                         {col.key === 'reportes' && c.overdue && <span className="text-[9px] text-red-400 font-bold uppercase tracking-wide">tarde</span>}
+                                        {col.key === 'aplazados' && c.seguidos >= 2 && <span className="text-[9px] text-red-400 font-bold uppercase tracking-wide">{c.seguidos} seguidos</span>}
                                         {/* Los días, y a partir de dos semanas en rojo: no es
                                             un umbral del servidor, es lo que salta a la vista. */}
                                         {col.key === 'contacto' && (
@@ -104,6 +112,11 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
                                         )}
                                         {!c.al_corriente && <span title="Pago pendiente" className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
                                         <ChevronRight className="w-3.5 h-3.5 text-white/20 flex-shrink-0" />
+                                        </span>
+                                        {/* Lo que escribió al aplazar («¿Quieres decirme algo?»), debajo del nombre. */}
+                                        {col.key === 'aplazados' && c.nota && (
+                                            <span className="block text-[11px] text-white/40 italic truncate" title={c.nota}>«{c.nota}»</span>
+                                        )}
                                     </button>
                                 ))}
                             </div>
@@ -1484,6 +1497,8 @@ const AdminLayout = () => {
         // Las tareas (doc 19-08, apartado 05): lo que cada uno tiene hoy, lo vencido y lo
         // que asignó. Sustituye al «todo va por WhatsApp y no queda en ningún sitio».
         { path: '/admin/tareas', icon: ClipboardList, label: 'Tareas' },
+        // Los cuatro paneles del doc 19-08: el entrenador entra y ve solo el suyo.
+        { path: '/admin/paneles', icon: Gauge, label: 'Paneles' },
         { path: '/admin/planes', icon: Layers, label: 'Planes', adminOnly: true },
         { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios', adminOnly: true },
         { path: '/admin/pagos', icon: Receipt, label: 'Cobros', adminOnly: true },

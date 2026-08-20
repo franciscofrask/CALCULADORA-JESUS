@@ -53,7 +53,7 @@ const fraseDeLosMacros = (dieta) => {
 const DIAS_A_LA_VISTA = 2;
 
 const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plazo,
-                          api, token, prev, aplazado, onAplazar }) => {
+                          api, token, prev }) => {
     const dieta = datos?.dieta || {};
     const entreno = datos?.entreno || {};
     const cardio = entreno.cardio || {};
@@ -91,17 +91,6 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                     </p>
                 )}
             </div>
-
-            {/* EL APLAZAMIENTO. Lo pide él y se le concede: no depende de que no conteste
-                un correo, que es como se aplazaba hasta ahora (sin querer). */}
-            <button type="button" onClick={onAplazar} disabled={!!aplazado} data-testid="aplazar"
-                className={`w-full text-left rounded-2xl p-4 border text-sm transition-colors ${
-                    aplazado ? 'border-green-500/40 bg-green-500/5 text-foreground'
-                             : 'border-border bg-card text-foreground/80 hover:border-foreground/30'}`}>
-                {aplazado
-                    ? 'Te lo he aplazado 7 días. Tu reporte se vuelve a abrir el viernes que viene. Sigue registrando como siempre.'
-                    : '¿No has podido hacer el programa completo estas 3 semanas? Márcalo y te lo aplazo 7 días.'}
-            </button>
 
             {/* ── 01 · TU PESO ── */}
             <Bloque numero={numero('peso')} titulo="Tu peso" testid="mensual-peso">
@@ -345,6 +334,9 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                                 opciones={[
                                     { value: 'basica', label: 'Sí · modalidad básica' },
                                     { value: 'avanzada', label: 'Sí · modalidad avanzada' },
+                                    // Aplazarla una semana marcándolo (doc 19-08): no es un
+                                    // «no», es un «pregúntamelo en unos días».
+                                    { value: 'aplazar_una_semana', label: 'Pregúntame en una semana' },
                                     { value: 'ahora_no', label: 'Ahora no' },
                                 ]} />
                             <p className="text-[13px] text-muted-foreground">

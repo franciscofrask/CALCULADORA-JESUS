@@ -332,7 +332,7 @@ const estrellas = (n) => (n >= 1 && n <= 5 ? '★'.repeat(n) + '☆'.repeat(5 - 
 
 // Una línea de «Lo que toca hoy» o de «Pendiente»: título, detalle y, a la derecha, la
 // flecha de entrar o el «✓ hecho». Nada de rojos ni de la palabra «pendiente».
-const LineaDeHoy = ({ icono: Icono, titulo, detalle, extra, hecho, onClick, testId }) => {
+const LineaDeHoy = ({ icono: Icono, titulo, detalle, cursiva, extra, hecho, onClick, testId }) => {
     const Contenedor = onClick ? 'button' : 'div';
     return (
         <Contenedor onClick={onClick} data-testid={testId}
@@ -344,7 +344,7 @@ const LineaDeHoy = ({ icono: Icono, titulo, detalle, extra, hecho, onClick, test
             )}
             <div className="min-w-0 flex-1">
                 <p className="font-bold text-foreground text-sm">{titulo}</p>
-                {detalle && <p className="text-muted-foreground text-sm truncate">{detalle}</p>}
+                {detalle && <p className={`text-muted-foreground text-sm truncate${cursiva ? ' italic' : ''}`}>{detalle}</p>}
                 {extra && <p className="text-muted-foreground text-xs mt-0.5">{extra}</p>}
             </div>
             {hecho ? (
@@ -510,10 +510,20 @@ const InicioNuevo = () => {
 
     // ── Lo pendiente, en el orden del documento ──
     const pendientes = [];
+    // SIN PLAN, LO PRIMERO ES ELEGIRLO (bug del 20-08): el recién registrado que volvía
+    // atrás desde /planes se quedaba sin ningún camino para volver a verlos.
+    if (profile && !profile.plan) {
+        pendientes.push({
+            id: 'plan', icono: User, titulo: 'Elige tu plan',
+            detalle: 'Con él se desbloquea la app entera',
+            path: '/planes',
+        });
+    }
     if (can('reportes') && !cierreDeHoy) {
         pendientes.push({
             id: 'cierre', icono: ClipboardCheck, titulo: '¿Cómo fuiste hoy?',
-            detalle: 'Para rellenar al final del día',
+            // En cursiva, como lo pide el doc 19-08: es una aclaración, no una orden.
+            detalle: 'Para rellenar al final del día', cursiva: true,
             // La fecha y la hora del último, en vez de la palabra «pendiente».
             extra: ultimoCierre ? `último registro: ${etiquetaMomento(ultimoCierre.created_at)}` : null,
             path: '/dashboard/checkins',
@@ -598,7 +608,7 @@ const InicioNuevo = () => {
             {frase && (
                 <section data-testid="frase-del-dia">
                     <p className="caption text-brand mb-1">La frase del día</p>
-                    <p className="text-foreground text-lg leading-snug">«{frase}»</p>
+                    <p className="text-foreground text-lg leading-snug italic">«{frase}»</p>
                 </section>
             )}
 
@@ -683,7 +693,7 @@ const InicioNuevo = () => {
                     <p className="caption">Pendiente</p>
                     {pendientes.map((p) => (
                         <LineaDeHoy key={p.id} icono={p.icono} titulo={p.titulo} detalle={p.detalle}
-                            extra={p.extra} testId={`pendiente-${p.id}`} onClick={() => navigate(p.path)} />
+                            cursiva={p.cursiva} extra={p.extra} testId={`pendiente-${p.id}`} onClick={() => navigate(p.path)} />
                     ))}
                 </section>
             )}
@@ -1383,10 +1393,11 @@ const ClientLayout = () => {
     // lleva su entrenador la pantalla se llama «Mis macros», y el menú tiene que decir lo mismo:
     // un enlace que promete ajustar y lleva a una pantalla de solo lectura es la misma promesa
     // rota que la calculadora sin botón de guardar.
+    // «MIS MACROS» SOLO LA VE QUIEN SE LOS CALCULA (doc 19-08, bloque 09). Antes al de
+    // coach se le renombraba la entrada a «Mis macros»; ahora directamente no la tiene:
+    // «para el que se los pone un entrenador, esa pestaña es un papel colgado en la
+    // pared». Su histórico vive en Seguimiento → Evolución.
     const lesAjustaSuCoach = profile?.macros_ajustables?.puede === false;
-    const conNombreDeMacros = (i) => (
-        i.path === '/dashboard/macro-calculator' && lesAjustaSuCoach ? { ...i, label: 'Mis macros' } : i
-    );
     // «SEGUIMIENTO» ES LA ÚNICA PUERTA, EN EL TELÉFONO Y EN EL ORDENADOR.
     //
     // El menú tenía «Reportes» y «Check-ins» como dos entradas distintas, y el cliente tenía
@@ -1405,7 +1416,7 @@ const ClientLayout = () => {
     // la pantalla, y a ella se entra desde Seguimiento.
     const navItems = NAV_ITEMS
         .filter(i => (!i.cap || can(i.cap)) && i.path !== '/dashboard/checkins')
-        .map(conNombreDeMacros)
+        .filter(i => !(i.path === '/dashboard/macro-calculator' && lesAjustaSuCoach))
         .map(i => i.path === '/dashboard/reports'
             ? { ...i, icon: TrendingUp, label: 'Seguimiento' }
             : i);
@@ -1639,6 +1650,17 @@ const ClientLayout = () => {
                                                 </p>
                                             )}
                                             <p className="text-[11px] text-muted-foreground mt-0.5">{notifTime(n.created_at)}</p>
+                                            {/* «No puedo esta semana» TAMBIÉN EN EL AVISO (doc 19-08):
+                                                el que lee el recordatorio y sabe que no va a llegar no
+                                                tiene que ir a buscar el botón al reporte. Lleva al
+                                                formulario con el aplazamiento ya abierto. */}
+                                            {/^(mensual|quincenal)_(abierto|ultimo):|^reporte_no_llego:/.test(n.clave || '') && (
+                                                <span role="button" data-testid="aviso-no-puedo"
+                                                    onClick={(e) => { e.stopPropagation(); setNotifOpen(false); navigate('/dashboard/reports?aplazar=1'); }}
+                                                    className="inline-block mt-1.5 px-2.5 py-1 rounded-lg border border-border text-[12px] text-foreground/70 hover:border-foreground/30">
+                                                    No puedo esta semana
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </button>

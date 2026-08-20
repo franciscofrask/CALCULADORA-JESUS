@@ -41,6 +41,7 @@ from routes.audit import router as audit_router
 from routes.plans import router as plans_router, admin_router as plans_admin_router
 from routes.settings import router as settings_router, admin_router as settings_admin_router
 from routes.workout_logs import router as workout_logs_router
+from routes.paneles import router as paneles_router
 from routes.diary import router as diary_router
 from routes.report_cadence import (
     router as report_cadence_router,
@@ -150,6 +151,8 @@ api_router.include_router(workout_logs_router)
 api_router.include_router(diary_router)
 api_router.include_router(report_cadence_router)
 api_router.include_router(report_due_router)
+# Los cuatro paneles del doc 19-08 (bloque 12).
+api_router.include_router(paneles_router)
 
 # Mount API router
 app.include_router(api_router)

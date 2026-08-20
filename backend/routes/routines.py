@@ -736,3 +736,95 @@ def _get_default_routine():
         ],
         "trainer_notes": "Rutina generada automáticamente."
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EL PDF DE LA RUTINA (bloque 11, doc 19-08): «que se pueda subir y ver desde la
+# app; se siguen generando como hasta ahora». El equipo lo genera fuera, lo sube
+# desde la ficha del cliente, y el cliente lo abre desde Entreno. Se guarda en la
+# base como las fotos de progreso: el mismo camino que ya funciona.
+# ─────────────────────────────────────────────────────────────────────────────
+from fastapi import File, UploadFile          # noqa: E402
+from fastapi.responses import Response        # noqa: E402
+from bson.binary import Binary                # noqa: E402
+
+MAX_PDF_BYTES = 15 * 1024 * 1024
+
+
+async def _guardar_pdf_de_rutina(client_id: str, file: UploadFile, subido_por: str) -> dict:
+    if (file.content_type or "").lower() != "application/pdf" \
+            and not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="La rutina tiene que ser un PDF.")
+    contenido = await file.read()
+    if not contenido:
+        raise HTTPException(status_code=400, detail="El archivo está vacío.")
+    if len(contenido) > MAX_PDF_BYTES:
+        raise HTTPException(status_code=413,
+                            detail=f"El PDF pesa demasiado; el máximo es {MAX_PDF_BYTES // (1024 * 1024)} MB.")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "client_id": client_id,
+        "filename": file.filename or "rutina.pdf",
+        "size": len(contenido),
+        "subido_por": subido_por,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "data": Binary(contenido),
+    }
+    await db.rutina_pdfs.insert_one(doc)
+    return doc
+
+
+@admin_router.post("/pdf/{client_id}")
+async def subir_pdf_de_rutina(client_id: str, file: UploadFile = File(...),
+                              user=Depends(get_admin_user)):
+    """Sube (o sustituye) la rutina en PDF de un cliente. Se guarda el histórico: el
+    cliente ve siempre la última, pero la del mes pasado no se pierde."""
+    perfil = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "id": 1, "user_id": 1})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    doc = await _guardar_pdf_de_rutina(client_id, file, subido_por=user.get("id"))
+    return {"ok": True, "id": doc["id"], "filename": doc["filename"],
+            "size": doc["size"], "uploaded_at": doc["uploaded_at"]}
+
+
+@admin_router.get("/pdf/{client_id}/info")
+async def info_pdf_de_rutina_admin(client_id: str, user=Depends(get_admin_user)):
+    doc = await db.rutina_pdfs.find_one({"client_id": client_id}, {"_id": 0, "data": 0},
+                                        sort=[("uploaded_at", -1)])
+    return {"hay": bool(doc), **({k: doc[k] for k in ("id", "filename", "size", "uploaded_at")} if doc else {})}
+
+
+async def _servir_pdf(doc: Optional[dict]) -> Response:
+    if not doc:
+        raise HTTPException(status_code=404, detail="No hay ninguna rutina en PDF subida.")
+    return Response(content=bytes(doc["data"]), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{doc.get("filename") or "rutina.pdf"}"'})
+
+
+@admin_router.get("/pdf/{client_id}")
+async def ver_pdf_de_rutina_admin(client_id: str, user=Depends(get_admin_user)):
+    doc = await db.rutina_pdfs.find_one({"client_id": client_id}, {"_id": 0},
+                                        sort=[("uploaded_at", -1)])
+    return await _servir_pdf(doc)
+
+
+@router.get("/pdf/info")
+async def info_pdf_de_rutina(user=Depends(get_current_user)):
+    """¿Tiene PDF? Para que la app enseñe el botón solo si existe. Sin gate de plan a
+    propósito: si su entrenador se lo subió, es suyo y lo puede abrir."""
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+    if not perfil:
+        return {"hay": False}
+    doc = await db.rutina_pdfs.find_one({"client_id": perfil["id"]}, {"_id": 0, "data": 0},
+                                        sort=[("uploaded_at", -1)])
+    return {"hay": bool(doc), **({k: doc[k] for k in ("filename", "uploaded_at")} if doc else {})}
+
+
+@router.get("/pdf")
+async def ver_pdf_de_rutina(user=Depends(get_current_user)):
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    doc = await db.rutina_pdfs.find_one({"client_id": perfil["id"]}, {"_id": 0},
+                                        sort=[("uploaded_at", -1)])
+    return await _servir_pdf(doc)

@@ -67,14 +67,28 @@ class TestUnaPorSemanaYNoMas:
         elegidos = elegir_avisos([], cond, set(), None, AHORA)
         assert len(elegidos) == 1, "pero solo se manda una"
 
-    def test_las_de_calendario_no_gastan_el_cupo(self):
+    def test_maximo_uno_al_dia_y_la_entrega_primero(self):
+        # Regla del doc 19-08: «máximo uno al día, y por orden: primero el de entrega,
+        # después el de recordatorio». Con calendario y condicionada a la vez, sale UNA
+        # y es la de calendario.
         cal = avisos_de_calendario(
             perfil={"ajuste_macros_completado": True, "week": 11, "id": "c1"},
             ahora=AHORA, semanas_ciclo=12,
             proximo_ajuste=AHORA + timedelta(days=6))
         cond = avisos_condicionados(ahora=AHORA, dias_sin_cerrar=10)
         elegidos = elegir_avisos(cal, cond, set(), None, AHORA)
-        assert len(elegidos) == len(cal) + 1
+        assert len(elegidos) == 1
+        assert elegidos[0]["clave"] == cal[0]["clave"]
+
+    def test_si_hoy_ya_le_nacio_uno_no_sale_nada_mas(self):
+        # El mismo caso, pero con un aviso ya nacido hoy (p. ej. la entrega del
+        # miércoles): todo lo demás espera a mañana.
+        cal = avisos_de_calendario(
+            perfil={"ajuste_macros_completado": True, "week": 11, "id": "c1"},
+            ahora=AHORA, semanas_ciclo=12,
+            proximo_ajuste=AHORA + timedelta(days=6))
+        cond = avisos_condicionados(ahora=AHORA, dias_sin_cerrar=10)
+        assert elegir_avisos(cal, cond, set(), None, AHORA, hubo_aviso_hoy=True) == []
 
     def test_si_ya_tuvo_una_esta_semana_no_le_llega_otra(self):
         cond = avisos_condicionados(ahora=AHORA, dias_sin_cerrar=10, dias_sin_entrar=20)
@@ -159,11 +173,14 @@ class TestLosUmbralesDeLasCondicionadas:
         a = avisos_condicionados(ahora=AHORA, semanas_sin_ajustar=2)[0]
         assert a["variantes"][0]["titulo"] == "Llevas 2 semanas con los mismos macros"
 
-    def test_trece_dias_sin_entrar_no(self):
-        assert avisos_condicionados(ahora=AHORA, dias_sin_entrar=13) == []
+    def test_seis_dias_sin_entrar_no(self):
+        # La tabla del doc 19-08 pone «¿Todo bien?» a los SIETE días (el 16-08 decía 14).
+        assert avisos_condicionados(ahora=AHORA, dias_sin_entrar=6) == []
 
-    def test_catorce_si(self):
-        assert len(avisos_condicionados(ahora=AHORA, dias_sin_entrar=14)) == 1
+    def test_siete_si_y_es_el_todo_bien(self):
+        avisos = avisos_condicionados(ahora=AHORA, dias_sin_entrar=7)
+        assert len(avisos) == 1
+        assert avisos[0]["variantes"][0]["titulo"] == "¿Todo bien?"
 
     def test_sin_datos_no_inventa_avisos(self):
         assert avisos_condicionados(ahora=AHORA) == []
@@ -475,9 +492,11 @@ class TestElTono:
         a = avisos_condicionados(ahora=AHORA, semanas_sin_ajustar=5)[0]
         assert a["variantes"][0]["titulo"] == "Llevas 5 semanas con los mismos macros"
 
-    def test_al_que_lleva_dos_semanas_fuera_se_le_deja_la_puerta_abierta(self):
+    def test_al_que_lleva_una_semana_fuera_se_le_deja_la_puerta_abierta(self):
+        # «¿Todo bien?» (doc 19-08), y el tono sigue siendo el de siempre: sin reproche.
         a = avisos_condicionados(ahora=AHORA, dias_sin_entrar=20)[0]
-        assert a["variantes"][0]["titulo"] == "Tu plan sigue aquí"
+        assert a["variantes"][0]["titulo"] == "¿Todo bien?"
+        assert "Retomamos cuando quieras." in a["variantes"][0]["cuerpo"]
         assert "Sin prisa." in a["variantes"][1]["cuerpo"]
 
     def test_todos_llevan_a_algun_sitio(self):

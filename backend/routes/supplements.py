@@ -83,14 +83,9 @@ def _sexo_de(profile: dict) -> str:
     return "mujer" if es_mujer else "hombre"
 
 
-async def protocolo_generico(profile: dict) -> list:
-    """La base + el intra del catálogo, por orden y con la variante del sexo del cliente."""
-    sexo = _sexo_de(profile)
-    catalogo = await db.supplement_catalog.find(
-        {"activo": True, "categoria": {"$in": ["base", "intra"]}}, {"_id": 0}
-    ).sort("orden", 1).to_list(200)
-    return [_catalog_to_protocol_item(c) for c in catalogo
-            if c.get("sexo", "ambos") in (sexo, "ambos")]
+# `protocolo_generico` vivió aquí del 18-08 al 20-08: componía base + intra por sexo para
+# quien no tenía la suya. El doc del 19-08 lo retiró («No es eso. Es mi guía entera»): ese
+# hueco lo cubre ahora GET /supplements/guia.
 
 
 # ==================== CLIENTE ====================
@@ -118,17 +113,82 @@ async def get_current_protocol(ctx=Depends(require_access("suplementacion"))):
         "client_id": profile["id"], "actual": [], "siguiente": [], "versiones": [],
     }
 
-    # Sin nada vigente entra la general. Se mira `actual` y no si existe el documento: al
-    # quitarle la suplementacion a alguien la version vigente se queda sin items, y ese
-    # cliente esta igual de vacio que el que nunca tuvo una.
-    if not resuelto.get("actual"):
-        generica = await protocolo_generico(profile)
-        if generica:
-            resuelto["actual"] = generica
-            resuelto["actual_fecha"] = None
-            resuelto["es_generica"] = True
-
+    # SIN PROTOCOLO PROPIO YA NO SE COMPONE NADA (doc 19-08, bloque 08). La general de
+    # cinco líneas -- base + intra por sexo -- era el apaño del 18-08, y la respuesta de
+    # Jesús fue clara: «No es eso. Es mi guía entera». Quien no tiene la suya ve LA GUÍA
+    # (GET /supplements/guia), que es otra pantalla, no una pauta que marcar en Inicio.
     return SupplementProtocolResponse(**resuelto)
+
+
+@router.get("/guia")
+async def guia_de_suplementacion(user=Depends(get_current_user)):
+    """La guía de suplementación de Jesús, entera (doc 19-08, bloque 08).
+
+    La ven TODOS los planes. Lo que cambia por plan es el remate:
+      - plan personalizado o ajuste de 87 € cobrado, SIN protocolo propio todavía →
+        el aviso de arriba («Esto es solo la guía básica...»), desde que se apunta
+        hasta que recibe su plan.
+      - los demás → sin promesa, y al final la oferta de la revisión de los 87 €.
+        El botón va al mismo checkout que la oferta del final del alta.
+    """
+    from core.guia_suplementacion import SECCIONES, DESCUENTO, partir_ficha
+    from core.plan_access import tiene_entrenador_detras
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+
+    # LA FUENTE BUENA es db.guia_suplementos: las fichas de la web tal cual, con sus
+    # secciones (importadas el 20-08 con la sesión de Francisco). db.supplements son los
+    # BLOQUES DE PROTOCOLO del coach (mes 1, mes 2, dosis...): sirven para pautar, no
+    # para leerse como guía; se usan solo de repuesto si la buena está vacía.
+    fichas_web = await db.guia_suplementos.find({}, {"_id": 0}).sort("orden", 1).to_list(200)
+    por_seccion = {s["clave"]: [] for s in SECCIONES}
+    sin_seccion = []
+    if fichas_web:
+        for f in fichas_web:
+            ficha = {
+                "id": f.get("id"), "nombre": f.get("nombre"),
+                "que_es": f.get("que_es"), "cuando": f.get("cuando"), "cuanto": f.get("cuanto"),
+                "notas": None,
+                "enlaces": f.get("enlaces") or [],
+                "imagen": f.get("imagen"),
+                "subfiltros": f.get("subfiltros") or [],
+            }
+            secciones_de_f = [c for c in (f.get("secciones") or []) if c in por_seccion]
+            if secciones_de_f:
+                for c in secciones_de_f:
+                    por_seccion[c].append(ficha)
+            else:
+                sin_seccion.append(ficha)
+    else:
+        fichas = await db.supplements.find({"activo": {"$ne": False}}, {"_id": 0}).to_list(500)
+        for f in sorted(fichas, key=lambda x: (x.get("orden") or 999, str(x.get("nombre") or ""))):
+            ficha = {
+                "id": f.get("id"), "nombre": f.get("nombre"),
+                **partir_ficha(f.get("descripcion")),
+                "notas": (f.get("notas") or "").strip() or None,
+                "enlaces": f.get("enlaces") or [],
+                "imagen": f.get("imagen"),
+                "subfiltros": [f.get("subfiltro")] if f.get("subfiltro") else [],
+            }
+            destino = por_seccion.get(f.get("seccion"))
+            (destino if destino is not None else sin_seccion).append(ficha)
+
+    va_con_plan = (tiene_entrenador_detras(profile.get("plan"))
+                   or bool((profile.get("ajuste_a_medida") or {}).get("cobrado")))
+    protocolo = await db.supplement_protocols.find_one({"client_id": profile.get("id")}, {"_id": 0})
+    con_protocolo = bool(protocolo and _respuesta(protocolo).get("actual"))
+
+    return {
+        "secciones": [{**s, "suplementos": por_seccion[s["clave"]]} for s in SECCIONES],
+        "sin_seccion": sin_seccion,
+        "descuento": DESCUENTO,
+        # El texto de entrada es de Jesús y viene de la web; hasta traerlo, nada (no se
+        # inventa). La pantalla solo lo pinta si existe.
+        "texto_entrada": ((await db.app_state.find_one({"clave": "guia_suplementacion"}, {"_id": 0}))
+                          or {}).get("texto_entrada"),
+        "aviso_plan_personalizado": va_con_plan and not con_protocolo,
+        "oferta_87": not va_con_plan,
+    }
 
 
 # ==================== ADMIN ====================

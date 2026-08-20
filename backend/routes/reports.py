@@ -1,9 +1,9 @@
 """
 Rutas de reportes: crear, listar, evolución.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Body, HTTPException, Depends
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 
 from core.database import db
@@ -189,7 +189,8 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     # Y el contador de seguidos vuelve a cero: mandar un reporte corta la racha (doc 19-08).
     await db.client_profiles.update_one(
         {"id": profile["id"]},
-        {"$unset": {"reporte_aplazado_hasta": "", "reporte_aplazado_tipo": ""},
+        {"$unset": {"reporte_aplazado_hasta": "", "reporte_aplazado_tipo": "",
+                    "reporte_aplazado_nota": ""},
          "$set": {"aplazamientos_seguidos": 0}})
 
     await _avisar_de_lo_que_pidio(profile, user, data, report_id)
@@ -271,6 +272,11 @@ async def _avisar_de_lo_que_pidio(profile: dict, user: dict, data: ReportCreate,
     from core.avisos_equipo import avisar_al_equipo
 
     nombre = user.get("name") or user.get("email") or "Un cliente"
+    if entreno.rutina_del_mes in ("basica", "avanzada", "ahora_no"):
+        # Contestó de verdad (sí o no): si venía de un «pregúntame en una semana», ese
+        # recordatorio ya no tiene sentido.
+        await db.client_profiles.update_one(
+            {"id": profile["id"]}, {"$unset": {"rutina_mes_aplazada_hasta": ""}})
     if entreno.rutina_del_mes in ("basica", "avanzada"):
         modalidad = "básica" if entreno.rutina_del_mes == "basica" else "avanzada"
         # «Al marcar «Sí» autorizas el cargo en tu tarjeta»: se le cobra en la que ya tiene
@@ -300,6 +306,22 @@ async def _avisar_de_lo_que_pidio(profile: dict, user: dict, data: ReportCreate,
             extra={"modalidad": entreno.rutina_del_mes, "cobrado": cobro["cobrado"],
                    "motivo": cobro.get("motivo"), "payment_intent": cobro.get("payment_intent"),
                    "importe_eur": PRECIO_EUR},
+        )
+    if entreno.rutina_del_mes == "aplazar_una_semana":
+        # LA APLAZÓ MARCÁNDOLO (doc 19-08): ni sí ni no, «pregúntamelo en una semana». Se
+        # apunta la fecha en su ficha -- de ella sale el aviso del cliente a los 7 días --
+        # y el equipo se entera para no darle caza antes de tiempo.
+        en_una_semana = (datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
+        await db.client_profiles.update_one(
+            {"id": profile["id"]},
+            {"$set": {"rutina_mes_aplazada_hasta": en_una_semana}})
+        await avisar_al_equipo(
+            db, tipo="rutina_del_mes",
+            titulo="Aplazó la rutina del mes",
+            mensaje=f"{nombre} ha marcado «pregúntame en una semana» para la rutina del mes. "
+                    f"Se le recuerda solo el {en_una_semana}.",
+            client_id=profile["id"], trainer_id=profile.get("trainer_id"),
+            extra={"modalidad": "aplazar_una_semana", "recordar_el": en_una_semana},
         )
     if entreno.quiere_saber_del_silver:
         await avisar_al_equipo(
@@ -519,8 +541,12 @@ async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(ge
     # calcular; lo que faltaba era el sitio donde preguntarlo.
     from core.series_cliente import grasa_vigente
     grasa = grasa_vigente(perfil)
+    # «EL RÁPIDO, MENSUAL» (tabla del bloque 11, doc 19-08): en la Calculadora (y en ELM
+    # si algún día su calendario trae reporte) la cadencia es la del mensual pero el
+    # formulario es el corto de cuatro preguntas, el mismo del quincenal.
+    forma_rapida = bool(hab.get("reporte_rapido")) and tipo == "mensual"
     bloques = bloques_del_mensual(perfil_rep, pedir_grasa=bool(grasa.get("hay_que_pedirlo"))) \
-        if tipo == "mensual" else [
+        if tipo == "mensual" and not forma_rapida else [
         "entreno_previo", "peso", "molestias", "sensaciones", "libre"]
     datos["grasa"] = grasa
     # SE MIRA EL DATO, NO EL PLAN (regla 3 del doc): sin rutina cargada, el bloque del
@@ -540,6 +566,8 @@ async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(ge
         "tipo": tipo,
         # Cuál de los tres mensuales le toca: completo / con_rutina / sin_rutina.
         "perfil": perfil_rep,
+        # «rapido» cuando el mensual va con el formulario corto (Calculadora, ELM).
+        "forma": "rapido" if forma_rapida else None,
         "bloques": bloques,
         # Si su plan lleva alguien detrás que le escriba el informe. De esto depende lo
         # que se le promete al enviar: ajustes (viernes) o informe con feedback (sábado).
@@ -551,9 +579,10 @@ async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(ge
 
 
 @router.post("/aplazar")
-async def aplazar_reporte(user=Depends(get_current_user)):
-    """"¿No has podido hacer el programa completo estas 3 semanas? Márcalo y te lo aplazo
-    7 días." (doc 16-08, T8, cabecera de los tres).
+async def aplazar_reporte(payload: Optional[Dict[str, Any]] = Body(default=None),
+                          user=Depends(get_current_user)):
+    """«No puedo esta semana» (doc 19-08). Con una línea opcional -- «¿Quieres decirme
+    algo?» -- que viaja al panel de su entrenador junto al aplazamiento.
 
     Guarda hasta cuándo se le corre la ventana en su perfil y deja el aviso de
     confirmación. La ventana de envío la sigue mandando `report_cadence`, que es quien
@@ -581,14 +610,23 @@ async def aplazar_reporte(user=Depends(get_current_user)):
     # Siete días desde el cierre de SU ventana, no desde hoy: aplazarlo el viernes y
     # aplazarlo el domingo tienen que dejarle el mismo plazo nuevo.
     hasta = estado["window_close"] + timedelta(days=7)
+    nota = str((payload or {}).get("nota") or "").strip()[:500]
     ya_aplazado = perfil.get("reporte_aplazado_hasta")
     if ya_aplazado and str(ya_aplazado) >= hasta.isoformat():
         # Ya lo aplazó: se le contesta con lo que tiene, sin correrle la fecha otra vez.
+        # La nota sí se guarda si trae una y aún no había: pulsar otra vez para añadir
+        # el «¿quieres decirme algo?» no puede perderse por llegar segundo.
         hasta = datetime.fromisoformat(str(ya_aplazado).replace("Z", "+00:00"))
+        if nota and not perfil.get("reporte_aplazado_nota"):
+            await db.client_profiles.update_one(
+                {"id": perfil["id"]}, {"$set": {"reporte_aplazado_nota": nota}})
     else:
         await db.client_profiles.update_one(
             {"id": perfil["id"]},
             {"$set": {"reporte_aplazado_hasta": hasta.isoformat(),
+                      # Lo que haya querido decir, para el panel; vacía si no dijo nada,
+                      # que no quede la nota del aplazamiento anterior.
+                      "reporte_aplazado_nota": nota,
                       # QUÉ reporte se aplazó, no solo hasta cuándo: la semana que viene
                       # puede que no le toque ninguno, y sin esto la ventana ampliada no
                       # sabría de qué reporte está hablando.

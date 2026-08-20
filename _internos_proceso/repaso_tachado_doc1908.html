@@ -1,0 +1,217 @@
+<title>El tachado del doc 19-08</title>
+<style>
+  /* Comprometido a oscuro a propósito: es el mundo del panel de 12EN12. */
+  :root {
+    --fondo: #0b0b0c; --tarjeta: #131315; --borde: #232326; --tinta: #f2f2f0;
+    --tinta2: #9c9c96; --naranja: #FF671F;
+    --prod: #22c55e; --local: #FF671F; --datos: #38bdf8; --falta: #ef4444;
+    --medias: #eab308; --noaplica: #6b7280;
+  }
+  html { background: var(--fondo); }
+  body { background: var(--fondo); color: var(--tinta);
+    font: 15px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0; padding: 40px 20px 80px; }
+  .marco { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 34px; line-height: 1.1; letter-spacing: .01em; margin: 0 0 6px;
+       text-transform: uppercase; font-weight: 800; }
+  h1 .naranja { color: var(--naranja); }
+  .sub { color: var(--tinta2); margin: 0 0 28px; max-width: 62ch; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .12em;
+       color: var(--tinta2); margin: 38px 0 10px; font-weight: 700; }
+  /* El resumen de arriba: los números que responden «qué hay» de un vistazo. */
+  .resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+             gap: 10px; margin: 0 0 8px; }
+  .cifra { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px;
+           padding: 14px 16px; }
+  .cifra b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
+  .cifra span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+                color: var(--tinta2); }
+  .respuestas { background: var(--tarjeta); border: 1px solid var(--borde);
+                border-left: 3px solid var(--naranja); border-radius: 12px;
+                padding: 18px 20px; margin: 18px 0 6px; }
+  .respuestas p { margin: 0 0 10px; max-width: 70ch; }
+  .respuestas p:last-child { margin: 0; }
+  .respuestas .preg { color: var(--naranja); font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; background: var(--tarjeta);
+          border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; }
+  .tabla-envoltura { overflow-x: auto; border-radius: 12px; }
+  td { padding: 9px 14px; border-top: 1px solid var(--borde); vertical-align: top; }
+  tr:first-child td { border-top: 0; }
+  td.que { width: 46%; }
+  td.nota { color: var(--tinta2); font-size: 13.5px; }
+  .chip { display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .08em;
+          text-transform: uppercase; padding: 2px 9px; border-radius: 99px;
+          border: 1px solid; white-space: nowrap; }
+  .PROD    { color: var(--prod);    border-color: color-mix(in srgb, var(--prod) 45%, transparent); }
+  .LOCAL   { color: var(--local);   border-color: color-mix(in srgb, var(--local) 45%, transparent); }
+  .DATOS   { color: var(--datos);   border-color: color-mix(in srgb, var(--datos) 45%, transparent); }
+  .FALTA   { color: var(--falta);   border-color: color-mix(in srgb, var(--falta) 45%, transparent); }
+  .MEDIAS  { color: var(--medias);  border-color: color-mix(in srgb, var(--medias) 45%, transparent); }
+  .NOAPLICA{ color: var(--noaplica);border-color: color-mix(in srgb, var(--noaplica) 45%, transparent); }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 10px 0 0;
+             color: var(--tinta2); font-size: 12.5px; align-items: center; }
+  .pie { color: var(--tinta2); font-size: 12.5px; margin-top: 40px;
+         border-top: 1px solid var(--borde); padding-top: 14px; }
+</style>
+<div class="marco">
+<h1>El tachado del <span class="naranja">doc 19&#8209;08</span></h1>
+<p class="sub">La lista del bloque 13, punto por punto contra lo construido. Verificado el 20 de agosto de 2026, con producción sirviendo los bloques 00-06 y todo lo demás hecho en local a la espera del despliegue.</p>
+
+<div class="resumen">
+  <div class="cifra"><b style="color:var(--prod)">49</b><span>En producción</span></div>
+  <div class="cifra"><b style="color:var(--local)">29</b><span>Hechos, sin subir</span></div>
+  <div class="cifra"><b style="color:var(--datos)">3</b><span>Datos o decisión</span></div>
+  <div class="cifra"><b style="color:var(--falta)">6</b><span>Por construir</span></div>
+  <div class="cifra"><b style="color:var(--medias)">2</b><span>A medias</span></div>
+</div>
+<div class="leyenda">
+  <span class="chip PROD">prod</span> desplegado y funcionando ·
+  <span class="chip LOCAL">local</span> hecho y verificado, entra con el próximo deploy ·
+  <span class="chip DATOS">datos</span> espera datos o una decisión tuya o de Jesús ·
+  <span class="chip FALTA">falta</span> por construir ·
+  <span class="chip MEDIAS">a medias</span>
+</div>
+
+<h2>Antes que nada · las dos respuestas</h2>
+<div class="respuestas">
+  <p><span class="preg">¿Qué está subido a producción?</span> Los bloques 00 a 06 enteros (commits 08584e8 y df058a5 del 19-08) con sus tres scripts de datos, los Prices nuevos de Stripe (247/847, los viejos archivados), y de datos: los 71 entrenadores asignados desde Calma el 20-08. Sin subir, a propósito desde tu corte del bloque 07: los bloques 07 a 13 completos (preferencias, guía de suplementos, Mis macros, avisos, reportes, los cuatro paneles, renovaciones y el modo oscuro por defecto), verificados en local con 284 tests y navegador.</p>
+  <p><span class="preg">¿Qué falta para dar la aplicación por terminada, con este documento delante?</span> Seis cosas por construir (los correos que sustituyen a ActiveCampaign, el tiempo-dentro-de-la-app como columna, la apertura del correo del viernes, y los tres encargos de fuera: artefacto de entrenadores como web, sistema de agentes y conteo de horas), seis de datos que esperan una decisión o una fuente (los 9 del Premium, los 11 de Calculadora JP, los 3 sin plan, los 28 a cero con la hoja de pagos, los 2 correos de Stripe, y GHL reactivado en su lado), y el despliegue de todo lo local.</p>
+</div>
+
+<h2>Admin &rsaquo; Planes</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Renombrar nivel1 &rarr; Calculadora · nivel2 &rarr; Gold · nivel3 &rarr; Premium</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Precios: Calculadora 247 € · Gold 847 €</td><td><span class="chip PROD">prod</span></td><td class="nota">Prices nuevos en Stripe; los de 297/897 archivados</td></tr>
+<tr><td class="que">Fusionar nivel3 + premium a 1.500 € y mover a los 9 con su precio</td><td><span class="chip PROD">prod</span></td><td class="nota">verificado el 20-08 contra prod: premium legacy quedó a 0 activos y los 9 están en nivel3 con su precio de siempre (y su precio real importado de la hoja)</td></tr>
+<tr><td class="que">Borrar la ficha vacía de «Membresía» y subir ELM a activos</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Mantenimiento de legacy a activos</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Quitar la fila Harbiz de las 21 fichas</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Campo «puede editar sus macros» + ponérselo a los legacy</td><td><span class="chip PROD">prod</span></td><td class="nota">no a los de entrenador, sí a los de autogestión</td></tr>
+<tr><td class="que">Campos videollamadas · grupo privado · frecuencia de ajuste · tiempo de respuesta</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Campo «Renovación automática» en las 21 fichas</td><td><span class="chip PROD">prod</span></td><td class="nota">y desde el 20-08, todas en No (eso va en local)</td></tr>
+<tr><td class="que">Suplementación a tres opciones · Contacto partido en feedback y canal · Materiales y recursos</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Cambiar «CEO» por «Jesús» en las trece fichas</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Marcar el audio en Silver, Bronze, Premium, 6M, Personalizado y CALMA 12</td><td><span class="chip PROD">prod</span></td><td class="nota">con una salvedad: el Bronze quedó en No, porque la tabla del bloque 11 del mismo doc dice que el audio es del Silver para arriba, y manda la específica</td></tr>
+<tr><td class="que">Complementos: Rutina personalizada 97 € · Revisión de macros 87 €</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Rutina del Mes: 67 € suelta además del 57 € dentro de un plan</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Migrar los 11 de Calculadora JP a Mantenimiento y retirar el plan</td><td><span class="chip PROD">prod</span></td><td class="nota">verificado el 20-08 contra prod: Calculadora JP quedó a 0 activos, todos en Mantenimiento. OJO: Calma y la hoja siguen diciendo «Calculadora JP» de ellos: hay que actualizarlas, no deshacerlo</td></tr>
+<tr><td class="que">Retirar Reto 12en12 Gold, Silver y Reto 60 días</td><td><span class="chip PROD">prod</span></td><td class="nota">y desde el 20-08 los tres son renovables por los suyos, como todos los legacy</td></tr>
+</table></div>
+
+<h2>Clientes · los datos</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Los 3 clientes sin plan y el que pone «CalMa»</td><td><span class="chip DATOS">datos</span></td><td class="nota">decisión tuya: qué plan les corresponde</td></tr>
+<tr><td class="que">Cuadrar la cartera: equipo y entrenadores fuera, criterio claro</td><td><span class="chip LOCAL">local</span></td><td class="nota">criterio del 20-08 aplicado: cartera = los que pagan; el equipo ya no cuenta. Si los clientes propios de José Luis y Montse deben salir también, es una línea</td></tr>
+<tr><td class="que">Optimización Hormonal · 1.000 € como legacy</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Mapear los planes viejos de CALMA al catálogo</td><td><span class="chip PROD">prod</span></td><td class="nota">sync del 17-08, cuadrado 1 a 1</td></tr>
+<tr><td class="que">Precio real de los 28 clientes a 0 €</td><td><span class="chip PROD">prod</span></td><td class="nota">hecho el 20-08 con la hoja de control: 114 precios escritos en las fichas (con backup y fuente anotada). Quedan 4 a cero: los perfiles duplicados de Marcos Román y Fernando Márquez (el precio está en su otra cuenta), Luis Gerardo Román (no sale en la hoja) y una cuenta interna del Reto</td></tr>
+<tr><td class="que">Los 2 con otro correo en Stripe: Marcos Román y Fernando Márquez</td><td><span class="chip DATOS">datos</span></td><td class="nota">hay que decidir cuál manda y unificar</td></tr>
+</table></div>
+
+<h2>Asignar y tareas</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Asignar y reasignar entrenador desde la ficha</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Bandeja de «sin asignar»</td><td><span class="chip LOCAL">local</span></td><td class="nota">en el panel de Operaciones, con asignación de tarea desde la lista</td></tr>
+<tr><td class="que">Asignar tarea: a quién, qué, para cuándo, sobre quién; desde ficha, lista y suelta</td><td><span class="chip PROD">prod</span></td><td class="nota">y desde cualquier lista de los cuatro paneles (local)</td></tr>
+<tr><td class="que">La tarea en el panel de esa persona, con aviso y registrada en la ficha</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Las 17 tareas automáticas del apartado 05</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Sacar el entrenador de CALMA, escrito dentro del nombre del plan</td><td><span class="chip PROD">prod</span></td><td class="nota">aplicado el 20-08: 71 asignados (Jesús 71 · José Luis 16 · Montse 3), con backup, idempotente y respetando lo puesto a mano; el sync diario queda listo para el cron del próximo deploy</td></tr>
+</table></div>
+
+<h2>La pestaña de Clientes</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Lo que paga y el desglose al mes</td><td><span class="chip MEDIAS">a medias</span></td><td class="nota">la fila enseña su precio de ciclo; el normalizado al mes vive en el reparto por plan de Dirección, no en la fila</td></tr>
+<tr><td class="que">Semana de rutina, separada de la semana de plan</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Semanas sin reporte y reportes sin responder</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Último peso registrado</td><td><span class="chip PROD">prod</span></td><td class="nota">con su semáforo</td></tr>
+<tr><td class="que">Tiempo dentro de la app</td><td><span class="chip FALTA">falta</span></td><td class="nota">el registro nace el 20-08 (last_seen, un apunte al día): la columna se puede poner ya, pero sin historia hacia atrás</td></tr>
+<tr><td class="que">Último contacto personal · si abrió el correo del viernes</td><td><span class="chip MEDIAS">a medias</span></td><td class="nota">el contacto sí (en panel y ficha); la apertura del correo vive en ActiveCampaign y no llega a la app</td></tr>
+</table></div>
+
+<h2>Los cuatro paneles</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Conectar Stripe con la ficha (sin esto, Dirección sale vacío)</td><td><span class="chip LOCAL">local</span></td><td class="nota">resuelto con el histórico unificado de cobros + espejo en tiempo real desde el webhook de Stripe (20-08)</td></tr>
+<tr><td class="que">Panel de Dirección: entra, cartera, altas y bajas, previsión a 4 semanas</td><td><span class="chip LOCAL">local</span></td><td class="nota">con importes editables a mano y cartera = los que pagan</td></tr>
+<tr><td class="que">Panel de Entrenador: mandados, faltan, aplazados, lo del día</td><td><span class="chip LOCAL">local</span></td><td class="nota">filtrado por sus clientes; con los 71 asignados ya tiene con qué llenarse</td></tr>
+<tr><td class="que">Panel de Operaciones, con lo bloqueado esperando a Jesús arriba</td><td><span class="chip LOCAL">local</span></td><td class="nota"></td></tr>
+<tr><td class="que">Panel de Soporte: renovaciones, problemas de pago, sin contactar</td><td><span class="chip LOCAL">local</span></td><td class="nota">con teléfono y semana X/Y por fila</td></tr>
+<tr><td class="que">Cada número lleva a su lista, y de cada lista se asigna tarea</td><td><span class="chip LOCAL">local</span></td><td class="nota">probado en vivo: «2 tareas asignadas»</td></tr>
+</table></div>
+
+<h2>El reloj</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Formularios que se abren y cierran solos (quincenal mié-jue, mensual vie-lun)</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Aviso del miércoles «Ya tienes tus macros nuevos» · del jueves «Ya tienes tu rutina»</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">La ficha con lo que Jenny prepara a mano el miércoles</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Mapeo de las respuestas del reporte (el cardio estaba mal)</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+</table></div>
+
+<h2>Mi plan y la baja</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Pantalla «Mi plan»: qué tiene, qué paga, semana y renovación</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">«No quiero renovar» con su porqué y sus cinco motivos</td><td><span class="chip PROD">prod</span></td><td class="nota">y desde el 20-08 ya no le sale a quien no tiene plan (local)</td></tr>
+<tr><td class="que">Al pedir la baja no pierde el acceso: termina su ciclo</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Texto de caducado sin pedirle el correo</td><td><span class="chip PROD">prod</span></td><td class="nota">es su sesión: un botón y ya</td></tr>
+</table></div>
+
+<h2>El alta y las preferencias</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">«¿Has tenido entrenador antes?» vuelve al básico · fuera «definitivos el 28» · las 4 de dieta al largo</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Las tres pantallas encadenadas del final del alta, guardando por pasos</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Botones de fotos, medidas y % de grasa siempre disponibles en Seguimiento</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">La ventana del % de grasa a las 12 semanas, tres salidas, una vez al día</td><td><span class="chip PROD">prod</span></td><td class="nota"></td></tr>
+<tr><td class="que">Aviso de fotos y medidas: de semanal a cada 4 semanas, uno para las dos</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 10</td></tr>
+<tr><td class="que">Las 37 categorías en diez cajones con sus tres ejemplos</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 07</td></tr>
+<tr><td class="que">La franja de los 20 g en vivo, con el Guardar apagado</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 07, comprobado con el motor real</td></tr>
+<tr><td class="que">«Cómo quieres tu día»: los tres selectores a la ficha</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 07</td></tr>
+<tr><td class="que">Tema, macros método/reales y vista, del navegador a la ficha</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 07</td></tr>
+<tr><td class="que">Fuera las 12 de «cómo comes» y el buscador de la pestaña 2</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 07</td></tr>
+<tr><td class="que">Que el motor de menús lea las preferencias al elegir receta</td><td><span class="chip PROD">prod</span></td><td class="nota">de antes: las palancas del picker y las alergias mandan desde julio; las preferencias nuevas de los cajones entran por el mismo camino</td></tr>
+</table></div>
+
+<h2>Suplementación</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">La guía entera de No te conformes con menos: categorías, filtro, orden y fichas</td><td><span class="chip LOCAL">local</span></td><td class="nota">28 fichas literales traídas con tu sesión el 20-08</td></tr>
+<tr><td class="que">El texto de entrada y el descuento GALLEGOVIP</td><td><span class="chip LOCAL">local</span></td><td class="nota"></td></tr>
+<tr><td class="que">Completar el catálogo de admin con lo de la web</td><td><span class="chip LOCAL">local</span></td><td class="nota">16 &rarr; 122 fichas en dev; el script para prod va con el deploy</td></tr>
+<tr><td class="que">El aviso de arriba (personalizados y 87 €) · la oferta de 87 € al final</td><td><span class="chip LOCAL">local</span></td><td class="nota"></td></tr>
+</table></div>
+
+<h2>«Mis macros» y las gráficas</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Fuera la pestaña en planes con entrenador; su histórico a Seguimiento &rsaquo; Evolución</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 09</td></tr>
+<tr><td class="que">Fuera la gráfica de peso de «Mis macros»; botón «Ver mi evolución»</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 09</td></tr>
+<tr><td class="que">Las dos gráficas de peso ya no dan números opuestos</td><td><span class="chip PROD">prod</span></td><td class="nota">una sola curva desde el 18-08</td></tr>
+<tr><td class="que">Que las gráficas se dibujen al abrir, como la del panel</td><td><span class="chip MEDIAS">a medias</span></td><td class="nota">por repasar pantalla a pantalla; no lo doy por hecho sin verlo</td></tr>
+</table></div>
+
+<h2>Avisos y reportes</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">«Te tenemos los macros listos» se cae; los otros dos, reescritos</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 10</td></tr>
+<tr><td class="que">Texto nuevo de macros provisionales, y solo a quien va a recibir definitivos</td><td><span class="chip PROD">prod</span></td><td class="nota">punto 04 del 19-08</td></tr>
+<tr><td class="que">Los copys rotan: dos o tres por aviso, nunca el mismo seguido</td><td><span class="chip PROD">prod</span></td><td class="nota">y los avisos nuevos del bloque 10 nacen con variantes</td></tr>
+<tr><td class="que">Montar los correos además de las notificaciones (apagar ActiveCampaign)</td><td><span class="chip FALTA">falta</span></td><td class="nota">es el frente del doc 16-08 (T1-T12): el plan está escrito, la serie sin construir</td></tr>
+<tr><td class="que">«Para rellenar al final del día» y la frase del día en cursiva; frase programable a una semana</td><td><span class="chip LOCAL">local</span></td><td class="nota">bloque 11</td></tr>
+<tr><td class="que">Fuera los entrenos previstos del mensual · el cardio bien mapeado</td><td><span class="chip PROD">prod</span></td><td class="nota">bloques 01 y 02</td></tr>
+<tr><td class="que">El % de grasa dentro del reporte, detrás del peso, solo el mes que toca</td><td><span class="chip LOCAL">local</span></td><td class="nota"></td></tr>
+<tr><td class="que">La rutina del mes al Bronze, aplazable una semana marcándolo</td><td><span class="chip LOCAL">local</span></td><td class="nota">con «Pregúntame en una semana» y su recordatorio</td></tr>
+<tr><td class="que">«No puedo esta semana», con su límite de uno seguido</td><td><span class="chip LOCAL">local</span></td><td class="nota">botón en reporte y aviso, nota opcional, sin más recordatorios, grupo en el panel y tarea automática a los dos</td></tr>
+<tr><td class="que">Bronze y Silver no reciben feedback</td><td><span class="chip LOCAL">local</span></td><td class="nota">en el catálogo, con el audio solo del Silver para arriba</td></tr>
+<tr><td class="que">La rutina en PDF: subir desde el panel, ver desde la app</td><td><span class="chip LOCAL">local</span></td><td class="nota">se siguen generando fuera, como hasta ahora</td></tr>
+</table></div>
+
+<h2>Los dos encargos que no son de la app (y el tercero)</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">Pasar el artefacto de los entrenadores a página web</td><td><span class="chip FALTA">falta</span></td><td class="nota">necesito que me digas dónde quieres alojarlo (¿un subdominio del VPS?); el contenido ya existe</td></tr>
+<tr><td class="que">El sistema de agentes, con el modelo que se te pasó</td><td><span class="chip FALTA">falta</span></td><td class="nota">es un proyecto aparte, no un punto: cuando quieras lo arrancamos con su propio plan</td></tr>
+<tr><td class="que">Registrar el conteo de horas que trabaja cada uno</td><td><span class="chip FALTA">falta</span></td><td class="nota">propuesta: un fichaje simple del equipo dentro del panel; dime si te vale y lo monto</td></tr>
+</table></div>
+
+<h2>Y en toda la app</h2>
+<div class="tabla-envoltura"><table>
+<tr><td class="que">El oscuro sale siempre por defecto</td><td><span class="chip LOCAL">local</span></td><td class="nota">hecho el 20-08; lo que cada uno haya elegido (navegador o ficha) sigue mandando</td></tr>
+<tr><td class="que">El PDF, en blanco</td><td><span class="chip NOAPLICA">no aplica</span></td><td class="nota">la app no genera ningún PDF hoy (el de la rutina se sube ya hecho): es una regla para los que se generan fuera, y para el día que la app genere alguno</td></tr>
+</table></div>
+
+<p class="pie">Repaso hecho contra el código y contra producción el 20-08-2026. Aparte de esta lista quedan los frentes ya conocidos: el despliegue de los bloques 07-13 cuando lo pidas, el workflow de GHL (la app funciona; GHL dejó de mandar el 19-07), las 7 suscripciones vivas de Stripe que aún renuevan solas, y la hoja de control de pagos para los 28 a cero.</p>
+</div>

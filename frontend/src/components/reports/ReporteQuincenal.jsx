@@ -17,7 +17,7 @@ import React from 'react';
 import { Bloque, DosBotones, Estrellas, TextoLibre, kg } from './piezas';
 import { PESO_MIN, PESO_MAX } from '../../lib/pesoValido';
 
-const ReporteQuincenal = ({ datos, valores, set, plazo }) => {
+const ReporteQuincenal = ({ datos, valores, set, plazo, titulo = 'Tu reporte quincenal' }) => {
     const entreno = datos?.entreno || {};
     const sinRegistrar = (entreno.sin_registrar || []).length;
     const peso = datos?.peso_ultimo;
@@ -32,7 +32,7 @@ const ReporteQuincenal = ({ datos, valores, set, plazo }) => {
                     </p>
                 )}
                 <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.03em' }}>
-                    Tu reporte quincenal
+                    {titulo}
                 </h2>
             </div>
 
