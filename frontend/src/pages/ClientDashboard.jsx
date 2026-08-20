@@ -285,14 +285,16 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
                     </div>
                 )}
 
-                {/* La alternativa de la que se habló: seguir con la Membresía en vez de irse. */}
+                {/* La salida del que no renueva es Mantenimiento (doc 19-08, fallo 06:
+                    «es donde aterriza todo el que termina un ciclo y no renueva»). Antes
+                    aquí se ofrecía la Membresía de 97, que se vende por su propio embudo. */}
                 <div className="mt-6 pt-6 border-t border-border">
                     <p className="text-sm text-foreground font-medium mb-1">¿Prefieres seguir por tu cuenta?</p>
                     <p className="text-muted-foreground text-xs mb-3">
-                        La Membresía son 97 €/mes y te deja la calculadora y tus alimentos.
+                        Mantenimiento son 60 €/mes y te deja la calculadora y tus alimentos.
                     </p>
                     <button onClick={() => navigate('/planes')} className="text-brand text-sm hover:underline" data-testid="ver-membresia">
-                        Ver la Membresía
+                        Ver Mantenimiento
                     </button>
                 </div>
             </div>
