@@ -949,7 +949,8 @@ const BuildMealModal = ({
 
     // Calma consejoParaEscogerAlimento: phase guidance text (not "Paso 1/2/3").
     const getPasoLabel = () => {
-        if (isManual) return 'Modo manual - cantidad libre, sin autoajuste';
+        // En el idioma del cliente, no del programa (Jesús, doc 21-08, apartado 14).
+        if (isManual) return 'Modo manual - las cantidades las pones tú y lo compensas en el día';
         if (isIntraMode) return 'Alimentos Intra-entreno';
         if (isPostMode) return 'Alimentos Post-entreno';
         if (paso === 1) return 'Definiendo base de proteínas...';

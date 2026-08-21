@@ -11,6 +11,7 @@ import {
     Camera, Trash2, Loader2, ChevronLeft,
 } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
+import { num1 } from '../lib/numeros';
 
 const ORANGE = '#FF671F';
 const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
@@ -131,7 +132,29 @@ const Opciones = ({ opciones, value, onChange, testId, columnas = 3 }) => (
     </div>
 );
 
-const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
+// ── Corta o larga (apartado 9 del doc del lunes) ─────────────────────────────
+//
+// Si el cliente YA FUE MARCANDO sus comidas durante el día -- la casilla del Inicio
+// nuevo, que vive en el día (`comidas.{k}.marcada`) --, el cierre no le vuelve a
+// preguntar si cumplió: le quedan solo las cinco cosas que la app no puede saber sola.
+// La versión larga es para el que no marca sobre la marcha. El peri no cuenta: no se
+// marca. Sin día guardado, o sin nada montado, la larga de siempre.
+
+const NUMERAL = { 1: 'una', 2: 'dos', 3: 'tres', 4: 'cuatro' };
+
+// Suma de `macros_efectivos` de una comida guardada, como la lista del Inicio: cuando el
+// campo falta en filas antiguas esa comida suma 0, y aquí el número es informativo.
+const macrosDeComida = (comida) => (comida?.alimentos || []).reduce((acc, a) => {
+    const m = a.macros_efectivos || {};
+    return { P: acc.P + (m.P || 0), H: acc.H + (m.H || 0), G: acc.G + (m.G || 0) };
+}, { P: 0, H: 0, G: 0 });
+
+// Las comidas PRINCIPALES del día (C1..Cn): las que se marcan. Intra y Post, fuera.
+const comidasPrincipales = (dia) => (dia?.exists
+    ? ['C1', 'C2', 'C3', 'C4'].slice(0, Math.max(1, Math.min(4, dia.num_comidas || 4)))
+    : []);
+
+const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado }) => {
     const navigate = useNavigate();
     const [enviando, setEnviando] = useState(false);
     const [f, setF] = useState({
@@ -143,6 +166,18 @@ const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
         notas: '', compartida: false, weight: '',
     });
     const set = (campo, valor) => setF(prev => ({ ...prev, [campo]: valor }));
+
+    // La decisión corta/larga, con lo que dice el servidor del día de hoy. `marcada` solo
+    // vale si lo dice el día guardado: si la marca no llegó a la base, larga, que nunca
+    // pregunta de menos.
+    const comidas = (dia?.exists && dia.comidas) || {};
+    const claves = comidasPrincipales(dia);
+    const algoMontado = claves.some(k => (comidas[k]?.alimentos || []).length > 0);
+    const corta = claves.length > 0 && algoMontado && claves.every(k => comidas[k]?.marcada === true);
+    const sinMarcar = algoMontado ? claves.filter(k => comidas[k]?.marcada !== true) : [];
+    // Las cinco cosas de la versión corta son cuatro para quien no tiene protocolo de
+    // suplementos: la cuenta de la cabecera dice las que van a salir de verdad.
+    const cosas = hoy?.suplementos ? 'cinco' : 'cuatro';
 
     const guardar = async () => {
         const algo = ['entreno_respuesta', 'suplementos', 'descanso', 'energy', 'hunger_anxiety', 'movimiento']
@@ -163,8 +198,10 @@ const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
                     : null,
                 // El check de la comida se guarda AQUÍ y ya: no toca la dieta ni le manda
                 // a Nutrición. Se anota de cuál hablaba, o el sí/no no se puede leer luego.
-                cena_hecha: hoy?.comida_pendiente ? f.cena_hecha : null,
-                comida_pendiente: hoy?.comida_pendiente?.key || null,
+                // En la versión corta esa pregunta no sale, así que tampoco se manda: los
+                // campos que no salen van vacíos, como cuando se dejan en blanco.
+                cena_hecha: !corta && hoy?.comida_pendiente ? f.cena_hecha : null,
+                comida_pendiente: (!corta && hoy?.comida_pendiente?.key) || null,
                 exceso_nota: f.exceso_nota.trim() || null,
                 notas: f.notas.trim() ? { texto: f.notas.trim(), compartida: f.compartida } : null,
                 weight: f.weight ? parseFloat(String(f.weight).replace(',', '.')) : null,
@@ -181,9 +218,54 @@ const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
 
     return (
         <Card className="p-5 space-y-6" data-testid="cierre-del-dia">
+            {/* La cabecera de la versión CORTA: marcó todas sus comidas durante el día,
+                así que aquí no se le vuelve a preguntar por ellas. */}
+            {corta && (
+                <div className="flex items-start gap-3" data-testid="cierre-corto">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm font-bold text-foreground">
+                        Ya marcaste {claves.length === 1 ? 'tu comida' : `las ${NUMERAL[claves.length]} comidas`}.
+                        {' '}Solo quedan {cosas} cosas.
+                    </p>
+                </div>
+            )}
+
+            {/* La versión LARGA abre, si las hay, con las comidas que se le quedaron sin
+                marcar. Solo informativo: se registran en Nutrición, no aquí. */}
+            {!corta && sinMarcar.length > 0 && (
+                <div data-testid="cierre-sin-marcar">
+                    <span className="text-sm text-foreground/70 mb-2 block">
+                        {sinMarcar.length === 1
+                            ? 'Te queda una comida sin registrar.'
+                            : `Te quedan ${NUMERAL[sinMarcar.length]} comidas sin registrar.`}
+                    </span>
+                    <ul className="space-y-1">
+                        {sinMarcar.map(k => {
+                            const m = macrosDeComida(comidas[k]);
+                            const tieneAlimentos = (comidas[k]?.alimentos || []).length > 0;
+                            return (
+                                <li key={k} data-testid={`cierre-sin-marcar-${k}`}
+                                    className="text-sm text-foreground/60 flex items-baseline justify-between gap-3">
+                                    <span className="font-semibold text-foreground/80">Comida {k.slice(1)}</span>
+                                    <span className="font-data">
+                                        {tieneAlimentos ? `${num1(m.P)}P · ${num1(m.H)}H · ${num1(m.G)}G` : 'Sin hacer'}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                    <button type="button" onClick={() => navigate('/dashboard/nutrition')}
+                        data-testid="cierre-ir-a-nutricion"
+                        className="text-xs text-brand hover:underline underline-offset-4 font-semibold mt-2">
+                        Regístralas en Nutrición
+                    </button>
+                </div>
+            )}
+
             {/* 1 · El entreno que no marcó. «Sí, pero no lo puse» le lleva a registrarlo,
-                que es donde de verdad se arregla; no se apaña con un sí a secas aquí. */}
-            {hoy?.entreno && (
+                que es donde de verdad se arregla; no se apaña con un sí a secas aquí.
+                En la versión corta no sale: solo quedan las cinco de siempre. */}
+            {!corta && hoy?.entreno && (
                 <div data-testid="cierre-entreno">
                     <span className="text-sm text-foreground/70 mb-2 block">Hoy no entrenaste.</span>
                     <Opciones columnas={2} testId="cierre-entreno-op" value={f.entreno_respuesta}
@@ -217,8 +299,9 @@ const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
                 </div>
             )}
 
-            {/* 3 · La comida que le quedó sin registrar: un check y ya. */}
-            {hoy?.comida_pendiente && (
+            {/* 3 · La comida que le quedó sin registrar: un check y ya. Con todas
+                marcadas no hay nada que preguntar. */}
+            {!corta && hoy?.comida_pendiente && (
                 <div data-testid="cierre-comida">
                     <span className="text-sm text-foreground/70 mb-2 block">
                         Te queda la {hoy.comida_pendiente.etiqueta} sin registrar.
@@ -232,8 +315,8 @@ const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
                 </div>
             )}
 
-            {/* 4 · Si se ha pasado de macros. */}
-            {hoy?.exceso && (
+            {/* 4 · Si se ha pasado de macros. En la corta tampoco sale. */}
+            {!corta && hoy?.exceso && (
                 <div data-testid="cierre-exceso">
                     <span className="text-sm text-foreground/70 mb-2 block">
                         Hoy te has pasado {hoy.exceso.gramos} g de {hoy.exceso.macro}.
@@ -269,6 +352,10 @@ const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
                     ]} />
             </div>
 
+            {/* Las notas y el peso son de la versión larga: el mockup corto no los lleva.
+                Quien quiera pesarse ese día lo hace desde Evolución, y los campos que no
+                salen viajan vacíos, como cuando se dejan en blanco. */}
+            {!corta && (
             <div>
                 <span className="text-sm text-foreground/70 block">Notas personales</span>
                 <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
@@ -284,7 +371,9 @@ const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
                     <span className="text-sm text-foreground/80">Compartir con nosotros</span>
                 </label>
             </div>
+            )}
 
+            {!corta && (
             <div>
                 <span className="text-sm text-foreground/70 block">Peso</span>
                 <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
@@ -294,6 +383,7 @@ const CierreDelDia = ({ api, hoy, onGuardado, pesoAceptado }) => {
                     onChange={e => set('weight', e.target.value)} data-testid="cierre-peso"
                     placeholder="kg" className={inputCls} />
             </div>
+            )}
 
             <button onClick={guardar} disabled={enviando} data-testid="cierre-guardar"
                 className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
@@ -450,6 +540,10 @@ const CheckInsPage = () => {
     // queda el check-in diario de siempre, que es lo que hay hoy en producción.
     const cierreNuevo = pantalla('t4_cierre_nuevo');
     const [hoy, setHoy] = useState(null);
+    // El día de la dieta de hoy, para decidir cierre corto o largo. `listo` evita el
+    // parpadeo: sin él la larga saldría un instante y se encogería a corta delante
+    // del cliente.
+    const [diaHoy, setDiaHoy] = useState({ dia: null, listo: false });
     const { confirm } = useConfirm();
     const navigate = useNavigate();
     const [checkins, setCheckins] = useState([]);
@@ -506,6 +600,22 @@ const CheckInsPage = () => {
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
     useEffect(() => { if (cierreNuevo) fetchHoy(); }, [cierreNuevo, fetchHoy]);
+
+    // La dieta de HOY, con la fecha que dice el servidor (`/checkins/hoy`), que es el
+    // único que sabe qué día es en España: aquí no se saca ninguna fecha del navegador.
+    // Si el día no se puede traer, el cierre sale largo, que nunca pregunta de menos.
+    const fechaHoy = hoy?.fecha;
+    useEffect(() => {
+        if (!cierreNuevo || !fechaHoy) return;
+        let cancelado = false;
+        api.get(`/diets/${fechaHoy}`)
+            .then(r => { if (!cancelado) setDiaHoy({ dia: r.data || null, listo: true }); })
+            .catch(err => {
+                console.error('No se pudo consultar la dieta de hoy:', err?.response?.data || err);
+                if (!cancelado) setDiaHoy({ dia: null, listo: true });
+            });
+        return () => { cancelado = true; };
+    }, [cierreNuevo, api, fechaHoy]);
 
     const todayDaily = checkins.find(c => c.type === 'daily' && isSameDay(c.created_at));
 
@@ -607,9 +717,13 @@ const CheckInsPage = () => {
                         <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                         <p className="font-bold text-foreground">Anotado. Mañana seguimos.</p>
                     </Card>
+                ) : hoy?.fecha && !diaHoy.listo ? (
+                    // Sin la dieta de hoy aún no se sabe si el cierre es corto o largo:
+                    // mejor un latido que un formulario que cambia de tamaño al llegar.
+                    <div className="h-64 bg-muted rounded-2xl animate-pulse" data-testid="checkins-content" />
                 ) : (
                     <div data-testid="checkins-content">
-                        <CierreDelDia api={api} hoy={hoy} pesoAceptado={pesoAceptado}
+                        <CierreDelDia api={api} hoy={hoy} dia={diaHoy.dia} pesoAceptado={pesoAceptado}
                             onGuardado={() => { fetchAll(); fetchHoy(); }} />
                     </div>
                 )

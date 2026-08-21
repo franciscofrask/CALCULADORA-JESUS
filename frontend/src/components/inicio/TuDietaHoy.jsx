@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Circle, ChevronRight, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
 import { num1 } from '../../lib/numeros';
+import ExtrasDelDia from '../nutrition/ExtrasDelDia';
 
 /**
  * «TU DIETA HOY» (doc de Jesús del 21-08, tarea 4.2): el deslizador de cuatro posiciones
@@ -13,8 +14,8 @@ import { num1 } from '../../lib/numeros';
  *              lleva porque en el método la grasa del peri no cuenta.
  *  - Dieta   · la suma de lo montado: `servido_comidas` (lo cuenta el servidor, calibrado)
  *              más lo montado en el peri (P/H; la grasa del peri va fuera, como arriba).
- *  - Llevas  · la suma de las comidas MARCADAS con su casilla. Los Extras se sumarán aquí
- *              cuando existan (son de otra tarea; no se construyen aquí).
+ *  - Llevas  · la suma de las comidas MARCADAS con su casilla, MÁS los Extras del día
+ *              (lo comido fuera de la dieta; el bloque vive en nutrition/ExtrasDelDia).
  *  - Falta   · Macros menos Llevas. PUEDE quedar en negativo y se dice tal cual («Te has
  *              pasado de 12 g de hidratos»), en tono tostado, sin bronca.
  *
@@ -62,6 +63,11 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
     // El reparto vivo del día: los totales con el peri y el objetivo de cada comida.
     const [reparto, setReparto] = useState(null);
     const [marcadas, setMarcadas] = useState({});
+    // Los Extras del día: lo comido fuera de la dieta. Llegan con el documento del día
+    // (`extras`), y añadir o quitar actualiza aquí -- este estado es el que suma en
+    // Llevas, así que vive en este componente y no en el bloque que los pinta.
+    const [extrasDia, setExtrasDia] = useState([]);
+    useEffect(() => { setExtrasDia((dieta?.exists && dieta.extras) || []); }, [dieta]);
 
     const comidasGuardadas = (dieta?.exists && dieta.comidas) || {};
 
@@ -162,12 +168,24 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         [dieta, numComidas]);
 
     const hechas = claves.filter((k) => marcadas[k]);
-    const llevas = hechas.reduce((acc, k) => ({
+    const deComidas = hechas.reduce((acc, k) => ({
         P: acc.P + montadoPorComida[k].P,
         H: acc.H + montadoPorComida[k].H,
         G: acc.G + montadoPorComida[k].G,
     }), { P: 0, H: 0, G: 0 });
-    // Aquí se sumarán también los Extras cuando existan (otra tarea del doc del 21-08).
+    // Los Extras del día cuentan en Llevas y NO tocan la dieta: por eso se suman aquí
+    // (donde se cuenta lo comido) y no en `totalDieta` (donde se cuenta lo montado).
+    // Sus macros vienen calculados del servidor, del añadirlos.
+    const deExtras = extrasDia.reduce((acc, e) => ({
+        P: acc.P + (e.macros?.P || 0),
+        H: acc.H + (e.macros?.H || 0),
+        G: acc.G + (e.macros?.G || 0),
+    }), { P: 0, H: 0, G: 0 });
+    const llevas = {
+        P: deComidas.P + deExtras.P,
+        H: deComidas.H + deExtras.H,
+        G: deComidas.G + deExtras.G,
+    };
 
     const falta = conPeri ? {
         P: Math.round(conPeri.P - llevas.P),
@@ -186,7 +204,9 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
 
     const valoresDeVista = { macros: conPeri, dieta: totalDieta, llevas, falta };
     const valores = valoresDeVista[vista];
-    const nadaMarcado = hechas.length === 0;
+    // Un extra apuntado también es «llevar algo»: con extras, Llevas enseña números
+    // aunque no haya ninguna comida marcada.
+    const nadaMarcado = hechas.length === 0 && extrasDia.length === 0;
 
     const irANutricion = () => navigate('/dashboard/nutrition');
 
@@ -218,17 +238,27 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                     ) : (
                         <>
                             <div className="grid grid-cols-3 gap-3 mt-4">
-                                {['P', 'H', 'G'].map((k) => (
-                                    <div key={k} className="text-center" data-testid={`dieta-hoy-${vista}-${k}`}>
-                                        <p className="font-data font-bold leading-none text-foreground text-[34px] sm:text-[40px]">
-                                            {valores ? Math.max(0, Math.round(valores[k] || 0)) : '·'}
-                                        </p>
-                                        <p className="text-sm font-bold mt-1.5" style={{ color: MACRO[k] }}>{NOMBRE[k]}</p>
-                                        {(vista === 'dieta' || vista === 'llevas') && conPeri && (
-                                            <p className="text-sm text-muted-foreground font-data">de {Math.round(conPeri[k] || 0)}</p>
-                                        )}
-                                    </div>
-                                ))}
+                                {['P', 'H', 'G'].map((k) => {
+                                    /* En Falta, el negativo NO se deja en cero (doc 21-08,
+                                       apartado 5): se enseña lo pasado, en tostado, con
+                                       «de más» debajo. La bronca no existe: es un dato. */
+                                    const crudo = valores ? Math.round(valores[k] || 0) : null;
+                                    const pasado = vista === 'falta' && crudo != null && crudo < 0;
+                                    return (
+                                        <div key={k} className="text-center" data-testid={`dieta-hoy-${vista}-${k}`}>
+                                            <p className={`font-data font-bold leading-none text-[34px] sm:text-[40px] ${pasado ? 'text-amber-600' : 'text-foreground'}`}>
+                                                {crudo == null ? '·' : (pasado ? Math.abs(crudo) : Math.max(0, crudo))}
+                                            </p>
+                                            <p className="text-sm font-bold mt-1.5" style={{ color: MACRO[k] }}>{NOMBRE[k]}</p>
+                                            {pasado && (
+                                                <p className="text-sm text-amber-600 font-data">de más</p>
+                                            )}
+                                            {(vista === 'dieta' || vista === 'llevas') && conPeri && (
+                                                <p className="text-sm text-muted-foreground font-data">de {Math.round(conPeri[k] || 0)}</p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                             {/* Lo pasado se dice tal cual, en tono tostado y sin bronca. */}
                             {vista === 'falta' && pasadas.length > 0 && (
@@ -242,7 +272,12 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                             )}
                             {vista === 'llevas' ? (
                                 <p className="text-xs text-muted-foreground text-center mt-3">
-                                    {hechas.length === 1 ? '1 comida marcada' : `${hechas.length} comidas marcadas`}
+                                    {[
+                                        hechas.length === 1 ? '1 comida marcada' : `${hechas.length} comidas marcadas`,
+                                        extrasDia.length > 0
+                                            ? (extrasDia.length === 1 ? '1 extra' : `${extrasDia.length} extras`)
+                                            : null,
+                                    ].filter(Boolean).join(' · ')}
                                 </p>
                             ) : PIE_DE_VISTA[vista] ? (
                                 <p className="text-xs text-muted-foreground text-center mt-3">{PIE_DE_VISTA[vista]}</p>
@@ -321,6 +356,12 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                     </button>
                 )}
             </section>
+
+            {/* «EXTRAS DEL DÍA», debajo de las comidas y del peri: lo comido fuera de la
+                dieta. Cuentan en Llevas (la suma de arriba) y no tocan la dieta. */}
+            <ExtrasDelDia api={api} fecha={fecha} extras={extrasDia}
+                onAnadido={(e) => setExtrasDia((prev) => [...prev, e])}
+                onQuitado={(id) => setExtrasDia((prev) => prev.filter((x) => x.id !== id))} />
         </>
     );
 };

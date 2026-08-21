@@ -352,6 +352,97 @@ const MealCard = ({
     const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri);
     const excesoTapaElNombre = status === 'sobra' && foods.length > 0;
 
+    // ── LA PUERTA DEL AUTOAJUSTE (Jesús, doc 21-08, apartado 14) ─────────────────────
+    //
+    // En Automático, tocar una cantidad puede hacer que la app la cambie sola: el cruce
+    // de tramo de una familia calibrada (doc 57, F3) recuadra la comida y deja, por
+    // ejemplo, las almendras en 20 g cuando el cliente escribió 40. El toast decía QUE
+    // se hizo, pero no DONDE se decide lo que él quería. Aquí se apunta la cantidad
+    // pedida al tocar; si después la comida vuelve con otra cantidad en ese alimento,
+    // sale un recuadro pegado al ingrediente que SE QUEDA hasta que el cliente decida.
+    // El botón hace las DOS cosas: pasa la comida a Manual y repone su cantidad.
+    //
+    // El reajuste en sí vive en NutritionPage (anotarCalibracion -> cuadrarComida
+    // silencioso); esta tarjeta es quien recibe el gesto y quien pinta el ingrediente,
+    // así que la puerta se monta aquí sin tocar el cálculo ni el reparto.
+    const idDe = (f) => f?.alimento_id ?? f?.id ?? f?._id ?? f?.nombre;
+    const [ajusteAuto, setAjusteAuto] = React.useState(null);   // { foodId, pedida, ajustada } en gramos
+    const peticionPendiente = React.useRef(null);               // { foodId, gramos, confirmada }
+
+    // La cantidad como la lee el cliente: en unidades si el alimento va por unidades.
+    const fmtCant = (food, g) => {
+        if (esPorUnidad && esPorUnidad(food)) {
+            const peso = (pesoUnidad ? pesoUnidad(food) : 100) || 100;
+            return `${num1(Math.round((g / peso) * 2) / 2)} ud (${num1(g)} g)`;
+        }
+        return `${num1(g)} g`;
+    };
+
+    // Se apunta lo pedido. Si toca otra cantidad antes de decidir, el recuadro pasa al
+    // ingrediente nuevo (se limpia aquí y, si el nuevo gesto también se ajusta, vuelve
+    // a salir en él). En Manual no hay autoajuste, así que no hay nada que vigilar.
+    const anotarPeticion = (food, gramosPedidos) => {
+        setAjusteAuto(null);
+        if (mealMode === 'manual' || isPeri || isLocked || !setMealMode || !(gramosPedidos > 0)) {
+            peticionPendiente.current = null;
+            return;
+        }
+        peticionPendiente.current = { foodId: idDe(food), gramos: Math.round(gramosPedidos), confirmada: false };
+    };
+
+    const updateFoodQuantityVigilada = (mk, idx, delta) => {
+        const f = foods[idx];
+        if (f) anotarPeticion(f, (f.cantidad_g || 0) + delta);
+        updateFoodQuantity(mk, idx, delta);
+    };
+
+    const updateFoodQuantityDirectVigilada = (mk, idx, valor) => {
+        const f = foods[idx];
+        if (f) {
+            const n = parseFloat(String(valor).replace(',', '.'));
+            const gramos = Number.isFinite(n)
+                ? (esPorUnidad && esPorUnidad(f) ? n * ((pesoUnidad ? pesoUnidad(f) : 100) || 100) : n)
+                : 0;
+            anotarPeticion(f, gramos);
+        }
+        updateFoodQuantityDirect(mk, idx, valor);
+    };
+
+    // La vigilancia: primero hay que VER la cantidad pedida puesta (si no entró tal
+    // cual -- tope, mínimo, valor rechazado -- no hay autoajuste que contar); si después
+    // cambia sin que el cliente la haya tocado, ese es el reajuste y sale el recuadro.
+    React.useEffect(() => {
+        const p = peticionPendiente.current;
+        if (!p) return;
+        const f = foods.find(x => idDe(x) === p.foodId);
+        if (!f) { peticionPendiente.current = null; return; }
+        const q = Math.round(f.cantidad_g || 0);
+        if (!p.confirmada) {
+            if (Math.abs(q - p.gramos) < 1) p.confirmada = true;
+            else peticionPendiente.current = null;
+            return;
+        }
+        if (Math.abs(q - p.gramos) >= 1) {
+            setAjusteAuto({ foodId: p.foodId, pedida: p.gramos, ajustada: q });
+            peticionPendiente.current = null;
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- se vigila la lista de alimentos
+    }, [foods]);
+
+    // El cliente quiere SU cantidad: la comida pasa a Manual (ahí nadie se la toca) y se
+    // repone lo que escribió. Las dos cosas del botón, tal cual las pidió Jesús.
+    const quererLaPedida = (food) => {
+        if (!ajusteAuto) return;
+        const idxActual = foods.findIndex(x => idDe(x) === ajusteAuto.foodId);
+        setAjusteAuto(null);
+        if (idxActual < 0) return;
+        setMealMode(mealKey, 'manual');
+        const valor = esPorUnidad && esPorUnidad(food)
+            ? String(Math.round((ajusteAuto.pedida / ((pesoUnidad ? pesoUnidad(food) : 100) || 100)) * 2) / 2)
+            : String(ajusteAuto.pedida);
+        updateFoodQuantityDirect(mealKey, idxActual, valor);
+    };
+
     const HeaderInner = (
         <>
             <div className="flex items-center gap-3 min-w-0">
@@ -398,7 +489,7 @@ const MealCard = ({
                 "Modo de cálculo" repetida seis veces no cabía, pero esconderla dejaba
                 sin Automático/Manual a las comidas que aún no tienen alimentos. */}
             {denso && !isPeri && !isLocked && setMealMode && (
-                <div className="inline-flex rounded-lg bg-muted p-0.5 flex-shrink-0" title="Automático ajusta las cantidades a tus macros; manual las deja como las pongas">
+                <div className="inline-flex rounded-lg bg-muted p-0.5 flex-shrink-0" title="Automático: yo te ajusto las cantidades. Manual: las pones tú y lo compensas en el día">
                     <button className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors ${mealMode !== 'manual' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}
                         onClick={() => setMealMode(mealKey, 'auto')} data-testid={`mode-auto-${mealKey}`}>Automático</button>
                     <button className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors ${mealMode === 'manual' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}
@@ -450,7 +541,9 @@ const MealCard = ({
                                 repetía en cada comida que se abriera. En escritorio se queda. */}
                             <div className="min-w-0">
                                 <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Modo de cálculo</p>
-                                <p className="hidden lg:block text-[11px] text-muted-foreground/80 mt-0.5">{mealMode === 'manual' ? 'Cantidad libre, sin autoajuste' : 'Ajusta cantidades a tus macros'}</p>
+                                {/* La explicación en el idioma del cliente, no del programa (Jesús,
+                                    doc 21-08, apartado 14): quién pone las cantidades y qué pasa después. */}
+                                <p className="hidden lg:block text-[11px] text-muted-foreground/80 mt-0.5">{mealMode === 'manual' ? 'Las pones tú y lo compensas en el día' : 'Yo te ajusto las cantidades'}</p>
                             </div>
                             <div className="inline-flex rounded-lg bg-card p-0.5 border border-border flex-shrink-0">
                                 <button className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${mealMode !== 'manual' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
@@ -538,14 +631,40 @@ const MealCard = ({
                                 </div>
                                 <div className="space-y-1.5">
                                     {foods.map((food, idx) => (
-                                        <IngredientRow key={idx} food={food} idx={idx} mealKey={mealKey} isLocked={isLocked}
-                                            isEditing={editingQuantity.mealKey === mealKey && editingQuantity.foodIndex === idx}
-                                            increment={getQuantityIncrement(food)}
-                                            moveFoodUp={moveFoodUp} removeFood={removeFood}
-                                            updateFoodQuantity={updateFoodQuantity} updateFoodQuantityDirect={updateFoodQuantityDirect}
-                                            setEditingQuantity={setEditingQuantity} formatFoodQuantity={formatFoodQuantity}
-                                            modoMacros={modoMacros} esPorUnidad={esPorUnidad} pesoUnidad={pesoUnidad}
-                                            acumFamilias={acumFamilias} />
+                                        <React.Fragment key={idx}>
+                                            <IngredientRow food={food} idx={idx} mealKey={mealKey} isLocked={isLocked}
+                                                isEditing={editingQuantity.mealKey === mealKey && editingQuantity.foodIndex === idx}
+                                                increment={getQuantityIncrement(food)}
+                                                moveFoodUp={moveFoodUp} removeFood={removeFood}
+                                                updateFoodQuantity={updateFoodQuantityVigilada} updateFoodQuantityDirect={updateFoodQuantityDirectVigilada}
+                                                setEditingQuantity={setEditingQuantity} formatFoodQuantity={formatFoodQuantity}
+                                                modoMacros={modoMacros} esPorUnidad={esPorUnidad} pesoUnidad={pesoUnidad}
+                                                acumFamilias={acumFamilias} />
+                                            {/* LA PUERTA: el recuadro del autoajuste, pegado al ingrediente tocado.
+                                                No es un toast: se queda hasta que el cliente decida, con los números
+                                                reales de lo que pidió y lo que la app dejó (doc 21-08, apartado 14). */}
+                                            {ajusteAuto && idDe(food) === ajusteAuto.foodId && (
+                                                <div className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 space-y-2"
+                                                    data-testid={`ajuste-auto-${mealKey}-${idx}`}>
+                                                    <p className="text-[13px] leading-snug text-foreground">
+                                                        Te he ajustado {food.nombre} a <span className="font-bold">{fmtCant(food, ajusteAuto.ajustada)}</span> para
+                                                        que la comida cuadre. Si quieres los {fmtCant(food, ajusteAuto.pedida)}, lo compensas en el resto del día.
+                                                    </p>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <button className="btn-brand px-3 py-1.5 text-xs rounded-lg"
+                                                            onClick={() => quererLaPedida(food)}
+                                                            data-testid={`ajuste-auto-quiero-${mealKey}`}>
+                                                            Los quiero en {fmtCant(food, ajusteAuto.pedida)}
+                                                        </button>
+                                                        <button className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                                            onClick={() => setAjusteAuto(null)}
+                                                            data-testid={`ajuste-auto-dejar-${mealKey}`}>
+                                                            Dejarlo en {fmtCant(food, ajusteAuto.ajustada)}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </React.Fragment>
                                     ))}
                                 </div>
                             </div>

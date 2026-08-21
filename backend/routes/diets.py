@@ -596,6 +596,98 @@ async def marcar_comida(fecha: str, data: dict, user = Depends(get_current_user)
     return {"fecha": fecha, "comida": comida, "marcada": marcada}
 
 
+# ── Extras del día (apartado 5 y «Extras» del doc del 21-08) ─────────────────
+#
+# Lo que el cliente se come FUERA de su dieta -- el cumpleaños, el picoteo -- no tenía dónde
+# apuntarse: o lo metía en una comida (y descuadraba el reparto) o no lo contaba (y la app
+# creía que iba perfecto). Es lo que le obligaba a mentirle a la app para que le cuadrara.
+#
+# Los extras viven en el documento del día como lista `extras`, HERMANA de `comidas` y no
+# dentro: así nadie que cuente comidas los ve. `_servido_de_las_comidas`, la calibración y
+# los helpers de `core.dieta_para_ver` (`alimentos_de`, `ids_de`) recorren `diet["comidas"]`
+# y solo eso, y el `$set` de `upsert_diet_doc` escribe campos con nombre, así que un guardado
+# desde Nutrición o el chat tampoco los pisa. Cuentan en «Llevas» (los suma la pantalla del
+# Inicio), no tocan la dieta ni el reparto, y con ellos «Falta» puede quedar en negativo y
+# se dice tal cual («te has pasado de 40 g de hidratos»), no se deja en cero.
+#
+# Los macros son los de la ETIQUETA (`macros_reales`), calculados al añadir y guardados en
+# el propio extra: un donut que no está en el método no tiene macros «efectivos» que valgan,
+# y lo que hace falta saber es lo que se ha comido de verdad.
+
+
+@router.post("/{fecha}/extras")
+async def anadir_extra(fecha: str, data: dict, user = Depends(get_current_user)):
+    """Apuntar un extra del día: un alimento del catálogo y cuánto ha sido."""
+    _validar_fecha(fecha)
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+
+    # El id puede llegar como número o como texto (según la puerta por la que entre).
+    alimento_id = data.get("alimento_id")
+    candidatos = [alimento_id]
+    if isinstance(alimento_id, str) and alimento_id.lstrip("-").isdigit():
+        candidatos.append(int(alimento_id))
+    food = None
+    if alimento_id is not None:
+        food = await db.foods.find_one({"id": {"$in": candidatos}}, {"_id": 0})
+    if not food:
+        raise HTTPException(status_code=404, detail="Ese alimento no está en el catálogo.")
+
+    # La cantidad llega en gramos o, en los alimentos por unidades, en unidades: la ración
+    # de la ficha dice cuánto pesa una, y aquí se pasa a gramos y no se vuelve a pensar.
+    import math as _math
+    racion = float(food.get("racion") or 100) or 100.0
+    cantidad = data.get("cantidad_g")
+    if cantidad is None and data.get("unidades") is not None:
+        try:
+            cantidad = float(data["unidades"]) * racion
+        except (TypeError, ValueError):
+            cantidad = None
+    try:
+        cantidad = float(cantidad)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Dime cuánto ha sido, en gramos o en unidades.")
+    if not _math.isfinite(cantidad) or cantidad <= 0 or cantidad > 5000:
+        raise HTTPException(status_code=400, detail="Esa cantidad no puede ser. Revísala.")
+
+    extra = {
+        "id": str(uuid.uuid4()),
+        "alimento_id": food["id"],
+        "nombre": food.get("nombre") or "?",
+        "cantidad_g": round(cantidad, 1),
+        # «2 ud (126 g)» en los de unidades, «40 g» en el resto: lo mismo que ve en su dieta.
+        "cantidad_texto": _para_ver.cantidad_de(
+            {"alimento_id": food["id"], "cantidad_g": cantidad}, {food["id"]: food}),
+        "macros": macros_reales(food, cantidad),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # Upsert del día si no existe, como la casilla por comida: el extra de un día sin
+    # dieta montada también cuenta.
+    await db.diets.update_one(
+        {"user_id": user["id"], "fecha": fecha},
+        {"$push": {"extras": extra},
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"fecha": fecha, "extra": extra}
+
+
+@router.delete("/{fecha}/extras/{extra_id}")
+async def quitar_extra(fecha: str, extra_id: str, user = Depends(get_current_user)):
+    """Quitar un extra apuntado ese día."""
+    _validar_fecha(fecha)
+    # El filtro exige que el extra ESTÉ: sin esto, el `$set` de updated_at contaría como
+    # modificación y borrar dos veces diría que borró las dos.
+    res = await db.diets.update_one(
+        {"user_id": user["id"], "fecha": fecha, "extras.id": extra_id},
+        {"$pull": {"extras": {"id": extra_id}},
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Ese extra ya no está apuntado.")
+    return {"fecha": fecha, "id": extra_id}
+
+
 @router.post("/copy-day")
 async def copy_day(data: dict, user = Depends(get_current_user)):
     """Copiar el día completo (todas las comidas) de una fecha a otra."""

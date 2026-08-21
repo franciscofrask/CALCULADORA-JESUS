@@ -27,6 +27,8 @@ import { VistaComidasSelector, leerVista, guardarVista } from '../components/nut
 import { ModoMacrosSelector, AvisoMacrosReales, leerModoMacros, guardarModoMacros } from '../components/nutrition/ModoMacros';
 import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
+import DiaVacio from '../components/nutrition/DiaVacio';
+import ExtrasDelDia from '../components/nutrition/ExtrasDelDia';
 import { cabeceras } from '../lib/cabeceras';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -305,6 +307,16 @@ const NutritionPage = () => {
     // es una decisión de Jesús, y con 2 de 14.027 delante se toma mejor.
     const [diaSinMarcar, setDiaSinMarcar] = useState(false);
 
+    // EL DÍA VACÍO (doc 21-08, tarea 6.1). Cuando el día no tiene ninguna comida con
+    // alimentos, en lugar de la parrilla sale una pregunta con tres salidas (DiaVacio).
+    // «Crear el día» guarda aquí LA FECHA para la que se pidió la parrilla: así al
+    // cambiar de día la pregunta vuelve, y si el cliente vacía un día que estaba
+    // montando no se le echa de la parrilla a mitad de faena.
+    const [diaEnCreacion, setDiaEnCreacion] = useState(null);
+    // La lista de días recientes es la misma que usa el modal de repetir comida
+    // (recentDiets, /diets/recent); esto solo marca que la está cargando el día vacío.
+    const [cargandoRecientes, setCargandoRecientes] = useState(false);
+
     // Calendar state
     const [calendarOpen, setCalendarOpen] = useState(false);
     
@@ -477,6 +489,10 @@ const NutritionPage = () => {
     const versionDiaRef = useRef(null);
     const loadDietRef = useRef(null);
 
+    // Extras del día (bloque 6.3): lo comido fuera del plan. Cuentan en Llevas del
+    // Inicio y no tocan la Dieta; aquí solo se pintan y se editan.
+    const [extrasDia, setExtrasDia] = useState([]);
+
     // Load saved diet - returns { targets, config } where config has the diet's day values
     const loadDiet = useCallback(async (date) => {
         try {
@@ -486,6 +502,10 @@ const NutritionPage = () => {
             // abierto en dos sitios, el segundo en guardar devolvía su versión de antes y
             // borraba lo del otro sin que nadie se enterara (16-08-2026).
             versionDiaRef.current = diet?.updated_at || null;
+            // Los Extras del día viajan con el documento (bloque 6.3 del doc 21-08):
+            // se refrescan aquí para que el bloque de debajo de las comidas diga la verdad
+            // también al cambiar de fecha o recargar tras un guardado.
+            setExtrasDia(diet.extras || []);
             if (diet.exists) {
                 const dietConfig = {
                     tipoDia: diet.tipo_dia || 'entrenamiento',
@@ -877,6 +897,19 @@ const NutritionPage = () => {
     useEffect(() => {
         if (!loading) loadDistribution();
     }, [tipoDia, numComidas, momentoEntreno, opcionPeri]); // eslint-disable-line
+
+    // Al caer en el día vacío se cargan sus dos listas: cuántas dietas guardadas tiene
+    // (para «Ver las N») y sus días recientes montados (para «Repetir un día»). Solo
+    // cuando la pantalla de día vacío va a verse; cargar dos veces no rompe nada.
+    useEffect(() => {
+        if (loading || cargaFallida || diaEnCreacion === currentDate) return;
+        const vacio = !Object.values(mealsData || {}).some(m => (m?.alimentos || []).length > 0);
+        if (!vacio) return;
+        loadDietFavorites();
+        setCargandoRecientes(true);
+        loadRecentDiets().finally(() => setCargandoRecientes(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loading, currentDate, mealsData, cargaFallida, diaEnCreacion]);
 
     // Objetivo por comida guardado (distribTargetsOverlay) OBSOLETO: se congela al crear la
     // dieta, pero si los macros asignados al cliente cambian después, la distribución
@@ -1758,7 +1791,15 @@ const NutritionPage = () => {
                     distribution_targets: distribTargetsOverlay || null,
                 })
             });
-            toast.success('Favorita guardada');
+            // La confirmación dice DÓNDE vive lo guardado (doc 21-08): «Favorita
+            // guardada» a secas no decía dónde volver a encontrarla. El último tramo
+            // nombra el tipo de día CONTRARIO al guardado, que es cuando de verdad se
+            // recuadra al aplicarla.
+            toast.success('Guardada · Ya es una de tus dietas', {
+                description: 'La tienes en Una de mis dietas cuando montes cualquier día. '
+                    + `Se recuadrará sola si la pones en un día de ${tipoDia === 'descanso' ? 'entreno' : 'descanso'}.`,
+                duration: 8000,
+            });
             loadDietFavorites();
         } catch (err) { toast.error('Error guardando favorita'); }
     };
@@ -1849,6 +1890,40 @@ const NutritionPage = () => {
             }
         } catch (err) {
             toast.error('Error al aplicar la favorita');
+        }
+    };
+
+    // Repetir un día reciente entero sobre el día abierto (pantalla de día vacío, doc
+    // 21-08). El mecanismo es EL MISMO que aplicar una favorita: applyDietFavorite ->
+    // /calculator/refit-diet, que recuadra cada alimento a los macros de HOY, con sus
+    // avisos de comidas cortas y su «Cuadrar ahora» (doc 57). Si el tipo de día no
+    // coincide («Se adapta»), va en modo adaptar: se queda el tipo del día abierto y el
+    // peri que no exista aquí se quita con aviso.
+    //
+    // /diets/recent no trae momento_entreno ni opcion_peri, así que antes se pide el
+    // día completo: sin eso, repetir un día «que encaja» le cambiaría el horario del
+    // entreno y el peri por los valores por defecto.
+    const repetirDiaReciente = async (diaReciente) => {
+        try {
+            const full = await api(`/api/diets/${diaReciente.fecha}`);
+            if (!full?.exists) {
+                toast.error('Ese día ya no está guardado');
+                return;
+            }
+            const comoFavorita = {
+                name: formatDate(diaReciente.fecha),
+                tipo_dia: full.tipo_dia || 'entrenamiento',
+                num_comidas: full.num_comidas || 4,
+                momento_entreno: normMomento(full.momento_entreno ?? 1),
+                opcion_peri: normPeri(full.opcion_peri),
+                comidas: full.comidas || {},
+            };
+            await applyDietFavorite(comoFavorita, {
+                adaptar: comoFavorita.tipo_dia !== tipoDia,
+            });
+        } catch (err) {
+            console.error('[repetir día]', err);
+            toast.error('No hemos podido repetir ese día. Inténtalo de nuevo.');
         }
     };
 
@@ -2081,6 +2156,26 @@ const NutritionPage = () => {
         Intra: { name: 'Intra-entreno', shortName: 'Intra', emoji: '⚡' },
         Post: { name: 'Post-entreno', shortName: 'Post', emoji: '💪' }
     };
+
+    // ── El día vacío (doc 21-08, tarea 6.1) ──────────────────────────────────
+    // «Vacío» es SOLO ninguna comida con alimentos: un día migrado con 1-2 comidas
+    // montadas sigue yendo a la parrilla de siempre. Y si la carga falló, la pantalla
+    // vacía sería mentira (el día puede existir en el servidor), así que tampoco.
+    const diaVacio = !Object.values(mealsData || {}).some(m => (m?.alimentos || []).length > 0);
+    const mostrarDiaVacio = diaVacio && !cargaFallida && diaEnCreacion !== currentDate;
+    // Los días que se ofrecen repetir: montados de verdad y que no sean el día abierto.
+    const recientesMontados = (recentDiets || []).filter(d =>
+        d.fecha !== currentDate
+        && Object.values(d.comidas || {}).some(m => (m?.alimentos || []).length > 0));
+    // «Hoy · jueves, 21 de agosto», o el día que sea si no es hoy.
+    const tituloDiaVacio = (() => {
+        const [y, m, d] = (currentDate || hoyISO()).split('-').map(Number);
+        const largo = new Date(y, m - 1, d).toLocaleDateString('es-ES', {
+            weekday: 'long', day: 'numeric', month: 'long',
+            ...(y !== new Date().getFullYear() ? { year: 'numeric' } : {}),
+        });
+        return currentDate === hoyISO() ? `Hoy · ${largo}` : largo.charAt(0).toUpperCase() + largo.slice(1);
+    })();
 
     // ===== COMPONENTS =====
 
@@ -2383,6 +2478,27 @@ const NutritionPage = () => {
                     getDayStatus={getDayStatus}
                 />
 
+                {/* EL DÍA VACÍO EN LUGAR DE LA PARRILLA (doc 21-08, tarea 6.1): una
+                    pregunta con tres salidas. Los macros del día siguen arriba, en la
+                    cabecera, para que sepa a qué está montando. «Crear el día» abre la
+                    parrilla de siempre; las otras dos salidas la rellenan y la parrilla
+                    aparece sola en cuanto hay comida. */}
+                {mostrarDiaVacio ? (
+                <div className="mt-4 lg:mt-6">
+                    <DiaVacio
+                        titulo={tituloDiaVacio}
+                        tipoDia={tipoDia}
+                        numFavoritas={dietFavorites.length}
+                        onCrear={() => setDiaEnCreacion(currentDate)}
+                        onVerFavoritas={() => { loadDietFavorites(); setFavoritesModalOpen(true); }}
+                        recientes={recientesMontados}
+                        cargandoRecientes={cargandoRecientes}
+                        onRepetir={repetirDiaReciente}
+                        formatDate={formatDate}
+                    />
+                </div>
+                ) : (
+                <>
                 {/* En el teléfono, sin la raya que separaba los macros del día de las
                     comidas: son la misma cosa contada dos veces -- lo que te queda arriba,
                     de dónde va a salir debajo -- y la raya las presentaba como dos secciones
@@ -2456,6 +2572,22 @@ const NutritionPage = () => {
                                     {getMealOrder().map(mealKey => renderMealCard(mealKey, false))}
                                 </div>
 
+                                {/* Extras del día (bloque 6.3): debajo de las comidas y del
+                                    peri. Cuentan en Llevas del Inicio y no tocan la Dieta.
+                                    El componente habla axios (api.get/post/delete): se le
+                                    adapta el fetch de esta página. */}
+                                <ExtrasDelDia
+                                    api={{
+                                        get: (url, cfg) => api(`/api${url}?${new URLSearchParams(cfg?.params || {})}`).then((data) => ({ data })),
+                                        post: (url, body) => api(`/api${url}`, { method: 'POST', body: JSON.stringify(body || {}) }).then((data) => ({ data })),
+                                        delete: (url) => api(`/api${url}`, { method: 'DELETE' }).then((data) => ({ data })),
+                                    }}
+                                    fecha={currentDate}
+                                    extras={extrasDia}
+                                    onAnadido={(extra) => setExtrasDia((prev) => [...prev, extra])}
+                                    onQuitado={(id) => setExtrasDia((prev) => prev.filter((e) => e.id !== id))}
+                                />
+
                                 {/* Acciones (móvil <sm: tras las comidas; en sm+ van en la tarjeta de config) */}
                                 <div className="sm:hidden">
                                     {renderActions('-mobile')}
@@ -2508,6 +2640,8 @@ const NutritionPage = () => {
                         </div>
                     )}
                 </div>
+                </>
+                )}
 
             {/* AQUÍ SE MONTABA UN BUSCADOR DE ALIMENTOS QUE NADIE PODÍA ABRIR.
                 `addFoodModal` se inicializaba cerrado y se cerraba en dos sitios, pero en toda
@@ -2593,7 +2727,7 @@ const NutritionPage = () => {
                 onDelete={deleteDietFavorite}
                 tipoDia={tipoDia}
                 // Para no dejar guardar un día sin comidas como favorita.
-                diaVacio={!Object.values(mealsData || {}).some(m => (m?.alimentos || []).length > 0)}
+                diaVacio={diaVacio}
             />
 
             {/* Diet Calendar Modal */}
