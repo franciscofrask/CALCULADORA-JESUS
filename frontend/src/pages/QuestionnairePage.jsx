@@ -2599,7 +2599,7 @@ const QuestionnairePage = () => {
                 </h2>
                 <p className="text-foreground/70 mb-4">
                     O terminamos tu perfil ahora. Los macros que tienes son provisionales, pero
-                    puedes montar tu día desde ya.
+                    puedes crear tu día desde ya.
                 </p>
                 <div className="surface p-4 mb-6 border-l-4 border-l-brand">
                     <p className="text-sm text-foreground/80">
@@ -2920,7 +2920,7 @@ const QuestionnairePage = () => {
                                 {misDias === null && <p className="text-foreground/50 text-sm">Buscando tus días...</p>}
                                 {misDias?.length === 0 && (
                                     <p className="text-foreground/50 text-sm">
-                                        Todavía no tienes ningún día montado en la calculadora. Escríbela o sube una foto.
+                                        Todavía no has creado ningún día en la calculadora. Escríbela o sube una foto.
                                     </p>
                                 )}
                                 {misDias?.map(d => (

@@ -1,10 +1,11 @@
 /**
- * LOS TRES AJUSTES DE LA APP, EN LA FICHA (doc 19-08, bloque 07).
+ * LOS AJUSTES DE LA APP, EN LA FICHA (doc 19-08, bloque 07).
  *
- * El tema claro/oscuro, el de MACROS · Método/Reales y el de VISTA se guardaban solo en
+ * El de MACROS · Método/Reales y el de VISTA se guardaban solo en
  * localStorage: al entrar desde otro móvil salía todo por defecto otra vez. Ahora cada
  * cambio se escribe también en la ficha (`ajustes_app`), y al entrar la ficha rellena el
  * localStorage antes de que las pantallas lean.
+ * (El tema claro/oscuro también vivía aquí; se retiró con el claro, doc 21-08.)
  *
  * A PROPÓSITO SIN `X-Actuar-Como`: cuando el entrenador trabaja «como» un cliente y
  * cambia el tema, ese tema es SUYO, del entrenador; con la cabecera puesta se escribiría
@@ -16,7 +17,6 @@ const API = process.env.REACT_APP_BACKEND_URL || '';
 
 // clave de la ficha -> clave del localStorage que leen las pantallas
 export const CLAVES_LOCALES = {
-    tema: 'theme',
     modo_macros: 'nutricion-modo-macros',
     vista: 'nutricion-vista-comidas',
 };
@@ -36,8 +36,7 @@ export function guardarAjusteEnFicha(clave, valor) {
 
 /**
  * Lo guardado en la ficha, al localStorage. Se llama al cargar el perfil (AuthContext):
- * así «entrar desde otro móvil» arranca con lo suyo. El tema además se avisa por evento,
- * porque su proveedor ya está montado cuando llega el perfil.
+ * así «entrar desde otro móvil» arranca con lo suyo.
  */
 export function aplicarAjustesDeFicha(ajustes) {
     if (!ajustes || typeof ajustes !== 'object') return;
@@ -46,8 +45,5 @@ export function aplicarAjustesDeFicha(ajustes) {
         if (typeof v === 'string' && v) {
             try { localStorage.setItem(claveLocal, v); } catch (e) { /* storage capado */ }
         }
-    }
-    if (ajustes.tema === 'dark' || ajustes.tema === 'light') {
-        window.dispatchEvent(new CustomEvent('tema-de-ficha', { detail: ajustes.tema }));
     }
 }

@@ -23,12 +23,12 @@
  *
  *   1. La clave lleva dentro el id del cliente, así que dos cuentas no pueden pisarse
  *      aunque la sesión anterior no se cerrase bien (se cierra el portátil y ya).
- *   2. Al cerrar sesión se borra lo que es de esa persona. Lo que es del aparato -- el tema
- *      claro u oscuro, si la barra lateral está plegada -- se queda: no es de nadie.
+ *   2. Al cerrar sesión se borra lo que es de esa persona. Lo que es del aparato -- si la
+ *      barra lateral está plegada -- se queda: no es de nadie.
  */
 
 // Lo que pertenece al APARATO y no a la persona. Sobrevive al cierre de sesión.
-const DEL_APARATO = new Set(['token', 'theme', 'sidebar-collapsed']);
+const DEL_APARATO = new Set(['token', 'sidebar-collapsed']);
 
 // Las que ya se escribieron sin dueño y hay que barrer una vez. Cuando no queden
 // navegadores con estas claves puestas, esta lista se puede quitar.

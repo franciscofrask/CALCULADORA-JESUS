@@ -1158,8 +1158,8 @@ const NutritionPage = () => {
                         recuadresHechos.current.add(guard);
                         afectadas.forEach(k => cuadrarComida(k, { silencioso: true }));
                         toast.info(afectadas.length === 1
-                            ? `He recuadrado una comida que ya tenías montada: con el cambio de ${cfg.etiqueta} sus cantidades ya no cuadraban.`
-                            : `He recuadrado ${afectadas.length} comidas que ya tenías montadas: con el cambio de ${cfg.etiqueta} sus cantidades ya no cuadraban.`,
+                            ? `He recuadrado una comida que ya tenías montada: con el cambio de ${cfg.etiqueta} había que ajustar sus cantidades.`
+                            : `He recuadrado ${afectadas.length} comidas que ya tenías montadas: con el cambio de ${cfg.etiqueta} había que ajustar sus cantidades.`,
                             { id: `recuadre-${bloque}`, duration: 8000, closeButton: true });
                     }
                 }

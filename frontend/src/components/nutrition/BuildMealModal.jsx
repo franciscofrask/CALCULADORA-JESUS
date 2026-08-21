@@ -1137,10 +1137,10 @@ const BuildMealModal = ({
                                                 falta a la comida -- y así se dice. */}
                                             <p className="text-[11px] text-muted-foreground mb-1.5" data-testid="origen-lista">
                                                 {isSearching
-                                                    ? <>Resultados de <span className="font-semibold text-foreground">«{searchQuery.trim()}»</span>{isManual ? '' : ', con la cantidad que cuadra y el que mejor encaja primero'}</>
+                                                    ? <>Resultados de <span className="font-semibold text-foreground">«{searchQuery.trim()}»</span>{isManual ? '' : ', con la cantidad ya ajustada y el que mejor encaja primero'}</>
                                                     : isManual
                                                         ? 'Alimentos de la categoría, por orden alfabético'
-                                                        : 'Sugerencias para lo que le falta a esta comida, con la cantidad que cuadra'}
+                                                        : 'Sugerencias para lo que le falta a esta comida, con la cantidad ya ajustada'}
                                             </p>
                                             {displayFoods.map((food, idx) => {
                                                 const isFav = favorites.has(String(food.id));

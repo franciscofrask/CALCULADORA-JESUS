@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 @layer base {
+    /* El tema claro se retiró (solo modo oscuro, doc 21-08). Este bloque sobrevive
+       solo por --radius y --chart-1..5, que no tienen versión en .dark. */
     :root {
         /* 12EN12 - Light theme (vigente) */
         --background: 0 0% 94%;          /* #F0F0F0 page - más gris para que las cards resalten */
@@ -90,7 +92,6 @@
         @apply bg-background text-foreground antialiased;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         font-feature-settings: 'cv11', 'ss01';
-        transition: background-color 0.2s ease, color 0.2s ease;
     }
 
     /* EN EL TELÉFONO LA PÁGINA NO SE MUEVE DE LADO. NUNCA.

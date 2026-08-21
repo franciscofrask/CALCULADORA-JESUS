@@ -523,7 +523,7 @@ const MealCard = ({
                             </button>
                             <button className={`rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5 ${denso ? 'h-11 text-sm' : 'w-full h-11'}`}
                                 onClick={() => setBuildMealModal({ open: true, mealKey, mode: mealKey === 'Intra' ? 'intra' : 'post' })}>
-                                <Zap className="w-4 h-4" /> Construir {mealKey === 'Intra' ? 'Intra' : 'Post'}
+                                <Zap className="w-4 h-4" /> Crear {mealKey === 'Intra' ? 'Intra' : 'Post'}
                             </button>
                         </div>
                     )}

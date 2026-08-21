@@ -4,10 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
 import { plural, nombreDePlan } from '../lib/labels';
 import { num1 } from '../lib/numeros';
-import {
-    estadoMacro, estadoDelDia, objetivoDelDia, faltanDe, porcentajeMacro,
-    COLOR_ESTADO, PALABRA_ESTADO, TEXTO_ESTADO_DIA, varianteDelDia,
-} from '../lib/estadoMacros';
+import { objetivoDelDia, varianteDelDia } from '../lib/estadoMacros';
 import {
     aFecha, diaEnEspana, hoyEnEspana, etiquetaMomento, fechaLargaDeHoy, textoPlazo,
 } from '../lib/horaEspana';
@@ -22,13 +19,13 @@ import {
     LogOut, Bell, ChevronRight, CreditCard, Target, Bot,
     Flame, Activity, Scale, Search, SlidersHorizontal, Pill,
     ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen,
-    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone, Clock, TrendingUp
+    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone, Clock, TrendingUp, Moon
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import { verComo } from '../lib/modoRevision';
-import ThemeToggle from '../components/ThemeToggle';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import LimiteDeError from '../components/LimiteDeError';
+import TuDietaHoy from '../components/inicio/TuDietaHoy';
 
 // ===== Macro colors (identidad 12EN12) =====
 const MACRO = { protein: '#FF671F', carbs: '#2196F3', fat: '#FFA500' };
@@ -309,10 +306,9 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
 //
 // Lo que cambia respecto al Inicio de siempre, que sigue vivo debajo:
 //
-//  - Los macros dicen lo que FALTA, no lo consumido. Es la misma pregunta que ya contesta
-//    la cabecera de Nutrición en el teléfono: «nadie abre la app para saber lo que ya se
-//    ha comido». El color (naranja/amarillo/verde) sale de `lib/estadoMacros`, que es la
-//    regla que ya usaban las tarjetas de comida, no una nueva.
+//  - Los macros son el bloque «Tu dieta hoy» del doc del 21-08: el deslizador de cuatro
+//    posiciones (Macros · Dieta · Llevas · Falta) y las comidas con su casilla. Vive en
+//    `components/inicio/TuDietaHoy.jsx`, que es donde está explicada cada cuenta.
 //  - Desaparece la pila de banners: lo pendiente es una lista de líneas iguales, en el
 //    orden del documento, y cuando no queda nada se dice y ya está.
 //  - La línea de entreno sale por el DATO (tiene rutina cargada), no por el plan; y si no
@@ -327,6 +323,11 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
 // entonces las dos discrepaban del servidor: la cabecera decía «Lunes, 17 de agosto» y
 // debajo salían los macros del domingo.
 const hoyDeLaDieta = () => hoyEnEspana();
+
+// El día de mañana con el mismo criterio (hora de España): para la línea «Mañana» y para
+// abrir Nutrición en ese día (`?date=`, el mismo camino que usa Mi semana).
+const mananaDeLaDieta = () =>
+    new Date(Date.parse(`${hoyEnEspana()}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 
 const estrellas = (n) => (n >= 1 && n <= 5 ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
 
@@ -359,30 +360,9 @@ const LineaDeHoy = ({ icono: Icono, titulo, detalle, cursiva, extra, hecho, onCl
     );
 };
 
-// Un macro: «Te faltan 94 · de 120 · Proteína», con su barra y su palabra de estado.
-const MacroQueFalta = ({ label, servido, objetivo, clave }) => {
-    const estado = estadoMacro(clave, servido, objetivo);
-    const color = COLOR_ESTADO[estado];
-    return (
-        <div className="text-center" data-testid={`macro-falta-${slug(label)}`}>
-            <p className="text-xs text-muted-foreground">Te faltan</p>
-            <p className="font-data font-bold leading-none text-foreground text-[34px] sm:text-[40px]">
-                {faltanDe(servido, objetivo)}
-            </p>
-            <p className="text-sm text-muted-foreground font-data">de {Math.round(objetivo || 0)}</p>
-            <p className="text-sm font-bold mt-1" style={{ color }}>{label}</p>
-            <div className="h-1 bg-muted rounded-full overflow-hidden mt-2">
-                <div className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${porcentajeMacro(servido, objetivo)}%`, backgroundColor: color }} />
-            </div>
-            {PALABRA_ESTADO[estado] && (
-                <p className="text-xs mt-1.5" style={{ color }} data-testid={`estado-${slug(label)}`}>
-                    {PALABRA_ESTADO[estado]}
-                </p>
-            )}
-        </div>
-    );
-};
+// El «Te faltan 94 · de 120» por macro (MacroQueFalta) se retiró el 21-08: el doc de ese
+// día lo sustituye por el deslizador de cuatro posiciones de `components/inicio/TuDietaHoy`,
+// donde «Falta» es una de las vistas y sale de la misma cuenta.
 
 // Los tres cierres del documento. Rotan por día: dentro del mismo día siempre el mismo,
 // que si no cambiaría de frase cada vez que recarga.
@@ -393,19 +373,27 @@ const CIERRES = [
 ];
 
 const InicioNuevo = () => {
-    const { user, profile, api, can, appSettings, pantalla } = useAuth();
+    const { user, profile, api, can, appSettings, pantalla, habilitaciones, planCatalog } = useAuth();
     const navigate = useNavigate();
     const [comido, setComido] = useState({ P: 0, H: 0, G: 0 });
     // El objetivo del día ya resuelto por el servidor (el del día menos el peri): el mismo
     // número que la cabecera de Nutrición. No se recalcula aquí, y no hay segunda fuente:
     // mientras no llegue, arriba no hay números (ver `diaCargado`).
     const [objetivoComidas, setObjetivoComidas] = useState(null);
+    // El documento entero del día (`GET /diets/{hoy}`): TuDietaHoy necesita las comidas
+    // una a una para la lista de «Marca lo que ya te has comido».
+    const [dieta, setDieta] = useState(null);
     const [diaCargado, setDiaCargado] = useState(false);
     const [suplementos, setSuplementos] = useState([]);
     const [rutina, setRutina] = useState(null);
     const [entrenoDeHoy, setEntrenoDeHoy] = useState(null);
     // Lo que le toca hoy según el servidor: si tiene rutina, qué día es y si es descanso.
     const [entrenoDelDia, setEntrenoDelDia] = useState(null);
+    // La rutina en PDF que sube el entrenador: para quien la tiene, ESA es su rutina
+    // (mismo patrón que RoutinePage tras el arreglo del 21-08).
+    const [pdfRutina, setPdfRutina] = useState(null);
+    // El día de mañana, para la línea «Mañana · aún sin dieta · Repetir la de hoy».
+    const [dietaManana, setDietaManana] = useState(null);
     const [ultimoCierre, setUltimoCierre] = useState(null);
     const [reportes, setReportes] = useState([]);
     const [tienePreferencias, setTienePreferencias] = useState(true);
@@ -420,7 +408,7 @@ const InicioNuevo = () => {
             // fuentes -- ese fue el fallo: según cuál llegara antes, Inicio enseñaba 190, 235
             // o 225 del mismo día mientras el cliente miraba. Viene resuelto con la dieta o
             // no viene.
-            const [dietaRes, suplRes, rutinaRes, logRes, cierreRes, dueRes, prefsRes] = await Promise.all([
+            const [dietaRes, suplRes, rutinaRes, logRes, cierreRes, dueRes, prefsRes, pdfRes, mananaRes] = await Promise.all([
                 api.get(`/diets/${hoyDeLaDieta()}`).catch(() => ({ data: { exists: false } })),
                 api.get('/supplements/current').catch(() => ({ data: null })),
                 api.get('/routines/current').catch(() => ({ data: null })),
@@ -428,6 +416,8 @@ const InicioNuevo = () => {
                 api.get('/checkins?type=daily&limit=1').catch(() => ({ data: [] })),
                 api.get('/reports/due').catch(() => ({ data: { items: [] } })),
                 api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
+                api.get('/routines/pdf/info').catch(() => ({ data: { hay: false } })),
+                api.get(`/diets/${mananaDeLaDieta()}`).catch(() => ({ data: { exists: false } })),
             ]);
             // EN INICIO, SOLO LA SUYA. Desde el 18-08 el servidor manda la suplementación
             // general a quien no tiene la suya escrita, y ahí está bien: la pestaña tiene
@@ -439,11 +429,14 @@ const InicioNuevo = () => {
             setEntrenoDeHoy(logRes.data?.log || null);
             // Qué le toca hoy lo dice el SERVIDOR, que cuenta los días en hora de España.
             setEntrenoDelDia(logRes.data?.tiene_rutina ? logRes.data : null);
+            setPdfRutina(pdfRes.data?.hay ? pdfRes.data : null);
+            setDietaManana(mananaRes.data || null);
             setUltimoCierre(Array.isArray(cierreRes.data) ? cierreRes.data[0] || null : null);
             setReportes(dueRes.data?.items || []);
             setTienePreferencias(!!prefsRes.data?.has_preferences);
 
             const dieta = dietaRes.data;
+            setDieta(dieta || null);
             // Viene aunque el día no exista todavía: el objetivo es del día, no de lo que
             // haya puesto.
             setObjetivoComidas(dieta?.objetivo_comidas || null);
@@ -469,8 +462,8 @@ const InicioNuevo = () => {
 
     // EL OBJETIVO, EL MISMO QUE ENSEÑA NUTRICIÓN. Lo resuelve el servidor con el reparto de
     // ese día, ya con el perientreno descontado. O ese, o ninguno: no hay segundo camino.
+    // (TuDietaHoy le suma el peri por su cuenta para la vista «Macros», con el reparto vivo.)
     const objetivo = objetivoDelDia(objetivoComidas);
-    const estadoDia = objetivo ? estadoDelDia(comido, objetivo) : null;
 
     // El cierre del día de HOY (hora de España, que es como cuenta el backend).
     const cierreDeHoy = ultimoCierre && diaEnEspana(aFecha(ultimoCierre.created_at) || new Date()) === hoyEnEspana()
@@ -507,6 +500,56 @@ const InicioNuevo = () => {
         entrenoDeHoy?.pesos?.[0]?.ejercicio
             ? `${entrenoDeHoy.pesos[0].ejercicio}${entrenoDeHoy.pesos[0].peso_kg != null ? ` ${num1(entrenoDeHoy.pesos[0].peso_kg)} kg` : ''}`
             : ''].filter(Boolean).join(' · ');
+
+    // «· día de entreno / día de descanso» en la cabecera, como el Inicio de siempre.
+    // Manda el día guardado (es del que salen los macros); si no hay, lo que diga la rutina.
+    const tipoDeDia = dieta?.exists && dieta.tipo_dia
+        ? (dieta.tipo_dia === 'descanso' ? 'descanso' : 'entreno')
+        : entrenoDelDia ? (entrenoDelDia.descanso ? 'descanso' : 'entreno') : null;
+
+    // El PDF se abre vía blob porque el visor del navegador no manda el token (mismo
+    // camino que RoutinePage y EntrenoPage).
+    const abrirPdfRutina = async () => {
+        try {
+            const r = await api.get('/routines/pdf', { responseType: 'blob' });
+            window.open(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })), '_blank');
+        } catch { toast.error('No hemos podido abrir tu rutina. Inténtalo en un momento.'); }
+    };
+
+    // ── 4.3: PLAN POR PLAN, POR EL CATÁLOGO (habilitaciones), jamás por nombre de plan ──
+    const h = habilitaciones || {};
+    // «Tus macros los pones tú · Cambiarlos»: los planes de autogestión (el catálogo lo
+    // dice con `edita_macros`). Gold y Premium lo llevan a false y no ven la tarjeta.
+    const ponesTusMacros = can('edita_macros') && !!objetivo;
+    // «La rutina del mes» sin rutina cargada: Calculadora y ELM (`rutina: del_mes`).
+    // `can('rutina')` añade el interruptor t3 del panel, el mismo que abre la ruta.
+    const rutinaDelMes = h.rutina === 'del_mes' && can('rutina');
+    // «Escribir a tu entrenador»: el apartado de contacto de los planes sin entrenador,
+    // si su catálogo trae un canal de verdad (el de solo incidencias técnicas no lo es).
+    const canalContacto = (h.canal_contacto || '').trim();
+    const escribirAlEntrenador = h.acompanamiento === 'solo_app' && canalContacto
+        && !/^ninguno$/i.test(canalContacto) && !/incidencias/i.test(canalContacto);
+    const contestaElViernes = /viernes/i.test(canalContacto);
+    // La tarjeta de venta del que no lleva rutina pero puede comprarla (`rutina: opcional`,
+    // hoy Mantenimiento). El precio es el del complemento del catálogo («Suelta», 67 €):
+    // si el catálogo no lo dice, no hay tarjeta.
+    const precioRutinaSuelta = (planCatalog?.rutina_mes?.precios || [])
+        .find((p) => /suelta/i.test(p.label || ''))?.importe;
+    const ventaRutina = h.rutina === 'opcional' && !entrenoDelDia && !rutina && !pdfRutina
+        && precioRutinaSuelta != null;
+
+    // ── La línea de mañana: a Nutrición en el día de mañana (?date=, como Mi semana) ──
+    const manana = (() => {
+        const d = dietaManana;
+        const comidas = (d?.exists && d.comidas) || {};
+        const conAlimentos = Object.entries(comidas)
+            .filter(([k]) => k !== 'Intra' && k !== 'Post')
+            .filter(([, c]) => (c?.alimentos || []).length > 0).length;
+        if (!conAlimentos) return { detalle: 'aún sin dieta', accion: 'Repetir la de hoy' };
+        const total = d.num_comidas || 4;
+        if (conAlimentos < total) return { detalle: `empezada · ${conAlimentos} de ${total} comidas`, accion: 'Terminarla' };
+        return { detalle: 'dieta montada', accion: 'Verla' };
+    })();
 
     // ── Lo pendiente, en el orden del documento ──
     const pendientes = [];
@@ -595,6 +638,9 @@ const InicioNuevo = () => {
             <header>
                 <p className="text-sm text-muted-foreground first-letter:uppercase" data-testid="inicio-fecha">
                     {fechaLargaDeHoy()}
+                    {/* «DÍA DE ENTRENO», no «entreno» (la regla del 13-08, la misma que en
+                        el Inicio viejo): es el tipo de día del que salen los macros. */}
+                    {tipoDeDia && <span> · día de {tipoDeDia === 'descanso' ? 'descanso' : 'entreno'}</span>}
                 </p>
                 <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase text-foreground leading-none mt-1">
                     Hola, {user?.name?.split(' ')[0]}
@@ -612,48 +658,83 @@ const InicioNuevo = () => {
                 </section>
             )}
 
-            <section className="space-y-3">
-                <p className="caption">Lo que toca hoy</p>
+            {/* «TU DIETA HOY» (doc del 21-08, tarea 4.2): el deslizador Macros · Dieta ·
+                Llevas · Falta y, debajo, «Marca lo que ya te has comido». Vive en
+                components/inicio/TuDietaHoy.
 
-                {/* MIENTRAS NO SE SEPA EL OBJETIVO, NO HAY NÚMEROS.
-                    Antes, hasta que llegaba la respuesta del día se pintaba el objetivo
-                    crudo del cliente, así que el mismo día decía 190, luego 235 y luego 225
-                    en tres lecturas seguidas de la misma pantalla. Un número que se corrige
-                    solo mientras lo miras no se vuelve a creer. */}
-                {!diaCargado ? (
-                    <div className="surface p-5 animate-pulse" data-testid="macros-cargando">
-                        <div className="h-4 w-32 bg-muted rounded" />
-                        <div className="grid grid-cols-3 gap-3 mt-4">
-                            {[0, 1, 2].map((i) => <div key={i} className="h-20 bg-muted rounded-xl" />)}
-                        </div>
+                MIENTRAS NO SE SEPA EL OBJETIVO, NO HAY NÚMEROS: la regla de siempre. Un
+                número que se corrige solo mientras lo miras no se vuelve a creer. */}
+            {!diaCargado ? (
+                <div className="surface p-5 animate-pulse" data-testid="macros-cargando">
+                    <div className="h-4 w-32 bg-muted rounded" />
+                    <div className="grid grid-cols-3 gap-3 mt-4">
+                        {[0, 1, 2].map((i) => <div key={i} className="h-20 bg-muted rounded-xl" />)}
                     </div>
-                ) : objetivo ? (
-                    <div className="surface surface-hover overflow-hidden cursor-pointer" data-testid="macros-de-hoy"
-                        onClick={() => navigate('/dashboard/nutrition')}>
-                        <div className="px-5 pt-5">
-                            <p className="text-sm font-semibold text-foreground">Tus macros de hoy</p>
-                        </div>
-                        <div className="px-5 pb-5 pt-3">
-                            <div className="grid grid-cols-3 gap-3">
-                                <MacroQueFalta label="Proteína" clave="P" servido={comido.P} objetivo={objetivo.P} />
-                                <MacroQueFalta label="Hidratos" clave="H" servido={comido.H} objetivo={objetivo.H} />
-                                <MacroQueFalta label="Grasa" clave="G" servido={comido.G} objetivo={objetivo.G} />
-                            </div>
-                            {/* El titular del día, SOLO cuando los tres cuadran o son válidos. */}
-                            {estadoDia && (
-                                <p className="text-sm font-bold text-center mt-4" data-testid="estado-del-dia"
-                                    style={{ color: COLOR_ESTADO[estadoDia] }}>
-                                    {TEXTO_ESTADO_DIA[estadoDia]}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                ) : (
-                    <LineaDeHoy icono={Scale} titulo="Configura tus macros"
-                        detalle="Introduce tu peso, % graso y objetivo" testId="inicio-sin-macros"
-                        onClick={() => navigate('/dashboard/macro-calculator')} />
-                )}
+                </div>
+            ) : objetivo ? (
+                <TuDietaHoy api={api} userId={user?.id} fecha={hoyDeLaDieta()} dieta={dieta}
+                    objetivo={objetivo} servido={comido} navigate={navigate} />
+            ) : (
+                <LineaDeHoy icono={Scale} titulo="Configura tus macros"
+                    detalle="Introduce tu peso, % graso y objetivo" testId="inicio-sin-macros"
+                    onClick={() => navigate('/dashboard/macro-calculator')} />
+            )}
 
+            {/* «Tus macros los pones tú · Cambiarlos»: solo si el catálogo dice que este
+                plan edita sus macros (Calculadora, ELM, Mantenimiento...). */}
+            {diaCargado && ponesTusMacros && (
+                <LineaDeHoy icono={SlidersHorizontal} titulo="Tus macros los pones tú"
+                    detalle="Cambiarlos" testId="linea-mis-macros"
+                    onClick={() => navigate('/dashboard/macro-calculator')} />
+            )}
+
+            {/* «TU ENTRENO HOY», en una línea: el entreno con su grupo si se conoce, el PDF
+                de rutina si es lo que hay (patrón de RoutinePage tras el arreglo de hoy),
+                la rutina del mes si el plan la trae por catálogo, o Descanso. */}
+            {diaCargado && (esDiaDeEntreno || entrenoDelDia?.descanso || pdfRutina || rutinaDelMes || ventaRutina) && (
+                <section className="space-y-3" data-testid="tu-entreno-hoy">
+                    <p className="caption">Tu entreno hoy</p>
+                    {esDiaDeEntreno ? (
+                        entrenoDeHoy?.hecho ? (
+                            <LineaDeHoy icono={Dumbbell}
+                                titulo={`Entreno${grupoMuscular ? ` · ${grupoMuscular}` : ''}`}
+                                detalle={resumenEntreno || null} hecho testId="linea-entreno"
+                                onClick={() => navigate('/dashboard/entreno')} />
+                        ) : soloCardio ? (
+                            <LineaDeHoy icono={Flame} titulo="Hoy solo cardio"
+                                detalle={[duracionCardio, 'ver la pauta'].filter(Boolean).join(' · ')}
+                                testId="linea-entreno" onClick={() => navigate('/dashboard/entreno')} />
+                        ) : (
+                            <LineaDeHoy icono={Dumbbell}
+                                titulo={`Entreno${grupoMuscular ? ` · ${grupoMuscular}` : ''}`}
+                                detalle="Ver la rutina" testId="linea-entreno"
+                                onClick={() => navigate('/dashboard/entreno')} />
+                        )
+                    ) : entrenoDelDia?.descanso ? (
+                        <LineaDeHoy icono={Moon} titulo="Descanso"
+                            detalle="Hoy no te toca entrenar" testId="linea-entreno"
+                            onClick={() => navigate('/dashboard/entreno')} />
+                    ) : pdfRutina ? (
+                        /* Sin rutina estructurada pero CON PDF: esa ES su rutina. */
+                        <LineaDeHoy icono={FileText} titulo="Tu rutina, en PDF"
+                            detalle="Abrirla" testId="linea-entreno-pdf" onClick={abrirPdfRutina} />
+                    ) : rutinaDelMes ? (
+                        <LineaDeHoy icono={Dumbbell} titulo="La rutina del mes"
+                            detalle="Ver la de este mes" testId="linea-rutina-del-mes"
+                            onClick={() => navigate('/dashboard/routine')} />
+                    ) : (
+                        /* Mantenimiento sin rutina: la tarjeta de venta, con el precio del
+                           catálogo (complemento rutina_mes, «Suelta»). El cobro suelto aún
+                           no tiene pantalla propia: de momento se pide por Mensajes. */
+                        <LineaDeHoy icono={Dumbbell}
+                            titulo={`Quiero la rutina del mes · ${Math.round(precioRutinaSuelta)} €`}
+                            detalle="Pídela y te la preparamos" testId="linea-venta-rutina"
+                            onClick={() => navigate('/dashboard/messages')} />
+                    )}
+                </section>
+            )}
+
+            <div className="space-y-3">
                 {/* LA SUPLEMENTACIÓN NUNCA DICE «PENDIENTE»: se pincha y ve lo que le hemos
                     pautado. Si no tiene nada pautado, no hay línea. */}
                 {nombresSuplementos && (
@@ -663,30 +744,40 @@ const InicioNuevo = () => {
                         onClick={() => navigate('/dashboard/supplements')} />
                 )}
 
-                {esDiaDeEntreno && (
-                    entrenoDeHoy?.hecho ? (
-                        <LineaDeHoy icono={Dumbbell}
-                            titulo={`Entreno${grupoMuscular ? ` · ${grupoMuscular}` : ''}`}
-                            detalle={resumenEntreno || null} hecho testId="linea-entreno"
-                            onClick={() => navigate('/dashboard/entreno')} />
-                    ) : soloCardio ? (
-                        <LineaDeHoy icono={Flame} titulo="Hoy solo cardio"
-                            detalle={[duracionCardio, 'ver la pauta'].filter(Boolean).join(' · ')}
-                            testId="linea-entreno" onClick={() => navigate('/dashboard/entreno')} />
-                    ) : (
-                        <LineaDeHoy icono={Dumbbell} titulo="Lo que te toca entrenar"
-                            detalle={[grupoMuscular, 'ver la rutina'].filter(Boolean).join(' · ')}
-                            testId="linea-entreno" onClick={() => navigate('/dashboard/entreno')} />
-                    )
+                {/* «Escribir a tu entrenador»: el apartado de contacto que el catálogo da a
+                    los planes sin entrenador (hoy, ELM: «te contesta el viernes»). */}
+                {escribirAlEntrenador && (
+                    <LineaDeHoy icono={MessageCircle} titulo="Escribir a tu entrenador"
+                        detalle={contestaElViernes ? 'Te contesta el viernes' : canalContacto}
+                        testId="linea-contacto" onClick={() => navigate('/dashboard/messages')} />
                 )}
 
-                {/* Cerrado el día, la línea se queda arriba con su marca: es lo hecho hoy,
+                {/* Cerrado el día, la línea se queda con su marca: es lo hecho hoy,
                     no algo pendiente. */}
                 {cierreDeHoy && (
                     <LineaDeHoy icono={ClipboardCheck} titulo="¿Cómo fuiste hoy?" hecho
                         testId="linea-cierre-hecho" onClick={() => navigate('/dashboard/checkins')} />
                 )}
-            </section>
+
+                {/* MAÑANA, al final: para programar la víspera sin pasar por Mi semana.
+                    Navega a Nutrición en el día de mañana, que es donde se repite o se
+                    termina. «Repetir la de hoy» se remata allí: aquí solo se abre el día. */}
+                {diaCargado && (
+                    <button onClick={() => navigate(`/dashboard/nutrition?date=${mananaDeLaDieta()}`)}
+                        data-testid="linea-manana"
+                        className="surface surface-hover w-full p-4 flex items-center gap-4 text-left group">
+                        <div className="min-w-0 flex-1">
+                            <p className="font-bold text-foreground text-sm">
+                                Mañana <span className="text-muted-foreground font-normal">· {manana.detalle}</span>
+                            </p>
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-brand flex-shrink-0">
+                            {manana.accion}
+                        </span>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors flex-shrink-0" />
+                    </button>
+                )}
+            </div>
 
             {pendientes.length > 0 && (
                 <section className="space-y-3">
@@ -1538,9 +1629,6 @@ const ClientLayout = () => {
                 </nav>
                 <div className="p-3 border-t border-white/10 space-y-2">
                     <UserChip compact={collapsed} />
-                    {collapsed
-                        ? <div className="flex justify-center"><ThemeToggle variant="icon" testId="theme-toggle-sidebar" /></div>
-                        : <ThemeToggle variant="sidebar" testId="theme-toggle-sidebar" />}
                     {isStaff && (
                         <button onClick={() => navigate('/admin')} data-testid="go-admin-btn"
                             className={`flex items-center gap-2 w-full rounded-lg text-white/50 hover:text-brand hover:bg-brand/10 transition-colors ${collapsed ? 'justify-center py-2.5' : 'px-3 py-2.5'}`}>
@@ -1570,7 +1658,6 @@ const ClientLayout = () => {
                         <Logo12EN12 size="sm" tone="dark" />
                     </div>
                     <div className="flex items-center -mr-2 relative z-10">
-                        <ThemeToggle variant="icon" testId="theme-toggle-topbar" />
                         <button onClick={openNotifications} data-testid="client-bell"
                             className="relative w-10 h-10 rounded-lg flex items-center justify-center text-white/80 hover:bg-white/10">
                             <Bell className="w-5 h-5" />
@@ -1714,7 +1801,6 @@ const ClientLayout = () => {
                         </nav>
                         <div className="p-3 border-t border-white/10 space-y-2">
                             <UserChip />
-                            <ThemeToggle variant="sidebar" testId="theme-toggle-drawer" />
                             {isStaff && (
                                 <button onClick={() => navigate('/admin')}
                                     className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-white/50 hover:text-brand hover:bg-brand/10 transition-colors">

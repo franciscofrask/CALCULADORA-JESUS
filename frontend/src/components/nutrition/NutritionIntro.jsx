@@ -10,7 +10,7 @@ const STEPS = [
     {
         icon: CalendarDays,
         title: 'Elige el día',
-        desc: 'Marca si es día de entrenamiento o de descanso. Tus macros se ajustan solos a cada tipo de día.',
+        desc: 'Marca si es día de entrenamiento o de descanso. Tus macros son distintos según el tipo de día y la app te los cambia sola.',
     },
     {
         icon: Utensils,

@@ -53,7 +53,8 @@ const DayHeader = ({
     summaryExpanded, setSummaryExpanded,
     mealOrder, mealInfo, calculateMealMacros, getMealStatus,
 }) => {
-    // El peri lleva su propia cuenta: ni el total del día ni su objetivo lo incluyen.
+    // La parte de las COMIDAS: al día se le quita el peri, que lleva su propia cuenta
+    // (el chip de abajo y las filas del detalle). De aquí sale el ESTADO del día.
     const mainP = dayMacros.P - servedPeriP;
     const mainH = dayMacros.H - servedPeriH;
     const mainG = dayMacros.G - servedPeriG;
@@ -69,10 +70,16 @@ const DayHeader = ({
     const dayStatus = getDayStatus();
     const hayPeri = tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri';
 
+    // LOS NÚMEROS GRANDES ENSEÑAN EL DÍA ENTERO, PERI INCLUIDO (doc 21-08, apartado 11):
+    // arriba un solo objetivo y un solo servido, con el perientreno dentro, en los cuatro
+    // modos de peri. El reparto interno no cambia: `val`/`tgt` siguen siendo los de las
+    // comidas y de ahí sale el estado (el mismo criterio que getDayStatus); `valDia`/`tgtDia`
+    // son solo lo que se pinta. El chip del perientreno sigue debajo con su propia cuenta.
+    // En grasa día y comidas coinciden: el peri no lleva grasa.
     const macros = [
-        { key: 'P', label: 'Proteína', val: mainP, tgt: tgtP || 0, color: MACRO.P },
-        { key: 'H', label: 'Hidratos', val: mainH, tgt: tgtH || 0, color: MACRO.H },
-        { key: 'G', label: 'Grasa', val: mainG, tgt: tgtG || 0, color: MACRO.G },
+        { key: 'P', label: 'Proteína', val: mainP, tgt: tgtP || 0, valDia: dayMacros.P, tgtDia: dayTarget.P_total ?? 0, color: MACRO.P },
+        { key: 'H', label: 'Hidratos', val: mainH, tgt: tgtH || 0, valDia: dayMacros.H, tgtDia: dayTarget.H_total ?? 0, color: MACRO.H },
+        { key: 'G', label: 'Grasa', val: mainG, tgt: tgtG || 0, valDia: dayMacros.G, tgtDia: tgtG || 0, color: MACRO.G },
     ];
 
     return (
@@ -153,7 +160,9 @@ const DayHeader = ({
                 Tres estados, con su titular, que es lo que el documento echaba en falta:
                 la app no distinguía «sin empezar» de «a medias» ni de «terminado». */}
             {(() => {
-                const nadaPuesto = macros.every(m => m.val === 0);
+                // A cero se mira el día entero, peri incluido: con solo el batido del
+                // entreno puesto ya no vale decir «Hoy tienes que comer».
+                const nadaPuesto = macros.every(m => m.valDia === 0);
                 // Pasarse SOLO cuenta en hidratos y grasa (Jesús, 13-08): el criterio es el
                 // de `lib/exceso`, el mismo que usan las tarjetas de comida y el chat.
                 const pasados = macros.filter(m => m.tgt > 0 && seExcede(m.key, m.val, m.tgt));
@@ -173,6 +182,12 @@ const DayHeader = ({
                 const titular = cuadrado ? 'Día cuadrado'
                     : nadaPuesto ? 'Hoy tienes que comer'
                     : pasado ? 'Te has pasado' : 'Te queda por comer';
+                // El «por cuánto», sobre el total del día (peri dentro), que es el que
+                // enseñan los números grandes. Puede quedar vacío: el exceso está en las
+                // comidas y el peri aún pendiente lo compensa; entonces no se pone cifra.
+                const excesoDia = pasado ? textoExceso(
+                    Object.fromEntries(macros.map(m => [m.key, m.valDia])),
+                    Object.fromEntries(macros.map(m => [m.key, m.tgtDia]))) : '';
                 return (
                     <div className="mt-5 lg:hidden" data-testid="dia-resumen">
                         <p className={`text-sm font-bold ${cuadrado ? 'text-emerald-600 dark:text-emerald-400' : pasado ? 'text-red-500' : 'text-muted-foreground'}`}
@@ -180,16 +195,14 @@ const DayHeader = ({
                             {titular}
                             {/* POR CUÁNTO. «Te has pasado» a secas obliga a restar de cabeza
                                 mirando los tres números de abajo (Jesús, 13-08). */}
-                            {pasado && <span className="font-semibold"> · {textoExceso(
-                                Object.fromEntries(macros.map(m => [m.key, m.val])),
-                                Object.fromEntries(macros.map(m => [m.key, m.tgt])))}</span>}
+                            {pasado && excesoDia && <span className="font-semibold"> · {excesoDia}</span>}
                         </p>
                         <div className="grid grid-cols-3 gap-3 max-w-md mt-2">
-                            {macros.map(({ key, label, val, tgt, color }) => {
-                                const over = tgt > 0 && seExcede(key, val, tgt);
+                            {macros.map(({ key, label, valDia, tgtDia, color }) => {
+                                const over = tgtDia > 0 && seExcede(key, valDia, tgtDia);
                                 // Cuadrado o pasado, el número que importa es el total, no un
                                 // «te quedan 0» repetido tres veces.
-                                const grande = (cuadrado || over) ? Math.round(val) : Math.max(0, Math.round(tgt - val));
+                                const grande = (cuadrado || over) ? Math.round(valDia) : Math.max(0, Math.round(tgtDia - valDia));
                                 return (
                                     // Centrado dentro de su columna, como en Inicio: los tres
                                     // números tienen anchos distintos (235, 60) y alineados a
@@ -202,7 +215,7 @@ const DayHeader = ({
                                             solo aporta cuando ya has comido algo (Jesús, 11-08). */}
                                         {!nadaPuesto && (
                                             <p className="text-xs text-muted-foreground font-data">
-                                                {cuadrado || over ? `de ${tgt.toFixed(0)}` : `de ${tgt.toFixed(0)} en total`}
+                                                {cuadrado || over ? `de ${tgtDia.toFixed(0)}` : `de ${tgtDia.toFixed(0)} en total`}
                                             </p>
                                         )}
                                     </div>
@@ -227,9 +240,11 @@ const DayHeader = ({
                             // Esta línea existe para que no se ponga a buscar un macro que ya
                             // está; del que se ha pasado ya le avisa el titular, y repetirlo en
                             // verde suena a que va bien.
+                            // Cubierto se mira sobre el día entero: con el batido del post
+                            // pendiente, la proteína del día NO está, aunque las comidas sí.
                             const cubiertos = macros.filter(
-                                m => m.tgt > 0 && m.val >= m.tgt - 4 && !seExcede(m.key, m.val, m.tgt));
-                            if (!cubiertos.length || cubiertos.length === macros.filter(m => m.tgt > 0).length) return null;
+                                m => m.tgtDia > 0 && m.valDia >= m.tgtDia - 4 && !seExcede(m.key, m.valDia, m.tgtDia));
+                            if (!cubiertos.length || cubiertos.length === macros.filter(m => m.tgtDia > 0).length) return null;
                             const nombres = cubiertos.map(m => NOMBRE[m.key]).filter(Boolean);
                             const texto = nombres.length === 1
                                 ? `${nombres[0].charAt(0).toUpperCase()}${nombres[0].slice(1)} ya la tienes cubierta.`
@@ -269,26 +284,28 @@ const DayHeader = ({
                 que en Inicio. Lo que sobra se sigue diciendo con la palabra de siempre
                 («sobran»), que es la que Jesús da por buena dentro de la calculadora. */}
             <div className="hidden lg:block mt-5 max-w-2xl space-y-2">
-                {macros.map(({ key, label, val, tgt, color }) => {
-                    const over = tgt > 0 && seExcede(key, val, tgt);
-                    const falta = Math.max(0, tgt - val);
+                {/* Aquí también el día entero, peri incluido (doc 21-08, apartado 11),
+                    como en el teléfono: un solo objetivo y un solo servido. */}
+                {macros.map(({ key, label, valDia, tgtDia, color }) => {
+                    const over = tgtDia > 0 && seExcede(key, valDia, tgtDia);
+                    const falta = Math.max(0, tgtDia - valDia);
                     // Cubierto: dentro del mismo margen de 4 g con el que la comida se da por
                     // cuadrada, para no decir «te faltan 0» ni contradecir a la tarjeta.
-                    const cubierto = !over && (tgt <= 0 || falta < 4);
+                    const cubierto = !over && (tgtDia <= 0 || falta < 4);
                     return (
                         <div key={key} className="flex items-center gap-3">
                             <span className="text-[13px] text-muted-foreground w-[64px] flex-shrink-0">{label}</span>
                             <span className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
                                 <span className="block h-full rounded-full transition-all duration-300"
-                                    style={{ width: `${tgt > 0 ? Math.min((val / tgt) * 100, 100) : 0}%`, backgroundColor: over ? '#EF4444' : color }} />
+                                    style={{ width: `${tgtDia > 0 ? Math.min((valDia / tgtDia) * 100, 100) : 0}%`, backgroundColor: over ? '#EF4444' : color }} />
                             </span>
                             <span className={`font-data text-[13px] text-right w-[150px] flex-shrink-0 ${over ? 'text-red-500 font-bold' : 'text-foreground'}`}
                                 data-testid={`dia-escritorio-${key}`}
-                                title={`Llevas ${val.toFixed(0)} g de ${tgt.toFixed(0)} g`}>
+                                title={`Llevas ${valDia.toFixed(0)} g de ${tgtDia.toFixed(0)} g`}>
                                 {over
-                                    ? <>sobran {fmtGramos(val - tgt)} g</>
+                                    ? <>sobran {fmtGramos(valDia - tgtDia)} g</>
                                     : cubierto
-                                        ? <>Ya está <span className="text-muted-foreground">· de {tgt.toFixed(0)}</span></>
+                                        ? <>Ya está <span className="text-muted-foreground">· de {tgtDia.toFixed(0)}</span></>
                                         : <>Te faltan {Math.round(falta)}
                                             {/* EL «DE X» VA SIEMPRE (punto 13 del 17-08).
                                                 Se ocultaba con el día a cero, pensando que
@@ -297,7 +314,7 @@ const DayHeader = ({
                                                 día y el cliente pierde la referencia justo
                                                 cuando abre la app y todo está a cero. Inicio ya
                                                 lo pinta siempre; esto era el segundo criterio. */}
-                                            <span className="text-muted-foreground"> de {tgt.toFixed(0)}</span></>}
+                                            <span className="text-muted-foreground"> de {tgtDia.toFixed(0)}</span></>}
                             </span>
                         </div>
                     );
@@ -341,14 +358,7 @@ const DayHeader = ({
                     maneras distintas por la app y el abreviado no lo entiende nadie que no
                     lleve meses aquí. */}
                 {hayPeri && (
-                    /* POR QUÉ EL OBJETIVO DE ARRIBA ES MENOR QUE SUS MACROS (punto 11 del
-                       17-08). Al montar el día con perientreno, el número grande baja -- de
-                       175 g de proteína a 130, por ejemplo -- porque el peri sale del total y
-                       lleva su cuenta aparte. Es correcto y está en el método, pero en
-                       pantalla parecía que se le habían recortado los macros y nadie se lo
-                       decía. El `title` lo explica donde ocurre, sin añadir otra línea. */
-                    <span className="text-[11px] text-muted-foreground font-data cursor-help"
-                        title={`El perientreno va aparte: estos ${totalPeriP.toFixed(0)} g de proteína y ${totalPeriH.toFixed(0)} de hidratos salen del total del día, por eso el objetivo de arriba es el resto.`}>
+                    <span className="text-[11px] text-muted-foreground font-data">
                         perientreno {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
                     </span>
                 )}

@@ -571,6 +571,31 @@ async def update_diet_targets(fecha: str, data: dict, user = Depends(get_current
     )
     return {"message": "Targets actualizados", "fecha": fecha}
 
+@router.patch("/{fecha}/comida-marcada")
+async def marcar_comida(fecha: str, data: dict, user = Depends(get_current_user)):
+    """La casilla por comida del Inicio nuevo (bloque 4 del doc 21-08).
+
+    «Marcar la comida es lo que cuenta como comida»: de aquí salen Llevas y Falta del
+    deslizador. Se guarda dentro de la propia comida (`comidas.{k}.marcada`) para que
+    viaje con el día: la marca es del cliente en cualquier aparato, no de un navegador.
+    El peri no se marca (regla 3 del diseño), así que Intra y Post se rechazan.
+    """
+    _validar_fecha(fecha)
+    comida = data.get("comida") if isinstance(data, dict) else None
+    marcada = bool(data.get("marcada")) if isinstance(data, dict) else None
+    if not isinstance(comida, str) or not _re.fullmatch(r"C[1-9]", comida):
+        raise HTTPException(status_code=400, detail="Dime qué comida marco (C1 a C9).")
+    await db.diets.update_one(
+        {"user_id": user["id"], "fecha": fecha},
+        {"$set": {
+            f"comidas.{comida}.marcada": marcada,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"fecha": fecha, "comida": comida, "marcada": marcada}
+
+
 @router.post("/copy-day")
 async def copy_day(data: dict, user = Depends(get_current_user)):
     """Copiar el día completo (todas las comidas) de una fecha a otra."""

@@ -3189,7 +3189,7 @@ class AgentTools:
             b.pop("avisos", None)
             b.pop("no_aplicable", None)
             return {"ok": True, "borrador": b,
-                    "nota": ("Es la MISMA opción con las cantidades cuadradas, no otra "
+                    "nota": ("Es la MISMA opción con las cantidades ajustadas, no otra "
                              "distinta. Dile qué ha cambiado en una línea.")}
 
         for op in operaciones or []:
@@ -4138,7 +4138,7 @@ class AgentTools:
                     hechos.append({"op": op, "detalle": {
                         "cambios": cambios or ["ninguna cantidad ha necesitado cambio"],
                         "falta_ahora": self.bot.get_remaining_macros(),
-                        "nota": ("Es la MISMA comida con las cantidades cuadradas, no "
+                        "nota": ("Es la MISMA comida con las cantidades ajustadas, no "
                                  "otra distinta. Dile qué ha cambiado en una línea.")}})
                 else:
                     fallos.append({"op": op, "detalle": f"operación desconocida '{tipo}'"})
@@ -4748,7 +4748,7 @@ class AgentTools:
                     "error": (f"lo de ese día ({', '.join(f.get('nombre', '?') for f in foods)}) "
                               f"no cabe en lo que te falta en {self.bot.meal_label(key)}"),
                     "nota": ("Díselo con esos nombres y ofrécele quitar alguna pieza o "
-                             "llevarlo a otra comida. NO lo montes a medias.")}
+                             "llevarlo a otra comida. NO montes media comida.")}
 
         tot = {m: round(sum(i["macros"][m] for i in items), 1) for m in ("P", "H", "G")}
         borradores = self.bot.state.setdefault("borradores", {})
