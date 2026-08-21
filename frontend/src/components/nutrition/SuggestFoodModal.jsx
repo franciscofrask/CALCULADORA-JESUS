@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
-import { X, Upload, Loader2 } from 'lucide-react';
+import { Upload, Loader2 } from 'lucide-react';
 import HelpTooltip from '../HelpTooltip';
 import { mensajeDeError } from '../../lib/mensajeDeError';
 
@@ -116,12 +116,8 @@ const SuggestFoodModal = ({ open, onClose, onSubmitted }) => {
         <Dialog open={open} onOpenChange={(o) => !o && close()}>
             <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
                 <DialogHeader className="bg-bg-dark p-4 flex-shrink-0">
-                    <div className="flex items-center justify-between">
-                        <DialogTitle className="text-white">Sugerir un alimento</DialogTitle>
-                        <button onClick={close} className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-                            <X className="w-5 h-5 text-white" />
-                        </button>
-                    </div>
+                    {/* Sin X propia: la trae el DialogContent y cierra por onOpenChange (había dos) */}
+                    <DialogTitle className="text-white">Sugerir un alimento</DialogTitle>
                     <DialogDescription className="text-white/60 text-sm">
                         Rellena los datos de la etiqueta del producto. El equipo lo revisará y, si procede, lo añadirá a la calculadora.
                     </DialogDescription>

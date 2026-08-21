@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, Trash2, X } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Input } from '../ui/input';
@@ -147,13 +147,8 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado }) => {
             <Dialog open={abierto} onOpenChange={(o) => !o && cerrar()}>
                 <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
                     <DialogHeader className="bg-bg-dark p-4 flex-shrink-0">
-                        <div className="flex items-center justify-between">
-                            <DialogTitle className="text-white">Añadir un extra</DialogTitle>
-                            <button onClick={cerrar}
-                                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-                                <X className="w-5 h-5 text-white" />
-                            </button>
-                        </div>
+                        {/* Sin X propia: la trae el DialogContent y cierra por onOpenChange (había dos) */}
+                        <DialogTitle className="text-white">Añadir un extra</DialogTitle>
                         <DialogDescription className="sr-only">
                             Busca el alimento que te has comido fuera de tu dieta y di cuánto ha sido
                         </DialogDescription>
