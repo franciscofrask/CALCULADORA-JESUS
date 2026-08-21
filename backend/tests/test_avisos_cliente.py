@@ -311,41 +311,52 @@ class TestElQuincenal:
 
 class TestElSemanal:
     """La rama semanal (Premium/6M), calcada del quincenal: antes el que tenia cadencia
-    semanal no recibia NINGUN aviso de reporte. Su ventana abre y cierra el mismo dia
-    (domingo 00:00 -> 23:00, HORAS_DEL_DOC), asi que el recordatorio de ultimo dia cae
-    ese mismo domingo desde las 9:00, solo si sigue sin mandarlo."""
+    semanal no recibia NINGUN aviso de reporte.
 
-    DOMINGO = _es(2026, 8, 9, 0)        # 2026-08-09 es domingo
+    LA VENTANA ES LA DEL DOC DEL 21-08 (apartado 15): abre el VIERNES a las 10:00 y
+    cierra el SABADO a las 10:00. (Hasta ese doc iba de domingo 00:00 a domingo 23:00,
+    que era un relleno: ningun documento la cubria; estos tests codificaban esa ventana
+    vieja y se actualizaron con la regla nueva.) El recordatorio de ultimo dia cae el
+    sabado desde las 8:00 -- no las 9:00 del quincenal, porque aqui se cierra a las
+    10:00 de la MAÑANA y avisar a las 9:00 dejaba una hora --, solo si sigue sin
+    mandarlo ni aplazarlo."""
+
+    VIERNES = _es(2026, 8, 7, 10)       # 2026-08-07 es viernes; abre a las 10:00
 
     def _v(self, **kw):
-        return _ventana("semanal", self.DOMINGO, dias_hasta_cierre=0, hora_cierre=23, **kw)
+        # Cierra el sabado 8 a las 10:00, veinticuatro horas despues.
+        return _ventana("semanal", self.VIERNES, dias_hasta_cierre=1, hora_cierre=10, **kw)
 
-    def test_el_domingo_se_abre(self):
-        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 8), ventanas=[self._v()])
+    def test_el_viernes_a_las_10_se_abre(self):
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 7, 10, 30), ventanas=[self._v()])
         assert _claves(a) == ["semanal_abierto"]
         assert a[0]["variantes"][0]["titulo"] == "Tu reporte semanal está abierto"
+        assert "hasta mañana a las 10:00" in a[0]["variantes"][0]["cuerpo"]
         assert len(a[0]["variantes"]) == 3
 
-    def test_desde_las_9_se_le_recuerda_si_no_lo_mando(self):
-        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 10), ventanas=[self._v()])
-        assert _claves(a) == ["semanal_abierto", "semanal_ultimo"]
-        ultimo = [x for x in a if x["familia"] == "semanal_ultimo"][0]
-        assert ultimo["variantes"][0]["titulo"] == "Último día para tu semanal"
+    def test_el_viernes_antes_de_las_10_nada(self):
+        assert avisos_de_calendario_doc(ahora_es=_es(2026, 8, 7, 9, 59),
+                                        ventanas=[self._v()]) == []
+
+    def test_el_sabado_desde_las_8_se_le_recuerda_si_no_lo_mando(self):
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 8, 8), ventanas=[self._v()])
+        assert _claves(a) == ["semanal_ultimo"]
+        assert a[0]["variantes"][0]["cuerpo"] == "Se cierra hoy a las 10:00."
 
     def test_si_ya_lo_mando_no_se_le_recuerda(self):
-        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 10),
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 8, 8),
                                      ventanas=[self._v(mandado=True)])
-        assert _claves(a) == ["semanal_abierto"]
+        assert a == []
 
     def test_aplazado_apaga_el_recordatorio(self):
-        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 10),
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 8, 8),
                                      ventanas=[{**self._v(), "aplazado": True}])
-        assert _claves(a) == ["semanal_abierto"]
+        assert a == []
 
-    def test_el_lunes_ya_no_se_insiste(self):
+    def test_el_domingo_ya_no_se_insiste(self):
         """El semanal no lleva el aviso del martes ('no me llego'): a la semana
         siguiente ya le toca el suyo, como al quincenal."""
-        assert avisos_de_calendario_doc(ahora_es=_es(2026, 8, 10, 9),
+        assert avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 9),
                                         ventanas=[self._v()]) == []
 
 

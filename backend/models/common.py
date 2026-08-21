@@ -133,6 +133,11 @@ class ReportCreate(BaseModel):
     # QUINCENAL · las cuatro preguntas
     molestias: Optional[str] = Field(None, max_length=4000)
     sensaciones: Optional[int] = Field(None, ge=1, le=5)
+    # SEMANAL · «¿Hay algo la semana que viene que te altere la rutina?» (doc 21-08,
+    # apartado 15). Es la pregunta que hace que el ajuste sirva: el entrenador ajusta
+    # PARA la semana que viene, y un viaje o un cambio de turno lo cambian todo. Solo
+    # la lleva la cadencia semanal.
+    semana_proxima: Optional[str] = Field(None, max_length=4000)
     # MENSUAL · 04 dieta
     dieta_dificultad: Optional[str] = Field(
         None, pattern="^(nada|algun_dia|bastante|no_he_podido)$")
@@ -175,6 +180,8 @@ class ReportResponse(BaseModel):
     tipo: Optional[str] = None
     molestias: Optional[str] = None
     sensaciones: Optional[int] = None
+    # La del semanal: qué le altera la rutina la semana que viene (doc 21-08).
+    semana_proxima: Optional[str] = None
     dieta_dificultad: Optional[str] = None
     entreno: Optional[Dict[str, Any]] = None
     lesiones: Optional[List[Dict[str, Any]]] = None

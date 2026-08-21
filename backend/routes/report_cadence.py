@@ -258,31 +258,38 @@ def _hora_es(dt: datetime) -> str:
 def _client_deadline(tipo: str, due: datetime, window_start: datetime):
     """Plazo de respuesta del cliente según el catálogo: quincenal → jueves 20:00
     (día siguiente al envío del miércoles); mensual → lunes siguiente al viernes
-    de envío ("lunes de la semana 4"); semanal → fin de la semana de ciclo."""
+    de envío ("lunes de la semana 4"); semanal → sábado 10:00 (doc 21-08: la
+    ventana va del viernes 10:00 al sábado 10:00)."""
     if tipo == "quincenal":
         deadline = (due + timedelta(days=1)).replace(hour=20, minute=0, second=0, microsecond=0)
         return deadline, f"{_fecha_es(deadline)} a las 20:00"
     if tipo == "mensual":
         deadline = (due + timedelta(days=3)).replace(hour=23, minute=59, second=0, microsecond=0)
         return deadline, _fecha_es(deadline)
-    deadline = (window_start + timedelta(days=6)).replace(hour=23, minute=59, second=0, microsecond=0)
-    return deadline, _fecha_es(deadline)
+    sabado = _due_date_in_window(window_start, 5)
+    deadline = sabado.replace(hour=10, minute=0, second=0, microsecond=0)
+    return deadline, f"{_fecha_es(deadline)} a las 10:00"
 
 
 # ==================== Ventana de envío del cliente, EN HORA DE ESPAÑA ====================
 #
-# Cada reporte tiene la suya, con las horas del RELOJ del doc del 19-08 (apartado 02):
+# Cada reporte tiene la suya, con las horas del RELOJ del doc del 19-08 (apartado 02) y,
+# para el semanal, las del doc del 21-08 (apartado 15):
 #
 #   quincenal   miércoles 10:00 -> jueves 20:00
 #   mensual     viernes 10:00   -> lunes 18:00
-#   semanal     viernes 00:00   -> lunes 06:00   (no lo cubre el doc: se queda como estaba)
+#   semanal     viernes 10:00   -> sábado 10:00  (24 horas; el feedback del entrenador,
+#                                                 hasta el domingo 10:00, para que el
+#                                                 cliente empiece el lunes sabiendo qué
+#                                                 cambia)
 #
-# El doc del 16-08 decía miércoles 09:00 y el mensual sin hora de apertura; el del 19-08
-# pone las dos a las 10:00 y manda («si algo de un documento anterior dice lo contrario,
-# manda este»). Antes de todo eso iban en UTC y con el mismo horario, y de ahí salían los
-# desajustes que denunciaba: el quincenal se cerraba el lunes cuando el correo prometía el
-# jueves a las 20:00. Se guarda y se compara en UTC, como el resto del módulo; lo que
-# cambia es que la hora que se le promete al cliente es la suya.
+# El semanal iba de viernes 00:00 a lunes 06:00, que era el horario único de antes (ningún
+# doc lo cubría); el 21-08 lo fija. El doc del 16-08 decía miércoles 09:00 y el mensual sin
+# hora de apertura; el del 19-08 pone las dos a las 10:00 y manda («si algo de un documento
+# anterior dice lo contrario, manda este»). Antes de todo eso iban en UTC y con el mismo
+# horario, y de ahí salían los desajustes que denunciaba: el quincenal se cerraba el lunes
+# cuando el correo prometía el jueves a las 20:00. Se guarda y se compara en UTC, como el
+# resto del módulo; lo que cambia es que la hora que se le promete al cliente es la suya.
 
 
 def _en_madrid(dia: datetime, hora: int, minuto: int = 0) -> datetime:
@@ -298,6 +305,9 @@ def _submission_window(window_start: datetime, tipo: Optional[str] = None):
         return _en_madrid(miercoles, 10), _en_madrid(miercoles + timedelta(days=1), 20)
 
     viernes = _due_date_in_window(window_start, 4)
+    if tipo == "semanal":
+        # Viernes 10:00 -> sábado 10:00 (doc 21-08, apartado 15): veinticuatro horas.
+        return _en_madrid(viernes, 10), _en_madrid(viernes + timedelta(days=1), 10)
     abre = 10 if tipo == "mensual" else 0
     cierra = 18 if tipo == "mensual" else 6
     return _en_madrid(viernes, abre), _en_madrid(viernes + timedelta(days=3), cierra)
@@ -428,9 +438,10 @@ def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any]
 @client_router.get("/due")
 async def get_my_due_report(user=Depends(get_current_user)):
     """Estado del reporte del cliente esta semana (para el banner del dashboard y el
-    formulario): qué tipos tocan y la ventana de envío (viernes 00:00 -> lunes 06:00).
-    Cuando la ventana ABRE crea la notificación de la campanita (una por semana de
-    ciclo). Devuelve {items: [], window: {...}}."""
+    formulario): qué tipos tocan y la ventana de envío de cada uno (quincenal miércoles
+    10:00 -> jueves 20:00, mensual viernes 10:00 -> lunes 18:00, semanal viernes 10:00 ->
+    sábado 10:00). Cuando la ventana ABRE crea la notificación de la campanita (una por
+    semana de ciclo). Devuelve {items: [], window: {...}}."""
     profile = await db.client_profiles.find_one(
         {"user_id": user["id"]},
         {"_id": 0, "id": 1, "plan": 1, "status": 1, "cycle_start": 1, "created_at": 1},
@@ -457,7 +468,10 @@ async def get_my_due_report(user=Depends(get_current_user)):
     )
     label = _principal_label(state["tipos"])
     closes_label = f"{_fecha_es(win_close)} a las {_hora_es(win_close)}"
-    opens_label = _fecha_es(win_open)
+    # CON HORA (doc 21-08): un botón apagado tiene que decir cuándo se enciende, y «se
+    # abre el viernes» sin el «a las 10:00» manda al cliente a las 8 de la mañana a una
+    # puerta cerrada. La hora es la de España; el navegador la traduce a su huso.
+    opens_label = f"{_fecha_es(win_open)} a las {_hora_es(win_open)}"
     window = {
         "due": True,
         "is_open": state["is_open"],
@@ -520,7 +534,15 @@ async def get_my_due_report(user=Depends(get_current_user)):
             #
             # Va aquí y no en los avisos condicionados a propósito: es de calendario, o sea
             # que no gasta el cupo de uno por semana. Y una sola vez, como el de abrir.
-            if win_close - now <= timedelta(hours=24):
+            # EN EL SEMANAL, SOLO EL DÍA DEL CIERRE (doc 21-08): su ventana entera son 24
+            # horas (viernes 10:00 -> sábado 10:00), así que «a menos de 24 horas del
+            # cierre» se cumple desde el minuto uno y el «último día» salía el viernes a
+            # las 10:00, pegado al de apertura y diciendo «último día» el primer día.
+            # El sábado sí es su último día. El quincenal y el mensual no cambian.
+            hoy_es_el_del_cierre = ((a_madrid(now) or now).date()
+                                    == (a_madrid(win_close) or win_close).date())
+            if win_close - now <= timedelta(hours=24) and (
+                    "semanal" not in state["tipos"] or hoy_es_el_del_cierre):
                 ya_recordado = await db.notifications.find_one({
                     "user_id": user["id"], "type": "reporte",
                     "created_at": {"$gte": state["window_start"].isoformat()},

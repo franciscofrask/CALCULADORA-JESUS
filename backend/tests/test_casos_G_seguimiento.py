@@ -198,15 +198,19 @@ class TestCaso47VentanaAbierta:
     """47. Seguimiento con la ventana del reporte abierta."""
 
     def test_47_con_la_ventana_abierta_toca_reporte_y_hay_fecha_limite(self):
-        # Sabado de la semana 3 del ciclo: el mensual toca y la ventana (viernes 00:00 ->
-        # lunes 06:00) esta abierta.
+        # Sabado de la semana 3 del ciclo: el mensual toca y la ventana (viernes 10:00 ->
+        # lunes 18:00, el reloj del doc del 19-08) esta abierta.
+        #
+        # ESTE TEST CODIFICABA LA VENTANA VIEJA (viernes 00:00 -> lunes 06:00, en UTC) y
+        # llevaba en rojo desde que el 19-08 la movio; se actualizo el 21-08 al repasar
+        # las ventanas del semanal. Lunes 18:00 de Madrid en junio son las 16:00 UTC.
         e = _estado("2026-06-20T12:00:00+00:00")
         assert e["due"] is True, "en la semana del mensual tiene que tocar reporte"
         assert e["tipos"] == ["mensual"]
         assert e["is_open"] is True, "el sabado de esa semana la ventana esta abierta"
         # La fecha limite es lo que Jesus quiere leer en la tarjeta de arriba.
-        assert e["window_close"] == datetime.fromisoformat("2026-06-22T06:00:00+00:00"), \
-            "la ventana cierra el lunes a las 6:00"
+        assert e["window_close"] == datetime.fromisoformat("2026-06-22T16:00:00+00:00"), \
+            "la ventana cierra el lunes a las 18:00 de España"
 
     def test_47_la_semana_que_no_toca_no_hay_tarjeta(self):
         """Y el resto en gris: en la semana 2 de este plan no toca nada."""
@@ -236,16 +240,28 @@ class TestCaso48VentanaCerrada:
 
     def test_48_antes_de_abrir_dice_cuando_abre(self):
         # Miercoles de la semana del mensual: toca, pero todavia no se puede mandar.
+        # (Codificaba la apertura vieja del viernes 00:00; el reloj del 19-08 la puso a
+        # las 10:00 de España -- 08:00 UTC en junio -- y se actualizo el 21-08.)
         e = _estado("2026-06-17T10:00:00+00:00")
         assert e["due"] is True
         assert e["is_open"] is False, "el miercoles la ventana no esta abierta"
-        assert e["window_open"] == datetime.fromisoformat("2026-06-19T00:00:00+00:00"), \
-            "hay que poder decir 'abre el viernes 19', y esa fecha sale de aqui"
+        assert e["window_open"] == datetime.fromisoformat("2026-06-19T08:00:00+00:00"), \
+            "hay que poder decir 'abre el viernes 19 a las 10:00', y esa fecha sale de aqui"
 
     def test_48_ya_cerrada_sigue_sabiendo_las_dos_fechas(self):
-        e = _estado("2026-06-22T07:00:00+00:00")   # lunes, una hora tarde
-        assert e["is_open"] is False
-        assert e["window_open"] < e["window_close"] <= datetime.fromisoformat("2026-06-22T06:00:00+00:00")
+        # Lunes a las 19:00 de España, una hora despues del cierre del 19-08 (18:00).
+        #
+        # CON ANCLA EN MIERCOLES, a proposito: para el perfil anclado en lunes, el lunes
+        # ya es la semana siguiente del ciclo y el mensual deja de tocar (due False), asi
+        # que «cerrada pero de esta semana» no existe. Con el ciclo empezando en miercoles
+        # el lunes sigue siendo la semana 3 y se ve lo que el test quiere ver: cerrada, y
+        # con las dos fechas todavia dichas.
+        from routes.report_cadence import compute_client_report_state
+        perfil = {**PERFIL, "cycle_start": "2026-06-03T00:00:00+00:00"}   # un miercoles
+        e = compute_client_report_state(perfil, CATALOGO,
+                                        datetime.fromisoformat("2026-06-22T17:00:00+00:00"))
+        assert e["due"] is True and e["is_open"] is False
+        assert e["window_open"] < e["window_close"] <= datetime.fromisoformat("2026-06-22T16:00:00+00:00")
 
     def test_48_el_endpoint_cerrado_trae_la_fecha_de_apertura(self, ventana):
         """Lo que la pantalla necesita para no ensenar el formulario apagado."""

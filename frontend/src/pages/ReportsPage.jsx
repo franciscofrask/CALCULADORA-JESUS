@@ -36,7 +36,9 @@ const HistorialDeAjustes = ({ api }) => {
     return <HistorialDeMacros entradas={entradas} />;
 };
 
-// Estado de la ventana de envío (viernes 00:00 -> lunes 06:00).
+// Estado de la ventana de envío. Cada cadencia tiene la suya (el semanal, viernes 10:00
+// -> sábado 10:00, doc 21-08); las fechas las manda el servidor y aquí solo se enseñan,
+// en la hora del navegador (_plazoDelCliente).
 const WindowBanner = ({ w }) => {
     const base = "rounded-2xl p-4 border text-sm flex items-center gap-2";
     if (w?.revision) {
@@ -67,27 +69,29 @@ const WindowBanner = ({ w }) => {
         return (
             <div className={`${base} border-yellow-500/40 bg-yellow-500/5 text-foreground`}>
                 <Calendar className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-                Ventana abierta: rellena tu {w.tipo_label?.toLowerCase()} antes del {w.closes_label}.
+                Ventana abierta: rellena tu {w.tipo_label?.toLowerCase()} antes del {_plazoDelCliente(w.closes_at) || w.closes_label}.
             </div>
         );
     }
     const before = w.opens_at && new Date(w.opens_at).getTime() > Date.now();
+    // Cerrada del todo: la fecha que sirve es la del SIGUIENTE, no la de la ventana que
+    // ya pasó. El servidor la manda en `proximo` (con su ISO para poder decir la hora).
+    const proximaApertura = _plazoDelCliente(w.proximo?.abre) || w.proximo?.abre_label;
     return (
         <div className={`${base} ${before ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-red-500/40 bg-red-500/5'} text-foreground`}>
             <Calendar className={`w-4 h-4 flex-shrink-0 ${before ? 'text-yellow-500' : 'text-red-500'}`} />
             {/* «La semana que viene» no es una fecha, y el servidor sabe cuándo vuelve a abrir:
                 lo mandaba en `opens_label` y aquí no se usaba (Jesús, 11-08). */}
-            {/* NO SE DICE CUÁNDO SE RELLENA, SE DICE CUÁNDO ABRE (punto 7 del 17-08).
-                Ponía «Tu reporte se rellena el fin de semana. La ventana abre el miércoles 19
-                ago.»: dos fechas distintas en la misma frase, y la primera además es falsa
-                para el quincenal, que va de miércoles a jueves. El «fin de semana» era del
-                mensual y se había quedado escrito para los dos. La fecha buena la manda el
-                servidor en `opens_label` y es la única que hace falta. */}
+            {/* UN BOTÓN GRIS INFORMA; UNO QUE NO ESTÁ, NO (doc 21-08): cerrada o aún sin
+                abrir, se dice CUÁNDO se enciende y CON HORA -- «Se abre el viernes a las
+                10:00» --, en la hora del navegador del cliente. */}
             {before
-                ? `Todavía no toca. Se abre el ${String(w.opens_label).split(' a las ')[0]}.`
-                : w.opens_label
-                    ? `La ventana de esta semana se cerró. Se abre el ${String(w.opens_label).split(' a las ')[0]}.`
-                    : 'La ventana de esta semana se cerró. Espera a la semana que viene.'}
+                ? `Todavía no toca. Se abre el ${_plazoDelCliente(w.opens_at) || w.opens_label}.`
+                : proximaApertura
+                    ? `La ventana de esta semana se cerró. Se abre el ${proximaApertura}.`
+                    : w.opens_label
+                        ? `La ventana de esta semana se cerró. Se abría el ${w.opens_label}.`
+                        : 'La ventana de esta semana se cerró. Espera a la semana que viene.'}
         </div>
     );
 };
@@ -138,21 +142,37 @@ const PuertaSeguimiento = ({ titulo, sub, onClick, testid }) => (
     </button>
 );
 
-// EL PLAZO, EN HORA DE ESPAÑA (regla 1 del doc 16-08). El servidor manda `closes_at` en
-// UTC y el cliente vive en España: "hasta el jueves 20 a las 20:00 h España" tiene que
-// decir la hora de allí aunque el teléfono esté puesto en otro huso. Se monta por partes
-// porque el formato de un tirón mete comas donde el doc no las tiene.
+// EL PLAZO, EN LA HORA DEL CLIENTE (doc 21-08, apartado 15). El plazo se FIJA en España
+// -- el servidor manda `closes_at` en UTC y la regla es de allí --, pero se ENSEÑA en la
+// hora del navegador: al que vive en Canarias o está de viaje, "hasta el sábado a las
+// 10:00" a secas le miente una hora o varias. Si el reloj del navegador coincide con el
+// de España se enseña tal cual y sin coletilla; si no, la hora local con la de España
+// entre paréntesis. Se monta por partes porque el formato de un tirón mete comas donde
+// el doc no las tiene. Este es el punto central: WindowBanner, la portada y el
+// formulario (plazoLabel) formatean por aquí.
 const MADRID = 'Europe/Madrid';
 
-const _plazoEnEspana = (iso) => {
-    const d = iso ? new Date(iso) : null;
-    if (!d || isNaN(d)) return null;
+const _partesPlazo = (d, tz) => {
     const partes = new Intl.DateTimeFormat('es-ES', {
-        timeZone: MADRID, weekday: 'long', day: 'numeric',
+        ...(tz ? { timeZone: tz } : {}), weekday: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit', hour12: false,
     }).formatToParts(d);
     const p = (tipo) => partes.find(x => x.type === tipo)?.value || '';
-    return `${p('weekday')} ${p('day')} a las ${p('hour')}:${p('minute')} h España`;
+    return {
+        texto: `${p('weekday')} ${p('day')} a las ${p('hour')}:${p('minute')}`,
+        hora: `${p('hour')}:${p('minute')}`,
+    };
+};
+
+const _plazoDelCliente = (iso) => {
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d)) return null;
+    const espana = _partesPlazo(d, MADRID);
+    let local = espana;
+    try { local = _partesPlazo(d); } catch { /* sin huso legible: se queda la de España */ }
+    // Mismo reloj (España, o un huso con su misma hora): tal cual y sin coletilla.
+    if (local.texto === espana.texto) return espana.texto;
+    return `${local.texto} (${espana.hora} h España)`;
 };
 
 const _diaMadrid = (d) => new Intl.DateTimeFormat('en-CA', {
@@ -198,8 +218,10 @@ const PortadaSeguimiento = ({ windowState, vencido, conDiario, onRevision, onEvo
     const hayReporteALaVista = tocaRevision || yaMandado || aunNoAbre;
     // El plazo, en hora de España y con lo que queda: la ventana son unos días y sin fecha
     // nadie sabe cuánto margen tiene (Jesús, 11-08).
-    const plazo = _plazoEnEspana(windowState?.closes_at);
+    const plazo = _plazoDelCliente(windowState?.closes_at);
     const queda = _cuantoQueda(windowState?.closes_at);
+    // Aún sin abrir: cuándo se enciende, con hora y en su huso (doc 21-08).
+    const apertura = _plazoDelCliente(windowState?.opens_at) || windowState?.opens_label;
 
     return (
         <div className="space-y-3" data-testid="portada-seguimiento">
@@ -213,8 +235,8 @@ const PortadaSeguimiento = ({ windowState, vencido, conDiario, onRevision, onEvo
                         : 'Unas breves preguntas para ajustar tus macros si hace falta.'}
                     extra={tocaRevision && plazo
                         ? `Hasta el ${plazo}${queda ? ` · ${queda}` : ''}`
-                        : aunNoAbre && windowState?.opens_label
-                            ? `Se abre el ${windowState.opens_label}.`
+                        : aunNoAbre && apertura
+                            ? `Se abre el ${apertura}.`
                             : null}
                     cta={tocaRevision ? 'Empezar' : 'Ver'}
                     tono={tocaRevision ? 'ahora' : 'gris'}
@@ -311,7 +333,7 @@ const ReportsPage = () => {
     const [seccionAbierta, setSeccionAbierta] = useState(
         tipoRevision || aplazarPedido ? 'form' : abrirPedida === 'evolucion' ? 'evolution' : null);
     const vista = seccionAbierta;
-    const [windowState, setWindowState] = useState(null);   // ventana de envío (viernes->lunes 6:00)
+    const [windowState, setWindowState] = useState(null);   // ventana de envío (la de su cadencia)
     // Si el plazo ya pasó. Lo dice el servidor en `items[].overdue` y no se calcula aquí:
     // la hora buena es la suya, no la del reloj del teléfono. Pasada la hora, el reporte
     // pendiente desaparece de esta pantalla (y de Inicio, que ya lo hacía).
@@ -479,7 +501,7 @@ const ReportsPage = () => {
                                 // La semana que decidió ESTE reporte (doc 19-08): la de su
                                 // rutina si la tiene; sin rutina, la de su ciclo de siempre.
                                 semana: windowState?.semana_reporte ?? profile?.week,
-                                plazoLabel: _plazoEnEspana(windowState?.closes_at),
+                                plazoLabel: _plazoDelCliente(windowState?.closes_at),
                                 quedaLabel: _cuantoQueda(windowState?.closes_at),
                             }}
                             prev={prev}

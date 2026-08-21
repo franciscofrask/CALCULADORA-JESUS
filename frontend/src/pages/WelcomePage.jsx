@@ -1,9 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useOnboarding } from '../context/OnboardingContext';
 import { Button } from '../components/ui/button';
-import { ArrowRight, Compass, Flame } from 'lucide-react';
+import { ArrowRight, Flame } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import BrandArrow from '../components/BrandArrow';
 
@@ -40,7 +39,6 @@ const MacroPill = ({ label, value, color }) => (
 const WelcomePage = () => {
     const navigate = useNavigate();
     const { user, profile, api, refreshProfile } = useAuth();
-    const { startTour, skipTour, available: recorridoDisponible } = useOnboarding();
 
     // LA VUELTA DE LA PASARELA (19-08). El ajuste a medida de 87 € manda aquí con
     // `?ajuste=ok&session_id=...`, y aquí no lo miraba nadie: el cliente pagaba, Stripe
@@ -65,15 +63,9 @@ const WelcomePage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const beginTour = () => {
-        navigate('/dashboard');
-        startTour();
-    };
-
-    const exploreSolo = () => {
-        skipTour(); // no auto-arrancar el tour en esta carga
-        navigate('/dashboard');
-    };
+    // Al entrar en el Inicio, el recorrido de la primera vez sale solo (doc 21-08,
+    // apartado 23): esta pantalla ya no lo ofrece ni lo salta, solo deja pasar.
+    const entrar = () => navigate('/dashboard');
 
     const mt = profile?.macros_training;
     const hasMacros = mt && (getP(mt) > 0);
@@ -137,36 +129,12 @@ const WelcomePage = () => {
                         </div>
                     )}
 
-                    {/* Con el recorrido apagado esta pantalla no puede ofrecerlo, así que en
-                        vez de dos botones deja uno solo: entrar. Ver RECORRIDO_ACTIVO en
-                        OnboardingContext. */}
-                    {recorridoDisponible ? (
-                        <>
-                            <p className="text-muted-foreground mb-5 text-sm">
-                                Te hacemos un recorrido rápido por la app para que sepas dónde está
-                                cada cosa y cómo preparar tu primer día. Son un par de minutos.
-                            </p>
-
-                            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                                <Button onClick={beginTour} data-testid="welcome-start-btn"
-                                    className="bg-brand hover:bg-brand/90 text-white font-bold uppercase tracking-wider px-8 py-6 text-base">
-                                    <Compass className="w-5 h-5 mr-2" /> Empezar recorrido guiado
-                                </Button>
-                                <Button onClick={exploreSolo} variant="ghost"
-                                    data-testid="welcome-skip-btn"
-                                    className="text-muted-foreground hover:text-foreground font-semibold px-6 py-6 text-base">
-                                    Explorar por mi cuenta <ArrowRight className="w-4 h-4 ml-2" />
-                                </Button>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex justify-center">
-                            <Button onClick={exploreSolo} data-testid="welcome-skip-btn"
-                                className="bg-brand hover:bg-brand/90 text-white font-bold uppercase tracking-wider px-8 py-6 text-base">
-                                Entrar <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
-                        </div>
-                    )}
+                    <div className="flex justify-center">
+                        <Button onClick={entrar} data-testid="welcome-skip-btn"
+                            className="bg-brand hover:bg-brand/90 text-white font-bold uppercase tracking-wider px-8 py-6 text-base">
+                            Entrar <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>

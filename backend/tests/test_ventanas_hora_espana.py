@@ -39,12 +39,74 @@ def test_el_mensual_va_del_viernes_a_las_diez_al_lunes_a_las_seis_de_la_tarde():
         assert _local(cierra) == (0, 18, 0), "el mensual no cierra el lunes a las 18:00"
 
 
-def test_el_semanal_se_queda_como_estaba():
-    """El doc no lo cubre (es del plan con llamadas): no se le cambia el horario, solo se
-    dice en su hora."""
-    abre, cierra = _submission_window(VERANO, "semanal")
-    assert _local(abre) == (4, 0, 0)
-    assert _local(cierra) == (0, 6, 0)
+def test_el_semanal_va_del_viernes_a_las_diez_al_sabado_a_las_diez():
+    """El doc del 21-08 (apartado 15) lo fija: viernes 10:00 -> sabado 10:00, veinticuatro
+    horas. (Este test decia viernes 00:00 -> lunes 06:00, que era el horario unico de
+    antes «porque ningun doc lo cubria»; desde el 21-08 lo cubre y manda.)"""
+    for semana in (VERANO, INVIERNO):
+        abre, cierra = _submission_window(semana, "semanal")
+        assert _local(abre) == (4, 10, 0), "el semanal no abre el viernes a las 10:00"
+        assert _local(cierra) == (5, 10, 0), "el semanal no cierra el sábado a las 10:00"
+        assert cierra - abre == timedelta(hours=24), "la ventana del semanal son 24 horas"
+
+
+# ── Los limites de la ventana del semanal, minuto a minuto (doc 21-08) ────────
+#
+# Con el estado completo (`compute_client_report_state`), que es lo que leen el boton del
+# cliente y el POST /reports: el viernes a las 09:59 el boton esta apagado y a las 10:00
+# encendido; el sabado a las 09:59 sigue abierto y a las 10:00 se cerro.
+
+CATALOGO_SEMANAL = {"plan_semanal": {"habilitaciones": {"reportes": ["semanal"]}}}
+PERFIL_SEMANAL = {"id": "p", "plan": "plan_semanal", "status": "activo",
+                  "cycle_start": "2026-08-03T00:00:00+00:00"}     # un lunes
+
+
+def _estado_semanal(cuando_es):
+    from routes.report_cadence import compute_client_report_state
+    return compute_client_report_state(PERFIL_SEMANAL, CATALOGO_SEMANAL,
+                                       cuando_es.astimezone(timezone.utc))
+
+
+def test_el_viernes_a_las_9_59_el_semanal_sigue_cerrado():
+    from core.tiempo import MADRID
+    e = _estado_semanal(datetime(2026, 8, 21, 9, 59, tzinfo=MADRID))
+    assert e["due"] is True and e["tipos"] == ["semanal"]
+    assert e["is_open"] is False
+
+
+def test_el_viernes_a_las_10_00_el_semanal_abre():
+    from core.tiempo import MADRID
+    e = _estado_semanal(datetime(2026, 8, 21, 10, 0, tzinfo=MADRID))
+    assert e["is_open"] is True
+
+
+def test_el_sabado_a_las_9_59_sigue_abierto():
+    from core.tiempo import MADRID
+    e = _estado_semanal(datetime(2026, 8, 22, 9, 59, tzinfo=MADRID))
+    assert e["is_open"] is True
+
+
+def test_el_sabado_a_las_10_00_ya_esta_cerrado():
+    from core.tiempo import MADRID
+    e = _estado_semanal(datetime(2026, 8, 22, 10, 0, 1, tzinfo=MADRID))
+    assert e["is_open"] is False
+    assert e["due"] is True         # el reporte era de esta semana; solo se cerro
+
+
+def test_la_ventana_de_los_avisos_del_semanal_es_la_misma_que_la_de_envio():
+    """`ventana_del_reporte` (los avisos) y `_submission_window` (el envio) tienen que
+    contar la MISMA ventana: si no, el aviso anuncia una puerta que no abre."""
+    from datetime import date
+
+    from core.calendario_reportes import calendario_del_plan, ventana_del_reporte
+    from core.tiempo import a_utc
+
+    cal = calendario_del_plan({"habilitaciones": {"reportes": ["semanal"]}})
+    v = ventana_del_reporte(cal, "semanal", date(2026, 8, 17))      # lunes 17
+    abre, cierra = _submission_window(
+        datetime(2026, 8, 17, tzinfo=timezone.utc), "semanal")
+    assert a_utc(v["abre"]) == abre
+    assert a_utc(v["cierra"]) == cierra
 
 
 def test_en_invierno_y_en_verano_la_hora_de_espana_es_la_misma():

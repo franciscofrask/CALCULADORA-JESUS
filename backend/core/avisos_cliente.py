@@ -560,15 +560,13 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                     "calendario": True,
                 })
 
-        # El semanal (Premium/6M), calcado del quincenal (tarea 1.6): mismos umbrales
-        # -- apertura desde la hora en que abre la ventana, insistencia a las 9:00 del
-        # día del cierre si no lo ha mandado ni aplazado -- con las palabras de su
-        # cadencia. El doc del 16-08 no lo cubre, así que los textos siguen el tono de
-        # los del quincenal. Su ventana abre y cierra EL MISMO día (domingo 00:00 ->
-        # 23:00, `HORAS_DEL_DOC`), así que las dos familias pueden coincidir en el día:
-        # la apertura anuncia y la segunda solo insiste al que sigue sin mandarlo. Sin
-        # hora prometida en el texto («se dice el día o no se dice nada»): la ventana
-        # real de envío (`_submission_window`) no cierra a la misma hora que esta.
+        # El semanal (Premium/6M), calcado del quincenal (tarea 1.6), con la VENTANA DEL
+        # DOC DEL 21-08 (apartado 15): abre el VIERNES a las 10:00 y cierra el SÁBADO a
+        # las 10:00. La apertura anuncia desde la hora en que abre la ventana, como en el
+        # quincenal. La insistencia va el sábado desde las 8:00 y no desde las 9:00: la
+        # ventana cierra a las 10:00 de la mañana, y avisar a las 9:00 le dejaba una hora
+        # de margen. Los textos ya prometen la hora: desde el 21-08 la ventana de estos
+        # avisos y la real de envío (`_submission_window`) son la misma.
         if tipo == "semanal":
             if hoy == abre.date() and ahora_es >= abre:
                 fuera.append({
@@ -577,25 +575,25 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                     "tipo": "reporte",
                     "variantes": [
                         {"titulo": "Tu reporte semanal está abierto",
-                         "cuerpo": "Unas breves preguntas para ajustar tus macros si hace falta. Tienes hasta esta noche."},
+                         "cuerpo": "Unas breves preguntas para ajustar tu semana que viene. Tienes hasta mañana a las 10:00."},
                         {"titulo": "Toca semanal",
-                         "cuerpo": "Cuatro preguntas. Tienes hasta esta noche."},
+                         "cuerpo": "Cuatro preguntas. Tienes hasta mañana a las 10:00."},
                         {"titulo": "Cuéntame esta semana",
                          "cuerpo": "Es rápido, y con eso decido si te toco algo."},
                     ],
                     "link": "/dashboard/reports",
                     "calendario": True,
                 })
-            if not mandado and not aplazado and hoy == cierra.date() and ahora_es.hour >= 9:
+            if not mandado and not aplazado and hoy == cierra.date() and ahora_es.hour >= 8:
                 fuera.append({
                     "clave": f"semanal_ultimo:{abre.date()}",
                     "familia": "semanal_ultimo",
                     "tipo": "reporte",
                     "variantes": [
-                        {"titulo": "Último día para tu semanal",
-                         "cuerpo": "Se cierra esta noche."},
+                        {"titulo": "Última hora para tu semanal",
+                         "cuerpo": "Se cierra hoy a las 10:00."},
                         {"titulo": "Hoy cierra tu semanal",
-                         "cuerpo": "Sin él no sé cómo has ido esta semana."},
+                         "cuerpo": "A las 10:00. Sin él no sé cómo has ido esta semana."},
                     ],
                     "link": "/dashboard/reports",
                     "calendario": True,

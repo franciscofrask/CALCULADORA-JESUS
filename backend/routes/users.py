@@ -1406,6 +1406,9 @@ async def guardar_ajustes_app(data: dict, user = Depends(get_current_user)):
         "tema": {"light", "dark"},
         "modo_macros": {"metodo", "reales"},
         "vista": {"actual", "pestanas", "continua"},
+        # El recorrido de la primera vez (doc 21-08, apartado 23): si lo vio o lo
+        # saltó, para no volver a ofrecérselo solo aunque cambie de móvil.
+        "recorrido": {"visto", "saltado"},
     }
     update = {f"ajustes_app.{k}": v for k, v in (data or {}).items()
               if k in VALIDOS and v in VALIDOS[k]}

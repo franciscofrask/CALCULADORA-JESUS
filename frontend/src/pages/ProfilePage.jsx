@@ -546,14 +546,12 @@ const ProfilePage = () => {
                     <CardContent className="p-0">
                         {[
                             { icon: Lock, title: 'Cambiar contraseña', sub: 'Seguridad de la cuenta', onClick: () => setShowPasswordDialog(true) },
-                            // El recorrido guiado era un botón suelto de ancho completo debajo,
-                            // con el mismo peso visual que «Cerrar sesión». Es una fila más de
-                            // ajustes, y aquí se lee mejor. En escritorio sigue siendo el botón
-                            // de siempre, que es donde estaba.
-                            // El recorrido está apagado (ver RECORRIDO_ACTIVO en
-                            // OnboardingContext): mientras lo esté, esta fila no sale.
+                            // El recorrido de la primera vez (doc 21-08, apartado 23): quien
+                            // lo saltó no lo vuelve a ver solo, así que esta fila es su única
+                            // puerta de vuelta. En el teléfono es una fila más de ajustes; en
+                            // escritorio sigue siendo el botón de debajo.
                             ...(recorridoDisponible ? [{
-                                icon: Compass, title: 'Repetir recorrido guiado', sub: 'Te volvemos a enseñar la app', soloMovil: true,
+                                icon: Compass, title: 'Ver el recorrido', sub: 'Las cinco ideas del método, en un minuto', soloMovil: true,
                                 onClick: () => { navigate('/dashboard'); startTour(); },
                             }] : []),
                         ].map((item, i) => (
@@ -583,9 +581,8 @@ const ProfilePage = () => {
                     </CardContent>
                 </Card>
 
-                {/* Repetir recorrido guiado. En el teléfono es una fila más de la tarjeta de
-                    arriba; aquí se queda para escritorio, tal cual estaba. Con el recorrido
-                    apagado no se enseña (ver RECORRIDO_ACTIVO en OnboardingContext). */}
+                {/* Ver el recorrido. En el teléfono es una fila más de la tarjeta de
+                    arriba; aquí se queda para escritorio. */}
                 {recorridoDisponible && (
                     <Button
                         variant="outline"
@@ -593,7 +590,7 @@ const ProfilePage = () => {
                         onClick={() => { navigate('/dashboard'); startTour(); }}
                         data-testid="replay-tour-btn"
                     >
-                        <Compass className="w-4 h-4 mr-2" /> Repetir recorrido guiado
+                        <Compass className="w-4 h-4 mr-2" /> Ver el recorrido
                     </Button>
                 )}
 

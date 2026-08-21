@@ -92,6 +92,20 @@ class TestAjustesEnLaFicha:
         assert r.json()["guardado"] == []
         assert (self._perfil(cab).get("ajustes_app") or {}).get("tema") == "light"
 
+    def test_el_recorrido_de_la_primera_vez_viaja_a_la_ficha(self, cab):
+        # Doc 21-08, apartado 23: visto/saltado en la ficha, para que el recorrido
+        # no se vuelva a ofrecer solo aunque el cliente cambie de movil.
+        r = requests.post(f"{BASE}/user/ajustes-app", headers=cab, timeout=10,
+                          json={"recorrido": "saltado"})
+        assert r.status_code == 200
+        assert r.json()["guardado"] == ["recorrido"]
+        assert (self._perfil(cab).get("ajustes_app") or {}).get("recorrido") == "saltado"
+        # un valor raro no pisa lo guardado
+        r = requests.post(f"{BASE}/user/ajustes-app", headers=cab, timeout=10,
+                          json={"recorrido": "luego"})
+        assert r.json()["guardado"] == []
+        assert (self._perfil(cab).get("ajustes_app") or {}).get("recorrido") == "saltado"
+
     def test_limpieza(self, cab):
         # La base de dev se queda como estaba: sin los ajustes de esta prueba.
         import pymongo

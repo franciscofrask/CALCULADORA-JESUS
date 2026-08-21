@@ -43,6 +43,8 @@ const valoresIniciales = (objetivoActual) => ({
     entreno_huecos: '',
     molestias: '',
     sensaciones: null,
+    // Semanal (doc 21-08): qué le altera la rutina la semana que viene.
+    semana_proxima: '',
     // Mensual
     dieta_dificultad: '',
     viabilidad_ajuste: '',
@@ -192,6 +194,8 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                 huecos: huecosParaElServidor(ficha, valores),
                 molestias: valores.molestias || null,
                 sensaciones: valores.sensaciones,
+                // Solo la rellena el semanal; en el resto ni se pregunta y viaja a null.
+                semana_proxima: valores.semana_proxima || null,
                 dieta_dificultad: valores.dieta_dificultad || null,
                 viabilidad_ajuste: valores.viabilidad_ajuste || null,
                 entreno: esMensual ? limpiarEntreno(valores.entreno) : null,

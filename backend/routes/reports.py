@@ -132,6 +132,9 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "tipo": (state["tipos"] or [data.tipo])[0] if (state["tipos"] or data.tipo) else None,
         "molestias": (data.molestias or "").strip() or None,
         "sensaciones": data.sensaciones,
+        # La del semanal (doc 21-08): qué le altera la rutina la semana que viene. Es lo
+        # que el entrenador necesita leer ANTES de ajustar, porque ajusta para esa semana.
+        "semana_proxima": (data.semana_proxima or "").strip() or None,
         "dieta_dificultad": data.dieta_dificultad,
         "entreno": data.entreno.model_dump() if data.entreno else None,
         "lesiones": [l.model_dump() for l in data.lesiones] if data.lesiones else None,
@@ -246,7 +249,13 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     lleva_feedback = "quincenal" in (hab.get("reportes") or [])
     respuesta = ReportResponse(**report).model_dump()
     respuesta["lleva_feedback"] = lleva_feedback
+    # En el SEMANAL el feedback es PARA LA SEMANA SIGUIENTE (doc 21-08): el entrenador
+    # tiene hasta el domingo a las 10:00, el cliente lo lee el domingo y el lunes empieza
+    # sabiendo qué cambia. Prometerle aquí «antes del viernes» era prometerle una fecha
+    # que ya había pasado: el semanal se manda el viernes o el sábado.
     respuesta["mensaje_envio"] = (
+        "El domingo tienes mi feedback: empiezas el lunes sabiendo qué cambia. Te aviso por aquí."
+        if report.get("tipo") == "semanal" else
         "Antes del sábado tienes tu informe completo con mi feedback y tus ajustes. Te aviso por aquí."
         if lleva_feedback and report.get("tipo") == "mensual" else
         "Antes del viernes tienes tus ajustes nuevos. Te aviso por aquí.")
@@ -502,17 +511,23 @@ def _periodo_del_reporte(perfil: dict, tipo: str):
     return desde, hasta
 
 
-def bloques_del_rapido(tiene_rutina: bool) -> list:
+def bloques_del_rapido(tiene_rutina: bool, semanal: bool = False) -> list:
     """Los bloques del formulario corto (quincenal, semanal y el mensual «rápido»).
 
     SE MIRA EL DATO, NO EL PLAN, como en el mensual: sin rutina cargada no hay
     ejercicios por los que preguntar molestias ni entrenos previos que confirmar, así
     que esos dos bloques no salen y los demás se renumeran solos. Hasta ahora la lista
     era fija y al cliente sin rutina se le preguntaba por las molestias «de la rutina».
+
+    `semanal` añade la cuarta pregunta del doc del 21-08 (apartado 15): «¿Hay algo la
+    semana que viene que te altere la rutina?». Solo en esa cadencia: el quincenal y el
+    mensual no la llevan, porque su ajuste no es para la semana que entra.
     """
-    if not tiene_rutina:
-        return ["peso", "sensaciones", "libre"]
-    return ["entreno_previo", "peso", "molestias", "sensaciones", "libre"]
+    base = (["peso", "sensaciones", "libre"] if not tiene_rutina
+            else ["entreno_previo", "peso", "molestias", "sensaciones", "libre"])
+    if semanal:
+        base = base + ["semana_proxima"]
+    return base
 
 
 @router.get("/formulario")
@@ -560,7 +575,8 @@ async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(ge
     forma_rapida = bool(hab.get("reporte_rapido")) and tipo == "mensual"
     bloques = bloques_del_mensual(perfil_rep, pedir_grasa=bool(grasa.get("hay_que_pedirlo"))) \
         if tipo == "mensual" and not forma_rapida else \
-        bloques_del_rapido(bool((datos.get("entreno") or {}).get("tiene_rutina")))
+        bloques_del_rapido(bool((datos.get("entreno") or {}).get("tiene_rutina")),
+                           semanal=(tipo == "semanal"))
     datos["grasa"] = grasa
     # SE MIRA EL DATO, NO EL PLAN (regla 3 del doc): sin rutina cargada, el bloque del
     # entreno no tiene ni dato que enseñar ni pregunta que hacer, así que no sale y los de

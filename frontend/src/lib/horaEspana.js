@@ -73,17 +73,33 @@ export function etiquetaMomento(valor) {
 }
 
 /**
- * El plazo de un reporte: «Hasta el lunes 24 a las 18:00 h España · te quedan 2 días».
+ * El plazo de un reporte: «Hasta el sábado 22 a las 10:00 · te queda 1 día».
  *
- * La hora sale del plazo de verdad, no escrita a mano: cuando la ventana se mueva a las
- * 18:00 de España (T7 y T8) esta línea lo dirá sola. `pasado` es lo que hace desaparecer
- * la línea de Inicio en cuanto se cierra.
+ * EL PLAZO SE FIJA EN ESPAÑA Y SE ENSEÑA EN LA HORA DEL CLIENTE (doc 21-08, apartado
+ * 15). Si el reloj del navegador marca lo mismo que el de España, se dice tal cual y sin
+ * coletilla; si marca otra cosa, la hora local con la de España entre paréntesis:
+ * «Hasta el sábado 22 a las 05:00 (10:00 h España)». Antes llevaba siempre el «h España»,
+ * que al que vive aquí -- casi todos -- no le decía nada.
+ *
+ * La hora sale del plazo de verdad, no escrita a mano. `pasado` es lo que hace
+ * desaparecer la línea de Inicio en cuanto se cierra.
  */
 export function textoPlazo(valor) {
     const d = aFecha(valor);
     if (!d) return null;
     const pasado = d.getTime() <= Date.now();
     const p = partes(d, { weekday: 'long', day: 'numeric' });
+    const enEspana = `${p.weekday} ${p.day} a las ${horaEnEspana(d)}`;
+    let cuando = enEspana;
+    try {
+        // Sin timeZone: el huso del navegador, que es donde vive quien mira.
+        const q = Object.fromEntries(new Intl.DateTimeFormat('es-ES', {
+            weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            hourCycle: 'h23',
+        }).formatToParts(d).map((x) => [x.type, x.value]));
+        const local = `${q.weekday} ${q.day} a las ${q.hour}:${q.minute}`;
+        if (local !== enEspana) cuando = `${local} (${horaEnEspana(d)} h España)`;
+    } catch { /* navegador sin huso legible: se queda la hora de España */ }
     const dias = -diasDesdeHoy(diaEnEspana(d));
     const cola = dias > 1 ? ` · te quedan ${dias} días`
         : dias === 1 ? ' · te queda 1 día'
@@ -91,6 +107,6 @@ export function textoPlazo(valor) {
     return {
         pasado,
         dias,
-        texto: `Hasta el ${p.weekday} ${p.day} a las ${horaEnEspana(d)} h España${pasado ? '' : cola}`,
+        texto: `Hasta el ${cuando}${pasado ? '' : cola}`,
     };
 }

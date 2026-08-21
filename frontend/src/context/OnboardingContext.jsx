@@ -1,282 +1,105 @@
-import React, { createContext, useContext, useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { driver } from 'driver.js';
-import 'driver.js/dist/driver.css';
+import React, { createContext, useContext, useRef, useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { guardarAjusteEnFicha, AJUSTE_RECORRIDO } from '../lib/ajustesEnFicha';
+import RecorridoPrimeraVez, { PASOS_RECORRIDO } from '../components/RecorridoPrimeraVez';
 
 // ============================================================================
-// Onboarding guiado (product tour): recorrido por toda la app con spotlight,
-// tooltips anclados y "bloqueo suave": ciertos pasos avanzan solos cuando el
-// usuario hace la acción clave, pero nunca lo encierran (puede pausar y retomar).
-// El progreso se guarda por usuario en el backend (onboarding_step / completed).
+// EL RECORRIDO DE LA PRIMERA VEZ (doc de Jesús del 21-08, apartado 23).
+//
+// Sustituye al tour de driver.js que vivía aquí (apagado con RECORRIDO_ACTIVO
+// desde el 11-08: por eso a Juan no le salía nada). Aquel recorría pantallas;
+// este explica las TRES REGLAS del método en cinco tarjetas propias, sin anclar
+// nada al DOM (ver components/RecorridoPrimeraVez.jsx).
+//
+// Las reglas de comportamiento, decididas en el doc:
+// - Sale LA PRIMERA VEZ que el cliente entra al Inicio, después de los tres
+//   pasos del alta (registro, plan, cuestionario) y antes de que monte nada.
+// - Se puede saltar desde el primer paso. Si lo salta, NO se le vuelve a
+//   ofrecer solo: que se lo busque él en Mi perfil («Ver el recorrido»).
+// - El estado (visto/saltado) se persiste EN LA FICHA (ajustes_app.recorrido),
+//   no solo en el navegador: cambiar de móvil no lo resucita. Y el disparo lee
+//   SOLO la ficha, nunca localStorage: en un ordenador compartido el «saltado»
+//   de uno no puede tapárselo al siguiente.
 // ============================================================================
-
-// EL RECORRIDO ESTA APAGADO (Francisco, 11-08-2026).
-//
-// Un solo interruptor: mientras esto sea false el recorrido no arranca solo, y los sitios
-// que lo ofrecen (el botón del perfil y el «Continuar recorrido» del checklist de Inicio)
-// no se enseñan, porque un botón que no hace nada es peor que no tenerlo.
-//
-// El código se queda entero a propósito: los pasos, el resaltado y el guardado del progreso
-// siguen aquí, así que volver a encenderlo es cambiar este false por true y nada más. No se
-// borra porque la decisión es de producto y puede darse la vuelta.
-export const RECORRIDO_ACTIVO = false;
-
-// Cada paso: id, ruta donde vive, selector del elemento a resaltar, textos, y
-// opcionalmente `gate` = id de acción que, al ocurrir, auto-avanza el tour, y
-// `cap` = capacidad del plan requerida (los pasos de secciones que el plan no
-// incluye se omiten del recorrido; ver lib/planAccess.js).
-// Recorrido CORTO (petición 19-07): solo lo esencial - Nutrición, Asistente IA,
-// Mis macros y Reportes. El resto de secciones se descubren solas.
-const STEPS = [
-    {
-        id: 'nut-meals', route: '/dashboard/nutrition',
-        element: '[data-testid="meal-selector"], [data-testid="meals-accordion"]',
-        title: 'Nutrición: tus comidas', side: 'right', gate: 'nutrition-add-food',
-        description: 'Aquí montas tu día: elige si es entreno o descanso y prepara cada comida. En cada una tienes "Sugiéreme un menú" con comida real que ya cuadra contigo.',
-    },
-    {
-        id: 'ai', route: '/dashboard/chatbot',
-        element: '[data-testid="chat-input"]',
-        title: 'Asistente IA', side: 'top', align: 'start',
-        description: 'El Asistente IA prepara tu dieta conversando: te propone comidas según tus macros y preferencias.',
-    },
-    {
-        id: 'macros', route: '/dashboard/macro-calculator',
-        element: '[data-testid="macros-content"]',
-        // «Mis macros», como la pestaña (tarea 7.3 del 21-08): el tour no puede llamar
-        // al sitio de otra manera que el menú.
-        title: 'Mis macros', side: 'right', align: 'start',
-        description: 'Aquí puedes recalcular o ajustar tus macros cuando cambie tu peso o tu objetivo.',
-    },
-    {
-        id: 'reports', route: '/dashboard/reports', cap: 'reportes',
-        element: '[data-testid="weight-input"]',
-        title: 'Tus reportes', side: 'bottom', align: 'start',
-        description: 'En Reportes registras tu peso y medidas cada semana. Ves tu evolución y tu entrenador te da feedback.',
-    },
-    {
-        id: 'done', route: '/dashboard', side: 'bottom',
-        element: '[data-testid="onboarding-checklist"], [data-testid="macro-trackers-card"], [data-testid="setup-macros-card"], [data-testid="client-dashboard"]',
-        title: '¡Listo! 🎉',
-        description: 'Ya conoces lo importante. Tu siguiente paso es preparar tu primer día de comidas. Puedes repetir este recorrido cuando quieras desde tu perfil.',
-    },
-];
 
 const OnboardingContext = createContext(null);
 
 export const useOnboarding = () => useContext(OnboardingContext) || {
     // Fallback no-op (por si algún componente se usa fuera del provider)
-    startTour: () => {}, resumeTour: () => {}, skipTour: () => {}, notify: () => {}, active: false, available: false,
+    startTour: () => {}, resumeTour: () => {}, skipTour: () => {}, notify: () => {}, active: false, available: false, completed: true,
 };
-
-// Devuelve el primer elemento VISIBLE que matchea el selector. Clave para que el
-// tour funcione en mobile y desktop con los mismos pasos: muchos anclajes listan el
-// elemento de escritorio y su equivalente mobile (ej. barra lateral / barra inferior,
-// selector de comidas / acordeón), y solo uno está visible según el ancho. querySelector
-// devolvería el primero aunque esté display:none, así que filtramos por visibilidad
-// (getClientRects vacío = no renderizado).
-const firstVisible = (selector) => {
-    const els = document.querySelectorAll(selector);
-    for (const el of els) {
-        if (el.getClientRects().length > 0) return el;
-    }
-    return els[0] || null;
-};
-
-const waitForEl = (selector, timeout = 3500) => new Promise((resolve) => {
-    if (!selector) return resolve(null);
-    const start = Date.now();
-    const tick = () => {
-        const el = firstVisible(selector);
-        if (el && el.getClientRects().length > 0) return resolve(el);
-        if (Date.now() - start > timeout) return resolve(el || null);
-        setTimeout(tick, 120);
-    };
-    tick();
-});
 
 export const OnboardingProvider = ({ children }) => {
-    const navigate = useNavigate();
     const location = useLocation();
-    const { api, profile, isClient, refreshProfile, can } = useAuth();
+    const { profile, isClient, planUnpaid, refreshProfile } = useAuth();
 
-    // Pasos visibles según el plan: se omiten las secciones que el plan no incluye
-    // (si no, el tour navegaría a una ruta bloqueada y entraría en bucle de redirección).
-    const steps = useMemo(() => STEPS.filter((s) => !s.cap || can(s.cap)), [can]);
+    // -1 = cerrado; 0..4 = el paso que se está viendo.
+    const [paso, setPaso] = useState(-1);
+    const activo = paso >= 0;
 
-    const [active, setActive] = useState(false);
-    const [index, setIndex] = useState(-1);
-    const indexRef = useRef(-1);
-    const driverRef = useRef(null);
-    const handlersRef = useRef({});
-    // Marca en memoria: bloquea el auto-arranque tras cerrar/terminar el tour
-    // SOLO en esta carga de página. Al recargar (F5) se limpia, así un reset en
-    // la base vuelve a mostrar el recorrido sin tener que abrir pestaña nueva.
-    const dismissedRef = useRef(false);
+    // Cierra el hueco entre «guardado en la ficha» y «perfil refrescado»: sin esto,
+    // el efecto de auto-arranque volvería a abrir el recorrido en ese instante.
+    const decididoRef = useRef(false);
 
-    const setIdx = useCallback((i) => { indexRef.current = i; setIndex(i); }, []);
+    const cerrar = useCallback((estado) => {
+        setPaso(-1);
+        decididoRef.current = true;
+        // 'visto' o 'saltado', a la ficha: el mismo patrón que Método/Reales y la vista
+        // (lib/ajustesEnFicha.js). Si la red falla, decididoRef aguanta esta sesión.
+        guardarAjusteEnFicha(AJUSTE_RECORRIDO, estado);
+        if (refreshProfile) refreshProfile();
+    }, [refreshProfile]);
 
-    const persistStep = useCallback((stepId) => {
-        api.patch('/clients/onboarding', { step: stepId }).catch(() => {});
-    }, [api]);
+    const siguiente = useCallback(() => {
+        if (paso >= PASOS_RECORRIDO.length - 1) { cerrar('visto'); return; } // «Empezar»
+        setPaso(paso + 1);
+    }, [paso, cerrar]);
 
-    const finish = useCallback((completed) => {
-        setActive(false);
-        setIdx(-1);
-        try { driverRef.current?.destroy(); } catch { /* noop */ }
-        driverRef.current = null; // forzar recreación en el próximo arranque
-        // Bloqueo en memoria: evita que el auto-arranque se redispare en el instante
-        // en que `active` pasa a false (refreshProfile es async). Se limpia al recargar
-        // o cuando un botón llama a startTour.
-        dismissedRef.current = true;
-        if (completed) {
-            api.patch('/clients/onboarding', { completed: true }).then(refreshProfile).catch(() => {});
-        }
-    }, [api, refreshProfile, setIdx]);
+    const saltar = useCallback(() => cerrar('saltado'), [cerrar]);
 
-    const goNext = useCallback(() => {
-        const i = indexRef.current;
-        if (i >= steps.length - 1) { finish(true); return; }
-        setIdx(i + 1);
-    }, [finish, setIdx, steps]);
+    // Repetir a mano (Mi perfil): arranca siempre desde el primer paso.
+    const startTour = useCallback(() => {
+        decididoRef.current = true; // un arranque a mano nunca deja armado el automático
+        setPaso(0);
+    }, []);
 
-    const goPrev = useCallback(() => {
-        const i = indexRef.current;
-        if (i <= 0) return;
-        setIdx(i - 1);
-    }, [setIdx]);
-
-    // Mantener handlers frescos para los hooks de driver.js
-    handlersRef.current = { next: goNext, prev: goPrev, close: () => finish(false) };
-
-    const ensureDriver = useCallback(() => {
-        if (driverRef.current) return driverRef.current;
-        driverRef.current = driver({
-            showProgress: true,
-            progressText: '{{current}} de {{total}}',
-            allowClose: true,
-            overlayColor: 'rgba(0,0,0,0.82)',
-            overlayOpacity: 0.82,
-            stagePadding: 10,
-            stageRadius: 16,
-            popoverClass: 'jg-tour',
-            nextBtnText: 'Siguiente',
-            prevBtnText: 'Atrás',
-            doneBtnText: 'Finalizar',
-            onNextClick: () => handlersRef.current.next?.(),
-            onPrevClick: () => handlersRef.current.prev?.(),
-            onCloseClick: () => handlersRef.current.close?.(),
-        });
-        return driverRef.current;
-    }, [steps]);
-
-    const renderPopover = useCallback((step, el, i) => {
-        const d = ensureDriver();
-        const isLast = i === steps.length - 1;
-        const isFirst = i === 0;
-        const buttons = [];
-        if (!isFirst) buttons.push('previous');
-        buttons.push('next');
-        buttons.push('close');
-        const popover = {
-            title: step.title,
-            description: step.description,
-            side: step.side || 'bottom',
-            align: step.align || 'start',
-            showButtons: buttons,
-            nextBtnText: isLast ? 'Finalizar' : 'Siguiente',
-            prevBtnText: 'Atrás',
-        };
-        try {
-            if (el) d.highlight({ element: el, popover });
-            else d.highlight({ popover: { ...popover, side: 'over', align: 'center' } });
-        } catch {
-            // Si el modal centrado falla, ancla al dashboard como último recurso.
-            const fallback = document.querySelector('[data-testid="client-dashboard"]');
-            if (fallback) d.highlight({ element: fallback, popover });
-        }
-    }, [ensureDriver]);
-
-    // Bucle principal: cuando el tour está activo, asegura la ruta del paso y
-    // luego resalta el elemento (esperando a que aparezca tras navegar).
+    // Auto-arranque: la primera vez, sobre el Inicio, con el alta terminada.
     useEffect(() => {
-        if (!active || index < 0) return;
-        const step = steps[index];
-        if (!step) return;
-        if (step.route && location.pathname !== step.route) {
-            navigate(step.route);
-            return; // el efecto se reejecuta cuando cambia pathname
-        }
-        let cancelled = false;
-        waitForEl(step.element).then((el) => {
-            if (cancelled || !active) return;
-            if (step.element && !el) { goNext(); return; } // elemento ausente → saltar
-            renderPopover(step, el, index);
-            persistStep(step.id);
-        });
-        return () => { cancelled = true; };
-    }, [active, index, location.pathname, navigate, goNext, renderPopover, persistStep, steps]);
-
-    const startTour = useCallback((fromStepId) => {
-        // Con el recorrido apagado no arranca ni aunque alguien llame a mano: es el mismo
-        // interruptor para todas las puertas, y así no queda ninguna abierta por olvido.
-        if (!RECORRIDO_ACTIVO) return;
-        let i = 0;
-        if (fromStepId) {
-            const found = steps.findIndex((s) => s.id === fromStepId);
-            if (found >= 0 && found < steps.length - 1) i = found;
-        }
-        dismissedRef.current = false;
-        setIdx(i);
-        setActive(true);
-    }, [setIdx, steps]);
-
-    // "Explorar por mi cuenta": no arranca el tour en esta carga de página.
-    const skipTour = useCallback(() => { dismissedRef.current = true; }, []);
-
-    const resumeTour = useCallback(() => {
-        startTour(profile?.onboarding_step);
-    }, [startTour, profile]);
-
-    const notify = useCallback((actionId) => {
-        if (!active) return;
-        const step = steps[indexRef.current];
-        if (step?.gate === actionId) goNext();
-    }, [active, goNext, steps]);
-
-    // Auto-arranque SOLO la primera vez: cliente que ya hizo el cuestionario,
-    // nunca empezó el tour (sin onboarding_step) y no lo completó. Una vez que
-    // arranca queda registrado, así no reaparece en cada login; luego se retoma
-    // desde el checklist ("Continuar recorrido") o el perfil ("Repetir").
-    useEffect(() => {
-        if (!RECORRIDO_ACTIVO) return;
-        if (!isClient || !profile) return;
-        if (active) return;
-        if (profile.onboarding_completed) return;
-        if (profile.onboarding_step) return;          // ya arrancó alguna vez
-        if (!profile.questionnaire_completed) return; // primero el cuestionario
-        if (dismissedRef.current) return;             // cerrado en esta carga de página
-        if (!location.pathname.startsWith('/dashboard')) return;
-        startTour();
-    }, [isClient, profile, active, location.pathname, startTour]);
+        if (activo || decididoRef.current) return;
+        if (!isClient || !profile || planUnpaid) return;
+        if (!profile.questionnaire_completed) return;        // el alta primero
+        if (profile.acceso?.motivo === 'caducado') return;   // al caducado no se le enseña a montar nada
+        if (profile.ajustes_app?.recorrido) return;          // visto o saltado: nunca se ofrece solo
+        if (location.pathname !== '/dashboard') return;      // sobre el Inicio, no en mitad de otra pantalla
+        setPaso(0);
+    }, [activo, isClient, profile, planUnpaid, location.pathname]);
 
     const value = {
         startTour,
-        resumeTour,
-        skipTour,
-        notify,
-        active,
-        // `available` es lo que miran las pantallas para decidir si ofrecen el recorrido.
-        // Apagado, nadie lo ofrece. Y `completed` se da por hecho para que el checklist de
-        // Inicio no enseñe un «Continuar recorrido» que no continuaría nada.
-        available: !!(RECORRIDO_ACTIVO && isClient && profile && profile.questionnaire_completed),
-        completed: RECORRIDO_ACTIVO ? !!profile?.onboarding_completed : true,
+        // Compatibilidad con los consumidores del tour viejo (checklist del Inicio,
+        // WelcomePage): resume = empezar de cero, notify ya no hace nada (no hay
+        // pasos con «gate»), y completed en true deja el «Continuar recorrido» del
+        // checklist apagado para siempre, que ya no existe tal cosa.
+        resumeTour: startTour,
+        skipTour: () => {},
+        notify: () => {},
+        active: activo,
+        // Lo que mira Mi perfil para ofrecer «Ver el recorrido».
+        available: !!(isClient && profile && profile.questionnaire_completed),
+        completed: true,
     };
 
     return (
         <OnboardingContext.Provider value={value}>
             {children}
+            {activo && (
+                <RecorridoPrimeraVez
+                    paso={paso}
+                    onSaltar={saltar}
+                    onSiguiente={siguiente}
+                />
+            )}
         </OnboardingContext.Provider>
     );
 };

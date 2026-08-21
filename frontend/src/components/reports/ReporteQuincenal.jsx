@@ -27,6 +27,9 @@ const ReporteQuincenal = ({ datos, valores, set, plazo, titulo, bloques }) => {
     // Molestias solo si el servidor la pide (sin rutina no hay ejercicios por los que
     // preguntar). Sin lista, comportamiento de siempre: se pregunta.
     const conMolestias = !bloques || bloques.includes('molestias');
+    // La semana que viene, solo en la cadencia semanal (doc 21-08): la manda el servidor
+    // en los bloques, porque el quincenal y el mensual rápido no la llevan.
+    const conSemanaProxima = !!bloques && bloques.includes('semana_proxima');
 
     return (
         <div className="space-y-4" data-testid="reporte-quincenal">
@@ -101,6 +104,17 @@ const ReporteQuincenal = ({ datos, valores, set, plazo, titulo, bloques }) => {
                 <TextoLibre testid="notes-textarea" valor={valores.notes}
                     onChange={(v) => set('notes', v)} filas={4} />
             </Bloque>
+
+            {/* La semana que viene, solo en el SEMANAL (doc 21-08). Es la pregunta que
+                hace que el ajuste sirva: el feedback del domingo es para la semana que
+                entra, y un viaje o un cambio de turno lo cambian todo. */}
+            {conSemanaProxima && (
+                <Bloque numero={conMolestias ? '5' : '4'} titulo="La semana que viene" testid="quincenal-semana-proxima">
+                    <TextoLibre testid="semana-proxima-input"
+                        etiqueta="¿Hay algo la semana que viene que te altere la rutina? Un viaje, una cena, un cambio de turno, unas vacaciones..."
+                        valor={valores.semana_proxima} onChange={(v) => set('semana_proxima', v)} filas={3} />
+                </Bloque>
+            )}
             {/* Y no hay nada más. Lo que se cayó (dieta, cardio y suplementación) no se
                 sustituye por una explicación: se cayó porque ya está marcado cada día. */}
         </div>

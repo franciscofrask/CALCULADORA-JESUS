@@ -21,6 +21,12 @@ export const CLAVES_LOCALES = {
     vista: 'nutricion-vista-comidas',
 };
 
+// El recorrido de la primera vez (doc 21-08, apartado 23): 'visto' | 'saltado'.
+// A PROPÓSITO SIN espejo en localStorage (no está en CLAVES_LOCALES): el disparo
+// lee solo la ficha, porque en un ordenador compartido el «saltado» de un cliente
+// se quedaría en el navegador y le taparía el recorrido al siguiente que entrara.
+export const AJUSTE_RECORRIDO = 'recorrido';
+
 /** Un ajuste a la ficha, sin bloquear a nadie: si falla, el localStorage ya lo tiene. */
 export function guardarAjusteEnFicha(clave, valor) {
     try {

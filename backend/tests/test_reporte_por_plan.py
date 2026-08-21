@@ -87,6 +87,33 @@ class TestElFormularioCorto:
         assert "entreno_previo" not in bloques
         assert bloques == ["peso", "sensaciones", "libre"]
 
+    def test_el_semanal_lleva_la_semana_que_viene_al_final(self):
+        """La cuarta pregunta del doc del 21-08 («¿Hay algo la semana que viene que te
+        altere la rutina?»): solo la cadencia semanal, y despues del texto libre."""
+        from routes.reports import bloques_del_rapido
+        assert bloques_del_rapido(True, semanal=True) == [
+            "entreno_previo", "peso", "molestias", "sensaciones", "libre", "semana_proxima"]
+        assert bloques_del_rapido(False, semanal=True) == [
+            "peso", "sensaciones", "libre", "semana_proxima"]
+
+    def test_el_quincenal_y_el_rapido_no_llevan_la_semana_que_viene(self):
+        """El quincenal y el mensual rapido NO la llevan (doc 21-08): su ajuste no es
+        para la semana que entra."""
+        from routes.reports import bloques_del_rapido
+        assert "semana_proxima" not in bloques_del_rapido(True)
+        assert "semana_proxima" not in bloques_del_rapido(False)
+
+    def test_la_respuesta_de_la_semana_que_viene_viaja_y_se_guarda(self):
+        """El modelo la acepta y la respuesta del servidor la devuelve: sin las dos
+        patas, lo que el cliente cuenta no llega al panel del entrenador."""
+        from models.common import ReportCreate, ReportResponse
+        data = ReportCreate(weight=78.0, semana_proxima="Estoy de viaje de miércoles a viernes")
+        assert data.semana_proxima == "Estoy de viaje de miércoles a viernes"
+        r = ReportResponse(id="r", client_id="c", weight=78.0,
+                           created_at="2026-08-21T10:00:00+00:00",
+                           semana_proxima="cena el sábado")
+        assert r.semana_proxima == "cena el sábado"
+
 
 class TestFechas:
     def test_como_lo_dice_el_doc(self):

@@ -3838,7 +3838,8 @@ const RespuestasDeCalma = ({ respuestas }) => {
 const RespuestasDelReporte = ({ reporte: r }) => {
     const e = r.entreno || {};
     const s = r.suplementacion || {};
-    const hayAlgo = r.tipo || r.molestias || r.sensaciones || r.dieta_dificultad || e.regularidad
+    const hayAlgo = r.tipo || r.molestias || r.sensaciones || r.semana_proxima || r.dieta_dificultad
+        || e.regularidad
         || e.estrellas || e.rutina_del_mes || s.respuesta || r.cardio_proximo_mes
         || (r.lesiones || []).length || r.valoracion_resultado || r.motivacion || r.sugerencias;
     if (!hayAlgo) return null;
@@ -3852,6 +3853,10 @@ const RespuestasDelReporte = ({ reporte: r }) => {
             )}
             <Fila que="Molestias" valor={r.molestias} />
             <Fila que="Sensaciones" valor={estrellas(r.sensaciones)} />
+            {/* La del semanal (doc 21-08): lo que le altera la rutina la semana que
+                viene. Es lo que hay que leer ANTES de ajustar: el feedback del domingo
+                es para esa semana. */}
+            <Fila que="La semana que viene" valor={r.semana_proxima} />
             <Fila que="La dieta" valor={RESPUESTA_LABEL.dieta_dificultad[r.dieta_dificultad]} />
             <Fila que="Entreno del mes" valor={RESPUESTA_LABEL.regularidad[e.regularidad]} />
             <Fila que="Qué tal el entreno" valor={estrellas(e.estrellas)} />
