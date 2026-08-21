@@ -562,6 +562,15 @@ const PanelOperaciones = ({ api, onAsignar }) => {
                 <ListaSeleccionable titulo="Sin datos" icono={AlertTriangle} color="#A855F7"
                     sub="Les falta algo para poder trabajar" items={datos.sin_datos?.clientes} onAsignar={onAsignar}
                     extra={(c) => c.falta ? <span className="text-[10px] text-white/40 truncate max-w-[9rem]" title={c.falta}>{c.falta}</span> : null} />
+                {/* Datos IMPOSIBLES (tarea 1.4): valores que la API no dejaría escribir
+                    (edad 5, estatura 1 cm) y que entraron por la importación de Calma.
+                    Lista aparte de «Sin datos»: aquello es lo que falta; esto es lo que
+                    está mal y hay que corregir con el cliente delante. Sus macros se
+                    rotulan «Provisionales» hasta que se arregle. */}
+                <ListaSeleccionable titulo="Datos imposibles" icono={AlertTriangle} color="#EF4444"
+                    sub="Valores fuera de rango en su ficha" items={datos.datos_imposibles?.clientes}
+                    onAsignar={onAsignar} vacio="Ninguno"
+                    extra={(c) => c.imposible ? <span className="text-[10px] text-white/40 truncate max-w-[9rem]" title={c.imposible}>{c.imposible}</span> : null} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -673,18 +682,13 @@ const PanelSoporte = ({ api, onAsignar }) => {
                     </span>
                 )} />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ListaSeleccionable titulo="Problemas de pago" icono={AlertTriangle} color="#EF4444"
-                    sub="Cobros fallidos o pagos parados" items={datos.problemas_pago} onAsignar={onAsignar}
-                    extra={(c) => c.motivo ? <span className="text-[10px] text-white/40 truncate max-w-[10rem]" title={c.motivo}>{c.motivo}</span> : null} />
-                <ListaSeleccionable titulo="Sin contactar" icono={Phone} color="#A855F7"
-                    sub="Días desde que alguien les habló" items={datos.sin_contactar} onAsignar={onAsignar}
-                    extra={(c) => (
-                        <span className={`text-[10px] font-bold tabular-nums ${c.dias >= 14 ? 'text-red-400' : 'text-white/40'}`}>
-                            {c.nunca ? 'nunca' : (c.dias !== null && c.dias !== undefined ? `${c.dias} d` : '-')}
-                        </span>
-                    )} />
-            </div>
+            {/* «Sin contactar» NO SE PINTA (doc 21-08). El dato solo cuenta el chat interno
+                y el webhook de GHL: ni el feedback de reportes ni los ajustes de macros
+                cuentan como contacto, así que el «177 · nunca» era falso. Fuera hasta que
+                el contacto se pueda registrar; el backend sigue mandando `sin_contactar`. */}
+            <ListaSeleccionable titulo="Problemas de pago" icono={AlertTriangle} color="#EF4444"
+                sub="Cobros fallidos o pagos parados" items={datos.problemas_pago} onAsignar={onAsignar}
+                extra={(c) => c.motivo ? <span className="text-[10px] text-white/40 truncate max-w-[10rem]" title={c.motivo}>{c.motivo}</span> : null} />
 
             {(datos.sin_conectar || []).length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

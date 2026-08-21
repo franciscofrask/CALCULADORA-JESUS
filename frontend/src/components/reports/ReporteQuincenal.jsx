@@ -17,10 +17,16 @@ import React from 'react';
 import { Bloque, DosBotones, Estrellas, TextoLibre, kg } from './piezas';
 import { PESO_MIN, PESO_MAX } from '../../lib/pesoValido';
 
-const ReporteQuincenal = ({ datos, valores, set, plazo, titulo = 'Tu reporte quincenal' }) => {
+// Sin título por defecto (tarea 1.6): el default «Tu reporte quincenal» tapaba al que
+// llamara sin pasarlo, y este formulario también sirve la cadencia semanal. El título
+// lo decide siempre quien conoce el tipo (FormularioReporte, con TITULOS_REPORTE).
+const ReporteQuincenal = ({ datos, valores, set, plazo, titulo, bloques }) => {
     const entreno = datos?.entreno || {};
     const sinRegistrar = (entreno.sin_registrar || []).length;
     const peso = datos?.peso_ultimo;
+    // Molestias solo si el servidor la pide (sin rutina no hay ejercicios por los que
+    // preguntar). Sin lista, comportamiento de siempre: se pregunta.
+    const conMolestias = !bloques || bloques.includes('molestias');
 
     return (
         <div className="space-y-4" data-testid="reporte-quincenal">
@@ -73,21 +79,25 @@ const ReporteQuincenal = ({ datos, valores, set, plazo, titulo = 'Tu reporte qui
             </Bloque>
 
             {/* 2 · Molestias. Es la pregunta que hace que la rutina se pueda cambiar a
-                tiempo, y la que el formulario de fuera no traía. */}
-            <Bloque numero="2" titulo="Molestias" testid="quincenal-molestias">
-                <TextoLibre testid="molestias-input"
-                    etiqueta="¿Algún ejercicio de la rutina te da molestias o te falta alguna máquina?"
-                    valor={valores.molestias} onChange={(v) => set('molestias', v)} filas={3} />
-            </Bloque>
+                tiempo. Solo al que tiene rutina: al resto no se le pregunta por
+                ejercicios que no existen. */}
+            {conMolestias && (
+                <Bloque numero="2" titulo="Molestias" testid="quincenal-molestias">
+                    <TextoLibre testid="molestias-input"
+                        etiqueta="¿Algún ejercicio de la rutina te da molestias o te falta alguna máquina?"
+                        valor={valores.molestias} onChange={(v) => set('molestias', v)} filas={3} />
+                </Bloque>
+            )}
 
-            {/* 3 · Sensaciones, con estrellas. */}
-            <Bloque numero="3" titulo="Sensaciones" testid="quincenal-sensaciones">
+            {/* Sensaciones, con estrellas. */}
+            <Bloque numero={conMolestias ? '3' : '2'} titulo="Sensaciones" testid="quincenal-sensaciones">
                 <Estrellas testid="sensaciones" valor={valores.sensaciones}
-                    onChange={(v) => set('sensaciones', v)} />
+                    onChange={(v) => set('sensaciones', v)}
+                    minLabel="fatal" maxLabel="de lujo" />
             </Bloque>
 
-            {/* 4 · Libre. */}
-            <Bloque numero="4" titulo="Y lo que quieras contarme." testid="quincenal-libre">
+            {/* Libre. */}
+            <Bloque numero={conMolestias ? '4' : '3'} titulo="Y lo que quieras contarme." testid="quincenal-libre">
                 <TextoLibre testid="notes-textarea" valor={valores.notes}
                     onChange={(v) => set('notes', v)} filas={4} />
             </Bloque>

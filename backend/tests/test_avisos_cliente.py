@@ -309,6 +309,46 @@ class TestElQuincenal:
         assert a == []
 
 
+class TestElSemanal:
+    """La rama semanal (Premium/6M), calcada del quincenal: antes el que tenia cadencia
+    semanal no recibia NINGUN aviso de reporte. Su ventana abre y cierra el mismo dia
+    (domingo 00:00 -> 23:00, HORAS_DEL_DOC), asi que el recordatorio de ultimo dia cae
+    ese mismo domingo desde las 9:00, solo si sigue sin mandarlo."""
+
+    DOMINGO = _es(2026, 8, 9, 0)        # 2026-08-09 es domingo
+
+    def _v(self, **kw):
+        return _ventana("semanal", self.DOMINGO, dias_hasta_cierre=0, hora_cierre=23, **kw)
+
+    def test_el_domingo_se_abre(self):
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 8), ventanas=[self._v()])
+        assert _claves(a) == ["semanal_abierto"]
+        assert a[0]["variantes"][0]["titulo"] == "Tu reporte semanal está abierto"
+        assert len(a[0]["variantes"]) == 3
+
+    def test_desde_las_9_se_le_recuerda_si_no_lo_mando(self):
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 10), ventanas=[self._v()])
+        assert _claves(a) == ["semanal_abierto", "semanal_ultimo"]
+        ultimo = [x for x in a if x["familia"] == "semanal_ultimo"][0]
+        assert ultimo["variantes"][0]["titulo"] == "Último día para tu semanal"
+
+    def test_si_ya_lo_mando_no_se_le_recuerda(self):
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 10),
+                                     ventanas=[self._v(mandado=True)])
+        assert _claves(a) == ["semanal_abierto"]
+
+    def test_aplazado_apaga_el_recordatorio(self):
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 9, 10),
+                                     ventanas=[{**self._v(), "aplazado": True}])
+        assert _claves(a) == ["semanal_abierto"]
+
+    def test_el_lunes_ya_no_se_insiste(self):
+        """El semanal no lleva el aviso del martes ('no me llego'): a la semana
+        siguiente ya le toca el suyo, como al quincenal."""
+        assert avisos_de_calendario_doc(ahora_es=_es(2026, 8, 10, 9),
+                                        ventanas=[self._v()]) == []
+
+
 class TestElMensual:
     VIERNES = _es(2026, 8, 7, 0)        # 2026-08-07 es viernes
 

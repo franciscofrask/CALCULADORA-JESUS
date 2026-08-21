@@ -602,6 +602,13 @@ async def distribute_macros(data: dict, user = Depends(get_current_user)):
                      else bool(profile.get("single_meal_mode", False))),
     )
 
+    # Si los datos del perfil son de fiar (tarea 1.4 del 21-08). La cabecera de Nutricion
+    # pinta estos objetivos: cuando la lista no viene vacia, rotula «Provisionales» y empuja
+    # a completar el perfil. Va aqui y no en el perfil del AuthContext porque esta llamada
+    # viaja con las cabeceras de «actuar como»: el perfil que se evalua es el del cliente
+    # sobre el que se trabaja, no el del que ha iniciado sesion.
+    from core.datos_dudosos import datos_dudosos
+    resultado["datos_dudosos"] = datos_dudosos(profile)
     return resultado
 
 

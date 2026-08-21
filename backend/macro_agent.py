@@ -323,12 +323,23 @@ def construir_contexto(
 async def sugerir_ajuste(contexto: str, api_key: Optional[str] = None, model: str = MODEL) -> Dict:
     """Llama al LLM (gpt-5.1) y devuelve la sugerencia estructurada + validacion."""
     client = AsyncOpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
+    kwargs = {}
+    # La familia gpt-5 razona por defecto y esos tokens salen del MISMO presupuesto de
+    # max_completion_tokens: con un contexto grande se lo pueden comer entero y el content
+    # vuelve vacio. El criterio es el de llm_client.py (acotar el razonamiento), pero OJO:
+    # gpt-5.1 ya no admite "minimal" (la API lo rechaza con un 400; admite none, low,
+    # medium y high). Se pone "low" y no "none": este agente interpreta un historial con
+    # reglas, quitarle el razonamiento del todo es cambiarle el caracter, y con "low" el
+    # JSON de ~700 tokens cabe de sobra en el presupuesto.
+    if (model or "").lower().startswith("gpt-5"):
+        kwargs["reasoning_effort"] = "low"
     resp = await client.chat.completions.create(
         model=model,
         messages=[{"role": "system", "content": SYSTEM_PROMPT},
                   {"role": "user", "content": contexto}],
         response_format={"type": "json_object"},
         max_completion_tokens=3000,
+        **kwargs,
     )
     raw = resp.choices[0].message.content
     try:
@@ -475,7 +486,10 @@ def validar(propuesta: Dict, macros_actuales: Dict, avisos_llm: List[str]) -> Li
         if act is None or nue is None or nue == act:
             continue
         total_movido += abs(nue - act)
-        movidos.append(f"{campo} de {blk} {nue - act:+d}")
+        # Con :+g y no :+d: los macros del perfil pueden venir como float (200.0, 62.5)
+        # y el :+d reventaba aqui con un ValueError que salia al panel como un 500
+        # pelado. Era LA causa de que "Sugerir ajuste (IA)" no funcionara nunca (21-08).
+        movidos.append(f"{campo} de {blk} {nue - act:+g}")
     if total_movido >= MOVIMIENTO_DE_CAMBIO_DE_FASE and not cambio_fase:
         warns.append(
             f"El ajuste mueve {total_movido} g en total ({', '.join(movidos)}). "

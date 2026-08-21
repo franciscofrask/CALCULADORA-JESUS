@@ -1085,6 +1085,12 @@ class ClientProfile(BaseModel):
     # y que se los termine el. `ajuste_macros_completado` no vale para eso: es False para
     # todo el que no paso por NUESTRO cuestionario, y eso son 169 de los 174 activos.
     macros_puestos_por_alguien: Optional[bool] = None
+    # LO QUE HACE DUDOSOS SUS MACROS (tarea 1.4 del 21-08): campos del perfil faltantes o
+    # imposibles (edad 5, estatura 1 cm...), calculados AL LEER por core/datos_dudosos con
+    # los MISMOS rangos que valida la puerta de la API (RANGOS_PERFIL). Vacio = perfil sano.
+    # No confundir con `macros_puestos_por_alguien`: aquello dice QUIEN puso los numeros;
+    # esto dice si los DATOS con los que se trabaja son de fiar. Nada se guarda en base.
+    datos_dudosos: Optional[List[Dict[str, Any]]] = None
     # ¿Puede el cliente ajustarse los macros? (punto 4.10): {puede, por_que_no}. Sale del
     # campo `habilitaciones.calculadora` del plan, que existia y no lo miraba nadie al
     # guardar: un cliente de plan personalizado podia machacar los de su entrenador.
@@ -1093,6 +1099,12 @@ class ClientProfile(BaseModel):
     # saberlo -- el listado del equipo es solo para admins -- y el chat le decia "Tu
     # Entrenador" en abstracto.
     entrenador: Optional[Dict[str, Any]] = None
+    # Lo que su plan promete del chat (tarea 1.5): plazo de respuesta y canal, sacados de
+    # las habilitaciones del catalogo. Vacio = el plan no promete plazo, y la pantalla de
+    # mensajes no pinta la linea. Hasta ahora solo los leia el panel de admin y el chat
+    # decia «menos de 24 horas» a todos los planes.
+    tiempo_respuesta: Optional[str] = None
+    canal_contacto: Optional[str] = None
     # LO QUE PAGA DE VERDAD CADA CICLO (punto 2.4c). `price` es el precio pactado y llega a
     # cero en los 168 perfiles que vinieron de Calma, asi que Mi perfil le decia «0 €/ciclo»
     # a un cliente de pago sin cortesia marcada -- «lo primero que va a ver quien reciba
@@ -1247,6 +1259,19 @@ class ClientProfileCreate(BaseModel):
     price: Optional[float] = None
     trainer_id: Optional[str] = None
 
+# LOS RANGOS DEL PERFIL, EN UN SOLO SITIO (tarea 1.4 del 21-08). Son los mismos que llevaban
+# los Field de abajo desde el punto 5.4: la puerta de la API los valida al ESCRIBIR, pero los
+# datos importados de Calma entraron directo en Mongo sin pasar por aqui (edades de 5,
+# estaturas de 1 cm, pesos de 1 kg). `core/datos_dudosos.py` usa estos mismos rangos para
+# marcar AL LEER que los macros de ese perfil se calcularon con datos imposibles, sin
+# inventarse un segundo criterio que pudiera discrepar de este.
+RANGOS_PERFIL = {
+    "weight": (25, 300),     # kg
+    "height": (100, 250),    # cm
+    "age": (14, 100),        # años
+    "body_fat": (3, 60),     # %
+}
+
 class ClientProfileUpdate(BaseModel):
     # Los dos correos: el cliente puede cambiar a cuál se le escribe desde Mi perfil. El de
     # acceso NO se toca por aquí -- es con el que entra y con el que cruzan los cobros.
@@ -1273,12 +1298,12 @@ class ClientProfileUpdate(BaseModel):
     # Los limites son los que ya usaba la app en `core/series_cliente` para aceptar un pesaje
     # (25-300 kg y 3-60 % de grasa): si un valor no vale para la serie, tampoco vale para el
     # campo. Los macros ya validaban; esto faltaba.
-    weight: Optional[float] = Field(None, ge=25, le=300)
-    height: Optional[float] = Field(None, ge=100, le=250)
-    age: Optional[int] = Field(None, ge=14, le=100)
+    weight: Optional[float] = Field(None, ge=RANGOS_PERFIL["weight"][0], le=RANGOS_PERFIL["weight"][1])
+    height: Optional[float] = Field(None, ge=RANGOS_PERFIL["height"][0], le=RANGOS_PERFIL["height"][1])
+    age: Optional[int] = Field(None, ge=RANGOS_PERFIL["age"][0], le=RANGOS_PERFIL["age"][1])
     sex: Optional[str] = None
     goal: Optional[str] = None
-    body_fat: Optional[float] = Field(None, ge=3, le=60)
+    body_fat: Optional[float] = Field(None, ge=RANGOS_PERFIL["body_fat"][0], le=RANGOS_PERFIL["body_fat"][1])
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None
     # Observaciones del coach sobre el ENTRENAMIENTO: van con la maquinaria y las lesiones

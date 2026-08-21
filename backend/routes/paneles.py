@@ -22,6 +22,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from core.cycle import compute_cycle
 from core.database import db
+from core.datos_dudosos import datos_imposibles
 from core.plan_access import dias_hasta_la_revision, estado_de_acceso, plan_grants_feature
 from core.security import get_admin_only_user, get_admin_user
 from core.sin_futuro import hasta_hoy
@@ -97,6 +98,10 @@ _PROY_PERFIL = {
     "reporte_aplazado_nota": 1, "reporte_aplazado_tipo": 1, "aplazamientos_seguidos": 1,
     "ultimo_ajuste": 1, "ultimo_reporte": 1, "height": 1, "goal": 1,
     "ultimo_contacto_externo": 1,
+    # Lo que mira `datos_imposibles` (tarea 1.4): sin estos campos en la proyeccion, la
+    # edad 5 de Juan o el peso de 1 kg se leerian como "falta" y la lista saldria vacia
+    # en silencio, que es justo el fallo que esta tarea viene a destapar.
+    "weight": 1, "age": 1, "body_fat": 1, "sex": 1,
     # Los tres campos con los que el contrato puede pisar el calendario del plan
     # (compute_client_report_state los lee del perfil).
     "calendario_reportes": 1, "ciclo_semanas": 1, "semana_de_entrada": 1,
@@ -576,7 +581,7 @@ async def panel_operaciones(user=Depends(get_admin_user)):
         if cid and ca and (cid not in ultimo_reporte or ca > ultimo_reporte[cid]):
             ultimo_reporte[cid] = ca
 
-    cierra_hoy, sin_entrenador, sin_datos = [], [], []
+    cierra_hoy, sin_entrenador, sin_datos, con_imposibles = [], [], [], []
     for p in profiles:
         u = umap.get(p.get("user_id"))
         plan = _plan_de(catalogo, p)
@@ -589,6 +594,15 @@ async def panel_operaciones(user=Depends(get_admin_user)):
                   if not p.get(campo)]
         if faltas:
             sin_datos.append({**fila, "falta": " y ".join(faltas)})
+
+        # DATOS IMPOSIBLES (tarea 1.4 del 21-08): valores que la API no dejaria escribir
+        # (edad 5, estatura 1 cm, peso 1 kg) y que entraron por la importacion de Calma
+        # directa a Mongo. Es una lista APARTE de «sin datos» a proposito: aquello es lo
+        # que falta; esto es lo que esta MAL, y hay que corregirlo con el cliente delante.
+        imposibles = datos_imposibles(p)
+        if imposibles:
+            con_imposibles.append({**fila, "imposible": " · ".join(
+                f"{d['nombre']}: {d['valor']}" for d in imposibles)})
 
         state = compute_client_report_state(p, catalogo, now, rutina=rutina_de.get(p["id"]))
         if not state["due"] or not state["is_open"]:
@@ -635,6 +649,8 @@ async def panel_operaciones(user=Depends(get_admin_user)):
         "sin_entrenador": {"n": len(sin_entrenador),
                            "clientes": sorted(sin_entrenador, key=lambda f: f["name"])},
         "sin_datos": {"n": len(sin_datos), "clientes": sorted(sin_datos, key=lambda f: f["name"])},
+        "datos_imposibles": {"n": len(con_imposibles),
+                             "clientes": sorted(con_imposibles, key=lambda f: f["name"])},
         "tareas_vencidas": sorted(por_persona.values(), key=lambda g: -g["n"]),
         "lista_francisco": {"hechas": lista.get("hechas"), "total": lista.get("total")},
         "generated_at": now.isoformat(),

@@ -89,22 +89,33 @@ export const TextoLibre = ({ etiqueta, ayuda, valor, onChange, placeholder, fila
  *
  * Se puede desmarcar volviendo a pulsar la misma: una estrella puesta sin querer, en un
  * campo que no es obligatorio, no se puede quitar de ninguna otra forma.
+ *
+ * `minLabel` y `maxLabel` escriben los extremos debajo, como en las escalas del check-in
+ * diario: sin ellos el cliente no sabe si cinco estrellas es ir de lujo o ir fatal.
  */
-export const Estrellas = ({ valor, onChange, testid, soloLectura = false }) => (
-    <div className="flex items-center gap-1" data-testid={testid}>
-        {[1, 2, 3, 4, 5].map(n => {
-            const puesta = (valor || 0) >= n;
-            return (
-                <button key={n} type="button" disabled={soloLectura}
-                    onClick={() => onChange(valor === n ? null : n)}
-                    data-testid={`${testid}-${n}`} aria-label={`${n} de 5`}
-                    className={`p-1 transition-transform ${soloLectura ? '' : 'hover:scale-110'}`}>
-                    <Star className="w-7 h-7" style={{ color: puesta ? ORANGE : 'currentColor' }}
-                        fill={puesta ? ORANGE : 'none'}
-                        strokeWidth={puesta ? 0 : 1.5} />
-                </button>
-            );
-        })}
+export const Estrellas = ({ valor, onChange, testid, soloLectura = false, minLabel, maxLabel }) => (
+    <div className="w-fit" data-testid={testid}>
+        <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map(n => {
+                const puesta = (valor || 0) >= n;
+                return (
+                    <button key={n} type="button" disabled={soloLectura}
+                        onClick={() => onChange(valor === n ? null : n)}
+                        data-testid={`${testid}-${n}`} aria-label={`${n} de 5`}
+                        className={`p-1 transition-transform ${soloLectura ? '' : 'hover:scale-110'}`}>
+                        <Star className="w-7 h-7" style={{ color: puesta ? ORANGE : 'currentColor' }}
+                            fill={puesta ? ORANGE : 'none'}
+                            strokeWidth={puesta ? 0 : 1.5} />
+                    </button>
+                );
+            })}
+        </div>
+        {(minLabel || maxLabel) && (
+            <div className="flex justify-between mt-0.5 px-1">
+                <span className="text-[11px] text-muted-foreground">{minLabel}</span>
+                <span className="text-[11px] text-muted-foreground">{maxLabel}</span>
+            </div>
+        )}
     </div>
 );
 

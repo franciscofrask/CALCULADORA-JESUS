@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, Response
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
 import asyncio
+import logging
 import re
 import uuid
 import os
@@ -194,11 +195,22 @@ async def _fuera_el_equipo(salvo: Optional[str] = None) -> Dict[str, Any]:
     `salvo` deja fuera del filtro a un usuario: se usa para que cada uno pueda encontrar SU
     propia ficha (ver `get_all_clients`). En los contadores del panel no se pasa nunca,
     porque ahí la pregunta es cuánto negocio hay y el equipo sigue sin ser negocio.
+
+    LAS CUENTAS DE PRUEBA TAMPOCO SON NEGOCIO (21-08-2026). Las cuentas que el equipo creó
+    para probar (jose@test.com, clientedemo@test.com...) tienen rol client, así que el
+    filtro por rol no las tocaba y contaban como clientes en todos los números del panel.
+    Se marcan con `es_prueba: true` (en `users` y en su `client_profiles`, script
+    `_marcar_cuentas_prueba.py`) y este filtro las deja fuera por los dos lados: por el
+    flag del perfil y, por si algún perfil se quedara sin marcar, por el del usuario.
     """
-    del_equipo = await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}})
+    del_equipo = await db.users.distinct(
+        "id", {"$or": [{"role": {"$in": ["admin", "trainer"]}}, {"es_prueba": True}]})
     if salvo:
         del_equipo = [uid for uid in del_equipo if uid != salvo]
-    return {"user_id": {"$nin": del_equipo}} if del_equipo else {}
+    filtro: Dict[str, Any] = {"es_prueba": {"$ne": True}}
+    if del_equipo:
+        filtro["user_id"] = {"$nin": del_equipo}
+    return filtro
 
 
 @router.get("/clients", response_model=List[Dict[str, Any]])
@@ -847,9 +859,19 @@ async def sugerir_ajuste_macros(client_id: str, user = Depends(get_admin_user)):
         # (pregunta "¿como de viable seria un nuevo ajuste?", punto 5 del 05-08): el dato del
         # cuestionario inicial se responde una vez y envejece.
         hambre_saturacion=_margen_del_cliente(profile, reporte_app))
-    out = await macro_agent.sugerir_ajuste(ctx)
-    if isinstance(out, dict) and out.get("propuesta"):
-        out["guardarrail"] = macro_agent.validar(out["propuesta"], macros_actuales, out.get("avisos", []))
+    # Si el agente o el guardarrail revientan, al panel le llega una frase humana y el
+    # detalle se queda en la consola del servidor. Hasta el 21-08 esto era un 500 pelado
+    # SIEMPRE: el guardarrail formateaba con :+d unos macros que vienen como float.
+    try:
+        out = await macro_agent.sugerir_ajuste(ctx)
+        if isinstance(out, dict) and out.get("propuesta"):
+            out["guardarrail"] = macro_agent.validar(out["propuesta"], macros_actuales, out.get("avisos", []))
+    except Exception:
+        logging.getLogger("uvicorn.error").exception(
+            "sugerir-ajuste: el agente de macros falló con el cliente %s", client_id)
+        raise HTTPException(
+            status_code=502,
+            detail="No hemos podido generar la sugerencia, vuelve a intentarlo en un momento.")
     out["contexto_usado"] = {"fase": fase, "sexo": sexo, "n_pesos": len(evolucion),
                              "n_historial": len(historial), "tiene_reporte": bool(reporte),
                              "n_gemelos": len(gemelos), "n_reglas_perfil": len(reglas_perfil)}

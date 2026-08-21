@@ -39,6 +39,10 @@ const fechaLarga = (iso) => {
     return texto.charAt(0).toUpperCase() + texto.slice(1);
 };
 
+// La etiqueta del historial en cristiano: la base guarda el tipo en inglés
+// (daily/weekly/monthly) y la píldora lo gritaba tal cual, «MONTHLY».
+const TIPO_CHECKIN = { daily: 'Diario', weekly: 'Semanal', monthly: 'Mensual' };
+
 // «77,3 kg, ayer». Los decimales con coma, que es como se escriben aquí.
 const kilos = (v) => `${String(v).replace('.', ',')} kg`;
 const cuando = (iso) => {
@@ -711,9 +715,9 @@ const CheckInsPage = () => {
                         {checkins.slice(0, histShown).map(c => (
                             <li key={c.id} className="rounded-xl border border-border bg-muted p-3">
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-card border border-border text-foreground/60">{c.type}</span>
+                                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-card border border-border text-foreground/60">{TIPO_CHECKIN[c.type] || c.type}</span>
                                     <span className="text-[11px] text-foreground/50">
-                                        {new Date(c.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        {new Date(c.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 </div>
                                 {c.type === 'daily' ? (

@@ -296,7 +296,8 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                         <div>
                             <p className="text-sm text-foreground mb-2">¿Qué tal el entrenamiento este mes?</p>
                             <Estrellas testid="entreno-estrellas" valor={valores.entreno.estrellas}
-                                onChange={(v) => setEntreno('estrellas', v)} />
+                                onChange={(v) => setEntreno('estrellas', v)}
+                                minLabel="fatal" maxLabel="de lujo" />
                         </div>
                         <TextoLibre testid="entreno-nota" etiqueta="Lo que quieras contarme."
                             valor={valores.entreno.nota} onChange={(v) => setEntreno('nota', v)} />

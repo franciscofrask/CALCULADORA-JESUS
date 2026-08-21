@@ -560,6 +560,47 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                     "calendario": True,
                 })
 
+        # El semanal (Premium/6M), calcado del quincenal (tarea 1.6): mismos umbrales
+        # -- apertura desde la hora en que abre la ventana, insistencia a las 9:00 del
+        # día del cierre si no lo ha mandado ni aplazado -- con las palabras de su
+        # cadencia. El doc del 16-08 no lo cubre, así que los textos siguen el tono de
+        # los del quincenal. Su ventana abre y cierra EL MISMO día (domingo 00:00 ->
+        # 23:00, `HORAS_DEL_DOC`), así que las dos familias pueden coincidir en el día:
+        # la apertura anuncia y la segunda solo insiste al que sigue sin mandarlo. Sin
+        # hora prometida en el texto («se dice el día o no se dice nada»): la ventana
+        # real de envío (`_submission_window`) no cierra a la misma hora que esta.
+        if tipo == "semanal":
+            if hoy == abre.date() and ahora_es >= abre:
+                fuera.append({
+                    "clave": f"semanal_abierto:{abre.date()}",
+                    "familia": "semanal_abierto",
+                    "tipo": "reporte",
+                    "variantes": [
+                        {"titulo": "Tu reporte semanal está abierto",
+                         "cuerpo": "Unas breves preguntas para ajustar tus macros si hace falta. Tienes hasta esta noche."},
+                        {"titulo": "Toca semanal",
+                         "cuerpo": "Cuatro preguntas. Tienes hasta esta noche."},
+                        {"titulo": "Cuéntame esta semana",
+                         "cuerpo": "Es rápido, y con eso decido si te toco algo."},
+                    ],
+                    "link": "/dashboard/reports",
+                    "calendario": True,
+                })
+            if not mandado and not aplazado and hoy == cierra.date() and ahora_es.hour >= 9:
+                fuera.append({
+                    "clave": f"semanal_ultimo:{abre.date()}",
+                    "familia": "semanal_ultimo",
+                    "tipo": "reporte",
+                    "variantes": [
+                        {"titulo": "Último día para tu semanal",
+                         "cuerpo": "Se cierra esta noche."},
+                        {"titulo": "Hoy cierra tu semanal",
+                         "cuerpo": "Sin él no sé cómo has ido esta semana."},
+                    ],
+                    "link": "/dashboard/reports",
+                    "calendario": True,
+                })
+
         if tipo == "mensual":
             # 5 · El viernes que abre, desde su hora (el reloj del 19-08 la pone: 10:00).
             # Antes salía sin hora porque el doc del 16-08 no le ponía ninguna; avisarle

@@ -312,6 +312,191 @@ async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
     
     return {"diets": result, "count": len(result)}
 
+
+# ── Mi semana (rediseño, tarea 5.1 del 21-08) ────────────────────────────────
+# Declarada ANTES de /{fecha} para que "semana" no caiga en el path param.
+
+# Los días como los escribe el panel en routines.days[].day; weekday() da 0 = lunes.
+_DIAS_SEMANA = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
+
+
+def _dia_de_la_rutina(routine: Optional[dict], indice_semana: int) -> Optional[dict]:
+    """El día de la rutina activa que cae en ese día de la semana, o None si no hay."""
+    if not routine:
+        return None
+    from routes.workout_logs import _plano
+    nombre = _DIAS_SEMANA[indice_semana]
+    for d in routine.get("days") or []:
+        if _plano(d.get("day")) == nombre:
+            return d
+    return None
+
+
+def _nombre_del_entreno(dia_rutina: Optional[dict]) -> Optional[str]:
+    """El grupo muscular del día si la rutina lo trae, y si no None: aquí no se inventa
+    un título («Entreno de hoy» queda bien en la pantalla de hoy, no en un martes)."""
+    for clave in ("grupo", "focus", "nombre", "titulo"):
+        valor = str((dia_rutina or {}).get(clave) or "").strip()
+        if valor:
+            return valor
+    return None
+
+
+@router.get("/semana")
+async def get_semana(inicio: Optional[str] = None, user = Depends(get_current_user)):
+    """Los siete días de la semana del cliente (lunes a domingo, en hora de España),
+    cada uno con el estado de su dieta y su entreno. Es lo que pinta Mi semana.
+
+    `inicio` (opcional, YYYY-MM-DD) es cualquier día de la semana que se quiera mirar;
+    sin él, la semana de hoy. El estado de cada día:
+
+      - montada: todas las comidas principales del día tienen alimentos,
+      - empezada: alguna con alimentos pero no todas,
+      - sin_montar: ninguna.
+
+    El peri (Intra/Post) no cuenta como comida, y los macros son los del motor de
+    conteo único (`calibrar_dia`), los mismos que enseñan Inicio y Nutrición.
+    """
+    from datetime import date as _date, timedelta
+    from core.tiempo import hoy_madrid
+
+    hoy = hoy_madrid()
+    base = hoy
+    if inicio:
+        base = _date.fromisoformat(_validar_fecha(inicio))
+    lunes = base - timedelta(days=base.weekday())
+    fechas = [(lunes + timedelta(days=i)).isoformat() for i in range(7)]
+
+    # UNA consulta para los siete días, no siete.
+    diets = {
+        d["fecha"]: d
+        async for d in db.diets.find(
+            {"user_id": user["id"], "fecha": {"$gte": fechas[0], "$lte": fechas[6]}},
+            {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "comidas": 1})
+    }
+
+    # El catálogo de TODOS los alimentos de la semana, también de una vez: hace falta
+    # entero (no la proyección corta) porque la calibración y el paso a gramos de los
+    # días migrados de Calma necesitan los campos de macros y de unidades.
+    ids = set()
+    for d in diets.values():
+        ids |= _ids_de(d)
+    catalogo = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0}):
+            catalogo[f["id"]] = f
+
+    import math as _math
+    for d in diets.values():
+        # Cantidades NaN fuera antes de calcular nada (doc 57): el NaN se propaga a la
+        # suma y el JSON no lo admite, y la semana entera respondería 500.
+        for a in _para_ver.alimentos_de(d):
+            v = a.get("cantidad_g")
+            if isinstance(v, float) and not _math.isfinite(v):
+                a["cantidad_g"] = 0
+        # Y a gramos (punto 4.5): en los días migrados de Calma los alimentos por
+        # unidades guardan el conteo de piezas donde van los gramos.
+        _normalizar_con_catalogo(d, catalogo)
+
+    # La rutina activa dice qué días de la semana son de entreno; los registros de
+    # entreno (workout_logs, T3) dicen cuáles se hicieron. El perfil hace de puente:
+    # las dos colecciones van por client_profiles.id, no por users.id.
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    routine = None
+    if perfil.get("id"):
+        routine = await db.routines.find_one(
+            {"client_id": perfil["id"], "status": "active"}, {"_id": 0, "days": 1})
+
+    from routes.settings import pantalla_activa
+    seguimiento_entrenos = await pantalla_activa("t3_entreno")
+    logs = {}
+    if seguimiento_entrenos and perfil.get("id"):
+        async for l in db.workout_logs.find(
+                {"client_id": perfil["id"], "fecha": {"$gte": fechas[0], "$lte": fechas[6]}},
+                {"_id": 0, "fecha": 1, "hecho": 1}):
+            logs[l["fecha"]] = bool(l.get("hecho"))
+
+    dias = []
+    montadas = empezadas = sin_montar = 0
+    entrenos_total = entrenos_hechos = 0
+    for i, fecha in enumerate(fechas):
+        diet = diets.get(fecha)
+        dia_rutina = _dia_de_la_rutina(routine, i)
+
+        # El tipo del día: lo que diga SU dieta si está guardada (es lo que el cliente
+        # dijo para ese día concreto) y, si no, lo que toque por rutina. Sin ninguna de
+        # las dos, no se sabe y se dice que no se sabe.
+        if diet:
+            tipo = diet.get("tipo_dia") or "entrenamiento"
+        elif dia_rutina is not None:
+            tipo = "descanso" if dia_rutina.get("is_rest") else "entrenamiento"
+        else:
+            tipo = None
+
+        num_comidas = int((diet or {}).get("num_comidas") or 4)
+        comidas = (diet or {}).get("comidas") or {}
+        principales = [f"C{n}" for n in range(1, num_comidas + 1)]
+        con_alimentos = sum(
+            1 for k in principales if (comidas.get(k) or {}).get("alimentos"))
+
+        if con_alimentos == 0:
+            estado = "sin_montar"
+            sin_montar += 1
+        elif con_alimentos >= num_comidas:
+            estado = "montada"
+            montadas += 1
+        else:
+            estado = "empezada"
+            empezadas += 1
+
+        macros = {"P": 0.0, "H": 0.0, "G": 0.0}
+        if diet and con_alimentos:
+            macros = await _servido_de_las_comidas(diet, fichas=catalogo)
+
+        hecho = logs.get(fecha) if seguimiento_entrenos else None
+        if tipo == "entrenamiento":
+            entrenos_total += 1
+            if hecho:
+                entrenos_hechos += 1
+
+        dias.append({
+            "fecha": fecha,
+            "tipo_dia": tipo,
+            "estado": estado,
+            "macros": macros,
+            "n_comidas_con_alimentos": con_alimentos,
+            "n_comidas_total": num_comidas,
+            "entreno": {
+                "nombre": _nombre_del_entreno(dia_rutina) if tipo == "entrenamiento" else None,
+                # true/false solo cuando el registro de entrenos (T3) está encendido;
+                # null = todavía no hay forma de saberlo.
+                "hecho": hecho if (seguimiento_entrenos and tipo == "entrenamiento") else None,
+            },
+        })
+
+    # Sin rutina y sin días guardados no hay forma de saber qué días entrena ESTA
+    # semana: se cae a los días de entreno de la ficha (4 si no consta otra cosa).
+    if entrenos_total == 0 and not routine and not diets:
+        from core.dias_de_entreno import dias_de_entreno
+        entrenos_total = dias_de_entreno(perfil)
+
+    return {
+        "inicio": fechas[0],
+        "fin": fechas[6],
+        "hoy": hoy.isoformat(),
+        "dias": dias,
+        "resumen": {
+            "montadas": montadas,
+            "empezadas": empezadas,
+            "sin_montar": sin_montar,
+            "entrenos_total": entrenos_total,
+            # null cuando no hay seguimiento de sesiones: la pantalla enseña
+            # «N entrenos» a secas en vez de un «0 de N» que nadie ha contado.
+            "entrenos_hechos": entrenos_hechos if seguimiento_entrenos else None,
+        },
+    }
+
+
 @router.get("/calendar/{year}/{month}")
 async def get_diet_calendar(year: int, month: int, user = Depends(get_current_user)):
     """Obtener calendario de dietas del mes."""
@@ -512,7 +697,7 @@ async def get_diet(fecha: str, user = Depends(get_current_user)):
 _PERI = ("Intra", "Post")
 
 
-async def _servido_de_las_comidas(diet: dict) -> dict:
+async def _servido_de_las_comidas(diet: dict, fichas: Optional[dict] = None) -> dict:
     """Lo que suman las comidas regulares de este día, YA CALIBRADO.
 
     POR QUÉ LO CUENTA EL SERVIDOR (punto 3 del documento del 17-08).
@@ -542,13 +727,15 @@ async def _servido_de_las_comidas(diet: dict) -> dict:
 
     NEUTRO = {"categorias": "", "proteinas": 0, "hidratos": 0, "grasas": 0, "racion": 100}
     # Los alimentos guardados llevan el id, no la ficha: hay que traerlas del catálogo o
-    # la calibración no sabe de qué bloque es cada uno.
-    ids = {a.get("alimento_id") for k in orden for a in (comidas.get(k, {}).get("alimentos") or [])
-           if a.get("alimento_id") is not None}
-    fichas = {}
-    if ids:
-        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0}):
-            fichas[f.get("id")] = f
+    # la calibración no sabe de qué bloque es cada uno. Quien ya tenga el catálogo puede
+    # pasarlo en `fichas` (Mi semana lo trae UNA vez para los siete días).
+    if fichas is None:
+        ids = {a.get("alimento_id") for k in orden for a in (comidas.get(k, {}).get("alimentos") or [])
+               if a.get("alimento_id") is not None}
+        fichas = {}
+        if ids:
+            async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0}):
+                fichas[f.get("id")] = f
 
     meals = []
     for k in orden:

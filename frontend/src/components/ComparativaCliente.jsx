@@ -13,6 +13,11 @@
  *
  * Las fotos van con la sesión, así que se piden con el token y se pintan desde el blob (el
  * mismo camino que `TresFotos`): el token no viaja nunca en una URL de imagen.
+ *
+ * La lista de /reports/photos viene ahora FUNDIDA (tarea 1.1): las de la app y las importadas
+ * de Calma, cada una con su `ref` y su fecha. Aquí no se distingue nada: se pide cada foto
+ * por su ref a /reports/foto/{ref} y se ordena todo junto, que es justo lo que el cliente
+ * espera ver (su histórico entero, no solo lo subido en la app nueva).
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Camera } from 'lucide-react';
@@ -42,16 +47,19 @@ const _pesoCercano = (pesos, fecha) => {
     return distancia <= 21 * 864e5 ? mejor : null;
 };
 
-/** Una foto del cliente, descargada con su sesión. */
+/** Una foto del cliente, descargada con su sesión. La ref de las de Calma lleva una
+ *  barra (calma/carpeta/fichero), así que se codifica tramo a tramo. */
 const FotoDelCliente = ({ api, foto }) => {
     const [url, setUrl] = useState(null);
+    const ref = foto.ref || foto.id;
     useEffect(() => {
         let vivo = true;
-        api.get(`/reports/photos/${foto.id}`, { responseType: 'blob' })
+        const camino = String(ref).split('/').map(encodeURIComponent).join('/');
+        api.get(`/reports/foto/${camino}`, { responseType: 'blob' })
             .then(r => { if (vivo) setUrl(URL.createObjectURL(r.data)); })
             .catch((e) => { console.error('No se pudo cargar una foto de la comparativa:', e); });
         return () => { vivo = false; };
-    }, [api, foto.id]);
+    }, [api, ref]);
 
     return (
         <div className="aspect-[3/4] rounded-xl overflow-hidden bg-muted">

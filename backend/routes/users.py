@@ -83,6 +83,12 @@ async def get_client_profile(user = Depends(get_current_user)):
     from macros_por_fecha import ultima_vigente
     ultimo = await ultima_vigente(db, profile.get("id"))
     datos["macros_puestos_por_alguien"] = de_una_persona(ultimo)
+    # Y si los DATOS con los que se trabaja son de fiar (tarea 1.4 del 21-08): faltantes o
+    # imposibles (edad 5, estatura 1 cm), calculado al leer con los rangos de la puerta de
+    # la API. Con esto las pantallas de macros rotulan «Provisionales» y empujan a completar
+    # el perfil; vacio = nada que decir.
+    from core.datos_dudosos import datos_dudosos
+    datos["datos_dudosos"] = datos_dudosos(profile)
     # Y si PUEDE ajustarselos el (punto 4.10). Lo decide el servidor y viaja al front para que
     # la pantalla no le enseñe un formulario y un boton de Guardar que van a devolver un 403:
     # dejarle contestar quince preguntas para negarselo al final es peor que decirselo antes.
@@ -100,10 +106,18 @@ async def get_client_profile(user = Depends(get_current_user)):
     # LO QUE PAGA, de verdad (punto 2.4c). `price` viene a cero en los 168 perfiles migrados
     # de Calma, y Mi perfil enseñaba «0 €/ciclo» a un cliente de pago. El precio del plan
     # tapa ese hueco; el cero solo se respeta si hay cortesía marcada.
-    from models.user import merged_catalog, precio_de_ciclo
+    from models.user import merged_catalog, precio_de_ciclo, codigo_de_plan
     from routes.plans import _overrides_by_code
-    datos["precio_ciclo"] = precio_de_ciclo(profile, merged_catalog(await _overrides_by_code()))
+    catalogo = merged_catalog(await _overrides_by_code())
+    datos["precio_ciclo"] = precio_de_ciclo(profile, catalogo)
     datos["precio_cortesia"] = bool(profile.get("comp_plan"))
+    # LO QUE SU PLAN PROMETE DEL CHAT (tarea 1.5). El catalogo ya lo sabe por plan
+    # (Gold: «menos de 24 h»; Calculadora: nada), pero solo lo leia el panel de admin y
+    # el chat del cliente decia «menos de 24 horas» a todos. Viajan aqui para que la
+    # pantalla pinte el plazo de SU plan, y vacio = no se promete nada.
+    hab = (catalogo.get(codigo_de_plan(profile.get("plan"))) or {}).get("habilitaciones") or {}
+    datos["tiempo_respuesta"] = hab.get("tiempo_respuesta") or ""
+    datos["canal_contacto"] = hab.get("canal_contacto") or ""
     # CUÁNDO SE LE ACABA (punto 2.4d). «Próxima renovación: no definida» a alguien cuya
     # membresía venció hace una semana no es que falte el dato: es que se miraba solo
     # `next_payment`, que es el próximo COBRO, y los migrados no tienen ninguno. Lo que se
@@ -1399,13 +1413,18 @@ async def get_macros(fecha: Optional[str] = None, user = Depends(get_current_use
     macros VIGENTE a esa fecha (date-versioned, Calma todosLosMacros): la última entrada de
     macro_history con effective_date <= fecha; antes del primer cambio, la más antigua; sin
     historial, los macros actuales del perfil. Así el editor precarga los del día elegido."""
+    # Si los datos del perfil son de fiar (tarea 1.4 del 21-08): las pantallas que pintan
+    # estos macros rotulan «Provisionales» cuando la lista no viene vacia. Sin perfil, todo
+    # falta: los numeros por defecto son los mas provisionales de todos.
+    from core.datos_dudosos import datos_dudosos
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         return {
             "training": {"protein": 160, "carbs": 50, "fat": 40},
             "rest": {"protein": 140, "carbs": 40, "fat": 40},
             "periworkout": {"protein": 35, "carbs": 15},
-            "source": "default"
+            "source": "default",
+            "datos_dudosos": datos_dudosos(None),
         }
     # SIN FECHA SIGNIFICA HOY, no "lo ultimo que se escribio" (punto 4.6).
     #
@@ -1448,6 +1467,7 @@ async def get_macros(fecha: Optional[str] = None, user = Depends(get_current_use
             "periworkout": peri or {"protein": 35, "carbs": 15},
             "source": profile.get("macros_source", "default"),
             "fecha": fecha,
+            "datos_dudosos": datos_dudosos(profile),
             **inputs,
         }
     return {
@@ -1459,6 +1479,7 @@ async def get_macros(fecha: Optional[str] = None, user = Depends(get_current_use
         "porcentaje_graso": profile.get("body_fat"),
         "sexo": profile.get("sex"),
         "objetivo": profile.get("goal"),
+        "datos_dudosos": datos_dudosos(profile),
     }
 
 
@@ -1536,6 +1557,10 @@ def _feedback_del_entrenador(h: Dict[str, Any]) -> Optional[str]:
     if not nota or nota in NOTAS_QUE_ESCRIBE_LA_APP:
         return None
     if (h.get("origen") or "") in LOS_ESCRIBE_EL_CLIENTE:
+        return None
+    # Residuos de tandas de prueba (caso 57 de la lista de Jesus): se guardan con origen
+    # manual y firma del equipo, indistinguibles de un consejo salvo por el prefijo.
+    if nota.startswith("TEST_"):
         return None
     return nota
 

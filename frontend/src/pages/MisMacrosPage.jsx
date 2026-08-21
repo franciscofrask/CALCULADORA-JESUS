@@ -78,10 +78,14 @@ const BloqueLinea = ({ label, macros, conGrasa = true, destacado = false }) => {
 // La tabla del histórico vive en components/HistorialDeMacros, compartida con Evolución.
 
 const MisMacrosPage = ({ onAjustar }) => {
-    const { api } = useAuth();
+    const { api, profile } = useAuth();
     const navigate = useNavigate();
     const [datos, setDatos] = useState(null);
     const [cargando, setCargando] = useState(true);
+    // Datos del perfil faltantes o imposibles (tarea 1.4): lo calcula el servidor al leer
+    // el perfil. Con la lista llena, los números se rotulan «Provisionales» y se empuja a
+    // la pantalla de completar datos que ya existe (?completar=1), que solo rellena huecos.
+    const datosDudosos = profile?.datos_dudosos || [];
 
     useEffect(() => {
         let vivo = true;
@@ -142,8 +146,16 @@ const MisMacrosPage = ({ onAjustar }) => {
                     {/* ── HOY ── */}
                     <section className="surface p-5 space-y-3" data-testid="mis-macros-hoy">
                         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                            <p className="caption">
+                            <p className="caption flex items-center gap-2">
                                 Hoy{entrenaHoy ? ' · Entreno' : descansaHoy ? ' · Descanso' : ''}
+                                {/* Rótulo discreto, no un aviso: los números siguen siendo
+                                    los suyos, solo que se calcularon con huecos en el perfil. */}
+                                {datosDudosos.length > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wide"
+                                        data-testid="rotulo-provisionales">
+                                        Provisionales
+                                    </span>
+                                )}
                             </p>
                             {vigente?.fecha && (
                                 <p className="text-xs text-muted-foreground" data-testid="mis-macros-vigentes-desde">
@@ -151,6 +163,15 @@ const MisMacrosPage = ({ onAjustar }) => {
                                 </p>
                             )}
                         </div>
+                        {datosDudosos.length > 0 && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 -mt-1" data-testid="macros-provisionales">
+                                Nos faltan datos tuyos para afinarlos.{' '}
+                                <button type="button" onClick={() => navigate('/questionnaire?completar=1')}
+                                    className="underline font-semibold">
+                                    Completar mis datos
+                                </button>
+                            </p>
+                        )}
 
                         {vigente ? (<>
                             {/* El bloque grande es el del día que le toca hoy si lo sabemos, y el de

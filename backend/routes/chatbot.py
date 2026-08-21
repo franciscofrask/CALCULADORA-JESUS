@@ -226,8 +226,20 @@ async def chatbot_configure(
         # peri y lo lleva aparte. El mismo día decía «faltan 5 g de grasa» aquí y «faltan
         # 10,1» tres centímetros más allá. `restante_comidas` es el par de Nutrición.
         r = v["restante_comidas"]
-        hechas = f"{comidas_traidas} de {total}" if total else str(comidas_traidas)
-        mensaje += f"\n\nYa tienes {hechas} comidas montadas de ese día."
+        # Y EL MISMO CONTADOR QUE NUTRICIÓN (tarea 1.3 del 21-08): las comidas se cuentan
+        # SIN el peri, que aquí entraba en los dos números («3 de 6» con 4 comidas). Las
+        # principales llevan la cuenta y el peri se nombra aparte, como los macros.
+        tr = chatbot.state.get("comidas_traidas") or []
+        ppales_tr = len([k for k in tr if k not in chatbot.COMIDAS_PERI])
+        peri_tr = len([k for k in tr if k in chatbot.COMIDAS_PERI])
+        total_ppal = v.get("total_comidas_principales") or base_n
+        if ppales_tr:
+            hechas = f"{ppales_tr} de {total_ppal}" if total_ppal else str(ppales_tr)
+            mensaje += f"\n\nYa tienes {hechas} comidas montadas de ese día."
+            if peri_tr:
+                mensaje += " Y el peri-entreno también."
+        else:
+            mensaje += "\n\nYa tienes el peri-entreno montado de ese día."
         # En palabras, no en iniciales: «Te faltan 13 P · 17 H · 1 G» es lo que Jesús
         # leyó en el vídeo 1 del 15-08, y no lo dice nadie.
         falta = [f"{_gr(abs(round(r[k])))} g de {_NOMBRE_MACRO[k]}"

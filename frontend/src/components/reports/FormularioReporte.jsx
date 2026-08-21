@@ -24,6 +24,16 @@ import { mensajeDeError } from '../../lib/mensajeDeError';
 
 const ORANGE = '#FF671F';
 
+// El título por cadencia (tarea 1.6). Antes era un ternario binario: todo lo que no era
+// mensual se rotulaba «Tu reporte quincenal», y al de cadencia semanal el aviso le decía
+// «semanal» y el formulario «quincenal». El tipo lo manda el servidor; si llega uno que
+// no está aquí, se dice «Tu reporte» a secas antes que ponerle una cadencia inventada.
+const TITULOS_REPORTE = {
+    semanal: 'Tu reporte semanal',
+    quincenal: 'Tu reporte quincenal',
+    mensual: 'Tu reporte mensual',
+};
+
 const valoresIniciales = (objetivoActual) => ({
     weight: '',
     // El % de grasa solo sale en el reporte que toca, cada 12 semanas.
@@ -257,8 +267,8 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                     valores={valores} set={set} setEntreno={setEntreno} plazo={plazo}
                     api={api} token={token} prev={prev} />
             ) : (
-                <ReporteQuincenal datos={ficha.datos} valores={valores} set={set} plazo={plazo}
-                    titulo={ficha?.tipo === 'mensual' ? 'Tu reporte mensual' : 'Tu reporte quincenal'} />
+                <ReporteQuincenal datos={ficha.datos} valores={valores} set={set} plazo={plazo} bloques={bloques}
+                    titulo={TITULOS_REPORTE[ficha?.tipo] || 'Tu reporte'} />
             )}
 
             {/* ── «NO PUEDO ESTA SEMANA», ABAJO (doc 19-08) ── En los dos reportes. Lo

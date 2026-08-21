@@ -502,6 +502,19 @@ def _periodo_del_reporte(perfil: dict, tipo: str):
     return desde, hasta
 
 
+def bloques_del_rapido(tiene_rutina: bool) -> list:
+    """Los bloques del formulario corto (quincenal, semanal y el mensual «rápido»).
+
+    SE MIRA EL DATO, NO EL PLAN, como en el mensual: sin rutina cargada no hay
+    ejercicios por los que preguntar molestias ni entrenos previos que confirmar, así
+    que esos dos bloques no salen y los demás se renumeran solos. Hasta ahora la lista
+    era fija y al cliente sin rutina se le preguntaba por las molestias «de la rutina».
+    """
+    if not tiene_rutina:
+        return ["peso", "sensaciones", "libre"]
+    return ["entreno_previo", "peso", "molestias", "sensaciones", "libre"]
+
+
 @router.get("/formulario")
 async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(get_current_user)):
     """TODO lo que el formulario necesita antes de preguntar nada (doc 16-08, T7 y T8).
@@ -546,8 +559,8 @@ async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(ge
     # formulario es el corto de cuatro preguntas, el mismo del quincenal.
     forma_rapida = bool(hab.get("reporte_rapido")) and tipo == "mensual"
     bloques = bloques_del_mensual(perfil_rep, pedir_grasa=bool(grasa.get("hay_que_pedirlo"))) \
-        if tipo == "mensual" and not forma_rapida else [
-        "entreno_previo", "peso", "molestias", "sensaciones", "libre"]
+        if tipo == "mensual" and not forma_rapida else \
+        bloques_del_rapido(bool((datos.get("entreno") or {}).get("tiene_rutina")))
     datos["grasa"] = grasa
     # SE MIRA EL DATO, NO EL PLAN (regla 3 del doc): sin rutina cargada, el bloque del
     # entreno no tiene ni dato que enseñar ni pregunta que hacer, así que no sale y los de

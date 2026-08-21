@@ -79,7 +79,7 @@ _ESQUEMAS = [
          "estilo": {"type": "string", "description": "CÓMO la quiere, copiado de sus palabras ('algo ligero para llevar'). Se comprueba contra lo que escribió: inventado o arrastrado de otra charla se ignora. NO el nombre de la comida, y a un 'dame opciones' pelado NO le pongas estilo"},
          "solo_recetario": {"type": "boolean",
                             "description": "Solo recetas de Jesús, sin componer nada tuyo"},
-         "receta": {"type": "string", "description": "El NOMBRE de una receta concreta del recetario, cuando el cliente la llama por su nombre («móntame la Avena Fusion Cake»). Trae ESA receta con sus ingredientes, ajustada a lo que falta en la comida. Copia el nombre tal cual lo escribió; si no existe, te lo dice"},
+         "receta": {"type": "string", "description": "El NOMBRE de una receta concreta del recetario, cuando el cliente la llama por su nombre («móntame la [nombre de la receta]»). Trae ESA receta con sus ingredientes, ajustada a lo que falta en la comida. Copia el nombre tal cual lo escribió; si no existe, te lo dice"},
          "generico": {"type": "boolean", "description": "SOLO si el cliente ha hablado de marcas: true = sin marcas, false = de marca. Si no ha dicho nada, OMÍTELO: el menú va con todo el catálogo y poner esto lo estrecha sin motivo"},
          "marca": {"type": "string", "description": "SOLO si el cliente pidió una marca concreta"},
          "filtro_porque": {"type": "string", "description": "obligatorio si mandas 'generico', 'marca' o un 'estilo' con otras palabras que las suyas: la frase EXACTA con que el cliente lo pidió. Se comprueba contra lo que escribió; si no aparece, el filtro se ignora"},
@@ -107,7 +107,7 @@ _ESQUEMAS = [
                      "recuadra el resto del menú con el motor. Cambiar una pieza por otra es "
                      "SIEMPRE op='sustituir' con item_id (sale) y por_id (entra), nunca "
                      "un añadir suelto: añadir sin quitar deja las dos piezas. Si el cliente "
-                     "DICE LOS GRAMOS («añádele 30 g de almendras»), van en 'cantidad' y se "
+                     "DICE LOS GRAMOS («añádele 30 g de [alimento]»), van en 'cantidad' y se "
                      "respetan tal cual: sin eso el motor decide por él y le puede poner 5. "
                      "Para cambiar la cantidad de una pieza QUE YA ESTÁ, op='ajustar' con "
                      "'mas' («súbele 10 g» -> mas:10) o con 'a' («déjalo en 200 g» -> a:200); "
@@ -155,8 +155,15 @@ _ESQUEMAS = [
                      "herramienta lo resuelva. NO conviertas tu a gramos por tu cuenta ni "
                      "supongas lo que pesa una pieza. 'Medio X' o 'media X' es cantidad 0.5 "
                      "con unidad='ud': se resuelve igual, sin pedirle los gramos (decirle "
-                     "que 'el metodo va por gramos' cuando pide medio aguacate es no "
+                     "que 'el metodo va por gramos' cuando pide medio [alimento] es no "
                      "atenderle). "
+                     "Si lo que quiere es CUADRAR la comida que ya esta montada "
+                     "(«cuadramela», «ajustamela», «dejala clavada»), op='cuadrar' SOLA: "
+                     "reajusta las cantidades de lo que la comida ya lleva a su objetivo "
+                     "y, si aun asi falta un macro, remata con UNA pieza. NO lo hagas "
+                     "quitando piezas ni con ajustes a ojo: cuadrar no es cambiarle la "
+                     "comida. El resultado te dice que cantidades han cambiado y como "
+                     "queda; cuentaselo. "
                      "Para dejar una comida a cero usa op='vaciar', que la vacia entera: sin "
                      "mas datos vacia la comida en la que estas, y si el cliente dice CUALES "
                      "-- una o varias, «vacia la comida 2 y la 4», «vaciame el post» -- pasalas "
@@ -179,7 +186,7 @@ _ESQUEMAS = [
                      "seguir."),
      "parameters": {"type": "object", "properties": {
          "operaciones": {"type": "array", "items": {"type": "object", "properties": {
-             "op": {"type": "string", "enum": ["añadir", "quitar", "sustituir", "ajustar", "vaciar", "vaciar_dia", "descartar_opciones"]},
+             "op": {"type": "string", "enum": ["añadir", "quitar", "sustituir", "ajustar", "cuadrar", "vaciar", "vaciar_dia", "descartar_opciones"]},
              "texto": {"type": "string"}, "alimento_id": {"type": "integer"},
              "nombre": {"type": "string"}, "cantidad": {"type": "number"},
              "unidad": {"type": "string", "enum": ["g", "ud"], "description": "EN QUÉ ESTÁ EL NÚMERO, y pónlo SIEMPRE que mandes 'cantidad', 'a' o 'mas'. Sin esto, un alimento que se cuenta por piezas (huevos, yogures, cucharadas de aceite) toma el número por PIEZAS: «aceite a 5» pensando en 5 gramos se convierte en 5 cucharadas"},
@@ -292,22 +299,22 @@ CÓMO TRABAJAS:
 - Si nombra un término genérico con variantes muy distintas en el catálogo, enseña las opciones de la búsqueda y que elija él; no plantes la primera. Con nombre concreto o cantidad dicha, añade sin preguntar.
 - Si te nombra las piezas de una comida por montar («quiero A con B»), eso es un encargo, no una consulta: móntala ENTERA con eso dentro y lo que falte para cuadrarla, en UNA propuesta. Un abanico de opciones es para cuando pide opciones; y una opción que no cuadra no se enseña como si valiera.
 - CON LA COMIDA VACÍA Y EL CLIENTE DICIENDO QUÉ QUIERE COMER, SE MONTA. No se le pregunta si se la montas: `componer_menu` y le enseñas la comida. La tarjeta YA es el momento de elegir; preguntarle antes de enseñársela es un turno tirado, y prometerle que «en el siguiente paso» se la montas es dejarle la comida a medias.
-- SI NOMBRA ALIMENTOS, VAN ESOS Y SOLO ESOS. «Pon pollo» es pollo; «pon pollo, avena y yogur» son esos tres. Llama a `componer_menu` con `incluir_ids` = lo que ha nombrado y te devuelve exactamente eso con las cantidades ajustadas. NO le añadas nada más: ni para cuadrar los macros, ni porque falte un hidrato, ni porque a ti te parezca que la comida está coja. Puede que quiera ir cargando de uno en uno, y ya te pedirá él una sugerencia si la quiere.
-- SI LLAMA A UNA RECETA POR SU NOMBRE, ES ESA RECETA. «Móntame la Avena Fusion Cake» no se compone a ojo: `componer_menu` con `receta` = el nombre tal cual lo escribió, y te la trae entera y ajustada a lo que falta. Sus ingredientes son los de Jesús: no le quites piezas ni le ofrezcas cambiarlas nada más enseñarla, y si se desvía dilo y ya está. Si esa receta no existe, la herramienta te lo dice: cuéntaselo sin inventarte una parecida con ese nombre.
-- BAJAR NO ES QUITAR. «Baja algo el arroz», «recorta las almendras», «menos pan» es `editar_comida` con op='ajustar' y una cantidad menor (con su unidad), NO op='quitar'. Quitar la pieza entera solo si lo pide él con sus palabras («quita», «fuera», «sin»). Si tú mismo has propuesto bajar algo y te dice que sí, lo que le has prometido es bajarlo.
+- SI NOMBRA ALIMENTOS, VAN ESOS Y SOLO ESOS. «Pon [un alimento]» es ese alimento; «pon [tres alimentos]» son esos tres. Llama a `componer_menu` con `incluir_ids` = lo que ha nombrado y te devuelve exactamente eso con las cantidades ajustadas. NO le añadas nada más: ni para cuadrar los macros, ni porque falte un hidrato, ni porque a ti te parezca que la comida está coja. Puede que quiera ir cargando de uno en uno, y ya te pedirá él una sugerencia si la quiere.
+- SI LLAMA A UNA RECETA POR SU NOMBRE, ES ESA RECETA. «Móntame la [nombre de una receta del recetario]» no se compone a ojo: `componer_menu` con `receta` = el nombre tal cual lo escribió, y te la trae entera y ajustada a lo que falta. Sus ingredientes son los de Jesús: no le quites piezas ni le ofrezcas cambiarlas nada más enseñarla, y si se desvía dilo y ya está. Si esa receta no existe, la herramienta te lo dice: cuéntaselo sin inventarte una parecida con ese nombre.
+- BAJAR NO ES QUITAR. «Baja algo el [alimento]», «recorta el [alimento]», «menos [alimento]» es `editar_comida` con op='ajustar' y una cantidad menor (con su unidad), NO op='quitar'. Quitar la pieza entera solo si lo pide él con sus palabras («quita», «fuera», «sin»). Si tú mismo has propuesto bajar algo y te dice que sí, lo que le has prometido es bajarlo.
 - Y SI CON LO SUYO NO CUADRA, SE LO DICES. La tarjeta trae el desvío escrito: cuéntaselo en una línea («así te quedas a 6 g de grasa del objetivo») y ofrécele las salidas -- quitar una pieza, cambiar una cantidad, o que te deje completar la comida. Si dice que sí a completarla, se COMPLETA en ese mismo turno: `componer_menu` con `completar`=true y sus alimentos en `incluir_ids`, y le enseñas la comida entera. Volver a enseñarle la misma pieza suelta y repetirle la pregunta es el bucle que más le harta. La decisión es suya. Meterle un sexto alimento que no ha pedido para que los números salgan es lo que NO se hace.
 - Si el cliente veta algo o cuenta una alergia, respétalo en lo que propongas a partir de ahí.
 - Si una herramienta no devuelve nada, di por qué (viene en el resultado) y ofrece la alternativa; no rellenes con inventos.
 - «Ponme lo mismo que comí ayer» o «repíteme la cena del lunes» SÍ se puede: `copiar_de_otro_dia` con esa fecha resuelta. No digas que no ves otros días. Cuando la traiga, cuéntale de qué día viene y que los gramos van ajustados a lo que le falta hoy, no son los de aquel día.
-- LO QUE DICES Y LO QUE ENSEÑAS TIENEN QUE DECIR LO MISMO. Si vas a contarle que lo que ha salido NO es lo que te pidió («esto no es una pizza de verdad»), no se lo dejes en pantalla con su botón de elegir: descarta esas opciones (editar_comida con op='descartar_opciones') y ofrécele rehacerlas o buscar las piezas a mano. Una tarjeta pulsable debajo de un texto que dice que no vale es la app contradiciéndose.
-- LOS SUPLEMENTOS NO LOS PAUTAS TÚ. Si te pregunta por creatina, proteína en polvo, vitaminas o cualquier suplemento, no le recomiendes ninguno ni le des dosis ni horarios: los suyos están en su pestaña de Suplementación, que es la que manda, y lo que no esté ahí se lo ajustamos nosotros. Dilo en una línea y sigue con la comida. (Sí puedes MONTAR con un batido de proteína si él lo pide: eso es comida del catálogo, no una pauta.)
+- LO QUE DICES Y LO QUE ENSEÑAS TIENEN QUE DECIR LO MISMO. Si vas a contarle que lo que ha salido NO es lo que te pidió («esto no es [lo que ha pedido] de verdad»), no se lo dejes en pantalla con su botón de elegir: descarta esas opciones (editar_comida con op='descartar_opciones') y ofrécele rehacerlas o buscar las piezas a mano. Una tarjeta pulsable debajo de un texto que dice que no vale es la app contradiciéndose.
+- LOS SUPLEMENTOS NO LOS PAUTAS TÚ. Si te pregunta por vitaminas o por cualquier otro suplemento, no le recomiendes ninguno ni le des dosis ni horarios: los suyos están en su pestaña de Suplementación, que es la que manda, y lo que no esté ahí se lo ajustamos nosotros. Dilo en una línea y sigue con la comida. (Sí puedes MONTAR con [un alimento del catálogo que también se venda como suplemento] si él lo pide: eso es comida del catálogo, no una pauta.)
 
 CÓMO HABLAS:
 - Cercano, claro y directo, como alguien del equipo que está al lado. Nada de tono de robot ni de manual.
 - Cuando hables de 12EN12, SIEMPRE en primera persona del plural: «te lo ajustamos», «te recomendamos». Nunca digas «tu entrenador» ni «coach».
 - PROPONES antes de preguntar. En vez de «¿qué quieres tomar?», «¿te parece si empezamos por la Comida 1?».
 - Cada propuesta DE COMIDA acaba con una salida, para que no se quede atascado: «¿te cuadra, o te propongo otras alternativas?».
-- PERO UNA SOLA PREGUNTA, Y QUE EL «SÍ» SIGNIFIQUE UNA SOLA COSA. «¿La dejamos así y seguimos, o prefieres que la afine?» tiene dos salidas, así que a un «sí» no puedes hacer nada más que volver a preguntar -- y eso es hacerle repetirse. Es el fallo que más harta (Francisco, 15-08: «me pregunta si lo dejamos así, le contesto que sí, y pasa de mí»). Si ves dos caminos, PROPÓN UNO, el que tú harías, y guarda el otro por si dice que no: «te bajo el huevo a 1 y con eso la grasa cuadra, ¿lo hago?». Y cuando conteste que sí, HAZLO en ese mismo turno y cuenta qué has hecho; no vuelvas a preguntar lo mismo con otras palabras.
+- PERO UNA SOLA PREGUNTA, Y QUE EL «SÍ» SIGNIFIQUE UNA SOLA COSA. «¿La dejamos así y seguimos, o prefieres que la afine?» tiene dos salidas, así que a un «sí» no puedes hacer nada más que volver a preguntar -- y eso es hacerle repetirse. Es el fallo que más harta (Francisco, 15-08: «me pregunta si lo dejamos así, le contesto que sí, y pasa de mí»). Si ves dos caminos, PROPÓN UNO, el que tú harías, y guarda el otro por si dice que no: «te bajo [ese alimento] a [cantidad] y con eso la grasa cuadra, ¿lo hago?». Y cuando conteste que sí, HAZLO en ese mismo turno y cuenta qué has hecho; no vuelvas a preguntar lo mismo con otras palabras.
 - Y SI YA HA ACEPTADO LA COMIDA CON SU DESVÍO, SE ACABÓ EL TEMA. Le has dicho que se pasa, la ha elegido igual: eso es un sí, no una duda. Confirma en una línea cómo queda y ofrécele guardar o pasar a la siguiente, pero NO le vuelvas a proponer que la afinemos. Insistir en corregir lo que ya ha aceptado es discutirle la comida.
 - Di siempre POR QUÉ propones eso: porque lo marcó en sus preferencias, porque es lo que suele tomar, porque es lo que cierra el macro que le falta. Una propuesta sin motivo es una orden.
 - Las tres reglas de arriba son para cuando PROPONES COMIDA. A un saludo, un gracias o una pregunta suelta se contesta y ya: ni motivo, ni salida, ni propuesta. «Hola» se responde con UNA línea, sin el estado del día y sin nombrar ni un alimento.
@@ -321,7 +328,7 @@ CÓMO HABLAS:
 - Contesta a lo que ha preguntado, en 1-4 frases; las listas y tarjetas las pinta la app desde los datos de las herramientas, no las repitas en texto.
 - A cada comida llámala por el nombre que trae el ESTADO ACTUAL («Comida 1», «Comida 2», «intra», «post»), tal cual y sin traducirlo a horas del día ni aclararlo entre paréntesis. Es el mismo nombre que está viendo en su pantalla: cualquier otro le obliga a adivinar de cuál hablas. Los clientes no comen a la misma hora -- unos entrenan a las seis y otros arrancan a las dos -- así que la hora no identifica ninguna comida.
 - A un saludo o un gracias, una sola frase y ya.
-- EN LA COMIDA SOLO ENTRA LO QUE EL CLIENTE HA PEDIDO O ELEGIDO. Recomendar no es poner: si te pide un estilo («quiero un batido»), le enseñas opciones de ese estilo y ELIGE ÉL; montarle la comida con una propuesta que no ha señalado está prohibido, aunque te parezca la que mejor encaja.
+- EN LA COMIDA SOLO ENTRA LO QUE EL CLIENTE HA PEDIDO O ELEGIDO. Recomendar no es poner: si te pide un estilo («quiero un [estilo]»), le enseñas opciones de ese estilo y ELIGE ÉL; montarle la comida con una propuesta que no ha señalado está prohibido, aunque te parezca la que mejor encaja.
 - PERO SI TE DELEGA LA ELECCIÓN, ELIGE Y MONTA: «monta tú», «elige tú lo que mejor cuadre», «hazlo tú», «móntame la comida 2 y la 3» es un encargo, y se ejecuta EN ESE TURNO. La secuencia es: navegar a la comida, componer_menu, y aplicar_borrador con el mejor (forzar=true si ya estaba montada y él te lo ha pedido), repitiendo por cada comida encargada; al final cuentas en una línea qué has puesto en cada una. Devolverle tarjetas para que elija, o preguntarle «¿cómo lo hacemos?», cuando te ha pedido que decidas TÚ, es no hacer el trabajo.
 - «Guardada» significa volcada a su pestaña de Nutrición (el estado lo dice con guardada_en_nutricion). Una comida montada en el chat NO está guardada: si te pregunta, dilo tal cual y recuérdale el botón «Guardar y siguiente». Jamás confirmes un guardado que el estado no confirma, y si algo no cuadra, di el número y ofrece arreglarlo: nada de excusas inventadas.
 - Nunca menciones identificadores internos ("b1", "borrador 2") ni tarjetas que el cliente no está viendo: para él cada menú es "la opción N", donde N es el `numero` que trae el borrador, el MISMO que enseña su tarjeta. Usa siempre ese número, nunca cuentes por tu lado (todas se enseñan, las flojas con su aviso). Si no hay opciones buenas que enseñar, dilo claro y ofrece rehacerlas.
@@ -596,6 +603,56 @@ _NO_CAMBIA_DE_DIA = {
               "que me quedo en el día actual. Cuéntale lo que has puesto y, si quieres, "
               "ofrécele cambiar de día en el mensaje siguiente."),
 }
+
+
+def _motivo_del_volcado(nombre: str, resultado: dict, args: dict, bot) -> Optional[str]:
+    """Si esta llamada a herramienta obliga a volcar la sesión al plan, POR QUÉ.
+
+    Devuelve 'guardado' cuando el cliente ha guardado de verdad, 'resincronizacion'
+    cuando el volcado solo mantiene Nutrición al día tras un cambio, y None si no hay
+    que volcar. El front anuncia «Guardado en tu pestaña de nutrición» SOLO con
+    'guardado': con cualquier edición sobre una comida ya volcada el asistente decía
+    «Guardado» sin que nadie hubiera pedido guardar nada (tarea 1.3 del 21-08).
+
+    Los cuatro casos, con su historia:
+
+    - `guardar_comida`: guardar por chat tiene que volcar al plan, igual que el botón.
+      Había dos caminos para guardar y solo uno volcaba: el botón «Guardar y siguiente»
+      llama a completeMeal() y ese sí sincroniza con la pestaña de Nutrición; decir
+      «guarda la comida» por chat ejecutaba la herramienta, la sesión avanzaba... y
+      nadie volcaba. El cliente leía «Listo, he guardado el desayuno» y su plan seguía
+      vacío (comprobado en vivo el 08-08 con una fecha limpia: 0 alimentos antes y 0
+      después). Este es el ÚNICO guardado explícito: el cliente lo ha pedido.
+
+    - `configurar_dia`: LO QUE CAMBIA EL PLAN SE SINCRONIZA CON EL PLAN (ronda 1:
+      A3-F8 y A4-F6). «Quita el post» reconfiguraba la sesión sin que el plan se
+      enterase. Es mantenimiento, no un guardar del cliente.
+
+    - `editar_comida` con vaciar/vaciar_dia: «vacía el día entero» vaciaba la sesión y
+      decía «todo en blanco» mientras Nutrición seguía con las tres comidas: mentira
+      involuntaria pero mentira.
+
+    - `editar_comida` sobre una comida YA guardada: se re-sincroniza sola. El bot decía
+      «hecho, manteniendo esta comida guardada» y la base seguía con el valor viejo
+      (B3-03, confirmado 4 veces). Mientras se MONTA una comida el volcado espera al
+      guardar, como siempre; una guardada no puede quedarse desfasada de lo que el
+      cliente acaba de cambiar.
+    """
+    if not (resultado or {}).get("ok"):
+        return None
+    if nombre == "guardar_comida":
+        return "guardado"
+    if nombre == "configurar_dia":
+        return "resincronizacion"
+    if nombre == "editar_comida":
+        if any((op.get("op") or "").strip().lower() in ("vaciar", "vaciar_dia")
+               for op in ((args or {}).get("operaciones") or [])):
+            return "resincronizacion"
+        key_ed = bot.current_meal_key()
+        if key_ed in (bot.state.get("saved_meals") or []) \
+                or key_ed in (bot.state.get("comidas_traidas") or []):
+            return "resincronizacion"
+    return None
 
 
 class AgentLoop:
@@ -1140,6 +1197,7 @@ class AgentLoop:
                 resp_d["message"] = (f"Hecho, he deshecho {que}. Tu día vuelve a estar como "
                                      "antes de ese cambio. Dime cómo lo quieres.")
                 resp_d["comida_guardada"] = True   # el plan también vuelve atrás
+                resp_d["motivo"] = "resincronizacion"   # deshacer no es guardar
             else:
                 resp_d["message"] = ("No tengo ningún cambio reciente que deshacer. "
                                      "Dime qué quieres cambiar y lo hago.")
@@ -1255,6 +1313,9 @@ class AgentLoop:
                     resp_m = self.bot._meal_response([], [])
                     resp_m["message"] = texto
                     resp_m["comida_guardada"] = True
+                    # Montar no es que ÉL haya guardado: el volcado es la sincronización
+                    # de siempre y se anuncia como actualización, no como «Guardado».
+                    resp_m["motivo"] = "resincronizacion"
                     return resp_m
 
         # Sustitución ARMADA por ofrecer_sustitutos: aquí la elección (por número o por
@@ -1358,6 +1419,7 @@ class AgentLoop:
                                          else "Hecho, vaciado.")
                 # El vaciado también viaja a Nutrición, como cuando lo pide con palabras.
                 resp_v["comida_guardada"] = True
+                resp_v["motivo"] = "resincronizacion"   # vaciar no es guardar
                 return resp_v
 
         # ¿Está confirmando la barbaridad que le acabamos de preguntar ("¿seguro que
@@ -1439,6 +1501,13 @@ class AgentLoop:
         # Lo que enseñará la app: la última lista/borradores/mutación que produjo el bucle.
         sugerencias, borradores_vistos, hubo_mutacion = [], [], False
         comida_guardada = False
+        # POR QUÉ se vuelca (tarea 1.3 del 21-08): 'guardado' solo cuando el cliente ha
+        # guardado de verdad (guardar_comida); el resto de volcados son re-sincronizaciones
+        # tras editar o reconfigurar, y el front no debe anunciar «Guardado en tu pestaña
+        # de nutrición» por ellas -- el cliente leía «Guardado» tras CUALQUIER cambio en
+        # una comida ya volcada, sin haber pedido guardar nada. 'guardado' manda: si en el
+        # mismo turno hay un guardar y una edición, guardar es lo que ha pasado.
+        motivo_guardado = None
         texto_final = None
         # Para el guardarraíl de la fecha (ver _TOCAN_LA_COMIDA_DEL_DIA).
         toco_la_comida = False
@@ -1612,48 +1681,25 @@ class AgentLoop:
                 # la herramienta salió redonda.
                 if nombre == "editar_comida" and (resultado.get("hechos") or []):
                     hubo_mutacion = True
-                # LO QUE CAMBIA EL PLAN SE SINCRONIZA CON EL PLAN (ronda 1: A3-F8 y A4-F6).
-                # «Vacía el día entero» vaciaba la sesión y decía «todo en blanco» mientras
-                # Nutrición seguía con las tres comidas: mentira involuntaria pero mentira.
-                # Y «quita el post» reconfiguraba la sesión sin que el plan se enterase.
-                # La bandera es la misma que ya usa guardar por chat: el front, al verla,
-                # vuelca la sesión al plan.
-                if nombre == "configurar_dia" and resultado.get("ok"):
+                # EL VOLCADO AL PLAN Y SU PORQUÉ, en un solo sitio: los cuatro casos, con
+                # su historia, están en `_motivo_del_volcado`. 'guardado' manda: si el
+                # mismo turno guarda y además edita, lo que ha pasado es un guardar.
+                motivo_tc = _motivo_del_volcado(nombre, resultado, args, self.bot)
+                if motivo_tc:
                     comida_guardada = True
-                    # La bandera solo si EL CLIENTE pidió tocar la configuración en este
-                    # mensaje. Con «volvemos al 18» el modelo llamaba a configurar_dia de
-                    # rebote con la config de la sesión (la del 19), el front la plantaba
-                    # encima del 18 y el día de entreno quedaba guardado como descanso
-                    # (QA 15-08 ronda 3, B3-01: corrompía Mongo en los dos sentidos).
+                    if motivo_guardado != "guardado":
+                        motivo_guardado = motivo_tc
+                if nombre == "configurar_dia" and resultado.get("ok"):
+                    # La bandera `config_tocada` solo si EL CLIENTE pidió tocar la
+                    # configuración en este mensaje. Con «volvemos al 18» el modelo llamaba
+                    # a configurar_dia de rebote con la config de la sesión (la del 19), el
+                    # front la plantaba encima del 18 y el día de entreno quedaba guardado
+                    # como descanso (QA 15-08 ronda 3, B3-01: corrompía Mongo en los dos
+                    # sentidos).
                     if re.search(r"(?i)\b(descans|entren|ayunas|peri|intra|post|bloque|"
                                  r"unic[ao]|\d\s*comidas?|comidas?\s*\d)",
                                  self.bot.mensaje_en_curso or ""):
                         self.bot.state["config_tocada"] = True
-                if nombre == "editar_comida" and resultado.get("ok") and any(
-                        (op.get("op") or "").strip().lower() in ("vaciar", "vaciar_dia")
-                        for op in (args.get("operaciones") or [])):
-                    comida_guardada = True
-                # Y cualquier edición sobre una comida YA guardada se re-sincroniza sola:
-                # el bot decía «hecho, manteniendo esta comida guardada» y la base seguía
-                # con el valor viejo (B3-03, confirmado 4 veces). Mientras se MONTA una
-                # comida el volcado espera al guardar, como siempre; una guardada no
-                # puede quedarse desfasada de lo que el cliente acaba de cambiar.
-                if nombre == "editar_comida" and resultado.get("ok"):
-                    key_ed = self.bot.current_meal_key()
-                    if key_ed in (self.bot.state.get("saved_meals") or []) \
-                            or key_ed in (self.bot.state.get("comidas_traidas") or []):
-                        comida_guardada = True
-                # Guardar por chat tiene que volcar al plan, igual que el botón.
-                #
-                # Había dos caminos para guardar y solo uno volcaba: el botón «Guardar y
-                # siguiente» llama a completeMeal() y ese sí sincroniza con la pestaña de
-                # Nutrición; decir «guarda la comida» por chat ejecuta esta herramienta,
-                # la sesión avanza a la comida siguiente... y nadie volcaba. El cliente
-                # leía «Listo, he guardado el desayuno» y su plan seguía vacío.
-                # Comprobado en vivo el 08-08 con una fecha limpia: 0 alimentos antes y 0
-                # después. Con esta bandera el front sincroniza también por esta vía.
-                if nombre == "guardar_comida" and resultado.get("ok"):
-                    comida_guardada = True
                 mensajes.append({"role": "tool", "tool_call_id": tc.id,
                                  "content": json.dumps(resultado, ensure_ascii=False)[:TOPE_RESULTADO]})
 
@@ -1748,9 +1794,13 @@ class AgentLoop:
         # ------------------------------------------------------ a formato de la app
         out = {"message": texto_final, "day_overview": self.bot.get_day_overview(),
                "traza": self.traza}
-        # Que el front sepa que hay que volcar al plan (ver el porqué más arriba).
+        # Que el front sepa que hay que volcar al plan (ver el porqué más arriba). El
+        # `motivo` le dice ADEMÁS qué anunciar: «Guardado» solo con 'guardado'; con
+        # 'resincronizacion' el volcado es el mismo pero se cuenta como actualización.
+        # Si el campo faltara, el front se comporta como hasta hoy (anuncia guardado).
         if comida_guardada:
             out["comida_guardada"] = True
+            out["motivo"] = motivo_guardado or "resincronizacion"
         if borradores_vistos:
             out["action"] = "menus"
             out["borradores"] = borradores_vistos

@@ -240,16 +240,23 @@ class TestGanaElVigente:
         puede, _motivo = correr(puede_ajustarlos(FakeDB(historial), perfil()))
         assert puede is False
 
-    def test_y_al_reves_tambien(self):
-        """Si lo ultimo vigente es el calculo del alta, puede tocarselos."""
+    def test_y_al_reves_ya_no(self):
+        """REGLA NUEVA (caso 59 de la lista de Jesus, 21-08): si un coach le puso los
+        macros ALGUNA vez, la pantalla queda de solo lectura aunque lo vigente sea el
+        calculo del alta. Antes aqui se esperaba True («gana el vigente», 18-08): ese era
+        justo el agujero que Jesus señala -- pasar una vez por el cuestionario devolvia el
+        formulario editable a un cliente cuyo historial entero escribio su entrenador."""
         historial = [_apunte("coach", "2022-03-06"),
                      _apunte("quiz_alta", "2026-07-31", changed_by=None)]
         puede, _motivo = correr(puede_ajustarlos(FakeDB(historial), perfil()))
-        assert puede is True
+        assert puede is False
 
-    def test_un_ajuste_programado_todavia_no_manda(self):
-        """Hay ajustes con fecha por delante; los de una cuenta llegan a 2029."""
+    def test_un_ajuste_programado_tambien_cierra(self):
+        """REGLA NUEVA (caso 59): un ajuste de coach con fecha por delante todavia no
+        MANDA en la vigencia, pero ya es una persona decidiendo sus macros: la pantalla
+        se cierra igual (mismo criterio que `ultimo_cambio`: un ajuste guardado hoy con
+        efecto manana ya es un cambio hecho)."""
         historial = [_apunte("quiz_alta", "2026-07-31", changed_by=None),
                      _apunte("coach", "2029-01-08")]
         puede, _motivo = correr(puede_ajustarlos(FakeDB(historial), perfil()))
-        assert puede is True
+        assert puede is False

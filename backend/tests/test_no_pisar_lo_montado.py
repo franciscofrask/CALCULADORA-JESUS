@@ -42,11 +42,20 @@ DIA_GUARDADO = {"C1": {"alimentos": [
 
 
 class _Solo:
-    """Las piezas de `AgentTools` que se prueban aquí solo necesitan el bot."""
+    """Las piezas de `AgentTools` que se prueban aquí solo necesitan el bot.
+
+    OJO: `editar_comida` creció desde que se escribió este stub y el stub no lo siguió,
+    así que tres tests llevaban en rojo sin vigilar el candado (cazado el 21-08 al pasar
+    la suite por ruta explícita): el deshacer apunta con `_resumen_ops` (15-08) y
+    `_protegida` lee las palabras del cliente (17-08). Si `editar_comida` estrena otra
+    dependencia, el AttributeError de estos tests es el aviso de añadirla aquí."""
     _protegida = AgentTools._protegida
     _nombre_comida_actual = AgentTools._nombre_comida_actual
     ver_estado = AgentTools.ver_estado
     editar_comida = AgentTools.editar_comida
+    _resumen_ops = staticmethod(AgentTools._resumen_ops)
+    _cliente_nombro_esta_comida = AgentTools._cliente_nombro_esta_comida
+    _cliente_pidio_borrar = AgentTools._cliente_pidio_borrar
 
     def __init__(self, bot):
         self.bot = bot

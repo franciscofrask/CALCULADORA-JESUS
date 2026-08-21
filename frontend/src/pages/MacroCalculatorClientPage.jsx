@@ -337,6 +337,18 @@ const MacroCalculatorClientPage = () => {
                     <p className="text-sm text-muted-foreground mt-1">
                         Modifica tus macros y elige desde qué fecha aplican
                     </p>
+                    {/* Datos del perfil faltantes o imposibles (tarea 1.4): lo dice el
+                        servidor en el perfil. Rótulo discreto, y el empujón a la pantalla
+                        de completar que ya existe (solo rellena huecos). */}
+                    {(profile?.datos_dudosos || []).length > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="macros-provisionales">
+                            Provisionales · Nos faltan datos tuyos para afinarlos.{' '}
+                            <button type="button" onClick={() => navigate('/questionnaire?completar=1')}
+                                className="underline font-semibold">
+                                Completar mis datos
+                            </button>
+                        </p>
+                    )}
                 </div>
             </header>
 

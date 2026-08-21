@@ -1615,6 +1615,22 @@ class NutritionChatbot:
             "comida_restante": self.get_remaining_macros(),
             "completas": len(self.state.get("saved_meals", [])),
             "total_comidas": self.total_meals(),
+            # EL CONTADOR DE COMIDAS TAMBIÉN DESCUENTA EL PERI (tarea 1.3 del 21-08).
+            # Los macros ya llevaban el peri aparte (`objetivo_comidas` y compañía), pero
+            # «Día: X de Y comidas» seguía contando Intra y Post como comidas: con 4
+            # comidas y peri completo la cabecera decía «2 de 6» donde Nutrición dice
+            # «2 de 4». Aquí va el par de las comidas PRINCIPALES, y el peri con su
+            # propia cuenta para nombrarlo aparte cuando haga falta. `completas` y
+            # `total_comidas` se quedan como estaban: son el total y hay quien los lee.
+            "completas_principales": len([k for k in self.state.get("saved_meals", [])
+                                          if k not in self.COMIDAS_PERI]),
+            "total_comidas_principales": (len([k for k in (self.state.get("meal_order") or [])
+                                               if k not in self.COMIDAS_PERI])
+                                          or self.state["num_comidas"]),
+            "completas_peri": len([k for k in self.state.get("saved_meals", [])
+                                   if k in self.COMIDAS_PERI]),
+            "total_peri": len([k for k in (self.state.get("meal_order") or [])
+                               if k in self.COMIDAS_PERI]),
             "meals": self.get_meals_status(),
         }
 

@@ -14,6 +14,7 @@
  *   - el peri y el detalle por comida, en pequeño.
  */
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import ConfigSection, { MOMENTO_OPTIONS, PERI_OPTIONS } from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
@@ -44,6 +45,10 @@ const DayHeader = ({
     // macros
     dayMacros, dayTarget, servedPeriP, servedPeriH, servedPeriG = 0, totalPeriP, totalPeriH,
     getDayStatus,
+    // Datos del perfil faltantes o imposibles (tarea 1.4): viene con la respuesta de
+    // /distribute, que viaja con las cabeceras de «actuar como» -- el perfil evaluado es
+    // el del cliente sobre el que se trabaja, no el del que ha iniciado sesión.
+    datosDudosos,
     // detalle
     summaryExpanded, setSummaryExpanded,
     mealOrder, mealInfo, calculateMealMacros, getMealStatus,
@@ -298,6 +303,20 @@ const DayHeader = ({
                     );
                 })}
             </div>
+
+            {/* OBJETIVOS PROVISIONALES (tarea 1.4). Los macros del día se calcularon con un
+                perfil con huecos o con datos imposibles (edad 5, estatura de 1 cm de la
+                importación de Calma): no se recalcula nada ni se cambia ningún número, solo
+                se rotula y se empuja a la pantalla de completar que ya existe. Rótulo
+                discreto, no un aviso: los objetivos siguen siendo los suyos. */}
+            {(datosDudosos || []).length > 0 && (
+                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="macros-provisionales">
+                    Provisionales · Nos faltan datos tuyos para afinarlos.{' '}
+                    <Link to="/questionnaire?completar=1" className="underline font-semibold">
+                        Completar mis datos
+                    </Link>
+                </p>
+            )}
 
             {/* La configuración desplegada. En el teléfono el botón que la abre está debajo
                 de los números; en escritorio, arriba con la fecha. El panel es el mismo. */}

@@ -14,7 +14,7 @@ from core.dias_de_entreno import dias_de_entreno
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.sin_futuro import hasta_hoy
 from core.plan_access import require_access, rutina_visible_para_el_cliente
-from routes.notifications import avisar_rutina_nueva
+from routes.notifications import avisar_rutina_nueva, _hay_aviso_de_hoy
 from models.common import RoutineResponse, RoutineCreate
 from models.user import PLAN_TYPES
 from llm_client import LlmChat, UserMessage
@@ -60,8 +60,10 @@ async def routines_overview(user = Depends(get_admin_user)):
     # El equipo fuera, como en el resto del panel desde el 09-08. Aquí seguían dentro y
     # salían "Admin" y los entrenadores entre los clientes sin rutina, contando como
     # trabajo pendiente: nadie le va a poner una rutina al perfil de pruebas del admin.
-    del_equipo = await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}})
-    solo_clientes = {"user_id": {"$nin": del_equipo}} if del_equipo else {}
+    # Con el helper compartido y no con una copia: así el filtro de cuentas de prueba
+    # (`es_prueba`, 21-08) arrastra aquí igual que al resto de contadores.
+    from routes.admin import _fuera_el_equipo
+    solo_clientes = await _fuera_el_equipo()
     profiles = await db.client_profiles.find(
         {**solo_clientes, "status": {"$ne": "baja"}}, {"_id": 0, "id": 1, "user_id": 1, "plan": 1}
     ).to_list(2000)
@@ -783,6 +785,13 @@ async def subir_pdf_de_rutina(client_id: str, file: UploadFile = File(...),
     if not perfil:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     doc = await _guardar_pdf_de_rutina(client_id, file, subido_por=user.get("id"))
+    # El aviso de entrega, el mismo que mandan las tres vías estructuradas y que aquí
+    # faltaba: el PDF se quedaba guardado sin que el cliente supiera que lo tenía. Mismo
+    # candado que ellas (t3_entreno) y máximo uno al día, que es la regla de los avisos
+    # de entrega: resubirlo para corregir una errata no puede sonarle dos veces.
+    if perfil.get("user_id") and await rutina_visible_para_el_cliente() \
+            and not await _hay_aviso_de_hoy(perfil["user_id"], "rutina_nueva"):
+        await avisar_rutina_nueva(perfil["user_id"])
     return {"ok": True, "id": doc["id"], "filename": doc["filename"],
             "size": doc["size"], "uploaded_at": doc["uploaded_at"]}
 

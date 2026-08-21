@@ -75,6 +75,26 @@ async def puede_ajustarlos(db, perfil: Dict[str, Any]) -> Tuple[bool, Optional[s
     """(puede, por que no). El `por que no` esta escrito para leerselo al cliente."""
     modo = modo_calculadora(perfil.get("plan"))
 
+    # SI ALGUNA VEZ una persona le puso los macros, la pantalla es de solo lectura (caso 59
+    # de la lista de Jesus, CRITICO). Antes se miraba SOLO el apunte vigente («gana el
+    # vigente», 18-08) y a un cliente con el historial entero escrito por su entrenador le
+    # bastaba pasar una vez por el cuestionario -- ese apunte lo firma la app -- para
+    # recuperar el formulario editable hasta el siguiente ajuste del entrenador.
+    #
+    # Solo en modo personalizado: al de autogestion no se le cierra por un apunte migrado
+    # de Calma que en su dia escribiera un coach. Y va ANTES del escape de «sin macros»:
+    # quien tiene historial de persona no esta atrapado en el alta.
+    if modo == "personalizado":
+        apuntes = await db.macro_history.find(
+            {"client_id": perfil.get("id")}, {"_id": 0, "origen": 1, "changed_by": 1}
+        ).to_list(None)
+        if any(de_una_persona(a) for a in apuntes):
+            # En plural y sin «entrenador»: al cliente no se le nombra a quien esté detrás
+            # ese mes, se le habla de nosotros (repaso de Jesús, 11-08).
+            return False, ("Tus macros los llevamos nosotros: en tu plan te los ajustamos "
+                           "a partir de tus reportes. Si crees que hay que moverlos, "
+                           "dínoslo por el chat y lo revisamos.")
+
     # SIN MACROS NO HAY NADA QUE PROTEGER, Y SI HAY ALGUIEN ATRAPADO (punto 1 del 17-08).
     #
     # Este candado existe para que un cliente no machaque los numeros que le puso una
@@ -96,17 +116,7 @@ async def puede_ajustarlos(db, perfil: Dict[str, Any]) -> Tuple[bool, Optional[s
     if modo != "personalizado":
         return True, None
 
-    # Por `effective_date`, no por `created_at`: ver `macros_por_fecha.ultima_vigente`.
-    from macros_por_fecha import ultima_vigente
-    ultimo = await ultima_vigente(db, perfil.get("id"))
-    if de_una_persona(ultimo):
-        # En plural y sin «entrenador»: al cliente no se le nombra a quien esté detrás ese
-        # mes, se le habla de nosotros (repaso de Jesús, 11-08).
-        return False, ("Tus macros los llevamos nosotros: en tu plan te los ajustamos a partir "
-                       "de tus reportes. Si crees que hay que moverlos, dínoslo por el chat y "
-                       "lo revisamos.")
-
-    # Todavia nadie se los ha puesto: son los de su alta y puede recalcularlos.
+    # Personalizado sin ningun apunte de persona: son los de su alta y puede recalcularlos.
     return True, None
 
 

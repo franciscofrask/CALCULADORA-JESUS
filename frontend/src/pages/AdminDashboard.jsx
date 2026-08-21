@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { PlanBadge, JG12Logo } from './ClientDashboard';
 import LimiteDeError from '../components/LimiteDeError';
@@ -69,10 +69,10 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
         ...((todo.reporte_aplazado || []).length ? [
             { key: 'aplazados', label: 'Aplazados a la semana que viene', icon: CalendarClock, color: '#22C55E', sub: 'Pidieron aplazarlo: han avisado', items: flt(todo.reporte_aplazado) },
         ] : []),
-        // "Hoy no puedes ver si un cliente de 1.500 lleva tres semanas sin que nadie le
-        // hable". Solo salen los planes con chat, ordenados de más abandonado a menos, y
-        // con los días a la vista para que se note de un vistazo.
-        { key: 'contacto', label: 'Sin contacto', icon: MessageCircle, color: '#A855F7', sub: 'Días desde que alguien le habló', items: flt(todo.sin_contacto) },
+        // «Sin contacto» NO SE PINTA (doc 21-08). El dato solo cuenta el chat interno y
+        // el webhook de GHL: ni el feedback de reportes ni los ajustes de macros cuentan
+        // como contacto, así que «177 · nunca» era falso. Fuera hasta que el contacto se
+        // pueda registrar de verdad; el backend sigue mandando `sin_contacto` por si acaso.
     ];
     return (
         <Card className="bg-[#111111] border-[#222]" data-testid="todo-semana">
@@ -103,13 +103,6 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
                                         <span className="flex-1 min-w-0 truncate text-sm text-white/80">{c.name}</span>
                                         {col.key === 'reportes' && c.overdue && <span className="text-[9px] text-red-400 font-bold uppercase tracking-wide">tarde</span>}
                                         {col.key === 'aplazados' && c.seguidos >= 2 && <span className="text-[9px] text-red-400 font-bold uppercase tracking-wide">{c.seguidos} seguidos</span>}
-                                        {/* Los días, y a partir de dos semanas en rojo: no es
-                                            un umbral del servidor, es lo que salta a la vista. */}
-                                        {col.key === 'contacto' && (
-                                            <span className={`text-[10px] font-bold tabular-nums ${c.dias >= 14 ? 'text-red-400' : 'text-white/40'}`}>
-                                                {c.nunca ? 'nunca' : `${c.dias} d`}
-                                            </span>
-                                        )}
                                         {!c.al_corriente && <span title="Pago pendiente" className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
                                         <ChevronRight className="w-3.5 h-3.5 text-white/20 flex-shrink-0" />
                                         </span>
@@ -870,9 +863,11 @@ const AdminDashboard = () => {
                                             · {new Date(rev.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                                         </p>
                                     </div>
+                                    {/* «Revisada» a secas se leia como el estado de la fila,
+                                        no como el boton que la resuelve. */}
                                     <Button size="sm" className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs uppercase flex-shrink-0"
                                         onClick={() => resolverRevision(rev)} data-testid={`revision-resolver-${i}`}>
-                                        Revisada
+                                        Marcar revisada
                                     </Button>
                                 </div>
                             ))}
@@ -1204,14 +1199,26 @@ const AdminClientsList = () => {
                         {/* Del CATÁLOGO, no cableados (punto 40). Estaban puestos a mano los
                             cuatro de siempre, así que con 17 planes en el catálogo había 13
                             por los que no se podía filtrar - entre ellos los tres niveles
-                            nuevos, que son con los que entra todo el mundo desde ahora. */}
+                            nuevos, que son con los que entra todo el mundo desde ahora.
+                            Y en DOS bloques (2.8 del 21-08): 21 opciones en una lista plana
+                            escondían los cuatro que se venden entre retirados a cero. Primero
+                            lo vivo (activo/especial), y el resto agrupado en «Planes antiguos»
+                            - agrupado, no quitado: los legacy siguen teniendo clientes. */}
                         {Object.entries(planCatalog || {})
-                            .filter(([, p]) => p.estado !== 'complemento')
+                            .filter(([, p]) => p.estado !== 'complemento' && ['activo', 'especial'].includes(p.estado))
                             .map(([code, p]) => (
-                                <SelectItem key={code} value={code}>
-                                    {p.name}{p.estado === 'legacy' ? ' · legacy' : ''}
-                                </SelectItem>
+                                <SelectItem key={code} value={code}>{p.name}</SelectItem>
                             ))}
+                        {Object.values(planCatalog || {}).some(p => p.estado !== 'complemento' && !['activo', 'especial'].includes(p.estado)) && (
+                            <SelectGroup>
+                                <SelectLabel className="text-white/40 text-xs uppercase tracking-wider">Planes antiguos</SelectLabel>
+                                {Object.entries(planCatalog || {})
+                                    .filter(([, p]) => p.estado !== 'complemento' && !['activo', 'especial'].includes(p.estado))
+                                    .map(([code, p]) => (
+                                        <SelectItem key={code} value={code}>{p.name}</SelectItem>
+                                    ))}
+                            </SelectGroup>
+                        )}
                     </SelectContent>
                 </Select>
             </div>

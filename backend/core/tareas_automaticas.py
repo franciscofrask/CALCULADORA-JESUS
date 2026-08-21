@@ -90,8 +90,11 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
     semana_iso = f"{hoy_es.isocalendar()[0]}-W{hoy_es.isocalendar()[1]:02d}"
 
     del_equipo = await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}})
+    # Mismo criterio que _fuera_el_equipo() del panel (copia local a proposito: core no
+    # importa de routes): las cuentas marcadas como de prueba no generan tareas.
     perfiles = await db.client_profiles.find(
-        {"user_id": {"$nin": del_equipo}, "status": {"$in": ["activo", "pago_pendiente"]}},
+        {"user_id": {"$nin": del_equipo}, "status": {"$in": ["activo", "pago_pendiente"]},
+         "es_prueba": {"$ne": True}},
         {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "comp_plan": 1, "week": 1,
          "trainer_id": 1, "cycle_start": 1, "created_at": 1, "current_period_end": 1,
          "subscription_status": 1, "stripe_subscription_id": 1, "access_until": 1,
@@ -114,6 +117,23 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
             ultima_foto[f["_id"]] = f.get("ultima") or ""
 
     creadas = 0
+
+    # LO QUE YA NO APLICA SE CIERRA SOLO. El generador creaba «Asignar entrenador a X»
+    # cuando faltaba el dato, pero nada la cerraba cuando el dato aparecia: la tarea
+    # seguia abierta con el entrenador ya asignado. En cada pasada, la clave cuya
+    # condicion ya se cumple se marca hecha por el sistema. Solo las de ESTADO (dato que
+    # falta o pago que se arregla); las de contactar con periodo en la clave (se_cae,
+    # no_entra, sin_fotos, renovacion...) son trabajo de personas y no se tocan.
+    claves_abiertas = set(await db.tareas.distinct(
+        "clave", {"hecha": False, "clave": {"$ne": None}, "origen": {"$regex": "^auto:"}}))
+    por_cerrar: set = set()
+
+    def cerrar(clave):
+        if clave in claves_abiertas:
+            por_cerrar.add(clave)
+
+    def cerrar_por_prefijo(prefijo):
+        por_cerrar.update(c for c in claves_abiertas if c.startswith(prefijo))
 
     async def tarea(**kw):
         nonlocal creadas
@@ -149,6 +169,8 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
             await tarea(a_quien=jenny, que=f"Problema de pago de {nombre}: contactar por WhatsApp",
                         sobre_quien=cid, sobre_quien_nombre=nombre,
                         clave=f"rebote:{cid}:{mes}", origen="auto:rebote_pago")
+        else:
+            cerrar_por_prefijo(f"rebote:{cid}:")   # el pago volvio a entrar
 
         if p.get("status") == "activo" and not has_active_access(p):
             await tarea(a_quien=jenny, que=f"{nombre} ha causado baja (venció sin renovar). "
@@ -156,12 +178,16 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
                         sobre_quien=cid, sobre_quien_nombre=nombre,
                         clave=f"vencido:{cid}:{str(p.get('current_period_end') or p.get('access_until'))[:10]}",
                         origen="auto:vencido")
+        elif has_active_access(p):
+            cerrar_por_prefijo(f"vencido:{cid}:")  # renovo: ya no hay nada que recuperar
 
         if not p.get("comp_plan") and precio_de_ciclo(p, catalogo) == 0:
             await tarea(a_quien=jenny, que=f"Poner el precio de {nombre}: sale de la hoja "
                                           "de control de pagos",
                         sobre_quien=cid, sobre_quien_nombre=nombre,
                         clave=f"sin_precio:{cid}", origen="auto:sin_precio")
+        else:
+            cerrar(f"sin_precio:{cid}")            # el precio ya esta puesto
 
         # ── EL CLIENTE SE ESTÁ CAYENDO ────────────────────────────────────────
         a_su_coach = entrenador or operaciones
@@ -210,6 +236,8 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
             await tarea(a_quien=operaciones, que=f"Asignar entrenador a {nombre}",
                         sobre_quien=cid, sobre_quien_nombre=nombre,
                         clave=f"sin_entrenador:{cid}", origen="auto:sin_entrenador")
+        else:
+            cerrar(f"sin_entrenador:{cid}")        # ya tiene, o su plan no lleva coach
 
         faltan = [n for n, v in (("altura", p.get("height")), ("objetivo", p.get("goal")),
                                  ("% de grasa", p.get("body_fat"))) if v in (None, "", 0)]
@@ -219,16 +247,23 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
                             "(con eso se le están calculando los macros)",
                         sobre_quien=cid, sobre_quien_nombre=nombre,
                         clave=f"sin_datos:{cid}:{mes}", origen="auto:sin_datos")
+        elif cid:
+            cerrar_por_prefijo(f"sin_datos:{cid}:")  # los dio: la de este mes y las viejas
 
         if p.get("plan") and plan_code not in PLAN_CATALOG:
             await tarea(a_quien=operaciones,
                         que=f"Asignar plan a {nombre}: el suyo («{p.get('plan')}») no existe en el catálogo",
                         sobre_quien=cid, sobre_quien_nombre=nombre,
                         clave=f"plan_inexistente:{cid}", origen="auto:plan_inexistente")
+            cerrar(f"sin_plan:{cid}")
         elif not p.get("plan"):
             await tarea(a_quien=operaciones, que=f"Asignar plan a {nombre}: no tiene ninguno",
                         sobre_quien=cid, sobre_quien_nombre=nombre,
                         clave=f"sin_plan:{cid}", origen="auto:sin_plan")
+            cerrar(f"plan_inexistente:{cid}")
+        else:
+            cerrar(f"sin_plan:{cid}")
+            cerrar(f"plan_inexistente:{cid}")
 
     # ── EL TRABAJO DE LA SEMANA, POR ENTRENADOR ──────────────────────────────
     # Con el recuento delante («Tienes 14 reportes para el miércoles»): se cuentan los
@@ -276,6 +311,14 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
     if dia == 0:
         await tarea(a_quien=operaciones, que="Reunión con los entrenadores",
                     clave=f"reunion:{semana_iso}", origen="auto:calendario")
+
+    # El cierre, en un solo update: las marca el sistema, igual que las creo.
+    if por_cerrar:
+        await db.tareas.update_many(
+            {"clave": {"$in": sorted(por_cerrar)}, "hecha": False},
+            {"$set": {"hecha": True, "hecha_por": None, "hecha_por_nombre": "sistema",
+                      "hecha_at": ahora.isoformat()}},
+        )
 
     return creadas
 

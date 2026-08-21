@@ -750,6 +750,9 @@ const ClientDashboard = () => {
     const { resumeTour, active: tourActive, completed: tourCompleted } = useOnboarding();
     const navigate = useNavigate();
     const [routine, setRoutine] = useState(null);
+    // ¿Hay rutina en PDF subida por su entrenador? Sin esto, el cliente con PDF y sin
+    // rutina estructurada leía aquí «Sin rutina asignada» teniendo la suya subida.
+    const [hayPdfRutina, setHayPdfRutina] = useState(false);
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [macros, setMacros] = useState(null);
     const [todayConsumed, setTodayConsumed] = useState({ P: 0, H: 0, G: 0 });
@@ -788,8 +791,9 @@ const ClientDashboard = () => {
         const fetchData = async () => {
             try {
                 const today = new Date().toISOString().split('T')[0];
-                const [routineRes, messagesRes, macrosRes, dietRes, prefsRes, dueRes] = await Promise.all([
+                const [routineRes, pdfRes, messagesRes, macrosRes, dietRes, prefsRes, dueRes] = await Promise.all([
                     api.get('/routines/current').catch(() => ({ data: null })),
+                    api.get('/routines/pdf/info').catch(() => ({ data: { hay: false } })),
                     api.get('/messages/unread-count').catch(() => ({ data: { count: 0 } })),
                     api.get('/macros').catch(() => ({ data: null })),
                     api.get(`/diets/${today}`).catch(() => ({ data: { exists: false } })),
@@ -797,6 +801,7 @@ const ClientDashboard = () => {
                     api.get('/reports/due').catch(() => ({ data: { items: [] } })),
                 ]);
                 setRoutine(routineRes.data);
+                setHayPdfRutina(!!pdfRes.data?.hay);
                 setUnreadMessages(messagesRes.data.count);
                 setDueReports(dueRes.data.items || []);
                 setMacros(macrosRes.data);
@@ -1309,7 +1314,11 @@ const ClientDashboard = () => {
                             todayRoutine.is_rest
                                 ? <p className="text-muted-foreground text-sm">Día de descanso activo</p>
                                 : <p className="text-muted-foreground text-sm">{plural(todayRoutine.exercises?.length || 0, 'ejercicio')} programados</p>
-                        ) : <p className="text-muted-foreground text-sm">Sin rutina asignada</p>}
+                        ) : hayPdfRutina
+                            /* Con PDF subido no hay «sin rutina» que valga: la tarjeta ya
+                               lleva a /dashboard/routine, donde se abre. */
+                            ? <p className="text-muted-foreground text-sm">Tu rutina está en PDF. Entra a verla</p>
+                            : <p className="text-muted-foreground text-sm">Sin rutina asignada</p>}
                     </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />

@@ -17,6 +17,7 @@ import uuid
 from bson import Binary
 
 from core.database import db
+from core.fotos import listar_fotos_de, abrir_foto, es_ref_calma
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import plan_grants_feature
 from core.series_cliente import actual as actual_de_serie, anotar_peso, anotar_grasa
@@ -605,15 +606,45 @@ async def subir_foto_por_el_cliente(
 
 @router.get("/reports/photos")
 async def list_my_photos(user = Depends(get_current_user)):
-    """Lista las fotos propias del cliente (más recientes primero), solo metadatos."""
-    cursor = db.client_photos.find({"user_id": user["id"]}, {"_id": 0, "data": 0}).sort("taken_at", -1)
-    photos = await cursor.to_list(length=200)
+    """Lista TODAS las fotos del cliente (app + importadas de Calma), más recientes primero.
+
+    La lista sale de `core/fotos.listar_fotos_de` (tarea 1.1): mismo formato de siempre
+    para las de la app, y las de Calma con su `ref` -- que también viaja como `id`, para
+    que las pantallas que piden el binario por /reports/photos/{id} las carguen igual."""
+    photos = await listar_fotos_de(user)
     return {"photos": photos, "count": len(photos)}
 
 
-@router.get("/reports/photos/{photo_id}")
+@router.get("/reports/foto/{ref:path}")
+async def get_my_photo(ref: str, user = Depends(get_current_user)):
+    """Sirve el binario de UNA foto del cliente por su ref (de la app o de Calma).
+
+    Autenticación de cliente normal: `core/fotos.abrir_foto` valida que la foto es del
+    que la pide, venga de donde venga. `:path` porque la ref de Calma lleva una barra
+    (carpeta/fichero)."""
+    data, content_type = await abrir_foto(user, ref)
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+@router.get("/reports/photos/{photo_id:path}")
 async def get_photo(photo_id: str, user = Depends(get_current_user)):
-    """Sirve el binario de la foto. El llamante debe ser el dueño o staff."""
+    """Sirve el binario de la foto. El llamante debe ser el dueño o staff.
+
+    Las refs de Calma (calma/...) también entran por aquí: la rejilla de check-ins y las
+    tres fotos del reporte piden por /reports/photos/{id} con lo que llega en la lista,
+    y así cargan las importadas sin cambiar. Solo para el dueño; el staff tiene su
+    endpoint de admin para las de Calma."""
+    if es_ref_calma(photo_id):
+        data, content_type = await abrir_foto(user, photo_id)
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
     photo = await db.client_photos.find_one({"id": photo_id}, {"_id": 0})
     if not photo:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
@@ -636,9 +667,16 @@ async def get_photo(photo_id: str, user = Depends(get_current_user)):
     )
 
 
-@router.delete("/reports/photos/{photo_id}")
+@router.delete("/reports/photos/{photo_id:path}")
 async def delete_photo(photo_id: str, user = Depends(get_current_user)):
     """El dueño o staff borra una foto."""
+    # Las importadas de Calma no se borran desde la app: son el histórico del cliente
+    # y el registro vive en calma_raw, no en client_photos.
+    if es_ref_calma(photo_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Esta foto viene de tu etapa anterior y no se puede borrar desde aquí.",
+        )
     photo = await db.client_photos.find_one(
         {"id": photo_id}, {"_id": 0, "user_id": 1, "client_id": 1, "inicial": 1})
     if not photo:

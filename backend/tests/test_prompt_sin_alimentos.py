@@ -57,6 +57,43 @@ _LENGUAJE_NORMAL = {
     # ("huevos frescos categoria A"). Igual que "alimento": la palabra generica de la
     # casa no puede quedar vetada por un producto que la lleve.
     "categoria", "categorias",
+    # "receta" es palabra de la casa, como "alimento": el recetario de Jesús, el parámetro
+    # `receta` de componer_menu y la regla «si llama a una receta por su nombre». Entró al
+    # vocabulario por productos tipo "Tomate frito receta artesana (Hacendado)": un producto
+    # que lleva la palabra genérica en el nombre no puede vetarla.
+    "receta",
+    # Familias de la CALIBRACIÓN PROGRESIVA: "cereales y panes" y "frutos secos" son
+    # concepto del método (tramos por gramos acumulados), no un alimento suelto, y el
+    # agente tiene que poder nombrarlas para explicar la regla. Colisionan con productos
+    # como "Cereales Crunchy Choc (Hacendado)" o "Frutos secos cocktail tostado sin sal".
+    "cereales", "frutos", "secos",
+    # "cortes" en el prompt son los cortes (tramos) de la calibración progresiva; colisiona
+    # con "Pan de barra 5 cortes (Europastry)", donde es un formato, no un alimento.
+    "cortes",
+    # "cucharadita" es una medida: entra por las coletillas del catálogo ("Aceite de coco
+    # una cucharadita de café") y el prompt la cita justo para enseñar que la coletilla
+    # NO es el alimento («...una cucharadita de café» no es un café).
+    "cucharadita",
+    # "enteros" (el singular "entero" ya estaba): en el prompt es "cuentan enteros" (al
+    # 100 % del tramo); colisiona con "Huevos enteros L" y los "Pimientos del piquillo
+    # enteros". Adjetivo, no comida.
+    "enteros",
+    # "ingles" es el idioma («aunque el cliente escriba en inglés»); entra al vocabulario
+    # por la marca "El Corte Inglés". Una marca no puede vetar el nombre de un idioma.
+    "ingles",
+    # "memoria" viene de "Brain Latte Memoria (Baña Food)"; en el prompt es «no la
+    # reconstruyas de memoria». Lenguaje corriente, no comida.
+    "memoria",
+    # "menos" es un adverbio («menos [alimento]», «jamás menos»); entra por nombres tipo
+    # "Fiambre de pechuga de pavo de baja calidad (menos del 85 %)".
+    "menos",
+    # "pasas" en el prompt es el verbo pasarse («te pasas 9 g», la regla de cómo decir el
+    # desvío); colisiona con "Uvas pasas". Si algún día el prompt hablara de las uvas
+    # pasas de verdad, esto lo taparía: se asume, el verbo es irrenunciable.
+    "pasas",
+    # "sabores" son las coletillas de los nombres del catálogo («medidas, sabores»),
+    # de "Sabores de langosta (La Sirena)". Lenguaje, no un alimento.
+    "sabores",
 }
 
 

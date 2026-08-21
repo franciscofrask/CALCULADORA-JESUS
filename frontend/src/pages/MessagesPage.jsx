@@ -113,8 +113,15 @@ const MessagesPage = () => {
                         Aquí ponía «Tu entrenador» otra vez, repitiendo el puesto debajo del
                         nombre. Lo que de verdad falta es el plazo: sin él, la mitad de los
                         mensajes son «¿hay alguien?» (Jesús, 11-08). Y al plan de 897 € se le
-                        vende un chat con una persona: decir cuándo responde es parte de eso. */}
-                    <p className="text-xs text-[#FF671F]">Te respondemos en menos de 24 horas</p>
+                        vende un chat con una persona: decir cuándo responde es parte de eso.
+                        EL PLAZO ES EL DE SU PLAN (tarea 1.5): aquí ponía «menos de 24 horas»
+                        fijo para todos, y eso solo lo promete el catálogo en los planes con
+                        chat de dudas. Lo trae el perfil (`tiempo_respuesta`); si su plan no
+                        promete plazo, la línea no se pinta -- prometer de más es peor que
+                        no decir nada. */}
+                    {profile?.tiempo_respuesta && (
+                        <p className="text-xs text-[#FF671F]">Te respondemos en {profile.tiempo_respuesta}</p>
+                    )}
                 </div>
             </div>
 

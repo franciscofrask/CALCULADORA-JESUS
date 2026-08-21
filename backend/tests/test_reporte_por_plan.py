@@ -33,7 +33,8 @@ class TestQuienEsQuien:
     def test_sin_rutina_en_el_plan_es_el_que_ve_la_oferta(self):
         # bronze lleva la rutina como "opcional": no es suya, se la vende.
         assert perfil_de_reporte(_hab("bronze")) == "sin_rutina"
-        assert perfil_de_reporte(_hab("nivel1")) == "sin_rutina"
+        # nivel1 lleva la del mes desde el doc 19-08 ("Rutina: La del mes"): con_rutina.
+        assert perfil_de_reporte(_hab("nivel1")) == "con_rutina"
 
     def test_sin_habilitaciones_no_revienta(self):
         assert perfil_de_reporte(None) == "sin_rutina"
@@ -63,6 +64,28 @@ class TestLosBloques:
         # La suplementación es la 08 del completo y la 06 de los otros dos.
         assert bloques_del_mensual("completo").index("suplementacion") == 7
         assert bloques_del_mensual("con_rutina").index("suplementacion") == 5
+
+
+class TestElFormularioCorto:
+    """El corto (quincenal, semanal y el mensual «rápido») también mira la rutina.
+
+    Antes la lista era fija y al cliente sin rutina se le preguntaba «¿Algún ejercicio
+    de la rutina te da molestias?» y por el entreno previo: sin rutina cargada, esos
+    dos bloques no salen (el mismo criterio que el mensual aplica a su bloque de
+    entreno). El import va dentro para no arrastrar el router al resto del fichero.
+    """
+
+    def test_con_rutina_lleva_los_cinco(self):
+        from routes.reports import bloques_del_rapido
+        assert bloques_del_rapido(True) == [
+            "entreno_previo", "peso", "molestias", "sensaciones", "libre"]
+
+    def test_sin_rutina_ni_molestias_ni_entreno_previo(self):
+        from routes.reports import bloques_del_rapido
+        bloques = bloques_del_rapido(False)
+        assert "molestias" not in bloques
+        assert "entreno_previo" not in bloques
+        assert bloques == ["peso", "sensaciones", "libre"]
 
 
 class TestFechas:

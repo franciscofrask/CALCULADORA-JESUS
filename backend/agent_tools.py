@@ -3625,6 +3625,7 @@ class AgentTools:
              {op:'quitar', nombre|alimento_id}
              {op:'sustituir', nombre, texto|alimento_id, cantidad?}  (cambiar X por Y: UNA op)
              {op:'ajustar', nombre, a?|mas?|por?, unidad?}  (fijar / sumar / multiplicar)
+             {op:'cuadrar'}  recuadra las cantidades de lo que ya lleva al objetivo
              {op:'vaciar'}   deja la comida a cero, con todo lo que tenga dentro
              {op:'vaciar_dia'}  vacia TODAS las comidas del dia y vuelve a la primera
         `forzar` solo para cambiar una comida que el cliente ya traía montada, y solo si te
@@ -4035,6 +4036,110 @@ class AgentTools:
                             op.get("nombre") or "", cantidad=float(cantidad),
                             unidad=op.get("unidad"), incrementar=op.get("mas") is not None)
                     (hechos if r.get("ok") else fallos).append({"op": op, "detalle": r})
+                elif tipo == "cuadrar":
+                    # CUADRAR LA COMIDA MONTADA, LA MISMA OPERACIÓN QUE YA TENÍA EL
+                    # BORRADOR (tarea 1.3 del 21-08). «Sí, ajústamela» tras un sustituir
+                    # no tenía herramienta: el sustituir mete la pieza nueva con la
+                    # cantidad que decida el motor y NO recuadra el resto, y el modelo,
+                    # sin op de cuadrar, o ajustaba a ojo o contestaba que ya estaba.
+                    # Mismo motor que `editar_borrador` op='cuadrar': reajusta las
+                    # cantidades de lo que hay y, solo si falta un macro, remata con UNA
+                    # pieza. Y nunca peor de como estaba.
+                    key_c = self.bot.current_meal_key()
+                    actuales = list((((self.bot.state.get("comidas_completadas") or {})
+                                      .get(key_c) or {}).get("alimentos")) or [])
+                    if not actuales:
+                        fallos.append({"op": op, "detalle": (
+                            "esta comida está vacía: no hay nada que cuadrar. Que diga "
+                            "qué quiere comer o pida un menú, y luego se cuadra.")})
+                        continue
+                    objetivo_c = self.bot.get_current_meal_macros()
+                    # La ficha del catálogo de cada pieza: sin ella el motor no puede
+                    # recalcular. Viaja con el alimento (`alimento`) o se saca por id.
+                    fichas_c, sin_ficha, vistos_c = [], [], set()
+                    for a in actuales:
+                        fid = int((a.get("alimento") or {}).get("id")
+                                  or a.get("alimento_id") or 0)
+                        ficha = self.foods.get(fid) or a.get("alimento")
+                        if not ficha or not ficha.get("nombre"):
+                            sin_ficha.append(a.get("nombre") or "?")
+                        elif ficha["nombre"] not in vistos_c:
+                            vistos_c.add(ficha["nombre"])
+                            fichas_c.append(ficha)
+                    if sin_ficha:
+                        fallos.append({"op": op, "detalle": (
+                            "no tengo la ficha de " + ", ".join(sin_ficha) + " para "
+                            "recalcular y no he tocado nada. Dile qué pieza no puedo "
+                            "cuadrar en automático y que la ajuste él con op='ajustar'.")})
+                        continue
+                    _desvio_c = lambda macros_its: sum(
+                        abs(sum(float((m or {}).get(k) or 0) for m in macros_its)
+                            - float(objetivo_c.get(k, 0) or 0))
+                        for k in ("P", "H", "G"))
+                    antes_macros = [a.get("macros") or {} for a in actuales]
+                    antes_desv = _desvio_c(antes_macros)
+                    # Rematar con una pieza SOLO si de verdad falta un macro: cuadrar lo
+                    # cuadrado es no tocarlo (mismo criterio que en el borrador).
+                    falta_algo = any(
+                        float(objetivo_c.get(k, 0) or 0)
+                        - sum(float((m or {}).get(k) or 0) for m in antes_macros)
+                        > self.bot.margen_de(objetivo_c.get(k, 0))
+                        for k in ("P", "H", "G"))
+                    recuadrado = await self._recuadrar_a_hoy(
+                        fichas_c, objetivo_c, rematar=falta_algo, exigente=False,
+                        umbral_corto=min(self.bot.margen_de(objetivo_c.get(k, 0))
+                                         for k in ("P", "H", "G")))
+                    # Y NUNCA PEOR DE COMO ESTABA: si el recuadre no mejora, se deja lo
+                    # que hay y se dice, en vez de devolver una comida peor con cara de
+                    # arreglo.
+                    if recuadrado and _desvio_c([i["macros"] for i in recuadrado]) \
+                            > antes_desv + 0.5:
+                        recuadrado = None
+                    if not recuadrado:
+                        fallos.append({"op": op, "detalle": (
+                            "la comida ya está todo lo cuadrada que puede estar con lo "
+                            "que lleva: tocarla la empeora. Dile cómo queda y, si quiere "
+                            "más ajuste, que diga qué pieza cambia.")})
+                        continue
+                    antes_por_nombre = {a.get("nombre"): a for a in actuales}
+                    # La comida se reescribe entera pasando por `add_food_by_id`, que es
+                    # como la reescribe `aplicar_borrador`: así cada pieza conserva su
+                    # ficha y la calibración del día se recalcula sola.
+                    estaba_volcada = (key_c in (self.bot.state.get("saved_meals") or [])
+                                      or key_c in (self.bot.state.get("comidas_traidas") or []))
+                    self.bot.clear_meal()
+                    for it in recuadrado:
+                        await self.bot.add_food_by_id(it["id"], it["cantidad_g"])
+                    # `clear_meal` soltó la marca de guardada, pero la comida SIGUE
+                    # volcada en Nutrición: sin reponerla, el bucle del agente no
+                    # re-sincroniza y el plan se queda con las cantidades viejas.
+                    if estaba_volcada:
+                        saved_c = self.bot.state.setdefault("saved_meals", [])
+                        if key_c not in saved_c:
+                            saved_c.append(key_c)
+                    # El diagnóstico: qué cambió y cómo queda, al estilo de las demás ops.
+                    despues_c = (((self.bot.state.get("comidas_completadas") or {})
+                                  .get(key_c) or {}).get("alimentos")) or []
+                    cambios, nombres_despues = [], set()
+                    for a in despues_c:
+                        nombres_despues.add(a.get("nombre"))
+                        prev = antes_por_nombre.get(a.get("nombre"))
+                        g_antes = float((prev or {}).get("cantidad_g") or 0)
+                        g_ahora = float(a.get("cantidad_g") or 0)
+                        if prev is None:
+                            cambios.append(f"{a.get('nombre')} entra con "
+                                           f"{int(round(g_ahora))} g para rematar")
+                        elif abs(g_ahora - g_antes) >= 1:
+                            cambios.append(f"{a.get('nombre')}: de {int(round(g_antes))} g "
+                                           f"a {int(round(g_ahora))} g")
+                    for n_a in antes_por_nombre:
+                        if n_a not in nombres_despues:
+                            cambios.append(f"{n_a} sale")
+                    hechos.append({"op": op, "detalle": {
+                        "cambios": cambios or ["ninguna cantidad ha necesitado cambio"],
+                        "falta_ahora": self.bot.get_remaining_macros(),
+                        "nota": ("Es la MISMA comida con las cantidades cuadradas, no "
+                                 "otra distinta. Dile qué ha cambiado en una línea.")}})
                 else:
                     fallos.append({"op": op, "detalle": f"operación desconocida '{tipo}'"})
             except Exception as e:
@@ -4132,6 +4237,14 @@ class AgentTools:
                               "lleva el día de esa familia, MÁS cuenta, nunca menos. Las "
                               "tarjetas ya traen los números calibrados.")},
                 "falta_dia": ov.get("restante"),
+                # El contador que se le dice al cliente: SIN el peri, igual que los
+                # macros de arriba. «X de Y comidas» son las principales; el intra y el
+                # post van aparte, que para eso tienen su propio presupuesto.
+                "contador_comidas": {
+                    "hechas": ov.get("completas_principales"),
+                    "total": ov.get("total_comidas_principales"),
+                    "nota": "solo comidas principales: el intra y el post no cuentan "
+                            "aquí, se nombran aparte si hace falta"},
                 "comidas": [{"nombre": m.get("nombre"),
                              "momento": momento_de_comida(m.get("key", ""), n, single),
                              "estado": ("cuadrada" if m.get("cuadrado")

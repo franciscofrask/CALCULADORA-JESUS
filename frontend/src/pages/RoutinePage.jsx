@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { plural } from '../lib/labels';
 import {
     Dumbbell, Repeat, ChevronDown, ChevronUp, History,
-    Flame, Moon, Play, Timer, Trophy, ChevronRight
+    Flame, Moon, Play, Timer, Trophy, ChevronRight, FileText
 } from 'lucide-react';
 
 const DAYS_ES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
@@ -27,6 +28,23 @@ const RoutinePage = () => {
     const [selectedDay, setSelectedDay] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showHistory, setShowHistory] = useState(false);
+    // La rutina en PDF que sube su entrenador (la de EntrenoPage). Hasta ahora esta
+    // pantalla ni preguntaba por ella: el cliente con PDF y sin rutina estructurada leía
+    // «Sin rutina asignada» teniendo su rutina subida. Se pide aparte del Promise.all a
+    // propósito: si /routines/current falla, el PDF se enseña igual.
+    const [pdfInfo, setPdfInfo] = useState(null);
+    useEffect(() => {
+        api.get('/routines/pdf/info').then(r => setPdfInfo(r.data?.hay ? r.data : null)).catch(() => {});
+    }, [api]);
+
+    // Se abre vía blob porque el visor del navegador no manda el token (mismo camino que
+    // EntrenoPage).
+    const abrirPdf = async () => {
+        try {
+            const r = await api.get('/routines/pdf', { responseType: 'blob' });
+            window.open(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })), '_blank');
+        } catch { toast.error('No hemos podido abrir tu rutina. Inténtalo en un momento.'); }
+    };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { fetchRoutine(); }, []);
@@ -65,13 +83,30 @@ const RoutinePage = () => {
     if (!routine) {
         return <Wrap>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-6" data-testid="routine-heading">Mi rutina</h1>
-            <div className="surface p-10 text-center" data-testid="routine-content">
-                <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Dumbbell className="w-8 h-8 text-brand/60" />
+            {pdfInfo ? (
+                /* Sin rutina estructurada pero CON PDF: esa ES su rutina, no un «sin
+                   rutina asignada». Se enseña con su botón para abrirla. */
+                <div className="surface p-10 text-center" data-testid="routine-content">
+                    <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <FileText className="w-8 h-8 text-brand/60" />
+                    </div>
+                    <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Tu rutina, en PDF</h2>
+                    <p className="text-muted-foreground text-sm mb-6">
+                        Tu entrenador te la ha preparado el {new Date(pdfInfo.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
+                    </p>
+                    <button onClick={abrirPdf} data-testid="routine-pdf-btn" className="btn-brand inline-flex items-center gap-2">
+                        Abrir mi rutina <ChevronRight className="w-4 h-4" />
+                    </button>
                 </div>
-                <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
-                <p className="text-muted-foreground text-sm">Tu entrenador está preparando tu rutina personalizada.</p>
-            </div>
+            ) : (
+                <div className="surface p-10 text-center" data-testid="routine-content">
+                    <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <Dumbbell className="w-8 h-8 text-brand/60" />
+                    </div>
+                    <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
+                    <p className="text-muted-foreground text-sm">Tu entrenador está preparando tu rutina personalizada.</p>
+                </div>
+            )}
         </Wrap>;
     }
 
@@ -185,6 +220,18 @@ const RoutinePage = () => {
                             )}
                         </div>
                     </div>
+
+                    {/* Si además hay PDF, la estructurada manda y el PDF queda de enlace
+                        secundario (mismo patrón que el botón de EntrenoPage). */}
+                    {pdfInfo && (
+                        <button onClick={abrirPdf} data-testid="routine-pdf-link"
+                            className="w-full max-w-2xl flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
+                            <span className="flex items-center gap-2 font-bold text-foreground text-sm">
+                                <FileText className="w-4 h-4 text-brand" /> Tu rutina en PDF
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-foreground/40" />
+                        </button>
+                    )}
                 </div>
             )}
         </Wrap>

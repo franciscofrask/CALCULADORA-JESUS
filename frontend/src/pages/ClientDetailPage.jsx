@@ -281,14 +281,17 @@ const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
 // EL PDF DE LA RUTINA (bloque 11, doc 19-08): se sigue generando fuera, como hasta ahora;
 // aquí solo se sube, y el cliente lo abre desde Entreno. Se abre vía blob porque el visor
 // del navegador no manda la cabecera de autenticación.
-const PdfDeRutina = ({ api, clientId }) => {
+const PdfDeRutina = ({ api, clientId, onInfo }) => {
     const [info, setInfo] = useState(null);
     const [subiendo, setSubiendo] = useState(false);
 
+    // `onInfo` le cuenta al padre lo que hay: el hueco de «Rutina actual» lo necesita
+    // para no decir «Sin rutina asignada» cuando la rutina está entregada en PDF.
     const cargar = useCallback(() => {
         api.get(`/admin/routines/pdf/${clientId}/info`)
-            .then(r => setInfo(r.data)).catch(() => setInfo(null));
-    }, [api, clientId]);
+            .then(r => { setInfo(r.data); onInfo?.(r.data); })
+            .catch(() => { setInfo(null); onInfo?.(null); });
+    }, [api, clientId, onInfo]);
     useEffect(() => { cargar(); }, [cargar]);
 
     const subir = async (e) => {
@@ -432,6 +435,9 @@ const ClientDetailPage = () => {
     const [generatingRoutine, setGeneratingRoutine] = useState(false);
     const [routineInstructions, setRoutineInstructions] = useState('');
     const [generatedRoutine, setGeneratedRoutine] = useState(null);
+    // El info del PDF lo carga PdfDeRutina y lo sube aquí: sin él, el hueco de «Rutina
+    // actual» decía «Sin rutina asignada» dos tarjetas por debajo del propio PDF.
+    const [pdfRutina, setPdfRutina] = useState(null);
 
     // Suplementos
     // El protocolo, versionado por fecha (punto 33). `actual` y `siguiente` los resuelve el
@@ -444,6 +450,9 @@ const ClientDetailPage = () => {
     const [supCatalog, setSupCatalog] = useState([]);
     const [supSaving, setSupSaving] = useState(false);
     const [supSuggesting, setSupSuggesting] = useState(false);
+    // La propuesta del auto-sugerir (2.3). Vive APARTE del protocolo: se pinta al
+    // lado y no toca nada hasta que el entrenador incorpora (o quita) uno a uno.
+    const [supPropuesta, setSupPropuesta] = useState(null);
 
     // Visor de dietas (pestaña Nutrición)
     const [selectedDietDate, setSelectedDietDate] = useState(null);
@@ -476,7 +485,7 @@ const ClientDetailPage = () => {
         } finally { setAssigningTrainer(false); }
     };
 
-    useEffect(() => { fetchClient(); }, [clientId]); // eslint-disable-line
+    useEffect(() => { fetchClient(); setSupPropuesta(null); }, [clientId]); // eslint-disable-line
     useEffect(() => { api.get('/admin/supplements/catalog').then(r => setSupCatalog(r.data || [])).catch(() => {}); }, []); // eslint-disable-line
     useEffect(() => { api.get('/admin/trainers').then(r => setTrainers(r.data || [])).catch(() => {}); }, []); // eslint-disable-line
 
@@ -791,12 +800,22 @@ const ClientDetailPage = () => {
         ...prev,
         [bloque]: prev[bloque].map((it, i) => i === idx ? { ...it, [campo]: valor } : it),
     }));
+    // ¿Son el mismo suplemento? Por su ficha del catálogo si los dos la traen;
+    // si no, por el título (los ítems escritos a mano no llevan catalog_id).
+    const mismoSup = (a, b) => (a?.catalog_id && b?.catalog_id)
+        ? a.catalog_id === b.catalog_id
+        : (a?.titulo || '').trim().toLowerCase() === (b?.titulo || '').trim().toLowerCase();
+    // Incorporar UN elemento de la propuesta al borrador (no guarda: eso lo hace Guardar).
+    const supPropAdd = (it) => setSupProtocol(prev => ({ ...prev, actual: [...prev.actual, { ...it, observaciones: it.observaciones || '' }] }));
     const supSuggest = async () => {
         setSupSuggesting(true);
         try {
             const r = await api.post(`/admin/supplements/suggest?client_id=${clientId}`);
-            setSupProtocol(prev => ({ ...prev, actual: r.data.actual || [] }));
-            toast.success('Protocolo sugerido (revísalo y guarda)');
+            // La propuesta NO pisa el protocolo (2.3): antes se sustituía entero
+            // el bloque actual y al Guardar quedaba persistido. Ahora se guarda
+            // aparte y se pinta al lado, para incorporarla elemento a elemento.
+            setSupPropuesta(r.data.actual || []);
+            toast.success('Propuesta lista: revísala al lado del protocolo');
         } catch (e) { toast.error('Error al sugerir'); }
         finally { setSupSuggesting(false); }
     };
@@ -1462,16 +1481,28 @@ const ClientDetailPage = () => {
                                 <div><Label className="text-white/60 text-xs">Plan</Label>
                                     <select value={profile?.plan || ''} onChange={e => setUserPlan(e.target.value, !!profile?.comp_plan)} className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
                                         <option value="">Sin plan</option>
-                                        {['activo', 'legacy', 'especial'].map(estado => {
+                                        {/* Primero lo que se vende hoy (activos y especiales); el resto de
+                                            asignables detrás, en «Planes antiguos» (2.8). No se quita ninguno:
+                                            hay clientes en legacy con precio congelado que hay que reasignar. */}
+                                        {['activo', 'especial'].map(estado => {
                                             const grupo = assignablePlans.filter(p => p.estado === estado);
                                             if (!grupo.length) return null;
-                                            const gl = { activo: 'Activos', legacy: 'Legacy', especial: 'Especiales' }[estado];
+                                            const gl = { activo: 'Activos', especial: 'Especiales' }[estado];
                                             return (
                                                 <optgroup key={estado} label={gl}>
                                                     {grupo.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
                                                 </optgroup>
                                             );
                                         })}
+                                        {(() => {
+                                            const antiguos = assignablePlans.filter(p => p.estado !== 'activo' && p.estado !== 'especial');
+                                            if (!antiguos.length) return null;
+                                            return (
+                                                <optgroup label="Planes antiguos">
+                                                    {antiguos.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
+                                                </optgroup>
+                                            );
+                                        })()}
                                     </select>
                                 </div>
                             </div>
@@ -1661,7 +1692,7 @@ const ClientDetailPage = () => {
                     <RutinasGuardadas api={api} clientId={clientId} onAsignada={fetchClient} />
 
                     {/* La rutina en PDF, la que el cliente abre desde Entreno (doc 19-08). */}
-                    <PdfDeRutina api={api} clientId={clientId} />
+                    <PdfDeRutina api={api} clientId={clientId} onInfo={setPdfRutina} />
 
                     {/* Current routine */}
                     {activeRoutine ? (
@@ -1675,6 +1706,12 @@ const ClientDetailPage = () => {
                             {activeRoutine.trainer_notes && <p className="text-white/30 text-xs mt-3 italic">{activeRoutine.trainer_notes}</p>}
                             </CardContent>
                         </Card>
+                    ) : pdfRutina?.hay ? (
+                        /* Sin estructurada pero con PDF: la rutina SÍ está entregada, solo
+                           que en papel. Decir «sin rutina asignada» aquí contradecía al
+                           «Rutina en PDF subida» de dos tarjetas más arriba. */
+                        <EmptyState icon={FileText}
+                            message={`Rutina entregada en PDF el ${new Date(pdfRutina.uploaded_at).toLocaleDateString('es-ES')}.`} />
                     ) : <EmptyState icon={Dumbbell} message="Sin rutina asignada." />}
 
                     {/* Generate routine */}
@@ -1708,7 +1745,8 @@ const ClientDetailPage = () => {
                         </div>
                     </div>
 
-                    {[['actual', 'Suplementación actual'], ['siguiente', 'Suplementación siguiente']].map(([bloque, titulo]) => (
+                    {[['actual', 'Suplementación actual'], ['siguiente', 'Suplementación siguiente']].map(([bloque, titulo]) => {
+                        const card = (
                         <Card key={bloque} className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">{titulo}</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
                                 {supProtocol[bloque].length === 0 && <p className="text-white/30 text-sm">Sin suplementos.</p>}
@@ -1760,7 +1798,68 @@ const ClientDetailPage = () => {
                                 </select>
                             </CardContent>
                         </Card>
-                    ))}
+                        );
+                        if (bloque !== 'actual' || !supPropuesta) return card;
+                        // La propuesta del auto-sugerir, AL LADO del protocolo (2.3): cada
+                        // elemento dice si es nuevo o si ya lo toma, y lo que toma y la
+                        // propuesta no trae se marca como «propone quitar». Incorporar o
+                        // quitar es decisión del entrenador, uno a uno, sobre el borrador.
+                        const propuestosQuitar = supProtocol.actual
+                            .map((it, i) => ({ it, i }))
+                            .filter(({ it }) => !supPropuesta.some(p => mismoSup(p, it)));
+                        return (
+                            <div key="actual-y-propuesta" className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                                {card}
+                                <Card className="bg-[#111] border-[#FF671F]/30" data-testid="sup-propuesta">
+                                    <CardHeader className="pb-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Sparkles className="w-3.5 h-3.5 text-[#FF671F]" />Propuesta (sin aplicar)
+                                            </CardTitle>
+                                            <button onClick={() => setSupPropuesta(null)} className="text-white/30 hover:text-white text-xs" data-testid="sup-propuesta-descartar">Descartar propuesta</button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-2">
+                                        <p className="text-white/30 text-xs">No cambia nada por sí sola: incorpora o quita elemento a elemento y después Guarda.</p>
+                                        {supPropuesta.length === 0 && propuestosQuitar.length === 0 && <p className="text-white/30 text-sm">Sin sugerencias para este perfil.</p>}
+                                        {supPropuesta.map((it, i) => {
+                                            const yaLoToma = supProtocol.actual.some(a => mismoSup(a, it));
+                                            return (
+                                                <div key={it.catalog_id || `p-${i}`} className="p-2.5 bg-[#0A0A0A] rounded-lg border border-[#222] flex items-center justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="text-white text-sm font-medium truncate">{it.titulo}</p>
+                                                        <p className="text-white/40 text-xs truncate">{[it.cuanto, it.cuando].filter(Boolean).join(' · ')}</p>
+                                                    </div>
+                                                    {yaLoToma
+                                                        ? <span className="text-[10px] uppercase tracking-wide text-white/30 flex-shrink-0">ya lo toma</span>
+                                                        : <div className="flex items-center gap-2 flex-shrink-0">
+                                                            <span className="text-[10px] uppercase tracking-wide text-[#FF671F]">nuevo</span>
+                                                            <Button size="sm" variant="outline" onClick={() => supPropAdd(it)} className="bg-transparent border-[#333] text-white h-7 px-2 text-xs" data-testid={`sup-propuesta-add-${i}`}>
+                                                                <Plus className="w-3 h-3 mr-1" />Añadir
+                                                            </Button>
+                                                        </div>}
+                                                </div>
+                                            );
+                                        })}
+                                        {propuestosQuitar.map(({ it, i }) => (
+                                            <div key={it.catalog_id || `q-${i}`} className="p-2.5 bg-[#0A0A0A] rounded-lg border border-[#222] flex items-center justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <p className="text-white/60 text-sm font-medium truncate">{it.titulo}</p>
+                                                    <p className="text-white/30 text-xs truncate">{[it.cuanto, it.cuando].filter(Boolean).join(' · ')}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    <span className="text-[10px] uppercase tracking-wide text-red-400">propone quitar</span>
+                                                    <Button size="sm" variant="outline" onClick={() => supRemove('actual', i)} className="bg-transparent border-red-500/40 text-red-400 hover:bg-red-500/10 h-7 px-2 text-xs" data-testid={`sup-propuesta-quitar-${i}`}>
+                                                        <X className="w-3 h-3 mr-1" />Quitar
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        );
+                    })}
 
                     <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Nota personal</CardTitle></CardHeader>
                         <CardContent>

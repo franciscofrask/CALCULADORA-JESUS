@@ -15,6 +15,7 @@ import { ClientDashboard, ClientLayout } from "./pages/ClientDashboard";
 import RoutinePage from "./pages/RoutinePage";
 import EntrenoPage from "./pages/EntrenoPage";
 import NutritionPage from "./pages/NutritionPage";
+import MiSemanaPage from "./pages/MiSemanaPage";
 import ReportsPage from "./pages/ReportsPage";
 import MessagesPage from "./pages/MessagesPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -225,6 +226,8 @@ function AppRoutes() {
                     rutina: CAP.RUTINA ya lleva dentro el interruptor `t3_entreno`. */}
                 <Route path="entreno" element={<CapabilityRoute cap="rutina"><EntrenoPage /></CapabilityRoute>} />
                 <Route path="nutrition" element={<NutritionPage />} />
+                {/* Mi semana (rediseño 21-08). Sin entrada en el menú todavía: se llega por URL. */}
+                <Route path="semana" element={<MiSemanaPage />} />
                 <Route path="reports" element={<CapabilityRoute cap="reportes"><ReportsPage /></CapabilityRoute>} />
                 <Route path="messages" element={<MessagesPage />} />
                 <Route path="profile" element={<ProfilePage />} />

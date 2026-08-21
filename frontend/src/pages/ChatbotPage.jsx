@@ -567,7 +567,10 @@ export default function ChatbotPage() {
     // vacío. Comprobado en vivo el 08-08 con una fecha limpia: 0 alimentos antes y 0
     // después de guardar.
     if (data?.comida_guardada || data?.response?.comida_guardada) {
-      syncToDiet();
+      // El `motivo` dice QUÉ anunciar: «Guardado» solo cuando ha guardado de verdad
+      // (guardar_comida); una re-sincronización tras editar se cuenta como actualización.
+      // Si el backend no manda el campo, se anuncia como hasta hoy.
+      syncToDiet(data?.motivo || data?.response?.motivo);
     }
   };
 
@@ -867,7 +870,14 @@ export default function ChatbotPage() {
       if (sobran.length) partes.push(`te pasas ${enumerar(sobran)}`);
       linea = partes.join(' y ').replace(/^./, c => c.toUpperCase());
     }
-    return `**Resumen del día**\nObjetivo: ${macrosLinea(ov.objetivo)}\nLlevas: ${macrosLinea(ov.consumido)}\n${linea}\nComidas guardadas: ${ov.completas}/${ov.total_comidas}`;
+    // El contador va SIN el peri, como los macros de Nutrición: con 4 comidas y peri
+    // completo aquí salía «guardadas 3/6» donde Nutrición dice «de 4». El intra/post
+    // lleva su propia cuenta y se dice aparte solo cuando el día lo tiene.
+    const hechas = ov.completas_principales ?? ov.completas;
+    const totalComidas = ov.total_comidas_principales ?? ov.total_comidas;
+    let comidasLinea = `Comidas guardadas: ${hechas}/${totalComidas}`;
+    if (ov.total_peri > 0) comidasLinea += ` · Peri-entreno: ${ov.completas_peri ?? 0}/${ov.total_peri}`;
+    return `**Resumen del día**\nObjetivo: ${macrosLinea(ov.objetivo)}\nLlevas: ${macrosLinea(ov.consumido)}\n${linea}\n${comidasLinea}`;
   };
 
   // Completar comida actual
@@ -921,7 +931,12 @@ export default function ChatbotPage() {
 
   // Vuelca el progreso actual en la pestaña de nutrición del día destino.
   // Decide UNA sola vez si sobrescribir un día que ya tuviera dieta.
-  const syncToDiet = async () => {
+  // `motivo`: 'guardado' (guardar explícito, por chat o por botón) anuncia «Guardado»;
+  // 'resincronizacion' (editar una comida ya volcada, reconfigurar, vaciar, deshacer)
+  // anuncia una actualización. El asistente decía «✅ Guardado en tu pestaña de
+  // nutrición» tras CUALQUIER cambio en una comida ya guardada, sin que nadie hubiera
+  // pedido guardar nada (tarea 1.3 del 21-08). Sin motivo se anuncia como siempre.
+  const syncToDiet = async (motivo) => {
     if (!sessionId) return;
     // Sin día destino se volcaba en silencio a ninguna parte. Si por lo que sea no está
     // fijado, se usa el día que se esté mirando en Nutrición, o hoy: guardar en el día
@@ -988,7 +1003,9 @@ export default function ChatbotPage() {
       }
       if (res.ok && !data.needs_confirmation) {
         recordarDia(dia);
-        addMessage(`✅ Guardado en tu pestaña de nutrición (${formatDateLabel(dia)}).`, false);
+        addMessage(motivo === 'resincronizacion'
+          ? `He actualizado tu dieta con el cambio (${formatDateLabel(dia)}).`
+          : `✅ Guardado en tu pestaña de nutrición (${formatDateLabel(dia)}).`, false);
       } else {
         // Antes esto se callaba: el cliente leía «comida guardada» y no lo estaba.
         addMessage('⚠️ No he podido guardarlo en tu pestaña de nutrición. Lo tienes montado aquí; vuelve a intentarlo o vuélcalo con el botón.', false);
@@ -1322,7 +1339,8 @@ export default function ChatbotPage() {
             {montando && (
               <p className="sm:hidden font-bold truncate" data-testid="chatbot-comida">
                 {mealNombre}
-                {dayOverview && <span className="font-normal text-muted-foreground"> · {dayOverview.completas} de {dayOverview.total_comidas} hechas</span>}
+                {/* Contador SIN el peri, como en Nutrición (tarea 1.3 del 21-08). */}
+                {dayOverview && <span className="font-normal text-muted-foreground"> · {dayOverview.completas_principales ?? dayOverview.completas} de {dayOverview.total_comidas_principales ?? dayOverview.total_comidas} hechas</span>}
               </p>
             )}
             {/* En movil el detalle va abreviado y en una sola linea: la version larga
@@ -1346,7 +1364,12 @@ export default function ChatbotPage() {
                   <span className="sm:hidden">{loQueQueda}</span>
                   <span className="hidden sm:inline">
                     {mealNombre} • {loQueQuedaLargo}
-                    {dayOverview && ` · Día: ${dayOverview.completas} de ${dayOverview.total_comidas} ${dayOverview.total_comidas === 1 ? 'comida' : 'comidas'}`}
+                    {/* El «Día: X de Y» cuenta comidas principales: el peri no es una comida. */}
+                    {dayOverview && (() => {
+                      const t = dayOverview.total_comidas_principales ?? dayOverview.total_comidas;
+                      const h = dayOverview.completas_principales ?? dayOverview.completas;
+                      return ` · Día: ${h} de ${t} ${t === 1 ? 'comida' : 'comidas'}`;
+                    })()}
                   </span>
                 </>
               )}

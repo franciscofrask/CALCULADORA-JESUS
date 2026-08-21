@@ -60,6 +60,17 @@ async def registrar_revision(
     try:
         trainer_id = profile.get("trainer_id")
         client_id = profile.get("id")
+        # SIN DUPLICADOS. Cada recalculo dejaba un insert, y «Macros por revisar»
+        # enseñaba 7 filas del mismo cliente (4 identicas): la lista contaba
+        # recalculos, no clientes por revisar. Antes de insertar se cierran las
+        # pendientes previas del MISMO cliente, asi que por cliente queda como
+        # mucho UNA pendiente y con la comparacion mas reciente.
+        filtro = {"client_id": client_id} if client_id else {"user_id": user.get("id")}
+        previas = await db.macro_revisiones.update_many(
+            {**filtro, "status": "pendiente"},
+            {"$set": {"status": "reemplazada",
+                      "resolved_at": datetime.now(timezone.utc).isoformat()}},
+        )
         await db.macro_revisiones.insert_one({
             "id": str(uuid.uuid4()),
             "client_id": client_id,
@@ -69,7 +80,9 @@ async def registrar_revision(
             "status": "pendiente",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-        if trainer_id:
+        # La campanita solo la primera vez: si ya habia una pendiente, el aviso ya
+        # salio y repetirlo por cada recalculo es ruido, no informacion.
+        if trainer_id and previas.modified_count == 0:
             from routes.notifications import notify  # lazy: evita import circular
             nombre = user.get("name") or user.get("email") or "un cliente"
             await notify(

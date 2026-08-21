@@ -198,7 +198,17 @@ admin_router = APIRouter(prefix="/admin/supplements", tags=["admin-supplements"]
 # ── Catálogo (CRUD) ──────────────────────────────────────────────────────
 @admin_router.get("/catalog")
 async def list_catalog(include_inactive: bool = False, user=Depends(get_admin_user)):
-    """Lista el catálogo de suplementos."""
+    """Lista el catálogo de suplementos.
+
+    Sin parámetros es el SELECTOR: lo que el coach ve al añadir un suplemento a un
+    protocolo. Ahí solo entran las fichas activas. La limpieza de la importación de la
+    guía (duplicados de semillas, «NO USAR», «obsoleto») se hace por DATOS con
+    `_sanear_catalogo_suplementos.py`, que las desactiva: las fichas legítimas de la guía
+    siguen siendo elegibles, que para eso se volcaron (bloque 08 del doc 19-08).
+
+    Con `include_inactive=true` (la página del catálogo, que es donde se cura) se devuelve
+    TODO: para desactivar una ficha primero hay que poder verla.
+    """
     q = {} if include_inactive else {"activo": True}
     items = await db.supplement_catalog.find(q, {"_id": 0}).sort("orden", 1).to_list(500)
     return items

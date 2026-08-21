@@ -58,12 +58,14 @@ class LlmChat:
         }
         # La familia gpt-5 y los modelos de razonamiento (o1/o3/o4) exigen
         # max_completion_tokens en lugar de max_tokens. Para gpt-5 forzamos ademas
-        # reasoning_effort="minimal": el router y las respuestas cortas no necesitan
-        # razonamiento y asi evitamos +5s de latencia y el coste de los reasoning tokens.
+        # el minimo de razonamiento: el router y las respuestas cortas no lo necesitan
+        # y asi evitamos +5s de latencia y el coste de los reasoning tokens.
+        # OJO: gpt-5.1 rechaza "minimal" con un 400 («Supported values are: none, low,
+        # medium, high»); su minimo se llama "none". Comprobado el 21-08 en la tarea 2.4.
         model_l = (self.model or "").lower()
         if model_l.startswith("gpt-5"):
             kwargs["max_completion_tokens"] = 4096
-            kwargs["reasoning_effort"] = "minimal"
+            kwargs["reasoning_effort"] = "none" if model_l.startswith("gpt-5.1") else "minimal"
         elif model_l.startswith(("o1", "o3", "o4")):
             kwargs["max_completion_tokens"] = 4096
         else:
