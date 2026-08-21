@@ -156,7 +156,14 @@ const DayHeader = ({
                 // Cuadrado: hidratos y grasa dentro de margen, y la proteína al menos
                 // cubierta. Si pasarse de proteína no es un fallo, tampoco puede impedir que
                 // el día se dé por bueno.
-                const cuadrado = !nadaPuesto && macros.every(m => m.tgt > 0 && (
+                // Y ninguna comida genuinamente descuadrada (doc 57, F3): mismo criterio
+                // que getDayStatus, para que el titular del móvil y el distintivo de
+                // escritorio no se contradigan.
+                const comidaMal = (mealOrder || []).some(k => {
+                    const st = getMealStatus ? getMealStatus(k) : 'empty';
+                    return st !== 'cuadrada' && st !== 'empty';
+                });
+                const cuadrado = !nadaPuesto && !comidaMal && macros.every(m => m.tgt > 0 && (
                     m.key === 'P' ? m.val > m.tgt - 4 : Math.abs(m.tgt - m.val) < 4));
                 const titular = cuadrado ? 'Día cuadrado'
                     : nadaPuesto ? 'Hoy tienes que comer'

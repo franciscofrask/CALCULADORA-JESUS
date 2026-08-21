@@ -211,6 +211,16 @@ const RenovacionPage = () => {
                     renovación la tienes que confirmar tú aquí.
                 </p>
             )}
+            {/* Ningún plan renueva solo desde el 20-08: al que sigue en el catálogo también
+                hay que decírselo, o se queda esperando un cobro que no va a llegar. Renovar
+                antes de que acabe encadena el ciclo y no pierde ni una semana. */}
+            {!motivo_cambio && !renueva_solo && !salidas.some(s => s.tipo === 'renovar' && s.por_checkout) && !ciclo.ya_vencido && (
+                <p className="text-sm text-muted-foreground mb-4" data-testid="aviso-renovacion-manual">
+                    Tu plan no se renueva solo: cuando quieras seguir, la renovación la
+                    confirmas tú aquí. Si renuevas antes de que acabe, el ciclo nuevo empieza
+                    donde termina este y no pierdes ni una semana.
+                </p>
+            )}
 
             <div className="space-y-3">
                 {salidas.map(s => (

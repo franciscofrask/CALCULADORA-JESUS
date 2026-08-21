@@ -1585,7 +1585,7 @@ const ClientLayout = () => {
                     )}
                     {/* Igual que en el panel del coach: un fallo de una pantalla no puede
                         dejar al cliente sin app. Ver LimiteDeError. */}
-                    <LimiteDeError clave={location.pathname}>
+                    <LimiteDeError clave={location.pathname + location.search}>
                         <Outlet />
                     </LimiteDeError>
                 </main>

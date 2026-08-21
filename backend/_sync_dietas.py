@@ -153,6 +153,15 @@ class Decodificador:
             comidas["Post"] = self.comida(peri_src["postentreno"])
         return comidas, comidas_src, peri_src
 
+    @staticmethod
+    def tipo_dia_de(doc):
+        """Calma no guardaba el tipo de dia, pero lo delata la estructura: un dia (o una
+        favorita) de DESCANSO no lleva ni momento de entreno ni perientrenamiento. Antes
+        esto era un literal "entrenamiento" y las favoritas de descanso migradas salian
+        como entreno (doc 57, F4: 225 corregidas en prod el 21-08 por nombre+sin peri)."""
+        tiene_entreno = bool(doc.get("momentoEntrenamiento")) or bool(doc.get("perientrenamiento"))
+        return "entrenamiento" if tiene_entreno else "descanso"
+
     def dieta(self, doc_id, doc, user_id):
         comidas, comidas_src, peri_src = self.comidas_de(doc)
         if not comidas:
@@ -160,7 +169,7 @@ class Decodificador:
         return {
             "user_id": user_id,
             "fecha": norm_date(doc_id),
-            "tipo_dia": "entrenamiento",
+            "tipo_dia": self.tipo_dia_de(doc),
             "num_comidas": len([m for m in comidas_src if m]) or 4,
             # `momentoEntrenamiento` 0 es «en ayunas» y con el `or` cae en 1, igual que en la
             # migracion original. Se respeta para no crear dos criterios distintos.
@@ -182,7 +191,7 @@ class Decodificador:
             # El id del documento ES el nombre que le puso el cliente. Algunos si traen
             # ademas el campo `nombre`, y ese manda.
             "name": doc.get("nombre") or doc_id,
-            "tipo_dia": "entrenamiento",
+            "tipo_dia": self.tipo_dia_de(doc),
             "num_comidas": len([m for m in comidas_src if m]) or 4,
             "momento_entreno": int(doc.get("momentoEntrenamiento") or 1),
             "opcion_peri": peri_option(peri_src),

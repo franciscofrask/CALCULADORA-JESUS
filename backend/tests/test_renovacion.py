@@ -162,9 +162,11 @@ class TestLaPantallaEntera:
         assert r["resumen"]["peso"]["cambio_pct"] == -8.0
         assert len(r["salidas"]) >= 3
 
-    def test_avisa_de_que_si_no_hace_nada_se_renueva(self):
-        """No es un paywall: Stripe cobra solo el dia que acaba el ciclo."""
-        assert self._montar()["renueva_solo"] is True
+    def test_sin_suscripcion_viva_ya_no_se_le_dice_que_se_renueva_solo(self):
+        """Desde el 20-08 ningun plan renueva solo: la frase de «no hagas nada» solo
+        vale para quien conserva una suscripcion viva de Stripe (repaso del 21-08,
+        cazado con la cuenta de prueba a 5 dias de vencer)."""
+        assert self._montar()["renueva_solo"] is False
 
     def test_al_que_viene_de_un_plan_viejo_ya_no_hay_motivo_que_explicar(self):
         # Con «seguir igual» disponible (20-08), el texto de «tu plan ya no se ofrece»

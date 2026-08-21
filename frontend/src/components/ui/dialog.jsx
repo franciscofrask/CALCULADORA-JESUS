@@ -16,20 +16,36 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=open]:fade-in-0",
       className
     )}
     {...props} />
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
-const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
+const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => {
+  // Radix deja document.body con pointer-events:none si el contenido se desmonta en el
+  // mismo commit que open=false (patrón habitual aquí: {abierto && <DialogContent>}).
+  // El body muerto se traga el siguiente clic de toda la app: era el "hay que pulsar
+  // dos o tres veces" del recorrido de Juan (doc 57, F1).
+  React.useEffect(() => () => {
+    setTimeout(() => {
+      if (!document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')) {
+        document.body.style.pointerEvents = "";
+      }
+    }, 0);
+  }, []);
+  return (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg max-h-[92dvh] overflow-y-auto",
+        // Sin animación de salida a propósito (doc 57, F1): Radix solo desmonta el diálogo
+        // cuando la animación de cierre termina, y si ese evento se pierde el nodo se queda
+        // en el DOM con el body en pointer-events:none y la app entera deja de responder al
+        // primer clic. La entrada sí anima; el cierre es instantáneo y siempre desmonta.
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg max-h-[92dvh] overflow-y-auto",
         className
       )}
       {...props}>
@@ -41,7 +57,8 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
-))
+  );
+})
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
 const DialogHeader = ({

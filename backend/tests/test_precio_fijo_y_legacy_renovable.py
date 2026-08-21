@@ -198,12 +198,14 @@ class TestLoQueVeElClienteAlRenovar:
     def test_no_se_le_dice_que_se_renueva_solo(self):
         assert self._pantalla(_catalogo_con_gold_reabierto())["renueva_solo"] is False
 
-    def test_al_del_plan_vivo_se_le_sigue_diciendo_que_no_haga_nada(self):
+    def test_al_del_plan_vivo_sin_suscripcion_se_le_dice_que_renueva_el(self):
+        # Nada renueva solo desde el 20-08: el del catalogo sin suscripcion de Stripe
+        # renueva a mano, y la pantalla ya no puede prometerle lo contrario.
         cat = merged_catalog()
         pantalla = self._pantalla(cat, plan="nivel2")
         seguir = [s for s in pantalla["salidas"] if s["tipo"] == "renovar"]
         assert seguir and seguir[0].get("por_checkout") is False
-        assert pantalla["renueva_solo"] is True
+        assert pantalla["renueva_solo"] is False
 
     def test_con_el_interruptor_apagado_no_hay_seguir_igual(self):
         pantalla = self._pantalla(merged_catalog({"gold": {"renovable_por_los_suyos": False}}))

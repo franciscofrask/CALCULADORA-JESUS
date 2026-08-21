@@ -73,6 +73,13 @@ def peri_option(peri):
     if intra: return "solo_intra"
     return "sin_peri"
 
+def tipo_dia_de(doc):
+    """Calma no guardaba el tipo de dia: lo delata la estructura. Sin momento de entreno
+    y sin perientrenamiento es un dia de DESCANSO. Antes era un literal "entrenamiento"
+    y las favoritas de descanso migradas salian como entreno (doc 57, F4)."""
+    tiene_entreno = bool(doc.get("momentoEntrenamiento")) or bool(doc.get("perientrenamiento"))
+    return "entrenamiento" if tiene_entreno else "descanso"
+
 def map_plan(txt):
     t = (txt or "").lower()
     if "gold" in t: return "gold"
@@ -236,7 +243,7 @@ async def main():
                 if not comidas: continue
                 fecha = norm_date(d.id)
                 await mdb.diets.update_one({"user_id": user_id, "fecha": fecha}, {"$set": {
-                    "user_id": user_id, "fecha": fecha, "tipo_dia": "entrenamiento",
+                    "user_id": user_id, "fecha": fecha, "tipo_dia": tipo_dia_de(dd),
                     "num_comidas": len([m for m in comidas_src if m]) or 4,
                     "momento_entreno": int(dd.get("momentoEntrenamiento") or 1),
                     "opcion_peri": peri_option(peri_src), "comidas": comidas, "updated_at": now_iso(),
@@ -258,7 +265,7 @@ async def main():
                 if peri_src.get("postentreno"): comidas["Post"] = build_meal(peri_src["postentreno"])
                 favs.append({"id": str(uuid.uuid4()), "user_id": user_id,
                              "name": fav.get("nombre") or d.id,
-                             "tipo_dia": "entrenamiento",
+                             "tipo_dia": tipo_dia_de(fav),
                              "num_comidas": len([m for m in comidas_src if m]) or 4,
                              "momento_entreno": int(fav.get("momentoEntrenamiento") or 1),
                              "opcion_peri": peri_option(peri_src), "comidas": comidas,

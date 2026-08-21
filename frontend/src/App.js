@@ -316,8 +316,11 @@ function App() {
                             {/* LOS AVISOS SE CIERRAN, Y SE CIERRAN SOLOS (Jesús, 15-08,
                                 fallo 37): no tenían aspa y alguno se quedó minutos tapando
                                 el título de un panel. Seis segundos y una cruz en todos; el
-                                que necesite más tiempo lo pide en su `duration`. */}
-                            <Toaster position="top-center" richColors closeButton duration={6000} />
+                                que necesite más tiempo lo pide en su `duration`.
+                                Y ABAJO A LA DERECHA (doc 57, F6): arriba-centro el aviso
+                                caía justo encima de las pestañas de comida y se comía los
+                                clics mientras estaba visible. */}
+                            <Toaster position="bottom-right" richColors closeButton duration={6000} />
                             <InstallPrompt />
                         </OnboardingProvider>
                     </ConfirmProvider>

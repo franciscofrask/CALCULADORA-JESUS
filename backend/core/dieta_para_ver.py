@@ -20,6 +20,7 @@ Aqui esta esa resolucion, UNA vez, para las tres puertas:
 
 Nada de esto se GUARDA: es la lectura. Lo guardado sigue siendo lo que escribio la app.
 """
+import math
 from typing import Any, Dict, Optional
 
 from core.database import db
@@ -113,6 +114,20 @@ async def adjuntar_urls(diet: dict) -> None:
     alimento, los dias antiguos lo cogen solos. Es una unica consulta por dia.
     """
     from calma_suggest import macros_reales
+
+    # Cantidades NaN fuera ANTES de calcular nada (doc 57, hallazgo del barrido): 335
+    # alimentos migrados llegaron con cantidad_g NaN y el NaN se propagaba a macros_reales;
+    # el JSON no admite NaN y el dia entero respondia 500 («Sin conexion» y dia en blanco).
+    # Se deja en 0: el alimento se ve y el cliente le pone cantidad.
+    for a in alimentos_de(diet):
+        v = a.get("cantidad_g")
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            a["cantidad_g"] = 0
+        for macros in (a.get("macros_efectivos"), a.get("macros_brutos"), a.get("macros_reales")):
+            if isinstance(macros, dict):
+                for k, mv in macros.items():
+                    if isinstance(mv, float) and (math.isnan(mv) or math.isinf(mv)):
+                        macros[k] = 0
 
     if not ids_de(diet):
         return

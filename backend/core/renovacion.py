@@ -241,10 +241,10 @@ def montar_renovacion(*, perfil: Dict[str, Any], catalogo: Dict[str, Dict[str, A
         "ciclo": estado,
         "resumen": resumen,
         "salidas": fuera,
-        # Si no hace nada, Stripe cobra solo: conviene decirlo para que no parezca que
-        # se le va a cortar el acceso. Al del plan antiguo reabierto NO se le dice, porque
-        # en su caso no es verdad: su renovacion pasa por la pasarela (`por_checkout`).
-        "renueva_solo": (not estado.get("ya_vencido")
-                         and not any(s.get("por_checkout") for s in fuera if s["tipo"] == "renovar")),
+        # «Se renueva solo» SOLO si Stripe le sigue cobrando de verdad (doc 57, repaso del
+        # 21-08). Desde el 20-08 ningun plan del catalogo renueva solo, y esta frase seguia
+        # saliendo para cualquier plan vivo: prometia una renovacion automatica que ya no
+        # existe, justo lo contrario del aviso de «renueva antes de que acabe».
+        "renueva_solo": (not estado.get("ya_vencido") and suscripcion_viva),
         "motivo_cambio": opciones_catalogo.get("motivo"),
     }

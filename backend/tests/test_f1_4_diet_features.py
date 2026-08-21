@@ -283,9 +283,14 @@ class TestFoodSearch:
         assert "alimentos" in data
         assert len(data["alimentos"]) > 0, "Should return foods for category 2 (meats)"
         
-        # Check that all results have category 2
+        # Pertenecer a la categoría 2 es tenerla en CUALQUIER posición de la cadena: las
+        # etiquetas transversales del catálogo (YA, TOP, 40...) van delante y un alimento
+        # como «Caldo de cocido» es «40 | 2.2.3 | ...». El startswith de antes daba por
+        # malo lo que el buscador hace bien.
         for food in data["alimentos"]:
-            assert food.get("categorias", "").startswith("2"), f"Food should be in category 2: {food.get('nombre')}"
+            partes = [p.strip() for p in str(food.get("categorias", "")).split("|")]
+            es_de_cat2 = any(p == "2" or p.startswith("2.") for p in partes)
+            assert es_de_cat2, f"Food should be in category 2: {food.get('nombre')} ({food.get('categorias')})"
         
         print(f"✅ Food search by category works: found {len(data['alimentos'])} meat items")
 

@@ -95,6 +95,18 @@ const MacroTrio = ({ macros, size = 'lg' }) => (
 const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayConfig, onApply }) => {
     const [margen, setMargen] = React.useState(5);
     const [orden, setOrden] = React.useState('cuadrado');
+    // La procedencia, a la vista y con puerta (doc 57, F7; decision de Francisco 21-08:
+    // opcion 3, «separar y etiquetar»). Los menus de la biblioteca los monta la gente y
+    // pueden traer cualquier cosa que cuadre (el donut del recorrido de Juan); no se
+    // filtran, pero cada tarjeta dice de donde viene y el cliente puede quedarse solo
+    // con el recetario. La eleccion se recuerda.
+    const [verDeOtros, setVerDeOtros] = React.useState(() => {
+        try { return localStorage.getItem('menus_ver_de_otros') !== 'no'; } catch { return true; }
+    });
+    const cambiarVerDeOtros = (v) => {
+        setVerDeOtros(v);
+        try { localStorage.setItem('menus_ver_de_otros', v ? 'si' : 'no'); } catch { /* privado */ }
+    };
     const [verReales, setVerReales] = React.useState(false);
     const [textFilter, setTextFilter] = React.useState('');
     const [menus, setMenus] = React.useState([]);
@@ -223,13 +235,15 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
     // de una que de otra, y el orden interno de cada una se respeta entero.
     const mostrados = React.useMemo(() => {
         const recetas = recetasFiltradas.map((dato, i) => ({ tipo: 'receta', dato, i }));
-        const reales = filtrados.map((dato, i) => ({ tipo: 'menu', dato, i }));
+        const reales = (verDeOtros ? filtrados : []).map((dato, i) => ({ tipo: 'menu', dato, i }));
         const salida = [];
         let a = 0, b = 0;
         while (a < recetas.length || b < reales.length) {
             const avanceRecetas = recetas.length ? a / recetas.length : 1;
             const avanceReales = reales.length ? b / reales.length : 1;
-            if (b >= reales.length || (a < recetas.length && avanceRecetas <= avanceReales)) {
+            // En el empate gana el menú real (doc 57, F8): la lista debe abrir con una
+            // tarjeta que ya trae los gramos y su etiqueta, no con la receta sin números.
+            if (b >= reales.length || (a < recetas.length && avanceRecetas < avanceReales)) {
                 salida.push(recetas[a++]);
             } else {
                 salida.push(reales[b++]);
@@ -237,7 +251,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
         }
         return salida;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [recetasFiltradas, filtrados]);
+    }, [recetasFiltradas, filtrados, verDeOtros]);
 
     const aplicar = async (menu) => {
         if (applying) return;
@@ -360,6 +374,15 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                     onClick={() => setOrden('cuadrado')} data-testid="library-orden-cuadrado">Más cuadrado</button>
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${orden === 'usado' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setOrden('usado')} data-testid="library-orden-usado">Lo que más gente monta</button>
+                            </div>
+                            {/* La puerta de la procedencia (doc 57, F7): los menús de la
+                                biblioteca los monta la gente, no el equipo, y quien no los
+                                quiera ver se queda con el recetario a secas. */}
+                            <div className="inline-flex rounded-lg bg-muted p-0.5 border border-border">
+                                <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${verDeOtros ? 'bg-brand text-white' : 'text-muted-foreground'}`}
+                                    onClick={() => cambiarVerDeOtros(true)} data-testid="library-fuente-todo">Recetario y gente</button>
+                                <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${!verDeOtros ? 'bg-brand text-white' : 'text-muted-foreground'}`}
+                                    onClick={() => cambiarVerDeOtros(false)} data-testid="library-fuente-recetario">Solo recetario</button>
                             </div>
                             <div className="hidden lg:inline-flex rounded-lg bg-muted p-0.5 border border-border">
                                 <button className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${!verReales ? 'bg-brand text-white' : 'text-muted-foreground'}`}
@@ -493,6 +516,8 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                                 {(receta.momentos || []).map(m => (
                                                     <span key={m} className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{m}</span>
                                                 ))}
+                                                {/* La procedencia, dicha (doc 57, F7). */}
+                                                <span className="text-[10px] font-semibold uppercase tracking-wide bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full">Del recetario</span>
                                             </div>
                                         </div>
                                         {/* Los alimentos de la receta, igual que en la
@@ -534,6 +559,10 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                             <MacroTrio macros={verReales ? menu.macros_reales : menu.macros_metodo} />
                                             <div className="flex items-center gap-1.5">
+                                                {/* La procedencia, dicha (doc 57, F7): estos menús los monta
+                                                    la gente, no el equipo, y el cliente tiene que saberlo
+                                                    ANTES de fijarse en que los números cuadran. */}
+                                                <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">De otros usuarios</span>
                                                 {verReales && (
                                                     <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2 py-0.5 rounded-full">etiqueta</span>
                                                 )}

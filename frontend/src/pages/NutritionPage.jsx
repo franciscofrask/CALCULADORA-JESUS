@@ -12,7 +12,7 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { hoyEnEspana } from '../lib/horaEspana';
 import {
-    Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle, Settings, UserCheck
+    Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle, AlertTriangle, Settings, UserCheck
 } from 'lucide-react';
 import PreferencesSetup, { PREFERENCE_CATEGORIES } from '../components/nutrition/PreferencesSetup';
 import NutritionIntro from '../components/nutrition/NutritionIntro';
@@ -47,6 +47,11 @@ const BIENVENIDA_NUTRICION = false;
 // values, defaulting unknown to intra_post.
 const PERI_VALUES = ['intra_post', 'solo_post', 'solo_intra', 'sin_peri'];
 const normPeri = (v) => (PERI_VALUES.includes(v) ? v : 'intra_post');
+// El momento del entreno solo puede ser 0-3 (en ayunas / tras C1 / tras C2 / tras C3), pero
+// 5.400 dias migrados de Calma traen un 5: el backend ya lo corrige a 1 al calcular, y aqui
+// se hace lo mismo al LEER, porque con un 5 el peri se pintaba al final del dia, el resumen
+// salia con un hueco («4 comidas ·  · intra + post») y el selector de horario en blanco.
+const normMomento = (v) => (Number.isInteger(v) && v >= 0 && v <= 3 ? v : 1);
 
 // Cuándo se guardó el día, en corto. Aparte del `formatDate` de la pantalla porque aquel dice
 // «Hoy» para la fecha de hoy, y «te lo montó Francisco el Hoy» no se puede leer.
@@ -245,6 +250,10 @@ const NutritionPage = () => {
     // El último tramo por el que se avisó, para no repetir el aviso en cada tecla. Es un
     // ref y no un estado a propósito: cambiarlo no tiene que repintar nada.
     const tramoAvisado = useRef({ cereal_pan: null, fruto_seco: null });
+    // Un solo recuadre automático por familia y día (doc 57, F3): el refit puede devolver
+    // el acumulado al tramo anterior y sin este candado la app entraría en un vaivén de
+    // recuadres. La clave lleva la fecha, así que se limpia sola al cambiar de día.
+    const recuadresHechos = useRef(new Set());
     // Calma comidaConMacrosVolcadas: the meal key that absorbs the day's remaining macros.
     // When set, every OTHER meal is locked (target = its served = cuadrada). null = no volcado.
     const [volcadoMeal, setVolcadoMeal] = useState(null);
@@ -481,7 +490,7 @@ const NutritionPage = () => {
                 const dietConfig = {
                     tipoDia: diet.tipo_dia || 'entrenamiento',
                     numComidas: diet.num_comidas || 4,
-                    momentoEntreno: diet.momento_entreno ?? 1,  // ?? not || so 0 (en ayunas) persiste
+                    momentoEntreno: normMomento(diet.momento_entreno ?? 1),  // ?? not || so 0 (en ayunas) persiste
                     opcionPeri: normPeri(diet.opcion_peri),
                 };
                 setTipoDia(dietConfig.tipoDia);
@@ -731,7 +740,7 @@ const NutritionPage = () => {
             let cfgOverrides = {};
             try {
                 const cfg = await api('/api/user/diet-config');
-                const me = cfg.momento_entreno ?? 1;
+                const me = normMomento(cfg.momento_entreno ?? 1);
                 const nc = cfg.num_comidas ?? 4;
                 const op = normPeri(cfg.opcion_peri);
                 setMomentoEntreno(me);
@@ -778,7 +787,7 @@ const NutritionPage = () => {
                     setMealsData(copia.comidas || {});
                     if (copia.tipo_dia) setTipoDia(copia.tipo_dia);
                     if (copia.num_comidas) setNumComidas(copia.num_comidas);
-                    if (copia.momento_entreno != null) setMomentoEntreno(copia.momento_entreno);
+                    if (copia.momento_entreno != null) setMomentoEntreno(normMomento(copia.momento_entreno));
                     if (copia.opcion_peri) setOpcionPeri(normPeri(copia.opcion_peri));
                     setVolcadoMeal(copia.comida_volcada || null);
                     setGuardadoEstado('error');   // hay algo pendiente de subir: arranca el reenvio
@@ -1133,6 +1142,27 @@ const NutritionPage = () => {
                     ? `Has pasado de ${cfg.tramos[1]} g de ${cfg.etiqueta} hoy: su proteína ya te cuenta entera`
                     : `Has pasado de ${cfg.tramos[0]} g de ${cfg.etiqueta} hoy: su proteína empieza a contarte a la mitad`,
                     { id: idAviso, duration: 7000, closeButton: true });
+                // Y LAS COMIDAS YA MONTADAS SE RECUADRAN SOLAS (doc 57, F3): al cruzar el
+                // tramo, la proteína de esa familia cambia de cuenta en TODAS las comidas
+                // del día, también en las que ya estaban cuadradas. Antes se quedaban con
+                // «sobran X g» sin que el cliente hubiera tocado nada. Solo las comidas en
+                // modo Automático (Manual es «lo dejo como lo pongas») y solo una vez por
+                // familia y día (ver recuadresHechos).
+                const guard = `${bloque}:${currentDate}`;
+                if (!recuadresHechos.current.has(guard)) {
+                    const afectadas = getMealOrder().filter(k =>
+                        !['Intra', 'Post'].includes(k)
+                        && (mealsData[k]?.modo !== 'manual')
+                        && (mealsData[k]?.alimentos || []).some(a => a.bloque === bloque));
+                    if (afectadas.length) {
+                        recuadresHechos.current.add(guard);
+                        afectadas.forEach(k => cuadrarComida(k, { silencioso: true }));
+                        toast.info(afectadas.length === 1
+                            ? `He recuadrado una comida que ya tenías montada: con el cambio de ${cfg.etiqueta} sus cantidades ya no cuadraban.`
+                            : `He recuadrado ${afectadas.length} comidas que ya tenías montadas: con el cambio de ${cfg.etiqueta} sus cantidades ya no cuadraban.`,
+                            { id: `recuadre-${bloque}`, duration: 8000, closeButton: true });
+                    }
+                }
             } else if (previo !== null && tramo < previo) {
                 toast.dismiss(idAviso);
             }
@@ -1778,10 +1808,30 @@ const NutritionPage = () => {
             const noCaben = excluidos.filter(e => e.motivo !== 'sin_objetivo_en_dia');
             const etiquetaDia = cfg.tipoDia === 'descanso' ? 'descanso' : 'entreno';
 
+            // Si la composición de la favorita no da para cubrir alguna comida, se dice y
+            // se ofrece el Cuadrar aquí mismo (doc 57, F5): antes solo quedaba el hueco en
+            // rojo y el cliente tenía que descubrir el botón comida por comida. El peri va
+            // aparte a propósito (ahí no hay Cuadrar desde el 08-08).
+            const cortas = Object.entries(res.desfases || {})
+                .filter(([k, d]) => !['Intra', 'Post'].includes(k)
+                    && d && ['P', 'H', 'G'].some(m => (d[m] || 0) < -4))
+                .map(([k]) => k);
+            const avisoCorta = {
+                duration: 9000,
+                action: { label: 'Cuadrar ahora', onClick: () => cortas.forEach(k => cuadrarComida(k)) },
+            };
+            const seQuedaCorta = cortas.length === 1
+                ? 'una comida se queda corta de macros'
+                : `${cortas.length} comidas se quedan cortas de macros`;
+
             if (adaptar && periQuitado.length) {
                 toast.warning(`Aplicada "${fav.name}" adaptada a tu día de ${etiquetaDia}. El intra/post se ha quitado porque hoy no hay periworkout.`);
+            } else if (adaptar && cortas.length) {
+                toast.warning(`Aplicada "${fav.name}" adaptada a tu día de ${etiquetaDia}, pero ${seQuedaCorta}.`, avisoCorta);
             } else if (adaptar) {
                 toast.success(`Aplicada "${fav.name}" adaptada a tu día de ${etiquetaDia}`);
+            } else if (!noCaben.length && cortas.length) {
+                toast.warning(`Aplicada "${fav.name}", pero ${seQuedaCorta}.`, avisoCorta);
             } else if (!noCaben.length) {
                 toast.success(`Aplicada "${fav.name}" y ajustada a tus macros`);
             }
@@ -1804,7 +1854,9 @@ const NutritionPage = () => {
 
     // Cuadrar una comida a demanda: re-ajusta sus alimentos a los macros de HOY, sin pasarse y
     // respetando el mínimo de cada uno (reusa /refit-diet solo para esa comida).
-    const cuadrarComida = async (mealKey) => {
+    // `silencioso`: lo usa el recuadre automático al cruzar un umbral (doc 57, F3), que ya
+    // pone su propio aviso; sin él saldrían dos carteles por el mismo gesto.
+    const cuadrarComida = async (mealKey, { silencioso = false } = {}) => {
         try {
             const res = await api('/api/calculator/refit-diet', {
                 method: 'POST',
@@ -1816,9 +1868,13 @@ const NutritionPage = () => {
                 }),
             });
             const refit = res.comidas?.[mealKey];
-            if (!refit) { toast.error('No se pudo cuadrar la comida'); return; }
+            if (!refit) { if (!silencioso) toast.error('No se pudo cuadrar la comida'); return; }
             setMealsData(prev => ({ ...prev, [mealKey]: refit }));
             setDistribTargetsOverlay(null);   // pasa a mostrar los macros de hoy
+            // Tras el recuadre automático del cruce de umbral, los macros del refit vienen
+            // SIN la calibración del día encima: se fuerza una pasada más para que lo que
+            // se ve (y se guarda) quede asentado con la regla nueva de la familia.
+            if (silencioso) setCalibracionIntento(n => n + 1);
             // Cuadrar ya no quita ingredientes (08-08-2026): reparte y, si no llega a
             // cuadrar del todo, lo dice. El aviso de antes ("no cabían ni al mínimo")
             // además no era cierto: sí cabían, lo que pasaba es que los macros se
@@ -1833,6 +1889,7 @@ const NutritionPage = () => {
             const notaRedondeo = d?.redondeado
                 ? ' Las cantidades se han dejado en números que se puedan pesar, así que los macros bailan un poco.'
                 : '';
+            if (silencioso) return;
             if (nEx) {
                 toast.warning(`Comida cuadrada. ${nEx === 1 ? 'Un alimento ya no está' : `${nEx} alimentos ya no están`} en el catálogo y se quitó.`);
             } else if (falla?.length) {
@@ -1979,7 +2036,14 @@ const NutritionPage = () => {
         const hOk = Math.abs(hDiff) <= margin;
         const gOk = Math.abs(gDiff) <= margin;
 
-        if (pOk && hOk && gOk) return 'cuadrado';
+        // Y NINGUNA COMIDA GENUINAMENTE DESCUADRADA (doc 57, F3): una comida corta de
+        // hidratos y otra pasada se compensan en el total, y el día decía CUADRADO con un
+        // «faltan» y un «sobran» a la vista. El criterio por comida es el de siempre
+        // (getMealStatus, donde pasarse de proteína no es un fallo).
+        const algunaComidaMal = getMealOrder().some(k =>
+            (mealsData[k]?.alimentos || []).length > 0 && getMealStatus(k) !== 'cuadrada');
+
+        if (pOk && hOk && gOk && !algunaComidaMal) return 'cuadrado';
         return 'falta';
     };
 

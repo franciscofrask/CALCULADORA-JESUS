@@ -1615,7 +1615,7 @@ const AdminLayout = () => {
                 <main className="flex-1 min-w-0 pb-20 lg:pb-0">
                     {/* Si una pantalla revienta, que se caiga ELLA y no la app entera: el
                         menú y el resto de secciones siguen accesibles. Ver LimiteDeError. */}
-                    <LimiteDeError clave={location.pathname}>
+                    <LimiteDeError clave={location.pathname + location.search}>
                         <Outlet />
                     </LimiteDeError>
                 </main>
