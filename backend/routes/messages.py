@@ -59,6 +59,11 @@ async def send_message(data: MessageCreate, user = Depends(get_current_user)):
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
+    # El canal del mensaje (doc 21-08): por cuál de las dos entradas del Chat entró.
+    # Solo los dos valores conocidos; cualquier otra cosa se ignora y el mensaje queda
+    # como los de siempre, que es lo que son los mensajes viejos y los del staff.
+    if data.canal in ("suscripcion", "tecnico"):
+        message["canal"] = data.canal
     await db.messages.insert_one(message)
 
     # Avisar a quien lo recibe. Hasta hoy el mensaje se guardaba y ya: le escribías a un

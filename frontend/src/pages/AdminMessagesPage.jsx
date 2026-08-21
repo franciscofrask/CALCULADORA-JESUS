@@ -5,6 +5,26 @@ import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
 import { Send, MessageCircle, Search, CheckCheck, Check, Clock } from 'lucide-react';
 
+// EL CANAL DEL MENSAJE (doc del 21-08, apartados 13 y 20): el cliente entra al chat por
+// una de dos puertas -- «Mi suscripción» o «Algo no funciona» -- y cada mensaje llega
+// etiquetado con la suya. El chip es informativo y nada más: la conversación sigue siendo
+// una. Los mensajes de antes de las dos entradas (y los del propio equipo) no llevan
+// canal y no pintan chip.
+const CANAL_CHIP = {
+    suscripcion: { texto: 'Suscripción', clase: 'bg-[#FF671F]/15 text-[#FF671F]' },
+    tecnico: { texto: 'Algo no funciona', clase: 'bg-sky-500/15 text-sky-400' },
+};
+const ChipCanal = ({ canal }) => {
+    const c = canal && CANAL_CHIP[canal];
+    if (!c) return null;
+    return (
+        <span className={`text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0 ${c.clase}`}
+            data-testid={`chip-canal-${canal}`}>
+            {c.texto}
+        </span>
+    );
+};
+
 // Bandeja de mensajes del staff: conversaciones a la izquierda, chat a la derecha.
 const AdminMessagesPage = () => {
     const { api, user } = useAuth();
@@ -119,6 +139,7 @@ const AdminMessagesPage = () => {
                                     <p className="text-white/40 text-xs truncate">
                                         {c.last_message.sender_id === user.id ? 'Tú: ' : ''}{c.last_message.content}
                                     </p>
+                                    <ChipCanal canal={c.last_message.canal} />
                                     {c.unread > 0 && (
                                         <span className="bg-[#FF671F] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center flex-shrink-0">{c.unread}</span>
                                     )}
@@ -166,6 +187,7 @@ const AdminMessagesPage = () => {
                                                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                                                 </div>
                                                 <div className={`flex items-center gap-1 mt-0.5 ${isOwn ? 'justify-end' : ''}`}>
+                                                    <ChipCanal canal={msg.canal} />
                                                     <span className="text-[10px] text-white/25">{formatTime(msg.created_at)}</span>
                                                     {isOwn && (msg.read ? <CheckCheck className="w-3 h-3 text-[#FF671F]" /> : <Check className="w-3 h-3 text-white/25" />)}
                                                 </div>

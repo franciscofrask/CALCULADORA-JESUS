@@ -407,6 +407,13 @@ async def get_semana(inicio: Optional[str] = None, user = Depends(get_current_us
         routine = await db.routines.find_one(
             {"client_id": perfil["id"], "status": "active"}, {"_id": 0, "days": 1})
 
+    # EL GRUPO DEL DÍA CUANDO LA RUTINA VA EN PDF (tarea 7.1 del 21-08): el reparto que
+    # puso el entrenador al subir el PDF, colocado sobre los días que entrena el cliente
+    # (training_weekdays). {0: "Empuje", 1: "Tirón", ...} o None si falta cualquiera de
+    # los dos datos. Import perezoso para no atar los módulos en el arranque.
+    from routes.routines import grupos_del_reparto
+    grupos_pdf = await grupos_del_reparto(perfil)
+
     from routes.settings import pantalla_activa
     seguimiento_entrenos = await pantalla_activa("t3_entreno")
     logs = {}
@@ -430,6 +437,10 @@ async def get_semana(inicio: Optional[str] = None, user = Depends(get_current_us
             tipo = diet.get("tipo_dia") or "entrenamiento"
         elif dia_rutina is not None:
             tipo = "descanso" if dia_rutina.get("is_rest") else "entrenamiento"
+        elif grupos_pdf is not None:
+            # Sin dieta y sin rutina estructurada, pero con PDF + días del cliente: el
+            # reparto también sabe qué días son de entreno, no solo cómo se llaman.
+            tipo = "entrenamiento" if i in grupos_pdf else "descanso"
         else:
             tipo = None
 
@@ -467,7 +478,10 @@ async def get_semana(inicio: Optional[str] = None, user = Depends(get_current_us
             "n_comidas_con_alimentos": con_alimentos,
             "n_comidas_total": num_comidas,
             "entreno": {
-                "nombre": _nombre_del_entreno(dia_rutina) if tipo == "entrenamiento" else None,
+                # El nombre del grupo: el de la rutina estructurada si lo trae y, si no,
+                # el del reparto del PDF (7.1 del 21-08). El front ya lo pinta si llega.
+                "nombre": (_nombre_del_entreno(dia_rutina) or (grupos_pdf or {}).get(i))
+                          if tipo == "entrenamiento" else None,
                 # true/false solo cuando el registro de entrenos (T3) está encendido;
                 # null = todavía no hay forma de saberlo.
                 "hecho": hecho if (seguimiento_entrenos and tipo == "entrenamiento") else None,

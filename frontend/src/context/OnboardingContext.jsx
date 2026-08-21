@@ -27,7 +27,7 @@ export const RECORRIDO_ACTIVO = false;
 // `cap` = capacidad del plan requerida (los pasos de secciones que el plan no
 // incluye se omiten del recorrido; ver lib/planAccess.js).
 // Recorrido CORTO (petición 19-07): solo lo esencial - Nutrición, Asistente IA,
-// Ajustar macros y Reportes. El resto de secciones se descubren solas.
+// Mis macros y Reportes. El resto de secciones se descubren solas.
 const STEPS = [
     {
         id: 'nut-meals', route: '/dashboard/nutrition',
@@ -44,7 +44,9 @@ const STEPS = [
     {
         id: 'macros', route: '/dashboard/macro-calculator',
         element: '[data-testid="macros-content"]',
-        title: 'Ajustar macros', side: 'right', align: 'start',
+        // «Mis macros», como la pestaña (tarea 7.3 del 21-08): el tour no puede llamar
+        // al sitio de otra manera que el menú.
+        title: 'Mis macros', side: 'right', align: 'start',
         description: 'Aquí puedes recalcular o ajustar tus macros cuando cambie tu peso o tu objetivo.',
     },
     {

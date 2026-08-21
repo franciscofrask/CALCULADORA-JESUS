@@ -752,6 +752,26 @@ const EL_BASICO = [
     ...PREGUNTA_DEL_ENTRENADOR_ANTERIOR,
     // Las del deporte: se quedan (decisión del 18-08), pegadas a la de entrenamiento.
     q('deporte_extra'), q('deporte_cual'), q('deporte_en_descanso'),
+    // QUÉ DÍAS DE LA SEMANA ENTRENA (tarea 7.1 del 21-08, apartados 12 y 19 del doc de
+    // Jesús). CUÁNTOS días ya no se pregunta (son cuatro, bloque 5 del 18-08); CUÁLES sí,
+    // porque dependen de su vida y no de la rutina: con ellos y el reparto del PDF la app
+    // sabe qué grupo toca cada día, y los planes de autogestión también los necesitan
+    // para marcar el entreno o el descanso en Mi semana. Nombres sin tilde a propósito:
+    // son los mismos que usa el backend (routes/workout_logs.DIAS_SEMANA).
+    {
+        type: 'multiselect', key: 'training_weekdays',
+        title: '¿Qué días de la semana entrenas?',
+        desc: 'Los de una semana normal tuya. Si alguna semana cambia, no pasa nada: esto nos dice dónde colocar cada entreno.',
+        options: [
+            { value: 'lunes', label: 'Lunes' },
+            { value: 'martes', label: 'Martes' },
+            { value: 'miercoles', label: 'Miércoles' },
+            { value: 'jueves', label: 'Jueves' },
+            { value: 'viernes', label: 'Viernes' },
+            { value: 'sabado', label: 'Sábado' },
+            { value: 'domingo', label: 'Domingo' },
+        ],
+    },
     // 14, 15 y 16 · cómo come, si engorda y si le cuesta definir
     q('apetito'), q('facilidad_engordar'), q('cuesta_definir'),
     // 17 y 18 · los siete biotipos y el suyo (en mujer no salen)
@@ -1436,6 +1456,13 @@ const QuestionnairePage = () => {
             const v = profile[clave];
             if (v !== null && v !== undefined && v !== '') delBasico[clave] = v;
         }
+        // Los días de entreno (7.1 del 21-08), solo si están guardados COMO NOMBRES: las
+        // fichas heredadas de Calma traen enteros sin semántica verificable, y sembrarlos
+        // daría la pregunta por contestada con un dato que no sirve para colocar grupos.
+        if (Array.isArray(profile.training_weekdays)
+            && profile.training_weekdays.some(d => typeof d === 'string')) {
+            delBasico.training_weekdays = profile.training_weekdays.filter(d => typeof d === 'string');
+        }
         // Y LAS CINCO QUE MUEVEN LOS MACROS, que no viven sueltas en el perfil sino dentro de
         // `ajustes_macros`. Sin esto el completo se las volvía a preguntar a todo el mundo,
         // porque aquí no las veía: son las mismas preguntas, guardadas en otro cajón.
@@ -1824,6 +1851,8 @@ const QuestionnairePage = () => {
         height: num(answers.height),
         biotype: answers.biotype || null,
         training_experience: answers.training_experience || null,
+        // Sus días de entreno (7.1 del 21-08): nombres de día, los guarda el perfil.
+        training_weekdays: answers.training_weekdays || null,
         profesion: answers.profesion || null,
         como_me_conociste: answers.como_me_conociste || null,
         proteinas_habituales: answers.proteinas_habituales || null,

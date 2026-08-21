@@ -26,6 +26,7 @@ import { verComo } from '../lib/modoRevision';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import LimiteDeError from '../components/LimiteDeError';
 import TuDietaHoy from '../components/inicio/TuDietaHoy';
+import BottomNav from '../components/BottomNav';
 
 // ===== Macro colors (identidad 12EN12) =====
 const MACRO = { protein: '#FF671F', carbs: '#2196F3', fat: '#FFA500' };
@@ -1440,7 +1441,12 @@ const NAV_ITEMS = [
     { path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina', cap: 'rutina' },
     { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
     { path: '/dashboard/foods', icon: Search, label: 'Alimentos' },
-    { path: '/dashboard/macro-calculator', icon: SlidersHorizontal, label: 'Ajustar macros' },
+    // «MIS MACROS» EN TODOS LOS PLANES (tarea 7.3 del 21-08, hueco 1c del doc de Jesús):
+    // el rótulo del menú es el nombre de la pantalla, y la pantalla la tiene todo el
+    // mundo -- el de autogestión con su calculadora, el de coach en solo lectura --.
+    // Lo que cambia por plan se decide DENTRO (macros_ajustables y ventana_revision),
+    // no escondiendo la entrada.
+    { path: '/dashboard/macro-calculator', icon: SlidersHorizontal, label: 'Mis macros' },
     { path: '/dashboard/supplements', icon: Pill, label: 'Suplementos', cap: 'suplementacion' },
     { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
     { path: '/dashboard/reports', icon: FileText, label: 'Reportes', cap: 'reportes' },
@@ -1488,16 +1494,11 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
 // =============== CLIENT LAYOUT ===============
 
 const ClientLayout = () => {
-    const { user, logout, profile, perfilNoCargado, api, can, planUnpaid, myPlan } = useAuth();
-    // «Ajustar macros» solo si de verdad puede ajustarlos (punto 6.2). Al cliente al que se los
-    // lleva su entrenador la pantalla se llama «Mis macros», y el menú tiene que decir lo mismo:
-    // un enlace que promete ajustar y lleva a una pantalla de solo lectura es la misma promesa
-    // rota que la calculadora sin botón de guardar.
-    // «MIS MACROS» SOLO LA VE QUIEN SE LOS CALCULA (doc 19-08, bloque 09). Antes al de
-    // coach se le renombraba la entrada a «Mis macros»; ahora directamente no la tiene:
-    // «para el que se los pone un entrenador, esa pestaña es un papel colgado en la
-    // pared». Su histórico vive en Seguimiento → Evolución.
-    const lesAjustaSuCoach = profile?.macros_ajustables?.puede === false;
+    const { user, logout, profile, perfilNoCargado, api, can, planUnpaid, myPlan, pantalla } = useAuth();
+    // «MIS MACROS» PARA TODOS (tarea 7.3 del 21-08). El doc 19-08 la había quitado al de
+    // coach («un papel colgado en la pared»); el hueco 1c del doc de Jesús lo revierte:
+    // la pestaña existe en todos los planes -- en solo lectura para quien no edita -- y
+    // dentro viven sus tres bloques (los de ahora, cambiarlos tú, el botón Revisar).
     // «SEGUIMIENTO» ES LA ÚNICA PUERTA, EN EL TELÉFONO Y EN EL ORDENADOR.
     //
     // El menú tenía «Reportes» y «Check-ins» como dos entradas distintas, y el cliente tenía
@@ -1516,7 +1517,6 @@ const ClientLayout = () => {
     // la pantalla, y a ella se entra desde Seguimiento.
     const navItems = NAV_ITEMS
         .filter(i => (!i.cap || can(i.cap)) && i.path !== '/dashboard/checkins')
-        .filter(i => !(i.path === '/dashboard/macro-calculator' && lesAjustaSuCoach))
         .map(i => i.path === '/dashboard/reports'
             ? { ...i, icon: TrendingUp, label: 'Seguimiento' }
             : i);
@@ -1688,6 +1688,12 @@ const ClientLayout = () => {
             </div>
 
             {/* ===== Mobile bottom nav ===== */}
+            {/* LA BARRA NUEVA DEL DOC (21-08): Inicio · Mi semana · Rutina · Más, detrás
+                del MISMO interruptor que el Inicio nuevo (t1_inicio_nuevo) para que el
+                lunes se encienda todo junto. Apagado, la barra de siempre, sin cambios. */}
+            {pantalla('t1_inicio_nuevo') ? (
+                <BottomNav items={navItems} unread={unread} />
+            ) : (
             <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-ink border-t border-white/10" data-testid="mobile-bottom-nav">
                 <div className="flex items-stretch h-16">
                     {bottomItems.map(item => (
@@ -1707,9 +1713,12 @@ const ClientLayout = () => {
                         escondía media app detrás de una palabra que no dice qué hay dentro.
                         Lo que había en el cajón vive ahora en Perfil, con su nombre.
                         El cajón sigue existiendo para el escritorio, donde es la barra
-                        lateral entera y ahí sí tiene sentido. */}
+                        lateral entera y ahí sí tiene sentido.
+                        (Con `t1_inicio_nuevo` encendido manda la barra nueva de arriba,
+                        que vuelve a traer «Más»: es lo que piden los mockups del 21-08.) */}
                 </div>
             </nav>
+            )}
 
             {/* ===== Panel de avisos (campanita) ===== */}
             {notifOpen && (

@@ -52,10 +52,13 @@ export function deriveCapabilities(habilitaciones, { rutinaVisible = false } = {
             ? !!h.edita_macros
             : h.calculadora !== 'personalizado',
         [CAP.REPORTES]: reportes.length > 0,
-        // Con entrenador o con entrenador y llamadas, sí; «solo app», no. Si el campo no
-        // viene (planes viejos sin normalizar) se deja pasar: quitarle el chat a alguien por
-        // un dato que falta es peor que enseñárselo de más.
-        [CAP.CHAT]: h.acompanamiento ? h.acompanamiento !== 'solo_app' : true,
+        // PARA TODOS LOS PLANES DE PAGO (doc 21-08, incongruencia 1b). Aquí se cerraba el
+        // Chat entero al «solo app», pero su catálogo dice «Solo incidencias técnicas»: la
+        // pantalla que se le escondía es justo la que necesita para cobros, renovación o
+        // baja, porque todos pagan. Ahora el Chat abre con dos entradas -- Mi suscripción y
+        // Algo no funciona -- y esas las tiene cualquiera con plan: `can()` ya devuelve
+        // false sin plan contratado, así que esto no le abre nada al que no paga.
+        [CAP.CHAT]: true,
     };
 }
 

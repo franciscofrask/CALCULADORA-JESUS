@@ -22,7 +22,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SlidersHorizontal, Loader2, Quote, TrendingUp } from 'lucide-react';
+import { SlidersHorizontal, Loader2, Quote, TrendingUp, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { MACRO } from './ClientDashboard';
 import HistorialDeMacros, { ultimoAjusteLegible } from '../components/HistorialDeMacros';
@@ -86,6 +86,8 @@ const MisMacrosPage = ({ onAjustar }) => {
     // el perfil. Con la lista llena, los números se rotulan «Provisionales» y se empuja a
     // la pantalla de completar datos que ya existe (?completar=1), que solo rellena huecos.
     const datosDudosos = profile?.datos_dudosos || [];
+    // La ventana del botón Revisar: {abierta, se_abre, motivo}, del servidor (tarea 7.3).
+    const ventana = profile?.ventana_revision;
 
     useEffect(() => {
         let vivo = true;
@@ -114,9 +116,10 @@ const MisMacrosPage = ({ onAjustar }) => {
                         Mis macros
                     </h1>
                     {/* LA CABECERA DEL DOC 19-08: la última revisión y la próxima, y qué se
-                        movió la última vez, en una frase que se lee. Desde el 19-08 esta
-                        pantalla es SOLO de quien se los calcula él («es su herramienta»):
-                        nada de «te los ajustamos nosotros». */}
+                        movió la última vez, en una frase que se lee. Desde la tarea 7.3
+                        del 21-08 la pantalla vuelve a ser DE TODOS los planes: el de
+                        autogestión con sus botones y el de coach en solo lectura (sin
+                        `onAjustar`, con el Revisar según su ciclo). */}
                     {(datos?.ultima_revision || datos?.proxima_revision) && (
                         <p className="text-sm text-muted-foreground mt-1" data-testid="macros-revisiones">
                             {datos?.ultima_revision && `Última revisión: ${fechaLarga(datos.ultima_revision)}`}
@@ -130,13 +133,42 @@ const MisMacrosPage = ({ onAjustar }) => {
                         </p>
                     )}
                 </div>
-                {/* Su herramienta: el ajuste está a un clic, no escondido. */}
-                {onAjustar && (
-                    <button type="button" onClick={onAjustar} data-testid="ajustar-mis-macros"
-                        className="px-4 py-2 rounded-full bg-brand text-white text-sm font-bold hover:opacity-90">
-                        Ajustar mis macros
-                    </button>
-                )}
+                {/* Los otros dos bloques de la tarea 7.3, como botones de cabecera:
+                    CAMBIARLOS TÚ (solo autogestión: `onAjustar` llega únicamente cuando
+                    macros_ajustables.puede lo permite) y el botón REVISAR de abajo. */}
+                <div className="flex flex-col items-end gap-2">
+                    {onAjustar && (
+                        <button type="button" onClick={onAjustar} data-testid="ajustar-mis-macros"
+                            className="px-4 py-2 rounded-full bg-brand text-white text-sm font-bold hover:opacity-90">
+                            Ajustar mis macros
+                        </button>
+                    )}
+                    {/* EL BOTÓN REVISAR (tarea 7.3): el cuestionario de ajuste se enciende
+                        cuando toca -- una vez al mes en autogestión, en su semana de ciclo
+                        con coach -- y se apaga cuando no. Lo decide el servidor
+                        (ventana_revision, core/ventana_revision.py). Apagado se queda
+                        VISIBLE en gris y dice cuándo se abre: un botón gris informa, uno
+                        que no está no. El cliente no pide nada: la app le abre la ventana. */}
+                    {ventana && (ventana.abierta ? (
+                        <button type="button" data-testid="boton-revisar"
+                            onClick={() => navigate('/questionnaire?ajustar=1')}
+                            className="px-4 py-2 rounded-full border border-brand text-brand text-sm font-bold hover:bg-brand/10 inline-flex items-center gap-2">
+                            <ClipboardCheck className="w-4 h-4" /> Revisar mis macros
+                        </button>
+                    ) : (
+                        <div className="text-right">
+                            <button type="button" disabled data-testid="boton-revisar"
+                                className="px-4 py-2 rounded-full border border-border bg-muted text-muted-foreground text-sm font-bold cursor-not-allowed inline-flex items-center gap-2">
+                                <ClipboardCheck className="w-4 h-4" /> Revisar mis macros
+                            </button>
+                            <p className="text-[11px] text-muted-foreground mt-1" data-testid="revisar-cuando">
+                                {ventana.se_abre
+                                    ? `Se abre el ${fechaLarga(ventana.se_abre)}`
+                                    : ventana.motivo}
+                            </p>
+                        </div>
+                    ))}
+                </div>
             </header>
 
             {cargando ? (

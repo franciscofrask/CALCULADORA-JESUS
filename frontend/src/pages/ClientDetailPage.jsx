@@ -284,12 +284,23 @@ const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
 const PdfDeRutina = ({ api, clientId, onInfo }) => {
     const [info, setInfo] = useState(null);
     const [subiendo, setSubiendo] = useState(false);
+    // LOS DOS DATOS QUE VAN CON EL PDF (tarea 7.1 del 21-08): el reparto de grupos por
+    // día de entreno («Empuje, Tirón, Pierna, Empuje») y las semanas que dura. Los pone
+    // el entrenador aquí y viajan con el PDF (db.rutina_pdfs): con ellos, la pantalla de
+    // Rutina del cliente puede decir «Semana 3 de 8» y qué grupo toca cada día.
+    const [reparto, setReparto] = useState('');
+    const [semanas, setSemanas] = useState('');
+    const [guardandoDetalles, setGuardandoDetalles] = useState(false);
 
     // `onInfo` le cuenta al padre lo que hay: el hueco de «Rutina actual» lo necesita
     // para no decir «Sin rutina asignada» cuando la rutina está entregada en PDF.
     const cargar = useCallback(() => {
         api.get(`/admin/routines/pdf/${clientId}/info`)
-            .then(r => { setInfo(r.data); onInfo?.(r.data); })
+            .then(r => {
+                setInfo(r.data); onInfo?.(r.data);
+                setReparto((r.data?.reparto || []).join(', '));
+                setSemanas(r.data?.semanas != null ? String(r.data.semanas) : '');
+            })
             .catch(() => { setInfo(null); onInfo?.(null); });
     }, [api, clientId, onInfo]);
     useEffect(() => { cargar(); }, [cargar]);
@@ -302,6 +313,11 @@ const PdfDeRutina = ({ api, clientId, onInfo }) => {
         try {
             const fd = new FormData();
             fd.append('file', f);
+            // Los dos campos van en la misma subida: se rellenan antes de elegir el
+            // archivo. Vacíos no pasan nada, el PDF se ve igual (pero la semana del
+            // cliente no sabrá decir el grupo).
+            if (reparto.trim()) fd.append('reparto', reparto.trim());
+            if (semanas.trim()) fd.append('semanas', semanas.trim());
             await api.post(`/admin/routines/pdf/${clientId}`, fd);
             toast.success('Rutina en PDF subida');
             cargar();
@@ -309,6 +325,21 @@ const PdfDeRutina = ({ api, clientId, onInfo }) => {
             toast.error(err?.response?.data?.detail || 'No se pudo subir el PDF');
         } finally {
             setSubiendo(false);
+        }
+    };
+
+    // Corregir el reparto o las semanas del PDF que ya está subido, sin resubirlo.
+    const guardarDetalles = async () => {
+        setGuardandoDetalles(true);
+        try {
+            await api.patch(`/admin/routines/pdf/${clientId}/detalles`,
+                { reparto: reparto.trim(), semanas: semanas.trim() });
+            toast.success('Reparto y semanas guardados');
+            cargar();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || 'No se pudieron guardar los detalles');
+        } finally {
+            setGuardandoDetalles(false);
         }
     };
 
@@ -322,7 +353,7 @@ const PdfDeRutina = ({ api, clientId, onInfo }) => {
     return (
         <Card className="bg-[#111] border-[#222]" data-testid="pdf-rutina">
             <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Rutina en PDF</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
                 {info?.hay ? (
                     <p className="text-xs text-white/60">
                         {info.filename} · subida el {new Date(info.uploaded_at).toLocaleDateString('es-ES')}
@@ -331,11 +362,37 @@ const PdfDeRutina = ({ api, clientId, onInfo }) => {
                 ) : (
                     <p className="text-xs text-white/40">Todavía no hay ninguna. El cliente verá la última que subas.</p>
                 )}
-                <label className="inline-flex items-center gap-2 text-xs text-white bg-[#0A0A0A] border border-[#333] rounded-lg px-3 py-2 cursor-pointer hover:border-[#FF671F]/50">
-                    {subiendo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                    {info?.hay ? 'Subir una nueva' : 'Subir PDF'}
-                    <input type="file" accept="application/pdf" className="hidden" onChange={subir} data-testid="input-pdf-rutina" />
-                </label>
+                <div className="grid grid-cols-[1fr_92px] gap-2">
+                    <div>
+                        <Label className="text-white/60 text-xs">Reparto por día de entreno</Label>
+                        <Input value={reparto} onChange={e => setReparto(e.target.value)}
+                            placeholder="Empuje, Tirón, Pierna, Empuje"
+                            className="bg-[#0A0A0A] border-[#333] text-white mt-1 text-xs" data-testid="pdf-rutina-reparto" />
+                    </div>
+                    <div>
+                        <Label className="text-white/60 text-xs">Semanas</Label>
+                        <Input type="number" min="1" max="52" value={semanas} onChange={e => setSemanas(e.target.value)}
+                            placeholder="8"
+                            className="bg-[#0A0A0A] border-[#333] text-white mt-1 text-xs" data-testid="pdf-rutina-semanas" />
+                    </div>
+                </div>
+                <p className="text-[10px] text-white/30">
+                    Separado por comas y en el orden de sus días de entreno. Los días de la semana los elige el cliente en su alta.
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <label className="inline-flex items-center gap-2 text-xs text-white bg-[#0A0A0A] border border-[#333] rounded-lg px-3 py-2 cursor-pointer hover:border-[#FF671F]/50">
+                        {subiendo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                        {info?.hay ? 'Subir una nueva' : 'Subir PDF'}
+                        <input type="file" accept="application/pdf" className="hidden" onChange={subir} data-testid="input-pdf-rutina" />
+                    </label>
+                    {info?.hay && (
+                        <button onClick={guardarDetalles} disabled={guardandoDetalles} data-testid="pdf-rutina-guardar-detalles"
+                            className="inline-flex items-center gap-2 text-xs text-white bg-[#0A0A0A] border border-[#333] rounded-lg px-3 py-2 hover:border-[#FF671F]/50 disabled:opacity-50">
+                            {guardandoDetalles ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                            Guardar reparto y semanas
+                        </button>
+                    )}
+                </div>
             </CardContent>
         </Card>
     );

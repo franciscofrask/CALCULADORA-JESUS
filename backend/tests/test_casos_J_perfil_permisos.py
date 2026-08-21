@@ -88,19 +88,28 @@ def _capacidades(habilitaciones: dict) -> dict:
 
     h = habilitaciones or {}
     reportes = h.get("reportes") or []
+    # Espejo de `suplementacionIncluida`: los tres valores del doc 19-08 («ninguna» es un
+    # texto y un texto es truthy), tolerando el booleano viejo de los overrides.
+    supl = h.get("suplementacion")
+    if isinstance(supl, str):
+        supl_incluida = supl.strip().lower() in ("guia", "guía", "protocolo")
+    else:
+        supl_incluida = bool(supl)
     return {
         # La Rutina depende del interruptor `t3_entreno` del panel además de del plan (T3
         # del doc 16-08). Aquí se mira su valor POR DEFECTO, que es lo que se puede saber
         # leyendo el código; encenderlo en el panel la abre a quien tenga rutina en su plan.
         "rutina": (PANTALLAS["t3_entreno"] and bool(h.get("rutina"))
                    and h.get("rutina") != "ninguna"),
-        "suplementacion": bool(h.get("suplementacion")),
+        "suplementacion": supl_incluida,
         "macros_personalizados": h.get("calculadora") == "personalizado",
         "reportes": len(reportes) > 0,
         "harbiz": bool(h.get("harbiz")),
-        # Si el plan no dice nada de acompañamiento se deja pasar: quitarle el chat a
-        # alguien por un dato que falta es peor que enseñárselo de más.
-        "chat": (h["acompanamiento"] != "solo_app") if h.get("acompanamiento") else True,
+        # PARA TODOS LOS PLANES DE PAGO (doc 21-08, incongruencia 1b): el Chat abre con
+        # dos entradas y la de «Mi suscripción» la necesitan todos, porque todos pagan.
+        # Sin plan contratado `can()` devuelve false, así que esto no abre nada al que
+        # no paga.
+        "chat": True,
     }
 
 
@@ -123,9 +132,9 @@ def test_las_reglas_del_front_siguen_siendo_estas():
     """Cerrojo del espejo de arriba: si cambian las reglas de planAccess.js, esto avisa."""
     src = _fuente("lib", "planAccess.js")
     for regla in ("[CAP.RUTINA]: !!rutinaVisible && !!h.rutina && h.rutina !== 'ninguna'",
-                  "[CAP.SUPLEMENTACION]: !!h.suplementacion",
+                  "[CAP.SUPLEMENTACION]: suplementacionIncluida(h)",
                   "[CAP.REPORTES]: reportes.length > 0",
-                  "h.acompanamiento ? h.acompanamiento !== 'solo_app' : true"):
+                  "[CAP.CHAT]: true"):
         assert regla in src, (
             f"cambió una regla de deriveCapabilities ({regla}): actualiza `_capacidades` "
             "en este fichero o los casos 67-69 dejan de probar lo que creen")
@@ -254,37 +263,39 @@ def test_66_nunca_se_le_dice_no_definida(cabeceras_cliente):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 67. [CRITICO] Entrar con un plan que no incluye chat.
+# 67. [CRITICO] El Chat, con cualquier plan de pago.
+#
+# EL CASO SE DIO LA VUELTA EL 21-08 (incongruencia 1b del doc de Jesús): el caso 67
+# original («un plan sin chat no enseña la pantalla») escondía el Chat entero al plan
+# «solo app», y con él la única vía para preguntar por cobros, renovación o baja -- que
+# su propio catálogo promete («Solo incidencias técnicas»). Decisión del doc: «la de
+# Mi suscripción la necesitan todos los planes, porque todos pagan». El Chat abre ahora
+# con dos entradas (Mi suscripción · Algo no funciona) y es visible para todos.
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_67_un_plan_sin_chat_no_ensena_la_pantalla_de_chat(
+def test_67_el_chat_se_ensena_tambien_al_plan_solo_app(
         cabeceras_admin, cabeceras_cliente, plan_del_cliente):
-    """Se le quita el entrenador al plan (acompanamiento «solo app») y se mira el menú.
-
-    El Chat sale del `acompanamiento`: un plan sin entrenador detrás no puede ofrecer una
-    conversación con una persona que no existe.
-    """
+    """Se le quita el entrenador al plan (acompanamiento «solo app») y el Chat SIGUE en
+    el menú: por él entran «Mi suscripción» y «Algo no funciona», y esas son de todos."""
     with plan_sin(plan_del_cliente, cabeceras_admin, acompanamiento="solo_app"):
         plan = _catalogo_del_cliente(cabeceras_cliente, plan_del_cliente)
         caps = _capacidades(plan["habilitaciones"])
-        assert caps["chat"] is False, (
-            "al cliente le sigue llegando la capacidad de chat con un plan «solo app»")
+        assert caps["chat"] is True, (
+            "a un plan «solo app» se le vuelve a esconder el Chat: sin él no tiene por "
+            "dónde preguntar por su dinero (doc 21-08, incongruencia 1b)")
         menu = _menu_del_cliente(plan["habilitaciones"])
-        assert "Chat" not in menu, f"el Chat sigue en el menú: {menu}"
+        assert "Chat" in menu, f"el Chat no está en el menú del plan «solo app»: {menu}"
 
 
-def test_67_el_chat_tambien_esta_cerrado_por_detras(
+def test_67_el_chat_tambien_esta_abierto_por_detras(
         cabeceras_admin, cabeceras_cliente, plan_del_cliente):
-    """Y que no baste con esconder la entrada: quitada la capacidad, el servidor tampoco
-    puede dejarle escribir a un entrenador que su plan no incluye."""
+    """Y el servidor tampoco se lo cierra: `GET /messages` (la que abre la pantalla del
+    cliente) contesta a un plan «solo app», porque ese cliente también paga."""
     with plan_sin(plan_del_cliente, cabeceras_admin, acompanamiento="solo_app"):
-        # `GET /messages` es la que abre la pantalla de Chat del cliente (la de
-        # `/conversations` es la bandeja del equipo, y esa ya es solo de staff).
         r = requests.get(f"{API}/messages", headers=cabeceras_cliente, timeout=30)
-        assert r.status_code in (402, 403), (
-            f"el chat responde {r.status_code} a un plan que no lo incluye: la pantalla "
-            "está escondida en el menú pero la API sigue abierta. Ninguna ruta de "
-            "`routes/messages.py` pasa por `require_access`.")
+        assert r.status_code == 200, (
+            f"el chat responde {r.status_code} a un plan «solo app»: la entrada de "
+            "«Mi suscripción» es de todos los planes de pago (doc 21-08)")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -328,6 +328,10 @@ class MessageCreate(BaseModel):
     # cliente o al primer admin (ver _resolve_receiver en routes/messages.py).
     receiver_id: Optional[str] = None
     content: str
+    # Por cuál de las dos entradas del Chat entró el mensaje (doc 21-08, apartados 13
+    # y 20): "suscripcion" (cobros, renovación, baja) o "tecnico" (algo no funciona).
+    # Opcional por compatibilidad: sin canal, el mensaje es como los de siempre.
+    canal: Optional[str] = None
 
 class MessageResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -337,6 +341,8 @@ class MessageResponse(BaseModel):
     content: str
     read: bool = False
     created_at: str
+    # "suscripcion" | "tecnico" | None (mensajes de antes de las dos entradas, o del staff).
+    canal: Optional[str] = None
 
 # Payment Models (Mocked)
 class PaymentResponse(BaseModel):

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { plural } from '../lib/labels';
 import {
     Dumbbell, Repeat, ChevronDown, ChevronUp, History,
-    Flame, Moon, Play, Timer, Trophy, ChevronRight, FileText
+    Flame, Moon, Play, Timer, Trophy, ChevronRight, FileText, Check
 } from 'lucide-react';
 
 const DAYS_ES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
@@ -21,6 +21,142 @@ const Wrap = ({ children }) => (
     <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1200px] mx-auto animate-fade-in" data-testid="routine-page">{children}</div>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LA SEMANA DE LA RUTINA (tarea 7.1 del 21-08, apartados 12 y 19 del doc de Jesús).
+// Con el reparto que puso el entrenador al subir el PDF y los días que eligió el
+// cliente en su alta, esto dice «Rutina #2 · Semana 3 de 8 · 4 días», pinta la tira de
+// lunes a domingo con el grupo o el descanso, y el «Hoy · jueves · Empuje» con MARCAR.
+// El descanso es un estado, no un fallo: «Hoy no entrenas», sin rojo y sin pedir nada.
+// A nivel de módulo por lo mismo que Wrap: definido dentro se remonta en cada render.
+// ─────────────────────────────────────────────────────────────────────────────
+const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, onRecuperar, marcando }) => {
+    // El selector del día para recuperar: null = cerrado.
+    const [eligiendoDia, setEligiendoDia] = useState(false);
+    if (!semana?.hay) return null;
+
+    const { numero, semanas, semana_actual, dias_de_entreno, dias, hoy, pendiente, puede_marcar } = semana;
+    const cab = [
+        numero ? `Rutina #${numero}` : 'Tu rutina',
+        semana_actual ? (semanas ? `Semana ${Math.min(semana_actual, semanas)} de ${semanas}` : `Semana ${semana_actual}`) : null,
+        plural(dias_de_entreno, 'día'),
+    ].filter(Boolean).join(' · ');
+
+    // Los días de descanso donde aún se puede recuperar: de hoy en adelante.
+    const diasParaRecuperar = dias.filter(d => !d.entrena && d.fecha >= hoy.fecha);
+
+    return (
+        <div className="space-y-3 max-w-2xl" data-testid="semana-rutina">
+            {/* Cabecera: qué rutina es, por qué semana va y el PDF a un toque. */}
+            <div className="surface p-4 flex items-center justify-between gap-3 flex-wrap">
+                <p className="font-bold text-foreground text-sm" data-testid="semana-rutina-cabecera">{cab}</p>
+                {tienePdf && (
+                    <button onClick={abrirPdf} data-testid="semana-rutina-pdf"
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline underline-offset-4">
+                        <FileText className="w-4 h-4" /> Abrir el PDF
+                    </button>
+                )}
+            </div>
+
+            {/* La tira de la semana: L a D con el grupo o la luna del descanso. */}
+            <div className="grid grid-cols-7 gap-1.5" data-testid="semana-rutina-tira">
+                {dias.map(d => (
+                    <div key={d.fecha} data-testid={`semana-dia-${d.fecha}`}
+                        className={`rounded-xl border px-1 py-2 text-center min-w-0
+                            ${d.hoy ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}>
+                        <p className={`text-[10px] font-bold uppercase ${d.hoy ? 'text-brand' : 'text-muted-foreground'}`}>
+                            {DAY_LABELS[d.dia]}
+                        </p>
+                        <div className="mt-1 h-8 flex flex-col items-center justify-center">
+                            {d.entrena ? (
+                                <>
+                                    <p className="text-[9px] font-semibold text-foreground leading-tight truncate w-full px-0.5"
+                                        title={d.grupo}>{d.grupo}</p>
+                                    {d.hecho ? <Check className="w-3 h-3 text-emerald-500 mt-0.5" />
+                                        : d.recuperado_en ? <span className="text-[8px] text-muted-foreground">→ otro día</span>
+                                        : null}
+                                </>
+                            ) : (
+                                <Moon className="w-3.5 h-3.5 text-muted-foreground/60" />
+                            )}
+                        </div>
+                        {d.recuperacion && <p className="text-[8px] text-brand font-semibold">recup.</p>}
+                    </div>
+                ))}
+            </div>
+
+            {/* Hoy: el grupo con su MARCAR, o el descanso dicho en paz. */}
+            {hoy.entrena ? (
+                <div className="surface p-4 flex items-center justify-between gap-3" data-testid="semana-rutina-hoy">
+                    <div>
+                        <p className="caption">Hoy · {hoy.dia}</p>
+                        <p className="font-heading text-xl font-bold uppercase text-foreground leading-tight">{hoy.grupo}</p>
+                    </div>
+                    {puede_marcar && (hoy.hecho ? (
+                        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-emerald-500">
+                            <Check className="w-4 h-4" /> Hecho
+                        </span>
+                    ) : (
+                        <button onClick={() => onMarcarHoy(hoy)} disabled={marcando} data-testid="semana-rutina-marcar"
+                            className="btn-brand px-5 py-2.5 font-bold text-sm disabled:opacity-60">
+                            Marcar
+                        </button>
+                    ))}
+                </div>
+            ) : (
+                <div className="surface p-4 flex items-center gap-3" data-testid="semana-rutina-hoy">
+                    <Moon className="w-5 h-5 text-violet-400 flex-shrink-0" />
+                    <div>
+                        <p className="caption">Descanso</p>
+                        <p className="font-semibold text-foreground text-sm">Hoy no entrenas.</p>
+                    </div>
+                </div>
+            )}
+
+            {/* El que se dejó: se pregunta, no se riñe. «No se puede mover. Si se ha
+                perdido, se recupera otro día» (decisión del apartado 12). */}
+            {pendiente && (
+                <div className="surface border-brand/30 p-4 space-y-3" data-testid="semana-rutina-pendiente">
+                    <p className="text-sm text-foreground">
+                        El {pendiente.dia} te dejaste <span className="font-bold">{pendiente.grupo}</span>.
+                    </p>
+                    {eligiendoDia ? (
+                        <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">¿Qué día de descanso lo recuperas?</p>
+                            <div className="flex gap-2 flex-wrap">
+                                {diasParaRecuperar.map(d => (
+                                    <button key={d.fecha} disabled={marcando}
+                                        onClick={() => { setEligiendoDia(false); onRecuperar(pendiente, d); }}
+                                        data-testid={`semana-recuperar-${d.fecha}`}
+                                        className="px-3 py-2 rounded-xl border border-border bg-card text-sm font-semibold text-foreground hover:border-brand/50 capitalize disabled:opacity-60">
+                                        {d.dia}
+                                    </button>
+                                ))}
+                                <button onClick={() => setEligiendoDia(false)}
+                                    className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
+                                    Atrás
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2 flex-wrap">
+                            <button onClick={() => onSiLoHice(pendiente)} disabled={marcando} data-testid="semana-si-lo-hice"
+                                className="px-4 py-2 rounded-xl border border-emerald-500/50 text-emerald-500 text-sm font-bold hover:bg-emerald-500/10 disabled:opacity-60">
+                                Sí lo hice
+                            </button>
+                            {diasParaRecuperar.length > 0 && (
+                                <button onClick={() => setEligiendoDia(true)} disabled={marcando} data-testid="semana-recuperar-otro-dia"
+                                    className="px-4 py-2 rounded-xl border border-border text-foreground text-sm font-bold hover:border-brand/50 disabled:opacity-60">
+                                    Recuperarlo otro día
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const RoutinePage = () => {
     const { api } = useAuth();
     const [routine, setRoutine] = useState(null);
@@ -36,6 +172,52 @@ const RoutinePage = () => {
     useEffect(() => {
         api.get('/routines/pdf/info').then(r => setPdfInfo(r.data?.hay ? r.data : null)).catch(() => {});
     }, [api]);
+
+    // La semana de la rutina (7.1 del 21-08): reparto del PDF + días del cliente. Se
+    // pide aparte de /routines/current por lo mismo que el PDF: una no tapa a la otra.
+    const [semana, setSemana] = useState(null);
+    const [marcando, setMarcando] = useState(false);
+    const cargarSemana = React.useCallback(() => {
+        api.get('/routines/semana').then(r => setSemana(r.data?.hay ? r.data : null)).catch(() => {});
+    }, [api]);
+    useEffect(() => { cargarSemana(); }, [cargarSemana]);
+
+    // MARCAR el entreno de hoy: el check de T3, por el endpoint de siempre
+    // (workout_logs). Marcar aquí y en la pantalla de Entreno escriben la misma fila.
+    const marcarHoy = async (hoy) => {
+        setMarcando(true);
+        try {
+            await api.post('/workout-logs', {
+                hecho: true, tipo: 'entreno', estrellas: null, nota: null,
+                pesos: [], compartida: false, dia_rutina: hoy.grupo || null,
+            });
+            toast.success('Entreno marcado.');
+            cargarSemana();
+        } catch { toast.error('No hemos podido marcar tu entreno. Inténtalo en un momento.'); }
+        finally { setMarcando(false); }
+    };
+
+    // «Sí lo hice»: el día de esta semana que se quedó sin marcar.
+    const siLoHice = async (pendiente) => {
+        setMarcando(true);
+        try {
+            await api.post('/routines/semana/hecho', { fecha: pendiente.fecha, grupo: pendiente.grupo });
+            toast.success('Apuntado.');
+            cargarSemana();
+        } catch { toast.error('No hemos podido apuntarlo. Inténtalo en un momento.'); }
+        finally { setMarcando(false); }
+    };
+
+    // «Recuperarlo otro día»: no se mueve, se recupera en un día de descanso.
+    const recuperar = async (pendiente, dia) => {
+        setMarcando(true);
+        try {
+            await api.post('/routines/semana/recuperar', { fecha_original: pendiente.fecha, fecha: dia.fecha });
+            toast.success(`${pendiente.grupo} pasa al ${dia.dia}.`);
+            cargarSemana();
+        } catch { toast.error('No hemos podido apuntar la recuperación. Inténtalo en un momento.'); }
+        finally { setMarcando(false); }
+    };
 
     // Se abre vía blob porque el visor del navegador no manda el token (mismo camino que
     // EntrenoPage).
@@ -83,7 +265,13 @@ const RoutinePage = () => {
     if (!routine) {
         return <Wrap>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-6" data-testid="routine-heading">Mi rutina</h1>
-            {pdfInfo ? (
+            {pdfInfo && semana?.hay ? (
+                /* Con PDF y con la semana montada (reparto + días del cliente): la
+                   pantalla completa del apartado 12: cabecera, tira, hoy y lo pendiente. */
+                <SemanaDeRutina semana={semana} abrirPdf={abrirPdf} tienePdf
+                    onMarcarHoy={marcarHoy} onSiLoHice={siLoHice} onRecuperar={recuperar}
+                    marcando={marcando} />
+            ) : pdfInfo ? (
                 /* Sin rutina estructurada pero CON PDF: esa ES su rutina, no un «sin
                    rutina asignada». Se enseña con su botón para abrirla. */
                 <div className="surface p-10 text-center" data-testid="routine-content">
@@ -135,6 +323,12 @@ const RoutinePage = () => {
                 </div>
             ) : (
                 <div className="space-y-5">
+                    {/* La semana (7.1 del 21-08): también con rutina estructurada, que
+                        es la que pone los grupos si el PDF no trae reparto. */}
+                    <SemanaDeRutina semana={semana} abrirPdf={abrirPdf} tienePdf={!!pdfInfo}
+                        onMarcarHoy={marcarHoy} onSiLoHice={siLoHice} onRecuperar={recuperar}
+                        marcando={marcando} />
+
                     {/* Stats */}
                     <div className="grid grid-cols-3 gap-3 sm:gap-4 max-w-2xl">
                         <StatCard value={trainingDays} label="Días entreno" color={MACRO_O} icon={Dumbbell} testId="stat-training-days" />

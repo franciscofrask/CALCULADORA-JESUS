@@ -1095,6 +1095,10 @@ class ClientProfile(BaseModel):
     # campo `habilitaciones.calculadora` del plan, que existia y no lo miraba nadie al
     # guardar: un cliente de plan personalizado podia machacar los de su entrenador.
     macros_ajustables: Optional[Dict[str, Any]] = None
+    # La ventana del boton «Revisar» de Mis macros (tarea 7.3 del 21-08): {abierta,
+    # se_abre, motivo}. La calcula core/ventana_revision al leer el perfil: una vez al mes
+    # en autogestion, cuando toca su ciclo en los planes con coach, cerrada en el resto.
+    ventana_revision: Optional[Dict[str, Any]] = None
     # Su entrenador, con nombre (punto 4.16): {id, nombre}. El cliente no tenia forma de
     # saberlo -- el listado del equipo es solo para admins -- y el chat le decia "Tu
     # Entrenador" en abstracto.
@@ -1147,6 +1151,10 @@ class ClientProfile(BaseModel):
     # entrenamiento lo llevo aparte").
     training_notes: Optional[str] = None
     training_days: Optional[int] = None
+    # QUÉ DÍAS entrena (7.1 del 21-08): nombres de día («lunes»...). `List[Any]` a
+    # propósito: en la base quedan filas heredadas de Calma con enteros, y tiparlo a str
+    # rompería el GET del perfil de esa gente sin arreglar nada.
+    training_weekdays: Optional[List[Any]] = None
     # Cuestionario inicial obligatorio (ELM): respuestas y flag de completado.
     questionnaire_completed: Optional[bool] = None
     birthdate: Optional[str] = None
@@ -1403,6 +1411,11 @@ class QuestionnaireSubmit(BaseModel):
     goal: str  # "volumen" | "definicion"
     sex: Optional[str] = None  # "hombre" | "mujer"
     training_experience: Optional[str] = None  # cero | principiante | intermedio | avanzado
+    # QUÉ DÍAS DE LA SEMANA ENTRENA (tarea 7.1 del 21-08). Los pone el cliente en el alta
+    # porque dependen de su vida, no de la rutina: con ellos y el reparto del PDF la app
+    # sabe qué grupo toca cada día. Nombres de día («lunes», «miercoles»...), no números:
+    # los enteros heredados de Calma en este campo no tienen semántica verificable.
+    training_weekdays: Optional[List[str]] = None
     birthdate: Optional[str] = None  # YYYY-MM-DD
     # CON RANGO, y por lo que costo verlo (18-08): sin el, una altura de 80 se GUARDABA en la
     # ficha y el error saltaba despues, al devolver el perfil ya escrito -- ese si valida --,

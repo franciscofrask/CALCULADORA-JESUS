@@ -1,15 +1,40 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { toast } from 'sonner';
-import { Send, MessageCircle, User, Check, CheckCheck } from 'lucide-react';
+import {
+    Send, MessageCircle, User, Check, CheckCheck, ChevronRight, ArrowLeft,
+    CreditCard, Wrench
+} from 'lucide-react';
+
+// EL CHAT CON DOS ENTRADAS (doc del 21-08, apartados 13 y 20).
+//
+// Antes esta pantalla era una sola conversación para todo, y eso producía la
+// contradicción del catálogo: al plan Calculadora se le decía «Solo incidencias
+// técnicas» pero se le escondía el chat entero, y con él la única vía para preguntar
+// por su dinero. Ahora se entra eligiendo de qué va la cosa, y cada entrada abre la
+// conversación de siempre etiquetada con su canal:
+//
+//   - «Mi suscripción»: cobros, renovación, cambio de plan o baja. Contesta el equipo.
+//     La promesa de plazo del plan (`tiempo_respuesta`) SE QUEDA aquí: hay dinero de
+//     por medio.
+//   - «Algo no funciona»: la app no carga, no guarda... SIN promesa de 24 horas: lo
+//     que el doc quiere ahí es un respondedor automático con el equipo detrás, y eso
+//     es un agente aparte que no es de hoy.
+//
+// El canal viaja con cada mensaje al backend («suscripcion» | «tecnico») y el panel
+// de Mensajes del equipo lo enseña como chip.
+const CANAL = {
+    suscripcion: { etiqueta: 'Mi suscripción', detalle: 'Cobros, renovación, cambio de plan o baja', icono: CreditCard },
+    tecnico: { etiqueta: 'Algo no funciona', detalle: 'La app no carga, no me guarda, no encuentro dónde se hace', icono: Wrench },
+};
 
 const MessagesPage = () => {
-    const { api, user, profile } = useAuth();
+    const { api, user, profile, habilitaciones } = useAuth();
+    const [canal, setCanal] = useState(null); // null = pantalla de las dos entradas
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
@@ -19,12 +44,22 @@ const MessagesPage = () => {
 
     const trainerId = profile?.trainer_id || 'support';
 
+    // El Premium habla de lo suyo con su entrenador por WhatsApp. Sale del CATÁLOGO
+    // (habilitaciones.acompanamiento), jamás del nombre del plan: un plan legacy con
+    // llamadas también lo es. El Gold pregunta entre reportes por «Algo no funciona»
+    // sin texto especial: basta con no bloquearle.
+    const seguimientoPorWhatsapp = habilitaciones?.acompanamiento === 'con_entrenador_y_llamadas';
+
     useEffect(() => {
+        // La conversación solo se carga (y solo se marca como leída) cuando se entra
+        // por una de las dos puertas: leer por debajo de la pantalla de entrada
+        // marcaría como vistos mensajes que nadie vio.
+        if (!canal) return;
         fetchMessages();
         const interval = setInterval(fetchMessages, 5000);
         return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- repoll al cambiar trainerId
-    }, [trainerId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- repoll al cambiar trainerId o canal
+    }, [trainerId, canal]);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -36,7 +71,7 @@ const MessagesPage = () => {
         try {
             const response = await api.get(`/messages?with_user=${trainerId}`);
             setMessages(response.data.reverse());
-            
+
             response.data.forEach(async (msg) => {
                 if (!msg.read && msg.receiver_id === user.id) {
                     await api.put(`/messages/${msg.id}/read`);
@@ -52,12 +87,15 @@ const MessagesPage = () => {
     const handleSend = async (e) => {
         e.preventDefault();
         if (!newMessage.trim()) return;
-        
+
         setSending(true);
         try {
             await api.post('/messages', {
                 receiver_id: trainerId,
-                content: newMessage.trim()
+                content: newMessage.trim(),
+                // La etiqueta de la puerta por la que entró: es lo que el equipo ve
+                // como chip en su bandeja.
+                canal,
             });
             setNewMessage('');
             fetchMessages();
@@ -73,7 +111,7 @@ const MessagesPage = () => {
         const date = new Date(dateString);
         const now = new Date();
         const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-        
+
         if (diffDays === 0) {
             return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         } else if (diffDays === 1) {
@@ -83,6 +121,52 @@ const MessagesPage = () => {
         }
     };
 
+    // ─── La pantalla de entrada: «¿Con qué te ayudamos?» ───────────────────────
+    // Tarjetas como las del Inicio (mockup del apartado 20 del doc).
+    if (!canal) {
+        return (
+            <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-4 animate-fade-in bg-background" data-testid="chat-entradas">
+                <div>
+                    <h1 className="text-xl font-bold text-foreground uppercase tracking-wider" data-testid="messages-heading">
+                        ¿Con qué te ayudamos?
+                    </h1>
+                </div>
+                {Object.entries(CANAL).map(([clave, c]) => (
+                    <button key={clave} onClick={() => { setLoading(true); setCanal(clave); }}
+                        data-testid={`entrada-${clave}`}
+                        className="surface surface-hover group w-full p-4 flex items-center gap-4 text-left">
+                        <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <c.icono className="w-5 h-5 text-brand" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="font-bold text-foreground text-sm">{c.etiqueta}</p>
+                            <p className="text-muted-foreground text-sm">{c.detalle}</p>
+                        </div>
+                        <span className="flex items-center gap-1 text-sm font-semibold text-brand flex-shrink-0">
+                            Escribir <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                    </button>
+                ))}
+                {/* El Premium no pregunta por aquí lo suyo: lo suyo va por WhatsApp con su
+                    entrenador, como siempre. Es una tarjeta informativa, no una puerta. */}
+                {seguimientoPorWhatsapp && (
+                    <div className="surface w-full p-4 flex items-center gap-4" data-testid="entrada-seguimiento">
+                        <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <MessageCircle className="w-5 h-5 text-brand" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="font-bold text-foreground text-sm">Tu seguimiento</p>
+                            <p className="text-muted-foreground text-sm">
+                                Para lo tuyo - dieta, entreno, cómo vas - hablas con tu entrenador por WhatsApp, como siempre.
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // ─── La conversación de siempre, etiquetada con su canal ───────────────────
     if (loading) {
         return (
             <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex items-center justify-center bg-background">
@@ -95,31 +179,39 @@ const MessagesPage = () => {
         <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-2rem)] flex flex-col animate-fade-in bg-background">
             {/* Header */}
             <div className="p-4 border-b border-border flex items-center gap-3 bg-card" data-testid="messages-content">
+                <button onClick={() => setCanal(null)} data-testid="volver-entradas"
+                    className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                    aria-label="Volver a elegir con qué te ayudamos">
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
                 {/* La inicial de su entrenador, no un muñeco de dicebear (punto 4.18). */}
                 <Avatar className="border-2 border-[#FF671F]">
                     <AvatarFallback className="bg-[#FF671F] text-white font-bold">
                         {profile?.entrenador?.nombre?.charAt(0)?.toUpperCase() || <User className="w-4 h-4" />}
                     </AvatarFallback>
                 </Avatar>
-                <div>
+                <div className="min-w-0">
                     {/* SU NOMBRE, NO «Tu Entrenador» (punto 4.16). Hablar con la persona que
                         te lleva no puede parecerse a un formulario de soporte. El nombre lo
                         da el servidor en el perfil: el cliente no tiene acceso al listado
                         del equipo. */}
-                    <h2 className="font-bold text-foreground uppercase tracking-wider" data-testid="messages-heading">
-                        {profile?.entrenador?.nombre || '12EN12'}
-                    </h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="font-bold text-foreground uppercase tracking-wider" data-testid="messages-heading">
+                            {profile?.entrenador?.nombre || '12EN12'}
+                        </h2>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand/10 text-brand flex-shrink-0"
+                            data-testid="chip-canal">
+                            {CANAL[canal].etiqueta}
+                        </span>
+                    </div>
                     {/* DEBAJO DEL NOMBRE, CUÁNTO SE TARDA EN CONTESTAR.
-                        Aquí ponía «Tu entrenador» otra vez, repitiendo el puesto debajo del
-                        nombre. Lo que de verdad falta es el plazo: sin él, la mitad de los
-                        mensajes son «¿hay alguien?» (Jesús, 11-08). Y al plan de 897 € se le
-                        vende un chat con una persona: decir cuándo responde es parte de eso.
-                        EL PLAZO ES EL DE SU PLAN (tarea 1.5): aquí ponía «menos de 24 horas»
-                        fijo para todos, y eso solo lo promete el catálogo en los planes con
-                        chat de dudas. Lo trae el perfil (`tiempo_respuesta`); si su plan no
-                        promete plazo, la línea no se pinta -- prometer de más es peor que
-                        no decir nada. */}
-                    {profile?.tiempo_respuesta && (
+                        EL PLAZO ES EL DE SU PLAN (tarea 1.5): lo trae el perfil
+                        (`tiempo_respuesta`); si su plan no promete plazo, la línea no se
+                        pinta -- prometer de más es peor que no decir nada.
+                        Y SOLO EN «MI SUSCRIPCIÓN» (doc 21-08): la promesa de tiempo de
+                        respuesta se queda donde hay dinero de por medio. En «Algo no
+                        funciona» no se promete plazo ninguno. */}
+                    {canal === 'suscripcion' && profile?.tiempo_respuesta && (
                         <p className="text-xs text-[#FF671F]">Te respondemos en {profile.tiempo_respuesta}</p>
                     )}
                 </div>
@@ -151,7 +243,7 @@ const MessagesPage = () => {
                                                 {formatTime(msg.created_at)}
                                             </span>
                                             {isOwn && (
-                                                msg.read 
+                                                msg.read
                                                     ? <CheckCheck className="w-3 h-3 text-[#FF671F]" />
                                                     : <Check className="w-3 h-3 text-foreground/40" />
                                             )}
@@ -201,9 +293,9 @@ const MessagesPage = () => {
                         disabled={sending}
                         data-testid="message-input"
                     />
-                    <Button 
-                        type="submit" 
-                        size="icon" 
+                    <Button
+                        type="submit"
+                        size="icon"
                         disabled={sending || !newMessage.trim()}
                         className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white"
                         data-testid="send-message-btn"

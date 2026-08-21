@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Pill, Clock, Beaker, Link2, CalendarClock, StickyNote } from 'lucide-react';
+import { Pill, Clock, Beaker, Link2, CalendarClock, StickyNote, ChevronRight, ChevronLeft, Copy, Check } from 'lucide-react';
 
 const Wrap = ({ children }) => (
     <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1100px] mx-auto animate-fade-in" data-testid="supplements-page">{children}</div>
@@ -50,7 +50,7 @@ const SupplementCard = ({ item }) => {
                     {item.enlaces.map((url, i) => (
                         <a key={i} href={url} target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-semibold">
-                            <Link2 className="w-3 h-3" /> Enlace {item.enlaces.length > 1 ? i + 1 : ''}
+                            <Link2 className="w-3 h-3" /> Dónde encontrarlo {item.enlaces.length > 1 ? i + 1 : ''}
                         </a>
                     ))}
                 </div>
@@ -87,7 +87,7 @@ const LineaSuplemento = ({ item }) => {
                         {item.enlaces.map((url, i) => (
                             <a key={i} href={url} target="_blank" rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-semibold">
-                                <Link2 className="w-3 h-3" /> Dónde comprarlo {item.enlaces.length > 1 ? i + 1 : ''}
+                                <Link2 className="w-3 h-3" /> Dónde encontrarlo {item.enlaces.length > 1 ? i + 1 : ''}
                             </a>
                         ))}
                     </div>
@@ -129,7 +129,7 @@ const FichaDeLaGuia = ({ ficha }) => {
                         {ficha.enlaces.map((e, i) => (
                             <a key={i} href={e.url || e} target="_blank" rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-semibold">
-                                <Link2 className="w-3 h-3" /> Dónde comprarlo
+                                <Link2 className="w-3 h-3" /> Dónde encontrarlo
                             </a>
                         ))}
                     </div>
@@ -140,21 +140,65 @@ const FichaDeLaGuia = ({ ficha }) => {
 };
 
 /**
- * LA GUÍA ENTERA (doc 19-08): las ocho categorías con su filtro y su orden, la ficha de
- * cada suplemento, el descuento, y el remate que toque por plan (el aviso del plan
- * personalizado o la oferta de los 87). La guía habla en singular porque es de Jesús;
- * el aviso y la oferta en plural, porque los hace el equipo.
+ * EL DESCUENTO, CON EL TEXTO QUE DICTÓ JESÚS EL 21-08 (apartado 10 de su doc), tal cual.
+ * Antes era una línea recompuesta con los campos («GALLEGOVIP · 20 % de descuento en
+ * FullGas...») y solo salía dentro de la guía: ahora el texto es el suyo, el código se
+ * copia con un toque, y sale también en la pantalla del protocolo, que no lo tenía.
  */
-const GuiaDeSuplementacion = ({ api, guia }) => {
-    const [filtro, setFiltro] = useState('todo');
+const Descuento = () => {
+    const [copiado, setCopiado] = useState(false);
+    const copiar = async () => {
+        try {
+            await navigator.clipboard.writeText('GALLEGOVIP');
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 2000);
+        } catch (e) {
+            // Sin permiso de portapapeles el código sigue a la vista: no pasa nada.
+            console.error('No se pudo copiar el código de descuento', e);
+        }
+    };
+    return (
+        <div className="surface p-4 border-dashed" data-testid="descuento-guia">
+            <p className="text-sm text-foreground">
+                Tienes un código especial en FullGas, la empresa con la que llevo trabajando más de 15 años.
+            </p>
+            <div className="my-2 flex items-center gap-2">
+                <button onClick={copiar} type="button" title="Copiar el código" data-testid="copiar-descuento"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand/10 text-brand font-bold tracking-widest text-sm hover:bg-brand/20">
+                    GALLEGOVIP
+                    {copiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </button>
+                {copiado && <span className="text-xs font-semibold text-brand">Copiado</span>}
+            </div>
+            <p className="text-sm text-foreground">
+                Lo tendrás activo todo el tiempo, mientras dure tu suscripción. Te aplicarán un 20 % en toda la web.
+            </p>
+        </div>
+    );
+};
+
+/**
+ * LA GUÍA (doc 19-08, presentada como dictó Jesús el 21-08): primero LAS CATEGORÍAS,
+ * para pinchar y entrar, no todo el mensaje de golpe. Dentro de cada una, sus fichas.
+ * El remate por plan sigue igual (el aviso del plan personalizado o la oferta de los 87).
+ * La guía habla en singular porque es de Jesús; el aviso y la oferta en plural, porque
+ * los hace el equipo.
+ */
+const GuiaDeSuplementacion = ({ api, guia, conDescuento = true }) => {
+    // La categoría abierta (su clave), o null: la portada con las categorías.
+    const [abierta, setAbierta] = useState(null);
     const [subfiltro, setSubfiltro] = useState(null);
     const [pidiendo, setPidiendo] = useState(false);
 
     if (!guia) return null;
     const secciones = (guia.secciones || []).filter(s => s.suplementos.length > 0);
     const sinSeccion = guia.sin_seccion || [];
-    const visibles = filtro === 'todo' ? secciones : secciones.filter(s => s.clave === filtro);
-    const seccionSalud = secciones.find(s => s.clave === 'salud');
+    // Las fichas que la web aún no encaja en ninguna categoría entran como una más, al
+    // final, para que se pueda llegar a ellas igual.
+    const entradas = sinSeccion.length > 0
+        ? [...secciones, { clave: '_resto', nombre: 'El resto de la guía', suplementos: sinSeccion }]
+        : secciones;
+    const seccion = entradas.find(s => s.clave === abierta) || null;
 
     const pedirRevision = async () => {
         setPidiendo(true);
@@ -181,72 +225,57 @@ const GuiaDeSuplementacion = ({ api, guia }) => {
                 </div>
             )}
 
-            {/* El texto de entrada es de Jesús y viene de su web: si aún no está traído,
-                no se pinta nada (no se inventa). */}
-            {guia.texto_entrada && (
-                <p className="text-muted-foreground text-sm mb-5 whitespace-pre-line">{guia.texto_entrada}</p>
-            )}
-
-            {/* El filtro de las ocho, en su orden. Solo las que tienen fichas. */}
-            {secciones.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                    <button onClick={() => { setFiltro('todo'); setSubfiltro(null); }}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold ${filtro === 'todo' ? 'bg-brand text-white' : 'bg-muted text-muted-foreground'}`}>
-                        Todo
+            {!seccion ? (
+                /* LA PORTADA (Jesús, 21-08): debajo del texto corto, directamente las
+                   categorías para pinchar y entrar. El mensaje entero de golpe murió. */
+                <div className="space-y-3">
+                    {entradas.map(s => (
+                        <button key={s.clave} type="button" data-testid={`categoria-${s.clave}`}
+                            onClick={() => { setAbierta(s.clave); setSubfiltro(null); }}
+                            className="surface w-full p-4 flex items-center justify-between gap-3 text-left hover:border-brand/40 transition-colors">
+                            <span className="min-w-0">
+                                <span className="block font-bold text-foreground text-sm">{s.nombre}</span>
+                                {s.explicacion && (
+                                    <span className="block text-muted-foreground text-xs mt-0.5">{s.explicacion}</span>
+                                )}
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                        </button>
+                    ))}
+                </div>
+            ) : (
+                /* DENTRO DE UNA CATEGORÍA: su explicación literal, sus fichas, y la vuelta. */
+                <div>
+                    <button type="button" data-testid="volver-categorias"
+                        onClick={() => { setAbierta(null); setSubfiltro(null); }}
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-brand mb-3 hover:underline">
+                        <ChevronLeft className="w-4 h-4" /> Todas las categorías
                     </button>
-                    {secciones.map(s => (
-                        <button key={s.clave} onClick={() => { setFiltro(s.clave); setSubfiltro(null); }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-bold ${filtro === s.clave ? 'bg-brand text-white' : 'bg-muted text-muted-foreground'}`}>
-                            {s.nombre}
-                        </button>
-                    ))}
-                </div>
-            )}
-            {/* Los seis apartados de Salud, cuando se filtra por ella. */}
-            {filtro === 'salud' && seccionSalud?.subfiltros?.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                    {seccionSalud.subfiltros.map(sf => (
-                        <button key={sf} onClick={() => setSubfiltro(subfiltro === sf ? null : sf)}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${subfiltro === sf ? 'bg-brand/20 text-brand' : 'bg-muted text-muted-foreground'}`}>
-                            {sf}
-                        </button>
-                    ))}
+                    <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-1">{seccion.nombre}</h2>
+                    {seccion.explicacion && <p className="text-muted-foreground text-sm mb-3">{seccion.explicacion}</p>}
+                    {/* Los seis apartados de Salud, solo dentro de Salud. */}
+                    {seccion.clave === 'salud' && seccion.subfiltros?.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {seccion.subfiltros.map(sf => (
+                                <button key={sf} onClick={() => setSubfiltro(subfiltro === sf ? null : sf)}
+                                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${subfiltro === sf ? 'bg-brand/20 text-brand' : 'bg-muted text-muted-foreground'}`}>
+                                    {sf}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <div className="space-y-3">
+                        {(subfiltro && seccion.clave === 'salud'
+                            ? seccion.suplementos.filter(f => (f.subfiltros || []).some(x => x.toLowerCase() === subfiltro.toLowerCase()))
+                            : seccion.suplementos
+                        ).map(f => <FichaDeLaGuia key={f.id} ficha={f} />)}
+                    </div>
                 </div>
             )}
 
-            <div className="space-y-6">
-                {visibles.map(s => (
-                    <div key={s.clave}>
-                        <h2 className="caption mb-1">{s.nombre}</h2>
-                        {s.explicacion && <p className="text-muted-foreground text-sm mb-3">{s.explicacion}</p>}
-                        <div className="space-y-3">
-                            {(subfiltro && s.clave === 'salud'
-                                ? s.suplementos.filter(f => (f.subfiltros || []).some(x => x.toLowerCase() === subfiltro.toLowerCase()))
-                                : s.suplementos
-                            ).map(f => <FichaDeLaGuia key={f.id} ficha={f} />)}
-                        </div>
-                    </div>
-                ))}
-                {filtro === 'todo' && sinSeccion.length > 0 && (
-                    <div>
-                        {secciones.length > 0 && <h2 className="caption mb-3">El resto de la guía</h2>}
-                        <div className="space-y-3">
-                            {sinSeccion.map(f => <FichaDeLaGuia key={f.id} ficha={f} />)}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* El descuento, tal cual: GALLEGOVIP de FullGas, 20 %. */}
-            {guia.descuento && (
-                <div className="surface p-4 mt-6 border-dashed" data-testid="descuento-guia">
-                    <p className="text-sm text-foreground">
-                        <span className="font-bold">{guia.descuento.codigo}</span>
-                        {' · '}{guia.descuento.porcentaje} % de descuento en {guia.descuento.tienda}.
-                        {' '}{guia.descuento.nota}
-                    </p>
-                </div>
-            )}
+            {/* El descuento, con el texto de Jesús. En la pantalla del protocolo lo pinta
+                la propia pantalla junto a la pauta, y aquí se apaga para no repetirlo. */}
+            {conDescuento && <div className="mt-6"><Descuento /></div>}
 
             {/* LA OFERTA, AL FINAL Y SOLO A QUIEN NO LO TIENE (doc 19-08): «entra a
                 consultar qué tomar y lo último que ve es lo que le falta». El botón va al
@@ -315,13 +344,17 @@ const SupplementsPage = () => {
     const hayGuia = (guia?.secciones || []).some(s => s.suplementos.length > 0) || (guia?.sin_seccion || []).length > 0;
 
     if (!tieneActual && !tieneSiguiente && !protocol?.nota && hayGuia) {
-        // SIN PAUTA PROPIA: la pantalla ES la guía (doc 19-08, bloque 08).
+        // SIN PAUTA PROPIA: la pantalla ES la guía (doc 19-08, bloque 08), y se llama
+        // «Tu suplementación» IGUAL que la del protocolo (Jesús, 21-08). El texto de
+        // entrada es el que dictó, tal cual, y debajo van directamente las categorías.
         return <Wrap>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-2">
-                Suplementación
+                Tu suplementación
             </h1>
             <p className="text-muted-foreground text-sm mb-5 max-w-2xl">
-                La guía de suplementación, con los suplementos que más utilizo y recomiendo.
+                Estos son los suplementos que más utilizo y recomiendo. Con pautas exactas
+                sobre su uso. Están organizados por categorías según su función. En
+                condiciones normales, se recomienda empezar por los básicos.
             </p>
             <GuiaDeSuplementacion api={api} guia={guia} />
         </Wrap>;
@@ -379,7 +412,7 @@ const SupplementsPage = () => {
                 {esGenerica
                     ? 'Todavía no te he pautado la tuya. Mientras tanto, esta es la que recomiendo de base: en cuanto te ponga la tuya, la ves aquí.'
                     : nuevo
-                        ? 'Lo que te he pautado y cuándo tomarlo'
+                        ? 'Lo que tienes pautado, dosis y cuándo tomarlo.'
                         : 'Aquí ves algunos de los suplementos más habituales que recomiendo, así como su modo de empleo. Esta información es orientativa: pueden ser necesarios otros suplementos o dosis según tu situación, objetivos o tolerancias.'}
             </p>
 
@@ -425,15 +458,20 @@ const SupplementsPage = () => {
                 </section>
             )}
 
+            {/* EL DESCUENTO, EN LA PANTALLA DEL PROTOCOLO (Jesús, 21-08): antes solo
+                vivía dentro de la guía y quien miraba su pauta no lo veía. */}
+            <div className="max-w-2xl mt-8"><Descuento /></div>
+
             {/* Y DEBAJO, LA GUÍA: la ven todos (doc 19-08), también quien ya tiene su
-                pauta. Con su rótulo, para que nadie confunda la guía con lo suyo. */}
+                pauta. Con su rótulo, para que nadie confunda la guía con lo suyo. El
+                descuento ya está arriba, junto a la pauta: aquí apagado. */}
             {hayGuia && (
                 <section className="mt-10">
                     <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-1">La guía de suplementación</h2>
                     <p className="text-muted-foreground text-sm mb-4 max-w-2xl">
                         Los suplementos que más utilizo y recomiendo, por si quieres consultarla.
                     </p>
-                    <GuiaDeSuplementacion api={api} guia={guia} />
+                    <GuiaDeSuplementacion api={api} guia={guia} conDescuento={false} />
                 </section>
             )}
         </Wrap>

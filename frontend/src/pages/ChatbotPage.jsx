@@ -170,7 +170,19 @@ export default function ChatbotPage() {
   const [daySummary, setDaySummary] = useState(p.daySummary ?? null);
 
   const messagesEndRef = useRef(null);
+  // El contenedor con el scroll de la conversación: el scroll se hace sobre él directamente
+  // (scrollTop = scrollHeight), no sobre un centinela de altura 0 con scrollIntoView, que
+  // perdía la carrera contra el scroll del onFocus del input y dejaba la vista arriba.
+  const messagesBoxRef = useRef(null);
   const inputRef = useRef(null);
+  // Cuando el foco al input lo pone el código (al terminar una respuesta), su onFocus NO
+  // debe re-scrollear: ese scroll es para cuando el CLIENTE toca el input y el teclado
+  // del móvil lo tapa. Sin esta marca, el foco automático disparaba un scrollIntoView
+  // 250 ms después que ganaba la carrera al del chat y dejaba la vista a media altura.
+  const focoAutomaticoRef = useRef(false);
+  // Último mensaje enviado y cuándo, para pedir confirmación si llega el MISMO texto dos
+  // veces en menos de 30 segundos (reenviar «añade un plátano» lo añade dos veces).
+  const ultimoEnviadoRef = useRef({ texto: null, cuando: 0 });
   // Decisión (una sola vez) sobre sobrescribir el día al sincronizar con nutrición
   const autoSyncRef = useRef(p.autoSync ?? { decided: false, enabled: true });
   // La misma decisión, en estado, para poder PINTAR el botón de volcar a mano cuando la
@@ -271,19 +283,39 @@ export default function ChatbotPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetDate, sessionId, loading, saving, step]);
 
+  // EL SCROLL QUE BAJA DE VERDAD (flecos del 21-08). Se scrollea el contenedor
+  // directamente dentro de un requestAnimationFrame: el DOM ya está pintado cuando se
+  // mide scrollHeight, así que baja hasta el final aunque el mensaje traiga tarjetas.
+  // El scrollIntoView sobre el centinela de altura 0 se quedaba corto y además perdía
+  // la carrera contra el scroll del onFocus del input.
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    requestAnimationFrame(() => {
+      const box = messagesBoxRef.current;
+      if (box) box.scrollTop = box.scrollHeight;
+    });
   };
 
+  // También con `loading` y `progressText` en las deps: la burbuja «Pensando...» y los
+  // textos de progreso del SSE aparecen sin añadir mensaje, y sin esto quedaban fuera
+  // de la vista.
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, loading, progressText]);
 
   // Mantener el foco en el input al terminar cada acción: cuando `loading` vuelve a false,
   // el input ya está re-habilitado, así que el foco funciona (llamarlo justo tras setLoading
-  // no servía porque el input seguía disabled en ese instante).
+  // no servía porque el input seguía disabled en ese instante). Con la marca de foco
+  // automático para que su onFocus no dispare el scroll del teclado.
+  const enfocarInputSinScroll = () => {
+    focoAutomaticoRef.current = true;
+    inputRef.current?.focus();
+    // Si el input ya tenía el foco no salta onFocus y nadie consumiría la marca.
+    setTimeout(() => { focoAutomaticoRef.current = false; }, 400);
+  };
+
   useEffect(() => {
-    if (!loading) inputRef.current?.focus();
+    if (!loading) enfocarInputSinScroll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   const getToken = () => localStorage.getItem('token');
@@ -584,6 +616,39 @@ export default function ChatbotPage() {
     setInput('');
     addMessage(userMessage, true);
 
+    // EL MISMO TEXTO DOS VECES SEGUIDAS SE CONFIRMA (flecos del 21-08). Reenviar
+    // «añade un plátano» ejecuta la acción otra vez -- añadir no es idempotente -- y
+    // casi siempre es un doble envío sin querer (doble Enter, «no ha hecho nada»).
+    // Si es LITERALMENTE idéntico al anterior y han pasado menos de 30 segundos, se
+    // pregunta con botones; el que de verdad quiere repetir pulsa «Sí» y listo.
+    const rep = ultimoEnviadoRef.current;
+    if (rep.texto === userMessage && Date.now() - rep.cuando < 30000) {
+      addMessage('Me acabas de pedir eso mismo. ¿Lo hago otra vez?', false,
+        { action: 'confirmar_repetido', texto: userMessage });
+      return;
+    }
+    ultimoEnviadoRef.current = { texto: userMessage, cuando: Date.now() };
+    await enviarAlAsistente(userMessage);
+  };
+
+  // Respuesta a la pregunta del mensaje repetido: se marca la tarjeta como resuelta
+  // (los botones desaparecen) y, si es que sí, se envía el mismo texto ya confirmado.
+  const confirmarRepetido = async (idx, texto, hacerlo) => {
+    if (loading) return;
+    setMessages(prev => prev.map((m, i) => (
+      i === idx && m?.data?.action === 'confirmar_repetido'
+        ? { ...m, data: { ...m.data, resuelto: hacerlo ? 'si' : 'no' } }
+        : m
+    )));
+    if (!hacerlo) {
+      addMessage('Vale, lo dejo como está.', false);
+      return;
+    }
+    ultimoEnviadoRef.current = { texto, cuando: Date.now() };
+    await enviarAlAsistente(texto);
+  };
+
+  const enviarAlAsistente = async (userMessage) => {
     setLoading(true);
     setProgressText(null);
 
@@ -668,10 +733,13 @@ export default function ChatbotPage() {
         ? 'Se me ha cortado la conexión y he dejado la petición a medias. Lo que llevabas '
           + 'montado sigue guardado: repite lo último que me pediste.'
         : 'Error al procesar el mensaje. Vuelve a intentarlo.', false);
+      // Aquí se le PIDE que repita: reenviar lo mismo ahora es lo esperado, no un doble
+      // envío, así que el aviso de mensaje repetido no debe saltar.
+      ultimoEnviadoRef.current = { texto: null, cuando: 0 };
     } finally {
       setProgressText(null);
       setLoading(false);
-      inputRef.current?.focus();
+      enfocarInputSinScroll();
     }
   };
 
@@ -1122,6 +1190,27 @@ export default function ChatbotPage() {
             {!isUser && msg.data?.action === 'menus' && (
               <ChatMenus data={msg.data} disabled={loading} onAplicar={aplicarMenu} />
             )}
+            {/* Confirmación del mensaje repetido: sí lo repite, no lo descarta */}
+            {!isUser && msg.data?.action === 'confirmar_repetido' && !msg.data?.resuelto && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => confirmarRepetido(idx, msg.data.texto, true)}
+                  disabled={loading}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                  data-testid="repetir-si-btn"
+                >
+                  Sí, hazlo otra vez
+                </button>
+                <button
+                  onClick={() => confirmarRepetido(idx, msg.data.texto, false)}
+                  disabled={loading}
+                  className="bg-muted hover:bg-accent border border-input text-foreground px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                  data-testid="repetir-no-btn"
+                >
+                  No
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1389,7 +1478,7 @@ export default function ChatbotPage() {
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+      <div ref={messagesBoxRef} className="flex-1 overflow-y-auto p-3 sm:p-4">
         {/* Pantalla inicial */}
         {step === 'init' && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
@@ -1453,17 +1542,23 @@ export default function ChatbotPage() {
               Con el día COMPLETO se quedan solo el resumen y el chat vivo: guardar y
               sugerir hablan de una comida en curso que ya no existe -- pero cortar el
               input dejaba el día cerrado a cal y canto («vacía la comida 1» tras
-              completar caía en una caja muerta, ronda 1 del 15-08). */}
-          <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
+              completar caía en una caja muerta, ronda 1 del 15-08).
+              El grid era grid-cols-3 FIJO: con «Volcar» (sincronización apagada) son
+              cuatro botones en tres columnas, el cuarto se iba a otra fila a lo ancho, y
+              como los botones no encogían (sin min-w-0 ni truncate) el tercero desbordaba
+              y el overflow-x: clip global se lo comía. grid-flow-col + auto-cols-fr
+              reparte el ancho entre LOS QUE HAY, sean 1, 3 o 4, siempre en una fila. */}
+          <div className="grid grid-flow-col auto-cols-fr sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
             {montando && (
               <button
                 onClick={completeMeal}
                 disabled={loading}
-                className="bg-green-600 hover:bg-green-700 text-white px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                className="bg-green-600 hover:bg-green-700 text-white min-w-0 px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                 data-testid="save-meal-btn"
               >
-                <Check size={16} className="flex-shrink-0" />
-                <span className="sm:hidden">Guardar</span>
+                {/* El icono solo de 640 px para arriba: con 4 botones en 390 px no cabe */}
+                <Check size={16} className="flex-shrink-0 hidden sm:block" />
+                <span className="sm:hidden min-w-0 truncate">Guardar</span>
                 <span className="hidden sm:inline">Guardar y siguiente</span>
               </button>
             )}
@@ -1471,10 +1566,10 @@ export default function ChatbotPage() {
               <button
                 onClick={requestSuggestions}
                 disabled={loading}
-                className="bg-muted hover:bg-accent border border-input text-foreground px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
+                className="bg-muted hover:bg-accent border border-input text-foreground min-w-0 px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
                 data-testid="suggest-foods-btn"
               >
-                <span className="sm:hidden">Sugerir</span>
+                <span className="sm:hidden block truncate">Sugerir</span>
                 <span className="hidden sm:inline">Sugerir alimentos</span>
               </button>
             )}
@@ -1494,9 +1589,9 @@ export default function ChatbotPage() {
                 addMessage(formatDayOverview(ov), false);
               }}
               disabled={loading || !dayOverview}
-              className="bg-muted hover:bg-accent border border-input text-foreground px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
+              className="bg-muted hover:bg-accent border border-input text-foreground min-w-0 px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-colors disabled:opacity-50"
             >
-              <span className="sm:hidden">Resumen</span>
+              <span className="sm:hidden block truncate">Resumen</span>
               <span className="hidden sm:inline">Resumen del día</span>
             </button>
             {/* EL BOTÓN QUE EL CHAT PROMETÍA Y NO EXISTÍA (fallo 21 de Jesús: «promete un
@@ -1509,10 +1604,10 @@ export default function ChatbotPage() {
               <button
                 onClick={() => saveToDiet(true)}
                 disabled={loading || saving}
-                className="bg-brand hover:opacity-90 text-white px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-opacity disabled:opacity-50"
+                className="bg-brand hover:opacity-90 text-white min-w-0 px-2 sm:px-3 py-2 rounded-xl font-semibold text-[13px] sm:text-sm transition-opacity disabled:opacity-50"
                 data-testid="volcar-a-mi-dieta"
               >
-                <span className="sm:hidden">Volcar</span>
+                <span className="sm:hidden block truncate">Volcar</span>
                 <span className="hidden sm:inline">Volcar a mi dieta</span>
               </button>
             )}
@@ -1527,9 +1622,15 @@ export default function ChatbotPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
               // Al abrirse el teclado, el navegador encoge la ventana y el input se
-              // queda debajo. Un scroll al enfocar lo devuelve a la vista.
-              onFocus={(e) => setTimeout(
-                () => e.target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 250)}
+              // queda debajo. Un scroll al enfocar lo devuelve a la vista. SOLO cuando
+              // el foco lo pone el cliente: el foco automático de después de cada
+              // respuesta disparaba este scroll 250 ms más tarde, ganaba la carrera al
+              // del chat y dejaba la conversación a media altura.
+              onFocus={(e) => {
+                if (focoAutomaticoRef.current) { focoAutomaticoRef.current = false; return; }
+                const el = e.target;
+                setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 250);
+              }}
               // Mientras guarda o piensa, el input se deshabilita: si además dice lo de
               // siempre, parece colgado. Que diga lo que está pasando.
               // En movil el placeholder largo se corta a mitad de frase y no se entiende.

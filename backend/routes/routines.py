@@ -746,14 +746,48 @@ def _get_default_routine():
 # desde la ficha del cliente, y el cliente lo abre desde Entreno. Se guarda en la
 # base como las fotos de progreso: el mismo camino que ya funciona.
 # ─────────────────────────────────────────────────────────────────────────────
-from fastapi import File, UploadFile          # noqa: E402
+from fastapi import File, Form, UploadFile    # noqa: E402
 from fastapi.responses import Response        # noqa: E402
 from bson.binary import Binary                # noqa: E402
 
 MAX_PDF_BYTES = 15 * 1024 * 1024
 
 
-async def _guardar_pdf_de_rutina(client_id: str, file: UploadFile, subido_por: str) -> dict:
+# ── Los dos datos que acompañan al PDF (tarea 7.1 del 21-08, apartados 12 y 19) ──
+#
+# El REPARTO DE GRUPOS POR DÍA («Empuje, Tirón, Pierna, Empuje») y las SEMANAS que dura
+# la rutina los pone el entrenador al subir el PDF. Viven EN EL PROPIO DOCUMENTO de
+# `rutina_pdfs`, no en el perfil: describen ESA rutina -- la siguiente tendrá su propio
+# reparto y su propia duración -- y así el histórico queda coherente sin inventar otra
+# colección. Los días de la semana en que entrena el cliente NO van aquí: esos son suyos
+# (dependen de su vida, no de la rutina) y viven en `client_profiles.training_weekdays`.
+
+def _reparto_limpio(valor: Any) -> Optional[List[str]]:
+    """El reparto como lista de grupos («Empuje», «Tirón»...). Acepta la lista o el texto
+    separado por comas que escribe el panel. Vacío es None: no hay reparto, no una lista
+    de nada."""
+    if isinstance(valor, str):
+        valor = valor.split(",")
+    if not isinstance(valor, (list, tuple)):
+        return None
+    grupos = [str(g).strip()[:40] for g in valor if str(g).strip()]
+    # Más de 7 grupos no caben en una semana: se recorta en vez de rechazar, que en el
+    # panel un error por la coma de más solo consigue que el dato no se rellene nunca.
+    return grupos[:7] or None
+
+
+def _semanas_limpias(valor: Any) -> Optional[int]:
+    """Cuántas semanas dura la rutina. Un número entre 1 y 52, o None si no viene."""
+    try:
+        n = int(str(valor).strip())
+    except (TypeError, ValueError):
+        return None
+    return n if 1 <= n <= 52 else None
+
+
+async def _guardar_pdf_de_rutina(client_id: str, file: UploadFile, subido_por: str,
+                                 reparto: Optional[List[str]] = None,
+                                 semanas: Optional[int] = None) -> dict:
     if (file.content_type or "").lower() != "application/pdf" \
             and not (file.filename or "").lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="La rutina tiene que ser un PDF.")
@@ -770,6 +804,9 @@ async def _guardar_pdf_de_rutina(client_id: str, file: UploadFile, subido_por: s
         "size": len(contenido),
         "subido_por": subido_por,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        # El reparto de grupos por día de entreno y las semanas que dura (7.1 del 21-08).
+        "reparto": reparto,
+        "semanas": semanas,
         "data": Binary(contenido),
     }
     await db.rutina_pdfs.insert_one(doc)
@@ -778,13 +815,21 @@ async def _guardar_pdf_de_rutina(client_id: str, file: UploadFile, subido_por: s
 
 @admin_router.post("/pdf/{client_id}")
 async def subir_pdf_de_rutina(client_id: str, file: UploadFile = File(...),
+                              reparto: Optional[str] = Form(None),
+                              semanas: Optional[str] = Form(None),
                               user=Depends(get_admin_user)):
     """Sube (o sustituye) la rutina en PDF de un cliente. Se guarda el histórico: el
-    cliente ve siempre la última, pero la del mes pasado no se pierde."""
+    cliente ve siempre la última, pero la del mes pasado no se pierde.
+
+    `reparto` (texto separado por comas: «Empuje, Tirón, Pierna, Empuje») y `semanas`
+    (número) son opcionales: sin ellos el PDF se ve igual, pero la semana del cliente no
+    puede decir qué grupo toca cada día."""
     perfil = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "id": 1, "user_id": 1})
     if not perfil:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    doc = await _guardar_pdf_de_rutina(client_id, file, subido_por=user.get("id"))
+    doc = await _guardar_pdf_de_rutina(client_id, file, subido_por=user.get("id"),
+                                       reparto=_reparto_limpio(reparto),
+                                       semanas=_semanas_limpias(semanas))
     # El aviso de entrega, el mismo que mandan las tres vías estructuradas y que aquí
     # faltaba: el PDF se quedaba guardado sin que el cliente supiera que lo tenía. Mismo
     # candado que ellas (t3_entreno) y máximo uno al día, que es la regla de los avisos
@@ -793,14 +838,38 @@ async def subir_pdf_de_rutina(client_id: str, file: UploadFile = File(...),
             and not await _hay_aviso_de_hoy(perfil["user_id"], "rutina_nueva"):
         await avisar_rutina_nueva(perfil["user_id"])
     return {"ok": True, "id": doc["id"], "filename": doc["filename"],
-            "size": doc["size"], "uploaded_at": doc["uploaded_at"]}
+            "size": doc["size"], "uploaded_at": doc["uploaded_at"],
+            "reparto": doc.get("reparto"), "semanas": doc.get("semanas")}
+
+
+@admin_router.patch("/pdf/{client_id}/detalles")
+async def detalles_pdf_de_rutina(client_id: str, data: Dict[str, Any],
+                                 user=Depends(get_admin_user)):
+    """Corrige el reparto o las semanas del ÚLTIMO PDF sin volver a subirlo: los PDF que
+    ya están subidos no traen estos dos datos, y resubir el archivo para ponérselos es
+    trabajo doble. Solo escribe lo que venga en la petición."""
+    doc = await db.rutina_pdfs.find_one({"client_id": client_id}, {"_id": 0, "id": 1},
+                                        sort=[("uploaded_at", -1)])
+    if not doc:
+        raise HTTPException(status_code=404, detail="Este cliente no tiene ningún PDF subido.")
+    update: Dict[str, Any] = {}
+    if "reparto" in (data or {}):
+        update["reparto"] = _reparto_limpio(data.get("reparto"))
+    if "semanas" in (data or {}):
+        update["semanas"] = _semanas_limpias(data.get("semanas"))
+    if update:
+        await db.rutina_pdfs.update_one({"id": doc["id"]}, {"$set": update})
+    return {"ok": True, **update}
 
 
 @admin_router.get("/pdf/{client_id}/info")
 async def info_pdf_de_rutina_admin(client_id: str, user=Depends(get_admin_user)):
     doc = await db.rutina_pdfs.find_one({"client_id": client_id}, {"_id": 0, "data": 0},
                                         sort=[("uploaded_at", -1)])
-    return {"hay": bool(doc), **({k: doc[k] for k in ("id", "filename", "size", "uploaded_at")} if doc else {})}
+    if not doc:
+        return {"hay": False}
+    return {"hay": True, **{k: doc[k] for k in ("id", "filename", "size", "uploaded_at")},
+            "reparto": doc.get("reparto"), "semanas": doc.get("semanas")}
 
 
 async def _servir_pdf(doc: Optional[dict]) -> Response:
@@ -826,7 +895,10 @@ async def info_pdf_de_rutina(user=Depends(get_current_user)):
         return {"hay": False}
     doc = await db.rutina_pdfs.find_one({"client_id": perfil["id"]}, {"_id": 0, "data": 0},
                                         sort=[("uploaded_at", -1)])
-    return {"hay": bool(doc), **({k: doc[k] for k in ("filename", "uploaded_at")} if doc else {})}
+    if not doc:
+        return {"hay": False}
+    return {"hay": True, **{k: doc[k] for k in ("filename", "uploaded_at")},
+            "reparto": doc.get("reparto"), "semanas": doc.get("semanas")}
 
 
 @router.get("/pdf")
@@ -837,3 +909,300 @@ async def ver_pdf_de_rutina(user=Depends(get_current_user)):
     doc = await db.rutina_pdfs.find_one({"client_id": perfil["id"]}, {"_id": 0},
                                         sort=[("uploaded_at", -1)])
     return await _servir_pdf(doc)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LA SEMANA DE LA RUTINA (tarea 7.1 del 21-08, apartados 12 y 19 del doc de Jesús)
+#
+# Con el reparto del PDF (lo pone el entrenador) y los días que entrena el cliente
+# (los pone él: `client_profiles.training_weekdays`), la pantalla de Rutina puede decir
+# «Rutina #2 · Semana 3 de 8», pintar la tira de la semana con el grupo de cada día y
+# preguntar por el entreno que se dejó. El registro de lo HECHO sigue siendo
+# `workout_logs` (T3): aquí no se inventa otra fuente, se escribe en la misma.
+#
+# Los días del cliente se guardan como NOMBRES («lunes», «miercoles»...). En la base
+# quedan unos pocos perfiles de la época de Calma con enteros, y su significado no se
+# puede verificar (el código que los escribió no está en el repo): esos se cuentan para
+# el total de días (core/dias_de_entreno) pero NO se usan para colocar grupos en días
+# concretos, que pintarle «Empuje» el día equivocado es peor que no pintar nada.
+# ─────────────────────────────────────────────────────────────────────────────
+from datetime import date, timedelta                              # noqa: E402
+from core.tiempo import a_madrid, hoy_madrid                      # noqa: E402
+from routes.workout_logs import DIAS_SEMANA, _plano               # noqa: E402
+
+# Como se enseñan («Hoy · jueves · Empuje»), con sus tildes.
+DIAS_BONITOS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+
+
+def indices_de_entreno(perfil: Dict[str, Any]) -> Optional[List[int]]:
+    """Qué días de la semana entrena, como índices 0-6 (0 = lunes), ordenados.
+
+    Solo de los nombres de día: ver el aviso de arriba sobre los enteros heredados."""
+    v = (perfil or {}).get("training_weekdays")
+    if not isinstance(v, (list, tuple)):
+        return None
+    dias = {DIAS_SEMANA.index(_plano(d)) for d in v
+            if isinstance(d, str) and _plano(d) in DIAS_SEMANA}
+    return sorted(dias) or None
+
+
+def _grupo_estructurado(routine: Optional[Dict[str, Any]], indice: int) -> Optional[str]:
+    """El grupo que la rutina estructurada le pone a ese día de la semana, si lo trae."""
+    for d in (routine or {}).get("days") or []:
+        if _plano(d.get("day")) == DIAS_SEMANA[indice] and not d.get("is_rest"):
+            for clave in ("grupo", "focus", "nombre", "titulo"):
+                valor = str(d.get(clave) or "").strip()
+                if valor:
+                    return valor
+    return None
+
+
+def _grupos_por_dia(indices: Optional[List[int]], reparto: Optional[List[str]],
+                    routine: Optional[Dict[str, Any]]) -> Dict[int, str]:
+    """{índice de la semana: grupo} para los días de entreno.
+
+    El reparto va POR ORDEN sobre los días del cliente: el primer grupo al primer día de
+    entreno de su semana, y así. Si el reparto se queda corto, los días de más son
+    «Entreno» a secas: un nombre honrado, no un grupo inventado."""
+    if not indices:
+        return {}
+    grupos: Dict[int, str] = {}
+    for n, i in enumerate(indices):
+        g = None
+        if reparto:
+            g = reparto[n] if n < len(reparto) else None
+        grupos[i] = g or _grupo_estructurado(routine, i) or "Entreno"
+    return grupos
+
+
+async def grupos_del_reparto(perfil: Dict[str, Any]) -> Optional[Dict[int, str]]:
+    """Para Mi semana (GET /diets/semana): {índice 0-6: grupo} según el reparto del PDF
+    vigente y los días del cliente, o None si falta cualquiera de los dos datos."""
+    if not (perfil or {}).get("id"):
+        return None
+    indices = indices_de_entreno(perfil)
+    if not indices:
+        return None
+    pdf = await db.rutina_pdfs.find_one({"client_id": perfil["id"]},
+                                        {"_id": 0, "reparto": 1},
+                                        sort=[("uploaded_at", -1)])
+    reparto = (pdf or {}).get("reparto") or None
+    if not reparto:
+        return None
+    return _grupos_por_dia(indices, reparto, None)
+
+
+async def _plan_de_la_semana(perfil: Dict[str, Any]) -> Dict[str, Any]:
+    """Todo lo que hace falta para componer la semana de un cliente, en una pieza."""
+    pdf = await db.rutina_pdfs.find_one({"client_id": perfil["id"]}, {"_id": 0, "data": 0},
+                                        sort=[("uploaded_at", -1)])
+    routine = await db.routines.find_one({"client_id": perfil["id"], "status": "active"},
+                                         {"_id": 0, "days": 1, "created_at": 1})
+    indices = indices_de_entreno(perfil)
+    if indices is None and routine:
+        # Sin días propios pero con rutina estructurada: los días los dice la rutina.
+        indices = sorted({DIAS_SEMANA.index(_plano(d.get("day")))
+                          for d in routine.get("days") or []
+                          if not d.get("is_rest") and _plano(d.get("day")) in DIAS_SEMANA}) or None
+    grupos = _grupos_por_dia(indices, (pdf or {}).get("reparto"), routine)
+    return {"pdf": pdf, "routine": routine, "indices": indices, "grupos": grupos}
+
+
+def _semana_actual(pdf: Optional[Dict[str, Any]], routine: Optional[Dict[str, Any]],
+                   hoy: date) -> Optional[int]:
+    """En qué semana de la rutina está. Se cuenta desde el LUNES de la semana en que se
+    subió el PDF (semana 1 = esa semana): el PDF no trae fecha de inicio, solo la de
+    subida, y contar por semanas naturales es lo que casa con la tira de lunes a domingo.
+    Sin PDF, desde la creación de la rutina estructurada."""
+    inicio = a_madrid((pdf or {}).get("uploaded_at") or (routine or {}).get("created_at"))
+    if not inicio:
+        return None
+    lunes_inicio = inicio.date() - timedelta(days=inicio.date().weekday())
+    lunes_hoy = hoy - timedelta(days=hoy.weekday())
+    return max(1, (lunes_hoy - lunes_inicio).days // 7 + 1)
+
+
+@router.get("/semana")
+async def semana_de_rutina(user=Depends(get_current_user)):
+    """La semana de la rutina del cliente: qué grupo toca cada día, qué está hecho, qué
+    se dejó y qué toca hoy. Es lo que pinta la cabecera y la tira de Mi rutina.
+
+    Sin gate de plan, como /routines/pdf/info: si su entrenador le subió la rutina, es
+    suya. Lo de MARCAR sí depende del interruptor `t3_entreno`, y va en `puede_marcar`."""
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not perfil or not perfil.get("id"):
+        return {"hay": False}
+
+    plan = await _plan_de_la_semana(perfil)
+    pdf, routine, indices, grupos = plan["pdf"], plan["routine"], plan["indices"], plan["grupos"]
+    if not grupos or not (pdf or routine):
+        # Sin días del cliente (o sin rutina ninguna) no hay semana que pintar. Se dice
+        # qué falta para que la pantalla pueda seguir enseñando el PDF a secas.
+        return {"hay": False, "tiene_pdf": bool(pdf), "tiene_rutina": bool(routine),
+                "faltan_dias": not indices}
+
+    hoy = hoy_madrid()
+    lunes = hoy - timedelta(days=hoy.weekday())
+    fechas = [(lunes + timedelta(days=i)).isoformat() for i in range(7)]
+
+    puede_marcar = await pantalla_activa_rutina()
+    logs: Dict[str, Dict[str, Any]] = {}
+    if puede_marcar:
+        async for l in db.workout_logs.find(
+                {"client_id": perfil["id"], "fecha": {"$gte": fechas[0], "$lte": fechas[6]}},
+                {"_id": 0, "fecha": 1, "hecho": 1}):
+            logs[l["fecha"]] = l
+
+    # Las recuperaciones de ESTA semana: un entreno perdido que se va a hacer otro día.
+    recuperaciones = {}
+    por_original = {}
+    async for r in db.workout_recuperaciones.find(
+            {"client_id": perfil["id"], "fecha": {"$gte": fechas[0], "$lte": fechas[6]}},
+            {"_id": 0}):
+        recuperaciones[r["fecha"]] = r
+        por_original[r.get("fecha_original")] = r
+
+    dias = []
+    for i, fecha in enumerate(fechas):
+        rec = recuperaciones.get(fecha)
+        entrena = i in grupos or bool(rec)
+        grupo = (rec or {}).get("grupo") if rec else grupos.get(i)
+        log = logs.get(fecha)
+        dias.append({
+            "fecha": fecha,
+            "dia": DIAS_BONITOS[i],
+            "entrena": entrena,
+            "grupo": grupo if entrena else None,
+            "recuperacion": bool(rec),
+            # A qué día se movió, si este se perdió y se va a recuperar.
+            "recuperado_en": (por_original.get(fecha) or {}).get("fecha"),
+            # true/false solo con el registro encendido; null = no hay forma de saberlo.
+            "hecho": bool(log and log.get("hecho")) if (puede_marcar and entrena) else None,
+            "registrado": bool(log),
+            "hoy": fecha == hoy.isoformat(),
+        })
+
+    # EL QUE SE DEJÓ: el día de entreno más reciente de esta semana, anterior a hoy, sin
+    # ningún registro (decir «no lo hice» TAMBIÉN es un registro y no se le vuelve a
+    # preguntar) y sin una recuperación ya apuntada. Solo uno: la pregunta es una, no una
+    # lista de reproches.
+    pendiente = None
+    if puede_marcar:
+        for d in reversed(dias):
+            if d["fecha"] >= hoy.isoformat() or not d["entrena"]:
+                continue
+            if d["registrado"] or d["recuperado_en"]:
+                continue
+            pendiente = {"fecha": d["fecha"], "dia": d["dia"], "grupo": d["grupo"]}
+            break
+
+    # «Rutina #2»: qué número hace este PDF entre los suyos.
+    numero = await db.rutina_pdfs.count_documents({"client_id": perfil["id"]}) if pdf else None
+
+    return {
+        "hay": True,
+        "tiene_pdf": bool(pdf),
+        "numero": numero,
+        "semanas": (pdf or {}).get("semanas"),
+        "semana_actual": _semana_actual(pdf, routine, hoy),
+        "dias_de_entreno": len(indices or []),
+        "dias": dias,
+        "hoy": next(d for d in dias if d["hoy"]),
+        "pendiente": pendiente,
+        "puede_marcar": puede_marcar,
+    }
+
+
+async def pantalla_activa_rutina() -> bool:
+    """El interruptor `t3_entreno`, el mismo que gobierna todo el registro de entrenos."""
+    from routes.settings import pantalla_activa
+    return await pantalla_activa("t3_entreno")
+
+
+def _fecha_de_esta_semana(valor: Any, hoy: date) -> date:
+    """Valida una fecha del cliente: tiene que ser un día de SU semana actual."""
+    try:
+        f = date.fromisoformat(str(valor or ""))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Esa fecha no vale.")
+    lunes = hoy - timedelta(days=hoy.weekday())
+    if not (lunes <= f <= lunes + timedelta(days=6)):
+        raise HTTPException(status_code=400,
+                            detail="Solo se puede tocar un día de esta semana.")
+    return f
+
+
+@router.post("/semana/hecho")
+async def marcar_dia_de_la_semana(data: Dict[str, Any], ctx=Depends(require_access("rutina"))):
+    """«Sí lo hice»: marca como hecho un día de ESTA semana que ya pasó.
+
+    POST /workout-logs solo escribe el día de hoy (y está bien que así sea); esto cubre
+    el único caso nuevo del apartado 12: el entreno del martes que se marca el jueves.
+    Escribe en la MISMA colección y con la misma forma, así que Inicio, el Diario y los
+    reportes lo cuentan igual. No pisa un registro que ya exista más que para ponerlo en
+    hecho."""
+    if not await pantalla_activa_rutina():
+        raise HTTPException(status_code=403,
+                            detail="El registro de entrenos todavía no está disponible.")
+    profile = ctx["profile"]
+    hoy = hoy_madrid()
+    f = _fecha_de_esta_semana((data or {}).get("fecha"), hoy)
+    if f > hoy:
+        raise HTTPException(status_code=400, detail="Ese día todavía no ha llegado.")
+    grupo = str((data or {}).get("grupo") or "").strip()[:200] or None
+    ahora = datetime.now(timezone.utc).isoformat()
+    await db.workout_logs.update_one(
+        {"client_id": profile["id"], "fecha": f.isoformat()},
+        {"$set": {"hecho": True, "updated_at": ahora},
+         "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": ahora,
+                          "tipo": "entreno", "dia_rutina": grupo, "estrellas": None,
+                          "nota": None, "pesos": [], "compartida": False,
+                          "routine_id": None}},
+        upsert=True,
+    )
+    # Si ese día tenía una recuperación apuntada, ya no hace falta: lo hizo.
+    await db.workout_recuperaciones.delete_many(
+        {"client_id": profile["id"], "fecha_original": f.isoformat()})
+    return {"ok": True, "fecha": f.isoformat()}
+
+
+@router.post("/semana/recuperar")
+async def recuperar_entreno(data: Dict[str, Any], ctx=Depends(require_access("rutina"))):
+    """«Recuperarlo otro día»: el entreno perdido no se mueve, se RECUPERA en un día de
+    descanso de esta semana (decisión del apartado 12: «No se puede mover. Si se ha
+    perdido, se recupera otro día»). Se apunta la recuperación y ese día pasa a enseñar
+    el grupo pendiente; marcarlo hecho es lo mismo de siempre (workout_logs)."""
+    if not await pantalla_activa_rutina():
+        raise HTTPException(status_code=403,
+                            detail="El registro de entrenos todavía no está disponible.")
+    profile = ctx["profile"]
+    perfil = await db.client_profiles.find_one({"id": profile["id"]}, {"_id": 0}) or profile
+    plan = await _plan_de_la_semana(perfil)
+    grupos = plan["grupos"]
+    if not grupos:
+        raise HTTPException(status_code=400, detail="Todavía no sabemos tu semana de entreno.")
+
+    hoy = hoy_madrid()
+    original = _fecha_de_esta_semana((data or {}).get("fecha_original"), hoy)
+    nueva = _fecha_de_esta_semana((data or {}).get("fecha"), hoy)
+    if original >= hoy:
+        raise HTTPException(status_code=400, detail="Ese entreno no se ha perdido todavía.")
+    if original.weekday() not in grupos:
+        raise HTTPException(status_code=400, detail="Ese día no tocaba entreno.")
+    if nueva < hoy:
+        raise HTTPException(status_code=400, detail="El día para recuperarlo tiene que estar por llegar.")
+    if nueva.weekday() in grupos:
+        raise HTTPException(status_code=400,
+                            detail="Ese día ya tiene su entreno: elige un día de descanso.")
+    if await db.workout_logs.find_one({"client_id": profile["id"], "fecha": original.isoformat()}):
+        raise HTTPException(status_code=400, detail="Ese día ya está registrado.")
+
+    ahora = datetime.now(timezone.utc).isoformat()
+    await db.workout_recuperaciones.update_one(
+        {"client_id": profile["id"], "fecha_original": original.isoformat()},
+        {"$set": {"fecha": nueva.isoformat(), "grupo": grupos.get(original.weekday()),
+                  "updated_at": ahora},
+         "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": ahora}},
+        upsert=True,
+    )
+    return {"ok": True, "fecha": nueva.isoformat(), "grupo": grupos.get(original.weekday())}

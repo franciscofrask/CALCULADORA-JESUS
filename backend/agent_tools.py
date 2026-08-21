@@ -2670,11 +2670,20 @@ class AgentTools:
             op["aviso_companyia"] = ("no he podido comprobar esta combinación contra el "
                                      "método: revísala antes de darla por buena")
             opciones = [op]
+        # LA TARJETA MUERTA NO SE REPITE (flecos del 21-08). Los rescates de abajo sacan
+        # como máximo UNA opción no aplicable por llamada («por arriba el método no la da
+        # por buena»; el front la pinta «Solo de referencia», sin botón), pero tres
+        # llamadas seguidas eran tres tarjetas muertas iguales. Si en ESTA comida una
+        # ronda anterior ya salió entera «solo de referencia», no se rescata otra: se
+        # devuelve el camino sin_resultados_porque y el asistente propone bajar el
+        # objetivo o cambiar de pieza. Una por comida y conversación basta.
+        mk = self.bot.current_meal_key()
+        muertas_previas = self.bot.state.setdefault("rescate_muerto", {})
         # Último peldaño: todo lo compuesto fue tumbado por el juez. Antes que una
         # pantalla vacía (regla del 07-08: nadie se queda sin opciones), sale la menos
         # mala DICIENDO que el método no la daría por buena. El cliente decide informado,
         # que es la misma lógica del rescate de compañía.
-        if not opciones and rechazadas_juez:
+        if not opciones and rechazadas_juez and not muertas_previas.get(mk):
             op = rechazadas_juez[0]
             op["aviso_companyia"] = ("esta combinación no la daría por buena el método: "
                                      "revísala o pídeme otra cosa")
@@ -2700,7 +2709,6 @@ class AgentTools:
         # pero ajustada» el asistente respondió preguntando cuál de las dos — el «se
         # lía» exacto que enseñó Jesús. La cuenta vive aparte en `opcion_seq` y solo
         # avanza: un número de opción no se reutiliza NUNCA dentro de la misma comida.
-        mk = self.bot.current_meal_key()
         seq = self.bot.state.setdefault("opcion_seq", {})
         numero = max(int(seq.get(mk) or 0),
                      max((b.get("numero") or 0 for b in borradores.values()
@@ -2863,7 +2871,9 @@ class AgentTools:
         # Y si lo único que había se pasaba de hidratos o de grasa, sale la que menos se
         # pasa, con su aviso y SIN botón: un menú corto se completa, uno pasado no. Antes
         # que dejar la pantalla vacía, que vea qué había y por qué no se le ofrece.
-        if not salida and pasadas:
+        # Salvo que en esta comida ya se enseñara una así: la segunda tarjeta muerta no
+        # aporta nada y se va por sin_resultados_porque (flecos del 21-08).
+        if not salida and pasadas and not muertas_previas.get(mk):
             pasadas.sort(key=lambda x: x[0])
             _, op = pasadas[0]
             tot = {m: round(sum(i["macros"][m] for i in op["items"]), 1) for m in ("P", "H", "G")}
@@ -2884,10 +2894,19 @@ class AgentTools:
             salida.append(borrador)
         # La cuenta consumida se apunta, se haya enseñado lo que se haya enseñado.
         seq[mk] = numero
+        # Si la ronda ha salido ENTERA «solo de referencia», se apunta: en esta comida no
+        # se vuelve a rescatar otra tarjeta muerta en toda la conversación.
+        if salida and all(b.get("no_aplicable") for b in salida):
+            muertas_previas[mk] = True
         if not salida:
             notas = descartes or []
             if descartes_bucle:
                 notas.append(descartes_bucle)
+            if muertas_previas.get(mk) and (pasadas or rechazadas_juez):
+                notas.append("lo único que quedaba era otra opción que el método no da "
+                             "por buena, como la que ya se enseñó solo de referencia en "
+                             "esta comida, y no se repite: proponle bajar el objetivo de "
+                             "la comida o cambiar de pieza")
             notas.append("no salió ningún menú que cuadre con esos filtros y lo que "
                          "falta; fija los imprescindibles con incluir_ids o móntalo "
                          "alimento a alimento")

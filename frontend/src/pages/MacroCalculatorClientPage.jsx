@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SlidersHorizontal, Calculator, Loader2, CheckCircle2, CalendarDays, Save, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import { MACRO } from './ClientDashboard';
@@ -311,11 +311,13 @@ const MacroCalculatorClientPage = () => {
     const ajustables = profile?.macros_ajustables;
     const puedeAjustar = ajustables ? ajustables.puede !== false : true;
 
-    // «MIS MACROS» SOLO LA VE QUIEN SE LOS CALCULA (doc 19-08, bloque 09). Para el que se
-    // los pone un entrenador esta pestaña «es un papel colgado en la pared»: ya no existe
-    // en el menú, y quien llegue por la URL aterriza en Seguimiento → Evolución, que es
-    // donde vive su histórico, al lado de su peso, sus medidas y sus fotos.
-    if (!puedeAjustar) return <Navigate to="/dashboard/reports?abrir=evolucion" replace />;
+    // «MIS MACROS» PARA TODOS, EN SOLO LECTURA PARA QUIEN NO EDITA (tarea 7.3 del 21-08,
+    // hueco 1c). El doc 19-08 rebotaba al de coach a Seguimiento → Evolución; el de Jesús
+    // lo revierte: la pestaña existe en todos los planes. Sin `onAjustar` no hay
+    // formulario ni botón de guardar -- el candado `macros_ajustables.puede` sigue
+    // mandando --, y el botón Revisar se enciende solo cuando su ciclo lo abre
+    // (ventana_revision, la calcula el servidor).
+    if (!puedeAjustar) return <MisMacrosPage />;
 
     // Y PARA QUIEN SÍ ES SU HERRAMIENTA, la portada es el mock del doc: última y próxima
     // revisión, el último ajuste en una frase, los ocho números, el histórico y «Ver mi

@@ -118,6 +118,11 @@ async def get_client_profile(user = Depends(get_current_user)):
     hab = (catalogo.get(codigo_de_plan(profile.get("plan"))) or {}).get("habilitaciones") or {}
     datos["tiempo_respuesta"] = hab.get("tiempo_respuesta") or ""
     datos["canal_contacto"] = hab.get("canal_contacto") or ""
+    # LA VENTANA DEL BOTON «REVISAR» de Mis macros (tarea 7.3 del 21-08): cuando la app le
+    # abre el cuestionario de ajuste y, cerrada, cuando se enciende. La regla vive en
+    # core/ventana_revision; aqui solo viaja para que el boton se pinte con ella.
+    from core.ventana_revision import ventana_de_revision
+    datos["ventana_revision"] = await ventana_de_revision(db, profile, catalogo=catalogo)
     # CUÁNDO SE LE ACABA (punto 2.4d). «Próxima renovación: no definida» a alguien cuya
     # membresía venció hace una semana no es que falte el dato: es que se miraba solo
     # `next_payment`, que es el próximo COBRO, y los migrados no tienen ninguno. Lo que se
@@ -437,6 +442,16 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         update["age"] = _age_from_birthdate(data.birthdate)
     if data.training_experience:
         update["training_experience"] = data.training_experience
+    # LOS DÍAS QUE ENTRENA (tarea 7.1 del 21-08): solo nombres de día conocidos, sin
+    # tildes y sin repetir, en orden de semana. Con ellos se escribe también el número
+    # (`training_days`), que es lo que leen el panel de rutinas y los conteos.
+    if data.training_weekdays:
+        from routes.workout_logs import DIAS_SEMANA, _plano
+        dias = sorted({_plano(d) for d in data.training_weekdays if _plano(d) in DIAS_SEMANA},
+                      key=DIAS_SEMANA.index)
+        if dias:
+            update["training_weekdays"] = dias
+            update["training_days"] = len(dias)
     if data.activity_level:
         update["activity_level"] = data.activity_level
     if data.biotype:
@@ -529,6 +544,11 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
                      "questionnaire_completed_at"}
         update = {k: v for k, v in update.items()
                   if k in de_macros or profile.get(k) in (None, "", [], {})}
+        # Si los días de la semana entran (estaban vacíos), el número va CON ellos aunque
+        # la ficha trajera un 4 rellenado por defecto: contar 4 con 3 días marcados es
+        # justo la incoherencia que separa `dias_guardados` de `dias_de_entreno`.
+        if "training_weekdays" in update:
+            update["training_days"] = len(update["training_weekdays"])
 
     await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": update})
 
@@ -962,7 +982,15 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     from core.quien_pone_los_macros import puede_ajustarlos
     puede, por_que_no = await puede_ajustarlos(db, profile)
     if not puede:
-        raise HTTPException(status_code=403, detail=por_que_no)
+        # SALVO QUE LA APP LE HAYA ABIERTO LA VENTANA DE REVISAR (tarea 7.3 del 21-08):
+        # en su semana de ciclo el cliente con coach rellena el cuestionario y esto NO le
+        # machaca nada -- con entrenador detras `aplicado` queda en False y sus respuestas
+        # van como propuesta a macro_sugerencias, que es justo lo que su coach revisa --.
+        # El candado sigue cerrado el resto del tiempo y en PUT /macros siempre.
+        from core.ventana_revision import ventana_de_revision
+        ventana = await ventana_de_revision(db, profile)
+        if not ventana["abierta"]:
+            raise HTTPException(status_code=403, detail=por_que_no)
 
     peso, sexo = profile.get("weight"), (profile.get("sex") or "hombre")
     bf, objetivo = profile.get("body_fat"), profile.get("goal")
