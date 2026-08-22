@@ -264,8 +264,16 @@ async def poner_escenario(payload: Dict[str, Any] = Body(...), user=Depends(get_
     perfil = await _perfil_propio(user)
     set_doc: Dict[str, Any] = {campo: valor for campo, valor in cambios.items() if campo in _CAMPOS_ESCENARIO}
     # La foto, solo la primera vez: no pisar el estado real con otro de prueba.
-    if not perfil.get("pruebas_snapshot"):
-        set_doc["pruebas_snapshot"] = {c: perfil.get(c, _AUSENTE) for c in _CAMPOS_ESCENARIO}
+    foto = perfil.get("pruebas_snapshot")
+    if not foto:
+        foto = {c: perfil.get(c, _AUSENTE) for c in _CAMPOS_ESCENARIO}
+        set_doc["pruebas_snapshot"] = foto
+    # EL PLAN QUE EL ESCENARIO NO FIJA VUELVE AL ORIGINAL (de la foto): así un escenario no
+    # arrastra el plan de otro anterior. Sin esto, tras «sin plan» los siguientes (caducado,
+    # pago a medias, cuestionario...) se quedaban sin plan y todos salían como «sin_plan».
+    if "plan" not in cambios:
+        original = foto.get("plan")
+        set_doc["plan"] = perfil.get("plan") if original in (None, _AUSENTE) else original
     set_doc["pruebas_escenario"] = nombre
     await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": set_doc})
     return {"escenario": nombre}
