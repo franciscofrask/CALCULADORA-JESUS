@@ -221,7 +221,11 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                         {VISTAS.map((v) => (
                             <button key={v.id} role="tab" aria-selected={vista === v.id}
                                 onClick={() => setVista(v.id)} data-testid={`vista-${v.id}`}
-                                className={`px-2 py-1.5 rounded-lg text-sm font-semibold transition-colors
+                                /* `min-w-0` para que las 4 columnas sean de verdad iguales: sin él,
+                                   la celda no baja del ancho de su texto y «Macros» ensancha su
+                                   columna y su pastilla invadía la de «Dieta» en pantalla estrecha.
+                                   Poco padding para que los labels quepan enteros sin cortarse. */
+                                className={`min-w-0 px-1 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-center transition-colors
                                     ${vista === v.id ? 'bg-brand text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                                 {v.label}
                             </button>
