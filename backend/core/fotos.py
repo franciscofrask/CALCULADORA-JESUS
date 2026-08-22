@@ -128,6 +128,43 @@ def _url_firmada(r2, clave: str) -> Optional[str]:
         return None
 
 
+async def subir_foto_nueva(*, user_id: Optional[str], client_id: str, photo_id: str,
+                           contenido: bytes, content_type: str) -> Optional[str]:
+    """Sube una foto RECIEN SUBIDA por el cliente a R2 y devuelve su clave, o None.
+
+    Es la pieza que hace que las fotos nuevas NAZCAN en R2 (22-08): con la clave
+    devuelta, el guardado escribe el documento SIN blob (en_r2 + r2_key) y Mongo
+    deja de engordar. None significa «guardala como siempre, con su blob»: sin
+    credenciales (dev) o con R2 caido, nada se pierde; el detalle va a consola.
+    """
+    r2 = _cliente_r2()
+    if not r2:
+        return None
+    clave = f"app/{user_id or client_id or 'sin-dueno'}/{photo_id}"
+    try:
+        await asyncio.to_thread(
+            r2.put_object, Bucket=_bucket_r2(), Key=clave,
+            Body=contenido, ContentType=content_type or "image/jpeg")
+        return clave
+    except Exception as e:
+        print(f"[fotos] no se pudo subir la foto nueva {clave} a R2 (va con blob): {e}")
+        return None
+
+
+async def borrar_objeto_r2(clave: str) -> bool:
+    """Borra un objeto del bucket. False (con el detalle a consola) si no se pudo:
+    el que llama sigue adelante y el huerfano lo recogera una limpieza."""
+    r2 = _cliente_r2()
+    if not r2:
+        return False
+    try:
+        await asyncio.to_thread(r2.delete_object, Bucket=_bucket_r2(), Key=clave)
+        return True
+    except Exception as e:
+        print(f"[fotos] no se pudo borrar {clave} de R2: {e}")
+        return False
+
+
 async def _leer_de_r2(r2, clave: str) -> Tuple[bytes, Optional[str]]:
     """El objeto entero desde R2 (en un hilo: boto3 es sincrono). Deja que la
     excepcion suba: el que llama decide el fallback."""

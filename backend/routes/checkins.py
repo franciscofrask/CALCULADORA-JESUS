@@ -18,6 +18,7 @@ from bson import Binary
 
 from core.database import db
 from core.fotos import listar_fotos_de, abrir_foto, es_ref_calma
+from core import fotos as fotos_core
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import plan_grants_feature
 from core.series_cliente import actual as actual_de_serie, anotar_peso, anotar_grasa
@@ -548,11 +549,23 @@ async def _guardar_foto_de_progreso(*, client_id: str, user_id: Optional[str],
         "uploaded_at":  now_iso,
         "pose":         pose_norm,
         "inicial":      es_inicial,
-        "data":         Binary(contents),
     }
     if subida_por:
         # Quien la subio, cuando no fue el cliente (punto 45).
         doc["subida_por"] = subida_por
+
+    # LAS FOTOS NUEVAS NACEN EN R2 (22-08): el binario va al bucket y aqui queda solo el
+    # metadato, asi Mongo deja de engordar 1-4 MB por foto. Sin R2 (dev sin claves, o R2
+    # caido en ese momento), el blob se guarda como toda la vida y nada se pierde.
+    clave_r2 = await fotos_core.subir_foto_nueva(
+        user_id=user_id, client_id=client_id, photo_id=doc["id"],
+        contenido=contents, content_type=content_type)
+    if clave_r2:
+        doc["en_r2"] = True
+        doc["r2_key"] = clave_r2
+        doc["en_r2_at"] = now_iso
+    else:
+        doc["data"] = Binary(contents)
     await db.client_photos.insert_one(doc)
     return doc
 
@@ -678,7 +691,8 @@ async def delete_photo(photo_id: str, user = Depends(get_current_user)):
             detail="Esta foto viene de tu etapa anterior y no se puede borrar desde aquí.",
         )
     photo = await db.client_photos.find_one(
-        {"id": photo_id}, {"_id": 0, "user_id": 1, "client_id": 1, "inicial": 1})
+        {"id": photo_id},
+        {"_id": 0, "user_id": 1, "client_id": 1, "inicial": 1, "en_r2": 1, "r2_key": 1, "id": 1})
     if not photo:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     if photo.get("user_id") != user["id"]:
@@ -690,6 +704,10 @@ async def delete_photo(photo_id: str, user = Depends(get_current_user)):
             status_code=400,
             detail="Esta es tu foto inicial y no se puede borrar: es contra la que se comparan las demás.",
         )
+    # Si vive en R2, su objeto se va con ella (si R2 no responde, el documento se borra
+    # igual y el objeto huerfano lo recogera una limpieza; el detalle, a consola).
+    if photo.get("en_r2"):
+        await fotos_core.borrar_objeto_r2(fotos_core._clave_r2_app(photo))
     await db.client_photos.delete_one({"id": photo_id})
     return {"ok": True}
 
