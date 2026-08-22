@@ -651,7 +651,7 @@ const InicioNuevo = () => {
                             el Inicio viejo): es el tipo de día del que salen los macros. */}
                         {tipoDeDia && <span> · día de {tipoDeDia === 'descanso' ? 'descanso' : 'entreno'}</span>}
                     </p>
-                    <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase text-white leading-none mt-1">
+                    <h1 className="font-heading text-3xl font-bold capitalize text-white leading-tight mt-1">
                         Hola, {user?.name?.split(' ')[0]}
                     </h1>
                 </header>
