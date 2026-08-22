@@ -26,6 +26,7 @@ import { verComo } from '../lib/modoRevision';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import LimiteDeError from '../components/LimiteDeError';
 import TuDietaHoy from '../components/inicio/TuDietaHoy';
+import HeroInicio from '../components/inicio/BannerInicio';
 import BottomNav from '../components/BottomNav';
 
 // ===== Macro colors (identidad 12EN12) =====
@@ -636,28 +637,31 @@ const InicioNuevo = () => {
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-3xl mx-auto space-y-6 animate-fade-in" data-testid="inicio-nuevo">
-            <header>
-                <p className="text-sm text-muted-foreground first-letter:uppercase" data-testid="inicio-fecha">
-                    {fechaLargaDeHoy()}
-                    {/* «DÍA DE ENTRENO», no «entreno» (la regla del 13-08, la misma que en
-                        el Inicio viejo): es el tipo de día del que salen los macros. */}
-                    {tipoDeDia && <span> · día de {tipoDeDia === 'descanso' ? 'descanso' : 'entreno'}</span>}
-                </p>
-                <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase text-foreground leading-none mt-1">
-                    Hola, {user?.name?.split(' ')[0]}
-                </h1>
-            </header>
-
-            {/* LA FRASE DEL DÍA. La misma para todos, la escribe el panel. Si hoy no hay
-                nueva se queda la del día anterior y no se dice de cuándo es: la frase no
-                es una noticia, y ponerle fecha solo serviría para que se note que no la
-                han cambiado. */}
-            {frase && (
-                <section data-testid="frase-del-dia">
-                    <p className="caption text-brand mb-1">La frase del día</p>
-                    <p className="text-foreground text-lg leading-snug italic">«{frase}»</p>
-                </section>
-            )}
+            {/* El saludo va sobre la foto del mes en blanco y negro (el hero de fondo vive
+                en components/inicio/BannerInicio; la foto no ocupa bloque propio). */}
+            {/* El saludo Y la frase del día van SOBRE la foto del mes en blanco y negro: la
+                imagen es el fondo de todo el bloque de arriba y se funde con el fondo de la
+                pantalla al llegar a «Tu dieta hoy» (no ocupa un bloque propio). La frase, si
+                hoy no hay nueva, se queda la del día anterior y no se dice de cuándo es. */}
+            <HeroInicio>
+                <header>
+                    <p className="text-sm text-white/75 first-letter:uppercase" data-testid="inicio-fecha">
+                        {fechaLargaDeHoy()}
+                        {/* «DÍA DE ENTRENO», no «entreno» (la regla del 13-08, la misma que en
+                            el Inicio viejo): es el tipo de día del que salen los macros. */}
+                        {tipoDeDia && <span> · día de {tipoDeDia === 'descanso' ? 'descanso' : 'entreno'}</span>}
+                    </p>
+                    <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase text-white leading-none mt-1">
+                        Hola, {user?.name?.split(' ')[0]}
+                    </h1>
+                </header>
+                {frase && (
+                    <section className="mt-4" data-testid="frase-del-dia">
+                        <p className="caption text-brand mb-1">La frase del día</p>
+                        <p className="text-white/90 text-lg leading-snug italic">«{frase}»</p>
+                    </section>
+                )}
+            </HeroInicio>
 
             {/* «TU DIETA HOY» (doc del 21-08, tarea 4.2): el deslizador Macros · Dieta ·
                 Llevas · Falta y, debajo, «Marca lo que ya te has comido». Vive en
