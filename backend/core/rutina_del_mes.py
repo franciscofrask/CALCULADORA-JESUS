@@ -71,6 +71,14 @@ async def cobrar(profile: Dict[str, Any], modalidad: str, report_id: str) -> Dic
     """
     salida = {"cobrado": False, "importe_eur": PRECIO_EUR, "modalidad": modalidad}
 
+    # MODO PRUEBAS: una cuenta de laboratorio NUNCA cobra de verdad, aunque Stripe esté en
+    # vivo. Es el freno para que probar el envío de un reporte no acabe en un cargo real.
+    # `es_pruebas` vive en el usuario; lo miramos por el contextvar de la petición.
+    from core.contexto_pruebas import usuario_actual
+    _u = usuario_actual()
+    if (_u and _u.get("es_pruebas")) or profile.get("es_pruebas"):
+        return {**salida, "motivo": "cuenta_de_pruebas"}
+
     if modalidad not in MODALIDADES:
         return {**salida, "motivo": "modalidad_desconocida"}
 

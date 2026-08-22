@@ -360,9 +360,9 @@ const MiModoPruebas = () => {
                             </div>
                         ))}
                     </div>
-                    <div className="flex items-center gap-2 pt-1">
-                        <span className="text-xs text-white/60 shrink-0">Cambiar mi plan a</span>
-                        <HelpTooltip text="Cambia tu plan para ver las funciones y límites de cada uno: qué pestañas ve el cliente, si puede editar sus macros, qué reportes tiene, etc." className="shrink-0" />
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                        <span className="text-xs text-white/60 shrink-0">Plan</span>
+                        <HelpTooltip text="Elige un plan y aplícalo de dos formas: «Aplicar plan» deja tu cuenta como un cliente YA asentado en ese plan (cuestionario hecho); «Recién comprado» la deja como alguien que ACABA de comprarlo, con el cuestionario inicial por hacer (la app le fuerza el onboarding)." className="shrink-0" />
                         <select
                             value={planSel}
                             onChange={(e) => setPlanSel(e.target.value)}
@@ -372,6 +372,9 @@ const MiModoPruebas = () => {
                         </select>
                         <Button onClick={() => aplicarEscenario('cambiar_plan', planSel)} disabled={guardando} className="bg-[#FF671F] hover:bg-[#e55b1a] text-white h-8">
                             Aplicar plan
+                        </Button>
+                        <Button onClick={() => aplicarEscenario('nuevo_con_plan', planSel)} disabled={guardando} variant="outline" className="border-[#FF671F]/50 text-white hover:bg-[#FF671F]/10 h-8">
+                            Recién comprado
                         </Button>
                     </div>
                 </div>

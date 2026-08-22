@@ -235,6 +235,13 @@ def _campos_de_escenario(nombre: str, plan: Optional[str]):
     if nombre == "cambiar_plan":
         destino = (plan or "").strip()
         return {**base, "plan": destino} if destino in _PLANES_ESCENARIO else None
+    if nombre == "nuevo_con_plan":
+        # Recién comprado: tiene el plan y está activo, pero aún no ha hecho el cuestionario
+        # ni tiene el ajuste, así que la app le fuerza el onboarding como a un recién llegado.
+        destino = (plan or "").strip()
+        return ({**base, "plan": destino,
+                 "questionnaire_completed": False, "ajuste_macros_completado": False}
+                if destino in _PLANES_ESCENARIO else None)
     return None
 
 
