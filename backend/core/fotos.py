@@ -374,6 +374,18 @@ async def abrir_foto(user: dict, ref: str) -> Tuple[bytes, str]:
         client_id is not None and doc.get("client_id") == client_id)
     if not es_suya:
         raise HTTPException(status_code=403, detail="Esa foto no es tuya.")
+    return await leer_binario_de_foto_app(doc)
+
+
+async def leer_binario_de_foto_app(doc: dict) -> Tuple[bytes, str]:
+    """El binario y el content-type de una foto de la APP cuya propiedad YA comprobó quien
+    llama (por eso no vuelve a validar dueño). Sale de R2 si la foto está marcada `en_r2`
+    (con caída al blob de Mongo si R2 falla); si no, del blob. 404 si no queda ni una vía.
+
+    Es la ÚNICA forma de leer una foto de la app: la usan `abrir_foto` (cliente) y el
+    endpoint que sirve la foto por id (que además deja mirar al staff). Antes esta segunda
+    vía leía solo el blob y se rendía con las fotos que nacen en R2 sin copia en Mongo."""
+    r2 = _cliente_r2()
     if r2 and doc.get("en_r2"):
         clave = _clave_r2_app(doc)
         try:
@@ -383,5 +395,5 @@ async def abrir_foto(user: dict, ref: str) -> Tuple[bytes, str]:
             print(f"[fotos] R2 fallo leyendo {clave}, se cae a Mongo: {e}")
     data = doc.get("data")
     if not data:
-        raise HTTPException(status_code=404, detail="Foto sin datos")
+        raise HTTPException(status_code=404, detail="No se ha podido cargar la foto.")
     return bytes(data), doc.get("content_type") or "application/octet-stream"

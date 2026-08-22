@@ -666,13 +666,13 @@ async def get_photo(photo_id: str, user = Depends(get_current_user)):
         # No es el dueño: solo el admin, o el entrenador ASIGNADO a ese cliente.
         await _assert_staff_photo_access(user, photo.get("user_id"))
 
-    data = photo.get("data")
-    if not data:
-        raise HTTPException(status_code=404, detail="Foto sin datos")
+    # De R2 (si la foto nació allí) o del blob de Mongo; misma vía que usa el cliente por
+    # /reports/foto/{ref}. Antes leía solo el blob y daba 404 con las fotos R2 sin copia.
+    data, content_type = await fotos_core.leer_binario_de_foto_app(photo)
 
     return Response(
-        content=bytes(data),
-        media_type=photo.get("content_type") or "application/octet-stream",
+        content=data,
+        media_type=content_type,
         headers={
             "Cache-Control": "private, max-age=3600",
             "Content-Disposition": f'inline; filename="{photo.get("filename") or "photo"}"',
