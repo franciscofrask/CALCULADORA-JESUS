@@ -22,13 +22,13 @@ export const MacroProgressBar = ({
     return (
         <div className="space-y-1">
             <div className="flex justify-between text-xs">
-                <span className="text-zinc-400">{label}</span>
-                <span className={isOver ? 'text-red-400' : 'text-zinc-300'}>
+                <span className="text-muted-foreground">{label}</span>
+                <span className={isOver ? 'text-red-400' : 'text-foreground'}>
                     {gr(current)} g / {gr(target)} g
-                    {showPercentage && <span className="text-zinc-500 ml-1">({Math.round(percentage)}%)</span>}
+                    {showPercentage && <span className="text-muted-foreground ml-1">({Math.round(percentage)}%)</span>}
                 </span>
             </div>
-            <div className="h-2 bg-zinc-700 rounded-full overflow-hidden">
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div 
                     className={`h-full transition-all duration-300 ${isOver ? 'bg-red-500' : color}`}
                     style={{ width: `${percentage}%` }}

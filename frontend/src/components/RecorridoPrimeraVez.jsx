@@ -166,7 +166,7 @@ const RecorridoPrimeraVez = ({ paso, onSaltar, onSiguiente }) => {
             aria-modal="true"
             aria-label="Recorrido de la primera vez"
         >
-            <div className="w-full sm:max-w-md bg-card border-t sm:border border-border rounded-t-3xl sm:rounded-3xl p-6 pb-7 animate-fade-in">
+            <div className="w-full sm:max-w-md max-h-[92dvh] overflow-y-auto bg-card border-t sm:border border-border rounded-t-3xl sm:rounded-3xl p-6 pb-7 animate-fade-in">
                 <div className="rounded-2xl bg-muted/40 border border-border p-4 mb-5 min-h-[9rem] flex items-center" data-testid={`recorrido-esquema-${p.id}`}>
                     <Esquema />
                 </div>

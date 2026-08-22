@@ -42,12 +42,12 @@ export const DayNavigation = ({
     };
 
     return (
-        <div className="flex items-center justify-between bg-zinc-800/50 rounded-xl p-2">
+        <div className="flex items-center justify-between bg-muted/50 rounded-xl p-2">
             <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={onPrevDay}
-                className="text-zinc-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
                 data-testid="prev-day-btn"
             >
                 <ChevronLeft size={20} />
@@ -55,11 +55,11 @@ export const DayNavigation = ({
             
             <button 
                 onClick={onOpenCalendar}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-zinc-700/50 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-muted transition-colors"
                 data-testid="open-calendar-btn"
             >
-                <Calendar size={16} className="text-orange-500" />
-                <span className="font-medium text-white">
+                <Calendar size={16} className="text-brand" />
+                <span className="font-medium text-foreground">
                     {formatDate(selectedDate)}
                 </span>
             </button>
@@ -68,7 +68,7 @@ export const DayNavigation = ({
                 variant="ghost" 
                 size="sm" 
                 onClick={onNextDay}
-                className="text-zinc-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
                 data-testid="next-day-btn"
             >
                 <ChevronRight size={20} />

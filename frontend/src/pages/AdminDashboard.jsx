@@ -1436,7 +1436,7 @@ const AdminClientsList = () => {
             {/* LA BARRA DEL «A VARIOS DE GOLPE» (doc 19-08): con gente marcada, flota abajo
                 y abre el formulario con todos dentro. Una tarea por cliente. */}
             {seleccionados.size > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#181818] border border-[#333] rounded-xl shadow-xl px-4 py-2.5 flex items-center gap-3"
+                <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#181818] border border-[#333] rounded-xl shadow-xl px-4 py-2.5 flex items-center gap-3"
                     data-testid="barra-asignar-bloque">
                     <span className="text-sm text-white/80">
                         {seleccionados.size} {seleccionados.size === 1 ? 'cliente marcado' : 'clientes marcados'}

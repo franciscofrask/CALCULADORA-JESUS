@@ -107,7 +107,10 @@ const AdminMessagesPage = () => {
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-96 bg-[#111] rounded-xl" /></div></div>;
 
     return (
-        <div className="p-4 md:p-6 h-[calc(100vh-4rem)] lg:h-screen flex flex-col bg-[#0A0A0A]" data-testid="admin-messages-page">
+        // En móvil hay DOS barras: la cabecera de arriba (3.5rem) y la de navegación de abajo
+        // (4rem); si solo se resta una, el campo de escribir cae tras la barra inferior. En
+        // escritorio no hay barras y usa la pantalla entera.
+        <div className="p-4 md:p-6 h-[calc(100vh-7.5rem)] lg:h-screen flex flex-col bg-[#0A0A0A]" data-testid="admin-messages-page">
             <div className="mb-4">
                 <h1 className="text-2xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>MENSAJES</h1>
                 {esperando > 0 && (
@@ -136,7 +139,7 @@ const AdminMessagesPage = () => {
                                     <span className="text-white/30 text-[10px] flex-shrink-0">{formatTime(c.last_message.created_at)}</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-2 mt-0.5">
-                                    <p className="text-white/40 text-xs truncate">
+                                    <p className="text-white/40 text-xs truncate min-w-0">
                                         {c.last_message.sender_id === user.id ? 'Tú: ' : ''}{c.last_message.content}
                                     </p>
                                     <ChipCanal canal={c.last_message.canal} />
