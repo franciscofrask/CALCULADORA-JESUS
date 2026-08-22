@@ -20,6 +20,10 @@ anyio==4.12.1
 passlib==1.7.4
 stripe==14.4.0
 pycryptodome==3.20.0
+# Cloudflare R2 (fotos): core/fotos.py y _migrar_fotos_a_r2.py hablan con el bucket por la
+# API S3. Version que corre en el Python 3.11 del contenedor (la leccion del numpy: el
+# venv local no manda). El import es perezoso: sin credenciales R2 nadie la toca.
+boto3==1.35.99
 # La usa food_semantic (embeddings de los alimentos) y por tanto TODO el asistente:
 # agent_tools la importa arriba del fichero, así que sin numpy el chat no arranca. Estaba
 # instalada en el venv local y no declarada aquí, y al desplegar el asistente-agente el
