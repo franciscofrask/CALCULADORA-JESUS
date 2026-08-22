@@ -1498,7 +1498,17 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
 // =============== CLIENT LAYOUT ===============
 
 const ClientLayout = () => {
-    const { user, logout, profile, perfilNoCargado, api, can, planUnpaid, myPlan, pantalla } = useAuth();
+    const { user, logout, profile, perfilNoCargado, api, can, planUnpaid, myPlan, pantalla, refreshProfile } = useAuth();
+
+    // AVISO DE MODO PRUEBAS: si el que prueba ha puesto su cuenta en un estado ficticio
+    // (caducado, sin plan...), puede quedarse sin forma de volver desde esa misma pantalla.
+    // Este botón flotante lo restaura desde cualquier sitio. Solo para cuentas es_pruebas.
+    const restaurarPruebas = async () => {
+        try {
+            await api.post('/settings/mis-pruebas/restaurar');
+            await refreshProfile();
+        } catch (e) { /* silencioso: es una herramienta interna */ }
+    };
     // «MIS MACROS» PARA TODOS (tarea 7.3 del 21-08). El doc 19-08 la había quitado al de
     // coach («un papel colgado en la pared»); el hueco 1c del doc de Jesús lo revierte:
     // la pestaña existe en todos los planes -- en solo lectura para quien no edita -- y
@@ -1605,6 +1615,15 @@ const ClientLayout = () => {
 
     return (
         <div className="min-h-screen bg-background flex">
+            {/* Aviso flotante de modo pruebas: solo para cuentas es_pruebas con un escenario puesto. */}
+            {user?.es_pruebas && profile?.pruebas_escenario && (
+                <div className="fixed bottom-24 lg:bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 rounded-full border border-yellow-500/50 bg-yellow-500/15 backdrop-blur px-4 py-2 shadow-lg">
+                    <span className="text-xs font-semibold text-yellow-200">Cuenta en modo prueba: {profile.pruebas_escenario}</span>
+                    <button onClick={restaurarPruebas} className="text-xs font-bold rounded-full bg-yellow-500 text-black px-3 py-1 hover:bg-yellow-400 transition-colors">
+                        Restaurar
+                    </button>
+                </div>
+            )}
             {/* ===== Desktop sidebar ===== */}
             <aside className={`hidden lg:flex flex-col bg-ink h-screen sticky top-0 flex-shrink-0 transition-[width] duration-300 ${collapsed ? 'w-[78px]' : 'w-64'}`} data-testid="desktop-sidebar">
                 <div className={`flex items-center h-16 border-b border-white/10 ${collapsed ? 'justify-center px-0' : 'justify-between px-4'}`}>

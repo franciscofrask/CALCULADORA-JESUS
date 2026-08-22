@@ -174,15 +174,20 @@ export const AuthProvider = ({ children }) => {
 
     // Ajustes de la app: con sesión, porque la frase del día es de los clientes. Si no
     // llegan, `pantalla()` cae en null y cada pantalla decide con su propio default.
-    useEffect(() => {
+    const refrescarAjustes = useCallback(async () => {
         if (!token) { setAppSettings(null); return; }
-        api.get('/settings/app')
-            .then((res) => setAppSettings(res.data || {}))
+        try {
+            const res = await api.get('/settings/app');
+            setAppSettings(res.data || {});
+        } catch (e) {
             // Vacío, no null: null significa "todavía no sé", y con eso `can()` espera. Si
             // los ajustes no llegan, lo que se sabe es que no hay nada encendido de más.
-            .catch(() => setAppSettings({}));
+            setAppSettings({});
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- api recreado cada render; refetch solo en cambio de token
     }, [token]);
+
+    useEffect(() => { refrescarAjustes(); }, [refrescarAjustes]);
 
     // pantalla('t3_entreno'): ¿está encendido ese interruptor del panel? Mientras los
     // ajustes no hayan llegado devuelve `porDefecto` (false salvo que se diga otra cosa):
@@ -338,6 +343,7 @@ export const AuthProvider = ({ children }) => {
         api,
         planCatalog,
         appSettings,
+        refrescarAjustes,
         pantalla,
         myPlan,
         planUnpaid,

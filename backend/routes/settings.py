@@ -15,12 +15,13 @@ Dos cosas viven aquí:
     todos, y si un día no hay nueva se queda la del día anterior (por eso se guarda
     con su fecha: Inicio decide si la enseña con o sin estreno).
 """
-from datetime import date, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from core.database import db
+from core.contexto_pruebas import usuario_actual
 from core.security import get_admin_only_user, get_current_user
 from core.tiempo import ahora_madrid
 
@@ -58,8 +59,34 @@ def _mezclar_pantallas(guardadas: Optional[Dict[str, Any]]) -> Dict[str, bool]:
     return {clave: bool(tocadas.get(clave, defecto)) for clave, defecto in PANTALLAS.items()}
 
 
-async def ajustes_app() -> Dict[str, Any]:
-    """Los ajustes vivos, para backend y para servir al front."""
+def _aplicar_modo_pruebas(pantallas: Dict[str, bool], frase: Any) -> tuple[Dict[str, bool], Any]:
+    """MODO PRUEBAS POR CUENTA: si la petición viene de una cuenta marcada `es_pruebas`,
+    sus anulaciones (`overrides_pantallas` y `override_frase`) pisan lo global SOLO para
+    ella. Una cuenta normal no tiene marca y ve siempre lo global; nadie más se entera.
+
+    Devuelve las pantallas y la frase ya con las anulaciones aplicadas (o tal cual si no
+    hay cuenta de pruebas en esta petición)."""
+    u = usuario_actual()
+    if not u or not u.get("es_pruebas"):
+        return pantallas, frase
+    ov = u.get("overrides_pantallas") or {}
+    if isinstance(ov, dict):
+        pantallas = {**pantallas,
+                     **{k: bool(v) for k, v in ov.items() if k in PANTALLAS}}
+    fr = (u.get("override_frase") or "").strip()
+    if fr:
+        frase = {"texto": fr,
+                 "fecha": ahora_madrid().date().isoformat(),
+                 "puesta_por": "mis-pruebas"}
+    return pantallas, frase
+
+
+async def ajustes_app(con_overrides: bool = True) -> Dict[str, Any]:
+    """Los ajustes vivos, para backend y para servir al front.
+
+    `con_overrides=True` (por defecto) aplica el modo pruebas de la cuenta que hace la
+    petición. El panel global de admin lo llama con `False` para ver y editar SIEMPRE lo
+    global, nunca la vista personal de nadie."""
     doc = await db.app_settings.find_one({"id": DOC_ID}, {"_id": 0}) or {}
 
     # La cola de frases programadas (bloque 11 del 19-08): si a alguna le ha llegado su
@@ -77,8 +104,12 @@ async def ajustes_app() -> Dict[str, Any]:
             {"$set": {"frase_del_dia": frase, "frases_programadas": pendientes}})
         cola = pendientes
 
+    pantallas = _mezclar_pantallas(doc.get("pantallas"))
+    if con_overrides:
+        pantallas, frase = _aplicar_modo_pruebas(pantallas, frase)
+
     return {
-        "pantallas": _mezclar_pantallas(doc.get("pantallas")),
+        "pantallas": pantallas,
         "frase_del_dia": frase,
         "frases_programadas": cola,
     }
@@ -102,7 +133,157 @@ async def get_app_settings(user=Depends(get_current_user)):
 
 @admin_router.get("")
 async def get_admin_settings(admin=Depends(get_admin_only_user)):
+    # El panel global edita lo de TODOS: siempre lo global, sin la vista personal de nadie.
+    return await ajustes_app(con_overrides=False)
+
+
+@router.put("/settings/mis-pruebas")
+async def guardar_mis_pruebas(payload: Dict[str, Any] = Body(...), user=Depends(get_current_user)):
+    """MODO PRUEBAS POR CUENTA (solo cuentas marcadas `es_pruebas`): guarda las anulaciones
+    de los interruptores y, opcional, una frase del día propia. Valen SOLO para esta cuenta
+    y no tocan lo que ven los demás. Un typo en el nombre de una pantalla se ignora."""
+    if not user.get("es_pruebas"):
+        raise HTTPException(status_code=403, detail="Esta cuenta no tiene modo pruebas.")
+
+    cambios: Dict[str, Any] = {}
+
+    pantallas = payload.get("pantallas")
+    if isinstance(pantallas, dict):
+        # Fusiona sobre lo que ya tuviera: cada botón manda su clave sin borrar el resto.
+        overrides = dict(user.get("overrides_pantallas") or {})
+        for clave, valor in pantallas.items():
+            if clave in PANTALLAS:
+                overrides[clave] = bool(valor)
+        cambios["overrides_pantallas"] = overrides
+
+    if "frase" in payload:
+        cambios["override_frase"] = str(payload.get("frase") or "").strip()
+
+    if cambios:
+        await db.users.update_one({"id": user["id"]}, {"$set": cambios})
+        # Que la vista de ESTA petición ya refleje lo recién guardado.
+        user.update(cambios)
+
     return await ajustes_app()
+
+
+@router.delete("/settings/mis-pruebas")
+async def limpiar_mis_pruebas(user=Depends(get_current_user)):
+    """Quita todas las anulaciones de esta cuenta: vuelve a ver lo global, como todos."""
+    if not user.get("es_pruebas"):
+        raise HTTPException(status_code=403, detail="Esta cuenta no tiene modo pruebas.")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$unset": {"overrides_pantallas": "", "override_frase": ""}})
+    user.pop("overrides_pantallas", None)
+    user.pop("override_frase", None)
+    return await ajustes_app()
+
+
+# ===== ESCENARIOS DE LA PROPIA CUENTA (Fase 2, solo cuentas `es_pruebas`) =====
+# Poner la cuenta del que prueba en un estado concreto (caducado, por vencer, sin plan,
+# cuestionario sin completar, otro plan...) para recorrer esas pantallas SIN crear clientes
+# demo. Es SU perfil, así que la primera vez se guarda una foto de los campos que se tocan
+# (`pruebas_snapshot`) y «Restaurar mi cuenta» lo deja como estaba. Los estados se derivan
+# al leer el perfil (acceso, renovación...), así que basta con fijar los campos crudos.
+
+# Los únicos campos que un escenario toca (y que, por tanto, se fotografían y se restauran).
+_CAMPOS_ESCENARIO = [
+    "plan", "status", "checkout_status", "current_period_end", "fin_de_ciclo",
+    "arranque_lunes", "access_until", "subscription_status", "questionnaire_completed",
+    "ajuste_macros_completado",
+]
+_AUSENTE = "__ausente__"  # en la foto: el campo no existía y al restaurar hay que quitarlo
+
+_PLANES_ESCENARIO = {"nivel1", "nivel2", "nivel3", "elm", "gold", "silver", "bronze", "mantenimiento"}
+
+
+def _campos_de_escenario(nombre: str, plan: Optional[str]):
+    """El juego de valores que deja la cuenta en el estado pedido; None si no se reconoce.
+
+    CADA ESCENARIO ES AUTÓNOMO: parte de una base «activo limpio» y encima pone lo suyo, así
+    no arrastra residuos del escenario anterior. Las fechas, en el día de España. El plan de
+    la base se deja como está (no se toca salvo en sin_plan/cambiar_plan)."""
+    hoy = ahora_madrid().date()
+    def iso(dias):
+        return datetime.combine(hoy + timedelta(days=dias), datetime.min.time(),
+                                tzinfo=timezone.utc).isoformat()
+    # Base común: cuenta activa, al día, con el cuestionario hecho y sin bloqueos de fecha.
+    base = {"status": "activo", "subscription_status": "active", "checkout_status": "completed",
+            "questionnaire_completed": True,
+            "current_period_end": None, "fin_de_ciclo": None, "access_until": None}
+    if nombre == "activo":
+        return base
+    if nombre == "caducado":
+        # Con suscripción activa la fecha no basta: un `status` bloqueado corta el acceso antes.
+        return {**base, "status": "cancelado"}
+    if nombre == "sin_plan":
+        return {**base, "plan": ""}
+    if nombre == "pago_a_medias":
+        return {**base, "status": "pendiente_pago", "checkout_status": "draft"}
+    if nombre == "cuestionario_inicial":
+        return {**base, "questionnaire_completed": False}
+    if nombre == "ajuste_pendiente":
+        # El cuestionario está hecho, pero el ajuste no, y nadie le ha puesto los macros a mano.
+        # Lo de "nadie a mano" (macros_puestos_por_alguien) se fuerza al leer el perfil.
+        return {**base, "questionnaire_completed": True, "ajuste_macros_completado": False}
+    if nombre == "ventana_grasa":
+        # Cuenta activa; que la ventana de las 12 semanas salga se fuerza al leer el perfil.
+        return {**base}
+    if nombre == "por_vencer":
+        return {**base, "fin_de_ciclo": iso(10), "current_period_end": iso(10), "arranque_lunes": iso(-74)}
+    if nombre == "cambiar_plan":
+        destino = (plan or "").strip()
+        return {**base, "plan": destino} if destino in _PLANES_ESCENARIO else None
+    return None
+
+
+async def _perfil_propio(user):
+    p = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Tu cuenta no tiene ficha de cliente.")
+    return p
+
+
+@router.post("/settings/mis-pruebas/escenario")
+async def poner_escenario(payload: Dict[str, Any] = Body(...), user=Depends(get_current_user)):
+    if not user.get("es_pruebas"):
+        raise HTTPException(status_code=403, detail="Esta cuenta no tiene modo pruebas.")
+    nombre = str(payload.get("escenario") or "").strip()
+    cambios = _campos_de_escenario(nombre, payload.get("plan"))
+    if cambios is None:
+        raise HTTPException(status_code=400, detail="Escenario no reconocido.")
+
+    perfil = await _perfil_propio(user)
+    set_doc: Dict[str, Any] = {campo: valor for campo, valor in cambios.items() if campo in _CAMPOS_ESCENARIO}
+    # La foto, solo la primera vez: no pisar el estado real con otro de prueba.
+    if not perfil.get("pruebas_snapshot"):
+        set_doc["pruebas_snapshot"] = {c: perfil.get(c, _AUSENTE) for c in _CAMPOS_ESCENARIO}
+    set_doc["pruebas_escenario"] = nombre
+    await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": set_doc})
+    return {"escenario": nombre}
+
+
+@router.post("/settings/mis-pruebas/restaurar")
+async def restaurar_cuenta(user=Depends(get_current_user)):
+    if not user.get("es_pruebas"):
+        raise HTTPException(status_code=403, detail="Esta cuenta no tiene modo pruebas.")
+    perfil = await _perfil_propio(user)
+    foto = perfil.get("pruebas_snapshot")
+    if not foto:
+        return {"escenario": None}
+    set_doc: Dict[str, Any] = {}
+    unset_doc: Dict[str, Any] = {"pruebas_snapshot": "", "pruebas_escenario": ""}
+    for campo, valor in foto.items():
+        if valor == _AUSENTE:
+            unset_doc[campo] = ""
+        else:
+            set_doc[campo] = valor
+    op: Dict[str, Any] = {"$unset": unset_doc}
+    if set_doc:
+        op["$set"] = set_doc
+    await db.client_profiles.update_one({"user_id": user["id"]}, op)
+    return {"escenario": None}
 
 
 @admin_router.put("")

@@ -6,9 +6,10 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Layers, Pencil, RotateCcw, Check, X } from 'lucide-react';
+import { Layers, Pencil, RotateCcw, Check, X, FlaskConical, Info } from 'lucide-react';
 import { queIncluyeElPlan, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia, etiquetaCalculadora } from '../lib/planAccess';
 import { mensajeDeError } from '../lib/mensajeDeError';
+import HelpTooltip from '../components/HelpTooltip';
 
 // Los tres valores del fallo 10 del 19-08, tolerando el booleano viejo de un override.
 const etiquetaSuplementacion = (v) => {
@@ -58,14 +59,14 @@ const HabRow = ({ label, value }) => (
 // Los interruptores de las pantallas nuevas (doc 16-08) y la frase del día. Viven en
 // db.app_settings y se tocan aquí para poder apagar una pantalla SIN desplegar.
 const PANTALLAS_APP = [
-    { clave: 'frase_del_dia', label: 'La frase del día en Inicio' },
-    { clave: 't1_inicio_nuevo', label: 'Inicio nuevo (Lo que toca hoy)' },
-    { clave: 't2_suplementos', label: 'Suplementos del cliente' },
-    { clave: 't3_entreno', label: 'Entreno (rutina y registro)' },
-    { clave: 't4_cierre_nuevo', label: 'Cierre del día nuevo' },
-    { clave: 't5_diario', label: 'El Diario' },
-    { clave: 't6_evolucion', label: 'Evolución completa del cliente' },
-    { clave: 't10_avisos_nuevos', label: 'Los avisos nuevos' },
+    { clave: 'frase_del_dia', label: 'La frase del día en Inicio', ayuda: 'Muestra una frase del día en la portada de Inicio del cliente.' },
+    { clave: 't1_inicio_nuevo', label: 'Inicio nuevo (Lo que toca hoy)', ayuda: 'La portada nueva del cliente: «Lo que toca hoy» (macros, suplementos, entreno) y «Pendiente».' },
+    { clave: 't2_suplementos', label: 'Suplementos del cliente', ayuda: 'La pantalla de suplementos del cliente.' },
+    { clave: 't3_entreno', label: 'Entreno (rutina y registro)', ayuda: 'Hace visible al cliente la rutina y el registro de sus entrenos.' },
+    { clave: 't4_cierre_nuevo', label: 'Cierre del día nuevo', ayuda: 'El nuevo cierre del día del cliente («¿cómo fue hoy?»).' },
+    { clave: 't5_diario', label: 'El Diario', ayuda: 'El Diario, dentro de Seguimiento.' },
+    { clave: 't6_evolucion', label: 'Evolución completa del cliente', ayuda: 'La Evolución completa del cliente: medidas y fotos.' },
+    { clave: 't10_avisos_nuevos', label: 'Los avisos nuevos', ayuda: 'Los avisos nuevos del cliente (la campanita).' },
 ];
 
 const PantallasDeLaApp = () => {
@@ -181,6 +182,204 @@ const PantallasDeLaApp = () => {
     );
 };
 
+// MI MODO PRUEBAS (solo cuentas marcadas `es_pruebas`): los MISMOS interruptores, pero
+// que valen SOLO para esta cuenta. El backend guarda las anulaciones en el usuario y las
+// pisa sobre lo global únicamente cuando la petición viene de esta cuenta; nadie más se
+// entera. Sirve para recorrer las pantallas nuevas sin cambiárselas a los clientes.
+// Los estados por los que un administrador de pruebas puede pasear su propia cuenta.
+const ESCENARIOS_CUENTA = [
+    { id: 'activo', label: 'Activa y al día', ayuda: 'Cuenta al día con acceso normal. El punto de partida limpio, sin ningún bloqueo.' },
+    { id: 'por_vencer', label: 'Por vencer (renovación)', ayuda: 'Tu ciclo acaba en unos 10 días: verás el aviso de renovación y la pantalla de renovar.' },
+    { id: 'caducado', label: 'Suscripción caducada', ayuda: 'Suscripción terminada: la pantalla de «tu suscripción ha terminado, renueva o pasa a Mantenimiento».' },
+    { id: 'sin_plan', label: 'Sin plan (elige plan)', ayuda: 'Como un registro nuevo sin plan contratado: la pantalla de «elige tu plan».' },
+    { id: 'pago_a_medias', label: 'Pago a medias', ayuda: 'Empezaste un pago y no lo terminaste: el estado de pago sin completar.' },
+    { id: 'cuestionario_inicial', label: 'Cuestionario sin completar', ayuda: 'Con el cuestionario inicial sin terminar: la app te lleva a completarlo.' },
+    { id: 'ajuste_pendiente', label: 'Ajuste de macros pendiente', ayuda: 'Cuestionario hecho pero macros sin ajustar y sin que nadie te los haya puesto: el aviso de «termina de ajustar tus macros».' },
+    { id: 'ventana_grasa', label: 'Ventana de % grasa (12 sem)', ayuda: 'Han pasado 12 semanas desde tu último dato: sale la ventana para actualizar tu % de grasa.' },
+];
+const PLANES_CUENTA = ['nivel1', 'nivel2', 'nivel3', 'elm', 'gold', 'silver', 'bronze', 'mantenimiento'];
+
+const MiModoPruebas = () => {
+    const { api, appSettings, refrescarAjustes, profile, refreshProfile } = useAuth();
+    const [guardando, setGuardando] = useState(false);
+    const [fraseTexto, setFraseTexto] = useState('');
+    const [planSel, setPlanSel] = useState('nivel2');
+    const pantallas = appSettings?.pantallas || {};
+    const escenarioActivo = profile?.pruebas_escenario || null;
+
+    const aplicarEscenario = async (id, plan) => {
+        setGuardando(true);
+        try {
+            await api.post('/settings/mis-pruebas/escenario', { escenario: id, ...(plan ? { plan } : {}) });
+            await refreshProfile();
+            toast.success('Tu cuenta está en modo de prueba');
+        } catch (e) {
+            toast.error('No se pudo aplicar el escenario');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    const restaurarCuenta = async () => {
+        setGuardando(true);
+        try {
+            await api.post('/settings/mis-pruebas/restaurar');
+            await refreshProfile();
+            toast.success('Tu cuenta vuelve a la normalidad');
+        } catch (e) {
+            toast.error('No se pudo restaurar');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    const alternar = async (clave) => {
+        const nuevo = !pantallas[clave];
+        setGuardando(true);
+        try {
+            await api.put('/settings/mis-pruebas', { pantallas: { [clave]: nuevo } });
+            await refrescarAjustes();
+        } catch (e) {
+            toast.error('No se pudo guardar el cambio');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    const guardarFrase = async () => {
+        setGuardando(true);
+        try {
+            await api.put('/settings/mis-pruebas', { frase: fraseTexto.trim() });
+            await refrescarAjustes();
+            toast.success(fraseTexto.trim() ? 'Tu frase de pruebas guardada' : 'Frase de pruebas quitada');
+        } catch (e) {
+            toast.error('No se pudo guardar la frase');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    const limpiar = async () => {
+        setGuardando(true);
+        try {
+            await api.delete('/settings/mis-pruebas');
+            await refrescarAjustes();
+            setFraseTexto('');
+            toast.success('Vuelves a ver lo mismo que todos');
+        } catch (e) {
+            toast.error('No se pudo reiniciar');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    return (
+        <Card className="bg-[#111] border-[#FF671F]/40">
+            <CardContent className="p-4 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2">
+                        <FlaskConical className="w-5 h-5 text-[#FF671F] shrink-0 mt-0.5" />
+                        <div>
+                            <h2 className="text-base font-bold text-white">Mi modo pruebas <span className="text-[#FF671F]">(solo tú)</span></h2>
+                            <p className="text-xs text-white/50">Enciende o apaga las pantallas SOLO para tu cuenta; ningún cliente lo nota. Para verlas, entra en tu propio panel de cliente.</p>
+                        </div>
+                    </div>
+                    <Button variant="ghost" onClick={limpiar} disabled={guardando} className="text-white/60 hover:text-white shrink-0">
+                        <RotateCcw className="w-4 h-4 mr-1" /> Reiniciar
+                    </Button>
+                </div>
+
+                {/* Una línea; el detalle de cada botón va en su «?». */}
+                <div className="flex gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2">
+                    <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-white/70">Todo esto cambia <span className="text-white/90 font-semibold">solo tu cuenta</span>; nadie más lo nota. Pasa el ratón por el «?» de cada botón para ver qué hace. Para verlo, entra en tu panel de cliente («Usar app»); para volver, «Restaurar mi cuenta».</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {PANTALLAS_APP.map(({ clave, label, ayuda }) => {
+                        const on = !!pantallas[clave];
+                        return (
+                            <div key={clave} className="flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => alternar(clave)}
+                                    disabled={guardando}
+                                    className={`flex-1 min-w-0 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${on ? 'border-[#FF671F]/50 bg-[#FF671F]/10 text-white' : 'border-[#333] bg-black/30 text-white/60'}`}
+                                >
+                                    <span>{label}</span>
+                                    <Dot on={on} />
+                                </button>
+                                <HelpTooltip text={ayuda} className="shrink-0" />
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="space-y-1">
+                    <Label className="text-xs text-white/60">Tu frase del día (solo tú)</Label>
+                    <div className="flex gap-2">
+                        <Input
+                            value={fraseTexto}
+                            onChange={(e) => setFraseTexto(e.target.value)}
+                            placeholder="La que quieras probar en tu Inicio"
+                            className="bg-black/30 border-[#333] text-white text-sm"
+                        />
+                        <Button onClick={guardarFrase} disabled={guardando} className="bg-[#FF671F] hover:bg-[#e55b1a] text-white shrink-0">Guardar</Button>
+                    </div>
+                    <p className="text-[11px] text-white/40">Vacío y Guardar: quitas tu frase y vuelves a la global. Acuérdate de encender también «La frase del día en Inicio» de arriba.</p>
+                </div>
+
+                {/* ESCENARIOS: poner mi propia cuenta en un estado para recorrer esas pantallas
+                    (vencimiento, renovación, caducado, cuestionario...) sin crear clientes demo. */}
+                <div className="border-t border-[#2a2a2a] pt-4 space-y-2">
+                    <div>
+                        <h3 className="text-sm font-bold text-white">Poner mi cuenta en un estado</h3>
+                        <p className="text-xs text-white/50">Cambia TU cuenta para ver esas pantallas. Guardo una foto antes de tocar; «Restaurar» la deja como estaba. Míralas entrando en tu panel de cliente.</p>
+                    </div>
+                    {escenarioActivo && (
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2">
+                            <span className="text-xs text-yellow-200">
+                                Tu cuenta está en un estado de prueba: <span className="font-bold">{(ESCENARIOS_CUENTA.find(e => e.id === escenarioActivo) || {}).label || escenarioActivo}</span>
+                            </span>
+                            <Button onClick={restaurarCuenta} disabled={guardando} className="bg-yellow-500 hover:bg-yellow-400 text-black shrink-0 h-8">
+                                Restaurar mi cuenta
+                            </Button>
+                        </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {ESCENARIOS_CUENTA.map(({ id, label, ayuda }) => (
+                            <div key={id} className="flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => aplicarEscenario(id)}
+                                    disabled={guardando}
+                                    className={`flex-1 min-w-0 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${escenarioActivo === id ? 'border-[#FF671F]/60 bg-[#FF671F]/10 text-white' : 'border-[#333] bg-black/30 text-white/70 hover:text-white'}`}
+                                >
+                                    {label}
+                                </button>
+                                <HelpTooltip text={ayuda} className="shrink-0" />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                        <span className="text-xs text-white/60 shrink-0">Cambiar mi plan a</span>
+                        <HelpTooltip text="Cambia tu plan para ver las funciones y límites de cada uno: qué pestañas ve el cliente, si puede editar sus macros, qué reportes tiene, etc." className="shrink-0" />
+                        <select
+                            value={planSel}
+                            onChange={(e) => setPlanSel(e.target.value)}
+                            className="bg-black/30 border border-[#333] rounded-lg text-white text-xs px-2 py-1.5"
+                        >
+                            {PLANES_CUENTA.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <Button onClick={() => aplicarEscenario('cambiar_plan', planSel)} disabled={guardando} className="bg-[#FF671F] hover:bg-[#e55b1a] text-white h-8">
+                            Aplicar plan
+                        </Button>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
 const PlanCard = ({ plan, onEdit }) => {
     const h = plan.habilitaciones || {};
     const sem = plan.ciclo?.semanas;
@@ -254,7 +453,7 @@ const PlanCard = ({ plan, onEdit }) => {
 };
 
 const AdminPlansPage = () => {
-    const { api } = useAuth();
+    const { api, user } = useAuth();
     const [catalog, setCatalog] = useState({});
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null); // plan en edición
@@ -402,6 +601,8 @@ const AdminPlansPage = () => {
                     <p className="text-sm text-white/50">Fuente única de planes, ciclos y habilitaciones. Editar aquí afecta a lo que ve cada usuario.</p>
                 </div>
             </div>
+
+            {user?.es_pruebas && <MiModoPruebas />}
 
             <PantallasDeLaApp />
 

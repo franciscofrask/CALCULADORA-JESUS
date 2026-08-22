@@ -13,6 +13,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from .config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 from .database import db
+from .contexto_pruebas import fijar_usuario_actual
 
 try:
     from Crypto.Cipher import AES  # pycryptodome
@@ -110,6 +111,7 @@ async def get_current_user(
 
     objetivo_id = (request.headers.get(CABECERA) or "").strip()
     if not objetivo_id or objetivo_id == user.get("id"):
+        fijar_usuario_actual(user)
         return user
 
     # Cerrojo 1: solo el equipo.
@@ -139,8 +141,13 @@ async def get_current_user(
         except Exception:
             pass  # el registro no puede tumbar la operacion
 
-    return {**objetivo, CLAVE: {"por_id": user.get("id"),
-                                "por_nombre": user.get("name") or user.get("email") or "el equipo"}}
+    resultado = {**objetivo, CLAVE: {"por_id": user.get("id"),
+                                     "por_nombre": user.get("name") or user.get("email") or "el equipo"}}
+    # El modo pruebas se rige por la identidad CON LA QUE SE SIRVE: al actuar como un
+    # cliente real, manda ese cliente (que no es de pruebas), así que las anulaciones de
+    # quien suplanta no se cuelan en la vista del cliente.
+    fijar_usuario_actual(resultado)
+    return resultado
 
 async def get_admin_user(user: dict = Depends(get_current_user)) -> dict:
     """Verify that the current user is staff (admin OR trainer).

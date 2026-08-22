@@ -83,6 +83,16 @@ async def get_client_profile(user = Depends(get_current_user)):
     from macros_por_fecha import ultima_vigente
     ultimo = await ultima_vigente(db, profile.get("id"))
     datos["macros_puestos_por_alguien"] = de_una_persona(ultimo)
+    # MODO PRUEBAS: dos estados dependen de datos derivados (historial de macros, serie de
+    # grasa). En vez de ensuciar esas colecciones, la cuenta de laboratorio los fuerza aquí al
+    # leer. Solo cuentas es_pruebas y con un escenario puesto; al restaurar se apaga solo.
+    if user.get("es_pruebas") and profile.get("pruebas_escenario"):
+        _esc = profile["pruebas_escenario"]
+        if _esc == "ajuste_pendiente":
+            datos["macros_puestos_por_alguien"] = False
+        elif _esc == "ventana_grasa":
+            datos["grasa"]["semanas"] = 12
+            datos["grasa"]["mostrar_ventana"] = True
     # Y si los DATOS con los que se trabaja son de fiar (tarea 1.4 del 21-08): faltantes o
     # imposibles (edad 5, estatura 1 cm), calculado al leer con los rangos de la puerta de
     # la API. Con esto las pantallas de macros rotulan «Provisionales» y empujan a completar

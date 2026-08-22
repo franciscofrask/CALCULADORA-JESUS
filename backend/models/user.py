@@ -1029,6 +1029,7 @@ class UserResponse(BaseModel):
     plan: Optional[str] = None
     trainer_id: Optional[str] = None
     created_at: str
+    es_pruebas: Optional[bool] = None  # cuenta de laboratorio: ve el panel de "Mi modo pruebas"
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -1048,6 +1049,9 @@ class ClientProfile(BaseModel):
     plan: Optional[str] = None
     price: Optional[float] = None
     week: int = 1
+    # Modo pruebas (solo cuentas es_pruebas): el escenario en el que el que prueba ha puesto
+    # su cuenta, para pintar el aviso de "estás en pruebas · Restaurar". None = cuenta normal.
+    pruebas_escenario: Optional[str] = None
     # Ciclo calculado (ver core/cycle.py): inicio del ciclo y progreso derivado.
     cycle_start: Optional[str] = None
     cycle_number: Optional[int] = None

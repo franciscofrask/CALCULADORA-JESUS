@@ -126,7 +126,7 @@ async def login(request: Request, data: UserLogin):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
     token = create_token(user["id"], user["role"])
-    known = {"id", "email", "name", "phone", "role", "plan", "trainer_id", "created_at"}
+    known = {"id", "email", "name", "phone", "role", "plan", "trainer_id", "created_at", "es_pruebas"}
     user_response = {k: v for k, v in user.items() if k in known}
     return TokenResponse(access_token=token, user=UserResponse(**user_response))
 
