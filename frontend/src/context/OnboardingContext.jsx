@@ -32,7 +32,11 @@ export const useOnboarding = () => useContext(OnboardingContext) || {
 
 export const OnboardingProvider = ({ children }) => {
     const location = useLocation();
-    const { profile, isClient, planUnpaid, refreshProfile } = useAuth();
+    const { profile, isClient, planUnpaid, refreshProfile, pantalla } = useAuth();
+    // El recorrido explica el Inicio nuevo (el deslizador es su paso 2): va detrás del
+    // MISMO interruptor t1_inicio_nuevo, para que el lunes se encienda todo junto y a
+    // nadie le cuenten una pantalla que todavía no tiene.
+    const inicioNuevoEncendido = !!pantalla?.('t1_inicio_nuevo');
 
     // -1 = cerrado; 0..4 = el paso que se está viendo.
     const [paso, setPaso] = useState(-1);
@@ -66,6 +70,7 @@ export const OnboardingProvider = ({ children }) => {
 
     // Auto-arranque: la primera vez, sobre el Inicio, con el alta terminada.
     useEffect(() => {
+        if (!inicioNuevoEncendido) return;               // con t1 apagado, ni solo ni desde el perfil
         if (activo || decididoRef.current) return;
         if (!isClient || !profile || planUnpaid) return;
         if (!profile.questionnaire_completed) return;        // el alta primero
@@ -86,7 +91,7 @@ export const OnboardingProvider = ({ children }) => {
         notify: () => {},
         active: activo,
         // Lo que mira Mi perfil para ofrecer «Ver el recorrido».
-        available: !!(isClient && profile && profile.questionnaire_completed),
+        available: !!(inicioNuevoEncendido && isClient && profile && profile.questionnaire_completed),
         completed: true,
     };
 
