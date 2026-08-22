@@ -107,6 +107,13 @@ async def create_indexes():
     await _ensure("chat_traces", [("user_id", 1), ("created_at", -1)])
     await _ensure("chat_traces", [("session_id", 1), ("created_at", 1)])
     await _ensure("chat_traces", "created_at", expireAfterSeconds=30 * 24 * 3600)
+    # Puerta anti fuerza bruta del login/registro (`core/rate_limit.py`). Se cuentan las
+    # marcas recientes por clave (compuesto clave+cuando), y caducan solas a las 2 horas:
+    # más que la ventana más larga (1 h del "olvidé la contraseña"), con margen de sobra.
+    # `cuando` es un Date real para que el TTL lo borre; un índice TTL debe ir sobre un
+    # solo campo, por eso va aparte del compuesto.
+    await _ensure("intentos_auth", [("clave", 1), ("cuando", 1)])
+    await _ensure("intentos_auth", "cuando", expireAfterSeconds=2 * 3600)
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""

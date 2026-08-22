@@ -1,11 +1,12 @@
 """
 Rutas de autenticación: registro, login, me.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from datetime import datetime, timezone
 import uuid
 
 from core.database import db
+from core import rate_limit as rl
 from core.dias_de_entreno import DIAS_DE_ENTRENO_POR_DEFECTO
 from core.security import hash_password, verify_password, verify_firebase_password, create_token, get_current_user, Depends
 from models.user import UserRegister, UserLogin, UserResponse, TokenResponse
@@ -13,8 +14,14 @@ from models.user import UserRegister, UserLogin, UserResponse, TokenResponse
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=TokenResponse)
-async def register(data: UserRegister):
+async def register(request: Request, data: UserRegister):
     """Registrar un nuevo usuario."""
+    # Freno al alta masiva de cuentas desde una misma máquina. Aquí se cuenta CADA alta
+    # (no solo las fallidas): una IP normal da de alta una cuenta, no cuarenta.
+    ip = rl.ip_de(request)
+    await rl.comprobar(f"register:ip:{ip}", limite=20, ventana_seg=3600)
+    await rl.apuntar(f"register:ip:{ip}")
+
     existing = await db.users.find_one({"email": data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email ya registrado")
@@ -83,11 +90,22 @@ async def register(data: UserRegister):
     return TokenResponse(access_token=token, user=UserResponse(**user_response))
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: UserLogin):
+async def login(request: Request, data: UserLogin):
     """Iniciar sesión. Acepta la contraseña bcrypt normal o, para usuarios importados de Calma,
     la contraseña original verificada con scrypt de Firebase (migrada a bcrypt al primer acceso)."""
+    # Puerta anti fuerza bruta (antes de mirar la contraseña, que es lo caro). Dos cubos:
+    # por cuenta (frena que ataquen un correo desde muchas IPs) y por IP (frena que una
+    # máquina barra muchos correos). Holgados: un cliente que se equivoca unas cuantas
+    # veces no lo nota; un bot que prueba miles, sí. Ver `core/rate_limit.py`.
+    ip = rl.ip_de(request)
+    correo = (data.email or "").strip().lower()
+    await rl.comprobar(f"login:cuenta:{correo}", limite=10, ventana_seg=900)
+    await rl.comprobar(f"login:ip:{ip}", limite=40, ventana_seg=900)
+    claves_intento = (f"login:cuenta:{correo}", f"login:ip:{ip}")
+
     user = await db.users.find_one({"email": data.email}, {"_id": 0})
     if not user:
+        await rl.apuntar(*claves_intento)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
     if user.get("deleted_at"):
         raise HTTPException(status_code=403, detail="Cuenta desactivada. Contacta con tu entrenador.")
@@ -104,6 +122,7 @@ async def login(data: UserLogin):
                  "$unset": {"firebase_password_hash": "", "firebase_password_salt": ""}},
             )
     if not ok:
+        await rl.apuntar(*claves_intento)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
     token = create_token(user["id"], user["role"])
@@ -164,7 +183,7 @@ HORAS_VALIDEZ_ENLACE = 2
 
 
 @router.post("/forgot-password")
-async def forgot_password(data: dict):
+async def forgot_password(request: Request, data: dict):
     """Pide el correo con el enlace para cambiarla. PUBLICO.
 
     Responde SIEMPRE lo mismo, exista el correo o no. Si dijera "ese correo no está
@@ -183,6 +202,15 @@ async def forgot_password(data: dict):
                  "mensaje": "Si ese correo tiene cuenta, te llega un enlace en un minuto."}
     if not email or "@" not in email:
         return respuesta
+
+    # Freno al bombardeo de correo: cada petición manda un email a ese cliente, así que se
+    # cuentan TODAS (no solo fallos). Por correo (que a nadie le llenen la bandeja) y por
+    # IP (que una máquina no dispare a muchos). Se comprueba y se apunta aquí, ya con el
+    # correo saneado y antes de mandar nada.
+    ip = rl.ip_de(request)
+    await rl.comprobar(f"forgot:cuenta:{email}", limite=3, ventana_seg=3600)
+    await rl.comprobar(f"forgot:ip:{ip}", limite=15, ventana_seg=3600)
+    await rl.apuntar(f"forgot:cuenta:{email}", f"forgot:ip:{ip}")
 
     user = await db.users.find_one({"email": email, "deleted_at": None},
                                    {"_id": 0, "id": 1, "name": 1})
@@ -215,7 +243,7 @@ async def forgot_password(data: dict):
 
 
 @router.post("/reset-password")
-async def reset_password(data: dict):
+async def reset_password(request: Request, data: dict):
     """Cambia la contraseña con el token del correo. PUBLICO.
 
     El token vale una vez y dos horas. Al usarlo se cierran también las sesiones que
@@ -223,6 +251,13 @@ async def reset_password(data: dict):
     contraseña vieja de Firebase no puede seguir sirviendo.
     """
     import hashlib
+
+    # El token del enlace son 32 bytes al azar (adivinarlo es inviable), pero una barrera
+    # por IP corta de raíz cualquier intento de probar tokens a lo bruto. Cuenta cada
+    # intento; el límite es alto para no estorbar a quien reintenta con su enlace bueno.
+    ip = rl.ip_de(request)
+    await rl.comprobar(f"reset:ip:{ip}", limite=30, ventana_seg=3600)
+    await rl.apuntar(f"reset:ip:{ip}")
 
     token = str((data or {}).get("token") or "").strip()
     nueva = (data or {}).get("password")
