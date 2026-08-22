@@ -26,20 +26,32 @@ function fotoDelMes(fecha = new Date()) {
 
 // Envuelve el saludo del Inicio: la foto de fondo (a sangre, cancelando el padding del
 // Inicio con los márgenes negativos) y encima el contenido que se le pase.
+//
+// EN ESCRITORIO la caja es ancha, así que le damos ALTURA (min-h por breakpoint): sin ella
+// la foto vertical se aplasta a una franja y se ve cortada. Y la foto se DESVANECE HACIA
+// ABAJO con una máscara (mask-image): a media altura empieza a difuminarse hasta desaparecer
+// en el fondo de la pantalla, sin borde ni corte. El texto se superpone en la parte de
+// arriba, donde la foto se ve entera.
 const HeroInicio = ({ children }) => (
-    <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-6 relative overflow-hidden" data-testid="inicio-banner">
+    <div className="relative overflow-hidden min-h-[240px] sm:min-h-[300px] lg:min-h-[340px]" data-testid="inicio-banner">
         <img
             src={fotoDelMes()}
             alt=""
             aria-hidden="true"
             draggable="false"
             className="absolute inset-0 w-full h-full object-cover grayscale select-none pointer-events-none"
+            style={{
+                objectPosition: 'center 28%',
+                WebkitMaskImage: 'linear-gradient(to bottom, #000 0%, #000 48%, transparent 96%)',
+                maskImage: 'linear-gradient(to bottom, #000 0%, #000 48%, transparent 96%)',
+            }}
         />
-        {/* Velo que oscurece para que el texto blanco se lea y, abajo, FUNDE la foto con el
-            fondo de la pantalla para que no haya corte: la imagen se disuelve en el
-            contenido en vez de ocupar un bloque con borde. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-background" />
-        <div className="relative px-4 sm:px-6 lg:px-8 pt-11 pb-10">
+        {/* Velo para que el texto blanco se lea (suave arriba) y, abajo, remata el fundido
+            con el fondo de la pantalla para que no quede ningún corte. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/25 to-background" />
+        {/* La foto va a sangre (todo el ancho); el texto se alinea con la columna central
+            (la misma anchura que la tarjeta de debajo) para que no quede descolgado. */}
+        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-11 pb-10">
             {children}
         </div>
     </div>

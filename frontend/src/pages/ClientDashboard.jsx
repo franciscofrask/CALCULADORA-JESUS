@@ -636,7 +636,7 @@ const InicioNuevo = () => {
     const frase = pantalla('frase_del_dia') ? appSettings?.frase_del_dia?.texto : null;
 
     return (
-        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-3xl mx-auto space-y-6 animate-fade-in" data-testid="inicio-nuevo">
+        <div className="pb-6 animate-fade-in" data-testid="inicio-nuevo">
             {/* El saludo va sobre la foto del mes en blanco y negro (el hero de fondo vive
                 en components/inicio/BannerInicio; la foto no ocupa bloque propio). */}
             {/* El saludo Y la frase del día van SOBRE la foto del mes en blanco y negro: la
@@ -662,6 +662,9 @@ const InicioNuevo = () => {
                     </section>
                 )}
             </HeroInicio>
+
+            {/* El resto del Inicio va en la columna central (la foto de arriba es a sangre). */}
+            <div className="px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto space-y-6 mt-4">
 
             {/* «TU DIETA HOY» (doc del 21-08, tarea 4.2): el deslizador Macros · Dieta ·
                 Llevas · Falta y, debajo, «Marca lo que ya te has comido». Vive en
@@ -823,6 +826,7 @@ const InicioNuevo = () => {
                     Tu revisión personalizada está pagada. La estamos mirando y te avisamos aquí.
                 </p>
             )}
+            </div>
         </div>
     );
 };
