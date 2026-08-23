@@ -11,7 +11,6 @@ import { toast } from 'sonner';
 import { ArrowRight, ArrowLeft, Loader2, Check, ClipboardList, ImagePlus } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import BrandArrow from '../components/BrandArrow';
-import DesgloseChips from '../components/DesgloseChips';
 import PreferencesSetup, { CAJONES, PREFERENCE_CATEGORIES, EJEMPLOS } from '../components/nutrition/PreferencesSetup';
 import TresFotos from '../components/reports/TresFotos';
 
@@ -316,7 +315,10 @@ const STEPS_AJUSTE = [
             ? 'Aunque no comas siempre lo mismo, ponme un día tipo. El de ayer, por ejemplo.'
             : 'Para que sepamos de dónde partes más o menos.'),
     },
-    { type: 'final0', title: 'Y ya estaría.', desc: 'Si quieres revisar alguna respuesta, ve hacia atrás. Al calcular verás tus macros personalizados.' },
+    // «CONFIRMA TUS RESPUESTAS» (doc del 23-08, punto 16): antes decía «Y ya estaría» sin
+    // enseñar ni una sola respuesta. Ahora es el repaso con la rejilla; tocar una tarjeta
+    // salta a su pregunta y contestar devuelve aquí.
+    { type: 'final0', title: 'Confirma tus respuestas', desc: 'Repásalas antes de calcular. Si quieres cambiar algo, toca encima.' },
     { type: 'result', title: 'Tus macros' },
 ];
 
@@ -1142,8 +1144,9 @@ const QuestionnairePage = () => {
     // El día de hoy montado y guardado en cuanto salen sus macros: termina el alta y ya tiene
     // comida puesta, en vez de unos números y una pantalla vacía por delante.
     const [diaMontado, setDiaMontado] = useState(null);
-    // Momento mágico: primeros menús del banco personal (null = cargando).
-    const [menusMagia, setMenusMagia] = useState(null);
+    // Los menús de arranque (doc 23-08, punto 18): mañana y pasado, escritos de verdad.
+    // null = cargando; [] = no se pudieron montar.
+    const [diasArranque, setDiasArranque] = useState(null);
     // Macros recalculados a cada respuesta, para verlos moverse. No se aplican: son un avance.
     const [vistaPrevia, setVistaPrevia] = useState(null);
     const [calculandoVivo, setCalculandoVivo] = useState(false);
@@ -1159,6 +1162,9 @@ const QuestionnairePage = () => {
     // Retroceder cancela el avance pendiente: el último gesto del cliente manda sobre
     // cualquier cosa que estuviera programada.
     const avancePendienteRef = useRef(null);
+    // «Toca encima» del repaso (doc 23-08, punto 16): guarda a qué pantalla volver después
+    // de corregir una respuesta desde «Confirma tus respuestas». null = recorrido normal.
+    const volverAlRepasoRef = useRef(null);
     // Los macros de antes de la ultima respuesta, para poder mostrar cuanto se ha movido cada uno.
     const previosRef = useRef(null);
     // Punto de partida: fotos subidas y la ficha que se le entrega a cambio.
@@ -1402,44 +1408,33 @@ const QuestionnairePage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx]);
 
-    // Momento mágico: tres recetas del recetario cuadradas a los macros que acaba de
-    // calcular. Antes salían de la biblioteca de menús de clientes; desde el 06-08-2026
-    // esa fuente está apagada (ver lib/menuFuentes) y el recetario es la única.
-    // Se piden por separado -- el catálogo no trae cantidades, las pone menu-apply al
-    // elegir cada receta -- y a cambio el menú viene con su nombre.
+    // LOS DOS MENÚS DE ARRANQUE (doc del 23-08, punto 18). Antes eran tres recetas
+    // sueltas cuadradas a su C1; ahora son los días de MAÑANA y PASADO enteros, escritos
+    // de verdad (`montar-dia` con fecha y guardar): «para que los tengas de referencia».
+    // El de hoy ya lo escribe el envío del cuestionario, como siempre. El tipo de día
+    // sale de sus días de entreno; sin ellos, entrenamiento, que es el conservador.
     useEffect(() => {
         const s = flow[idx];
-        if (s?.type !== 'magia' || menusMagia !== null) return;
-        const config = {
-            mealKey: 'C1',
-            macros_objetivo: {},   // el backend reparte el día y toma el target de C1
-            num_comidas: answers.pref_num_comidas || 4,
-            momento_entreno: answers.pref_momento ?? 1,
+        if (s?.type !== 'magia' || diasArranque !== null) return;
+        const DIAS_JS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+        const fechaEn = (mas) => { const d = new Date(); d.setDate(d.getDate() + mas); return d; };
+        const iso = (mas) => fechaEn(mas).toLocaleDateString('en-CA');
+        const tipoDe = (mas) => {
+            const dias = answersRef.current.training_weekdays;
+            if (!Array.isArray(dias) || !dias.length) return 'entrenamiento';
+            return dias.includes(DIAS_JS[fechaEn(mas).getDay()]) ? 'entrenamiento' : 'descanso';
         };
         (async () => {
             try {
-                const cat = await api.get('/calculator/menu-catalog');
-                // Si entrena en ayunas su primera comida es la de después del entreno, y
-                // ahí toca plato, no un desayuno.
-                const enAyunas = (answers.pref_momento ?? 1) === 1;
-                const quiero = enAyunas ? 'comida' : 'desayuno';
-                const todas = cat.data?.menus || [];
-                const pegan = todas.filter(m => (m.momentos || []).includes(quiero));
-                // Se cuadran más de las que se enseñan y se muestran las tres que mejor
-                // encajan: una receta cualquiera puede quedarse lejos de sus macros, y el
-                // momento mágico es justo donde no puede verse flojo.
-                const candidatas = (pegan.length >= 3 ? pegan : todas).slice(0, 8);
-                if (!candidatas.length) { setMenusMagia([]); return; }
-                const cuadradas = await Promise.all(candidatas.map(r =>
-                    api.post('/calculator/menu-apply', { plantilla_id: r.id, ...config })
-                        .then(res => ({ ...res.data, macros_metodo: res.data.macros_totales }))
-                        .catch(() => null)
-                ));
-                setMenusMagia(cuadradas.filter(Boolean)
-                    .sort((a, b) => (a.err ?? 999) - (b.err ?? 999))
-                    .slice(0, 3));
+                const montados = await Promise.all([1, 2].map(mas =>
+                    api.post('/calculator/montar-dia', {
+                        fecha: iso(mas), guardar: true, tipo_dia: tipoDe(mas),
+                        num_comidas: answers.pref_num_comidas || 4,
+                        momento_entreno: answers.pref_momento ?? 1,
+                    }).then(r => ({ ...r.data, tipo_dia: tipoDe(mas) })).catch(() => null)));
+                setDiasArranque(montados.filter(Boolean));
             } catch {
-                setMenusMagia([]);
+                setDiasArranque([]);
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1908,6 +1903,14 @@ const QuestionnairePage = () => {
     // pantalla de macros de «nos faltan cosas tuyas», que ahí es la última.
     const goNext = () => {
         if (idx >= flow.length - 1) { navigate('/welcome'); return; }
+        // Si vino del repaso a corregir una respuesta, contestar le devuelve al repaso.
+        if (volverAlRepasoRef.current != null) {
+            const destino = volverAlRepasoRef.current;
+            volverAlRepasoRef.current = null;
+            guardarProgreso(answersRef.current, destino);
+            setIdx(destino);
+            return;
+        }
         let j = idx + 1;
         while (j < flow.length - 1 && !visible(flow[j])) j++;
         const destino = Math.min(j, flow.length - 1);
@@ -1929,6 +1932,8 @@ const QuestionnairePage = () => {
     };
     const goBack = () => {
         cancelarAvancePendiente();
+        // Retroceder a mano cancela la vuelta automática al repaso: manda su último gesto.
+        volverAlRepasoRef.current = null;
         setIdx(i => {
             let j = i - 1;
             while (j > 0 && !visible(flow[j])) j--;
@@ -2354,13 +2359,64 @@ const QuestionnairePage = () => {
         // Sin las respuestas que mueven el número no hay nada que calcular: el botón espera y
         // se dice cuáles faltan, en vez de devolver unos macros que no son de nadie.
         const bloqueado = isN0 && faltanPorContestar.length > 0;
+        // LA REJILLA DEL REPASO (doc del 23-08, punto 16): lo contestado, tarjeta a
+        // tarjeta; tocar una lleva a su pregunta y contestar devuelve aquí. Solo salen
+        // las que su recorrido de verdad preguntó (en mujer no hay biotipo, por ejemplo).
+        const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+        const etiquetaDe = (paso, valor) => {
+            const opts = segunRespuestas(paso?.options) || [];
+            const o = opts.find(x => x.value === valor);
+            // La etiqueta corta: lo de antes de los dos puntos («Muy sedentario: paso...»).
+            return o ? String(o.label).split(':')[0] : null;
+        };
+        const conAno = (v, ano) => (v == null || v === '') ? null : `${v} kg${ano ? ` (${ano})` : ''}`;
+        const REPASO = [
+            ['goal', 'Objetivo', answers.goal === 'volumen' ? 'Ganar masa muscular'
+                : answers.goal === 'definicion' ? 'Perder grasa' : null],
+            ['weight', 'Peso', answers.weight ? `${answers.weight} kg` : null],
+            ['height', 'Altura', answers.height ? `${answers.height} cm` : null],
+            ['body_fat', 'Grasa', answers.body_fat != null ? `${answers.body_fat} %` : null],
+            ['ocupacion', 'Actividad', etiquetaDe(q('actividad_diaria'), answers.actividad_diaria)],
+            ['biotype', 'Biotipo', (BIOTIPOS.find(b => b.value === answers.biotype)?.label || '').split(' (')[0] || null],
+            ['peso_maximo', 'Tu máximo', conAno(answers.peso_maximo, answers.peso_maximo_ano)],
+            ['peso_mejor_momento', 'Tu mejor forma', conAno(answers.peso_mejor_momento, answers.peso_mejor_momento_ano)],
+            ['training_weekdays', 'Cuándo entrenas',
+                Array.isArray(answers.training_weekdays) && answers.training_weekdays.length
+                    // Con sus tildes: los valores van sin ellas a propósito (backend), pero
+                    // aquí se enseñan las etiquetas de la pregunta.
+                    ? answers.training_weekdays
+                        .map(v => ({ miercoles: 'Miércoles', sabado: 'Sábado' }[v] || cap(v)))
+                        .join(', ')
+                    : null],
+        ];
+        const irACorregir = (clave) => {
+            const destino = flow.findIndex(s => s.key === clave || s.type === clave);
+            if (destino < 0) return;
+            volverAlRepasoRef.current = idx;
+            setIdx(destino);
+        };
+        const enElFlujo = (clave) => flow.some(s => s.key === clave || s.type === clave);
         body = (
             <div>
                 <Title />
+                {isN0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-6" data-testid="repaso-respuestas">
+                        {REPASO.filter(([clave]) => enElFlujo(clave)).map(([clave, rotulo, valor]) => (
+                            <button key={clave} type="button" onClick={() => irACorregir(clave)}
+                                data-testid={`repaso-${clave}`}
+                                className="text-left rounded-xl border-2 border-[#222222] bg-card px-3.5 py-3 hover:border-brand/60 transition-all">
+                                <p className="text-[10px] uppercase tracking-wider text-foreground/40 font-bold">{rotulo}</p>
+                                <p className={`text-sm font-semibold mt-0.5 ${valor ? 'text-foreground' : 'text-foreground/35'}`}>
+                                    {valor || 'Sin contestar'}
+                                </p>
+                            </button>
+                        ))}
+                    </div>
+                )}
                 {bloqueado && (
-                    <p className="text-sm text-amber-500 mb-5 -mt-6" data-testid="faltan-obligatorias">
+                    <p className="text-sm text-amber-500 mb-5" data-testid="faltan-obligatorias">
                         Antes de calcular falta que nos digas {faltanPorContestar.map(o => o.label).join(', ')}.
-                        Vuelve atrás y complétalo.
+                        Toca la tarjeta y complétalo.
                     </p>
                 )}
                 <div className="flex gap-3">
@@ -2369,7 +2425,7 @@ const QuestionnairePage = () => {
                         data-testid="calcular-macros-btn"
                         className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg disabled:opacity-40">
                         {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Check className="w-5 h-5 mr-2" />}
-                        {loading ? 'Enviando...' : isN0 ? 'Calcular mis macros' : 'Enviar'}
+                        {loading ? 'Enviando...' : isN0 ? 'Confirmar' : 'Enviar'}
                     </Button>
                 </div>
             </div>
@@ -2383,29 +2439,28 @@ const QuestionnairePage = () => {
                     recorrido (punto 15 del doc del 07-08), lo que se calcula aquí ya lleva
                     dentro las respuestas que mueven los hidratos. Así que el mensaje solo
                     depende de si hay un entrenador detrás que los vaya a repasar. */}
+                {/* LOS TEXTOS DEL DOC DEL 23-08 (punto 17) para quien no lleva entrenador:
+                    «Y ya estaría» de ceja, «iniciales» en el título -- van a mejorar con el
+                    tiempo, y se le dice --, y la próxima revisión con sus semanas y su
+                    fecha. Al del plan con entrenador se le mantiene su cierre (el aviso de
+                    las 48 horas va debajo de los números, punto 4.1). */}
+                {!entrega?.con_entrenador && (
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-brand font-bold mb-2">Y ya estaría</p>
+                )}
                 <h2 className="font-heading font-bold text-2xl md:text-3xl text-foreground mb-2 leading-tight">
-                    {/* Al del plan con entrenador hay que decirle con estas palabras que lo
-                        que tiene NO es lo definitivo: le queda el cuestionario largo por
-                        rellenar y su coach se lo revisa. El texto es el del documento de
-                        Jesús del 06-08, literal.
-
-                        Se había quitado al unificar el alta (punto 15), y era pasarse: lo que
-                        dejó de tener sentido es llamar "provisionales" a unos macros que ya
-                        llevan dentro los modificadores, no el aviso al que espera revisión. */}
-                    {/* EL AVISO VA DEBAJO DE LOS NÚMEROS (punto 4.1): «Debe ir DEBAJO DE LOS
-                        MACROS al terminar, para los planes con entrenador». Aquí arriba estaba
-                        antes de verlos, y leer «estos no son tus macros definitivos» sin haber
-                        visto todavía ningún macro no dice nada. */}
-                    Estos son tus macros
+                    {entrega?.con_entrenador ? 'Estos son tus macros' : 'Estos son tus macros iniciales'}
                 </h2>
                 {!entrega?.con_entrenador && (
                     <p className="text-foreground/60 mb-4 text-sm">
-                        {/* Sin entrenador asignado no se dice "tu entrenador": casi ningún cliente
-                            tiene uno puesto y prometer una persona que no existe se nota. Quien lo
-                            revisa entonces es el equipo, que es la verdad.
-                            Texto cerrado por Jesús el 06-08-2026 (momento 1 de la revisión
-                            suelta): lo que sostiene el número es el perfil parecido. */}
-                        {`Están adaptados a tu perfil, a partir de tus respuestas y tomando como referencia otros perfiles parecidos al tuyo.${entrega?.proxima_revision ? ` Tu próxima revisión automática será el ${entrega.proxima_revision}.` : ''}`}
+                        Están adaptados a tu perfil, basándonos en tus respuestas y tomando como
+                        referencia otros perfiles parecidos al tuyo. Conforme más tiempo estés y
+                        más información registres, mejores ajustes podremos ofrecerte cada vez
+                        que toque revisar tus macros.
+                        {entrega?.proxima_revision && (
+                            <span className="block mt-1.5 text-foreground font-semibold" data-testid="proxima-revision">
+                                {`Próxima revisión${entrega?.revision_en_dias ? ` en ${Math.round(entrega.revision_en_dias / 7)} semana${Math.round(entrega.revision_en_dias / 7) === 1 ? '' : 's'}` : ''}: ${entrega.proxima_revision}.`}
+                            </span>
+                        )}
                     </p>
                 )}
                 {m ? (
@@ -2429,7 +2484,10 @@ const QuestionnairePage = () => {
                                 </div>
                             ))}
                         </div>
-                        <DesgloseChips desglose={resultado.desglose} />
+                        {/* Las etiquetas de colores del desglose («Otro deporte +20 %»,
+                            «Engordas enseguida: sin subidas»...) SE VAN de esta pantalla
+                            (doc del 23-08, punto 17: «sobra»). El desglose sigue vivo en
+                            la calculadora de macros, que es pantalla de trabajo. */}
                         {resultado.revision?.requiere_revision && (
                             <p className="text-xs text-amber-500 font-medium">
                                 Lo que comes ahora no cuadra con lo esperado para tu % graso: el equipo lo revisará.
@@ -2527,7 +2585,10 @@ const QuestionnairePage = () => {
     } else if (step.type === 'prefs') {
         // Selector completo de alimentos (mostrar + evitar): mismo componente que
         // "Mis preferencias" de Nutrición; al guardar, sigue el flujo.
-        return (
+        // DENTRO DEL MARCO (hallazgo del mapeo del 23-08): esto hacía `return` a secas y
+        // era la única pantalla del alta sin barra de progreso ni logo, como si el
+        // cliente se hubiera salido del cuestionario a mitad.
+        body = (
             <PreferencesSetup
                 api={fetchApi}
                 initialPreferences={[]}
@@ -2545,62 +2606,75 @@ const QuestionnairePage = () => {
         // «Ir a mi panel» y se las saltaba las dos. Se vio recorriendo el alta entera con una
         // cuenta de dev; por API no se ve, porque el recorrido lo compone la pantalla.
         const esUltimo = idx >= flow.length - 1;
+        // «Sin el CUADRA CONTIGO en verde: eso fuera» (doc 23-08). Y los menús ya no son
+        // recetas sueltas: son mañana y pasado, escritos, con sus comidas.
+        const nombreComida = (k) => (k.toLowerCase().startsWith('peri') ? 'Perientreno' : k.replace('C', 'Comida '));
         body = (
             <div>
-                <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
-                    Estas son comidas que puedes comer hoy
+                <h2 className="font-heading font-bold text-2xl md:text-3xl text-foreground mb-2 leading-tight">
+                    Ahora, una muestra de lo que podrías comer con estos macros
                 </h2>
-                <p className="text-foreground/60 mb-6 text-sm md:text-base">
-                    Recetas del recetario, con las cantidades ya puestas para tus macros.
+                <p className="font-semibold text-foreground mb-1">Dos menús para empezar.</p>
+                <p className="text-foreground/60 mb-5 text-sm md:text-base">
+                    Mañana y pasado tienes dos menús con las cantidades ajustadas a tus macros,
+                    para que los tengas de referencia (puedes cambiar lo que quieras).
                 </p>
-                {menusMagia === null ? (
+                {diasArranque === null ? (
                     <div className="flex justify-center py-10">
                         <div className="animate-spin rounded-full h-9 w-9 border-4 border-brand border-t-transparent" />
                     </div>
-                ) : menusMagia.length === 0 ? (
+                ) : diasArranque.length === 0 ? (
                     <p className="text-foreground/60 text-sm mb-4">
                         El recetario te espera en <span className="font-bold text-foreground">Nutrición</span>:
                         en cada comida, pulsa "Sugiéreme un menú" y elige la receta que te apetezca.
                     </p>
                 ) : (
-                    <div className="space-y-3 mb-2">
-                        {menusMagia.map((menu, i) => (
-                            <div key={menu.plantilla_id || menu.biblioteca_id || i} className="rounded-xl border-2 border-[#222222] bg-card p-4">
-                                {menu.nombre && (
-                                    <p className="text-base font-black text-foreground mb-1">{menu.nombre}</p>
-                                )}
-                                <div className="flex items-center justify-between gap-2 mb-1.5">
-                                    <p className="text-sm font-black text-brand">
-                                        {Math.round(menu.macros_metodo?.P || 0)}P · {Math.round(menu.macros_metodo?.H || 0)}H · {Math.round(menu.macros_metodo?.G || 0)}G
+                    <div className="space-y-3 mb-2 max-h-[46vh] overflow-y-auto pr-1" data-testid="menus-arranque">
+                        {diasArranque.map((dia, i) => (
+                            <div key={dia.fecha} className="rounded-xl border-2 border-[#222222] bg-card p-4">
+                                <div className="flex items-baseline justify-between gap-2 mb-2">
+                                    <p className="text-base font-black text-foreground">
+                                        Menú {i + 1} · {i === 0 ? 'mañana' : 'pasado mañana'}
                                     </p>
-                                    {(menu.cuadrada || menu.clavado) && (
-                                        <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded-full">Cuadra contigo</span>
-                                    )}
+                                    <span className="text-[10px] uppercase tracking-wider text-foreground/40 font-bold">
+                                        {dia.tipo_dia === 'descanso' ? 'Día de descanso' : 'Día de entreno'}
+                                    </span>
                                 </div>
-                                <ul className="space-y-0.5">
-                                    {(menu.items || []).map((it, j) => (
-                                        <li key={j} className="text-sm text-foreground/80">
-                                            <span className="font-bold text-brand">{it.cantidad_display}</span> {it.nombre}
-                                        </li>
-                                    ))}
-                                </ul>
+                                <div className="space-y-2">
+                                    {Object.entries(dia.comidas || {})
+                                        .filter(([, v]) => (v.alimentos || []).length)
+                                        .sort(([a], [b]) => a.localeCompare(b))
+                                        .map(([k, v]) => (
+                                            <div key={k}>
+                                                <p className="text-sm text-foreground">
+                                                    <span className="text-foreground/40 font-semibold">{nombreComida(k)}</span>
+                                                    {v.menu_nombre && <span className="font-semibold"> · {v.menu_nombre}</span>}
+                                                </p>
+                                                <p className="text-xs text-foreground/60">
+                                                    {(v.alimentos || []).map(a =>
+                                                        `${Math.round(a.cantidad_g || 0)} g ${a.nombre}`).join(' · ')}
+                                                </p>
+                                            </div>
+                                        ))}
+                                </div>
                             </div>
                         ))}
                         <p className="text-xs text-foreground/50">
-                            Tienes el recetario entero en Nutrición, en "Sugiéreme un menú" de cada comida.
+                            Los tienes puestos en Nutrición, en su día. Y el recetario entero en
+                            "Sugiéreme un menú" de cada comida.
                         </p>
                     </div>
                 )}
                 <div className="flex gap-3 mt-6">
                     {esUltimo ? (
-                        <Button onClick={() => navigate('/welcome')}
+                        <Button onClick={() => navigate('/welcome')} data-testid="empezar-menu-1"
                             className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                            Ir a mi panel <ArrowRight className="w-5 h-5 ml-2" />
+                            Empezar con el menú 1 <ArrowRight className="w-5 h-5 ml-2" />
                         </Button>
                     ) : (
-                        <Button onClick={goNext}
+                        <Button onClick={goNext} data-testid="empezar-menu-1"
                             className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                            {tieneCoach ? 'Continuar con tu perfil' : 'Continuar'} <ArrowRight className="w-5 h-5 ml-2" />
+                            {diasArranque?.length ? 'Empezar con el menú 1' : 'Continuar'} <ArrowRight className="w-5 h-5 ml-2" />
                         </Button>
                     )}
                 </div>
@@ -2958,18 +3032,23 @@ const QuestionnairePage = () => {
             </div>
         );
     } else if (step.type === 'ya_esta_todo') {
-        // PASO 4 · después de las preferencias, con el literal del doc. Y detrás, la
-        // oferta de la revisión: el botón sigue de largo hasta ella.
+        // PASO 4 · después de las preferencias, con el literal del doc del 23-08 (punto
+        // 20): «Ya está todo · Este es tu punto de partida», la lista con lo que de
+        // verdad ha dejado hecho, la promesa del mes que viene y «Seguir» (detrás va la
+        // oferta).
+        const nMedidas = Object.values(medidasAlta).filter(v => v !== '' && v != null).length;
+        const estadoMedidas = nMedidas > 0 ? `${nMedidas} de ${MEDIDAS.length}`
+            : yaTieneMedidas ? 'Guardadas' : 'Pendientes';
         body = (
             <div>
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-2 leading-tight">
                     Ya está todo
                 </h2>
-                <p className="text-foreground/70 mb-6">Ya lo tienes todo listo.</p>
-                <div className="space-y-3 mb-8">
-                    {[['Tus macros están calculados', 'Y tu primer día montado'],
-                      ['Tus fotos y tus medidas, guardadas', 'Te avisaré en 4 semanas'],
-                      ['Tus preferencias, puestas', 'Ya te podemos montar los menús']]
+                <p className="text-foreground/70 mb-6">Este es tu punto de partida.</p>
+                <div className="space-y-3 mb-6" data-testid="punto-de-partida-lista">
+                    {[['Las tres fotos', yaTieneFotos ? 'Guardadas' : 'Pendientes'],
+                      ['Tus medidas', estadoMedidas],
+                      ['Tus preferencias', 'Guardadas']]
                         .map(([t, d]) => (
                             <div key={t} className="flex items-start gap-3">
                                 <Check className="w-5 h-5 text-brand mt-0.5 shrink-0" />
@@ -2980,9 +3059,12 @@ const QuestionnairePage = () => {
                             </div>
                         ))}
                 </div>
+                <p className="text-sm text-foreground/60 mb-8">
+                    El mes que viene te pedimos las siguientes y las vas a ver al lado de estas.
+                </p>
                 <Button onClick={goNext} data-testid="ir-a-mi-panel"
                     className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                    Ir a mi panel <ArrowRight className="w-5 h-5 ml-2" />
+                    Seguir <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
             </div>
         );
@@ -3051,9 +3133,9 @@ const QuestionnairePage = () => {
                     personas con un perfil parecido al tuyo que ya han pasado por aquí, o puedes
                     solicitar tus macros personalizados y recibir tu ajuste a medida.
                 </p>
-                <p className="text-sm text-foreground/50 mb-6">
-                    Esta segunda opción no está incluida en tu plan, tiene un coste adicional e
-                    incluye también tu plan personalizado de suplementación.
+                <p className="text-sm text-foreground/50 italic mb-6">
+                    (Esta segunda opción no está incluida en tu plan, tiene un coste adicional e
+                    incluye también tu plan personalizado de suplementación.)
                 </p>
                 <div className="space-y-3">
                     <button data-testid="oferta-no" disabled={loading}

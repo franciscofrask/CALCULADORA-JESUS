@@ -1212,7 +1212,8 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     # decidir (los macros propuestos, las respuestas del cliente y el desglose del porque).
     # La fecha de la proxima revision: en el plan que se autogestiona es la revision automatica;
     # en el plan con coach, cuando le toca repasarlos con el.
-    proxima = datetime.now(timezone.utc) + timedelta(days=dias_hasta_la_revision(profile.get("plan")))
+    dias_revision = dias_hasta_la_revision(profile.get("plan"))
+    proxima = datetime.now(timezone.utc) + timedelta(days=dias_revision)
     MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
              "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
     entrega = {
@@ -1220,6 +1221,9 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
         "con_entrenador": con_entrenador,
         "coach": None,
         "proxima_revision": f"{proxima.day} de {MESES[proxima.month - 1]}",
+        # Para el «Próxima revisión en N semanas» del doc del 23-08: los días los decide
+        # el plan (7/14/28), la pantalla solo los traduce a semanas.
+        "revision_en_dias": dias_revision,
     }
     if con_entrenador:
         propuesta_id = str(uuid.uuid4())
