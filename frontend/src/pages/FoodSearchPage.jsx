@@ -58,17 +58,17 @@ const TODAS_CATEGORIAS = (() => {
     return arr;
 })();
 
-const RENDER_CAP = 300;
-
 /**
  * CUÁNTOS SE PINTAN DE GOLPE.
  *
- * Medido: al entrar sin buscar nada, esta pantalla pintaba los 300 del tope y el documento
+ * Medido: al entrar sin buscar nada, esta pantalla pintaba 300 de golpe y el documento
  * quedaba en **69.711 px, ochenta y dos pantallas de móvil**. Nadie recorre 300 alimentos
  * por orden alfabético con el pulgar, y mientras tanto el teléfono los tiene todos montados.
  *
- * Veinte y un botón para traer más. No se quita nada -- se llega a los mismos 300 pulsando
- * -- y se dice cuántos hay, que es lo que evita que un recorte se lea como «no hay más».
+ * Veinte y un botón para traer más. No se quita nada -- pulsando se llega hasta el final
+ * de la lista -- y se dice cuántos hay, que es lo que evita que un recorte se lea como
+ * «no hay más». Antes había un tope de 300 incluso pulsando y de ahí no se pasaba: con
+ * 3.211 alimentos, «viendo 300» sin botón era un callejón (P39, doc 23-08). Fuera el tope.
  *
  * En el ordenador, cuarenta: caben dos columnas y la pantalla es más alta, así que el
  * primer golpe de vista da más sin volver a los 69.000 px. Esto era solo del teléfono
@@ -202,7 +202,7 @@ const FoodSearchPage = () => {
     }, [foods, query, cats, opcion]);
 
     const porTanda = enTelefono ? CAP_TELEFONO : CAP_ORDENADOR;
-    const aLaVista = Math.min(porTanda + deMas, filtered.length, RENDER_CAP);
+    const aLaVista = Math.min(porTanda + deMas, filtered.length);
 
     return (
         <div className="min-h-screen bg-background p-4 md:p-6">
@@ -223,8 +223,15 @@ const FoodSearchPage = () => {
                             Sugerir alimento
                         </button>
                     </div>
-                    <p className="text-muted-foreground text-sm mb-4">
+                    <p className="text-muted-foreground text-sm mb-1">
                         Busca entre todos los alimentos cargados en la calculadora. Ordenados por coincidencia con el nombre.
+                    </p>
+                    {/* El subrayado naranja distingue marca de genérico y nadie lo decía en
+                        ningún sitio (P40, doc 23-08). Una línea, con el estilo puesto encima
+                        para que se reconozca sin explicarlo dos veces. */}
+                    <p className="text-xs text-muted-foreground mb-4">
+                        Los nombres <span className="text-[#FF671F] underline underline-offset-2">subrayados en naranja</span> son
+                        marcas: tocando el nombre vas a su web.
                     </p>
 
                     <div className="relative mb-3">
@@ -313,10 +320,10 @@ const FoodSearchPage = () => {
                                 <p className="text-center text-muted-foreground text-sm py-12">Sin resultados</p>
                             )}
                         </div>
-                        {aLaVista < Math.min(filtered.length, RENDER_CAP) && (
+                        {aLaVista < filtered.length && (
                             <button onClick={() => setDeMas(n => n + porTanda)} data-testid="ver-mas-alimentos"
                                 className="w-full mt-3 py-3 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:text-brand-orange hover:border-brand-orange/40 transition-colors">
-                                Ver {Math.min(porTanda, Math.min(filtered.length, RENDER_CAP) - aLaVista)} más
+                                Ver {Math.min(porTanda, filtered.length - aLaVista)} más
                             </button>
                         )}
                     </>

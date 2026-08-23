@@ -1,7 +1,7 @@
 """
 Rutas del calculador de macros y búsqueda de alimentos.
 """
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Response
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Response, Query
 from bson import Binary
 from datetime import datetime, timezone, timedelta, date
 import math
@@ -232,11 +232,23 @@ def _fmt_macros(m: dict) -> str:
     return " / ".join(parts)
 
 @router.get("/foods-listado")
-async def get_foods_listado(user = Depends(get_current_user)):
+async def get_foods_listado(
+    limit: Optional[int] = Query(None, ge=0),
+    offset: int = Query(0, ge=0),
+    user = Depends(get_current_user),
+):
     """Lista completa de alimentos enriquecida para el Buscador (réplica de Calma
     `getTodosLosAlimentos`): macros efectivos tras la regla, info de etiqueta con los
     originales, cantidad mínima y si 'siempre puede ser sugerido'."""
     foods = await get_all_foods_cached(db)
+    # Tanda opcional (P39, doc 23-08). Sin parámetros se devuelve el catálogo entero,
+    # como siempre, para no romper a quien ya llamaba así; con limit/offset solo el
+    # tramo pedido, que es lo que evita mandar los tres mil de golpe. Se recorta antes
+    # de enriquecer para no calcular macros de fichas que no van a viajar.
+    if offset:
+        foods = foods[offset:]
+    if limit is not None:
+        foods = foods[:limit]
     out = []
     for f in foods:
         orig = {"proteinas": float(f.get("proteinas") or 0),
