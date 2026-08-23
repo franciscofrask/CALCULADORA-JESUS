@@ -122,10 +122,11 @@ const RenovacionPage = () => {
             ) : (
                 <section className="surface p-5 mb-4 flex items-start gap-3">
                     <Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    {/* El texto es el del doc del 23-08 (P55), literal: «las dos puntas del
+                        ciclo» no se entendía. */}
                     <p className="text-sm text-muted-foreground">
-                        No tenemos fotos de las dos puntas del ciclo, así que no podemos ponerlas
-                        una al lado de otra. Es lo que más enseña el cambio: si te haces unas hoy,
-                        las tendrás para el ciclo que viene.
+                        No tienes fotos del principio y del final, así que no podemos compararlas.
+                        Si te haces unas hoy, el próximo ciclo sí las tendrás.
                     </p>
                 </section>
             )}
@@ -248,7 +249,13 @@ const RenovacionPage = () => {
                             {s.por_llamada ? (
                                 <span className="font-bold text-brand text-sm whitespace-nowrap">Pedir llamada</span>
                             ) : (
-                                <span className="font-heading text-lg font-bold text-foreground">{euros(s.precio)}</span>
+                                <span className="font-heading text-lg font-bold text-foreground">
+                                    {euros(s.precio)}
+                                    {/* Los planes mensuales lo dicen (P51): 97 € a secas al
+                                        lado de un 847 € por ciclo compara peras con manzanas.
+                                        El periodo viene del catálogo, por dato. */}
+                                    {s.periodo === 'mes' && <span className="text-sm font-normal text-muted-foreground">/mes</span>}
+                                </span>
                             )}
                             {yendo === s.plan
                                 ? <Loader2 className="w-4 h-4 animate-spin text-brand" />

@@ -252,8 +252,13 @@ const LlamadasPendientes = ({ llamadas, onAtendida, onCobrar, generandoEnlace })
 
 // Admin Dashboard Home
 const AdminDashboard = () => {
-    const { api, planCatalog } = useAuth();
+    const { api, planCatalog, user } = useAuth();
     const navigate = useNavigate();
+    // EL DINERO, SOLO AL ADMIN (P62, doc 23-08). El entrenador también entra en esta
+    // portada, y aquí le salían el MRR, los próximos cobros con importes y los avisos de
+    // pagos. La regla ya regía en las secciones; ahora también aquí, y el backend además
+    // ha dejado de mandarle los importes (no es solo esconderlos).
+    const esAdmin = user?.role === 'admin';
     const [stats, setStats] = useState(null);
     const [upcoming, setUpcoming] = useState([]);
     const [clients, setClients] = useState([]);
@@ -443,7 +448,9 @@ const AdminDashboard = () => {
             try {
                 const [statsRes, upcomingRes, clientsRes, cadenceRes, revisionesRes, todoRes, llamadasRes, avisosRes] = await Promise.all([
                     api.get('/admin/dashboard-stats'),
-                    api.get('/admin/upcoming-payments'),
+                    // Los próximos cobros son dinero: al entrenador ni se le piden (el
+                    // backend le contestaría 403 igualmente).
+                    esAdmin ? api.get('/admin/upcoming-payments') : Promise.resolve({ data: { upcoming: [] } }),
                     api.get('/admin/clients'),
                     api.get('/admin/report-cadence'),
                     api.get('/admin/macro-revisiones').catch(() => ({ data: { items: [] } })),
@@ -462,10 +469,14 @@ const AdminDashboard = () => {
                 // DESPUÉS y no dentro del grupo de arriba: es la llamada a la cadencia la que
                 // crea los de reporte vencido y la que caduca los de semanas pasadas, así que
                 // pedidos a la vez se enseñaría la lista de antes de ese repaso.
-                try {
-                    const avisosRes = await api.get('/admin/stripe/alerts', { params: { resolved: false } });
-                    setAvisos(Array.isArray(avisosRes.data) ? avisosRes.data : []);
-                } catch { /* sin avisos: la tarjeta se queda vacía, no rompe el panel */ }
+                // Los avisos de pagos (cobros fallidos, bajas por impago, tarjetas) son
+                // dinero: solo para el admin (P62).
+                if (esAdmin) {
+                    try {
+                        const avisosRes = await api.get('/admin/stripe/alerts', { params: { resolved: false } });
+                        setAvisos(Array.isArray(avisosRes.data) ? avisosRes.data : []);
+                    } catch { /* sin avisos: la tarjeta se queda vacía, no rompe el panel */ }
+                }
             } catch (error) {
                 console.error('Error fetching dashboard:', error);
                 toast.error('Error al cargar dashboard');
@@ -477,7 +488,7 @@ const AdminDashboard = () => {
         fetchNotif();
         const id = setInterval(fetchNotif, 60000);
         return () => clearInterval(id);
-    }, [api, fetchNotif]);
+    }, [api, fetchNotif, esAdmin]);
 
     if (loading) {
         return (
@@ -595,7 +606,15 @@ const AdminDashboard = () => {
             {/* KPI Row */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="kpi-row">
                 <KpiCard value={stats?.total_clients || 0} label="Clientes totales" icon={Users} color="#FF671F" testId="kpi-total" />
-                <KpiCard value={stats?.active_clients || 0} label="Activos" icon={UserCheck} color="#22C55E" testId="kpi-active" />
+                {/* P63: activos = con acceso vigente, el MISMO criterio que la pestaña
+                    «Activos» de Clientes. Los marcados «activo» sin acceso van debajo,
+                    con su nombre, para que este número cuadre con aquella lista. */}
+                <KpiCard value={stats?.active_clients || 0} label="Activos" icon={UserCheck} color="#22C55E" testId="kpi-active"
+                    pie={stats?.caducados_clients > 0 ? (
+                        <span className="text-[10px] text-white/50 mt-0.5" data-testid="kpi-caducados">
+                            y {stats.caducados_clients} caducados
+                        </span>
+                    ) : null} />
                 {/* Antes ponía "En riesgo" y saltaba para tres de cada cuatro activos, así
                     que no era una alerta: era el color de fondo de la pantalla. Y sobre
                     todo no decía EN QUÉ. Ahora el número son los que tienen algo en rojo, y
@@ -628,7 +647,10 @@ const AdminDashboard = () => {
                                 : 'ni activos ni de baja'}
                         </span>
                     ) : null} />
-                <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />
+                {/* El MRR es dinero: solo admin (P62). Al entrenador el backend ni se lo manda. */}
+                {esAdmin && (
+                    <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />
+                )}
             </div>
 
             {/* "Esta semana te tocan estos seis" (punto 29). Va antes del resto del panel:
@@ -777,7 +799,7 @@ const AdminDashboard = () => {
 
                 Lo que sí va uno a uno es lo que cuesta dinero y necesita a una persona: un
                 cobro que ha fallado, una baja automática o una tarjeta caducada. */}
-            {avisos.length > 0 && (
+            {esAdmin && avisos.length > 0 && (
             <Card className="bg-[#111111] border-[#222]" data-testid="avisos-sistema">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center justify-between">
@@ -876,7 +898,8 @@ const AdminDashboard = () => {
                 </CardContent>
             </Card>
 
-            {/* Upcoming Payments */}
+            {/* Upcoming Payments: importes de cobro, solo admin (P62) */}
+            {esAdmin && (
             <Card className="bg-[#111111] border-[#222]" data-testid="upcoming-payments">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center justify-between">
@@ -917,6 +940,7 @@ const AdminDashboard = () => {
                     )}
                 </CardContent>
             </Card>
+            )}
 
             {/* Client List (compact) */}
             <Card className="bg-[#111111] border-[#222]" data-testid="client-list-compact">

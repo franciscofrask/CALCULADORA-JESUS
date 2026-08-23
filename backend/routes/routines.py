@@ -11,7 +11,9 @@ import logging
 
 from core.database import db
 from core.dias_de_entreno import dias_de_entreno
-from core.security import get_current_user, get_admin_user, assert_client_access
+from core.security import (
+    get_current_user, get_admin_user, solo_admin_borra_catalogo, assert_client_access,
+)
 from core.sin_futuro import hasta_hoy
 from core.plan_access import require_access, rutina_visible_para_el_cliente
 from routes.notifications import avisar_rutina_nueva, _hay_aviso_de_hoy
@@ -665,11 +667,14 @@ async def crear_en_biblioteca(data: Dict[str, Any], user = Depends(get_admin_use
 
 
 @admin_router.delete("/biblioteca/{rutina_id}")
-async def borrar_de_biblioteca(rutina_id: str, user = Depends(get_admin_user)):
+async def borrar_de_biblioteca(rutina_id: str, user = Depends(solo_admin_borra_catalogo)):
     """Quita una rutina de la biblioteca.
 
     No toca a quien ya la tenga puesta: al asignarla se copió, así que sus clientes siguen
     con la suya. Borrar la plantilla no le deja a nadie sin rutina.
+
+    Solo admin (P61, doc 23-08): la biblioteca de rutinas es del equipo entero. Guardar,
+    reescribir y asignar plantillas siguen abiertos al entrenador.
     """
     r = await db.routine_templates.delete_one({"id": rutina_id})
     if not r.deleted_count:

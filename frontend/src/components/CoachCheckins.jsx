@@ -264,21 +264,34 @@ const CoachCheckins = ({ clientId }) => {
                                 c.hunger_anxiety != null && `Hambre y ansiedad ${c.hunger_anxiety}/5`,
                                 c.mood != null && `Ánimo ${c.mood}/5`,
                             ].filter(Boolean);
-                            const sinDatos = !escalas.length && c.trained == null && c.nutrition_followed == null;
+                            // «NO ENTRENÓ» SOLO CUANDO CONTESTÓ QUE NO (P69, doc 23-08).
+                            // La respuesta de verdad viaja en `entreno_respuesta` (el cierre
+                            // del día de hoy: no_entrene | si_no_lo_puse). `trained` dejó de
+                            // preguntarse el 31-07 y en los check-ins viejos venía marcado a
+                            // false por defecto, así que un false a secas no es un «no»: es
+                            // «sin registro», y así se dice. Un true sí se respeta: alguien
+                            // lo marcó.
+                            const entreno = c.entreno_respuesta === 'no_entrene' ? 'no'
+                                : (c.entreno_respuesta === 'si_no_lo_puse' || c.trained === true) ? 'si'
+                                : c.trained === false ? 'sin_registro' : null;
+                            const sinDatos = !escalas.length && entreno == null && c.nutrition_followed == null;
                             return (
                                 <li key={c.id} className="px-5 py-2.5 text-xs">
                                     <div className="flex items-center justify-between gap-3">
                                         <span className="text-white/50 whitespace-nowrap">{fmt(c.created_at)}</span>
                                         <span className="text-white/70 text-right">
                                             {escalas.join(' · ')}
-                                            {c.trained != null && (
-                                                <span className={c.trained ? 'text-emerald-300' : 'text-red-300'}>
-                                                    {escalas.length ? ' · ' : ''}{c.trained ? 'Entrenó' : 'No entrenó'}
+                                            {entreno != null && (
+                                                <span className={entreno === 'si' ? 'text-emerald-300'
+                                                    : entreno === 'no' ? 'text-red-300' : 'text-white/30 italic'}>
+                                                    {escalas.length ? ' · ' : ''}
+                                                    {entreno === 'si' ? 'Entrenó'
+                                                        : entreno === 'no' ? 'No entrenó' : 'Entreno: sin registro'}
                                                 </span>
                                             )}
                                             {c.nutrition_followed != null && (
                                                 <span className={c.nutrition_followed ? 'text-emerald-300' : 'text-red-300'}>
-                                                    {(escalas.length || c.trained != null) ? ' · ' : ''}
+                                                    {(escalas.length || entreno != null) ? ' · ' : ''}
                                                     {c.nutrition_followed ? 'Dieta registrada' : 'Sin dieta registrada'}
                                                 </span>
                                             )}

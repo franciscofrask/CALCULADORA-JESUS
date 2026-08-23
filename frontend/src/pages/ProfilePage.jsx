@@ -36,27 +36,50 @@ const UPGRADE_PLAN_UI = false;
 
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const { user, profile, logout, api, refreshUser, refreshProfile, myPlan, planUnpaid, can } = useAuth();
+    const { user, profile, logout, api, refreshUser, refreshProfile, myPlan, planUnpaid, can, planCatalog } = useAuth();
     const { startTour, available: recorridoDisponible } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [verIncluye, setVerIncluye] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
-    // La baja (doc 19-08): el modal del porqué y su envío.
+    // La baja (P56 del doc 23-08): antes era un clic y fuera, sin pregunta ni alternativa.
+    // Ahora cada motivo tiene su salida, y el equipo se entera al momento.
     const [bajaAbierta, setBajaAbierta] = useState(false);
     const [motivoBaja, setMotivoBaja] = useState('');
-    const [pidiendoBaja, setPidiendoBaja] = useState(false);
+    const [detalleBaja, setDetalleBaja] = useState('');
+    const [pidiendoBaja, setPidiendoBaja] = useState(null);   // qué salida está en vuelo
 
-    const confirmarBaja = async () => {
-        setPidiendoBaja(true);
+    // El precio de Mantenimiento sale del catálogo, no de un número escrito aquí.
+    const mantenimiento = planCatalog?.mantenimiento;
+
+    // Registra la intención (motivo + salida) y avisa al equipo al momento. `salida`:
+    // 'baja' (se va de verdad), 'mantenimiento' (sigue barato), 'aplazar' (le escribimos),
+    // 'revision' (su entrenador le revisa el plan antes de irse).
+    const responderBaja = async (salida) => {
+        setPidiendoBaja(salida);
         try {
-            const r = await api.post('/billing/no-renovar', { motivo: motivoBaja });
+            const r = await api.post('/billing/no-renovar', {
+                motivo: motivoBaja,
+                detalle: detalleBaja.trim() || undefined,
+                salida,
+            });
+            if (salida === 'mantenimiento') {
+                // La intención ya está registrada; de aquí, directo al pago del plan barato.
+                const c = await api.post('/billing/checkout-session', {
+                    plan: 'mantenimiento',
+                    success_path: '/dashboard?renovado=ok',
+                    cancel_path: '/dashboard/profile',
+                });
+                if (c.data?.checkout_url) { window.location.href = c.data.checkout_url; return; }
+            }
             toast.success(r.data?.mensaje || 'Hecho. Sigues teniendo acceso hasta el final de tu ciclo.');
             setBajaAbierta(false);
+            setMotivoBaja('');
+            setDetalleBaja('');
             refreshProfile();
         } catch (e) {
             toast.error(mensajeDeError(e, 'No se pudo registrar. Inténtalo en un momento.'));
         } finally {
-            setPidiendoBaja(false);
+            setPidiendoBaja(null);
         }
     };
     const [formData, setFormData] = useState({
@@ -166,10 +189,23 @@ const ProfilePage = () => {
     // Ponía «RENOVACIÓN · No definida», que es un hueco de la base de datos en la cara de
     // alguien que paga 149 €. Jesús, 11-08: «si hay fecha, se pone la fecha; si no la hay, no
     // se enseña la etiqueta». Callar dice menos que decir que no se sabe.
+    //
+    // Y SOLO LAS FECHAS QUE EL SERVIDOR DA POR BUENAS (P50 del doc 23-08): `renovacion.*`
+    // llega ya filtrado (una «renovación» a años vista es una membresía importada de Calma,
+    // no una renovación). El `next_payment` crudo del perfil ya no entra en la cascada,
+    // porque era justo por donde se colaba el «1 de febrero de 2030».
     const fechaDeRenovacion = profile?.renovacion?.fecha
         || profile?.renovacion?.proximo_cobro
-        || profile?.next_payment
         || null;
+
+    // La fecha se pinta como dia LOCAL, no pasando el ISO a new Date(): '2026-09-22' se
+    // interpreta como medianoche UTC y en husos por detras de Greenwich salia «21 de
+    // septiembre», un dia antes del real (regla de la casa: el dia es el del navegador).
+    const pintaFecha = (iso, opciones) => {
+        const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+        if (!a || !m || !d) return '';
+        return new Date(a, m - 1, d).toLocaleDateString('es-ES', opciones);
+    };
 
     return (
         <div className="p-4 md:p-6 pb-24 md:pb-6 animate-fade-in bg-background min-h-screen relative overflow-hidden">
@@ -320,7 +356,12 @@ const ProfilePage = () => {
                                     <p className="text-3xl font-bold text-[#FF671F]" style={{ fontFamily: 'Barlow Condensed' }}>
                                         {profile.precio_cortesia
                                             ? <>Cortesía</>
-                                            : <>{profile.precio_ciclo ? `${profile.precio_ciclo}€` : '-'}<span className="text-sm font-normal text-foreground/50">/ciclo</span></>}
+                                            : <>{profile.precio_ciclo ? `${profile.precio_ciclo}€` : '-'}<span className="text-sm font-normal text-foreground/50">
+                                                {/* «/mes» o «/ciclo» lo dice el catálogo por el
+                                                    ciclo del plan (P51): El Lunes Empiezo y
+                                                    Mantenimiento son mensuales y aquí salían
+                                                    como «/ciclo». */}
+                                                /{profile.precio_periodo === 'mes' ? 'mes' : 'ciclo'}</span></>}
                                     </p>
                                     {profile.precio_cortesia && (
                                         <p className="text-xs text-foreground/50 mt-1">Tu plan no tiene cobro asociado.</p>
@@ -351,7 +392,7 @@ const ProfilePage = () => {
                                         </p>
                                         <p className={`font-semibold text-sm ${profile.renovacion?.vencida ? 'text-amber-500' : 'text-foreground'}`}
                                             data-testid="perfil-renovacion">
-                                            {new Date(fechaDeRenovacion).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                            {pintaFecha(fechaDeRenovacion, { day: 'numeric', month: 'long', year: 'numeric' })}
                                         </p>
                                     </div>
                                 )}
@@ -420,24 +461,28 @@ const ProfilePage = () => {
                     </Card>
                 )}
 
-                {/* «¿Por qué lo dejas?» — una sola pregunta, con los cinco motivos del doc.
-                    «Es lo más valioso que se saca de una baja y hoy no se pregunta nunca.» */}
-                <Dialog open={bajaAbierta} onOpenChange={setBajaAbierta}>
+                {/* LA BAJA CON SUS CUATRO MOTIVOS Y UNA SALIDA PARA CADA UNO (P56 del doc
+                    23-08). Antes era un clic y fuera: sin pregunta, sin alternativa y sin
+                    que el equipo se enterase. Ahora el motivo abre su salida (Mantenimiento
+                    si es caro, aplazar si no hay tiempo, revisión del plan si no ve
+                    resultados, texto libre si es otra cosa) y TODO lo que se confirme queda
+                    registrado y avisa al equipo al momento. */}
+                <Dialog open={bajaAbierta} onOpenChange={(o) => { setBajaAbierta(o); if (!o) { setMotivoBaja(''); setDetalleBaja(''); } }}>
                     <DialogContent className="bg-card border-border max-w-md">
                         <DialogHeader>
-                            <DialogTitle className="text-foreground">¿Por qué lo dejas?</DialogTitle>
+                            <DialogTitle className="text-foreground">¿Por qué no quieres renovar?</DialogTitle>
                         </DialogHeader>
                         <p className="text-sm text-muted-foreground -mt-1">
-                            Solo para saberlo. Sigues teniendo acceso hasta el final de tu ciclo
-                            {fechaDeRenovacion ? ` (el ${new Date(fechaDeRenovacion).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })})` : ''}.
+                            Pase lo que pase, sigues teniendo acceso hasta el final de tu ciclo
+                            {fechaDeRenovacion ? ` (el ${pintaFecha(fechaDeRenovacion, { day: 'numeric', month: 'long' })})` : ''}.
                         </p>
                         <div className="space-y-2">
-                            {[['no_consegui', 'No he conseguido lo que quería'],
-                              ['caro', 'Me sale caro'],
-                              ['no_lo_use', 'No lo he usado'],
-                              ['consegui', 'He conseguido lo que quería'],
+                            {[['caro', 'Es caro'],
+                              ['sin_tiempo', 'No tengo tiempo ahora'],
+                              ['sin_resultados', 'No estoy viendo resultados'],
                               ['otra', 'Otra cosa']].map(([clave, texto]) => (
-                                <button key={clave} type="button" onClick={() => setMotivoBaja(clave)}
+                                <button key={clave} type="button"
+                                    onClick={() => { setMotivoBaja(clave); setDetalleBaja(''); }}
                                     data-testid={`baja-motivo-${clave}`}
                                     className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
                                         motivoBaja === clave
@@ -447,11 +492,70 @@ const ProfilePage = () => {
                                 </button>
                             ))}
                         </div>
+
+                        {/* La salida de cada motivo. */}
+                        {motivoBaja === 'caro' && (
+                            <div className="rounded-lg border border-[#FF671F]/30 bg-[#FF671F]/5 p-4 space-y-3" data-testid="baja-salida-caro">
+                                <p className="text-sm text-foreground/80">
+                                    Antes de irte: tienes <b>Mantenimiento</b>
+                                    {mantenimiento?.precio ? <> por <b>{Math.round(mantenimiento.precio)} €/mes</b></> : null}.
+                                    Te quedas con la app, tus números y tus datos, y puedes volver
+                                    al programa cuando quieras.
+                                </p>
+                                <Button onClick={() => responderBaja('mantenimiento')} disabled={!!pidiendoBaja}
+                                    data-testid="baja-salida-mantenimiento"
+                                    className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold">
+                                    {pidiendoBaja === 'mantenimiento' ? 'Un momento…' : 'Pasarme a Mantenimiento'}
+                                </Button>
+                            </div>
+                        )}
+                        {motivoBaja === 'sin_tiempo' && (
+                            <div className="rounded-lg border border-[#FF671F]/30 bg-[#FF671F]/5 p-4 space-y-3" data-testid="baja-salida-sin-tiempo">
+                                <p className="text-sm text-foreground/80">
+                                    No hace falta decidirlo hoy. Lo aplazamos, te escribimos
+                                    nosotros en unos días y lo ves con calma.
+                                </p>
+                                <Button onClick={() => responderBaja('aplazar')} disabled={!!pidiendoBaja}
+                                    data-testid="baja-salida-aplazar"
+                                    className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold">
+                                    {pidiendoBaja === 'aplazar' ? 'Un momento…' : 'Aplazarlo, escribidme'}
+                                </Button>
+                            </div>
+                        )}
+                        {motivoBaja === 'sin_resultados' && (
+                            <div className="rounded-lg border border-[#FF671F]/30 bg-[#FF671F]/5 p-4 space-y-3" data-testid="baja-salida-sin-resultados">
+                                <p className="text-sm text-foreground/80">
+                                    Antes de irte, {profile?.entrenador?.nombre ? 'tu entrenador' : 'el equipo'} puede
+                                    revisar tu plan y proponerte cambios. Le avisamos ahora mismo.
+                                </p>
+                                <Button onClick={() => responderBaja('revision')} disabled={!!pidiendoBaja}
+                                    data-testid="baja-salida-revision"
+                                    className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold">
+                                    {pidiendoBaja === 'revision' ? 'Un momento…' : 'Que revisen mi plan'}
+                                </Button>
+                            </div>
+                        )}
+                        {motivoBaja === 'otra' && (
+                            <div className="space-y-2" data-testid="baja-salida-otra">
+                                <Label className="text-foreground/70 text-xs uppercase tracking-wider">Cuéntanos qué pasa</Label>
+                                <textarea value={detalleBaja} onChange={(e) => setDetalleBaja(e.target.value)}
+                                    rows={3} maxLength={500}
+                                    data-testid="baja-detalle"
+                                    placeholder="Con tus palabras: nos llega al equipo tal cual"
+                                    className="w-full rounded-lg bg-background border border-input text-foreground text-sm p-3 resize-none focus:outline-none focus:border-[#FF671F]" />
+                            </div>
+                        )}
+
                         <DialogFooter>
-                            <Button onClick={confirmarBaja} disabled={!motivoBaja || pidiendoBaja}
+                            <Button onClick={() => responderBaja('baja')}
+                                disabled={!motivoBaja || !!pidiendoBaja || (motivoBaja === 'otra' && !detalleBaja.trim())}
                                 data-testid="baja-confirmar"
-                                className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold">
-                                {pidiendoBaja ? 'Un momento…' : 'Confirmar'}
+                                variant={motivoBaja && motivoBaja !== 'otra' ? 'outline' : 'default'}
+                                className={motivoBaja && motivoBaja !== 'otra'
+                                    ? 'bg-transparent border-input text-foreground/70 hover:text-foreground'
+                                    : 'bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold'}>
+                                {pidiendoBaja === 'baja' ? 'Un momento…'
+                                    : motivoBaja && motivoBaja !== 'otra' ? 'Seguir con la baja' : 'Confirmar la baja'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

@@ -10,7 +10,9 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from core.database import db
-from core.security import get_current_user, get_admin_user, assert_client_access
+from core.security import (
+    get_current_user, get_admin_user, solo_admin_borra_catalogo, assert_client_access,
+)
 from core.plan_access import require_access
 from core.tiempo import hoy_madrid
 from models.supplements import (
@@ -227,6 +229,13 @@ async def update_catalog_item(item_id: str, item: SupplementCatalogItem, user=De
     """Actualiza un suplemento del catálogo."""
     doc = item.model_dump()
     doc["id"] = item_id
+    # El PUT acepta `activo`, así que sin este cerrojo era la puerta de atrás del DELETE:
+    # un entrenador que no puede desactivar por el DELETE lo conseguía mandando el mismo
+    # documento con activo=false (P61, doc 23-08). Editar sigue abierto; apagar, no.
+    if user.get("role") != "admin" and doc.get("activo") is False:
+        existente = await db.supplement_catalog.find_one({"id": item_id}, {"_id": 0, "activo": 1})
+        if existente and existente.get("activo") is not False:
+            raise HTTPException(status_code=403, detail="Esto solo puede borrarlo el administrador")
     res = await db.supplement_catalog.update_one({"id": item_id}, {"$set": doc})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Suplemento no encontrado")
@@ -234,8 +243,12 @@ async def update_catalog_item(item_id: str, item: SupplementCatalogItem, user=De
 
 
 @admin_router.delete("/catalog/{item_id}")
-async def delete_catalog_item(item_id: str, user=Depends(get_admin_user)):
-    """Borrado lógico (activo=false) de un suplemento del catálogo."""
+async def delete_catalog_item(item_id: str, user=Depends(solo_admin_borra_catalogo)):
+    """Borrado lógico (activo=false) de un suplemento del catálogo.
+
+    Solo admin (P61, doc 23-08): es lógico pero destructivo igual -- el suplemento
+    desaparece del selector de TODOS los coaches. Asignar y quitar suplementos a un
+    cliente (save / version) sigue abierto al entrenador."""
     res = await db.supplement_catalog.update_one({"id": item_id}, {"$set": {"activo": False}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Suplemento no encontrado")

@@ -1580,8 +1580,10 @@ const ClientDetailPage = () => {
                             {/* Del catálogo cuando el perfil no trae precio propio (punto 2.4c).
                                 Lo resuelve el servidor: aquí salía «0€/ciclo» en la ficha del
                                 mismo cliente al que la lista le pone bien su precio. */}
+                            {/* «/mes» en los planes mensuales (P51 del 23-08): el periodo
+                                lo dice el servidor por el catálogo, no un if por nombre. */}
                             <InfoItem icon={CreditCard} label="Precio"
-                                value={profile?.precio_cortesia ? 'Cortesía' : `${profile?.precio_ciclo ?? profile?.price ?? 0}€/ciclo`} />
+                                value={profile?.precio_cortesia ? 'Cortesía' : `${profile?.precio_ciclo ?? profile?.price ?? 0}€/${profile?.precio_periodo || 'ciclo'}`} />
                             <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
                             <InfoItem icon={Calendar} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES') : '-'} />
                         </div>

@@ -319,15 +319,30 @@ async def get_renovacion(user=Depends(get_current_user)):
     )
 
 
-# Los cinco motivos del doc del 19-08 («Mi plan y la baja»), literales. «Es lo más
-# valioso que se saca de una baja y hoy no se pregunta nunca.»
+# Los cuatro motivos del doc del 23-08 (P56), cada uno con su salida en la pantalla:
+#   caro           → se le enseña Mantenimiento (60 €/mes) como forma barata de seguir
+#   sin_tiempo     → aplazar la decisión y que el equipo le escriba
+#   sin_resultados → su entrenador le revisa el plan antes de irse (aviso con prioridad)
+#   otra           → campo de texto libre
 MOTIVOS_DE_BAJA = {
-    "no_consegui": "No he conseguido lo que quería",
-    "caro": "Me sale caro",
-    "no_lo_use": "No lo he usado",
-    "consegui": "He conseguido lo que quería",
+    "caro": "Es caro",
+    "sin_tiempo": "No tengo tiempo ahora",
+    "sin_resultados": "No estoy viendo resultados",
     "otra": "Otra cosa",
 }
+
+# Las claves del modal anterior (doc 19-08) se siguen aceptando: quien tenga la pantalla
+# vieja cargada en el navegador no puede volver con un 400 por pedir la baja.
+MOTIVOS_DE_BAJA_ANTIGUOS = {
+    "no_consegui": "No he conseguido lo que quería",
+    "no_lo_use": "No lo he usado",
+    "consegui": "He conseguido lo que quería",
+}
+
+# Lo que el cliente eligió hacer con su motivo. "baja" es la única que marca `no_renovar`;
+# las otras tres son quedarse (o al menos no irse todavía) y lo que hacen es avisar al
+# equipo al momento y dejar la intención escrita en su ficha.
+SALIDAS_DE_BAJA = ("baja", "mantenimiento", "aplazar", "revision")
 
 
 @router.post("/no-renovar")
@@ -348,12 +363,70 @@ async def no_quiero_renovar(payload: Dict[str, Any] = Body(default={}),
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
     motivo_clave = (payload.get("motivo") or "").strip()
-    if motivo_clave not in MOTIVOS_DE_BAJA:
+    textos = {**MOTIVOS_DE_BAJA_ANTIGUOS, **MOTIVOS_DE_BAJA}
+    if motivo_clave not in textos:
         raise HTTPException(status_code=400, detail="Dinos el motivo, aunque sea «otra cosa».")
-    motivo = MOTIVOS_DE_BAJA[motivo_clave]
+    motivo = textos[motivo_clave]
+    # El texto libre de «otra cosa» (y de quien quiera añadir algo): viaja al equipo tal
+    # cual lo escribió, recortado para que un pegote no reviente la tarjeta de la tarea.
+    detalle = (payload.get("detalle") or "").strip()[:500]
+    if detalle:
+        motivo = f"{motivo} · «{detalle}»" if motivo_clave != "otra" else detalle
+
+    salida = (payload.get("salida") or "baja").strip()
+    if salida not in SALIDAS_DE_BAJA:
+        raise HTTPException(status_code=400, detail="Esa salida no existe.")
+
+    ahora = datetime.now(timezone.utc).isoformat()
+    nombre = user.get("name") or user.get("email") or "cliente"
+
+    # LAS SALIDAS QUE NO SON IRSE (P56 del doc 23-08). No marcan `no_renovar` -- el
+    # cliente ha elegido quedarse o esperar --, pero la intención queda escrita en su
+    # ficha y el equipo se entera AL MOMENTO por el mismo canal de siempre: una tarea
+    # con su aviso (core/tareas_automaticas), la que ya usaba la baja.
+    if salida != "baja":
+        await db.client_profiles.update_one(
+            {"user_id": user["id"]},
+            {"$set": {"baja_intencion": {"motivo": textos[motivo_clave],
+                                         "motivo_clave": motivo_clave,
+                                         "detalle": detalle or None,
+                                         "salida": salida, "cuando": ahora}}})
+        try:
+            from core.tareas_automaticas import tarea_intencion_de_baja
+            if salida == "revision":
+                # «Que su entrenador le revise el plan antes de irse»: al suyo si lo
+                # tiene, y para hoy: es la de prioridad.
+                await tarea_intencion_de_baja(
+                    db, client_id=perfil.get("id"), nombre=nombre,
+                    que=(f"{nombre} no está viendo resultados y se planteaba no renovar. "
+                         "Revisar su plan hoy y escribirle antes de que acabe su ciclo"),
+                    trainer_id=perfil.get("trainer_id"), para_hoy=True)
+            elif salida == "aplazar":
+                await tarea_intencion_de_baja(
+                    db, client_id=perfil.get("id"), nombre=nombre,
+                    que=(f"{nombre} no tiene tiempo ahora y aplaza la decisión de renovar. "
+                         "Escribirle estos días para verlo con calma"),
+                    para_hoy=True)
+            else:  # mantenimiento
+                await tarea_intencion_de_baja(
+                    db, client_id=perfil.get("id"), nombre=nombre,
+                    que=(f"{nombre} dice que su plan le sale caro y se pasa a Mantenimiento. "
+                         "Comprobar que termina el cambio"),
+                    para_hoy=True)
+        except Exception as e:
+            logger.error(f"[baja] no se pudo crear la tarea de intención: {e}")
+        # El precio de Mantenimiento sale del catálogo, no de un número escrito aquí.
+        _precio_mant = (PLAN_CATALOG.get("mantenimiento") or {}).get("precio")
+        mensajes = {
+            "mantenimiento": ("Perfecto. Te llevamos al pago de Mantenimiento: "
+                              + (f"{_precio_mant:.0f} € al mes y " if _precio_mant else "")
+                              + "te quedas con la app y tus datos."),
+            "aplazar": "Hecho, lo aplazamos. Te escribimos estos días y lo decides con calma.",
+            "revision": "Hecho. Le pasamos tu plan a tu entrenador para que lo revise y te escriba.",
+        }
+        return {"ok": True, "salida": salida, "mensaje": mensajes[salida]}
 
     # La marca en su ficha: es lo que leen la renovación, el panel y los avisos.
-    ahora = datetime.now(timezone.utc).isoformat()
     await db.client_profiles.update_one(
         {"user_id": user["id"]},
         {"$set": {"no_renovar": {"motivo": motivo, "motivo_clave": motivo_clave,

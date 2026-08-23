@@ -132,19 +132,27 @@ def test_el_total_del_panel_es_el_de_la_tabla_de_clientes(panel):
 
 
 def test_los_activos_se_cuentan_igual_en_las_dos_pantallas(panel):
+    """Desde P63 (doc 23-08) el criterio unico es el del servidor: activo = con acceso
+    vigente (`acceso.activo`, lo que mira la pestaña «Activos» de Clientes), no la
+    etiqueta `status`, que contaba a los caducados como activos e inflaba el MRR."""
     stats, lista = panel
     activos = [c for c in lista
-               if c.get("status") == "activo" and not c.get("es_tu_ficha")]
+               if (c.get("acceso") or {}).get("activo") and not c.get("es_tu_ficha")]
     assert stats["active_clients"] == len(activos), (
         f"el panel dice {stats['active_clients']} activos y en la tabla hay {len(activos)}")
 
 
 def test_el_total_cuadra_con_sus_partes(panel):
-    """«"0 bajas" con 188 totales y 184 activos: faltan cuatro por algun sitio»."""
+    """«"0 bajas" con 188 totales y 184 activos: faltan cuatro por algun sitio».
+
+    Desde P63 hay un cajon mas y siguen siendo excluyentes: activos (con acceso) +
+    caducados (etiqueta «activo» sin acceso) + bajas + otros = total."""
     stats, _ = panel
-    partes = stats["active_clients"] + stats["inactive_clients"] + stats["otros_clients"]
+    partes = (stats["active_clients"] + stats.get("caducados_clients", 0)
+              + stats["inactive_clients"] + stats["otros_clients"])
     assert stats["total_clients"] == partes, (
         f"{stats['total_clients']} totales frente a {stats['active_clients']} activos + "
+        f"{stats.get('caducados_clients', 0)} caducados + "
         f"{stats['inactive_clients']} bajas + {stats['otros_clients']} otros = {partes}")
 
 

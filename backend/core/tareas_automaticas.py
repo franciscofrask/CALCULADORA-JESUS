@@ -345,3 +345,21 @@ async def tarea_baja_pedida(db, *, client_id: str, nombre: str, motivo: str) -> 
                       sobre_quien=client_id, sobre_quien_nombre=nombre,
                       clave=f"baja:{client_id}:{datetime.now(timezone.utc).date().isoformat()}",
                       origen="auto:baja_pedida")
+
+
+async def tarea_intencion_de_baja(db, *, client_id: str, nombre: str, que: str,
+                                  trainer_id: Optional[str] = None,
+                                  para_hoy: bool = False) -> None:
+    """El aviso AL MOMENTO del «no quiero renovar» con salida (P56 del doc 23-08): el
+    cliente estuvo a punto de irse y eligió una alternativa (aplazar, revisión del plan,
+    pasar a Mantenimiento). Va por el mismo canal que todo lo demás -- una tarea con su
+    campanita (`crear_tarea` avisa al asignado) --, no por uno nuevo. `para_hoy` es la
+    prioridad de la casa: la tarea cae en la bandeja de hoy, no en «lo que viene»."""
+    quien = await _destinatarios(db)
+    hoy = datetime.now(timezone.utc).date().isoformat()
+    await crear_tarea(db, a_quien=trainer_id or quien["jenny"],
+                      que=que,
+                      para_cuando=hoy if para_hoy else None,
+                      sobre_quien=client_id, sobre_quien_nombre=nombre,
+                      clave=f"intencion_baja:{client_id}:{hoy}",
+                      origen="auto:intencion_baja")

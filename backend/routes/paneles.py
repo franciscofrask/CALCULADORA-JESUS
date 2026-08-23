@@ -129,6 +129,20 @@ def _plan_de(catalogo: Dict[str, Any], p: Dict[str, Any]) -> Dict[str, Any]:
     return catalogo.get(codigo_de_plan(p.get("plan"))) or {}
 
 
+def _plan_lleva_entrenador(plan: Dict[str, Any]) -> bool:
+    """True si el plan incluye entrenador detrás (habilitaciones.acompanamiento).
+
+    Es el criterio de la casa para saber si un plan lleva acompañamiento: `merged_catalog`
+    completa `acompanamiento` en todas las entradas (solo_app | con_entrenador |
+    con_entrenador_y_llamadas). ELM y Mantenimiento son solo_app: sus clientes no tienen
+    entrenador QUE ASIGNAR, así que contarlos como «sin entrenador» era inflar la lista
+    con gente que está exactamente como su plan manda (P64, doc 23-08: 82 donde había ~5).
+    Un plan que no está en el catálogo sale como solo_app y no cuenta: si no se sabe qué
+    incluye, no se le apunta trabajo a nadie."""
+    hab = plan.get("habilitaciones") or {}
+    return (hab.get("acompanamiento") or "solo_app") != "solo_app"
+
+
 def _fila(p: Dict[str, Any], u: Optional[Dict[str, Any]], plan: Dict[str, Any]) -> Dict[str, Any]:
     """La fila básica que llevan todas las listas: quién es y de qué plan."""
     return {
@@ -451,7 +465,10 @@ async def panel_entrenador(trainer_id: Optional[str] = None, user=Depends(get_ad
         raise HTTPException(status_code=404, detail="Ese entrenador no existe")
 
     profiles, umap = await _activos_con_usuarios()
-    sin_asignar = sum(1 for p in profiles if not p.get("trainer_id"))
+    # Sin asignar = su plan lleva entrenador y no tiene a nadie (P64): los solo_app
+    # (ELM, Mantenimiento) no cuentan, no hay nada que asignarles.
+    sin_asignar = sum(1 for p in profiles
+                      if not p.get("trainer_id") and _plan_lleva_entrenador(_plan_de(catalogo, p)))
     mios = [p for p in profiles if p.get("trainer_id") == tid]
     ids = [p["id"] for p in mios]
 
@@ -587,7 +604,9 @@ async def panel_operaciones(user=Depends(get_admin_user)):
         plan = _plan_de(catalogo, p)
         fila = _fila(p, u, plan)
 
-        if not p.get("trainer_id"):
+        # Solo si su plan LLEVA entrenador (P64): al de ELM o Mantenimiento no le falta
+        # nadie, su plan es sin acompañamiento.
+        if not p.get("trainer_id") and _plan_lleva_entrenador(plan):
             sin_entrenador.append(fila)
 
         faltas = [nombre for campo, nombre in (("height", "altura"), ("goal", "objetivo"))

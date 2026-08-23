@@ -142,6 +142,36 @@ def _en_una_frase(info: Dict[str, Any]) -> str:
     return f"{frase.rstrip('.')}." if frase else ""
 
 
+def periodo_de_cobro(info: Dict[str, Any]) -> str:
+    """"mes" si el plan se cobra al mes, "ciclo" si por ciclo. Sale del catalogo
+    (ciclo.tipo), no del nombre del plan: es el dato del que Mi perfil y la renovacion
+    sacan el «/mes» o el «/ciclo» (P51 del doc 23-08)."""
+    tipo = ((info.get("ciclo") or {}).get("tipo") or "").lower().strip()
+    return "mes" if tipo == "mensual" else "ciclo"
+
+
+def _que_recibe(info: Dict[str, Any]) -> str:
+    """El respaldo cuando el plan no trae `en_una_linea`: la frase se saca de sus
+    habilitaciones, que es lo que de verdad recibe. Antes aqui vivia «Más gente encima
+    de tus números» para todo lo que costara mas, y en un plan de autogestion como ELM
+    era mentira (P53 y P54 del doc 23-08)."""
+    hab = info.get("habilitaciones") or {}
+    piezas = []
+    if (hab.get("acompanamiento") or "").startswith("con_entrenador"):
+        piezas.append("Con entrenador detrás")
+    else:
+        piezas.append("Sin entrenador, a tu ritmo")
+    rutina = hab.get("rutina")
+    if rutina == "personalizada":
+        piezas.append("rutina personalizada")
+    elif rutina in ("del_mes", "opcional"):
+        piezas.append("rutina del mes")
+    reportes = hab.get("reportes") or []
+    if reportes:
+        piezas.append(f"reporte {reportes[0]}")
+    return " · ".join(piezas) + "."
+
+
 def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             catalogo: Dict[str, Dict[str, Any]], precio_alta: Optional[float],
             suscripcion_viva: bool = False) -> List[Dict[str, Any]]:
@@ -173,11 +203,17 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             "plan": actual,
             "nombre": info.get("name"),
             "precio": precio,
+            "periodo": periodo_de_cobro(info),
             "precio_congelado": bool(precio_alta and precio_alta != info.get("precio")),
             "por_checkout": legacy,
             "titulo": "Seguir igual",
-            "detalle": ("Sigues en tu plan de siempre, con todo lo que incluye."
-                        if legacy else "Otras 12 semanas con lo mismo."),
+            # La duracion sale del catalogo: a un plan mensual (ELM, Mantenimiento) se le
+            # decia «otras 12 semanas» con toda la cara (cazado con el P51 del 23-08).
+            "detalle": ("Sigues en tu plan de siempre, con todo lo que incluye." if legacy
+                        else "Otro mes con lo mismo." if periodo_de_cobro(info) == "mes"
+                        else f"Otras {(info.get('ciclo') or {}).get('semanas')} semanas con lo mismo."
+                        if (info.get("ciclo") or {}).get("semanas")
+                        else "Otro ciclo con lo mismo."),
         })
 
     # 2) Cambiar de nivel. Los que no tiene, mas caros primero: subir es lo que se quiere
@@ -186,23 +222,23 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
                    key=lambda c: catalogo.get(c, {}).get("precio") or 0, reverse=True)
     for code in otros:
         info = catalogo.get(code) or {}
-        sube = (info.get("precio") or 0) > (catalogo.get(actual, {}).get("precio") or 0)
         fuera.append({
             "tipo": "cambiar",
             "plan": code,
             "nombre": info.get("name"),
             "precio": info.get("precio"),
+            "periodo": periodo_de_cobro(info),
             "precio_congelado": False,
             "por_llamada": es_por_llamada(code),
-            "titulo": "Subir a " + (info.get("name") or code) if sube else "Pasar a " + (info.get("name") or code),
-            # La frase la pone el catalogo (`en_una_linea`), que es donde vive el nombre.
-            # Estaban escritas aqui a mano, y ademas sin tildes -- "Mas gente encima de tus
-            # numeros" -- porque este fichero se escribio sin acentos. Al cliente le llegaba
-            # asi. Ahora hay un solo sitio donde dice que es cada plan.
+            # «Cambiar a», no «Subir a» ni «Pasar a» (P54 del doc 23-08): son planes
+            # distintos, no escalones. Desde un plan de 177 € salia «Subir a El Lunes
+            # Empiezo · 97 €», que ni sube ni tiene sentido como escalera.
+            "titulo": "Cambiar a " + (info.get("name") or code),
+            # La frase la pone el catalogo (`en_una_linea`) y, si el plan no la trae, se
+            # saca de sus habilitaciones: siempre dice QUE RECIBE, nunca compara precios.
             "detalle": _en_una_frase(info) or (
                 "Hablamos antes de entrar." if es_por_llamada(code)
-                else "Más gente encima de tus números." if sube
-                else "Menos acompañamiento, mismo método."),
+                else _que_recibe(info)),
         })
 
     # 3) Salir a la membresia. Es la ultima y se dice como lo que es, sin adornos.
@@ -214,6 +250,7 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             "plan": salida,
             "nombre": info.get("name"),
             "precio": info.get("precio"),
+            "periodo": periodo_de_cobro(info),
             "precio_congelado": False,
             "titulo": "Dejarlo por ahora",
             "detalle": "Te quedas con la app y tus datos por "

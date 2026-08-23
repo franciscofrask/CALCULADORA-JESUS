@@ -13,8 +13,8 @@ import os
 
 from core.database import db
 from core.security import (
-    get_admin_user, get_admin_only_user, assert_client_access, hash_password, generate_temp_password,
-    decode_token,
+    get_admin_user, get_admin_only_user, solo_admin_borra_catalogo, assert_client_access,
+    hash_password, generate_temp_password, decode_token,
 )
 
 # Carpeta local con las fotos de progreso importadas de Calma (solo dev).
@@ -982,6 +982,16 @@ async def update_client_admin(client_id: str, data: ClientProfileUpdate, user = 
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     # El coach se cambia solo por PUT /clients/{id}/trainer (ahí viven las reglas de permisos)
     update_data.pop("trainer_id", None)
+    # LOS MACROS NO ENTRAN POR AQUÍ (punto 27 del doc del 23-08): esta ruta hacía $set de
+    # macros_training/rest/peri sin dejar rastro en macro_history, y ese histórico es el
+    # que alimenta los avisos, la vigencia por fecha y el modelo predictivo. Todo guardado
+    # de macros pasa por PUT /clients/{id}/macros, que sí archiva. Se rechaza en alto, no
+    # en silencio: quien llame por aquí tiene que enterarse de que no ha guardado.
+    if any(update_data.get(k) for k in ("macros_training", "macros_rest", "macros_periworkout")):
+        raise HTTPException(
+            status_code=400,
+            detail="Los macros no se guardan por aquí: usa la pestaña de Macros "
+                   "(PUT /admin/clients/{id}/macros), que deja el ajuste en el histórico.")
     # La excepcion (punto 39) es el unico campo donde la cadena VACIA significa algo:
     # "quitala". Con el filtro de arriba, mandar "" la deja tal cual estaba y el coach se
     # queda creyendo que la ha borrado -- justo el tipo de malentendido que este campo
@@ -1634,20 +1644,53 @@ async def admin_restore_user(user_id: str, user=Depends(get_admin_only_user)):
 @router.get("/dashboard-stats")
 async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     """Métricas reales del negocio con agregación MongoDB."""
+    from core.plan_access import estado_de_acceso
+
     now = datetime.now(timezone.utc)
     first_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     # Sin el equipo: son 11 perfiles con plan que no son negocio (ver _fuera_el_equipo).
     solo_clientes = await _fuera_el_equipo()
-    total = await db.client_profiles.count_documents(solo_clientes)
-    active = await db.client_profiles.count_documents({**solo_clientes, "status": "activo"})
-    inactive = await db.client_profiles.count_documents(
-        {**solo_clientes, "status": {"$in": ["inactivo", "baja", "cancelado"]}})
-    # EL HUECO DE LOS CUATRO (punto 2.4g): «"0 bajas" con 188 totales y 184 activos: faltan
-    # cuatro por algún sitio». Son los `pendiente_pago` y demás estados intermedios, que no
-    # caían ni en activos ni en bajas y desaparecían de la suma. Un total que no cuadra con
-    # sus partes hace que no te creas ninguna de las tres cifras.
-    otros = max(0, total - active - inactive)
+
+    # UN SOLO CRITERIO DE «ACTIVO» (P63, doc 23-08). Aquí se contaba por la etiqueta
+    # `status`, que alguien puso una vez y no se entera de que pasa el tiempo, y el panel
+    # decía «170 activos» mientras la lista de Clientes -- que mira `estado_de_acceso`, el
+    # mismo criterio que la puerta de la app -- decía «Activos 132 · Caducados 39». El MRR
+    # se calculaba sobre esos 170, o sea, inflado con gente que ya no puede ni entrar.
+    #
+    # El criterio que queda es el del servidor: activo = con acceso vigente
+    # (estado_de_acceso, que mira plan, Stripe y fin de ciclo). El marcado «activo» al que
+    # se le acabó lo pagado va aparte, en `caducados_clients`, y no suma MRR.
+    todos = await db.client_profiles.find(
+        solo_clientes,
+        # OJO con `status`: `has_active_access` lo lee, y sin el en la proyeccion daba
+        # "pago pendiente" a todo el mundo y el semaforo salia rojo entero. Y sin
+        # `current_period_end` / `checkout_status` -- los dos campos que mira la puerta de
+        # la app -- el fin de ciclo no cortaba y el caducado volvia a contar como activo.
+        {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "price": 1, "created_at": 1,
+         "cycle_start": 1, "status": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
+         "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
+         "current_period_end": 1, "checkout_status": 1, "updated_at": 1,
+         "ultimo_contacto_externo": 1},
+    ).to_list(5000)
+    total = len(todos)
+    # Los cuatro cajones, excluyentes y en este orden, para que el total cuadre siempre
+    # con sus partes: con acceso, bajas, caducados (etiqueta «activo» sin acceso) y otros.
+    active_profiles, caducados = [], 0
+    inactive, otros = 0, 0
+    for p in todos:
+        if estado_de_acceso(p)["activo"]:
+            active_profiles.append(p)
+        elif (p.get("status") or "") in ("inactivo", "baja", "cancelado"):
+            inactive += 1
+        elif p.get("status") == "activo":
+            caducados += 1
+        else:
+            # EL HUECO DE LOS CUATRO (punto 2.4g): los `pendiente_pago` y demás estados
+            # intermedios, que no caían ni en activos ni en bajas y desaparecían de la
+            # suma. Un total que no cuadra con sus partes hace que no te creas ninguna.
+            otros += 1
+    active = len(active_profiles)
 
     # HAY QUE MIRARLOS (punto 32 del 07-08). Antes esto era "en riesgo": activo, semana >= 3
     # y sin reporte en 14 dias. Saltaba para el 76% de los activos, o sea que no era una
@@ -1656,16 +1699,9 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     #
     # Ahora se cuenta con el mismo semaforo de la lista, que mide cada celda contra el plazo
     # DE SU PLAN y no contra un 14 fijo, y solo cuenta el que tiene alguna celda en
-    # regular-malo o peor. Los `info` (lo que su plan no incluye) no cuentan.
-    active_profiles = await db.client_profiles.find(
-        {**solo_clientes, "status": "activo"},
-        # OJO con `status`: `has_active_access` lo lee, y sin el en la proyeccion daba
-        # "pago pendiente" a todo el mundo y el semaforo salia rojo entero.
-        {"_id": 0, "id": 1, "user_id": 1, "plan": 1, "created_at": 1, "cycle_start": 1,
-         "status": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
-         "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
-         "ultimo_contacto_externo": 1},
-    ).to_list(2000)
+    # regular-malo o peor. Los `info` (lo que su plan no incluye) no cuentan. Se reparte a
+    # los ACTIVOS DE VERDAD (con acceso): el caducado no es trabajo de seguimiento, es un
+    # caducado, y metido aquí volvía a pintar el panel de rojo.
     staff_ids = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
     hablado_a: Dict[str, str] = {}
     async for m in db.messages.find({"sender_id": {"$in": list(staff_ids)}},
@@ -1707,8 +1743,9 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         ],
     })
 
-    # Plan distribution + MRR en una sola agregación. Cubre TODOS los planes del
-    # catálogo (activos, legacy, especiales), no solo los cuatro históricos.
+    # Plan distribution + MRR sobre los MISMOS activos de arriba (P63): el caducado ni
+    # cuenta en la barra de planes ni suma MRR. Cubre TODOS los planes del catálogo
+    # (activos, legacy, especiales), no solo los cuatro históricos.
     plans = {}
     mrr = 0
     # El MRR se calcula en Python y no con una agregación porque hace falta el catálogo:
@@ -1718,31 +1755,27 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     from routes.plans import _overrides_by_code
     from models.user import merged_catalog
     catalogo = merged_catalog(await _overrides_by_code())
-    for p in await db.client_profiles.find(
-            {**solo_clientes, "status": "activo"},
-            {"_id": 0, "plan": 1, "price": 1}).to_list(3000):
+    for p in active_profiles:
         plan = p.get("plan") or "sin_plan"
         plans[plan] = plans.get(plan, 0) + 1
         mrr += precio_mensual(p, catalogo)
     mrr = round(mrr, 2)
 
-    # Revenue: suma en la base de datos, no en Python
-    rev = await db.payments.aggregate([
-        {"$match": {"status": "success"}},
-        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}},
-    ]).to_list(1)
-    total_revenue = rev[0]["total"] if rev else 0
-
-    return {
+    salida = {
         "total_clients": total,
         "active_clients": active,
+        # Los marcados «activo» a los que se les acabó el acceso (P63): en la lista de
+        # Clientes son la pestaña «Caducados», y aquí van con nombre para que el KPI de
+        # activos cuadre con ella a simple vista.
+        "caducados_clients": caducados,
         "at_risk_clients": at_risk,
         # El reparto POR CELDA: cuantos van bien, regular y mal en cada cosa. Es lo que
         # deja decir "78 sin reporte a tiempo" en vez de una cifra que no distingue nada.
         "semaforo": reparto,
         "bajas_mes": bajas_mes,
         "inactive_clients": inactive,
-        # Los que no son ni activos ni bajas (punto 2.4g): total = activos + bajas + otros.
+        # Los que no son ni activos ni bajas ni caducados (punto 2.4g):
+        # total = activos + caducados + bajas + otros.
         "otros_clients": otros,
         # Y EN QUÉ ESTADO ESTÁN, que la suma ya cuadraba pero la pantalla no los nombraba
         # (punto 63, QA del 15-08). «+ 5 ni activos ni de baja» no le dice a nadie qué
@@ -1757,14 +1790,30 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
             ]).to_list(10)
         ],
         "plans": plans,
-        "mrr": mrr,
-        "total_revenue": total_revenue,
     }
+
+    # EL DINERO, SOLO AL ADMIN (P62, doc 23-08). La regla ya regía en las secciones
+    # (Cobros, panel de Dirección) pero la portada se la saltaba: el MRR y la facturación
+    # le llegaban también al entrenador. No basta esconderlo en el front: los importes
+    # directamente no viajan si quien pregunta no es admin.
+    if user.get("role") == "admin":
+        salida["mrr"] = mrr
+        # Revenue: suma en la base de datos, no en Python
+        rev = await db.payments.aggregate([
+            {"$match": {"status": "success"}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}},
+        ]).to_list(1)
+        salida["total_revenue"] = rev[0]["total"] if rev else 0
+
+    return salida
 
 
 @router.get("/upcoming-payments")
-async def get_upcoming_payments(user = Depends(get_admin_user)):
-    """Clientes con cobro en los próximos 7 días."""
+async def get_upcoming_payments(user = Depends(get_admin_only_user)):
+    """Clientes con cobro en los próximos 7 días.
+
+    Solo admin (P62, doc 23-08): cada fila lleva el importe del cobro, y el dinero no es
+    del entrenador. La portada del panel ya no lo pide para ese rol."""
     now = datetime.now(timezone.utc)
     seven_days = now + timedelta(days=7)
     now_iso = now.isoformat()
@@ -1988,14 +2037,17 @@ async def get_todo_semana(user = Depends(get_admin_user)):
 async def get_dashboard_stats(user = Depends(get_admin_user)):
     """Legacy dashboard endpoint (backwards compatible)."""
     stats = await get_dashboard_stats_v2(user)
-    return {
+    salida = {
         "total_clients": stats["total_clients"],
         "active_clients": stats["active_clients"],
         "plans": stats["plans"],
-        "mrr": stats["mrr"],
-        "total_revenue": stats["total_revenue"],
         "clients_by_plan": stats["plans"],
     }
+    # Para un trainer el v2 ya no trae dinero (P62): aquí tampoco se le inventa.
+    for clave in ("mrr", "total_revenue"):
+        if clave in stats:
+            salida[clave] = stats[clave]
+    return salida
 
 # ==================== TRAINERS ====================
 
@@ -2029,6 +2081,21 @@ async def _siguiente_id_de_alimento() -> int:
     ultimo = await db.foods.find_one({"id": {"$type": ["int", "long", "double"]}},
                                      {"_id": 0, "id": 1}, sort=[("id", -1)])
     return int((ultimo or {}).get("id") or 0) + 1
+
+
+def _filtro_food_id(food_id: str) -> Dict[str, Any]:
+    """El filtro por id de alimento, tolerante con el tipo.
+
+    Los alimentos del catalogo llevan id ENTERO (ver `_siguiente_id_de_alimento`), pero un
+    parametro de ruta llega siempre como texto: `{"id": "123"}` no casa con `{"id": 123}`
+    en Mongo, asi que el PUT y el DELETE de /admin/foods devolvian 404 para TODO el
+    catalogo (se destapo al probar el candado del P61). Se busca por las dos formas."""
+    formas: List[Any] = [food_id]
+    try:
+        formas.append(int(food_id))
+    except ValueError:
+        pass
+    return {"id": {"$in": formas}}
 
 
 def _food_doc_from_fields(f: dict, categorias: Optional[str], nuevo_id=None) -> dict:
@@ -2254,7 +2321,7 @@ async def admin_create_food(data: AdminFoodCreate, user = Depends(get_admin_user
 @router.put("/foods/{food_id}")
 async def admin_update_food(food_id: str, data: FoodSuggestionUpdate, user = Depends(get_admin_user)):
     """Edita un alimento del catálogo (incluye categorías)."""
-    existing = await db.foods.find_one({"id": food_id}, {"_id": 0})
+    existing = await db.foods.find_one(_filtro_food_id(food_id), {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Alimento no encontrado")
 
@@ -2275,16 +2342,20 @@ async def admin_update_food(food_id: str, data: FoodSuggestionUpdate, user = Dep
 
     if not updates:
         return {"ok": True}
-    await db.foods.update_one({"id": food_id}, {"$set": updates})
+    await db.foods.update_one(_filtro_food_id(food_id), {"$set": updates})
     invalidate_foods_cache()
     await audit(user, "editar", f"Editó el alimento {food_id}")
     return {"ok": True}
 
 
 @router.delete("/foods/{food_id}")
-async def admin_delete_food(food_id: str, user = Depends(get_admin_user)):
-    """Elimina un alimento del catálogo (uso excepcional, no recuperable)."""
-    res = await db.foods.delete_one({"id": food_id})
+async def admin_delete_food(food_id: str, user = Depends(solo_admin_borra_catalogo)):
+    """Elimina un alimento del catálogo (uso excepcional, no recuperable).
+
+    Solo admin (P61, doc 23-08): db.foods es el catálogo GLOBAL -- borrar aquí le quita
+    el alimento a todos los clientes y a todas las dietas por montar. Crear y editar
+    siguen abiertos al equipo (get_admin_user)."""
+    res = await db.foods.delete_one(_filtro_food_id(food_id))
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Alimento no encontrado")
     invalidate_foods_cache()

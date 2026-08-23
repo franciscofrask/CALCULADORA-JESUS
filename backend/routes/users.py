@@ -124,6 +124,12 @@ async def get_client_profile(user = Depends(get_current_user)):
     catalogo = merged_catalog(await _overrides_by_code())
     datos["precio_ciclo"] = precio_de_ciclo(profile, catalogo)
     datos["precio_cortesia"] = bool(profile.get("comp_plan"))
+    # Y CADA CUANTO (P51 del doc 23-08): «97 €/ciclo» en El Lunes Empiezo y «60 €/ciclo»
+    # en Mantenimiento eran mentira a medias -- son mensuales. El sufijo sale del ciclo
+    # del plan en el catalogo, no de un if por nombre.
+    from core.renovacion import periodo_de_cobro
+    datos["precio_periodo"] = periodo_de_cobro(
+        catalogo.get(codigo_de_plan(profile.get("plan"))) or {})
     # LO QUE SU PLAN PROMETE DEL CHAT (tarea 1.5). El catalogo ya lo sabe por plan
     # (Gold: «menos de 24 h»; Calculadora: nada), pero solo lo leia el panel de admin y
     # el chat del cliente decia «menos de 24 horas» a todos. Viajan aqui para que la
@@ -141,10 +147,32 @@ async def get_client_profile(user = Depends(get_current_user)):
     # `next_payment`, que es el próximo COBRO, y los migrados no tienen ninguno. Lo que se
     # sabe de cuándo termina lo pagado está en `current_period_end` (Stripe) o en
     # `fin_de_ciclo` (calendario de arranque), y si esa fecha ya pasó hay que decirlo.
-    _fin = str(profile.get("current_period_end") or profile.get("fin_de_ciclo") or "")[:10] or None
+    # Y EL CANDADO DE LAS FECHAS IMPORTADAS (P50 del doc 23-08). Habia perfiles enseñando
+    # «Próxima renovación: 1 de febrero de 2030»: la fecha venia de una membresía de Calma
+    # importada tal cual (una fila «Gold · 1/1/2026 a 1/2/2030»). Ningún plan del catálogo
+    # produce una renovación a más de un año vista -- el ciclo más largo que se vende es
+    # anual (ELM 800 €/año) --, así que una fecha más allá de ese horizonte no es una
+    # renovación: es un dato heredado. Se cae a la del ciclo y, si tampoco la hay creíble,
+    # no se enseña nada (la pantalla ya calla sin fecha).
+    _horizonte = (datetime.now(timezone.utc) + timedelta(days=370)).date().isoformat()
+
+    def _fecha_creible(v):
+        f = str(v or "")[:10]
+        return f if f and f <= _horizonte else None
+
+    _fin = _fecha_creible(profile.get("current_period_end")) or _fecha_creible(profile.get("fin_de_ciclo"))
+    # «La del ciclo»: sin fecha de pago creíble, el final del ciclo en marcha se calcula
+    # (arranque + semanas del ciclo). Es lo que el cliente tiene delante de verdad.
+    if not _fin and datos.get("cycle_start") and datos.get("cycle_total_weeks"):
+        try:
+            _fin = (datetime.fromisoformat(str(datos["cycle_start"])[:10])
+                    + timedelta(weeks=int(datos["cycle_total_weeks"]))).date().isoformat()
+        except (ValueError, TypeError):
+            pass
     datos["renovacion"] = {
         "fecha": _fin,
-        "proximo_cobro": profile.get("next_payment"),
+        # El mismo candado para el próximo cobro: Mi perfil cae en él si no hay fecha.
+        "proximo_cobro": _fecha_creible(profile.get("next_payment")) and profile.get("next_payment"),
         "vencida": bool(_fin and _fin < datetime.now(timezone.utc).date().isoformat()),
     }
     return ClientProfile(**datos)
@@ -1795,16 +1823,21 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
     vigente = entradas[0] if entradas else None
 
     # LA CABECERA DEL DOC 19-08: «Última revisión: 2 de julio · Próxima: 30 de julio». La
-    # última es la fecha del ajuste vigente; la próxima, esa fecha más el ritmo del plan
-    # (el mismo `dias_hasta_la_revision` que usa la entrega del cuestionario).
+    # última es la fecha del ajuste vigente. LA PRÓXIMA SALE DE LA MISMA VENTANA QUE EL
+    # BOTÓN (punto 25 del doc del 23-08): aquí se calculaba con el plazo del catálogo
+    # (`dias_hasta_la_revision`) y el botón con core/ventana_revision, y a Jesús la
+    # pantalla le decía «Próxima revisión: 31 de agosto» con un botón que se abría el 6
+    # de septiembre (y en Silver, al revés). Una sola fuente: la ventana. Abierta, la
+    # próxima es hoy (ya puede revisar).
     ultima_revision = vigente.get("fecha") if vigente else None
     proxima_revision = None
-    if ultima_revision:
-        try:
-            d = datetime.strptime(ultima_revision, "%Y-%m-%d")
-            proxima_revision = (d + timedelta(days=dias_hasta_la_revision(profile.get("plan")))).strftime("%Y-%m-%d")
-        except (ValueError, TypeError):
-            pass
+    try:
+        from core.ventana_revision import ventana_de_revision
+        ventana = await ventana_de_revision(db, profile)
+        proxima_revision = hoy if ventana.get("abierta") else ventana.get("se_abre")
+    except Exception as e:  # noqa: BLE001 - la cabecera puede vivir sin fecha
+        logging.getLogger("uvicorn.error").warning(
+            "no se pudo resolver la ventana de revisión: %s", e)
 
     return {
         # EL HISTÓRICO ES PARA TODOS (doc 19-08, bloque 09): lo que cambia por plan es

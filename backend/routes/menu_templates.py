@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
 
 from core.database import db
-from core.security import get_admin_user
+from core.security import get_admin_user, solo_admin_borra_catalogo
 from meal_templates import load_menu_templates
 from calculator import get_categoria_principal
 
@@ -185,7 +185,9 @@ async def update_template(template_id: str, data: dict, user=Depends(get_admin_u
 
 
 @router.delete("/{template_id}")
-async def delete_template(template_id: str, user=Depends(get_admin_user)):
+async def delete_template(template_id: str, user=Depends(solo_admin_borra_catalogo)):
+    """Solo admin (P61, doc 23-08): estos menús son el recetario GLOBAL que ve todo el
+    mundo en «Sugiéreme un menú». Crear y editar siguen abiertos al equipo."""
     result = await db.menu_templates.delete_one({"id": template_id})
     if result.deleted_count == 0:
         raise HTTPException(404, "Menú no encontrado")

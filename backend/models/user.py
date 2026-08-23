@@ -122,7 +122,9 @@ PLAN_CATALOG = {
         # OJO CON EL COBRO: el importe real sale del Price de Stripe
         # (STRIPE_PRICE_NIVEL1); cambiarlo aquí cambia el escaparate. El Price de 247 lo
         # tiene que crear Francisco en Stripe y poner su id en el .env.
-        "name": "Calculadora", "en_una_linea": "Menos acompañamiento, mismo método",
+        # La frase dice QUE RECIBE, sacada de su ficha (P54 del doc 23-08): «menos
+        # acompañamiento» comparaba con otro plan en vez de decir que trae este.
+        "name": "Calculadora", "en_una_linea": "Por tu cuenta: calculadora, rutina del mes y reporte mensual",
         "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 247.0, "precio_nota": "247€ por ciclo de 12 semanas",
@@ -155,7 +157,9 @@ PLAN_CATALOG = {
     "nivel2": {
         # La ficha del doc del 19-08 ("Gold · 847 € · 12 semanas"). El Price de 847 lo
         # tiene que crear Francisco en Stripe.
-        "name": "Gold", "en_una_linea": "Más gente encima de tus números",
+        # «Más gente encima de tus números» FUERA (P53 del doc 23-08): la frase sale de la
+        # ficha del plan, que es lo que de verdad recibe quien lo contrata.
+        "name": "Gold", "en_una_linea": "Entrenador detrás de tus números: rutina personalizada y reporte quincenal",
         "estado": "activo", "asignable": True,
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         "precio": 847.0, "precio_nota": "847€ por ciclo de 12 semanas",
@@ -223,6 +227,10 @@ PLAN_CATALOG = {
         # A los 55 no se les toca el precio: hay quien paga 67 y quien paga 87 (el precio
         # de cada cliente vive en su perfil; este es el de catálogo para el que entre).
         "name": "El Lunes Empiezo", "estado": "activo", "asignable": True,
+        # Sin esta frase, la pantalla de renovación le colgaba el «más gente encima de tus
+        # números» de la escalera de precios, y ELM es autogestión: no hay nadie encima
+        # (P53 del doc 23-08). Lo que dice es su ficha: solo app y catálogo de recursos.
+        "en_una_linea": "Sin entrenador: la app entera, la rutina del mes y el catálogo de recursos",
         "ciclo": {"tipo": "mensual", "semanas": None},
         "precio": 97.0, "precio_nota": "97€/mes · la membresía (antiguos 67€ u 87€ · 800€/año)",
         "precios": [{"label": "Mensual", "importe": 97.0, "periodo": "mes"},
@@ -1120,6 +1128,10 @@ class ClientProfile(BaseModel):
     # y si no el de su plan en el catalogo. Un cero solo se respeta con cortesia marcada.
     precio_ciclo: Optional[float] = None
     precio_cortesia: Optional[bool] = None
+    # CADA CUANTO SE PAGA ESE PRECIO (P51 del doc 23-08): "mes" para los planes de ciclo
+    # mensual (ELM, Mantenimiento), "ciclo" para el resto. Sale del catalogo (ciclo.tipo),
+    # no de un if por nombre de plan: Mi perfil decia «97 €/ciclo» a un plan mensual.
+    precio_periodo: Optional[str] = None
     # Cuando se le acaba lo pagado (punto 2.4d): {fecha, proximo_cobro, vencida}. `fecha` es
     # `current_period_end` o `fin_de_ciclo`; `proximo_cobro` es el `next_payment` de siempre,
     # que es otra cosa y era lo unico que se enseñaba.

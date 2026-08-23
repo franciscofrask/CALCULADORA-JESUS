@@ -168,6 +168,21 @@ async def get_admin_only_user(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
+async def solo_admin_borra_catalogo(user: dict = Depends(get_current_user)) -> dict:
+    """Solo administradores, para BORRAR (o apagar) recursos GLOBALES del catálogo:
+    alimentos, menús, plantillas de rutina y suplementos (P61 del doc 23-08; es el M1
+    de la auditoría del 22-08, ya con decisión de cerrarlo).
+
+    Un entrenador sigue gestionando lo de SUS clientes -- protocolos, rutinas, menús
+    personales -- y sigue pudiendo crear y editar en el catálogo; lo que no puede es
+    quitar una pieza que usa todo el mundo. El mensaje es distinto del de
+    `get_admin_only_user` a propósito: aquí no se le niega una sección, se le niega
+    un borrado concreto."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Esto solo puede borrarlo el administrador")
+    return user
+
+
 def assert_client_access(user: dict, profile: Optional[dict]) -> None:
     """Autorización a nivel de recurso para endpoints staff que operan sobre un cliente.
 

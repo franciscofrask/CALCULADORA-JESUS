@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
 
 from core.database import db
-from core.security import get_admin_user
+from core.security import get_admin_user, solo_admin_borra_catalogo
 
 router = APIRouter(prefix="/admin/biblioteca-menus", tags=["biblioteca-menus"])
 
@@ -207,8 +207,11 @@ async def editar(menu_id: str, data: dict, user=Depends(get_admin_user)):
 
 
 @router.delete("/{menu_id}")
-async def borrar(menu_id: str, user=Depends(get_admin_user)):
-    """Quita un menú de la biblioteca: deja de proponerse a nadie."""
+async def borrar(menu_id: str, user=Depends(solo_admin_borra_catalogo)):
+    """Quita un menú de la biblioteca: deja de proponerse a nadie.
+
+    Solo admin (P61, doc 23-08): la biblioteca es GLOBAL -- lo que se borra aquí deja de
+    proponerse a todos los clientes. Corregir un menú (PUT) sigue abierto al equipo."""
     r = await db.meal_library.delete_one({"id": menu_id})
     if r.deleted_count == 0:
         raise HTTPException(404, "Ese menú no existe")

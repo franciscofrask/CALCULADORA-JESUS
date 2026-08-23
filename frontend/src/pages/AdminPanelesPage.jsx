@@ -557,8 +557,11 @@ const PanelOperaciones = ({ api, onAsignar }) => {
                         } catch { /* sin hora, se queda el tipo solo */ }
                         return <span className="text-[10px] text-white/40">{c.tipo}{hora ? ` · ${hora}` : ''}</span>;
                     }} />
+                {/* P64: solo cuentan los clientes cuyo plan LLEVA entrenador (el filtro
+                    vive en el backend): a los de ELM o Mantenimiento no les falta nadie. */}
                 <ListaSeleccionable titulo="Sin entrenador" icono={Users} color="#EAB308"
-                    sub="Clientes sin nadie asignado" items={datos.sin_entrenador?.clientes} onAsignar={onAsignar} />
+                    sub="Su plan lleva entrenador y no tienen a nadie asignado"
+                    items={datos.sin_entrenador?.clientes} onAsignar={onAsignar} />
                 <ListaSeleccionable titulo="Sin datos" icono={AlertTriangle} color="#A855F7"
                     sub="Les falta algo para poder trabajar" items={datos.sin_datos?.clientes} onAsignar={onAsignar}
                     extra={(c) => c.falta ? <span className="text-[10px] text-white/40 truncate max-w-[9rem]" title={c.falta}>{c.falta}</span> : null} />
