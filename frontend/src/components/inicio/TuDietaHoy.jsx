@@ -230,6 +230,12 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
     const nadaMarcado = hechas.length === 0 && extrasDia.length === 0;
 
     const irANutricion = () => navigate('/dashboard/nutrition');
+    // El peri aterriza EN el peri (P32 del 23-08): pinchar su tarjeta te dejaba en la
+    // cocina con la Comida 1 delante. Se va al bloque que el día tenga (Intra o Post).
+    const irAlPeri = () => {
+        const clave = (comidasGuardadas.Intra || (reparto?.periworkout || {}).Intra) ? 'Intra' : 'Post';
+        navigate(`/dashboard/nutrition?comida=${clave}`);
+    };
 
     return (
         <>
@@ -390,7 +396,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
 
                 {/* El peri va después y SIN casilla: el peri no se marca. */}
                 {hayPeri && (
-                    <button onClick={irANutricion} data-testid="peri-hoy"
+                    <button onClick={irAlPeri} data-testid="peri-hoy"
                         className="surface surface-hover w-full p-3.5 sm:p-4 flex items-center gap-3 text-left group border-l-4 border-l-brand">
                         <div className="w-9 h-9 bg-brand/10 rounded-xl flex items-center justify-center flex-shrink-0">
                             <Zap className="w-4 h-4 text-brand" />

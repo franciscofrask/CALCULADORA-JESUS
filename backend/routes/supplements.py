@@ -197,22 +197,40 @@ async def guia_de_suplementacion(user=Depends(get_current_user)):
 admin_router = APIRouter(prefix="/admin/supplements", tags=["admin-supplements"])
 
 
+# Las marcas que la importación de la guía trajo EN EL PROPIO TÍTULO («... - NO USAR»,
+# «Suplemento obsoleto»). El criterio vive en _sanear_catalogo_suplementos.es_basura, que
+# es quien las apaga por datos; aquí se reutiliza para que el selector tampoco las ofrezca
+# mientras los datos sigan sucios (P34, doc 23-08): en prod quedaron con activo=True y el
+# coach podía pautárselas a un cliente.
+from _sanear_catalogo_suplementos import es_basura
+
+
+def _ofrecible(ficha: dict) -> bool:
+    """Si la ficha se puede OFRECER al coach para añadirla a un protocolo. No decide
+    nada sobre lo ya asignado: un protocolo que la lleve se sigue sirviendo tal cual,
+    porque el protocolo guarda su propio snapshot del ítem."""
+    return not es_basura(ficha.get("titulo"))
+
+
 # ── Catálogo (CRUD) ──────────────────────────────────────────────────────
 @admin_router.get("/catalog")
 async def list_catalog(include_inactive: bool = False, user=Depends(get_admin_user)):
     """Lista el catálogo de suplementos.
 
     Sin parámetros es el SELECTOR: lo que el coach ve al añadir un suplemento a un
-    protocolo. Ahí solo entran las fichas activas. La limpieza de la importación de la
-    guía (duplicados de semillas, «NO USAR», «obsoleto») se hace por DATOS con
-    `_sanear_catalogo_suplementos.py`, que las desactiva: las fichas legítimas de la guía
-    siguen siendo elegibles, que para eso se volcaron (bloque 08 del doc 19-08).
+    protocolo. Ahí solo entran las fichas activas Y sin la marca «NO USAR»/«obsoleto» en
+    el título: la limpieza de datos (`_sanear_catalogo_suplementos.py`) las apaga, pero
+    el endpoint no se fía de que ya haya corrido, que en prod se colaron activas (P34,
+    doc 23-08). Las fichas legítimas de la guía siguen siendo elegibles, que para eso se
+    volcaron (bloque 08 del doc 19-08).
 
     Con `include_inactive=true` (la página del catálogo, que es donde se cura) se devuelve
-    TODO: para desactivar una ficha primero hay que poder verla.
+    TODO, también la basura: para apagar o arreglar una ficha primero hay que poder verla.
     """
     q = {} if include_inactive else {"activo": True}
     items = await db.supplement_catalog.find(q, {"_id": 0}).sort("orden", 1).to_list(500)
+    if not include_inactive:
+        items = [i for i in items if _ofrecible(i)]
     return items
 
 
@@ -352,6 +370,9 @@ async def suggest_protocol(client_id: str, user=Depends(get_admin_user)):
     es_definicion = "defin" in objetivo or "cut" in objetivo or "perder" in objetivo
 
     catalog = await db.supplement_catalog.find({"activo": True}, {"_id": 0}).sort("orden", 1).to_list(500)
+    # La propuesta OFRECE, igual que el selector: nada de «NO USAR»/«obsoleto» aunque
+    # sigan activas en la base (P34, doc 23-08).
+    catalog = [c for c in catalog if _ofrecible(c)]
 
     def sexo_ok(c):
         return c.get("sexo", "ambos") in (sexo, "ambos")

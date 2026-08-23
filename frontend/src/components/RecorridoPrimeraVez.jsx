@@ -138,7 +138,9 @@ export const PASOS_RECORRIDO = [
     },
     {
         id: 'peri',
-        titulo: 'El perientreno va aparte',
+        // «Va aparte» era mentira a medias desde el Inicio nuevo (P32 del 23-08): sus
+        // macros van DENTRO del total del día; lo que tiene propio es el bloque.
+        titulo: 'El perientreno tiene su propio bloque',
         texto: 'Lo que tomas durante y después de entrenar tiene su propio bloque, al final. Sus macros ya están contados en el total del día que ves arriba.',
         Esquema: EsquemaPerientreno,
     },

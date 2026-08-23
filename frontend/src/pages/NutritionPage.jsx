@@ -730,6 +730,17 @@ const NutritionPage = () => {
         setCurrentDate(hoyISO());
     }, [uid]);
 
+    // ?comida=Intra|Post|C1..C4: aterrizar CON ESA COMIDA elegida. Es el remate del
+    // P32 del 23-08: pinchar el bloque del peri en Inicio te dejaba en la cocina con
+    // la Comida 1 delante, como si el peri no fuera contigo.
+    useEffect(() => {
+        const comida = new URLSearchParams(window.location.search).get('comida');
+        if (comida && /^(C[1-4]|Intra|Post)$/.test(comida)) {
+            setSelectedMeal(comida);
+            setExpandedMeals(prev => ({ ...prev, [comida]: true }));
+        }
+    }, []);
+
     // Se guarda la fecha vista y el día en que se vio, para lo de arriba. Y se refleja en la
     // URL, para que copiar la barra de direcciones lleve al día que estás mirando: se cambia
     // sin recargar ni apilar historial, así que el botón de atrás sigue haciendo lo suyo.
