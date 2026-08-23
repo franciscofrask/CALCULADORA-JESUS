@@ -650,9 +650,14 @@ def _dias_con_el_perfil_a_medias(perfil: dict, hoy) -> Optional[int]:
     # trae la calculadora en modo «personalizado», o sea que hay alguien detrás que le va a
     # poner los macros a mano. Dos criterios para la misma pregunta acaban contradiciéndose y
     # avisando a quien no tiene nada que rellenar.
+    #
+    # Y EL QUE COMPRÓ EL AJUSTE DE 87 € TAMBIÉN (doc del 23-08, punto 24): su plan no
+    # cambia, pero el cuestionario largo se le abre igual («exactamente igual que un
+    # Gold», core/ajuste_a_medida). Solo con el plan, a ese el aviso no le llegaba nunca.
     from core.plan_access import modo_calculadora
 
-    if modo_calculadora(perfil.get("plan")) != "personalizado":
+    con_ajuste_pagado = bool((perfil.get("ajuste_a_medida") or {}).get("cobrado"))
+    if modo_calculadora(perfil.get("plan")) != "personalizado" and not con_ajuste_pagado:
         return None
 
     desde = (perfil.get("questionnaire_completed_at")

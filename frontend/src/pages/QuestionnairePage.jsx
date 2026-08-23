@@ -1147,6 +1147,9 @@ const QuestionnairePage = () => {
     // Los menús de arranque (doc 23-08, punto 18): mañana y pasado, escritos de verdad.
     // null = cargando; [] = no se pudieron montar.
     const [diasArranque, setDiasArranque] = useState(null);
+    // «Próximos pasos» (doc 23-08, punto 26): el cierre del camino con entrenador. Guarda
+    // a dónde ir tras el «Entendido»; mientras tiene valor, esa pantalla manda sobre todo.
+    const [pasosFinales, setPasosFinales] = useState(null);
     // Macros recalculados a cada respuesta, para verlos moverse. No se aplican: son un avance.
     const [vistaPrevia, setVistaPrevia] = useState(null);
     const [calculandoVivo, setCalculandoVivo] = useState(false);
@@ -1653,6 +1656,45 @@ const QuestionnairePage = () => {
     // ── P10: leer la dieta que trae el cliente ────────────────────────────────
     // (La puerta «Un día mío» se quitó el 23-08: en el alta nadie tiene días creados,
     // así que `mis-dias` ya no se consulta desde aquí.)
+
+    // «PRÓXIMOS PASOS» (doc del 23-08, punto 26): la última pantalla del camino con
+    // entrenador, después de enviar el cuestionario completo. Va aquí arriba y manda
+    // sobre el recorrido: el largo ya está enviado y no hay paso al que volver.
+    if (pasosFinales) {
+        return (
+            <Shell progress={100}>
+                <div data-testid="proximos-pasos">
+                    <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-6 leading-tight">
+                        Próximos pasos
+                    </h2>
+                    <div className="space-y-4 mb-6">
+                        {[['Hoy', 'Ya puedes usar la app (estos días no cuentan, van de regalo).'],
+                          ['Antes del viernes', 'Recibirás tu primer programa: macros definitivos, plan de suplementación y primera rutina.'],
+                          ['Lunes', 'Comienzo oficial.']]
+                            .map(([cuando, que]) => (
+                                <div key={cuando} className="flex items-start gap-4">
+                                    <span className="w-36 flex-shrink-0 text-sm font-bold text-brand uppercase tracking-wide mt-0.5">{cuando}</span>
+                                    <p className="text-sm text-foreground/80">{que}</p>
+                                </div>
+                            ))}
+                    </div>
+                    <p className="text-sm text-foreground/60 mb-8">
+                        Ahora danos unos días para poder revisar tus respuestas y preparar tu
+                        plan. Cualquier duda, tienes el chat.
+                    </p>
+                    <Button data-testid="proximos-pasos-entendido" disabled={loading}
+                        onClick={async () => {
+                            setLoading(true);
+                            try { await refreshProfile(); } catch (e) { /* la app refresca sola al entrar */ }
+                            navigate(pasosFinales);
+                        }}
+                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
+                        Entendido <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                </div>
+            </Shell>
+        );
+    }
 
     // El ALTA no se puede repetir (ni por el enlace). El cuestionario de AJUSTE sí: si cambia de
     // trabajo o empieza a hacer otro deporte, lo vuelve a pasar y sus macros se recalculan.
@@ -2188,9 +2230,12 @@ const QuestionnairePage = () => {
                 tiempo_intentandolo: answers.tiempo_intentandolo || null,
                 motivo_apuntarse: answers.motivo_apuntarse || null,
             });
-            await refreshProfile();
             toast.success('¡Perfil completo! El equipo ya tiene toda la información.');
-            navigate(irA);
+            // «PRÓXIMOS PASOS» ANTES DE SOLTARLE EN LA APP (doc 23-08, punto 26). El
+            // refresco del perfil espera al «Entendido»: hecho aquí, el recorrido se
+            // recompone debajo de la pantalla (el largo pasa a completado) y se la lleva
+            // por delante antes de que la lea.
+            setPasosFinales(irA);
         } catch (e) {
             toast.error(mensajeDeError(e, 'Error al guardar el perfil'));
         } finally {
@@ -2448,7 +2493,9 @@ const QuestionnairePage = () => {
                     <p className="text-[11px] uppercase tracking-[0.2em] text-brand font-bold mb-2">Y ya estaría</p>
                 )}
                 <h2 className="font-heading font-bold text-2xl md:text-3xl text-foreground mb-2 leading-tight">
-                    {entrega?.con_entrenador ? 'Estos son tus macros' : 'Estos son tus macros iniciales'}
+                    {/* Al del plan con entrenador, el título del doc del 23-08 (punto 23):
+                        «primeros», porque los definitivos se los manda su equipo. */}
+                    {entrega?.con_entrenador ? 'Ya tienes tus primeros macros' : 'Estos son tus macros iniciales'}
                 </h2>
                 {!entrega?.con_entrenador && (
                     <p className="text-foreground/60 mb-4 text-sm">
@@ -2503,10 +2550,11 @@ const QuestionnairePage = () => {
                     planes con entrenador: es a ellos a quienes les queda una revisión. */}
                 {entrega?.con_entrenador && (
                     <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 p-3" data-testid="cierre-del-test">
-                        <p className="text-sm font-semibold text-foreground">Estos no son tus macros definitivos.</p>
-                        <p className="text-sm text-foreground/70 mt-0.5">
-                            Son los que vas a usar hasta que revisemos tu cuestionario. Rellénalo lo antes posible y en
-                            menos de 48 horas recibirás los tuyos personalizados.
+                        {/* El texto del doc del 23-08 (punto 23), literal. */}
+                        <p className="text-sm text-foreground/80">
+                            Recuerda que son provisionales: en menos de 48 horas revisamos tus
+                            respuestas y terminamos de ajustarlos. Mientras tanto, ya puedes
+                            empezar a crear tu día.
                         </p>
                     </div>
                 )}
@@ -2856,41 +2904,32 @@ const QuestionnairePage = () => {
         // le metía de cabeza en el cuestionario largo sin preguntarle: veinticinco pantallas
         // más justo cuando acaba de terminar veinticuatro. Ahora elige, y si se va a la
         // calculadora le queda la tarjeta de «Completa tu perfil» en Inicio.
+        // LOS TEXTOS DEL DOC DEL 23-08 (punto 24): la pregunta en el título, lo que falta
+        // dicho entero, y cada botón con su coletilla. «Lo dejo para luego» deja la
+        // tarjeta «Completar perfil» en Inicio (ya existe) y el aviso llega a los 3 días.
         body = (
             <div>
                 <h2 className="font-heading font-bold text-3xl md:text-4xl text-foreground mb-3 leading-tight">
-                    Ya puedes empezar a usar la calculadora
+                    ¿Seguimos ahora o lo dejas para luego?
                 </h2>
                 <p className="text-foreground/70 mb-4">
-                    O terminamos tu perfil ahora. Los macros que tienes son provisionales, pero
-                    puedes crear tu día desde ya.
+                    Nos faltan tus fotos, tus medidas, tus preferencias de comida y unas
+                    preguntas más. Sin eso no podemos terminar de ajustarte los macros ni
+                    prepararte la rutina.
                 </p>
-                <div className="surface p-4 mb-6 border-l-4 border-l-brand">
-                    <p className="text-sm text-foreground/80">
-                        Para arrancar de verdad necesitamos <strong className="text-foreground">tus fotos y tus
-                        medidas</strong>: sin eso no podemos ponerte los macros buenos ni montarte la rutina.
-                    </p>
-                    {/* CON LA FECHA, no con «siempre un lunes» (bloque 6 del doc del 18-08:
-                        «No se le dice cuándo empieza»). El lunes de arranque ya está
-                        calculado y guardado desde que paga -- es el que ancla su ciclo -- y
-                        aun así ninguna pantalla se lo decía.
-
-                        Y NADA MÁS (corrección del punto 46, doc del 19-08). Aquí ponía además
-                        «Tus macros definitivos los tendrás el jueves», y el jueves cae DESPUÉS
-                        del lunes: le estábamos diciendo que arrancara su programa y que tres
-                        días más tarde le llegarían sus macros. Los recibe el miércoles
-                        ANTERIOR a su lunes. Las 48 horas son el margen del equipo para
-                        trabajar; al cliente ni le va ni le viene. */}
-                    <p className="text-xs text-foreground/50 mt-2">
-                        {arranque
-                            ? <>Empiezas el <b className="text-foreground/80">lunes {arranque.lunes}</b>.</>
-                            : 'Te apuntas cualquier día y empiezas siempre un lunes.'}
-                    </p>
-                </div>
+                {/* CON LA FECHA, no con «siempre un lunes» (bloque 6 del doc del 18-08). El
+                    lunes de arranque ya está calculado desde que paga. Y nada más
+                    (corrección del punto 46 del 19-08): los macros definitivos llegan el
+                    miércoles anterior a su lunes y aquí no se promete ninguna otra fecha. */}
+                <p className="text-xs text-foreground/50 mb-6">
+                    {arranque
+                        ? <>Empiezas el <b className="text-foreground/80">lunes {arranque.lunes}</b>.</>
+                        : 'Te apuntas cualquier día y empiezas siempre un lunes.'}
+                </p>
                 {/* CON LA VENTANA CERRADA NO SE LE OFRECE ENTRAR (el reloj del 19-08: el
                     largo abre el viernes a las 10:00 y cierra el lunes a las 18:00). Al
                     que se apunta un martes se le dice cuándo, y su única salida es la
-                    calculadora, que es exactamente lo que el documento describe. */}
+                    calculadora. */}
                 {ventanaLargo && !ventanaLargo.abierta && !revision ? (
                     <>
                         <p className="text-sm text-foreground/70 mb-4" data-testid="largo-abre-el">
@@ -2903,16 +2942,17 @@ const QuestionnairePage = () => {
                         </Button>
                     </>
                 ) : (
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <Button onClick={goNext} data-testid="terminar-perfil-ahora"
-                            className="bg-brand hover:bg-brand/90 text-white font-bold px-8 py-6 text-lg">
-                            Terminar mi perfil ahora <ArrowRight className="w-5 h-5 ml-2" />
-                        </Button>
-                        <Button variant="outline" data-testid="empezar-calculadora"
-                            onClick={() => navigate('/welcome')}
-                            className="px-8 py-6 text-lg">
-                            Empezar a usar la calculadora
-                        </Button>
+                    <div className="space-y-3">
+                        <button onClick={goNext} data-testid="terminar-perfil-ahora"
+                            className="w-full text-left p-4 rounded-xl border-2 border-brand bg-brand/10 hover:bg-brand/15 transition-all">
+                            <span className="font-semibold text-foreground">Seguimos ahora</span>
+                            <span className="block text-sm text-foreground/60 italic mt-0.5">En 10 min lo tienes hecho.</span>
+                        </button>
+                        <button onClick={() => navigate('/welcome')} data-testid="empezar-calculadora"
+                            className="w-full text-left p-4 rounded-xl border-2 border-border hover:border-brand/50 transition-all">
+                            <span className="font-semibold text-foreground">Lo dejo para luego</span>
+                            <span className="block text-sm text-foreground/60 italic mt-0.5">Te lo dejo apuntado en Inicio.</span>
+                        </button>
                     </div>
                 )}
             </div>
