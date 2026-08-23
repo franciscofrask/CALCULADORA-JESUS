@@ -67,6 +67,9 @@ const PANTALLAS_APP = [
     { clave: 't5_diario', label: 'El Diario', ayuda: 'El Diario, dentro de Seguimiento.' },
     { clave: 't6_evolucion', label: 'Evolución completa del cliente', ayuda: 'La Evolución completa del cliente: medidas y fotos.' },
     { clave: 't10_avisos_nuevos', label: 'Los avisos nuevos', ayuda: 'Los avisos nuevos del cliente (la campanita).' },
+    // P59 del doc 23-08. OJO: encenderlo manda CORREOS DE VERDAD a todos los clientes
+    // con reporte pendiente, entren o no en la app. Nace apagado por eso.
+    { clave: 'correos_avisos', label: 'Los avisos del reporte, por correo', ayuda: 'Manda por correo los avisos del reporte (se abre, último día, no nos llegó) y del fin de ciclo, sin esperar a que el cliente entre en la app. Un aviso, un correo: nunca se repite.' },
 ];
 
 const PantallasDeLaApp = () => {

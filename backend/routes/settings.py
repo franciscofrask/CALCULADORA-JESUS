@@ -42,6 +42,12 @@ PANTALLAS = {
     # tabla está completa (los dos de entrega, los once diseñados y las cuatro reglas),
     # así que el interruptor queda solo como freno de emergencia.
     "t10_avisos_nuevos": True,
+    # P59 del doc 23-08: los avisos del reporte salen por CORREO, sin esperar a que el
+    # cliente entre («el que no entra, no se entera» explicaba el 33 contra 1). NACE
+    # APAGADO a propósito: encenderlo en prod es mandar correos de verdad a todos los
+    # clientes con reporte pendiente, y eso lo decide Francisco desde el panel, no un
+    # deploy. La pasada vive en core/correo_avisos.py.
+    "correos_avisos": False,
 }
 
 router = APIRouter(tags=["settings"])

@@ -6,6 +6,7 @@ Main FastAPI application with modular routes.
 from fastapi import FastAPI, APIRouter
 from starlette.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 
 from core.config import CORS_ORIGINS
@@ -59,8 +60,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting JG12 API...")
     await create_indexes()
     logger.info("Database indexes created successfully")
+    # Los correos de avisos (P59, doc 23-08): un bucle de fondo cada 15 minutos.
+    # Detrás del interruptor `correos_avisos` (apagado de fábrica) y con dedupe por
+    # índice único, así las dos réplicas pueden llevarlo sin mandar nada dos veces.
+    from core.correo_avisos import bucle_de_correos
+    tarea_correos = asyncio.create_task(bucle_de_correos())
     yield
     # Shutdown
+    tarea_correos.cancel()
     logger.info("Shutting down JG12 API...")
     await close_connection()
 

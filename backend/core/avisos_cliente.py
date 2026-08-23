@@ -360,12 +360,19 @@ def avisos_condicionados(*, ahora: datetime,
     #    SOLO SI SU PLAN LLEVA AJUSTE (regla 1 del doc 19-08: «hoy al de Mantenimiento le
     #    llega "llevas 4 semanas con los mismos macros" y su plan no incluye ajuste»).
     if con_ajuste and semanas_sin_ajustar and semanas_sin_ajustar >= 2:
+        # EL NÚMERO SE TOPA (punto 58 del doc del 23-08): a un cliente real migrado le
+        # decía «llevas 133 semanas con los mismos macros», o sea dos años y medio
+        # pagando sin que nadie le tocara nada. Pasado un ciclo entero (12 semanas) el
+        # número exacto ya no informa: solo acusa.
+        titulo = (f"Llevas {semanas_sin_ajustar} semanas con los mismos macros"
+                  if semanas_sin_ajustar <= 12
+                  else "Llevas más de 12 semanas con los mismos macros")
         fuera.append({
             "clave": f"sin_ajustar:{semana_iso}",
             "familia": "sin_ajustar",
             "tipo": "macros",
             "variantes": [
-                {"titulo": f"Llevas {semanas_sin_ajustar} semanas con los mismos macros",
+                {"titulo": titulo,
                  "cuerpo": "Con tus datos de estas semanas podemos mirarlo."},
                 {"titulo": "Hace tiempo que no te ajustamos",
                  "cuerpo": "Cierra unos días seguidos y le echamos un ojo."},
