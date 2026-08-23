@@ -607,8 +607,12 @@ const InicioNuevo = () => {
         return [
             [!profile.biotype && profile.sex !== 'mujer', 'tu biotipo'],
             [!profile.peso_maximo, 'tu peso máximo'],
-            [!profile.peso_mejor_momento, 'tu mejor forma'],
-            [!(profile.proteinas_habituales || []).length, 'qué proteínas comes'],
+            // «Si no, pásala» (doc 23-08) es una respuesta: quien la dio no tiene mejor
+            // forma que contar y no se le persigue con la tarjeta.
+            [!profile.peso_mejor_momento && !profile.mejor_forma_pasada, 'tu mejor forma'],
+            // Las proteínas ya no se preguntan (doc 23-08, punto 14: en su lugar van las
+            // exclusiones, que pueden estar vacías legítimamente). Contarlas aquí dejaba
+            // a todo cliente nuevo con una tarjeta imposible de quitar.
             [!profile.tiempo_intentandolo, 'cuánto llevas intentándolo'],
             [!profile.training_experience, 'tu experiencia entrenando'],
             [!profile.birthdate, 'tu fecha de nacimiento'],

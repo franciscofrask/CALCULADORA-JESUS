@@ -897,7 +897,10 @@ for (let i = 0; i < STEPS_NIVEL1.length; i++) {
     const antes = paso.cond;
     STEPS_NIVEL1[i] = {
         ...paso,
-        cond: (a) => sinContestar(a, paso.key) && (!antes || antes(a)),
+        // La mejor forma pasada con «Si no, pásala» ES una respuesta (doc 23-08): al que
+        // la dio, el completo no se la repesca aunque el campo esté vacío.
+        cond: (a) => sinContestar(a, paso.key) && (!antes || antes(a))
+            && !(paso.key === 'peso_mejor_momento' && a.mejor_forma_pasada),
     };
 }
 
@@ -918,6 +921,8 @@ const falta = (paso, a) => {
     // «¿Estás seguro?» es la confirmación del objetivo: sin la pregunta del objetivo delante
     // no significa nada, y el que ya está dentro tiene objetivo desde el primer día.
     if (paso.key === '_confirm') return !a.goal;
+    // El «pásala» de la mejor forma cuenta como contestada: no se le vuelve a pedir.
+    if (paso.key === 'peso_mejor_momento' && a.mejor_forma_pasada) return false;
     if (paso.key) return a[paso.key] === undefined || a[paso.key] === null || a[paso.key] === '';
     // Las pantallas compuestas no tienen clave: se miran los campos que rellenan.
     if (paso.type === 'contacto') return !a.birthdate || !a.phone;
@@ -1545,7 +1550,7 @@ const QuestionnairePage = () => {
         const delBasico = {};
         for (const clave of ['tiempo_intentandolo', 'motivo_apuntarse', 'dietas_previas',
                              'lactosa', 'gluten', 'alergias', 'peso_maximo', 'peso_minimo',
-                             'peso_mejor_momento', 'profesion', 'como_me_conociste',
+                             'peso_mejor_momento', 'mejor_forma_pasada', 'profesion', 'como_me_conociste',
                              'proteinas_habituales', 'birthdate', 'height', 'biotype',
                              'training_experience',
                              'entrenador_anterior', 'entrenador_anterior_que_tal',
@@ -2011,6 +2016,9 @@ const QuestionnairePage = () => {
         peso_mejor_momento: num(answers.peso_mejor_momento),
         peso_mejor_momento_ano: num(answers.peso_mejor_momento_ano),
         peso_mejor_momento_nota: answers.peso_mejor_momento_nota || null,
+        // El «pásala» viaja como respuesta: sin él, la ficha no distingue «no he estado
+        // en forma» de «no llegó a contestar».
+        mejor_forma_pasada: answers.mejor_forma_pasada === true ? true : null,
         foto_mejor_momento: answers.foto_mejor_momento || null,
         peso_minimo: num(answers.peso_minimo),
         peso_minimo_ano: num(answers.peso_minimo_ano),
@@ -2889,9 +2897,16 @@ const QuestionnairePage = () => {
                         className="bg-brand hover:bg-brand/90 text-white font-bold px-8 disabled:opacity-40">
                         OK <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
-                    {/* La salida del que no (doc 23-08, punto 3): pasa de largo sin rellenar. */}
+                    {/* La salida del que no (doc 23-08, punto 3). Y SE APUNTA: «pásala» es
+                        una respuesta («no he estado»), no un olvido. Sin la marca, la
+                        tarjeta del Inicio y el cuestionario completo se la volvían a pedir
+                        como si no hubiera contestado. */}
                     {step.pasala && (
-                        <Button variant="ghost" onClick={goNext} data-testid="peso-hito-pasala"
+                        <Button variant="ghost" data-testid="peso-hito-pasala"
+                            onClick={() => {
+                                if (step.key === 'peso_mejor_momento') set('mejor_forma_pasada', true);
+                                goNext();
+                            }}
                             className="text-foreground/50">
                             Si no, pásala
                         </Button>

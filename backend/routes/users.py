@@ -529,6 +529,7 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     for campo in ("profesion", "como_me_conociste", "proteinas_habituales",
                   "peso_maximo", "peso_maximo_ano", "peso_maximo_nota",
                   "peso_mejor_momento", "peso_mejor_momento_ano", "peso_mejor_momento_nota",
+                  "mejor_forma_pasada",
                   "peso_minimo", "peso_minimo_ano", "peso_minimo_nota",
                   "alergias", "lactosa", "gluten", "alergia_otra",
                   "dietas_previas", "tiempo_intentandolo", "motivo_apuntarse",

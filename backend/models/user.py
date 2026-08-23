@@ -1217,6 +1217,8 @@ class ClientProfile(BaseModel):
     peso_mejor_momento: Optional[float] = None
     peso_mejor_momento_ano: Optional[int] = None
     peso_mejor_momento_nota: Optional[str] = None
+    # «Si no, pásala» del alta: contestó que nunca ha estado especialmente en forma.
+    mejor_forma_pasada: Optional[bool] = None
     foto_mejor_momento: Optional[str] = None
     peso_minimo: Optional[float] = None
     peso_minimo_ano: Optional[int] = None
@@ -1459,6 +1461,10 @@ class QuestionnaireSubmit(BaseModel):
     peso_mejor_momento: Optional[float] = None
     peso_mejor_momento_ano: Optional[int] = None
     peso_mejor_momento_nota: Optional[str] = None
+    # «Si no, pásala» (doc del 23-08, punto 3) es una RESPUESTA: nunca ha estado
+    # especialmente en forma. Sin la marca, la tarjeta del Inicio y el cuestionario
+    # completo se lo volvían a pedir como si no hubiera contestado.
+    mejor_forma_pasada: Optional[bool] = None
     foto_mejor_momento: Optional[str] = None
     # La foto que sube en el carrusel del % de grasa (doc del 23-08, punto 1). Llega en
     # base64 y NO se queda en el perfil: el guardado la manda a client_photos (R2 si hay
