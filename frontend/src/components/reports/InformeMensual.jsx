@@ -171,7 +171,8 @@ const Barra = ({ etiqueta, dato, sufijo, ocultarDias = false }) => (
 export const InformeMensual = ({ informe, onPedirFotos }) => {
     if (!informe) return null;
 
-    // Sin fotos no se genera: se le dice por qué y se le ofrece arreglarlo.
+    // Solo para informes VIEJOS guardados sin generar: desde el punto 41 del 23-08 el
+    // informe se monta siempre y esta pantalla completa no debería volver a salir.
     if (!informe.generado) {
         return (
             <div className="bg-card border border-border rounded-2xl p-6 text-center" data-testid="informe-sin-fotos">
@@ -239,11 +240,25 @@ export const InformeMensual = ({ informe, onPedirFotos }) => {
                 </Apartado>
             )}
 
-            {/* Punto 54 del doc del 07-08 ("que se genere el informe sin fotos"): aquí no
-                hace falta nada. El informe NO se genera sin fotos - el backend devuelve
-                `generado: false` con motivo `sin_fotos` y arriba se sale con "Tu informe está
-                a una foto" y un botón para subirlas. Donde sí faltaba era en la ficha del
-                coach, que se quedaba en blanco sin decir nada. */}
+            {/* SIN FOTOS, EL INFORME SALE IGUAL (punto 41 del 23-08): el apartado de
+                fotos lo dice y ofrece subirlas; el resto del informe ya está arriba. */}
+            {(fotos.faltan || (todasLasFotos.length === 0 && !(fotos.comparativa?.length))) && (
+                <Apartado titulo="Tus fotos">
+                    <div className="text-center py-2" data-testid="informe-fotos-faltan">
+                        <Camera className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                            Este mes no hay fotos, así que no podemos enseñarte el cambio.
+                            El informe sale igual, y con ellas se completa.
+                        </p>
+                        {onPedirFotos && (
+                            <button onClick={onPedirFotos} data-testid="informe-subir-fotos"
+                                className="mt-3 px-4 py-2 rounded-xl bg-brand text-white text-sm font-bold">
+                                Subir mis fotos
+                            </button>
+                        )}
+                    </div>
+                </Apartado>
+            )}
 
             <Apartado titulo="Lo que has cumplido">
                 <div className="grid grid-cols-2 gap-4">

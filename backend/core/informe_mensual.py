@@ -376,15 +376,14 @@ def montar_informe(*, perfil: Dict[str, Any], reporte: Dict[str, Any],
                    macros_nuevos: Optional[Dict[str, Any]],
                    explicacion_equipo: Optional[str],
                    la_escribe_el_equipo: bool) -> Dict[str, Any]:
-    """Arma los ocho apartados. Sin fotos, no hay informe."""
+    """Arma los ocho apartados, CON LO QUE HAYA (punto 41 del doc del 23-08).
+
+    Hasta ese doc «sin fotos no hay informe»: las 17 entradas del cliente se quedaban en
+    «Tu informe está a una foto». La regla nueva es la contraria: el informe sale
+    siempre -- peso, ciclo, cumplimiento, macros comidos, lo que se le dijo -- y la
+    foto lo COMPLETA. Sin fotos, el apartado de fotos lo dice y ya está.
+    """
     fotos_ahora = [f for f in (reporte.get("photos") or []) if f]
-    if not fotos_ahora:
-        return {
-            "generado": False,
-            "motivo": "sin_fotos",
-            "mensaje": "Sin fotos no podemos comparar. Te lleva un minuto y es lo que "
-                       "de verdad enseña lo que ha cambiado.",
-        }
 
     peso = evaluar_peso(
         peso_ahora=reporte.get("weight"),
@@ -425,6 +424,9 @@ def montar_informe(*, perfil: Dict[str, Any], reporte: Dict[str, Any],
         },
         "fotos": {
             "ahora": fotos_ahora[:3], "dia_cero": fotos_antes,
+            # Sin fotos el informe sale igual (P41): la pantalla lee esta marca para
+            # decirlo y ofrecer subirlas, en vez de esconder el informe entero.
+            "faltan": not fotos_ahora,
             # La comparativa con etiquetas (3.2). Se deja `ahora`/`dia_cero` al lado para
             # no romper lo que ya lee la pantalla vieja.
             "comparativa": comparativa_de_fotos(

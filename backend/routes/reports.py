@@ -409,6 +409,21 @@ async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
     # El peso, a su serie con la fecha del reporte (punto 30).
     await anotar_peso(client_id, data.weight, dia_reporte, origen="reporte (lo metió el equipo)")
 
+    # EL INFORME TAMBIÉN POR ESTA VÍA (punto 41 del doc del 23-08): los Premium mandan
+    # por WhatsApp, el equipo lo pasa a la app, y como el informe solo se generaba en el
+    # envío del cliente, los Premium no tenían informe NUNCA. Se genera igual que allí y
+    # queda `pendiente_revision` para que el coach lo publique. Sin la marca de tipo:
+    # esta vía no la trae, y lo que pasa el equipo es el reporte del mes.
+    try:
+        informe = await _montar_informe_del_reporte(report, profile)
+        await db.reports.update_one(
+            {"id": report["id"]},
+            {"$set": {"informe": informe, "informe_estado": "pendiente_revision",
+                      "informe_generado_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    except Exception as e:      # noqa: BLE001 - el reporte metido no se puede perder
+        print(f"[reportes] no se pudo montar el informe (vía equipo) de {report['id']}: {e}")
+
     return ReportResponse(**report)
 
 
