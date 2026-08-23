@@ -36,20 +36,30 @@ def _fecha(iso: Optional[str]) -> Optional[datetime]:
 
 
 def estado_del_ciclo(perfil: Dict[str, Any], ahora: Optional[datetime] = None) -> Dict[str, Any]:
-    """En que punto de su ciclo esta y si toca ya enseñarle la renovacion."""
+    """En que punto de su ciclo esta y si toca ya enseñarle la renovacion.
+
+    LA SEMANA SALE DE core/cycle, la misma cuenta que Mi perfil (cazado en el
+    recorrido movil del 23-08: el perfil decia «semana 10 de 12» y esta pantalla
+    «semana 1», porque aqui se leia `perfil["week"]`, un campo muerto que en los
+    migrados vale 1 para siempre; la semana de verdad se calcula desde cycle_start).
+    """
+    from core.cycle import compute_cycle
+
     ahora = ahora or datetime.now(timezone.utc)
     fin = _fecha(perfil.get("fin_de_ciclo"))
-    inicio = _fecha(perfil.get("arranque_lunes")) or _fecha(perfil.get("created_at"))
+    # Con ancla (cycle_start o created_at) manda la cuenta; sin ninguna, lo guardado.
+    if perfil.get("cycle_start") or perfil.get("created_at"):
+        semana = int(compute_cycle(perfil, ahora).get("week") or 1)
+    else:
+        semana = int(perfil.get("week") or 1)
 
     if not fin:
         # Los clientes de antes del calendario de arranque no tienen fin de ciclo
-        # guardado. Se cae a la semana del perfil, que es lo que habia.
-        semana = int(perfil.get("week") or 1)
+        # guardado: se sabe la semana, no el dia exacto del final.
         return {"conocido": False, "semana": semana, "toca_renovar": semana >= 11,
                 "dias_restantes": None, "fin": None}
 
     dias = (fin.date() - ahora.date()).days
-    semana = max(1, ((ahora - inicio).days // 7) + 1) if inicio else int(perfil.get("week") or 1)
     return {
         "conocido": True,
         "semana": semana,
