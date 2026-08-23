@@ -1079,7 +1079,9 @@ const MacrosEnVivo = ({ macros, previos, calculando }) => {
         return (
             <div className="flex items-baseline gap-1.5">
                 <span className="text-[10px] uppercase tracking-wider text-foreground/40">{etiqueta}</span>
-                <span className="font-heading font-extrabold text-xl text-brand tabular-nums">{ahora}</span>
+                {/* Con macro y unidad (punto 29 del 23-08): «TUS MACROS · ENTRENO 140»
+                    era un número suelto que no decía de qué hablaba. */}
+                <span className="font-heading font-extrabold text-xl text-brand tabular-nums">{ahora}<span className="text-xs font-bold text-brand/70"> g</span></span>
                 {delta !== 0 && (
                     <span className={`text-[11px] font-bold ${delta > 0 ? 'text-emerald-500' : 'text-amber-500'}`}>
                         {delta > 0 ? '+' : ''}{delta}
@@ -1091,7 +1093,7 @@ const MacrosEnVivo = ({ macros, previos, calculando }) => {
     const hcE = macros.entreno?.hidratos, hcD = macros.descanso?.hidratos;
     return (
         <div className={`flex items-center gap-5 flex-wrap transition-opacity ${calculando ? 'opacity-50' : ''}`}>
-            <span className="text-[10px] uppercase tracking-wider text-foreground/30">Tus macros</span>
+            <span className="text-[10px] uppercase tracking-wider text-foreground/30">Tus hidratos</span>
             {linea('Entreno', hcE, previos?.entreno?.hidratos)}
             {linea('Descanso', hcD, previos?.descanso?.hidratos)}
             {/* «Perientreno», el mismo nombre que en el resto de la app (punto 4.18). */}

@@ -8,6 +8,7 @@ import { MACRO } from './ClientDashboard';
 import DesgloseChips from '../components/DesgloseChips';
 import MisMacrosPage from './MisMacrosPage';
 import { mensajeDeError } from '../lib/mensajeDeError';
+import { fraseDeLoQueFalta } from '../lib/datosDudosos';
 
 // Fecha de HOY en la zona del usuario. Con toISOString() (que es UTC) a partir de las
 // 22:00 en Espana el "hoy" saltaba al dia siguiente.
@@ -344,7 +345,7 @@ const MacroCalculatorClientPage = () => {
                         de completar que ya existe (solo rellena huecos). */}
                     {(profile?.datos_dudosos || []).length > 0 && (
                         <p className="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="macros-provisionales">
-                            Macros provisionales · Para poder darte tus macros definitivos necesitas completar tus datos.{' '}
+                            Macros provisionales · {fraseDeLoQueFalta(profile?.datos_dudosos)}{' '}
                             <button type="button" onClick={() => navigate('/questionnaire?completar=1')}
                                 className="underline font-semibold">
                                 Completar mis datos

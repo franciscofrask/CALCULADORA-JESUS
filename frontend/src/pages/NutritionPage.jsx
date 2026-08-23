@@ -2079,6 +2079,35 @@ const NutritionPage = () => {
         persistVolcado(null);
         toast.info('Volcado deshecho: cada comida vuelve a su objetivo.');
     };
+
+    // RECUADRAR EL DÍA ENTERO (punto 26 del doc del 23-08): al cambiar los macros, los
+    // días ya creados se quedaban en «TE PASAS» contra el objetivo nuevo y nadie le
+    // ofrecía rehacerlos. El motor ya existía (refit-diet, el mismo de las favoritas):
+    // reajusta cantidades sin pasarse y respetando el mínimo de cada alimento.
+    const [recuadrando, setRecuadrando] = useState(false);
+    const handleRecuadrarDia = async () => {
+        setRecuadrando(true);
+        try {
+            const res = await api('/api/calculator/refit-diet', {
+                method: 'POST',
+                body: JSON.stringify({
+                    fecha: currentDate, tipo_dia: tipoDia, num_comidas: numComidas,
+                    momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
+                    comidas: mealsData,
+                }),
+            });
+            setMealsData(res.comidas || {});
+            const fuera = (res.excluidos || []).length;
+            toast.success(fuera
+                ? `Día recuadrado a tus macros. ${fuera === 1 ? 'Un alimento no cabía ni al mínimo y se quitó' : `${fuera} alimentos no cabían ni al mínimo y se quitaron`}.`
+                : 'Día recuadrado a tus macros.');
+        } catch (err) {
+            console.error('[recuadrar dia]', err);
+            toast.error('No hemos podido recuadrar el día. Inténtalo de nuevo.');
+        } finally {
+            setRecuadrando(false);
+        }
+    };
     const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + comidasG * 9;  // peri grasas excluded (match G_total)
     const targetKcal = dayTarget.kcal_total || 0;
     
@@ -2515,6 +2544,25 @@ const NutritionPage = () => {
 
                 {/* ── Comidas: selector en columna + detalle ── */}
                 <div data-testid="nutrition-meals">
+                    {/* «TE PASAS» con salida (punto 26 del 23-08): si el día ya creado se
+                        pasa del objetivo -- lo típico tras un cambio de macros --, se
+                        ofrece recuadrarlo, no solo se le riñe. */}
+                    {!activeVolcado && !loading && getDayStatus() === 'sobra'
+                        && Object.values(mealsData).some(c => (c?.alimentos || []).length > 0) && (
+                        <div className="surface p-4 mb-4 flex items-center justify-between gap-3 border-amber-500/30"
+                            data-testid="banner-recuadrar">
+                            <div className="min-w-0">
+                                <p className="font-bold text-foreground">Este día se pasa de tus macros de ahora</p>
+                                <p className="text-xs text-muted-foreground">Si tus macros han cambiado, podemos reajustar las cantidades sin quitarte nada.</p>
+                            </div>
+                            <button
+                                className="shrink-0 rounded-xl font-bold text-sm px-4 py-2 border border-brand text-brand hover:bg-brand hover:text-white transition-colors disabled:opacity-50"
+                                onClick={handleRecuadrarDia} disabled={recuadrando}
+                                data-testid="boton-recuadrar-dia">
+                                {recuadrando ? 'Recuadrando...' : 'Recuadrar el día'}
+                            </button>
+                        </div>
+                    )}
                     {/* Volcado de macros banner (ancho completo) */}
                     {activeVolcado && (
                         /* Sin `truncate` (punto 12 del 23-08: se leía «Volcados en…»,

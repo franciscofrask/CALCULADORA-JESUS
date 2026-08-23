@@ -26,6 +26,7 @@ import { SlidersHorizontal, Loader2, Quote, TrendingUp, ClipboardCheck } from 'l
 import { useAuth } from '../context/AuthContext';
 import { MACRO } from './ClientDashboard';
 import HistorialDeMacros, { ultimoAjusteLegible } from '../components/HistorialDeMacros';
+import { fraseDeLoQueFalta } from '../lib/datosDudosos';
 
 const fechaLarga = (iso) => {
     if (!iso) return '';
@@ -197,7 +198,7 @@ const MisMacrosPage = ({ onAjustar }) => {
                         </div>
                         {datosDudosos.length > 0 && (
                             <p className="text-xs text-amber-600 dark:text-amber-400 -mt-1" data-testid="macros-provisionales">
-                                Para poder darte tus macros definitivos necesitas completar tus datos.{' '}
+                                {fraseDeLoQueFalta(datosDudosos)}{' '}
                                 <button type="button" onClick={() => navigate('/questionnaire?completar=1')}
                                     className="underline font-semibold">
                                     Completar mis datos

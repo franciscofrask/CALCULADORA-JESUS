@@ -19,6 +19,7 @@ import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'luc
 import ConfigSection, { MOMENTO_OPTIONS, PERI_OPTIONS } from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
 import { seExcede, textoExceso, fmtGramos } from '../../lib/exceso';
+import { fraseDeLoQueFalta } from '../../lib/datosDudosos';
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
@@ -325,8 +326,8 @@ const DayHeader = ({
                 discreto, no un aviso: los objetivos siguen siendo los suyos. */}
             {(datosDudosos || []).length > 0 && (
                 <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="macros-provisionales">
-                    {/* El texto del punto 5 del 23-08 (y fuera «afinar», punto 82). */}
-                    Macros provisionales · Para poder darte tus macros definitivos necesitas completar tus datos.{' '}
+                    {/* El texto del punto 5 del 23-08, y CON el dato concreto (punto 24). */}
+                    Macros provisionales · {fraseDeLoQueFalta(datosDudosos)}{' '}
                     <Link to="/questionnaire?completar=1" className="underline font-semibold">
                         Completar mis datos
                     </Link>
