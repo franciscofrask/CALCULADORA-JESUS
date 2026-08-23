@@ -277,15 +277,16 @@ def test_16_de_entreno_a_descanso_cambian_los_macros_del_dia():
 def test_16_al_cliente_se_le_avisa_de_que_sus_macros_cambian():
     """Caso 16, la otra mitad: "y lo avisa".
 
-    El aviso vive en DayHeader: mientras el dia esta sin marcar, el conmutador sale con el
-    aro naranja (`diaSinMarcar`) y en escritorio ademas con la frase. La app abre en
-    "Entreno" porque tiene que abrir en algo, y en un dia de descanso eso son 60 g de
-    hidratos de mas: por eso el aviso se da ANTES de elegir, no despues.
+    Desde el punto 8 del doc del 23-08 la frase «¿Este dia entrenas o descansas? Tus
+    macros cambian» esta FUERA (y sin sustituto): el aviso es el aro naranja del
+    conmutador (`diaSinMarcar`), en el sitio donde se actua. Aqui se fija que el aro
+    sigue y que la frase no vuelve por la puerta de atras.
     """
     texto = DAY_HEADER.read_text(encoding="utf-8")
-    assert "Tus macros cambian" in texto, "se ha perdido la frase que avisa del cambio"
+    assert "Tus macros cambian" not in texto, \
+        "la frase del conmutador volvio: el punto 8 del 23-08 la quito a proposito"
     assert "diaSinMarcar ? 'ring-2 ring-brand" in texto, \
-        "se ha perdido el aro del conmutador, que es el aviso en el telefono"
+        "se ha perdido el aro del conmutador, que es el unico aviso que queda"
 
 
 def test_17_marcar_y_desmarcar_el_perientreno_no_altera_el_total():

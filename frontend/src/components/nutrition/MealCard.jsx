@@ -234,14 +234,16 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
             <div className="order-1 w-full min-w-0 sm:order-2 sm:w-auto sm:flex-1">
                 {/* El nombre del alimento, a 17 px: es lo que la persona lee para saber qué
                     lleva su comida, y estaba en 14, por debajo del texto normal. */}
+                {/* Hasta dos líneas en vez de «Pan Wasa fibre…» (punto 12 del 23-08:
+                    los nombres cortados no se leen). En escritorio sigue a una. */}
                 {food.url ? (
                     <a href={food.url} target="_blank" rel="noopener noreferrer"
-                        className="block text-[17px] lg:text-sm font-semibold text-brand underline underline-offset-2 truncate"
+                        className="block text-[17px] lg:text-sm font-semibold text-brand underline underline-offset-2 break-words line-clamp-2 lg:line-clamp-1"
                         title={`${food.nombre} (abre la ficha del producto)`}>
                         {food.nombre}
                     </a>
                 ) : (
-                    <span className="block text-[17px] lg:text-sm font-semibold text-foreground truncate" title={food.nombre}>{food.nombre}</span>
+                    <span className="block text-[17px] lg:text-sm font-semibold text-foreground break-words line-clamp-2 lg:line-clamp-1" title={food.nombre}>{food.nombre}</span>
                 )}
                 {/* Lo que llevas hoy de su familia, si es de las que se calibran. Jesús,
                     13-08: «un contador en la línea del alimento desde el primer gramo».

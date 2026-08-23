@@ -2613,7 +2613,7 @@ const QuestionnairePage = () => {
                 {diaMontado?.montadas?.length > 0 && (
                     <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4" data-testid="primer-dia-montado">
                         <p className="text-sm font-semibold text-foreground mb-1">
-                            Y tu día de hoy ya está montado
+                            Y tu día de hoy ya está creado
                         </p>
                         <p className="text-xs text-foreground/50 mb-3">
                             Cuadrado a estos macros. Cámbialo a tu gusto: así aprendemos qué te gusta.
@@ -3175,7 +3175,7 @@ const QuestionnairePage = () => {
                 </h2>
                 <p className="text-foreground/70 mb-6">
                     {step.obligatorio
-                        ? 'Es lo último, y hace falta para arrancar: sin fotos y sin medidas tu entrenador no puede ponerte los macros buenos ni montarte la rutina. Si te puede medir alguien, y siempre el mismo, mejor.'
+                        ? 'Es lo último, y hace falta para arrancar: sin fotos y sin medidas tu entrenador no puede ponerte los macros buenos ni crearte la rutina. Si te puede medir alguien, y siempre el mismo, mejor.'
                         : leFalta.length === 2
                             ? 'Sube tus fotos y toma tus medidas. Sin eso no puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.'
                             : `Te faltan ${leFalta[0] || 'un par de cosas'}. Con eso ya puedes ver tu evolución, que es lo que de verdad enseña lo que cambia.`}

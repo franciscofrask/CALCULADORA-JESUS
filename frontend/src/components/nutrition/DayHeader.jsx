@@ -120,16 +120,10 @@ const DayHeader = ({
                             Descanso
                         </button>
                     </div>
-                    {/* El aviso, solo en escritorio. En el teléfono la frase ocupaba dos
-                        líneas enteras justo debajo del conmutador, que es lo que la propia
-                        frase te manda mirar. El aviso NO se pierde: el conmutador se queda
-                        con su aro naranja mientras el día esté sin marcar, que es la misma
-                        señal en el sitio donde se actúa (punto 4.17). */}
-                    {diaSinMarcar && (
-                        <p className="hidden lg:block text-xs text-brand font-semibold w-full sm:w-auto" data-testid="dia-sin-marcar">
-                            ¿Este día entrenas o descansas? Tus macros cambian.
-                        </p>
-                    )}
+                    {/* La frase «¿Este día entrenas o descansas?» se quitó (punto 8 del doc
+                        del 23-08: fuera, y nada en su lugar). El aviso de día sin marcar
+                        sigue siendo el aro naranja del conmutador, en el sitio donde se
+                        actúa (punto 4.17). */}
 
                     {/* Los distintivos de «Cuadrado» y «Te pasas», solo en escritorio: en el
                         teléfono lo dice ya el titular de debajo -- «Día cuadrado», «Te has
@@ -179,9 +173,11 @@ const DayHeader = ({
                 });
                 const cuadrado = !nadaPuesto && !comidaMal && macros.every(m => m.tgt > 0 && (
                     m.key === 'P' ? m.val > m.tgt - 4 : Math.abs(m.tgt - m.val) < 4));
+                // «Te queda por comer HOY»: es del día entero, no de una comida, y no
+                // quedaba claro (punto 6 del doc del 23-08).
                 const titular = cuadrado ? 'Día cuadrado'
                     : nadaPuesto ? 'Hoy tienes que comer'
-                    : pasado ? 'Te has pasado' : 'Te queda por comer';
+                    : pasado ? 'Te has pasado' : 'Te queda por comer hoy';
                 // El «por cuánto», sobre el total del día (peri dentro), que es el que
                 // enseñan los números grandes. Puede quedar vacío: el exceso está en las
                 // comidas y el peri aún pendiente lo compensa; entonces no se pone cifra.
@@ -208,7 +204,8 @@ const DayHeader = ({
                                     // números tienen anchos distintos (235, 60) y alineados a
                                     // la izquierda el bloque se ve descolgado.
                                     <div key={key} className="text-center" data-testid={`dia-${key}`}>
-                                        <p className="font-data font-bold leading-none text-foreground text-[30px] sm:text-[34px]">{grande}</p>
+                                        {/* Más grandes por el punto 6 del 23-08: eran 30/34. */}
+                                        <p className="font-data font-bold leading-none text-foreground text-[36px] sm:text-[42px]">{grande}</p>
                                         <p className="text-sm font-bold mt-1" style={{ color: over ? '#EF4444' : color }}>{label}</p>
                                         {/* Con el día a cero, el número grande YA ES el total:
                                             «235 · de 235 en total» lo dice dos veces. La línea
@@ -328,7 +325,8 @@ const DayHeader = ({
                 discreto, no un aviso: los objetivos siguen siendo los suyos. */}
             {(datosDudosos || []).length > 0 && (
                 <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="macros-provisionales">
-                    Provisionales · Nos faltan datos tuyos para afinarlos.{' '}
+                    {/* El texto del punto 5 del 23-08 (y fuera «afinar», punto 82). */}
+                    Macros provisionales · Para poder darte tus macros definitivos necesitas completar tus datos.{' '}
                     <Link to="/questionnaire?completar=1" className="underline font-semibold">
                         Completar mis datos
                     </Link>

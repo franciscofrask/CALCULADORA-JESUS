@@ -197,7 +197,7 @@ const MisMacrosPage = ({ onAjustar }) => {
                         </div>
                         {datosDudosos.length > 0 && (
                             <p className="text-xs text-amber-600 dark:text-amber-400 -mt-1" data-testid="macros-provisionales">
-                                Nos faltan datos tuyos para afinarlos.{' '}
+                                Para poder darte tus macros definitivos necesitas completar tus datos.{' '}
                                 <button type="button" onClick={() => navigate('/questionnaire?completar=1')}
                                     className="underline font-semibold">
                                     Completar mis datos

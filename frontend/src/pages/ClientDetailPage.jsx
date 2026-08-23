@@ -1972,7 +1972,7 @@ const ClientDetailPage = () => {
                         <CardContent className="p-4 flex items-center gap-3 flex-wrap">
                             <UserCog className="w-5 h-5 text-[#FF671F] shrink-0" />
                             <div className="min-w-0 flex-1">
-                                <p className="text-white text-sm font-semibold">Montarle el día tú mismo</p>
+                                <p className="text-white text-sm font-semibold">Crearle el día tú mismo</p>
                                 <p className="text-white/40 text-xs">
                                     Abre su calculadora tal y como la ve él. Lo que guardes queda
                                     firmado con tu nombre y él lo verá.
@@ -3908,7 +3908,7 @@ const ReportsFeedbackList = ({ initialReports }) => {
             setInforme(r.data);
         } catch (e) {
             console.error('No se pudo montar el informe del reporte', e);
-            toast.error('No hemos podido montar el informe de este reporte');
+            toast.error('No hemos podido crear el informe de este reporte');
         } finally { setCargandoInforme(false); }
     };
 
@@ -4045,13 +4045,13 @@ const ReportsFeedbackList = ({ initialReports }) => {
                                 <Button size="sm" variant="outline" data-testid="ver-informe"
                                     onClick={() => verInforme(abierto.id)} disabled={cargandoInforme}
                                     className="bg-transparent border-[#333] text-white h-7 text-xs">
-                                    {cargandoInforme ? 'Montando...' : informe ? 'Actualizar' : 'Ver el informe'}
+                                    {cargandoInforme ? 'Creando...' : informe ? 'Actualizar' : 'Ver el informe'}
                                 </Button>
                             </div>
                             {informe && (
                                 <div className="max-h-[45vh] overflow-y-auto pr-1" data-testid="informe-montado">
                                     {informe.generado === false
-                                        ? <p className="text-white/50 text-sm">{informe.mensaje || 'Todavía no se puede montar.'}</p>
+                                        ? <p className="text-white/50 text-sm">{informe.mensaje || 'Todavía no se puede crear.'}</p>
                                         : <InformeMensual informe={informe} />}
                                 </div>
                             )}

@@ -552,7 +552,7 @@ const InicioNuevo = () => {
         if (!conAlimentos) return { detalle: 'aún sin dieta', accion: 'Repetir la de hoy' };
         const total = d.num_comidas || 4;
         if (conAlimentos < total) return { detalle: `empezada · ${conAlimentos} de ${total} comidas`, accion: 'Terminarla' };
-        return { detalle: 'dieta montada', accion: 'Verla' };
+        return { detalle: 'dieta creada', accion: 'Verla' };
     })();
 
     // ── Lo pendiente, en el orden del documento ──
@@ -1293,7 +1293,8 @@ const ClientDashboard = () => {
                         ? { titulo: 'Completa tu cuestionario inicial',
                             desc: 'Unas preguntas más y nos ponemos con tus números.' }
                         : { titulo: 'Termina de ajustar tus macros iniciales',
-                            desc: 'Unas preguntas más y los tienes finos.' };
+                            // Fuera «los tienes finos» (punto 82 del 23-08).
+                            desc: 'Unas preguntas más y tendrás tus macros definitivos.' };
                 return (
                     <button onClick={() => navigate(porLlamada ? '/dashboard/messages' : '/questionnaire?ajustar=1')}
                         data-testid="ajustar-macros-banner"

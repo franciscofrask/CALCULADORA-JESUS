@@ -355,7 +355,7 @@ const ReportsPage = () => {
             const r = await api.get(`/reports/${reportId}/informe`);
             setInforme(r.data);
         } catch (e) {
-            toast.error('No hemos podido montar tu informe');
+            toast.error('No hemos podido crear tu informe');
             setInformeAbierto(null);
         } finally {
             setCargandoInforme(false);
@@ -614,7 +614,7 @@ const ReportsPage = () => {
                             {informeAbierto === report.id && (
                                 <div className="mb-3">
                                     {cargandoInforme
-                                        ? <p className="text-sm text-foreground/40 py-4 text-center">Montando tu informe...</p>
+                                        ? <p className="text-sm text-foreground/40 py-4 text-center">Creando tu informe...</p>
                                         // EL INFORME NO SALE HASTA QUE LO REVISAN (T9). Mientras está
                                         // pendiente no se le enseña el "te falta una foto" del informe
                                         // sin generar: ahí no le falta nada a él, le falta a Jesús.

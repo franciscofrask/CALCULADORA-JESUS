@@ -1187,8 +1187,8 @@ const NutritionPage = () => {
                         recuadresHechos.current.add(guard);
                         afectadas.forEach(k => cuadrarComida(k, { silencioso: true }));
                         toast.info(afectadas.length === 1
-                            ? `He recuadrado una comida que ya tenías montada: con el cambio de ${cfg.etiqueta} había que ajustar sus cantidades.`
-                            : `He recuadrado ${afectadas.length} comidas que ya tenías montadas: con el cambio de ${cfg.etiqueta} había que ajustar sus cantidades.`,
+                            ? `Hemos recuadrado una comida que ya tenías creada: con el cambio de ${cfg.etiqueta} había que ajustar sus cantidades.`
+                            : `Hemos recuadrado ${afectadas.length} comidas que ya tenías creadas: con el cambio de ${cfg.etiqueta} había que ajustar sus cantidades.`,
                             { id: `recuadre-${bloque}`, duration: 8000, closeButton: true });
                     }
                 }
@@ -1958,7 +1958,8 @@ const NutritionPage = () => {
             // salen clavados y el cliente tiene derecho a saber por qué (Jesús, 15-08,
             // fallo 29: «5 g de aguacate es media cucharadita, nadie pesa eso»).
             const notaRedondeo = d?.redondeado
-                ? ' Las cantidades se han dejado en números que se puedan pesar, así que los macros bailan un poco.'
+                // Reescrito por el punto 9 del 23-08: «los macros bailan» no se entendía.
+                ? ' Hemos redondeado las cantidades para que las puedas pesar fácil, así que los macros pueden variar unos gramos.'
                 : '';
             if (silencioso) return;
             if (nEx) {

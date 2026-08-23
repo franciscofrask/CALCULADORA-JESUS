@@ -344,7 +344,7 @@ const MacroCalculatorClientPage = () => {
                         de completar que ya existe (solo rellena huecos). */}
                     {(profile?.datos_dudosos || []).length > 0 && (
                         <p className="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="macros-provisionales">
-                            Provisionales · Nos faltan datos tuyos para afinarlos.{' '}
+                            Macros provisionales · Para poder darte tus macros definitivos necesitas completar tus datos.{' '}
                             <button type="button" onClick={() => navigate('/questionnaire?completar=1')}
                                 className="underline font-semibold">
                                 Completar mis datos

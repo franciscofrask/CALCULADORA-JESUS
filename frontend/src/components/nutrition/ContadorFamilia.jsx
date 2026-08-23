@@ -36,12 +36,15 @@ export const ContadorFamilia = ({ bloque, gramos }) => {
         : 'todavía no te cuenta';
 
     return (
+        // Sin `truncate`: en 390 px la frase entera no cabe y el corte se comía el
+        // «su proteína no cuenta», que es justo lo que explica (punto 13 del 23-08:
+        // «los frutos secos no entran en la pantalla»). Que parta de línea.
         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground"
              data-testid={`contador-${bloque}`}>
             <span className="inline-block w-10 h-1 rounded-full bg-muted overflow-hidden shrink-0">
                 <span className="block h-full rounded-full bg-brand/70" style={{ width: `${pct}%` }} />
             </span>
-            <span className="truncate">
+            <span className="min-w-0">
                 {cfg.etiqueta} hoy: <b className="text-foreground">{g}</b>
                 {meta ? ` de ${meta} g` : ' g'} · su proteína {cuenta}
             </span>

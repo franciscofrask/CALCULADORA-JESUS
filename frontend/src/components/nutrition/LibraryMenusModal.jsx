@@ -286,7 +286,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
             }
             await onApply(menu);
         } catch (err) {
-            setRecetarioError('No se pudo montar esa receta con tus macros. Prueba con otra.');
+            setRecetarioError('No se pudo crear esa receta con tus macros. Prueba con otra.');
         } finally {
             setAplicandoId(null);
         }
@@ -619,9 +619,9 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                                                 {menu.de_jesus
                                                     ? <>De los menús de Jesús · <span className="font-bold">{menu.menu_elm?.nombre}</span></>
                                                     : menu.personas > 1
-                                                        ? <><span className="font-bold">{menu.personas}</span> personas lo han montado</>
+                                                        ? <><span className="font-bold">{menu.personas}</span> personas lo han usado</>
                                                         : menu.personas === 1
-                                                            ? 'Lo ha montado alguien más'
+                                                            ? 'Lo ha usado alguien más'
                                                             : menu.origen === 'variante' ? 'Variante de un menú real' : ''}
                                             </p>
                                             <p className="text-[11px] text-brand-orange font-semibold flex items-center gap-1">

@@ -68,16 +68,17 @@ const MiSemanaPage = () => {
     }
 
     const r = semana.resumen || {};
-    // «2 montadas · 1 empezada · 4 sin montar · 1 de 4 entrenos». El tramo de entrenos
+    // «2 creadas · 1 empezada · 4 sin crear · 1 de 4 entrenos» (fuera «montar», punto 7
+    // del 23-08; los campos del servidor conservan su nombre). El tramo de entrenos
     // solo dice «X de N» cuando el registro de sesiones existe; si no, «N entrenos» a
     // secas: un «0 de 4» que nadie ha contado sería mentira.
     const entrenosTxt = r.entrenos_hechos == null
         ? plural(r.entrenos_total || 0, 'entreno')
         : `${r.entrenos_hechos} de ${plural(r.entrenos_total || 0, 'entreno')}`;
     const contador = [
-        plural(r.montadas || 0, 'montada'),
+        plural(r.montadas || 0, 'creada'),
         plural(r.empezadas || 0, 'empezada'),
-        `${r.sin_montar || 0} sin montar`,
+        `${r.sin_montar || 0} sin crear`,
         entrenosTxt,
     ].join(' · ');
 
@@ -170,14 +171,14 @@ const LineaDieta = ({ dia }) => {
                     <span className="text-muted-foreground"> · </span>
                     <span className="text-yellow-400 font-semibold">{Math.round(m.G || 0)}</span>
                     <span className="text-muted-foreground"> · </span>
-                    <span className="text-emerald-400 font-semibold">montada</span>
+                    <span className="text-emerald-400 font-semibold">creada</span>
                 </span>
             )}
             {dia.estado === 'empezada' && (
                 <span className="text-foreground">{dia.n_comidas_con_alimentos} de {plural(dia.n_comidas_total, 'comida')}</span>
             )}
             {dia.estado === 'sin_montar' && (
-                <span className="text-muted-foreground">Sin montar</span>
+                <span className="text-muted-foreground">Sin crear</span>
             )}
         </div>
     );

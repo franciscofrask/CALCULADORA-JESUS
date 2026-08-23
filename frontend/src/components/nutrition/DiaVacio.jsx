@@ -15,7 +15,8 @@
  * el estado vacío es únicamente «ninguna comida con alimentos».
  *
  * El botón dice CREAR a propósito (arrancar de cero); en cuanto el día existe, el
- * vocabulario del resto de la pantalla vuelve a montar/montada (regla del doc).
+ * vocabulario: se dice CREAR en toda la app (punto 7 del doc del 23-08; la regla
+ * vieja de «montar» quedó al revés ese día).
  */
 import React, { useState } from 'react';
 import { Plus, Star, History, ChevronRight, ChevronUp } from 'lucide-react';
@@ -102,11 +103,12 @@ const DiaVacio = ({
         <section className="surface p-5 sm:p-6 max-w-xl mx-auto" data-testid="dia-vacio">
             {/* La pregunta */}
             <p className="caption text-brand mb-1">{titulo}</p>
+            {/* El texto del punto 7 del 23-08: fuera «montar», se dice crear. */}
             <h2 className="font-heading font-bold text-2xl text-foreground leading-tight">
-                Todavía sin montar
+                Todavía sin crear
             </h2>
             <p className="text-sm text-muted-foreground mt-1 mb-5">
-                Puedes repetir una que ya tengas o empezarla de cero.
+                Puedes repetir una dieta que ya tengas o empezarla de cero.
             </p>
 
             {/* Salida 1: crear de cero (la primaria) */}

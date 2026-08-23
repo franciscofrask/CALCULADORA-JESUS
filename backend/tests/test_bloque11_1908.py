@@ -56,7 +56,8 @@ class TestRutinaDelMesAplazada:
     def test_el_dia_elegido_si_y_una_vez(self):
         avisos = avisos_condicionados(ahora=AHORA, rutina_mes_aplazada_hasta="2026-08-19")
         assert len(avisos) == 1
-        assert avisos[0]["variantes"][0]["titulo"] == "¿Te preparo la rutina del mes?"
+        # Plural desde el 23-08 (punto 57).
+        assert avisos[0]["variantes"][0]["titulo"] == "¿Te preparamos la rutina del mes?"
         # La clave lleva la fecha del aplazamiento: sale una vez por aplazamiento.
         assert avisos[0]["clave"] == "rutina_mes_aplazada:2026-08-19"
 

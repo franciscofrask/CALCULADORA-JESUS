@@ -391,7 +391,8 @@ class TestElMensual:
         abierto de ActiveCampaign (18,9 %) y hoy en la app no existe."""
         a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 11, 9), ventanas=[self._v()])
         assert _claves(a) == ["reporte_no_llego"]
-        assert a[0]["variantes"][0]["titulo"] == "No me llegó tu reporte"
+        # Plural desde el 23-08 (punto 57: la voz de la app es «nosotros»).
+        assert a[0]["variantes"][0]["titulo"] == "No nos llegó tu reporte"
 
     def test_el_martes_si_lo_mando_no(self):
         assert avisos_de_calendario_doc(ahora_es=_es(2026, 8, 11, 9),

@@ -108,7 +108,7 @@ const WelcomePage = () => {
                         {/* «Armamos» así es de Argentina y en España se lee raro; y
                             «personalizados» es palabra de folleto que sobra cuando ya le estás
                             enseñando sus tres números (Jesús, 11-08). */}
-                        Con tus respuestas hemos montado tus objetivos. Estos son tus
+                        Con tus respuestas hemos creado tus objetivos. Estos son tus
                         números para un <span className="text-foreground font-semibold">día de entrenamiento</span>:
                     </p>
 

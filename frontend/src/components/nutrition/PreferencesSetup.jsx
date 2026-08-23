@@ -523,7 +523,7 @@ const PreferencesSetup = ({
                             {/* El texto del doc 19-08, literal. */}
                             <p className="text-muted-foreground text-sm mb-3">
                                 Te los sugeriremos cuando te falten macros para terminar de cuadrar
-                                una comida, y son los que usamos para montarte los menús.
+                                una comida, y son los que usamos para crearte los menús.
                             </p>
                             {/* LOS DIEZ CAJONES, cada uno con su número y su Todas · Ninguna.
                                 Aquí solo se marcan categorías: no hay buscador de alimentos a
