@@ -393,6 +393,50 @@ export default function ChatbotPage() {
   };
 
   /**
+   * Un ejemplo de la pantalla vacía (P31 del doc del 23-08): la pantalla se abría con
+   * «Empezar» a secas y nadie sabía qué se le puede pedir al asistente. Pulsar un ejemplo
+   * arranca el chat igual que «Empezar» y, con el día ya configurado, manda ese texto por
+   * el flujo normal de envío, como si el cliente lo hubiera escrito.
+   */
+  const enviarEjemplo = async (texto) => {
+    if (loading) return;
+    setLoading(true);
+    let sid = sessionId;
+    try {
+      if (!sid) {
+        const res = await fetchConTope(`${API_URL}/api/chatbot/start`, {
+          method: 'POST',
+          headers: cabs({ 'Content-Type': 'application/json' })
+        });
+        const data = await res.json();
+        if (!data.session_id) {
+          // Sin sesión no hay chat: si el backend explica por qué (p. ej. sin macros
+          // asignados), esa frase es la buena para el cliente.
+          if (data.message) { addMessage(data.message, false); setLoading(false); return; }
+          throw new Error('start sin session_id');
+        }
+        sid = data.session_id;
+        setSessionId(sid);
+        setStep('config');
+        const dia = diaEnNutricion() || todayLocal();
+        setTargetDate(dia);
+        await arrancarConLaConfigDeNutricion(dia, {}, sid);
+      }
+    } catch (error) {
+      console.error('No se pudo arrancar el chat desde un ejemplo:', error);
+      setLoading(false);
+      addMessage('No he podido arrancar el chat. Recarga la página y vuelve a intentarlo.', false);
+      return;
+    }
+    setLoading(false);
+    addMessage(texto, true);
+    // Se apunta como último enviado para que el aviso de mensaje repetido funcione igual
+    // que si lo hubiera tecleado.
+    ultimoEnviadoRef.current = { texto, cuando: Date.now() };
+    await enviarAlAsistente(texto, sid);
+  };
+
+  /**
    * Arranca el día con la configuración que el cliente ya tiene puesta, en vez de
    * preguntarle cuatro cosas que ya ha contestado en Nutrición.
    *
@@ -470,8 +514,10 @@ export default function ChatbotPage() {
       : `Vamos con ${formatDateLabel(iso)}, con lo que tienes en Nutrición: `
         + `${resumenConfig(cfg)}. Si quieres otro día o cambiar algo, dímelo cuando quieras: `
         + '"mañana", "hoy descanso", "3 comidas", "en ayunas" o "sin peri".', false);
-    configureDay(cfg.tipo_dia, cfg.num_comidas, cfg.opcion_peri, cfg.momento_entreno,
-                 cfg.single_meal, sid, iso);
+    // Con await: quien arranca el chat para mandar un mensaje detrás (los ejemplos de la
+    // pantalla vacía) necesita el día YA configurado, o el mensaje adelanta al configure.
+    await configureDay(cfg.tipo_dia, cfg.num_comidas, cfg.opcion_peri, cfg.momento_entreno,
+                       cfg.single_meal, sid, iso);
   };
 
   const periLabel = (op) => ({
@@ -652,11 +698,13 @@ export default function ChatbotPage() {
     await enviarAlAsistente(texto);
   };
 
-  const enviarAlAsistente = async (userMessage) => {
+  // `sidExplicito` para el arranque desde los ejemplos de la pantalla vacía: ahí el
+  // sessionId recién creado todavía no está en el estado de React (igual que en configureDay).
+  const enviarAlAsistente = async (userMessage, sidExplicito = null) => {
     setLoading(true);
     setProgressText(null);
 
-    const body = JSON.stringify({ message: userMessage, session_id: sessionId });
+    const body = JSON.stringify({ message: userMessage, session_id: sidExplicito || sessionId });
     const headers = cabs({ 'Content-Type': 'application/json' });
     // Ni el stream ni el POST tienen final garantizado: si el backend se cae o se
     // reinicia a mitad, reader.read() se queda esperando para siempre, setLoading(false)
@@ -735,7 +783,7 @@ export default function ChatbotPage() {
       // lo montado hasta aquí sigue en su sitio.
       addMessage(cortado
         ? 'Se me ha cortado la conexión y he dejado la petición a medias. Lo que llevabas '
-          + 'montado sigue guardado: repite lo último que me pediste.'
+          + 'creado sigue guardado: repite lo último que me pediste.'
         : 'Error al procesar el mensaje. Vuelve a intentarlo.', false);
       // Aquí se le PIDE que repita: reenviar lo mismo ahora es lo esperado, no un doble
       // envío, así que el aviso de mensaje repetido no debe saltar.
@@ -1062,7 +1110,7 @@ export default function ChatbotPage() {
       // Pero si lo ha frenado OTRA pestaña, el cliente tiene que saberlo: si no, cree
       // que guardo y lo que ve aqui no es lo que hay en su dieta.
       if (res.ok && data.skipped === 'otra_sesion') {
-        addMessage(data.message || 'Este día lo estás montando en otro sitio y no lo he '
+        addMessage(data.message || 'Este día lo estás creando en otro sitio y no lo he '
           + 'guardado desde aquí para no pisarlo.', false);
         return;
       }
@@ -1080,12 +1128,12 @@ export default function ChatbotPage() {
           : `✅ Guardado en tu pestaña de nutrición (${formatDateLabel(dia)}).`, false);
       } else {
         // Antes esto se callaba: el cliente leía «comida guardada» y no lo estaba.
-        addMessage('⚠️ No he podido guardarlo en tu pestaña de nutrición. Lo tienes montado aquí; vuelve a intentarlo o vuélcalo con el botón.', false);
+        addMessage('⚠️ No he podido guardarlo en tu pestaña de nutrición. Lo tienes creado aquí; vuelve a intentarlo o vuélcalo con el botón.', false);
       }
     } catch (e) {
       // Fallar en silencio era el problema: el cliente creía que su comida estaba
       // guardada y no estaba en ninguna parte.
-      addMessage('⚠️ No he podido guardarlo en tu pestaña de nutrición. Lo tienes montado aquí; vuelve a intentarlo o vuélcalo con el botón.', false);
+      addMessage('⚠️ No he podido guardarlo en tu pestaña de nutrición. Lo tienes creado aquí; vuelve a intentarlo o vuélcalo con el botón.', false);
     }
   };
 
@@ -1444,7 +1492,7 @@ export default function ChatbotPage() {
                 fijo ahí arriba gasta la línea sin decir nada. */}
             {targetDate && targetDate !== todayLocal() && (
               <p className="text-xs font-medium text-orange-500 truncate" data-testid="chatbot-dia-activo">
-                Montando {formatDateLabel(targetDate)}
+                Creando {formatDateLabel(targetDate)}
               </p>
             )}
             <p className="text-xs text-muted-foreground truncate">
@@ -1491,7 +1539,7 @@ export default function ChatbotPage() {
             </div>
             <h2 className="text-xl font-bold mb-2">¡Hola!</h2>
             <p className="text-muted-foreground mb-6 max-w-md">
-              Soy tu asistente de nutrición. Te ayudaré a montar tu dieta del día, 
+              Soy tu asistente de nutrición. Te ayudaré a crear tu dieta del día,
               comida por comida, respetando tus macros objetivo.
             </p>
             <button
@@ -1502,6 +1550,23 @@ export default function ChatbotPage() {
               {loading ? <Loader2 className="animate-spin" size={20} /> : <ChevronRight size={20} />}
               Empezar
             </button>
+            {/* P31 (doc 23-08): la pantalla vacía no decía qué se le puede pedir. Tres
+                ejemplos pulsables, con los textos literales de Jesús; al pulsarlos se
+                arranca el chat y se manda ese texto por el flujo normal de envío. */}
+            <p className="text-sm text-muted-foreground mt-6 mb-2">O pídeme algo directamente:</p>
+            <div className="flex flex-col sm:flex-row gap-2 max-w-md w-full px-4 sm:px-0 sm:w-auto">
+              {['Me faltan 40 H y 5 G, dime qué meto', 'Móntame la cena', 'Voy a comer fuera, ¿qué pido?'].map((ej) => (
+                <button
+                  key={ej}
+                  onClick={() => enviarEjemplo(ej)}
+                  disabled={loading}
+                  data-testid="chatbot-ejemplo"
+                  className="bg-muted hover:bg-accent border border-input text-foreground px-4 py-2 rounded-xl text-sm transition-colors disabled:opacity-50"
+                >
+                  {ej}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

@@ -318,6 +318,19 @@ class NutritionChatbot:
         """Número total de comidas a montar (principales + peri)."""
         return len(self.state["meal_order"]) or self.state["num_comidas"]
 
+    def total_comidas_principales(self) -> int:
+        """Las comidas que el cliente cuenta como comidas: C1..Cn, sin Intra ni Post.
+
+        P30 del doc del 23-08: el chat decía «5 de 5 comidas» porque contaba el
+        perientreno como una comida más. La regla del método es que son CUATRO comidas
+        y el peri va aparte: no se marca, no se cuadra y no entra en el contador. Todo
+        número de comidas que lea el cliente sale de aquí; `total_meals()` se queda
+        para las cuentas internas que sí recorren el día entero (navegación, volcado).
+        """
+        return (len([k for k in (self.state.get("meal_order") or [])
+                     if k not in self.COMIDAS_PERI])
+                or self.state["num_comidas"])
+
     @property
     def usuario_id(self) -> str:
         """El id del usuario detrás de esta sesión.
@@ -1153,7 +1166,7 @@ class NutritionChatbot:
         if not alimentos:
             return {
                 "error": (f"{self.meal_label(comida_num)} está vacía todavía: dime qué "
-                          f"quieres tomar y la montamos antes de guardarla."),
+                          f"quieres tomar y la creamos antes de guardarla."),
                 "comida": comida_num,
                 "vacia": True
             }
@@ -1624,9 +1637,7 @@ class NutritionChatbot:
             # `total_comidas` se quedan como estaban: son el total y hay quien los lee.
             "completas_principales": len([k for k in self.state.get("saved_meals", [])
                                           if k not in self.COMIDAS_PERI]),
-            "total_comidas_principales": (len([k for k in (self.state.get("meal_order") or [])
-                                               if k not in self.COMIDAS_PERI])
-                                          or self.state["num_comidas"]),
+            "total_comidas_principales": self.total_comidas_principales(),
             "completas_peri": len([k for k in self.state.get("saved_meals", [])
                                    if k in self.COMIDAS_PERI]),
             "total_peri": len([k for k in (self.state.get("meal_order") or [])

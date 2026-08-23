@@ -250,11 +250,11 @@ async def chatbot_configure(
         total_ppal = v.get("total_comidas_principales") or base_n
         if ppales_tr:
             hechas = f"{ppales_tr} de {total_ppal}" if total_ppal else str(ppales_tr)
-            mensaje += f"\n\nYa tienes {hechas} comidas montadas de ese día."
+            mensaje += f"\n\nYa tienes {hechas} comidas creadas de ese día."
             if peri_tr:
                 mensaje += " Y el peri-entreno también."
         else:
-            mensaje += "\n\nYa tienes el peri-entreno montado de ese día."
+            mensaje += "\n\nYa tienes el peri-entreno creado de ese día."
         # En palabras, no en iniciales: «Te faltan 13 P · 17 H · 1 G» es lo que Jesús
         # leyó en el vídeo 1 del 15-08, y no lo dice nadie.
         falta = [f"{_gr(abs(round(r[k])))} g de {_NOMBRE_MACRO[k]}"
@@ -383,9 +383,9 @@ def _texto_reubicado(reubicado: list) -> str:
 # de intenciones anterior se borró en F3 (06-08) tras validar el agente con el banco de
 # casos (48/60 del router frente a 59-60/60 del agente); volver atrás es git revert.
 SIN_MACROS = (
-    "Todavía no tienes macros asignados, así que no puedo montarte el día: cualquier "
+    "Todavía no tienes macros asignados, así que no puedo crearte el día: cualquier "
     "cantidad que te diera me la estaría inventando. Habla con tu entrenador para que te "
-    "los asigne y vuelve por aquí, que lo montamos en un momento."
+    "los asigne y vuelve por aquí, que lo creamos en un momento."
 )
 """Lo mismo que le dice Nutrición («aún no tienes macros asignados»), en la voz de Marco.
 
@@ -529,7 +529,7 @@ async def chatbot_message_stream(
 
     ETIQUETAS = {
         "buscar_alimentos": "Buscando en el catálogo...",
-        "componer_menu": "Montando el menú...",
+        "componer_menu": "Creando el menú...",
         "revisar_borrador": "Revisando el menú...",
         "editar_borrador": "Ajustando el menú...",
         "aplicar_borrador": "Añadiendo la comida...",
@@ -632,10 +632,10 @@ async def chatbot_apply_draft(
                        ". Dime si lo cambio o lo pongo igualmente.")
         elif not existe:
             mensaje = ("Ese menú era de una ronda anterior y ya no está activo. "
-                       "Si lo quieres, pídeme opciones otra vez y te lo vuelvo a montar.")
+                       "Si lo quieres, pídeme opciones otra vez y te lo vuelvo a crear.")
         else:
             mensaje = ("No he podido aplicar ese menú. " +
-                       (resultado.get("error") or "Dime si te monto opciones nuevas."))
+                       (resultado.get("error") or "Dime si te creo opciones nuevas."))
         response = {"action": "no_foods", "message": mensaje,
                     "day_overview": chatbot.get_day_overview()}
     return {"session_id": session_id, "response": response}
@@ -869,7 +869,7 @@ async def chatbot_save_to_diet(
         return {
             "skipped": "otra_sesion",
             "fecha": fecha,
-            "message": ("Este día lo estás montando en otra pestaña o en otro dispositivo. "
+            "message": ("Este día lo estás creando en otra pestaña o en otro dispositivo. "
                         "Para no pisar lo que hay allí, no lo he guardado desde aquí: sigue "
                         "en la otra o recarga esta para trabajar con lo último."),
         }
