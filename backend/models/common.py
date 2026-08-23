@@ -320,6 +320,13 @@ class CheckInResponse(BaseModel):
     calma_suplementacion: Optional[str] = None
     calma_cumplimiento_dieta: Optional[str] = None
     trainer_feedback: Optional[str] = None
+    # El día del cliente ("2026-08-23"). Se guardaba desde el bloque F pero no salía a la
+    # respuesta, y sin él ni el historial ni los tests pueden saber de qué día es la fila
+    # (el `created_at` va en UTC y a las 23:30 de Madrid ya es "mañana").
+    dia: Optional[str] = None
+    # Cuándo se editó por última vez, si se reenvió el mismo día (P75): el reenvío
+    # sustituye a la fila y `created_at` se queda con el del primer envío.
+    updated_at: Optional[str] = None
     created_at: str
 
     # Los check-ins migrados de Calma guardan created_at como datetime (los que crea

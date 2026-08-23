@@ -33,19 +33,36 @@ const Entrada = ({ entrada }) => {
     return (
         <li className="bg-card border border-border rounded-2xl p-4" data-testid={`diario-${entrada.tipo}`}>
             {/* La fecha, tal y como la escribe el doc: «Jueves, 20 de agosto · entreno».
-                Sin mayúsculas: ahí se lee una fecha, no una etiqueta de sección. */}
+                Sin mayúsculas: ahí se lee una fecha, no una etiqueta de sección.
+                La entrada del día lleva su apellido igual que la del entreno (P78, doc
+                23-08): «cierre del día», el mismo nombre que en el historial de check-ins,
+                que decía «DIARIO» y se confundía con esta pestaña. */}
             <p className="text-sm font-bold text-foreground">
-                {fechaLarga(entrada.fecha)}{entrada.tipo === 'entreno' ? ' · entreno' : ''}
+                {fechaLarga(entrada.fecha)}{entrada.tipo === 'entreno' ? ' · entreno' : ' · cierre del día'}
             </p>
-            <p className="text-[15px] text-foreground/80 mt-1.5 whitespace-pre-line">{entrada.texto}</p>
+            {entrada.texto && (
+                <p className="text-[15px] text-foreground/80 mt-1.5 whitespace-pre-line">{entrada.texto}</p>
+            )}
+            {/* La nota de entreno del cierre (P80): quien no tiene rutina apunta ahí su
+                entreno, y esto también es «lo del entreno» que cae al diario. */}
+            {entrada.entreno_nota && (
+                <p className="text-[15px] text-foreground/80 mt-1.5 whitespace-pre-line">
+                    <span className="text-xs uppercase tracking-wider font-bold text-muted-foreground mr-2">Entreno</span>
+                    {entrada.entreno_nota}
+                </p>
+            )}
             {/* El peso destacado va en su renglón: la línea de debajo es la del doc y dice
                 las estrellas y la marca, ni una cosa más. */}
             {entrada.peso_destacado && (
                 <p className="text-[13px] text-muted-foreground mt-1">{entrada.peso_destacado}</p>
             )}
-            <p className="text-xs text-muted-foreground mt-2">
-                {entrada.estrellas ? `${estrellas(entrada.estrellas)} · ` : ''}{marca}
-            </p>
+            {/* La marca habla de la nota personal: una entrada que solo trae la nota de
+                entreno no la lleva, porque esa nota es la respuesta a una pregunta nuestra. */}
+            {(entrada.texto || entrada.estrellas) && (
+                <p className="text-xs text-muted-foreground mt-2">
+                    {entrada.estrellas ? `${estrellas(entrada.estrellas)} · ` : ''}{marca}
+                </p>
+            )}
         </li>
     );
 };

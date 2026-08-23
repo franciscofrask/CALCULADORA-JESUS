@@ -291,8 +291,13 @@ async def cierre_del_dia_hoy(fecha: Optional[str] = Query(None), user=Depends(ge
     from routes.settings import pantalla_activa
 
     entreno = None
+    # ¿Tiene rutina con nosotros? (P80, doc 23-08). Sin rutina el cierre le ofrece una
+    # nota de entreno libre; con rutina, su entreno va por el registro de siempre y la
+    # nota libre no sale, para no tener el mismo dato en dos sitios.
+    tiene_rutina = False
     if await pantalla_activa("t3_entreno"):
         rutina = await db.routines.find_one({"client_id": profile["id"], "status": "active"}, {"_id": 0})
+        tiene_rutina = rutina is not None
         dia = dia_de_rutina(rutina, fecha)
         if dia and not await log_del_dia(profile["id"], fecha):
             entreno = {"dia_rutina": titulo_del_dia(dia)}
@@ -315,6 +320,7 @@ async def cierre_del_dia_hoy(fecha: Optional[str] = Query(None), user=Depends(ge
         "hecho": bool(hecho),
         "checkin": hecho,
         "entreno": entreno,
+        "tiene_rutina": tiene_rutina,
         "suplementos": suplementos,
         "comida_pendiente": ({"key": pendiente, "etiqueta": ETIQUETA_COMIDA.get(pendiente, "comida")}
                              if pendiente else None),
@@ -361,7 +367,20 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
         checkin.update(deducido)
         checkin["autorrelleno"] = list(deducido.keys())
 
-    await db.checkins.insert_one(checkin)
+    # EL MISMO DÍA SE SUSTITUYE, NO SE DUPLICA (P75, doc 23-08). El cierre del día es una
+    # foto de SU día: si lo reenvía es que lo está corrigiendo, y dos filas del mismo día
+    # contarían doble en todo lo que lea la colección. Se sustituye entero -- lo que dejó
+    # en blanco al editar, se queda en blanco --, conservando el id y el `created_at` del
+    # primero, y el comentario del entrenador, que es suyo y no del formulario.
+    previo = await _cierre_de_hoy(profile["id"], dia) if data.type == "daily" else None
+    if previo:
+        checkin["id"] = previo["id"]
+        checkin["created_at"] = previo["created_at"]
+        checkin["trainer_feedback"] = previo.get("trainer_feedback")
+        checkin["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.checkins.replace_one({"id": previo["id"]}, checkin)
+    else:
+        await db.checkins.insert_one(checkin)
 
     # El peso que aporta el check-in va a la SERIE con la fecha del check-in (punto 30), y
     # el peso "actual" del perfil sale de la serie. Antes se escribia suelto en el perfil,

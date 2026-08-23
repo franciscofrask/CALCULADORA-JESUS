@@ -89,7 +89,9 @@ def test_el_cliente_ve_su_diario(cabeceras_cliente):
     assert fechas == sorted(fechas, reverse=True), "el diario va de lo más nuevo a lo más viejo"
     for e in datos["entradas"]:
         assert e["tipo"] in ("entreno", "dia")
-        assert e["texto"]
+        # Desde el P80 (doc 23-08) una entrada puede venir solo con la nota de entreno
+        # del cierre (quien no tiene rutina la apunta ahi): texto o nota, pero algo trae.
+        assert e["texto"] or e.get("entreno_nota")
 
 
 def test_el_equipo_solo_ve_las_compartidas(cabeceras_admin, cabeceras_cliente):

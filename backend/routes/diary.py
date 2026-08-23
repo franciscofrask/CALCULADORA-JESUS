@@ -82,18 +82,31 @@ def _entrada_de_entreno(log: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _entrada_del_dia(checkin: Dict[str, Any]) -> Dict[str, Any]:
+def _entrada_del_dia(checkin: Dict[str, Any], solo_compartidas: bool = False) -> Dict[str, Any]:
     notas = checkin.get("notas") or {}
+    texto = notas.get("texto")
+    compartida = bool(notas.get("compartida"))
+    # La regla de siempre, tambien cuando la fila entro a la lista por su nota de entreno:
+    # al equipo una nota personal no compartida no le llega ni vacia de contenido. Lo que
+    # queda entonces (la nota de entreno) si es para el equipo, y la entrada servida se
+    # marca como tal: la marca habla de lo que va dentro, no de lo que se quito.
+    if solo_compartidas and not compartida:
+        texto = None
+        compartida = True
     return {
         "tipo": "dia",
         # Los cierres nuevos traen `dia` (el dia del cliente); los viejos, solo el
         # created_at en UTC, y de ahi se saca la fecha para que no se queden sin ordenar.
         "fecha": checkin.get("dia") or str(checkin.get("created_at") or "")[:10],
-        "texto": notas.get("texto"),
+        "texto": texto,
         "estrellas": None,
-        "compartida": bool(notas.get("compartida")),
+        "compartida": compartida,
         "peso_destacado": None,
         "dia_rutina": None,
+        # La nota de entreno del cierre (P80, doc 23-08): quien no tiene rutina apunta ahi
+        # su entreno, y "cae todo lo que escribe" incluye eso. No lleva marca de privacidad
+        # porque es la respuesta a una pregunta nuestra: el equipo ya la ve en el check-in.
+        "entreno_nota": checkin.get("entreno_nota"),
         "created_at": checkin.get("created_at") or "",
     }
 
@@ -107,15 +120,26 @@ async def _componer(client_id: str, solo_compartidas: bool, skip: int, limit: in
     hasta = skip + limit + 1
 
     filtro_logs: Dict[str, Any] = {"client_id": client_id, "nota": {"$nin": [None, ""]}}
-    filtro_checkins: Dict[str, Any] = {"client_id": client_id, "notas.texto": {"$nin": [None, ""]}}
+    # Un cierre entra al Diario por su nota personal O por su nota de entreno (P80): el
+    # que no tiene rutina apunta su entreno ahi y eso tambien es "lo que escribe".
+    con_texto = {"$nin": [None, ""]}
+    filtro_checkins: Dict[str, Any] = {
+        "client_id": client_id,
+        "$or": [{"notas.texto": con_texto}, {"entreno_nota": con_texto}],
+    }
     if solo_compartidas:
         filtro_logs["compartida"] = True
-        filtro_checkins["notas.compartida"] = True
+        # Al equipo: las notas personales solo si van compartidas; la nota de entreno
+        # siempre, que es la respuesta a nuestra pregunta y ya la ve en el check-in.
+        filtro_checkins["$or"] = [
+            {"notas.texto": con_texto, "notas.compartida": True},
+            {"entreno_nota": con_texto},
+        ]
 
     logs = await db.workout_logs.find(filtro_logs, {"_id": 0}).sort("fecha", -1).to_list(hasta)
     checkins = await db.checkins.find(filtro_checkins, {"_id": 0}).sort("created_at", -1).to_list(hasta)
 
-    entradas = [_entrada_de_entreno(l) for l in logs] + [_entrada_del_dia(c) for c in checkins]
+    entradas = [_entrada_de_entreno(l) for l in logs] + [_entrada_del_dia(c, solo_compartidas) for c in checkins]
     # Por dia y, dentro del mismo dia, por la hora a la que se escribio: el entreno de la
     # mañana y el cierre de la noche del mismo dia tienen que salir en ese orden.
     entradas.sort(key=lambda e: (str(e.get("fecha") or ""), str(e.get("created_at") or "")), reverse=True)
