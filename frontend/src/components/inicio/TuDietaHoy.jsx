@@ -5,8 +5,11 @@ import { num1 } from '../../lib/numeros';
 import ExtrasDelDia from '../nutrition/ExtrasDelDia';
 
 /**
- * «TU DIETA HOY» (doc de Jesús del 21-08, tarea 4.2): el deslizador de cuatro posiciones
- * sobre los tres números grandes, y debajo «Marca lo que ya te has comido».
+ * «TU DIETA HOY» (doc de Jesús del 21-08, tarea 4.2; repintado con el doc del 23-08,
+ * punto 1): el deslizador de cuatro posiciones sobre los tres números por macro -- el
+ * nombre encima, el número en naranja y, en Falta, «para llegar» con su barra --, y
+ * debajo «Marca lo que ya te has comido» con las hechas contraídas y el peri en su
+ * propia tarjeta, con lo que lleva dentro.
  *
  *  - Macros  · el objetivo del día CON el perientreno dentro. Es el mismo número que la
  *              cabecera de Nutrición: `resumen.P_total/H_total` del reparto vivo
@@ -27,7 +30,6 @@ import ExtrasDelDia from '../nutrition/ExtrasDelDia';
  * Cuadrada» se calculan de los macros y nadie guardaba «me la he comido».
  */
 
-const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 const NOMBRE = { P: 'Proteína', H: 'Hidratos', G: 'Grasa' };
 const NOMBRE_LLANO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
 
@@ -39,8 +41,9 @@ const VISTAS = [
 ];
 
 const PIE_DE_VISTA = {
-    macros: 'Tu objetivo de hoy, con el perientreno dentro',
-    dieta: 'Lo que tienes montado en la calculadora',
+    // El texto del punto 2 del doc del 23-08, palabra por palabra.
+    macros: 'Los macros totales a los que tienes que llegar hoy. Debajo verás el desglose por comidas.',
+    dieta: 'Lo que tienes creado en la calculadora',
     falta: 'Lo que te queda para cuadrar el día',
 };
 
@@ -60,6 +63,10 @@ const nombreComida = (k, unica) => (unica ? 'Comida única' : `Comida ${k.slice(
 
 const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) => {
     const [vista, setVista] = useState('macros');
+    // Las comidas ya marcadas se CONTRAEN («2 hechas · ocultas — Ver», punto 1 del doc
+    // del 23-08): la lista enseña solo lo que queda por comer, y el «Ver» las despliega.
+    const [verHechas, setVerHechas] = useState(false);
+    useEffect(() => { setVerHechas(false); }, [fecha]);
     // El reparto vivo del día: los totales con el peri y el objetivo de cada comida.
     const [reparto, setReparto] = useState(null);
     const [marcadas, setMarcadas] = useState({});
@@ -202,6 +209,20 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
     })();
     const hayPeri = periObjetivo.P > 0 || periObjetivo.H > 0 || periMontado.P > 0 || periMontado.H > 0;
 
+    // Lo que lleva el peri, por su nombre («crema de arroz y aislado de suero»).
+    const alimentosDelPeri = useMemo(() => {
+        const nombres = [];
+        for (const c of [comidasGuardadas.Intra, comidasGuardadas.Post]) {
+            for (const a of (c?.alimentos || [])) {
+                const n = (a.nombre || a.name || '').trim();
+                if (n && !nombres.includes(n)) nombres.push(n);
+            }
+        }
+        if (nombres.length <= 1) return nombres.join('');
+        return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dieta]);
+
     const valoresDeVista = { macros: conPeri, dieta: totalDieta, llevas, falta };
     const valores = valoresDeVista[vista];
     // Un extra apuntado también es «llevar algo»: con extras, Llevas enseña números
@@ -241,6 +262,9 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                         </p>
                     ) : (
                         <>
+                            {/* Se pintan POR MACRO, como la captura del doc del 23-08 (punto 1):
+                                el nombre encima, el número grande en naranja, y en Falta el
+                                «para llegar» debajo con su barra de progreso. */}
                             <div className="grid grid-cols-3 gap-3 mt-4">
                                 {['P', 'H', 'G'].map((k) => {
                                     /* En Falta, el negativo NO se deja en cero (doc 21-08,
@@ -248,17 +272,31 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                        «de más» debajo. La bronca no existe: es un dato. */
                                     const crudo = valores ? Math.round(valores[k] || 0) : null;
                                     const pasado = vista === 'falta' && crudo != null && crudo < 0;
+                                    const objetivoK = conPeri ? Math.round(conPeri[k] || 0) : 0;
+                                    /* La barra de Falta: cuánto del objetivo lleva ya. */
+                                    const progreso = objetivoK > 0
+                                        ? Math.max(0, Math.min(100, (llevas[k] / objetivoK) * 100)) : 0;
                                     return (
                                         <div key={k} className="text-center" data-testid={`dieta-hoy-${vista}-${k}`}>
-                                            <p className={`font-data font-bold leading-none text-[34px] sm:text-[40px] ${pasado ? 'text-amber-600' : 'text-foreground'}`}>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                {NOMBRE[k]}
+                                            </p>
+                                            <p className={`font-data font-bold leading-none text-[34px] sm:text-[40px] mt-1 ${pasado ? 'text-amber-600' : 'text-brand'}`}>
                                                 {crudo == null ? '·' : (pasado ? Math.abs(crudo) : Math.max(0, crudo))}
                                             </p>
-                                            <p className="text-sm font-bold mt-1.5" style={{ color: MACRO[k] }}>{NOMBRE[k]}</p>
-                                            {pasado && (
-                                                <p className="text-sm text-amber-600 font-data">de más</p>
+                                            {vista === 'falta' && (
+                                                <>
+                                                    <p className={`text-xs mt-1 ${pasado ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                                                        {pasado ? 'de más' : 'para llegar'}
+                                                    </p>
+                                                    <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
+                                                        <div className={`h-full rounded-full ${pasado ? 'bg-amber-500' : 'bg-brand'}`}
+                                                            style={{ width: `${pasado ? 100 : progreso}%` }} />
+                                                    </div>
+                                                </>
                                             )}
                                             {(vista === 'dieta' || vista === 'llevas') && conPeri && (
-                                                <p className="text-sm text-muted-foreground font-data">de {Math.round(conPeri[k] || 0)}</p>
+                                                <p className="text-sm text-muted-foreground font-data mt-1">de {objetivoK}</p>
                                             )}
                                         </div>
                                     );
@@ -292,17 +330,29 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
             </section>
 
             <section className="space-y-3" data-testid="marca-comidas">
-                <p className="caption">
-                    Marca lo que ya te has comido
-                    {hechas.length > 0 && (
-                        <span className="normal-case tracking-normal text-muted-foreground font-normal" data-testid="resumen-hechas">
-                            {' '}· {hechas.length === 1 ? '1 hecha' : `${hechas.length} hechas`}
-                        </span>
-                    )}
-                </p>
+                <p className="caption">Marca lo que ya te has comido</p>
+
+                {/* Las hechas, contraídas en una fila: la lista queda para lo que falta
+                    por comer. El «Ver» las despliega (y ahí se pueden desmarcar). */}
+                {hechas.length > 0 && (
+                    <div className="surface p-3.5 sm:p-4 flex items-center justify-between gap-3"
+                        data-testid="resumen-hechas">
+                        <p className="text-sm text-muted-foreground">
+                            <span className="font-bold text-foreground">
+                                {hechas.length === 1 ? '1 hecha' : `${hechas.length} hechas`}
+                            </span>
+                            {!verHechas && ' · ocultas'}
+                        </p>
+                        <button onClick={() => setVerHechas((v) => !v)} data-testid="ver-hechas"
+                            className="text-sm font-semibold text-brand flex items-center gap-0.5">
+                            {verHechas ? 'Ocultar' : 'Ver'} <ChevronRight className={`w-4 h-4 transition-transform ${verHechas ? 'rotate-90' : ''}`} />
+                        </button>
+                    </div>
+                )}
 
                 {claves.map((k) => {
                     const marcada = !!marcadas[k];
+                    if (marcada && !verHechas) return null;
                     const montado = montadoPorComida[k];
                     const tieneAlimentos = (comidasGuardadas[k]?.alimentos || []).length > 0;
                     const objetivoComida = reparto?.comidas?.[k];
@@ -347,13 +397,12 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="font-bold text-sm text-foreground">Perientreno</p>
-                            <p className="text-sm text-muted-foreground font-data truncate">
+                            {/* Con lo que lleva dentro, como la captura del 23-08:
+                                «40 P · 60 H · crema de arroz y aislado de suero». */}
+                            <p className="text-sm text-muted-foreground font-data">
                                 {(periMontado.P > 0 || periMontado.H > 0)
-                                    ? lineaMacros(periMontado, true)
+                                    ? [lineaMacros(periMontado, true), alimentosDelPeri].filter(Boolean).join(' · ')
                                     : `Objetivo ${lineaMacros(periObjetivo, true)}`}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                                Va aparte y no se marca: se ajusta con tu entreno.
                             </p>
                         </div>
                         <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors flex-shrink-0" />
