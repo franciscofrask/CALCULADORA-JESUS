@@ -1330,7 +1330,15 @@ const QuestionnairePage = () => {
     const loQueFaltaDelBasico = useMemo(() => {
         if (!profile) return [];
         if (delBasicoRef.current) return delBasicoRef.current;
-        const a = answersRef.current;
+        // CON LA FICHA, NO CON EL ESPEJO DE RESPUESTAS (23-08). Los efectos que siembran
+        // `answersRef` desde el perfil corren DESPUÉS de este cálculo, así que aquí el
+        // espejo llegaba vacío y TODO parecía sin contestar: al que volvía a por el
+        // completo (el de los 87 €, un Gold que lo dejó a medias) se le volvía a abrir el
+        // básico entero por «Antes de empezar». Lo tapaba el borrador del alta, que
+        // saltaba por encima con su número de paso... aterrizándole a mitad del completo.
+        // Se mira lo mismo que siembra el efecto: el perfil plano y sus ajustes de macros.
+        const a = { ...(profile.ajustes_macros || {}), ...profile,
+                    phone: profile.phone ?? user?.phone };
         // Sin las de la base: esas van por su cuenta, delante de todo, y preguntarle el
         // objetivo dos veces seguidas es lo que hace que cierre la pestaña.
         const yaVanDelante = new Set(laBaseQueFalta.map(p => p.key).filter(Boolean));
@@ -1492,7 +1500,13 @@ const QuestionnairePage = () => {
         // otro: sin esta comprobación, quien dejó el ajuste por la séptima aterrizaría en la
         // séptima del alta, que es otra pregunta. Lo guardado sin `flujo` es de antes de
         // esto y solo puede ser del ajuste, que era el único que se guardaba.
-        const suyo = (guardado?.flujo || 'ajuste') === (modoAjuste ? 'ajuste' : 'alta');
+        //
+        // Y EL DE RETOMAR EL COMPLETO NO RETOMA NINGUNO (23-08): su lista es otra (los
+        // huecos + el nivel 1) y el paso del borrador del alta apuntaba a mitad del
+        // completo. El que compró los 87 € volvía al cuestionario y aterrizaba en «¿Qué
+        // suplementos tomas ahora?» sin haber visto ni la portada.
+        const flujoDeAhora = retomandoNivel1 ? 'nivel1' : (modoAjuste ? 'ajuste' : 'alta');
+        const suyo = (guardado?.flujo || 'ajuste') === flujoDeAhora;
         if (suyo && guardado?.respuestas && Object.keys(guardado.respuestas).length) {
             answersRef.current = { ...answersRef.current, ...guardado.respuestas };
             setAnswers(a => ({ ...a, ...guardado.respuestas }));
@@ -1649,6 +1663,10 @@ const QuestionnairePage = () => {
     // del recorrido para que cada uno retome el suyo.
     const guardarProgreso = useCallback((respuestas, paso) => {
         if (revision) return;   // en modo revisión no se escribe nada
+        // Con el alta ya enviada, el borrador sobra: el recorrido que queda (el cierre)
+        // no se reanuda, y seguir escribiéndolo dejaba un paso enorme que luego
+        // descolocaba al que volvía a por el completo.
+        if (nivel0Enviado) return;
         // Las fotos NO viajan en el borrador: son base64 de megas y esto se guarda a cada
         // avance. Van una sola vez, en el envío final. Quien salga a mitad pierde solo la
         // foto (se le vuelve a pedir), no las respuestas.
@@ -1656,7 +1674,7 @@ const QuestionnairePage = () => {
         api.put('/clients/ajuste-progreso',
                 { respuestas: ligeras, paso, flujo: modoAjuste ? 'ajuste' : 'alta' }).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, modoAjuste, revision]);
+    }, [api, modoAjuste, revision, nivel0Enviado]);
 
     // ── P10: leer la dieta que trae el cliente ────────────────────────────────
     // (La puerta «Un día mío» se quitó el 23-08: en el alta nadie tiene días creados,
@@ -2448,7 +2466,10 @@ const QuestionnairePage = () => {
             volverAlRepasoRef.current = idx;
             setIdx(destino);
         };
-        const enElFlujo = (clave) => flow.some(s => s.key === clave || s.type === clave);
+        // «Su recorrido de verdad»: el paso tiene que existir Y aplicarle (en mujer el
+        // biotipo está en la lista pero su condición lo apaga; enseñarle esa tarjeta
+        // «Sin contestar» es enseñarle un hueco que no puede rellenar).
+        const enElFlujo = (clave) => flow.some(s => (s.key === clave || s.type === clave) && visible(s));
         body = (
             <div>
                 <Title />

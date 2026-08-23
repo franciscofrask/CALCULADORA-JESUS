@@ -494,6 +494,9 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     # mismo: lo primero es una respuesta, lo segundo es una pregunta que no existe.
     update = {
         "questionnaire_completed": True,
+        # El borrador del alta muere con el alta: su número de paso solo significa algo en
+        # ese recorrido, y dejarlo vivo descolocaba al que volvía a por el completo (23-08).
+        "ajuste_macros_progreso": None,
         # CUANDO lo terminó, no solo que lo terminó. Sin la fecha no hay forma de saber si
         # el que tiene el perfil largo a medias lleva un día o tres semanas, que es justo lo
         # que el panel necesita para pintarlo (bloque 6 del doc del 18-08).
@@ -834,7 +837,11 @@ async def mi_ficha_de_partida(user = Depends(get_current_user)):
     referencia = await referencia_de_parecidos(
         sexo, fase, float(peso), float(bf), excluir_client_id=profile.get("id"))
 
-    fotos = await db.client_photos.count_documents({"client_id": profile.get("id")})
+    # Solo las de PROGRESO: las del alta (uso: alta_grasa / mejor_forma, doc 23-08) no
+    # cuentan aquí. Contarlas hacía que el recorrido se saltara la pantalla de «Tus
+    # fotos» a quien solo había subido su foto del carrusel de grasa.
+    fotos = await db.client_photos.count_documents(
+        {"client_id": profile.get("id"), "uso": {"$exists": False}})
     return {
         "composicion": composicion,
         "referencia": referencia,
