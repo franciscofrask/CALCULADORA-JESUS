@@ -1559,8 +1559,16 @@ async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_onl
                 raise HTTPException(status_code=400, detail=f"El plan '{plan_entry['name']}' no es asignable como membresía")
             set_user["plan"] = plan_code
             set_prof["plan"] = plan_code
-            # Cambiar de plan reinicia el ciclo (nueva duración, semana 1).
-            if plan_code != (target.get("plan") or ""):
+            # Cambiar de plan CONSERVA la semana del ciclo (punto 70 del doc del 23-08).
+            # Aqui se reiniciaba el ciclo en TODO cambio de plan: el que migraba de Silver
+            # a un plan nuevo en la semana 10 de 12 amanecia en la semana 1, con sus
+            # reportes, ventanas y avisos movidos -- y deshacer el cambio era otro cambio
+            # de plan, asi que tampoco volvia. La semana sale sola de `cycle_start`
+            # (core/cycle.py), de modo que basta con no tocarlo.
+            # El ciclo solo arranca de cero cuando se le da plan a alguien que NO tenia:
+            # su `cycle_start` es viejo (o no existe y mandaria `created_at`) y sin esto
+            # la semana le saldria contada desde un pasado sin plan.
+            if not (target.get("plan") or ""):
                 set_prof["cycle_start"] = datetime.now(timezone.utc).isoformat()
             if data.get("comp_plan"):
                 set_user["comp_plan"] = True
