@@ -24,7 +24,9 @@ const POSES = [
     { key: 'perfil', label: 'De perfil', ayuda: 'De lado, brazos relajados, sin girar el cuerpo hacia la cámara.' },
 ];
 
-const TresFotos = ({ api, token, esMensual = true }) => {
+// `onSubida` es opcional: avisa a la pantalla de fuera de que hay una foto nueva, para
+// que su propia lista (la rejilla de fotos de progreso) no se quede desfasada.
+const TresFotos = ({ api, token, esMensual = true, onSubida }) => {
     const [fotos, setFotos] = useState([]);
     const [subiendo, setSubiendo] = useState(null);
     const [urls, setUrls] = useState({});
@@ -66,6 +68,7 @@ const TresFotos = ({ api, token, esMensual = true }) => {
             await api.post(`/reports/photos?pose=${pose}`, fd);
             toast.success('Foto subida');
             cargar();
+            onSubida?.();
         } catch (err) {
             toast.error(mensajeDeError(err, 'No hemos podido subirla'));
         } finally {

@@ -2029,7 +2029,7 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB: SEGUIMIENTO (evolución de peso + check-ins + reportes) ========== */}
                 <TabsContent value="seguimiento" className="space-y-4">
-                    <WeightEvolution reports={reports} />
+                    <WeightEvolution reports={reports} objetivo={profile?.goal} />
                     {/* Las diez medidas comparadas en el tiempo (punto 35): hasta ahora solo
                         se veía el último dato. */}
                     <EvolucionMedidas reports={reports} tono="admin" />
@@ -3745,7 +3745,7 @@ const CalmaSuplementos = ({ sup }) => {
 // La MISMA gráfica que ve el cliente (punto 4.13). Antes eran dos, con los mismos fallos
 // escritos dos veces: el eje por categorías juntando todos los «9 ago» de cuatro años y los
 // colores a pelo. Ahora hay una sola y las dos pantallas enseñan lo mismo.
-const WeightEvolution = ({ reports }) => {
+const WeightEvolution = ({ reports, objetivo }) => {
     const puntos = (reports || [])
         .filter(r => r.weight != null)
         .map(r => ({ fecha: r.created_at, peso: r.weight }));
@@ -3754,7 +3754,9 @@ const WeightEvolution = ({ reports }) => {
         <Card className="bg-[#111] border-[#222]">
             <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><Scale className="w-4 h-4" />Evolución del peso ({puntos.length})</CardTitle></CardHeader>
             <CardContent>
-                <GraficaDePeso puntos={puntos} />
+                {/* El color del cambio, contra el objetivo del cliente (P46 del 23-08):
+                    el coach tampoco tiene que leer un +2 en volumen como alarma. */}
+                <GraficaDePeso puntos={puntos} objetivo={objetivo} />
             </CardContent>
         </Card>
     );

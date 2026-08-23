@@ -34,11 +34,35 @@ const NARANJA = '#FF671F';
 const TENUE = 'hsl(var(--muted-foreground))';
 const LINEA_TENUE = 'hsl(var(--border))';
 
+// EL CAMBIO SE LEE CONTRA SU OBJETIVO (doc 23-08, bloque 10). «Cambio +7 kg» en naranja
+// de alarma cuando el cliente está en volumen es contarle su progreso al revés: para él
+// +7 es la buena noticia. El color solo dice algo si sabe hacia dónde va el cliente:
+// verde si el cambio va hacia su objetivo, rojo si va en contra, y neutro si mantiene
+// (o si su objetivo no marca dirección, como recomposición).
+const OBJETIVO_TEXTO = {
+    volumen: 'ganar masa', definicion: 'perder grasa',
+    perdida_grasa: 'perder grasa', 'perdida-grasa': 'perder grasa',
+    recomposicion: 'recomposición', mantenimiento: 'mantener tu peso',
+};
+// +1 = el peso debe subir; -1 = debe bajar; 0 = sin dirección (mantener, recomposición
+// o sin objetivo en el perfil).
+const _direccion = (objetivo) => {
+    const o = String(objetivo || '').toLowerCase();
+    if (o === 'volumen') return 1;
+    if (o === 'definicion' || o.startsWith('perdida')) return -1;
+    return 0;
+};
+const _colorDelCambio = (delta, objetivo) => {
+    const dir = _direccion(objetivo);
+    if (!delta || !dir) return 'text-foreground';
+    return delta * dir > 0 ? 'text-emerald-500' : 'text-red-500';
+};
+
 const _fecha = (ts, conAnio) => new Date(ts).toLocaleDateString('es-ES', {
     day: 'numeric', month: 'short', ...(conAnio ? { year: '2-digit' } : {}),
 });
 
-const Globo = ({ active, payload, conAnio }) => {
+const Globo = ({ active, payload, conAnio, objetivo }) => {
     if (!active || !payload?.length) return null;
     const p = payload[0].payload;
     return (
@@ -48,7 +72,9 @@ const Globo = ({ active, payload, conAnio }) => {
                 {p.peso} <span className="text-xs font-normal text-muted-foreground">kg</span>
             </p>
             {p.delta != null && p.delta !== 0 && (
-                <p className={`text-xs font-bold ${p.delta < 0 ? 'text-emerald-500' : 'text-brand'}`}>
+                // El mismo criterio que el resumen: bajar solo es verde si su objetivo
+                // es bajar. Antes bajar era siempre verde y subir siempre naranja.
+                <p className={`text-xs font-bold ${_colorDelCambio(p.delta, objetivo)}`}>
                     {p.delta > 0 ? '+' : ''}{p.delta} kg desde el anterior
                 </p>
             )}
@@ -60,7 +86,7 @@ const Globo = ({ active, payload, conAnio }) => {
  * `puntos`: [{fecha|date, peso|value}]. Se acepta cualquiera de los dos nombres porque las
  * dos pantallas los traían distintos, y unificarlos aquí es más barato que tocar las dos.
  */
-const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true }) => {
+const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = null }) => {
     const datos = useMemo(() => {
         const limpio = (puntos || [])
             .map(p => {
@@ -106,6 +132,8 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true }) => {
     const primero = datos[0].peso;
     const ultimo = datos[datos.length - 1].peso;
     const cambio = Math.round((ultimo - primero) * 10) / 10;
+    // El objetivo del perfil, contado en cristiano. Sin objetivo conocido no se inventa.
+    const objetivoTexto = OBJETIVO_TEXTO[String(objetivo || '').toLowerCase()] || null;
     // Más de un año de recorrido: las etiquetas necesitan el año o se repiten.
     const conAnio = (datos[datos.length - 1].ts - datos[0].ts) > 330 * 24 * 3600 * 1000;
 
@@ -123,10 +151,18 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true }) => {
                     </div>
                     <div>
                         <span className="text-muted-foreground text-xs mr-1">Cambio</span>
-                        <span className={`font-bold ${cambio < 0 ? 'text-emerald-500' : cambio > 0 ? 'text-brand' : 'text-foreground'}`}>
+                        <span data-testid="cambio-de-peso" className={`font-bold ${cambio === 0 ? 'text-foreground' : _colorDelCambio(cambio, objetivo)}`}>
                             {cambio > 0 ? '+' : ''}{cambio} kg
                         </span>
                     </div>
+                    {/* Al lado del cambio, hacia dónde va: sin esto un +7 no se puede
+                        leer, porque no es lo mismo en volumen que en definición. */}
+                    {objetivoTexto && (
+                        <div data-testid="objetivo-del-peso">
+                            <span className="text-muted-foreground text-xs mr-1">Tu objetivo:</span>
+                            <span className="text-foreground font-bold">{objetivoTexto}</span>
+                        </div>
+                    )}
                     <span className="text-muted-foreground text-xs">
                         {datos.length} {datos.length === 1 ? 'pesaje' : 'pesajes'}
                     </span>
@@ -150,7 +186,7 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true }) => {
                             tick={{ fill: TENUE, fontSize: 11 }}
                             axisLine={false} tickLine={false}
                         />
-                        <Tooltip content={<Globo conAnio={conAnio} />} cursor={{ stroke: LINEA_TENUE }} />
+                        <Tooltip content={<Globo conAnio={conAnio} objetivo={objetivo} />} cursor={{ stroke: LINEA_TENUE }} />
                         {/* De dónde salió: la referencia contra la que se lee todo lo demás. */}
                         <ReferenceLine y={primero} stroke={TENUE} strokeDasharray="4 4" />
                         <Line

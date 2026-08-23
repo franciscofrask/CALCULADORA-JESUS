@@ -547,7 +547,9 @@ const ReportsPage = () => {
                                 los ejes iban pintados de blanco a pelo, y esta tarjeta es
                                 blanca en tema claro: eran fechas y kilos escritos en blanco
                                 sobre blanco. */}
-                            <GraficaDePeso puntos={weightData} />
+                            {/* Con su objetivo al lado: el color del cambio se decide
+                                contra él (doc 23-08, bloque 10). */}
+                            <GraficaDePeso puntos={weightData} objetivo={profile?.goal} />
                         </div>
                     ) : (
                         <div className="bg-card border border-border rounded-2xl p-8 text-center">

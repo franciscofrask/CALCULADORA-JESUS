@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
 import { num1 } from '../lib/numeros';
+import TresFotos from '../components/reports/TresFotos';
 
 const ORANGE = '#FF671F';
 const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
@@ -461,8 +462,11 @@ const _mesTitulo = (key) => {
  * subirlas -- el reporte, con sus tres poses y la del mes pasado al lado para colocarse
  * igual -- y esta pantalla se queda para mirarlas, que es lo que se viene a hacer aquí.
  */
-const PhotosSection = ({ api }) => {
+const PhotosSection = ({ api, token }) => {
     const [photos, setPhotos] = useState([]);
+    // Si acaba de subir su primera foto en esta visita, la subida se queda a la vista:
+    // cambiarla por la rejilla a mitad le quitaría el hueco de las otras dos poses.
+    const [subiendoAhora, setSubiendoAhora] = useState(false);
     const navigate = useNavigate();
 
     const load = useCallback(() => {
@@ -505,10 +509,14 @@ const PhotosSection = ({ api }) => {
                     <Camera className="w-4 h-4 text-brand" />
                     <p className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Fotos de progreso</p>
                 </div>
-                <button onClick={() => navigate('/dashboard/reports')}
-                    className="text-xs text-brand hover:underline underline-offset-4 font-semibold">
-                    Se suben en tu reporte
-                </button>
+                {/* Con fotos ya subidas, la puerta para añadir más sigue en Seguimiento;
+                    sin ninguna, la subida está aquí mismo y este enlace sobra. */}
+                {photos.length > 0 && (
+                    <button onClick={() => navigate('/dashboard/reports')}
+                        className="text-xs text-brand hover:underline underline-offset-4 font-semibold">
+                        Sube más en Seguimiento
+                    </button>
+                )}
             </div>
             {/* Vuelve a decir «tu reporte» a secas, y ahora es verdad. El 09-08 esto decía
                 «mensual» como parche: las fotos solo se pedían en el reporte mensual y en una
@@ -516,10 +524,23 @@ const PhotosSection = ({ api }) => {
                 subirlas. El parche avisaba de la contradicción pero no la quitaba -- seguía
                 sin haber sitio 3 de cada 4 semanas. Ahora el bloque de fotos está siempre en
                 Reportes (punto 21), así que el enlace lleva a algo. */}
-            {photos.length === 0 ? (
-                <p className="text-foreground/40 text-center py-6 text-sm">
-                    Aún no has subido fotos. Se piden en el reporte mensual, junto con las medidas.
-                </p>
+            {photos.length === 0 || subiendoAhora ? (
+                // SIN FOTOS, LA PUERTA VA AQUÍ (doc 23-08, bloque 10, y lo decidido el
+                // 19-08): en autogestión las fotos no se piden, se recomiendan, y esto
+                // decía «se piden en el reporte mensual» sin dejar hacer nada. Ahora se
+                // recomienda y debajo va la subida de siempre, la misma de los reportes
+                // (POST /reports/photos), que no distingue de planes.
+                <div>
+                    {photos.length === 0 && (
+                        <p className="text-foreground/50 text-sm mb-4">
+                            Todavía no has subido fotos. Te recomendamos hacértelas cada cuatro
+                            semanas: son la forma más honesta de ver tu cambio. Puedes subirlas
+                            aquí cuando quieras.
+                        </p>
+                    )}
+                    <TresFotos api={api} token={token}
+                        onSubida={() => { setSubiendoAhora(true); load(); }} />
+                </div>
             ) : (
                 <div className="space-y-5">
                     {meses.map(m => (
@@ -539,7 +560,7 @@ const PhotosSection = ({ api }) => {
 };
 
 const CheckInsPage = () => {
-    const { api, pantalla } = useAuth();
+    const { api, token, pantalla } = useAuth();
     // El cierre del día nuevo, detrás de su interruptor del panel (T4). Con él apagado se
     // queda el check-in diario de siempre, que es lo que hay hoy en producción.
     const cierreNuevo = pantalla('t4_cierre_nuevo');
@@ -821,7 +842,7 @@ const CheckInsPage = () => {
                 no se pierde ninguna forma de llegar a ellas. En escritorio se queda, que ahí
                 sobra sitio y el bloque no estorba a nadie. */}
             <div className="hidden lg:block">
-                <PhotosSection api={api} />
+                <PhotosSection api={api} token={token} />
             </div>
 
             {/* Historial */}

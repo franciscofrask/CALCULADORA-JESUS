@@ -73,7 +73,9 @@ const TusFotosYMetricas = ({ api, token, profile, onGuardado }) => {
                 <Boton icon={Ruler} titulo="Añadir medidas" sub="Cuando quieras"
                     abierto={abierto === 'medidas'} onClick={() => alternar('medidas')}
                     testid="btn-anadir-medidas" />
-                <Boton icon={Percent} titulo="Actualizar mi % de grasa" sub="Abre el carrusel"
+                {/* «Carrusel» era jerga nuestra (doc 23-08, bloque 10): se dice lo que
+                    va a hacer, con las palabras del doc. */}
+                <Boton icon={Percent} titulo="Actualizar mi % de grasa" sub="Eliges la foto que más se parece a como estás"
                     abierto={abierto === 'grasa'} onClick={() => alternar('grasa')}
                     testid="btn-actualizar-grasa" />
             </div>

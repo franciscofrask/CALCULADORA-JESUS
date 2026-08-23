@@ -29,7 +29,14 @@ const BF_DEFAULT = 20;
 const BF_MUJER = [45, 40, 35, 30, 25, 20];
 const BF_DEFAULT_MUJER = 30;
 
-const esMujer = (sexo) => String(sexo || '').toLowerCase().startsWith('muj');
+// La base guarda LOS DOS convenios de sexo: «mujer» (la app) y «female» (las clientas
+// migradas de Calma). Reconocer solo «muj» le enseñaba a una migrada la escala de hombre
+// -- 22 cuerpos de hombre -- aunque la pantalla le pasara bien su sexo. La misma
+// tolerancia que el backend (routes/reports.py y routes/supplements.py).
+const esMujer = (sexo) => {
+    const s = String(sexo || '').toLowerCase();
+    return s.startsWith('muj') || s.startsWith('fem') || s === 'f';
+};
 export const escalaDeGrasa = (sexo) => (esMujer(sexo) ? BF_MUJER : BF_PERCENTAGES);
 export const grasaPorDefecto = (sexo) => (esMujer(sexo) ? BF_DEFAULT_MUJER : BF_DEFAULT);
 
