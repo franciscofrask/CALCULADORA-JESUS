@@ -59,8 +59,11 @@ async def ultima_vigente(db, client_id: str, fecha: Optional[str] = None) -> Opt
     Y se corta en hoy: un ajuste programado para dentro de tres semanas todavía no se le ha
     hecho.
     """
-    from datetime import date as _date
-    return await elegir_entrada(db, {"id": client_id}, fecha or _date.today().isoformat())
+    # EL «HOY» ES EL DE ESPAÑA (bloque F, 23-08). Con `date.today()` en un servidor en UTC,
+    # entre las 00:00 y las 02:00 de aquí el ajuste que entra en vigor hoy no contaba: el
+    # aviso de «macros nuevos» y el «te falta ajustar» del Inicio miraban el día de ayer.
+    from core.tiempo import hoy_madrid
+    return await elegir_entrada(db, {"id": client_id}, fecha or hoy_madrid().isoformat())
 
 
 async def ultimo_cambio(db, client_id: str) -> Optional[dict]:

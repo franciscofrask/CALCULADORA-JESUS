@@ -157,21 +157,30 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     # `ultimo_reporte` va aqui a proposito duplicado (punto 29 del 07-08, ver
     # core/seguimiento.py): es lo que deja ordenar la lista de clientes por "quien lleva
     # mas sin que le toquen" sin recorrer los reportes de todos para pintar una tabla.
-    set_perfil = {"ultimo_reporte": report["created_at"][:10]}
+    # EL DIA DEL REPORTE, EN ESPAÑA (bloque F, 23-08). `created_at[:10]` era el dia UTC
+    # del instante: un reporte mandado a las 00:30 de aqui fechaba el pesaje en AYER, y si
+    # ese dia ya tenia punto en la serie, lo pisaba.
+    from core.tiempo import a_madrid
+    try:
+        _instante = datetime.fromisoformat(str(report["created_at"]).replace("Z", "+00:00"))
+        dia_reporte = (a_madrid(_instante) or _instante).date().isoformat()
+    except (ValueError, TypeError):
+        dia_reporte = report["created_at"][:10]
+    set_perfil = {"ultimo_reporte": dia_reporte}
     # El peso NO se escribe aqui: va a la serie con la fecha del reporte, y el "actual"
     # sale de la serie (punto 30). Es lo que arregla los dos pesos distintos del punto 9.
-    await anotar_peso(profile["id"], data.weight, report["created_at"][:10], origen="reporte")
+    await anotar_peso(profile["id"], data.weight, dia_reporte, origen="reporte")
     # Y EL % DE GRASA, cuando toca (cada 12 semanas). Va a su serie igual que el peso, con la
     # fecha del reporte: es un dato que se estima mirando fotos, y sin fecha no hay forma de
     # saber si el que se está usando para calcular macros es de hace un mes o de hace un año.
     if data.body_fat is not None:
         from core.series_cliente import anotar_grasa
-        await anotar_grasa(profile["id"], data.body_fat, report["created_at"][:10],
+        await anotar_grasa(profile["id"], data.body_fat, dia_reporte,
                            origen="reporte")
     if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
         if profile.get("goal") != data.proximo_objetivo:
             set_perfil["goal"] = data.proximo_objetivo
-            set_perfil["fase_desde"] = report["created_at"][:10]
+            set_perfil["fase_desde"] = dia_reporte
 
     # LAS LESIONES SE QUEDAN EN EL PERFIL, NO SOLO EN EL REPORTE (T8, bloque 06).
     # Es lo que hace que el mes que viene salga "LO QUE YA ME CONTASTE" en vez de una
@@ -180,7 +189,7 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     if data.lesiones is not None:
         set_perfil["lesiones"] = [
             {"zona": l.zona, "desde": l.desde, "estado_mes": l.estado_mes,
-             "ejercicios_vetados": l.ejercicios, "actualizado": report["created_at"][:10]}
+             "ejercicios_vetados": l.ejercicios, "actualizado": dia_reporte}
             for l in data.lesiones
         ]
     await db.client_profiles.update_one({"id": profile["id"]}, {"$set": set_perfil})
@@ -383,14 +392,22 @@ async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
     }
     await db.reports.insert_one(report)
 
-    set_perfil = {"ultimo_reporte": str(report["created_at"])[:10]}
+    # El dia en España, no el UTC del instante (bloque F, 23-08; igual que en la via del
+    # cliente).
+    from core.tiempo import a_madrid
+    try:
+        _instante = datetime.fromisoformat(str(report["created_at"]).replace("Z", "+00:00"))
+        dia_reporte = (a_madrid(_instante) or _instante).date().isoformat()
+    except (ValueError, TypeError):
+        dia_reporte = str(report["created_at"])[:10]
+    set_perfil = {"ultimo_reporte": dia_reporte}
     if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
         if profile.get("goal") != data.proximo_objetivo:
             set_perfil["goal"] = data.proximo_objetivo
-            set_perfil["fase_desde"] = str(report["created_at"])[:10]
+            set_perfil["fase_desde"] = dia_reporte
     await db.client_profiles.update_one({"id": client_id}, {"$set": set_perfil})
     # El peso, a su serie con la fecha del reporte (punto 30).
-    await anotar_peso(client_id, data.weight, str(report["created_at"])[:10], origen="reporte (lo metió el equipo)")
+    await anotar_peso(client_id, data.weight, dia_reporte, origen="reporte (lo metió el equipo)")
 
     return ReportResponse(**report)
 
@@ -723,7 +740,7 @@ async def get_evolution_data(user = Depends(get_current_user)):
     # macros enseñaba 5 del mismo cliente (Francisco, 17-08: «¿ninguna miente, verdad?»).
     if profile.get("id"):
         async for h in db.macro_history.find(
-            hasta_hoy({"client_id": profile["id"]}, campo="effective_date"),
+            hasta_hoy({"client_id": profile["id"]}, campo="effective_date", campo_es_dia=True),
             {"_id": 0, "effective_date": 1, "created_at": 1, "peso": 1, "client_weight": 1},
         ):
             # Por `effective_date`, nunca por `created_at`: en las filas importadas ese campo

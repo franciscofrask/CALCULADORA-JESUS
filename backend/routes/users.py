@@ -1742,7 +1742,7 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
     entradas_crudas = []
     if client_id:
         todas = await db.macro_history.find(
-            hasta_hoy({"client_id": client_id}, campo="effective_date"), {"_id": 0}
+            hasta_hoy({"client_id": client_id}, campo="effective_date", campo_es_dia=True), {"_id": 0}
         ).sort([("effective_date", -1), ("created_at", -1)]).to_list(1000)
         vistas = set()
         for h in todas:

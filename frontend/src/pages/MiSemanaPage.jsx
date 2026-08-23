@@ -36,7 +36,9 @@ const MiSemanaPage = () => {
     const [filtro, setFiltro] = useState('todo');
 
     useEffect(() => {
-        api.get('/diets/semana')
+        // Con el «hoy» del RELOJ DEL CLIENTE (bloque F, 23-08): la pastilla «Hoy» y la
+        // semana por defecto son suyas, no las de España.
+        api.get(`/diets/semana?hoy_cliente=${new Date().toLocaleDateString('en-CA')}`)
             .then(r => setSemana(r.data))
             .catch(e => {
                 console.error('Error cargando la semana:', e);

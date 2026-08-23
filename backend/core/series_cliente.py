@@ -32,8 +32,13 @@ GRASA = ("porcentajes_grasos", "body_fat", 3.0, 60.0)
 
 
 def _dia(valor: Optional[str] = None) -> str:
+    # El fallback es EL DÍA DE ESPAÑA, no el de UTC (bloque F, 23-08). Con UTC, un pesaje
+    # apuntado entre las 00:00 y las 02:00 de aquí se archivaba en AYER y, si ese día ya
+    # tenía punto, `poner_en_serie` lo sobrescribía: se borraba un dato real. La lectura
+    # (`actual`, `curva_de_peso`) ya cortaba en España; faltaba la escritura.
     if not valor:
-        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        from core.tiempo import hoy_madrid
+        return hoy_madrid().isoformat()
     return str(valor)[:10]
 
 

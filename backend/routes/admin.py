@@ -464,7 +464,7 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     # -- 2026-09, 2027, 2029 --, y el historial del coach abria por una de ellas, o sea por
     # unos macros que todavia no aplican a nadie.
     macro_history = await db.macro_history.find(
-        hasta_hoy({"client_id": client_id}, campo="effective_date"), {"_id": 0}
+        hasta_hoy({"client_id": client_id}, campo="effective_date", campo_es_dia=True), {"_id": 0}
     ).sort([("effective_date", -1), ("created_at", -1)]).to_list(500)
     # El protocolo va RESUELTO POR FECHA (punto 33): `actual` es el que le toca hoy y
     # `siguiente` el que ya esta preparado, y viaja el historico entero.

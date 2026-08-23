@@ -2006,7 +2006,11 @@ async def montar_dia(data: dict, user = Depends(get_current_user)):
     """
     from meal_templates import generar_opciones_menu
 
-    fecha = (data.get("fecha") or datetime.now(timezone.utc).date().isoformat()).strip()
+    # Sin fecha, el dia de ESPAÑA, no el de UTC (bloque F, 23-08): un alta a las 00:30 de
+    # aqui escribia su primera dieta en AYER y el cliente estrenaba la app con hoy vacio.
+    # Lo suyo es que el front mande la fecha del cliente; esto es la red de seguridad.
+    from core.tiempo import hoy_madrid
+    fecha = (data.get("fecha") or hoy_madrid().isoformat()).strip()
     dist = await distribute_macros({
         "fecha": fecha,
         "tipo_dia": data.get("tipo_dia", "entrenamiento"),

@@ -48,3 +48,26 @@ def a_utc(valor: datetime) -> datetime:
     if valor.tzinfo is None:
         valor = valor.replace(tzinfo=MADRID)
     return valor.astimezone(timezone.utc)
+
+
+def dia_del_cliente(valor: Optional[str], margen_dias: int = 1) -> str:
+    """El día que el CLIENTE dice estar viviendo, validado. Bloque F (23-08).
+
+    La regla de producto: el «hoy» que el cliente ve y edita es el de SU reloj, no el de
+    España (España queda para plazos, ventanas y avisos). El backend no conoce su zona,
+    así que el front manda su día y aquí solo se valida: formato de fecha y a no más de
+    `margen_dias` del día de España (ninguna zona horaria real se aleja más de un día;
+    lo que llegue más lejos es un reloj roto o una trampa, y se ignora).
+
+    Sin valor, o con uno inválido, se devuelve el día de España: el comportamiento de
+    siempre, que para un cliente en España es además el correcto.
+    """
+    hoy = hoy_madrid()
+    if valor:
+        try:
+            d = date.fromisoformat(str(valor)[:10])
+            if abs((d - hoy).days) <= margen_dias:
+                return d.isoformat()
+        except (ValueError, TypeError):
+            pass
+    return hoy.isoformat()

@@ -28,18 +28,29 @@ def ahora() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def hasta_hoy(filtro: Optional[Dict[str, Any]] = None, campo: str = "created_at") -> Dict[str, Any]:
+def hasta_hoy(filtro: Optional[Dict[str, Any]] = None, campo: str = "created_at",
+              campo_es_dia: bool = False) -> Dict[str, Any]:
     """`filtro` con la condicion de que `campo` no sea posterior a ahora.
 
     Si el filtro ya trae una condicion sobre ese campo, se respeta y solo se añade el tope:
     asi se puede pedir "entre el reporte anterior y hoy" sin pisar nada.
+
+    `campo_es_dia`: para campos que son UN DIA a secas (`effective_date`, "2026-08-23") y
+    no un instante. Compararlos contra el instante UTC los dejaba fuera entre las 00:00 y
+    las 02:00 de España ("2026-08-23" > "2026-08-22T22:30:00+00:00"): el ajuste que entra
+    en vigor hoy no salia en el historial. El corte de un dia es el DIA de España.
     """
+    if campo_es_dia:
+        from core.tiempo import hoy_madrid
+        corte = hoy_madrid().isoformat()
+    else:
+        corte = ahora()
     fuera = dict(filtro or {})
     actual = fuera.get(campo)
     if isinstance(actual, dict):
-        fuera[campo] = {**actual, "$lte": min(actual["$lte"], ahora()) if "$lte" in actual else ahora()}
+        fuera[campo] = {**actual, "$lte": min(actual["$lte"], corte) if "$lte" in actual else corte}
     elif actual is None:
-        fuera[campo] = {"$lte": ahora()}
+        fuera[campo] = {"$lte": corte}
     # Si el filtro pedia una fecha exacta (`campo: "2026-08-09"`), se deja: quien pide un dia
     # concreto sabe cual pide.
     return fuera

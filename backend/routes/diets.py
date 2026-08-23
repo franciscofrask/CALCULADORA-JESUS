@@ -343,7 +343,8 @@ def _nombre_del_entreno(dia_rutina: Optional[dict]) -> Optional[str]:
 
 
 @router.get("/semana")
-async def get_semana(inicio: Optional[str] = None, user = Depends(get_current_user)):
+async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = None,
+                     user = Depends(get_current_user)):
     """Los siete días de la semana del cliente (lunes a domingo, en hora de España),
     cada uno con el estado de su dieta y su entreno. Es lo que pinta Mi semana.
 
@@ -358,9 +359,11 @@ async def get_semana(inicio: Optional[str] = None, user = Depends(get_current_us
     conteo único (`calibrar_dia`), los mismos que enseñan Inicio y Nutrición.
     """
     from datetime import date as _date, timedelta
-    from core.tiempo import hoy_madrid
+    from core.tiempo import dia_del_cliente
 
-    hoy = hoy_madrid()
+    # `hoy_cliente` es el dia del RELOJ DEL CLIENTE (bloque F, 23-08): decide la pastilla
+    # «Hoy» y la semana por defecto. Validado; sin el, el dia de España, como siempre.
+    hoy = _date.fromisoformat(dia_del_cliente(hoy_cliente))
     base = hoy
     if inicio:
         base = _date.fromisoformat(_validar_fecha(inicio))

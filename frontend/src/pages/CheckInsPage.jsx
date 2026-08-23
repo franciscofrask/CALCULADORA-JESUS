@@ -30,8 +30,10 @@ const MOOD_FACES = [
     { value: 5, icon: Smile, color: 'text-emerald-400', label: 'Genial' },
 ];
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
-const isSameDay = (iso) => iso && new Date(iso).toISOString().slice(0, 10) === todayKey();
+// El día del RELOJ DEL CLIENTE (bloque F, 23-08). `toISOString()` era el día UTC: desde
+// América por la tarde «hoy» ya era mañana y el cierre de hoy nunca contaba como de hoy.
+const todayKey = () => new Date().toLocaleDateString('en-CA');
+const isSameDay = (iso) => iso && new Date(iso).toLocaleDateString('en-CA') === todayKey();
 
 // «Jueves, 20 de agosto», la fecha de la cabecera del cierre del día.
 const fechaLarga = (iso) => {
@@ -189,6 +191,8 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado }) => {
         try {
             await api.post('/checkins', {
                 type: 'daily',
+                // El día del RELOJ DEL CLIENTE (bloque F): su cierre se archiva en SU día.
+                fecha: todayKey(),
                 descanso: f.descanso, energy: f.energy, hunger_anxiety: f.hunger_anxiety,
                 movimiento: f.movimiento,
                 entreno_respuesta: f.entreno_respuesta,
@@ -576,7 +580,8 @@ const CheckInsPage = () => {
     // preguntas de siempre, que es mejor que no dejarle cerrar el día.
     const fetchHoy = useCallback(async () => {
         try {
-            const { data } = await api.get('/checkins/hoy');
+            // Con el día del cliente: el cierre pregunta por el día que ÉL está viviendo.
+            const { data } = await api.get(`/checkins/hoy?fecha=${todayKey()}`);
             setHoy(data || null);
         } catch (err) {
             console.error('No se pudo consultar el día de hoy:', err?.response?.data || err);
@@ -641,7 +646,7 @@ const CheckInsPage = () => {
         }
         setSubmitting(true);
         try {
-            await api.post('/checkins', { type: 'daily', ...daily });
+            await api.post('/checkins', { type: 'daily', fecha: todayKey(), ...daily });
             toast.success('Check-in diario enviado');
             setDaily({ energy: null, hunger_anxiety: null });
             fetchAll();

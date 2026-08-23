@@ -129,16 +129,19 @@ async def pesos_de_la_ultima_vez(client_id: str, dia_rutina: Optional[str],
 
 
 @router.get("/workout-logs/hoy")
-async def get_log_de_hoy(ctx=Depends(require_access("rutina"))):
+async def get_log_de_hoy(fecha: Optional[str] = Query(None), ctx=Depends(require_access("rutina"))):
     """Lo que Inicio y la pantalla de registro necesitan de hoy.
 
     Devuelve `{"log": ... | null}` (el contrato) y, ademas, lo que la pantalla tiene que
     pintar antes de que el cliente toque nada: la cabecera del dia y los pesos de la
     ultima vez con esa misma rutina.
+
+    `fecha` es el dia del RELOJ DEL CLIENTE (bloque F, 23-08), validado; sin el, España.
     """
     await _exige_pantalla_encendida()
     profile, routine = await _perfil_y_rutina(ctx)
-    fecha = hoy_madrid().isoformat()
+    from core.tiempo import dia_del_cliente
+    fecha = dia_del_cliente(fecha)
     dia = dia_de_rutina(routine, fecha)
     log = await log_del_dia(profile["id"], fecha)
     titulo = titulo_del_dia(dia)
@@ -192,7 +195,10 @@ async def guardar_log(data: WorkoutLogCreate, ctx=Depends(require_access("rutina
     dia corrige lo puesto, no crea una fila nueva ni cuenta dos entrenos."""
     await _exige_pantalla_encendida()
     profile, routine = await _perfil_y_rutina(ctx)
-    fecha = hoy_madrid().isoformat()
+    # El dia del RELOJ DEL CLIENTE si la pantalla lo manda (bloque F, 23-08): un entreno
+    # registrado a las 00:30 de un cliente al este de España se apuntaba en su mañana.
+    from core.tiempo import dia_del_cliente
+    fecha = dia_del_cliente(getattr(data, "fecha", None))
 
     # El dia de la rutina lo manda la pantalla (es lo que enseño), y si no viene se
     # resuelve aqui: sin el, el Diario y la precarga de pesos se quedan sin saber de que

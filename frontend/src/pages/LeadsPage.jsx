@@ -69,7 +69,7 @@ const fechaCorta = (valor) => {
 const isOverdue = (lead) => {
     if (!lead.next_action_date) return false;
     if (['convertido', 'descartado'].includes(lead.status)) return false;
-    return lead.next_action_date < new Date().toISOString().slice(0, 10);
+    return lead.next_action_date < new Date().toLocaleDateString('en-CA'); // dia local del coach, no UTC (bloque F)
 };
 
 /**
@@ -167,7 +167,7 @@ const LeadsPage = () => {
         if (metricsFilter.period !== 'all') {
             const d = new Date();
             d.setDate(d.getDate() - Number(metricsFilter.period));
-            params.from_date = d.toISOString().slice(0, 10);
+            params.from_date = d.toLocaleDateString('en-CA');
         }
         if (metricsFilter.source) params.source = metricsFilter.source;
         if (metricsFilter.assigned_to) params.assigned_to = metricsFilter.assigned_to;

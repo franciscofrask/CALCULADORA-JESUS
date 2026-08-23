@@ -64,8 +64,12 @@ async def chatbot_start(current_user: dict = Depends(get_current_user)):
     #
     # Al arrancar todavía no se sabe qué día se va a montar (lo dice el front en
     # /configure), así que se resuelve para HOY y se recalcula allí con la fecha buena.
+    from core.tiempo import hoy_madrid
     from macros_por_fecha import para_el_chat
-    user_macros = await para_el_chat(db, profile, datetime.now().strftime("%Y-%m-%d"))
+    # El dia de España, no el naive del proceso (bloque F, 23-08): con el reloj del
+    # servidor, de 00:00 a 02:00 la sesion arrancaba con los macros vigentes de AYER.
+    # En /configure se recalcula con la fecha que manda el cliente, que es la buena.
+    user_macros = await para_el_chat(db, profile, hoy_madrid().isoformat())
 
 
     chatbot = await get_or_create_chatbot(session_id, db, user_macros)
@@ -156,6 +160,12 @@ async def chatbot_configure(
             chatbot.state["sustitucion_pendiente"] = None
         chatbot.state["fecha_objetivo"] = config.fecha
 
+    # EL «HOY» DEL CLIENTE (bloque F, 23-08): el front manda el dia de SU reloj y el agente
+    # razona «hoy/mañana/ayer» con el. Sin esto, el agente usaba el dia del servidor y a un
+    # cliente fuera de España un «vamos con hoy» le montaba (y guardaba) otro dia.
+    if getattr(config, "hoy", None):
+        chatbot.state["hoy_cliente"] = config.hoy
+
     # Los macros de un cliente cambian con el tiempo, así que se resuelven PARA EL DÍA que
     # se va a montar, no una vez al arrancar la sesión. Sin esto, cambiar de día dentro de
     # la conversación («móntame el de mañana») dejaba los objetivos del día anterior.
@@ -183,7 +193,12 @@ async def chatbot_configure(
     # Va DESPUES de configure_day a proposito: esa llamada rehace el orden de comidas y
     # limpia el estado, asi que precargar antes seria tirarlo. Y va aqui y no en /start
     # porque hasta este momento no se sabe que dia se esta montando.
-    fecha_dieta = chatbot.state.get("fecha_objetivo") or datetime.now().strftime("%Y-%m-%d")
+    # Sin fecha del front: el dia del CLIENTE si lo dio, y si no el de España (nunca el
+    # naive del proceso, que precargaba las comidas de otro dia de madrugada).
+    from core.tiempo import hoy_madrid as _hoy_madrid
+    fecha_dieta = (chatbot.state.get("fecha_objetivo")
+                   or chatbot.state.get("hoy_cliente")
+                   or _hoy_madrid().isoformat())
     user_id = current_user.get("id") or current_user.get("user_id")
     dieta = await db.diets.find_one({"user_id": user_id, "fecha": fecha_dieta}, {"_id": 0, "comidas": 1})
     comidas_traidas = chatbot.precargar_desde_dieta(*(await _dieta_para_precargar(dieta)))

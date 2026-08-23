@@ -6,7 +6,7 @@ import { plural, nombreDePlan } from '../lib/labels';
 import { num1 } from '../lib/numeros';
 import { objetivoDelDia, varianteDelDia } from '../lib/estadoMacros';
 import {
-    aFecha, diaEnEspana, hoyEnEspana, etiquetaMomento, fechaLargaDeHoy, textoPlazo,
+    aFecha, diaLocal, hoyLocal, etiquetaMomento, fechaLargaDeHoy, textoPlazo,
 } from '../lib/horaEspana';
 import { useEsTelefono } from '../lib/esTelefono';
 import { useOnboarding } from '../context/OnboardingContext';
@@ -320,17 +320,18 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
 // Todo esto vive detrás del interruptor `t1_inicio_nuevo` del panel: apagado, el cliente
 // ve el Inicio de siempre sin que nadie despliegue nada.
 
-// La fecha de hoy con la que viajan las dietas: la de ESPAÑA, la misma que usa Nutrición
-// (`hoyISO`) y la misma con la que el backend cierra el día, cuenta el entreno y abre los
-// reportes. Estuvo en hora local para que Inicio y Nutrición coincidieran entre sí, pero
-// entonces las dos discrepaban del servidor: la cabecera decía «Lunes, 17 de agosto» y
-// debajo salían los macros del domingo.
-const hoyDeLaDieta = () => hoyEnEspana();
+// La fecha de hoy con la que viajan las dietas: LA DEL RELOJ DEL CLIENTE (bloque F,
+// 23-08). Estuvo clavada a España «para coincidir con el servidor», pero eso le abría a
+// un cliente en América un día que aún no había vivido y le marcaba la cena de su sábado
+// en el domingo. Ahora el criterio es el contrario y es de producto: su día es el suyo;
+// el servidor acepta la fecha del cliente en todos los caminos del día vivido
+// (`dia_del_cliente`), y España queda para los plazos. Nutrición usa este mismo reloj.
+const hoyDeLaDieta = () => hoyLocal();
 
-// El día de mañana con el mismo criterio (hora de España): para la línea «Mañana» y para
-// abrir Nutrición en ese día (`?date=`, el mismo camino que usa Mi semana).
+// El día de mañana con el mismo criterio (el reloj del cliente): para la línea «Mañana»
+// y para abrir Nutrición en ese día (`?date=`, el mismo camino que usa Mi semana).
 const mananaDeLaDieta = () =>
-    new Date(Date.parse(`${hoyEnEspana()}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+    new Date(Date.parse(`${hoyLocal()}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 
 const estrellas = (n) => (n >= 1 && n <= 5 ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
 
@@ -415,7 +416,7 @@ const InicioNuevo = () => {
                 api.get(`/diets/${hoyDeLaDieta()}`).catch(() => ({ data: { exists: false } })),
                 api.get('/supplements/current').catch(() => ({ data: null })),
                 api.get('/routines/current').catch(() => ({ data: null })),
-                api.get('/workout-logs/hoy').catch(() => ({ data: { log: null } })),
+                api.get(`/workout-logs/hoy?fecha=${hoyLocal()}`).catch(() => ({ data: { log: null } })),
                 api.get('/checkins?type=daily&limit=1').catch(() => ({ data: [] })),
                 api.get('/reports/due').catch(() => ({ data: { items: [] } })),
                 api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
@@ -469,7 +470,7 @@ const InicioNuevo = () => {
     const objetivo = objetivoDelDia(objetivoComidas);
 
     // El cierre del día de HOY (hora de España, que es como cuenta el backend).
-    const cierreDeHoy = ultimoCierre && diaEnEspana(aFecha(ultimoCierre.created_at) || new Date()) === hoyEnEspana()
+    const cierreDeHoy = ultimoCierre && diaLocal(aFecha(ultimoCierre.created_at) || new Date()) === hoyLocal()
         ? ultimoCierre : null;
     // «✓ hecho» en suplementación cuando lo marcó en el cierre de hoy. El campo lo escribe
     // T4; mientras no exista, la línea sale sin marcar y no pasa nada.
@@ -490,7 +491,7 @@ const InicioNuevo = () => {
     // la cabecera de arriba escribe el día de España: a un cliente que no esté en España la
     // misma pantalla le decía «Lunes, 17 de agosto» y buscaba su entreno en el domingo, así
     // que un día de descanso ahí le borraba la línea de entreno del lunes. El backend ya lo
-    // resuelve en `GET /workout-logs/hoy` con `hoy_madrid()`, que es la única cuenta buena.
+    // resuelve en `GET /workout-logs/hoy`, que desde el bloque F recibe el día del cliente.
     const grupoMuscular = entrenoDelDia?.dia_rutina || '';
     const esDiaDeEntreno = !!entrenoDelDia && !entrenoDelDia.descanso;
     const soloCardio = esDiaDeEntreno && entrenoDelDia.tipo === 'cardio';
@@ -895,7 +896,9 @@ const ClientDashboard = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const today = new Date().toISOString().split('T')[0];
+                // El día LOCAL del cliente, no el UTC (bloque F, 23-08): `toISOString`
+                // pedía los macros de mañana desde media tarde en América.
+                const today = hoyLocal();
                 const [routineRes, pdfRes, messagesRes, macrosRes, dietRes, prefsRes, dueRes] = await Promise.all([
                     api.get('/routines/current').catch(() => ({ data: null })),
                     api.get('/routines/pdf/info').catch(() => ({ data: { hay: false } })),

@@ -271,17 +271,19 @@ async def _cierre_de_hoy(client_id: str, fecha: str) -> Optional[dict]:
 
 
 @router.get("/checkins/hoy")
-async def cierre_del_dia_hoy(user=Depends(get_current_user)):
+async def cierre_del_dia_hoy(fecha: Optional[str] = Query(None), user=Depends(get_current_user)):
     """Lo que la pantalla del cierre del día necesita saber antes de preguntar nada.
 
-    `fecha` es el día del cliente en hora de España: a las 23:30 de Madrid el cierre
-    sigue siendo el de hoy, aunque en UTC ya sea mañana.
+    `fecha` es el día DEL RELOJ DEL CLIENTE (bloque F, 23-08): el front lo manda y aquí
+    solo se valida (`dia_del_cliente`). Sin él, el día de España, que era lo de siempre:
+    a un cliente fuera de España su cierre le salía con el día equivocado.
     """
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
-    fecha = hoy_madrid().isoformat()
+    from core.tiempo import dia_del_cliente
+    fecha = dia_del_cliente(fecha)
     hecho = await _cierre_de_hoy(profile["id"], fecha)
 
     # ── 1 · El entreno. Solo si hoy le tocaba y no lo ha registrado.
@@ -336,15 +338,17 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     if not plan_grants_feature(profile.get("plan"), "reportes"):
         raise HTTPException(status_code=403, detail="Tu plan no incluye check-ins de seguimiento.")
 
-    # El día DEL CLIENTE, en hora de España. `created_at` es UTC y a partir de las 22:00
-    # de Madrid (23:00 en invierno) ya cuenta como el día siguiente: el cierre de las
-    # 23:30 acababa guardado en mañana, que es justo el día que aún no ha vivido.
-    dia = hoy_madrid().isoformat()
+    # El día DEL RELOJ DEL CLIENTE (bloque F, 23-08): lo manda el front y aquí se valida.
+    # Sin él, el de España (lo de siempre). `created_at` sigue siendo el instante UTC.
+    from core.tiempo import dia_del_cliente
+    dia = dia_del_cliente(getattr(data, "fecha", None))
 
+    cuerpo = data.model_dump(exclude_none=True)
+    cuerpo.pop("fecha", None)   # ya viaja saneado en `dia`; dos campos con el día son ruido
     checkin = {
         "id": str(uuid.uuid4()),
         "client_id": profile["id"],
-        **data.model_dump(exclude_none=True),
+        **cuerpo,
         "dia": dia,
         "trainer_feedback": None,
         "created_at": datetime.now(timezone.utc).isoformat(),

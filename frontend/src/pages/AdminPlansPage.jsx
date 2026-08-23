@@ -158,8 +158,8 @@ const PantallasDeLaApp = () => {
                             type="date"
                             value={fechaFrase}
                             onChange={(e) => setFechaFrase(e.target.value)}
-                            min={new Date().toISOString().slice(0, 10)}
-                            max={new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)}
+                            min={new Date().toLocaleDateString('en-CA')}
+                            max={new Date(Date.now() + 7 * 864e5).toLocaleDateString('en-CA')}
                             className="bg-black/30 border-[#333] text-white text-sm w-40 shrink-0"
                         />
                         <Button onClick={guardarFrase} disabled={guardandoFrase || !frase.trim()} className="bg-[#FF671F] hover:bg-[#e55b1a] text-white">

@@ -506,6 +506,10 @@ export default function ChatbotPage() {
           single_meal: single,
           // Qué fecha se monta: el asistente resuelve "mañana" contra el día abierto.
           fecha: fecha || targetDate || null,
+          // Y el «hoy» del RELOJ DEL CLIENTE (bloque F, 23-08): con él el agente resuelve
+          // «hoy/mañana/ayer»; sin él usaba el reloj del servidor y a quien está fuera de
+          // España un «vamos con hoy» le montaba otro día.
+          hoy: todayLocal(),
           // El saludo con la configuración lo acaba de dar `arrancarConLaConfigDeNutricion`
           // (es quien llama aquí). Sin esto, el backend lo repetía en su respuesta con la
           // forma de un «Perfecto, día de entrenamiento con 4 comidas» a una petición que

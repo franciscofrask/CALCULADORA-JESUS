@@ -1023,7 +1023,7 @@ def _semana_actual(pdf: Optional[Dict[str, Any]], routine: Optional[Dict[str, An
 
 
 @router.get("/semana")
-async def semana_de_rutina(user=Depends(get_current_user)):
+async def semana_de_rutina(hoy_cliente: Optional[str] = None, user=Depends(get_current_user)):
     """La semana de la rutina del cliente: qué grupo toca cada día, qué está hecho, qué
     se dejó y qué toca hoy. Es lo que pinta la cabecera y la tira de Mi rutina.
 
@@ -1041,7 +1041,10 @@ async def semana_de_rutina(user=Depends(get_current_user)):
         return {"hay": False, "tiene_pdf": bool(pdf), "tiene_rutina": bool(routine),
                 "faltan_dias": not indices}
 
-    hoy = hoy_madrid()
+    # El «hoy» del RELOJ DEL CLIENTE si la pantalla lo mando (bloque F, 23-08); sin el,
+    # España. Decide la marca «hoy» de la tira y la semana que se pinta.
+    from core.tiempo import dia_del_cliente
+    hoy = date.fromisoformat(dia_del_cliente(hoy_cliente))
     lunes = hoy - timedelta(days=hoy.weekday())
     fechas = [(lunes + timedelta(days=i)).isoformat() for i in range(7)]
 
@@ -1145,7 +1148,10 @@ async def marcar_dia_de_la_semana(data: Dict[str, Any], ctx=Depends(require_acce
         raise HTTPException(status_code=403,
                             detail="El registro de entrenos todavía no está disponible.")
     profile = ctx["profile"]
-    hoy = hoy_madrid()
+    # El «hoy» del cliente si viaja en el body (bloque F, 23-08): a un cliente al este de
+    # España su propio hoy le salia como «todavía no ha llegado».
+    from core.tiempo import dia_del_cliente
+    hoy = date.fromisoformat(dia_del_cliente((data or {}).get("hoy")))
     f = _fecha_de_esta_semana((data or {}).get("fecha"), hoy)
     if f > hoy:
         raise HTTPException(status_code=400, detail="Ese día todavía no ha llegado.")
@@ -1182,7 +1188,8 @@ async def recuperar_entreno(data: Dict[str, Any], ctx=Depends(require_access("ru
     if not grupos:
         raise HTTPException(status_code=400, detail="Todavía no sabemos tu semana de entreno.")
 
-    hoy = hoy_madrid()
+    from core.tiempo import dia_del_cliente
+    hoy = date.fromisoformat(dia_del_cliente((data or {}).get("hoy")))
     original = _fecha_de_esta_semana((data or {}).get("fecha_original"), hoy)
     nueva = _fecha_de_esta_semana((data or {}).get("fecha"), hoy)
     if original >= hoy:

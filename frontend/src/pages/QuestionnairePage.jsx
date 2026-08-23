@@ -2158,7 +2158,11 @@ const QuestionnairePage = () => {
             // Con los macros ya calculados, se le deja el día de hoy montado. Va en segundo
             // plano y sin bloquear: si falla, se queda como estaba (con su día por montar) y
             // no se le estropea el final del alta por esto.
-            api.post('/calculator/montar-dia', { guardar: true })
+            // Con LA FECHA DEL CLIENTE (bloque F, 23-08): sin ella el servidor montaba el
+            // dia en su propio reloj y un alta de madrugada estrenaba la app con el hoy
+            // vacio y la dieta puesta en ayer.
+            api.post('/calculator/montar-dia',
+                     { guardar: true, fecha: new Date().toLocaleDateString('en-CA') })
                 .then(r => setDiaMontado(r.data || null))
                 .catch(() => {});
             setEntrega(res?.data?.entrega || null);

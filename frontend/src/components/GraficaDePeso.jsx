@@ -75,7 +75,7 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true }) => {
         // Es la misma regla que las series del backend, y sin ella la curva hace picos que
         // no existieron.
         const porDia = new Map();
-        limpio.forEach(p => porDia.set(new Date(p.ts).toISOString().slice(0, 10), p));
+        limpio.forEach(p => porDia.set(new Date(p.ts).toLocaleDateString('en-CA'), p)); // dia local, no UTC (bloque F)
         const unicos = [...porDia.values()].sort((a, b) => a.ts - b.ts);
         return unicos.map((p, i) => ({
             ...p,

@@ -223,6 +223,9 @@ class NotaDelDia(BaseModel):
 
 class CheckInCreate(BaseModel):
     type: str  # "daily" | "weekly" | "monthly"
+    # El día del RELOJ DEL CLIENTE (bloque F, 23-08): el backend lo valida con
+    # `dia_del_cliente` (a un día del de España como mucho). Sin él, el de España.
+    fecha: Optional[str] = None
     # ── El cierre del día nuevo (T4 del doc 16-08) ────────────────────────────
     # Todo opcional a propósito: la pantalla enseña solo lo que le falta a ESE cliente
     # ese día, así que un cierre normal llega con la mitad de los campos vacíos. Los

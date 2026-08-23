@@ -48,7 +48,8 @@ const EntrenoPage = () => {
 
     const cargar = useCallback(async () => {
         try {
-            const { data } = await api.get('/workout-logs/hoy');
+            // Con el día del RELOJ DEL CLIENTE (bloque F, 23-08): registra SU hoy.
+            const { data } = await api.get(`/workout-logs/hoy?fecha=${new Date().toLocaleDateString('en-CA')}`);
             setDia(data || null);
             const log = data?.log;
             if (log) {
@@ -88,6 +89,8 @@ const EntrenoPage = () => {
         setGuardando(true);
         try {
             await api.post('/workout-logs', {
+                // Su día (bloque F): el entreno de las 00:30 de su reloj es de SU hoy.
+                fecha: new Date().toLocaleDateString('en-CA'),
                 hecho,
                 tipo: dia?.tipo || 'entreno',
                 estrellas: estrellas > 0 ? estrellas : null,

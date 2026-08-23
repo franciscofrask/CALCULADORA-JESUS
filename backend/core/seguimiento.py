@@ -24,9 +24,13 @@ from core.database import db
 
 
 def _dia(valor: Optional[str] = None) -> str:
-    """AAAA-MM-DD a partir de una fecha ISO (o de hoy si no viene ninguna)."""
+    """AAAA-MM-DD a partir de una fecha ISO (o de hoy si no viene ninguna).
+
+    El «hoy» de repuesto es el de ESPAÑA (bloque F, 23-08): con UTC, un ajuste de
+    madrugada quedaba fechado en ayer y descolocaba el «a quién le toca esta semana»."""
     if not valor:
-        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        from core.tiempo import hoy_madrid
+        return hoy_madrid().isoformat()
     return str(valor)[:10]
 
 

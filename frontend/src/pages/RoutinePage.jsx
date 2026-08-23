@@ -178,7 +178,9 @@ const RoutinePage = () => {
     const [semana, setSemana] = useState(null);
     const [marcando, setMarcando] = useState(false);
     const cargarSemana = React.useCallback(() => {
-        api.get('/routines/semana').then(r => setSemana(r.data?.hay ? r.data : null)).catch(() => {});
+        // Con el «hoy» del reloj del cliente (bloque F, 23-08).
+        api.get(`/routines/semana?hoy_cliente=${new Date().toLocaleDateString('en-CA')}`)
+            .then(r => setSemana(r.data?.hay ? r.data : null)).catch(() => {});
     }, [api]);
     useEffect(() => { cargarSemana(); }, [cargarSemana]);
 
@@ -201,7 +203,7 @@ const RoutinePage = () => {
     const siLoHice = async (pendiente) => {
         setMarcando(true);
         try {
-            await api.post('/routines/semana/hecho', { fecha: pendiente.fecha, grupo: pendiente.grupo });
+            await api.post('/routines/semana/hecho', { fecha: pendiente.fecha, grupo: pendiente.grupo, hoy: new Date().toLocaleDateString('en-CA') });
             toast.success('Apuntado.');
             cargarSemana();
         } catch { toast.error('No hemos podido apuntarlo. Inténtalo en un momento.'); }
@@ -212,7 +214,7 @@ const RoutinePage = () => {
     const recuperar = async (pendiente, dia) => {
         setMarcando(true);
         try {
-            await api.post('/routines/semana/recuperar', { fecha_original: pendiente.fecha, fecha: dia.fecha });
+            await api.post('/routines/semana/recuperar', { fecha_original: pendiente.fecha, fecha: dia.fecha, hoy: new Date().toLocaleDateString('en-CA') });
             toast.success(`${pendiente.grupo} pasa al ${dia.dia}.`);
             cargarSemana();
         } catch { toast.error('No hemos podido apuntar la recuperación. Inténtalo en un momento.'); }

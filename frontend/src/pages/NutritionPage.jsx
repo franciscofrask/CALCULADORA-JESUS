@@ -10,7 +10,7 @@ import { useConfirm } from '../components/ui/confirm';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { hoyEnEspana } from '../lib/horaEspana';
+import { hoyLocal } from '../lib/horaEspana';
 import {
     Copy, FileDown, SlidersHorizontal, Star, Check, AlertCircle, AlertTriangle, Settings, UserCheck
 } from 'lucide-react';
@@ -137,18 +137,14 @@ const POST_CARB_CATEGORIES = [
     { id: 'bebida', label: 'Bebida', emoji: '🥤', prefixes: ['24'] },
 ];
 
-// La fecha de hoy con la que viajan las dietas (AAAA-MM-DD), EN HORA DE ESPAÑA.
-//
-// Antes salía del reloj del aparato. Con `toISOString()` habría sido peor todavía -- el que
-// entra de madrugada vería el día anterior --, pero la hora local tampoco vale: el resto de
-// la app cuenta los días en España. El backend cierra el día, cuenta el entreno, abre los
-// reportes y manda los avisos con `hoy_madrid()`, así que un cliente fuera de España veía
-// la cabecera de Inicio en un día ("Lunes, 17 de agosto") y sus macros en otro, y el cierre
-// del día le preguntaba por una dieta que no era la que estaba mirando.
-//
-// Una sola cuenta para todos, la de España, que es la regla 1 del documento del 16-08. Para
-// quien está en España no cambia nada.
-const hoyISO = () => hoyEnEspana();
+// La fecha de hoy con la que viajan las dietas (AAAA-MM-DD): EL RELOJ DEL CLIENTE
+// (bloque F, 23-08, decisión de Francisco). Estuvo clavada a España para cuadrar con el
+// servidor, pero eso le abría a un cliente en América el día de mañana. Ahora el servidor
+// acepta la fecha del cliente en todos los caminos del día vivido (checkins, entreno,
+// semana, montar-día), así que la cuenta única es la del navegador; España queda para
+// los plazos y ventanas, que ya van con su «(h España)». Para quien vive aquí no cambia
+// nada. OJO: nunca `toISOString()` -- ese es el día UTC, la trampa de siempre.
+const hoyISO = () => hoyLocal();
 
 const NutritionPage = () => {
     // `user` hace falta para separar por cliente lo que se guarda en el navegador (punto

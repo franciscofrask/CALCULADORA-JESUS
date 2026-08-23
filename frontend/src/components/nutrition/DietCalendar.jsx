@@ -56,7 +56,8 @@ const DietCalendar = ({ open, onClose, onSelectDate, api }) => {
         weeks.push(currentWeek);
     }
 
-    const todayStr = today.toISOString().split('T')[0];
+    // El dia LOCAL del cliente, no el UTC (bloque F, 23-08).
+    const todayStr = today.toLocaleDateString('en-CA');
 
     const getDayStatus = (day) => {
         if (!day) return null;

@@ -73,7 +73,8 @@ const TresFotos = ({ api, token, esMensual = true }) => {
         }
     };
 
-    const hoy = new Date().toISOString().slice(0, 10);
+    // El dia LOCAL del cliente, no el UTC (bloque F, 23-08).
+    const hoy = new Date().toLocaleDateString('en-CA');
     const subidaHoy = (pose) => {
         const f = ultimaDe(pose);
         return f && String(f.taken_at).slice(0, 10) === hoy;

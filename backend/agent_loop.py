@@ -726,7 +726,18 @@ class AgentLoop:
         # Hasta el 08-08 esto lo decidía un regex del front, que con "hoy es día de
         # descanso" cambiaba de día y se dejaba por el camino lo de descanso.
         from datetime import date, timedelta
-        hoy = date.today()
+        # EL «HOY» ES EL DEL CLIENTE (bloque F, 23-08). `date.today()` era el reloj del
+        # servidor: a un cliente fuera de España un «vamos con hoy» le montaba -- y le
+        # GUARDABA -- la dieta de otro día, con total convicción. El front manda su día en
+        # /configure (`hoy_cliente`); sin él, el de España, que es el reloj de la casa.
+        hoy = None
+        try:
+            hoy = date.fromisoformat(str(self.bot.state.get("hoy_cliente") or ""))
+        except (ValueError, TypeError):
+            hoy = None
+        if hoy is None:
+            from core.tiempo import hoy_madrid
+            hoy = hoy_madrid()
         dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
         montando = self.bot.state.get("fecha_objetivo") or hoy.isoformat()
         # «MAÑANA» ES MAÑANA, LA DEL CALENDARIO (Francisco, 16-08-2026).

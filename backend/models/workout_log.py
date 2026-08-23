@@ -34,8 +34,9 @@ class PesoDeReferencia(BaseModel):
 
 
 class WorkoutLogCreate(BaseModel):
-    """Lo que manda la pantalla de T3. `fecha` la pone el servidor (hoy en Madrid);
-    el cliente no fecha sus entrenos, los registra."""
+    """Lo que manda la pantalla de T3. `fecha` es el dia del RELOJ DEL CLIENTE (bloque F,
+    23-08), validado por el servidor con `dia_del_cliente`; sin ella, el dia de España."""
+    fecha: Optional[str] = None
     hecho: bool
     # "cardio" para los días de solo cardio ("Hoy solo cardio · 40 minutos"): cuentan
     # como día válido en Inicio y como sesión de cardio en el mensual (T8).

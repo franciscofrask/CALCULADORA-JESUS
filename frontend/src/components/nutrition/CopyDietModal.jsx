@@ -32,7 +32,7 @@ const CopyDietModal = ({
                         type="date"
                         value={copyDate}
                         onChange={(e) => setCopyDate(e.target.value)}
-                        min={new Date().toISOString().split('T')[0]}
+                        min={new Date().toLocaleDateString('en-CA')}
                         className="h-12 rounded-xl"
                         data-testid="copy-date-input"
                     />
