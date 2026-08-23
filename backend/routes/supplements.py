@@ -360,7 +360,12 @@ def _catalog_to_protocol_item(c: dict) -> dict:
 @admin_router.post("/suggest")
 async def suggest_protocol(client_id: str, user=Depends(get_admin_user)):
     """Propone un protocolo inicial según el perfil (sexo y objetivo).
-    No guarda nada: el entrenador lo revisa/edita antes de guardar."""
+
+    NO GUARDA NADA, y es la regla definitiva (P33 del doc 23-08, confirmada por
+    Francisco el 23-08): auto-sugerir solo PROPONE y el coach revisa y guarda. El 21-08
+    esto borró el protocolo entero de Juan porque el front sustituía con la respuesta;
+    si alguien vuelve a hacer que esta ruta escriba en supplement_protocols, está
+    reabriendo ese fallo."""
     profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
     assert_client_access(user, profile)
 

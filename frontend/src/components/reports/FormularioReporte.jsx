@@ -282,7 +282,9 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
             {aplazado ? (
                 <div data-testid="aplazar"
                     className="w-full rounded-2xl p-4 border text-sm border-green-500/40 bg-green-500/5 text-foreground">
-                    Te lo he aplazado 7 días. Tu reporte se vuelve a abrir el viernes que viene. Sigue registrando como siempre.
+                    {/* Sin día de la semana: el quincenal cierra en jueves y el mensual
+                        en lunes, y esto sale en los dos (P44 del 23-08). Y en plural. */}
+                    Te lo hemos aplazado 7 días: tu reporte se vuelve a abrir la semana que viene, el mismo día de siempre. Sigue registrando como hasta ahora.
                 </div>
             ) : !pidiendoAplazar ? (
                 <button type="button" onClick={() => setPidiendoAplazar(true)} data-testid="aplazar"

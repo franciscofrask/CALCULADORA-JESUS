@@ -1980,8 +1980,8 @@ const NutritionPage = () => {
             // salen clavados y el cliente tiene derecho a saber por qué (Jesús, 15-08,
             // fallo 29: «5 g de aguacate es media cucharadita, nadie pesa eso»).
             const notaRedondeo = d?.redondeado
-                // Reescrito por el punto 9 del 23-08: «los macros bailan» no se entendía.
-                ? ' Hemos redondeado las cantidades para que las puedas pesar fácil, así que los macros pueden variar unos gramos.'
+                // Reescrito por el punto 9 del 23-08 (y acortado por Francisco).
+                ? ' Cantidades redondeadas para pesarlas fácil: los macros pueden variar unos gramos.'
                 : '';
             if (silencioso) return;
             if (nEx) {

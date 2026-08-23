@@ -38,6 +38,70 @@ async def get_current_routine(ctx = Depends(require_access("rutina"))):
 
     return RoutineResponse(**routine)
 
+@router.post("/quiero-la-rutina")
+async def quiero_la_rutina(data: dict, user = Depends(get_current_user)):
+    """«Quiero mi rutina» (P72 del doc 23-08, DECIDIDO): el plan que no lleva rutina
+    puede comprar la rutina del mes desde la pantalla de Rutina.
+
+    Reutiliza EXACTAMENTE el circuito del reporte mensual del Bronze (19-08):
+    `core/rutina_del_mes.cobrar` (57 EUR en la tarjeta guardada, con el freno de las
+    cuentas de pruebas) y el aviso al equipo con el estado del cobro. Si el cobro no
+    entra, la petición queda avisada igual: lo que no se hace es perderla.
+    """
+    modalidad = str((data or {}).get("modalidad") or "").strip()
+    if modalidad not in ("basica", "avanzada"):
+        raise HTTPException(status_code=400, detail="Dinos si la quieres básica o avanzada.")
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    # El que YA tiene rutina activa no compra otra por error.
+    activa = await db.routines.find_one({"client_id": profile["id"], "status": "active"}, {"_id": 1})
+    if activa:
+        raise HTTPException(status_code=400, detail="Ya tienes una rutina activa.")
+
+    from core.avisos_equipo import avisar_al_equipo
+    from core.rutina_del_mes import PRECIO_EUR, cobrar
+
+    cobro = await cobrar(profile, modalidad, None)
+    nombre = user.get("name") or user.get("email") or "Un cliente"
+    etiqueta = "básica" if modalidad == "basica" else "avanzada"
+    if cobro["cobrado"]:
+        estado = f"Cobrados {PRECIO_EUR:.0f} € en su tarjeta."
+    else:
+        porques = {
+            "sin_tarjeta": "no tiene tarjeta guardada",
+            "requiere_autenticacion": "su banco pide que lo confirme él",
+            "rechazada": "la tarjeta la rechazó",
+            "sin_stripe": "los pagos no están configurados en este entorno",
+            "cuenta_de_pruebas": "es una cuenta de pruebas (no se cobra de verdad)",
+        }
+        estado = ("SIN COBRAR: " + porques.get(cobro.get("motivo"), str(cobro.get("motivo")))
+                  + ". Hay que cobrárselo a mano.")
+
+    await avisar_al_equipo(
+        db, tipo="rutina_del_mes",
+        titulo="Quiere la rutina del mes",
+        mensaje=f"{nombre} ha pedido la rutina del mes {etiqueta} ({PRECIO_EUR:.0f} €) "
+                f"desde la pantalla de Rutina. {estado}",
+        client_id=profile["id"], trainer_id=profile.get("trainer_id"),
+        extra={"modalidad": modalidad, "cobrado": cobro["cobrado"],
+               "motivo": cobro.get("motivo"), "payment_intent": cobro.get("payment_intent"),
+               "importe_eur": PRECIO_EUR, "origen": "pantalla_rutina"},
+    )
+    # Al cliente, la verdad de lo que ha pasado, sin tecnicismos.
+    return {
+        "ok": True,
+        "cobrado": cobro["cobrado"],
+        "mensaje": ("Hecho. Te hemos cobrado los 57 € y el equipo se pone con tu rutina: "
+                    "la tendrás cargada aquí en cuanto esté."
+                    if cobro["cobrado"] else
+                    "Tu petición está apuntada y el equipo se pone con ella. El cobro no ha "
+                    "podido hacerse ahora: te escribiremos para resolverlo."),
+    }
+
+
 @router.get("/history", response_model=List[RoutineResponse])
 async def get_routine_history(ctx = Depends(require_access("rutina"))):
     """Obtener historial de rutinas (requiere plan con rutina y suscripción activa)."""

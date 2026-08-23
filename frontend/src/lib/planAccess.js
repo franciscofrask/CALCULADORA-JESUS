@@ -52,13 +52,13 @@ export function deriveCapabilities(habilitaciones, { rutinaVisible = false } = {
             ? !!h.edita_macros
             : h.calculadora !== 'personalizado',
         [CAP.REPORTES]: reportes.length > 0,
-        // PARA TODOS LOS PLANES DE PAGO (doc 21-08, incongruencia 1b). Aquí se cerraba el
-        // Chat entero al «solo app», pero su catálogo dice «Solo incidencias técnicas»: la
-        // pantalla que se le escondía es justo la que necesita para cobros, renovación o
-        // baja, porque todos pagan. Ahora el Chat abre con dos entradas -- Mi suscripción y
-        // Algo no funciona -- y esas las tiene cualquiera con plan: `can()` ya devuelve
-        // false sin plan contratado, así que esto no le abre nada al que no paga.
-        [CAP.CHAT]: true,
+        // SOLO CON ENTRENADOR DETRÁS (P73 del doc 23-08, decidido por Francisco el
+        // mismo día): a Calculadora, ELM y Mantenimiento se les QUITA el Chat. El
+        // 21-08 se había abierto a todos como canal de soporte (cobros, «algo no
+        // funciona»), pero el doc lo marcó como fallo -- «Contacto: Ninguna» -- y la
+        // decisión es la contraria: el Chat es del acompañamiento, no del soporte.
+        // Sus incidencias van por el correo del negocio, como antes del 21-08.
+        [CAP.CHAT]: h.acompanamiento === 'con_entrenador',
     };
 }
 

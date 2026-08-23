@@ -158,8 +158,29 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
 };
 
 const RoutinePage = () => {
-    const { api } = useAuth();
+    const { api, myPlan } = useAuth();
     const [routine, setRoutine] = useState(null);
+    // «Quiero mi rutina» (P72 del 23-08, DECIDIDO): si su plan NO lleva rutina, aquí no
+    // se le dice que «su entrenador la está preparando» (mentira): se le ofrece comprar
+    // la rutina del mes. La lleva o no lo dice el catálogo del plan.
+    const rutinaIncluida = (() => {
+        const r = myPlan?.habilitaciones?.rutina;
+        // «opcional» es justo eso: no la lleva de serie, se le ofrece comprarla.
+        return !!r && r !== 'ninguna' && r !== 'opcional';
+    })();
+    const [comprando, setComprando] = useState(null);      // null | 'eligiendo' | 'basica' | 'avanzada'
+    const [compraHecha, setCompraHecha] = useState(null);  // el mensaje del servidor
+    const comprarRutina = async (modalidad) => {
+        setComprando(modalidad);
+        try {
+            const r = await api.post('/routines/quiero-la-rutina', { modalidad });
+            setCompraHecha(r.data?.mensaje || 'Hecho. El equipo se pone con tu rutina.');
+        } catch (e) {
+            console.error('[quiero-la-rutina]', e?.response?.data || e);
+            toast.error(e?.response?.data?.detail || 'No hemos podido apuntar tu petición. Inténtalo en un momento.');
+            setComprando('eligiendo');
+        }
+    };
     const [routineHistory, setRoutineHistory] = useState([]);
     const [selectedDay, setSelectedDay] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -293,8 +314,50 @@ const RoutinePage = () => {
                     <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <Dumbbell className="w-8 h-8 text-brand/60" />
                     </div>
-                    <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
-                    <p className="text-muted-foreground text-sm">Tu entrenador está preparando tu rutina personalizada.</p>
+                    {rutinaIncluida ? (
+                        <>
+                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
+                            <p className="text-muted-foreground text-sm">Tu entrenador está preparando tu rutina personalizada.</p>
+                        </>
+                    ) : compraHecha ? (
+                        <p className="text-sm text-foreground max-w-sm mx-auto" data-testid="rutina-compra-hecha">{compraHecha}</p>
+                    ) : (
+                        /* Su plan no lleva rutina: el aviso y el botón de compra del
+                           DECIDIDO (P72, doc 23-08), con el precio delante. */
+                        <div data-testid="quiero-mi-rutina">
+                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Tu plan no incluye rutina</h2>
+                            <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-5">
+                                Si quieres, te preparamos la rutina del mes por 57 €. Se cobra en la tarjeta que ya tienes guardada.
+                            </p>
+                            {comprando === null ? (
+                                <button onClick={() => setComprando('eligiendo')} data-testid="quiero-mi-rutina-btn"
+                                    className="btn-brand inline-flex items-center gap-2">
+                                    Quiero mi rutina · 57 €
+                                </button>
+                            ) : (
+                                <div className="max-w-sm mx-auto space-y-2">
+                                    <p className="text-sm text-foreground/80">¿Cómo la quieres?</p>
+                                    <div className="flex gap-2 justify-center">
+                                        <button onClick={() => comprarRutina('basica')} disabled={comprando !== 'eligiendo'}
+                                            data-testid="rutina-basica"
+                                            className="btn-brand px-5 disabled:opacity-50">
+                                            {comprando === 'basica' ? 'Un momento...' : 'Básica'}
+                                        </button>
+                                        <button onClick={() => comprarRutina('avanzada')} disabled={comprando !== 'eligiendo'}
+                                            data-testid="rutina-avanzada"
+                                            className="btn-brand px-5 disabled:opacity-50">
+                                            {comprando === 'avanzada' ? 'Un momento...' : 'Avanzada'}
+                                        </button>
+                                        <button onClick={() => setComprando(null)} disabled={comprando !== 'eligiendo'}
+                                            className="px-4 rounded-xl border border-border text-sm text-foreground/70">
+                                            Ahora no
+                                        </button>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">Al elegirla autorizas el cargo de 57 € en tu tarjeta.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
         </Wrap>;
