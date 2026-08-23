@@ -144,6 +144,11 @@ const DiaCard = ({ dia, indice, filtro, esHoy, onIr }) => {
                 {filtro !== 'entreno' && dia.estado === 'sin_montar' && (
                     <span className="text-xs font-bold uppercase tracking-wider text-brand" data-testid={`accion-${dia.fecha}`}>Repetir</span>
                 )}
+                {/* El día completo también lleva rótulo (pedido 23-08), pero en gris:
+                    el naranja queda para lo pendiente. */}
+                {filtro !== 'entreno' && dia.estado === 'montada' && (
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground" data-testid={`accion-${dia.fecha}`}>Ver día</span>
+                )}
                 <ChevronRight className="w-4 h-4 text-foreground/40" />
             </div>
         </div>
