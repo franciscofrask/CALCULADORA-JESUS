@@ -11,6 +11,7 @@ import uuid
 
 from core.database import db
 from core.security import get_current_user
+from core.tiempo import dia_del_cliente, hoy_madrid
 from calma_suggest import macros_reales
 from macro_distribution import objetivo_de_las_comidas
 from core import dieta_para_ver as _para_ver
@@ -274,13 +275,19 @@ async def delete_favorite(fav_id: str, user = Depends(get_current_user)):
 
 
 @router.get("/recent")
-async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
-    """Lista los últimos días con dieta guardada."""
+async def get_recent_diets(limit: int = 14, para: Optional[str] = None, user = Depends(get_current_user)):
+    """Lista los últimos días con dieta guardada.
+
+    `para` es el día para el que se quiere repetir (el que el cliente tiene abierto, con
+    su reloj): las comidas se juzgan contra los macros vigentes de ESE día (caso 27 de
+    los 85; punto 14 del doc del 23-08). Sin `para`, el día de España.
+    """
     cursor = db.diets.find(
         {"user_id": user["id"]},
-        {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "comidas": 1, "distribution_targets": 1}
+        {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "momento_entreno": 1,
+         "opcion_peri": 1, "comidas": 1, "distribution_targets": 1}
     ).sort("fecha", -1).limit(limit)
-    
+
     diets = await cursor.to_list(length=limit)
 
     # Las cantidades, a gramos tambien aqui (punto 4.5). Por esta lista entra «Repetir de otro
@@ -290,26 +297,63 @@ async def get_recent_diets(limit: int = 14, user = Depends(get_current_user)):
     for diet in diets:
         await _normalizar_cantidades(diet)
 
+    # El objetivo de cada comida PARA EL DÍA DESTINO, una vez por configuración distinta
+    # (dos días guardados con 4 comidas y entreno comparten reparto: no se calcula dos veces).
+    fecha_para = dia_del_cliente(para) if para else hoy_madrid().isoformat()
+    repartos_por_config: dict = {}
+
+    async def _objetivo_para(diet: dict):
+        """El objetivo POR COMIDA del día destino, con la configuración de ese día guardado."""
+        clave = (diet.get("tipo_dia"), diet.get("num_comidas"),
+                 diet.get("momento_entreno"), diet.get("opcion_peri"))
+        if clave not in repartos_por_config:
+            reparto = await _reparto_del_dia(fecha_para, diet, user)
+            repartos_por_config[clave] = (
+                {**(reparto.get("comidas") or {}), **(reparto.get("periworkout") or {})}
+                if reparto else None)
+        return repartos_por_config[clave]
+
     result = []
     for diet in diets:
+        # SOLO SE OFRECE LO QUE SE PUEDE CUADRAR (caso 27): una Comida 2 que son 20 g de
+        # pollo no puede llegar a los hidratos de hoy ni escalando, asi que no se ofrece
+        # para repetir. El criterio es de fuentes, no de gramos: si ningun alimento de la
+        # comida aporta un macro que hoy pide de verdad (> 8 g), esa comida no tiene
+        # camino al objetivo -- cuadrar (test 28) escala y completa cantidades, pero no
+        # inventa alimentos que no estan.
+        objetivo = await _objetivo_para(diet)
         comidas_resumen = {}
+        cuadrada = {}
         for key, meal_data in (diet.get("comidas") or {}).items():
             alimentos = meal_data.get("alimentos") or []
-            if alimentos:
-                nombres = [a.get("nombre", "?")[:20] for a in alimentos[:3]]
-                comidas_resumen[key] = " + ".join(nombres)
-                if len(alimentos) > 3:
-                    comidas_resumen[key] += f" +{len(alimentos)-3}"
-        
+            if not alimentos:
+                continue
+            objetivo_k = (objetivo or {}).get(key)
+            if objetivo_k:
+                servido = {m: sum(float((a.get("macros_efectivos") or {}).get(m) or 0)
+                                  for a in alimentos) for m in ("P", "H", "G")}
+                sin_fuente = [m for m in ("P", "H", "G")
+                              if float(objetivo_k.get(m) or 0) > 8 and servido[m] <= 0]
+                if sin_fuente:
+                    continue
+                cuadrada[key] = all(abs(servido[m] - float(objetivo_k.get(m) or 0)) <= 4
+                                    for m in ("P", "H", "G"))
+            nombres = [a.get("nombre", "?")[:20] for a in alimentos[:3]]
+            comidas_resumen[key] = " + ".join(nombres)
+            if len(alimentos) > 3:
+                comidas_resumen[key] += f" +{len(alimentos)-3}"
+
         result.append({
             "fecha": diet.get("fecha"),
             "tipo_dia": diet.get("tipo_dia", "entrenamiento"),
             "num_comidas": diet.get("num_comidas", 4),
             "comidas_resumen": comidas_resumen,
+            # Si cada comida ya cuadra tal cual con los macros del día destino (±4 g).
+            "cuadrada": cuadrada,
             "comidas": diet.get("comidas", {}),
             "distribution_targets": diet.get("distribution_targets", None)
         })
-    
+
     return {"diets": result, "count": len(result)}
 
 
@@ -717,6 +761,21 @@ async def copy_day(data: dict, user = Depends(get_current_user)):
     if not source_diet:
         raise HTTPException(status_code=404, detail="No hay dieta guardada para la fecha origen")
 
+    # AVISAR ANTES DE SUSTITUIR (caso 30 de los 85; punto 14 del doc del 23-08): copiar
+    # encima de un día con comidas se las llevaba por delante sin decir nada. Sin la
+    # marca `sobreescribir`, un 409 con lo que hay; la pantalla pregunta y repite con
+    # ella. La marca y no un simple confirm del front: cualquier otra puerta a esta
+    # ruta (el chat, un script) tropieza con el mismo aviso.
+    if not data.get("sobreescribir"):
+        destino = await db.diets.find_one(
+            {"user_id": user["id"], "fecha": target_date}, {"_id": 0, "comidas": 1})
+        ocupadas = sorted(k for k, c in ((destino or {}).get("comidas") or {}).items()
+                          if (c or {}).get("alimentos"))
+        if ocupadas:
+            raise HTTPException(status_code=409, detail={
+                "ocupada": True, "comidas": ocupadas,
+                "mensaje": "Ese día ya tiene comidas guardadas. Copiar encima las sustituye."})
+
     copy_doc = {
         "user_id": user["id"],
         "fecha": target_date,
@@ -748,7 +807,7 @@ _normalizar_cantidades = _para_ver.normalizar_cantidades
 _adjuntar_urls = _para_ver.adjuntar_urls
 
 
-async def _objetivo_comidas_del_dia(fecha: str, diet: Optional[dict], user: dict) -> Optional[dict]:
+async def _reparto_del_dia(fecha: str, diet: Optional[dict], user: dict) -> Optional[dict]:
     """EL OBJETIVO DEL DÍA, RESUELTO AQUÍ Y PARA TODOS.
 
     Nutrición no enseña `macros_snapshot.P_total`: enseña ese total menos el perientreno, que
@@ -801,7 +860,13 @@ async def _objetivo_comidas_del_dia(fecha: str, diet: Optional[dict], user: dict
             "no se pudo resolver el objetivo del día %s: %s", fecha, e)
         return None
 
-    return objetivo_de_las_comidas(reparto)
+    return reparto
+
+
+async def _objetivo_comidas_del_dia(fecha: str, diet: Optional[dict], user: dict) -> Optional[dict]:
+    """El objetivo del día (P/H/G totales de las comidas, sin el peri). Ver arriba."""
+    reparto = await _reparto_del_dia(fecha, diet, user)
+    return objetivo_de_las_comidas(reparto) if reparto else None
 
 
 @router.get("/{fecha}")

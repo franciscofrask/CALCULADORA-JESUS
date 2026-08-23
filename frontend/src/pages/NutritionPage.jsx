@@ -1495,7 +1495,9 @@ const NutritionPage = () => {
     // Repeat from another day
     const loadRecentDiets = async () => {
         try {
-            const result = await api('/api/diets/recent?limit=14');
+            // `para`: el día abierto. El servidor solo ofrece comidas que se puedan
+            // cuadrar con los macros de ESE día (caso 27; punto 14 del 23-08).
+            const result = await api(`/api/diets/recent?limit=14&para=${currentDate}`);
             setRecentDiets(result.diets || []);
         } catch (err) {
             console.error('Error loading recent diets:', err);
@@ -1563,6 +1565,15 @@ const NutritionPage = () => {
                 }),
             });
             scaledFoods = (r.items || []).length ? r.items : null;
+            // Si el motor tuvo que AÑADIR alimentos para poder cuadrar (la comida
+            // copiada no tenía fuente de algún macro), se dice: son suyos ahora,
+            // pero no los eligió él (punto 14 del 23-08, caso 28).
+            const anadidos = (r.items || []).filter(i => i.anadido_para_cuadrar);
+            if (anadidos.length) {
+                toast.info(anadidos.length === 1
+                    ? `Hemos añadido ${anadidos[0].nombre} para poder cuadrarla con tus macros de hoy.`
+                    : `Hemos añadido ${anadidos.map(i => i.nombre).join(' y ')} para poder cuadrarla con tus macros de hoy.`);
+            }
         } catch (err) {
             console.error('cuadrar-comida falló; se escala por proteína:', err);
         }
@@ -2066,7 +2077,7 @@ const NutritionPage = () => {
     const handleEliminarVolcado = () => {
         setVolcadoMeal(null);
         persistVolcado(null);
-        toast.info('Volcado eliminado - reparto normal restaurado');
+        toast.info('Volcado deshecho: cada comida vuelve a su objetivo.');
     };
     const dayKcal = dayMacros.P * 4 + dayMacros.H * 4 + comidasG * 9;  // peri grasas excluded (match G_total)
     const targetKcal = dayTarget.kcal_total || 0;
@@ -2506,16 +2517,18 @@ const NutritionPage = () => {
                 <div data-testid="nutrition-meals">
                     {/* Volcado de macros banner (ancho completo) */}
                     {activeVolcado && (
+                        /* Sin `truncate` (punto 12 del 23-08: se leía «Volcados en…»,
+                           cortado) y con el botón en «Deshacer» (punto 10). */
                         <div className="surface p-4 mb-4 flex items-center justify-between gap-3 border-brand/30">
                             <div className="min-w-0">
-                                <p className="font-bold text-foreground truncate">Macros volcados en {mealInfo[activeVolcado]?.name}</p>
-                                <p className="text-xs text-muted-foreground">Las demás comidas quedan bloqueadas hasta quitarlo.</p>
+                                <p className="font-bold text-foreground">Los macros que te quedaban están volcados en {mealInfo[activeVolcado]?.name}</p>
+                                <p className="text-xs text-muted-foreground">Las demás comidas quedan bloqueadas hasta deshacerlo.</p>
                             </div>
                             <button
                                 className="shrink-0 rounded-xl font-bold text-sm px-4 py-2 border border-brand text-brand hover:bg-brand hover:text-white transition-colors"
                                 onClick={handleEliminarVolcado}
                             >
-                                Quitar volcado
+                                Deshacer volcado
                             </button>
                         </div>
                     )}

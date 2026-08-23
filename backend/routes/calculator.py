@@ -1858,12 +1858,94 @@ async def cuadrar_comida(data: dict, user = Depends(get_current_user)):
 
     meal_key = (data.get("mealKey") or data.get("meal_key") or "").strip()
     obj = await _objetivo_de_comida(data, user, meal_key)
-    opcion = await _ajustar_plantilla(db, {"items": items_in}, obj, best_effort=True)
-    if not opcion:
-        raise HTTPException(status_code=422,
-                            detail="No se pudo cuadrar: algún alimento ya no está en el catálogo.")
 
-    items, totales = await _items_con_macros(opcion)
+    # COMPLETAR LO QUE NO TIENE FUENTE (caso 28 de los 85; punto 14 del doc del 23-08).
+    # Escalar no inventa macros: una comida copiada que es solo pollo no llega a los
+    # hidratos de hoy ni con un kilo. Si al objetivo le falta un eje que ninguno de los
+    # alimentos aporta, se pide al MISMO motor de sugerencias de la pantalla (uso 2) el
+    # mejor candidato de ese eje y se añade marcado como `anadido_para_cuadrar`, para
+    # que el front pueda decirlo. Después cuadra el conjunto entero como siempre.
+    ids_puestos = {int(it["alimento_id"]) for it in items_in
+                   if str(it.get("alimento_id")).lstrip("-").isdigit()}
+    puestos = []
+    if ids_puestos:
+        async for f in db.foods.find({"id": {"$in": list(ids_puestos)}}, {"_id": 0}):
+            puestos.append(f)
+    from calma_suggest import _per100
+    anadidos = []
+    disponibles = await get_all_foods_cached(db)
+
+    # OJO: las claves de la base son las castellanas (proteinas/hidratos/grasas); leer
+    # P/H/G aqui da ceros SIN error y el filtro se lo traga todo (la trampa conocida).
+    _CAMPO = {"P": "proteinas", "H": "hidratos", "G": "grasas"}
+
+    def _densidad(f: dict, m: str) -> float:
+        try:
+            return float(_per100(f, _CAMPO[m]) or 0)
+        except Exception:
+            return 0.0
+
+    async def _anadir_fuente(m: str, hueco_m: float) -> bool:
+        """Añade el mejor candidato del motor que sea fuente de verdad del eje `m`."""
+        # La petición ENFATIZA el eje que falta pero no pone los otros a cero: con
+        # ceros el motor elige lo que menos estorba (vinagre, tomate), no lo que
+        # alimenta; con los otros a un margen pequeño gana el que más aporta del eje.
+        restante = {k: (max(hueco_m, 10.0) if k == m else min(float(obj.get(k) or 0), 5.0))
+                    for k in ("P", "H", "G")}
+        candidatos = sugerir_alimentos(
+            alimentos_disponibles=disponibles, macros_restantes=restante,
+            tipo_comida="normal", max_resultados=25,
+            excluir_ids=list(ids_puestos) + [int(a["alimento_id"]) for a in anadidos])
+        for s in candidatos:
+            comida_s = s.get("alimento") or s
+            id_s = comida_s.get("id") or s.get("alimento_id")
+            if id_s is None or _densidad(comida_s, m) < 10:
+                continue
+            anadidos.append({"alimento_id": int(id_s), "cantidad_g": None,
+                             "nombre": comida_s.get("nombre")})
+            f = await db.foods.find_one({"id": int(id_s)}, {"_id": 0})
+            if f:
+                puestos.append(f)
+            return True
+        return False
+
+    # Un eje esta cubierto si algun alimento de la comida es FUENTE de verdad de ese
+    # macro (>= 8 g por 100): el pollo trae 2 de grasa, pero pedirle los 12 g del dia
+    # es pedirle 600 g de pollo.
+    for m in ("P", "H", "G"):
+        if float(obj.get(m) or 0) <= 8:
+            continue
+        if any(_densidad(f, m) >= 8 for f in puestos):
+            continue
+        await _anadir_fuente(m, float(obj.get(m) or 0))
+
+    # Cuadrar, y si un eje se queda corto porque su fuente tocó techo (el máximo por
+    # alimento del motor de menús), una segunda fuente de ese eje y otra pasada. Dos
+    # rondas bastan: más es señal de que el objetivo no es alcanzable y se devuelve
+    # lo más cerca posible (best effort), dicho con `cuadrada: false`.
+    opcion = None
+    items: list = []
+    totales: dict = {}
+    for _ronda in range(3):
+        opcion = await _ajustar_plantilla(db, {"items": items_in + anadidos}, obj, best_effort=True)
+        if not opcion:
+            raise HTTPException(status_code=422,
+                                detail="No se pudo cuadrar: algún alimento ya no está en el catálogo.")
+        items, totales = await _items_con_macros(opcion)
+        cortos = [m for m in ("P", "H", "G")
+                  if float(obj.get(m) or 0) > 8 and (obj[m] - totales[m]) > MARGEN_MENU]
+        if not cortos or _ronda == 2:
+            break
+        alguno = False
+        for m in cortos:
+            alguno = await _anadir_fuente(m, obj[m] - totales[m]) or alguno
+        if not alguno:
+            break
+    # Se marca lo que puso el motor y no el cliente, para que la pantalla lo diga.
+    ids_anadidos = {int(a["alimento_id"]) for a in anadidos if a.get("alimento_id") is not None}
+    for it in items:
+        if int(it.get("alimento_id") or it.get("id") or 0) in ids_anadidos:
+            it["anadido_para_cuadrar"] = True
     err = sum(abs(obj[m] - totales[m]) for m in ("P", "H", "G"))
     return {
         "items": items,

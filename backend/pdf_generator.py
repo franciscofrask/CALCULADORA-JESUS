@@ -12,6 +12,8 @@ from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, KeepTogether,
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.graphics.shapes import Drawing, Polygon, String
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from io import BytesIO
 from datetime import datetime
 
@@ -47,6 +49,30 @@ def _fecha_larga(fecha: str) -> str:
 
 def _kcal(p, h, g) -> int:
     return round((p or 0) * 4 + (h or 0) * 4 + (g or 0) * 9)
+
+
+# La flecha de la marca (BrandArrow.jsx): «M0 0 H100 V100 H77 V50 L36 96 H3 L58 28 H0 Z»,
+# con la Y volteada porque el SVG cuenta hacia abajo y el PDF hacia arriba.
+_FLECHA = [(0, 100), (100, 100), (100, 0), (77, 0), (77, 50), (36, 4), (3, 4), (58, 72), (0, 72)]
+
+
+def _logo_12en12(alto: float = 16) -> Drawing:
+    """El logotipo de verdad, no el nombre en texto plano (punto 23 del doc del 23-08):
+    «12EN12» en blanco con la flecha SIEMPRE naranja, como en la cabecera de la app.
+    Por eso la banda del PDF es oscura: sobre naranja, la flecha naranja no existe."""
+    texto, fuente = "12EN12", "Helvetica-Bold"
+    ancho_txt = stringWidth(texto, fuente, alto)
+    lado = alto * 0.80                     # la flecha, a ras de las letras
+    hueco = alto * 0.12
+    d = Drawing(ancho_txt + hueco + lado + 2, alto * 1.05)
+    d.add(String(0, alto * 0.16, texto, fontName=fuente, fontSize=alto, fillColor=colors.white))
+    s = lado / 100.0
+    x0, y0 = ancho_txt + hueco, alto * 0.16
+    puntos = []
+    for x, y in _FLECHA:
+        puntos += [x0 + x * s, y0 + y * s]
+    d.add(Polygon(points=puntos, fillColor=BRAND, strokeColor=None, strokeWidth=0))
+    return d
 
 
 def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = None) -> BytesIO:
@@ -89,13 +115,13 @@ def generate_diet_pdf(summary: dict, user_name: str = "Cliente", fecha: str = No
 
     elements = []
 
-    # ---- Cabecera de marca (banda naranja) ----
-    izq = [Paragraph("12EN12", st_brand)]
+    # ---- Cabecera de marca (banda oscura, como la de la app, con el logo) ----
+    izq = [_logo_12en12(17)]
     der = [Paragraph("Plan de nutrición", st_head_r),
            Paragraph(_fecha_larga(fecha), st_head_r2)]
     header = Table([[izq, der]], colWidths=[100 * mm, 78 * mm])
     header.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), BRAND),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#0A0A0A")),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('LEFTPADDING', (0, 0), (-1, -1), 12),
         ('RIGHTPADDING', (0, 0), (-1, -1), 12),

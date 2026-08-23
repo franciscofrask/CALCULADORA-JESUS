@@ -29,7 +29,12 @@ const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
  *
  * En el perientreno la grasa no cuenta, igual que en el resto del cálculo.
  */
-const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = false) => {
+const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = false, bloqueada = false) => {
+    // Con el volcado puesto, las demás comidas quedan con objetivo = servido y salían
+    // como «Cuadrada» en verde mientras el día decía «te falta» (punto 11 del 23-08:
+    // «una de las dos cosas está mal»). La que mentía era el verde: bloqueada no es
+    // cuadrada, es que ya no juega.
+    if (bloqueada) return { texto: 'Bloqueada', cls: 'text-muted-foreground' };
     if (!cuantosAlimentos) return { texto: 'Sin hacer', cls: 'text-muted-foreground' };
     // POR CUÁNTO TE PASAS, no solo que te pasas (Jesús, 13-08): «la app enseña los dos
     // números pero no la diferencia; el cliente tiene que restar». El texto sale de
@@ -351,7 +356,7 @@ const MealCard = ({
     // él. Francisco, 13-08: «ese texto tapa el título de Comida 1, Comida 2... haz que lo
     // reemplace si se pasa». Los otros estados son cortos («Cuadrada», «Te falta») y caben al
     // lado, así que esos no se tocan.
-    const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri);
+    const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri, isLocked);
     const excesoTapaElNombre = status === 'sobra' && foods.length > 0;
 
     // ── LA PUERTA DEL AUTOAJUSTE (Jesús, doc 21-08, apartado 14) ─────────────────────
@@ -461,7 +466,9 @@ const MealCard = ({
                         <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-xl lg:text-base' : 'text-2xl lg:text-lg'} ${excesoTapaElNombre ? 'hidden lg:block' : ''}`}>{info.name}</h3>
                         {/* El punto de color, solo en escritorio: en el teléfono el estado se
                             pide con «ver detalles», dentro de la comida. */}
-                        <StatusDot status={status} className="hidden lg:inline-block flex-shrink-0" />
+                        {/* Bloqueada por el volcado: el candado sustituye al punto verde,
+                            que aquí contaba una mentira (ver estadoDeLaComida). */}
+                        {!isLocked && <StatusDot status={status} className="hidden lg:inline-block flex-shrink-0" />}
                         {isLocked && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </div>
                     {/* En el teléfono los números bajan al pie de la tarjeta, no van pegados
@@ -563,7 +570,7 @@ const MealCard = ({
                     {isLocked && (
                         <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 rounded-xl px-3 py-2">
                             <Lock className="w-3.5 h-3.5 shrink-0" />
-                            <span>Bloqueada - los macros del día están volcados en otra comida. Quita el volcado para editar.</span>
+                            <span>Bloqueada: los macros del día están volcados en otra comida. Deshaz el volcado para editarla.</span>
                         </div>
                     )}
 
@@ -681,13 +688,20 @@ const MealCard = ({
                     )}
 
                     {canVolcar && onVolcar && (
-                        <button
-                            className="w-full text-xs text-muted-foreground hover:text-brand py-1.5 flex items-center justify-center gap-1.5 transition-colors"
-                            onClick={() => onVolcar(mealKey)}
-                            title="Volcar los macros restantes del día en esta comida y bloquear las demás"
-                        >
-                            <Download className="w-3.5 h-3.5" /> Volcar macros aquí
-                        </button>
+                        /* El botón dice QUÉ HACE (punto 10 del 23-08: «no dice qué hace»):
+                           el tooltip no existe en el teléfono, así que la explicación va
+                           debajo, visible. */
+                        <div className="py-1.5">
+                            <button
+                                className="w-full text-xs text-muted-foreground hover:text-brand flex items-center justify-center gap-1.5 transition-colors"
+                                onClick={() => onVolcar(mealKey)}
+                            >
+                                <Download className="w-3.5 h-3.5" /> Volcar los macros aquí
+                            </button>
+                            <p className="text-[11px] text-muted-foreground/70 text-center mt-0.5">
+                                Mete en esta comida todo lo que te queda del día y bloquea las demás.
+                            </p>
+                        </div>
                     )}
                 </div>
             )}
