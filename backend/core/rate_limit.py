@@ -11,6 +11,7 @@ un índice TTL (ver `core/database.py`), así que la colección no crece.
 Se usan cubos separados por CUENTA y por IP: el de cuenta frena que ataquen un correo
 concreto desde muchos sitios; el de IP frena que una misma máquina barra muchos correos.
 """
+import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, Request
@@ -18,6 +19,13 @@ from fastapi import HTTPException, Request
 from .database import db
 
 COLECCION = "intentos_auth"
+
+# SOLO PARA DESARROLLO. La batería de tests y las pasadas de QA registran decenas de
+# cuentas por hora desde la misma IP, y desde el arreglo del 22-08 el límite de registro
+# (20/hora) las tumba a mitad de pasada con 429. Con `AUTH_SIN_LIMITE=1` en el .env de
+# dev la puerta se abre; el secret de producción NO lleva la variable, así que allí el
+# limitador sigue exactamente igual.
+SIN_LIMITE = os.environ.get("AUTH_SIN_LIMITE") == "1"
 
 
 def ip_de(request: Request) -> str:
@@ -40,6 +48,8 @@ async def comprobar(clave: str, limite: int, ventana_seg: int) -> None:
     Solo MIRA; no apunta nada. La marca se pone aparte (`apuntar`), después de saber que
     el intento fue fallido, para no penalizar a quien acierta a la primera.
     """
+    if SIN_LIMITE:
+        return
     desde = datetime.now(timezone.utc) - timedelta(seconds=ventana_seg)
     cuantos = await db[COLECCION].count_documents({"clave": clave, "cuando": {"$gte": desde}})
     if cuantos >= limite:

@@ -153,7 +153,7 @@ const STEPS_AJUSTE = [
         type: 'text', key: 'deporte_cual', title: '¿Cuál, cuántos días y a qué intensidad?',
         cond: a => a.deporte_extra === true,
         placeholder: 'Por ejemplo: pádel, dos días entre semana, a buen ritmo',
-        textarea: true,
+        textarea: true, required: true,
     },
     {
         type: 'choice', key: 'deporte_en_descanso',
@@ -345,7 +345,9 @@ const delAjuste = (clave) => {
 // mundo, y el completo solo al que entró antes de que el básico existiera.
 const PESO_HITOS = [
     {
-        type: 'peso_hito', key: 'peso_maximo',
+        // Obligatoria (regla 2 del doc del 23-08): el peso y su año. La nota sigue siendo
+        // opcional, que para eso lo dice su etiqueta.
+        type: 'peso_hito', key: 'peso_maximo', required: true,
         title: '¿Cuál fue tu máximo peso alcanzado y cuándo?',
         desc: 'Me refiero a cuándo estuviste en tu peor forma física.',
         nota: 'Cuéntame lo que quieras de esa época',
@@ -536,10 +538,10 @@ const STEPS_NIVEL1 = [
         // de apuntarse, de Francisco: la versión de siempre dice lo mismo y mejor»). Las
         // opciones cerradas le hacen elegir el motivo que más se parece al suyo; el texto
         // libre es donde de verdad cuenta por qué ahora y no antes, que es lo que se lee.
-        type: 'text', textarea: true, key: 'motivo_apuntarse',
+        type: 'text', textarea: true, key: 'motivo_apuntarse', required: true,
         title: 'Dime el motivo principal de querer trabajar conmigo, qué esperas y por qué te decides a empezar ahora y no antes.',
     },
-    { type: 'text', key: 'dietas_previas', title: '¿Has hecho dietas antes? ¿Qué tal te fue?', desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...', textarea: true },
+    { type: 'text', key: 'dietas_previas', title: '¿Has hecho dietas antes? ¿Qué tal te fue?', desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...', textarea: true, required: true },
     // ── Pantallas 19, 20 y 21 · cómo entrena hoy ────────────────────────────────
     // Comidas al día, días de entreno y cuándo entrena YA no se preguntan: van por defecto
     // y se cambian en Preferencias (bloque 5 del doc del 18-08).
@@ -720,7 +722,7 @@ const PREGUNTA_DEL_ENTRENADOR_ANTERIOR = [
     {
         type: 'text', key: 'entrenador_anterior_que_tal', title: '¿Qué tal te fue?',
         cond: a => a.entrenador_anterior === 'si',
-        textarea: true,
+        textarea: true, required: true,
     },
 ];
 
@@ -734,11 +736,17 @@ const EL_BASICO = [
     q('goal'), q('_confirm'),
     // 5 · cuánto tiempo lleva intentándolo (estaba en el cuestionario largo)
     q('tiempo_intentandolo'),
+    // PORTADAS DE BLOQUE (doc del 23-08, regla 4: «una pantalla de título al empezar cada
+    // bloque»). Son pantallas sin pregunta: sitúan y se pasan con un botón. En el
+    // ?completar=1 no salen (falta() no las reconoce y las deja fuera, que es lo que toca:
+    // ahí el recorrido es la lista de huecos, no el alta entero).
+    { type: 'titulo', title: 'Tus datos.', desc: 'Tu peso, tu altura, tu grasa y de dónde vienes.' },
     // 6, 7 y 8 · peso, altura y porcentaje de grasa
     q('weight'), q('height'), q('body_fat'),
     // 9, 10 y 11 · su recorrido de peso, cada hito con su año. Antes era UNA pantalla con
     // cuatro casillas sueltas, sin años y solo para quien llevaba entrenador.
     ...PESO_HITOS,
+    { type: 'titulo', title: 'Tu día a día.', desc: 'Tu trabajo, cuánto te mueves y cómo entrenas.' },
     // 12 · a qué se dedica y cuánto se mueve, JUNTAS. En pantallas seguidas se le pregunta
     // su trabajo y acto seguido se le pide que se clasifique en lo mismo, y suena a que no
     // se le ha escuchado.
@@ -772,10 +780,12 @@ const EL_BASICO = [
             { value: 'domingo', label: 'Domingo' },
         ],
     },
+    { type: 'titulo', title: 'Tu cuerpo.', desc: 'Cómo responde cuando comes de más y de menos.' },
     // 14, 15 y 16 · cómo come, si engorda y si le cuesta definir
     q('apetito'), q('facilidad_engordar'), q('cuesta_definir'),
     // 17 y 18 · los siete biotipos y el suyo (en mujer no salen)
     porTipo('biotype_intro'), q('biotype'),
+    { type: 'titulo', title: 'Tu alimentación.', desc: 'Lo que comes hoy y lo que no quieres en el plato.' },
     // 19 · el día tipo, con el lector. Las cuatro de la dieta ya no van con él: se
     // preguntan en el cuestionario largo (punto 26 del doc del 19-08).
     porTipo('dieta'),
@@ -800,6 +810,7 @@ const EL_BASICO = [
         type: 'text', key: 'alergia_otra', title: '¿Cuál?',
         desc: 'Dime a qué eres alérgico o intolerante.',
         cond: a => (a.alergias || []).includes('otra'),
+        required: true,
     },
     // 22 · las proteínas que come habitualmente. Con esto y las intolerancias se le monta
     // el primer menú, que es lo que hace que no entre a una app vacía.
@@ -820,6 +831,7 @@ const EL_BASICO = [
             { value: 'lacteos', label: 'Lácteos' },
         ],
     },
+    { type: 'titulo', title: 'Para terminar.', desc: 'Dos preguntas más y calculamos tus macros.' },
     // 23 · cómo le conoció
     {
         type: 'choice', key: 'como_me_conociste', title: '¿Cómo me has conocido?',
@@ -1001,8 +1013,9 @@ const Shell = ({ progress, children, tramo, cabecera }) => (
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-brand/5 rounded-full blur-[120px]" />
         {/* Flecha de marca gigante de fondo */}
         <BrandArrow className="absolute -right-16 -bottom-16 w-[420px] h-[420px] text-brand/[0.04] pointer-events-none" />
-        {/* Barra de progreso */}
-        <div className="fixed top-0 left-0 right-0 h-1 bg-white/10 z-20">
+        {/* Barra de progreso: sin números a propósito (regla 5 del doc del 23-08), que se
+            vea avanzar sin decirle cuántas le quedan. */}
+        <div className="fixed top-0 left-0 right-0 h-1.5 bg-white/10 z-20">
             <div className="h-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
         {/* Cabecera: logo, en qué tramo va y los macros en vivo */}
@@ -1621,7 +1634,7 @@ const QuestionnairePage = () => {
     }
 
     const step = flow[idx] || flow[0];
-    const progress = ((idx + 1) / flow.length) * 100;
+    // El progreso se calcula abajo, sobre los pasos que aplican de verdad (ver `visible`).
 
     // «LO HAGO LUEGO» (doc 19-08): salta directo a la oferta de los 87 € y le deja el
     // aviso pendiente de las preferencias («Son 2 minutos y nos ayudará a mostrarte las
@@ -1812,11 +1825,17 @@ const QuestionnairePage = () => {
     // pantalla de macros de «nos faltan cosas tuyas», que ahí es la última.
     const goNext = () => {
         if (idx >= flow.length - 1) { navigate('/welcome'); return; }
-        setIdx(i => {
-            let j = i + 1;
-            while (j < flow.length - 1 && !visible(flow[j])) j++;
-            return Math.min(j, flow.length - 1);
-        });
+        let j = idx + 1;
+        while (j < flow.length - 1 && !visible(flow[j])) j++;
+        const destino = Math.min(j, flow.length - 1);
+        // EL BORRADOR SE GUARDA AL AVANZAR, CON TODO (regla 3 del doc del 23-08). Antes
+        // solo guardaban las preguntas de opciones (pickChoice): lo escrito en textos,
+        // números y multiselects se quedaba en memoria, y quien salía a mitad volvía a una
+        // pantalla anterior a la suya. Se guarda el índice de DESTINO, no el actual: al
+        // volver se aterriza en la primera pregunta sin contestar, no en la última que
+        // acababa de responder.
+        guardarProgreso(answersRef.current, destino);
+        setIdx(destino);
     };
 
     const cancelarAvancePendiente = () => {
@@ -2223,13 +2242,18 @@ const QuestionnairePage = () => {
                 </Button>
             </div>
         );
-    } else if (step.type === 'statement') {
+    } else if (step.type === 'statement' || step.type === 'titulo') {
         body = (
             <div>
+                {/* Las portadas de bloque (doc 23-08) llevan una ceja que dice qué son:
+                    sin ella, un título suelto parece una pregunta a la que le falta algo. */}
+                {step.type === 'titulo' && (
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-brand font-bold mb-3">Siguiente bloque</p>
+                )}
                 <Title />
                 <div className="flex gap-3">
                     <BackBtn />
-                    <Button onClick={goNext}
+                    <Button onClick={goNext} data-testid={step.type === 'titulo' ? 'titulo-continuar' : undefined}
                         className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 py-6 text-lg">
                         {step.cta || 'Continuar'} <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
@@ -2542,21 +2566,33 @@ const QuestionnairePage = () => {
             </div>
         );
     } else if (step.type === 'ocupacion') {
-        // PANTALLA 12: la profesión y el sedentarismo, juntas. En pantallas seguidas se le
-        // pregunta a qué se dedica y acto seguido se le pide que se clasifique en lo mismo,
-        // y eso suena a que no se le ha escuchado.
+        // PANTALLA 12: la profesión y el sedentarismo, juntas, CADA UNA CON SU ETIQUETA
+        // (punto 5 del doc del 23-08). Y el candado de la regla 1: marcar la opción de
+        // abajo NO puede saltar a la siguiente sin recoger la de arriba, que era
+        // exactamente lo que pasaba y por lo que se perdía «¿A qué te dedicas?».
         const actividad = q('actividad_diaria');
+        const sinProfesion = !(answers.profesion || '').trim();
+        const listo = !sinProfesion && !!answers.actividad_diaria;
         body = (
             <div>
-                <Title />
-                <div className="mb-6">
-                    <MiniInput {...mini} k="profesion" label="¿A qué te dedicas?" />
+                <h2 className="font-heading font-bold text-2xl md:text-3xl text-foreground mb-4 leading-tight">¿A qué te dedicas?</h2>
+                <div className="mb-8">
+                    <Input value={answers.profesion ?? ''} onChange={e => set('profesion', e.target.value)}
+                        placeholder="Escribe tu respuesta..." data-testid="ocupacion-profesion"
+                        className="text-lg py-6 bg-card border-[#222222]" />
                 </div>
-                <p className="text-sm text-foreground/60 mb-3">{actividad.desc}</p>
+                <h2 className="font-heading font-bold text-2xl md:text-3xl text-foreground mb-2 leading-tight">¿Cuánto te mueves en tu día a día?</h2>
+                <p className="text-sm text-foreground/60 mb-4">{actividad.desc}</p>
                 <div className="space-y-3">
                     {actividad.options.map(o => (
                         <button key={o.value}
-                            onClick={() => { set('actividad_diaria', o.value); trasResponder('actividad_diaria', o.value); goNext(); }}
+                            onClick={() => {
+                                set('actividad_diaria', o.value);
+                                trasResponder('actividad_diaria', o.value);
+                                // Solo avanza si la de arriba está recogida; si no, se queda
+                                // con la opción marcada y el aviso de abajo se lo dice.
+                                if ((answersRef.current.profesion || '').trim()) goNext();
+                            }}
                             className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all ${
                                 answers.actividad_diaria === o.value
                                     ? 'border-[#FF671F] bg-[#FF671F]/10'
@@ -2565,7 +2601,18 @@ const QuestionnairePage = () => {
                         </button>
                     ))}
                 </div>
-                <div className="mt-6"><BackBtn /></div>
+                {!!answers.actividad_diaria && sinProfesion && (
+                    <p className="text-sm text-amber-500 mt-4" data-testid="falta-profesion">
+                        Te falta la primera: dinos a qué te dedicas y seguimos.
+                    </p>
+                )}
+                <div className="flex gap-3 mt-6">
+                    <BackBtn />
+                    <Button onClick={goNext} disabled={!listo} data-testid="ocupacion-ok"
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8 disabled:opacity-40">
+                        OK <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                </div>
             </div>
         );
     } else if (step.type === 'peso_hito') {
@@ -2573,16 +2620,23 @@ const QuestionnairePage = () => {
         // sueltas en una sola pantalla, sin años y solo para quien llevaba entrenador: «si
         // viene como "unos 95 hace tres años" no se puede calcular nada con él».
         const kPeso = step.key, kAno = `${step.key}_ano`, kNota = `${step.key}_nota`;
+        // El año, EN BLANCO (punto 2 del doc del 23-08): el placeholder «2019» se leía como
+        // valor puesto. Y validado: cuatro cifras entre 1940 y el año actual.
+        const anoCrudo = `${answers[kAno] ?? ''}`.trim();
+        const anoNum = parseInt(anoCrudo, 10);
+        const anoMal = anoCrudo !== '' && (isNaN(anoNum) || anoNum < 1940 || anoNum > new Date().getFullYear());
+        const hitoListo = !step.required
+            || (!avisoDelPaso && `${answers[kPeso] ?? ''}`.trim() !== '' && anoCrudo !== '' && !anoMal);
         body = (
             <div>
                 <Title />
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <MiniInput {...mini} k={kPeso} label="Peso" type="number" unit="kg" />
-                    <MiniInput {...mini} k={kAno} label="Año" type="number" placeholder="2019" />
+                    <MiniInput {...mini} k={kAno} label="Año" type="number" />
                 </div>
-                {avisoDelPaso && (
+                {(avisoDelPaso || anoMal) && (
                     <p className="text-sm text-amber-500 -mt-2 mb-4" data-testid="aviso-del-paso">
-                        {avisoDelPaso}
+                        {avisoDelPaso || 'El año, con sus cuatro cifras.'}
                     </p>
                 )}
                 <div className="mb-4">
@@ -2609,8 +2663,8 @@ const QuestionnairePage = () => {
                 )}
                 <div className="flex gap-3">
                     <BackBtn />
-                    <Button onClick={goNext}
-                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8">
+                    <Button onClick={goNext} disabled={!hitoListo} data-testid="peso-hito-ok"
+                        className="bg-brand hover:bg-brand/90 text-white font-bold px-8 disabled:opacity-40">
                         OK <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                 </div>
@@ -3331,11 +3385,22 @@ const QuestionnairePage = () => {
     // La barra va en dos tramos (doc 29-07): el primero ajusta los macros y al acabarlo ya se
     // los entregamos; el segundo completa el perfil y es opcional. Los pasos de STEPS_AJUSTE
     // son el primer tramo; lo que viene detras (preferencias y perfil largo) es el segundo.
-    const pasosTramo1 = modoAjuste ? STEPS_AJUSTE.length : flow.length;
-    const enTramo1 = idx < pasosTramo1;
+    //
+    // SE CUENTAN SOLO LOS PASOS QUE APLICAN (regla 5 del doc del 23-08). Con `flow.length` a
+    // secas la barra contaba pantallas condicionales que luego se saltan -- el detalle del
+    // deporte de quien dijo que no, el biotipo en mujer -- y avanzaba a trompicones: un salto
+    // grande al pasar tres condicionales de golpe y pasos enanos entre medias. Filtrando por
+    // `visible` la barra mide el camino que este cliente va a recorrer de verdad con lo que
+    // ha contestado hasta ahora.
+    const limiteTramo1 = modoAjuste ? laBaseQueFalta.length + STEPS_AJUSTE.length : flow.length;
+    const visiblesTotal = flow.filter(visible).length;
+    const visiblesTramo1 = modoAjuste ? flow.slice(0, limiteTramo1).filter(visible).length : visiblesTotal;
+    const posVisible = flow.slice(0, idx + 1).filter(visible).length;
+    const enTramo1 = idx < limiteTramo1;
     const progresoTramo = enTramo1
-        ? ((idx + 1) / pasosTramo1) * 100
-        : ((idx + 1 - pasosTramo1) / Math.max(1, flow.length - pasosTramo1)) * 100;
+        ? (posVisible / Math.max(1, visiblesTramo1)) * 100
+        : ((posVisible - visiblesTramo1) / Math.max(1, visiblesTotal - visiblesTramo1)) * 100;
+    const progress = (posVisible / Math.max(1, visiblesTotal)) * 100;
     const etiquetaTramo = !modoAjuste
         ? null
         : enTramo1 ? 'Ajustando tus macros' : 'Completando tu perfil (opcional)';

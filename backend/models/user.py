@@ -1228,6 +1228,11 @@ class ClientProfile(BaseModel):
     dietas_previas: Optional[str] = None
     tiempo_intentandolo: Optional[str] = None
     motivo_apuntarse: Optional[str] = None
+    # Si ya le pagó a alguien y qué tal acabó (punto 42 del 19-08). El alta los guardaba
+    # desde entonces, pero sin declararlos aquí la ficha no los servía: ni el coach los
+    # veía ni el cuestionario largo sabía que estaban contestados (y los repetía).
+    entrenador_anterior: Optional[str] = None
+    entrenador_anterior_que_tal: Optional[str] = None
     # Punto de partida (paso 3 del doc): fotos y medidas del dia 1, que son la unica forma de
     # comparar dentro de un mes.
     punto_de_partida_hecho: Optional[bool] = None
