@@ -147,8 +147,11 @@ const CategoryCheckbox = ({ cat, checked, onToggle, colorClass, locked = false }
         // había forma de saber por qué (Jesús, 15-08, fallo 40). El aviso lo da `onToggle`.
         onClick={() => onToggle(cat.id)}
     >
+        {/* La casilla marcada siempre en el naranja de la casa (doc 23-08, P22): antes la
+            pestaña de evitar la pintaba en rojo y la de preferidos en el #FFA500 legacy,
+            que en pantalla se lee amarillo. La app es naranja: brand y punto. */}
         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
-            checked ? `${colorClass.includes('orange') ? 'bg-brand-orange border-brand-orange' : 'bg-red-500 border-red-500'}` : 'border-border'
+            checked ? 'bg-brand border-brand' : 'border-border'
         }`}>
             {checked && <Check className="w-3 h-3 text-white" />}
         </div>
@@ -226,23 +229,27 @@ const PreferencesSetup = ({
     const [keywordInput, setKeywordInput] = useState('');
     const [saving, setSaving] = useState(false);
     const { confirm } = useConfirm();
-    // «Con lo que has marcado podemos cuadrarte...»: la respuesta del motor, en vivo.
-    const [cuadra, setCuadra] = useState(null);
     // El perfil, para pintar las alergias del alta con su candado (solo al revisar).
     const [perfil, setPerfil] = useState(null);
-    // «Cómo quieres tu día»: los tres selectores por defecto de la ficha.
-    const [dia, setDia] = useState(null);
-    const [guardandoDia, setGuardandoDia] = useState(false);
+    // «Con lo que has marcado podemos cuadrarte...»: la respuesta del motor, en vivo.
+    // `null` mientras responde o si la llamada falla: sin respuesta la franja no se
+    // pinta y el Guardar no se apaga, porque un fallo de red no puede dejar a nadie
+    // sin guardar sus preferencias.
+    const [cuadra, setCuadra] = useState(null);
 
     useEffect(() => {
         if (!isEditMode) return;
         api('/api/clients/profile').then(setPerfil).catch(() => {});
-        api('/api/user/diet-config').then(setDia).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditMode]);
 
-    // La comprobación es EN VIVO, no al guardar (doc 19-08). Con un respiro de medio
-    // segundo para no bombardear al motor mientras marca en cadena.
+    // LA FRANJA DE LOS 20 g (doc 23-08, P20): ¿con lo marcado se pueden cuadrar 20 g de
+    // proteína y 20 g de hidratos? Se le pregunta al MOTOR de sugerencias, no a una
+    // tabla aparte: el endpoint del doc 19-08 recorta el catálogo a las categorías
+    // marcadas como preferidas (las grasas buenas van siempre, por eso la grasa no se
+    // comprueba) y simula sugerir hasta llegar a los 20 g de cada macro. La
+    // comprobación es EN VIVO, a cada marca, con un respiro de medio segundo para no
+    // bombardear al motor mientras se marca en cadena.
     useEffect(() => {
         const t = setTimeout(() => {
             api('/api/calculator/preferencias/cuadra', {
@@ -253,27 +260,7 @@ const PreferencesSetup = ({
         return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selected]);
-
-    const guardarDia = async () => {
-        if (!dia) return;
-        setGuardandoDia(true);
-        try {
-            await api('/api/user/diet-config', {
-                method: 'PATCH',
-                body: JSON.stringify({
-                    num_comidas: Number(dia.num_comidas),
-                    momento_entreno: Number(dia.momento_entreno),
-                    opcion_peri: dia.opcion_peri,
-                }),
-            });
-            toast.success('Guardado: así te saldrá cada día');
-        } catch (e) {
-            toast.error('No se pudo guardar. Inténtalo otra vez.');
-            console.error('[como quieres tu dia]', e);
-        } finally {
-            setGuardandoDia(false);
-        }
-    };
+    const noCuadra = !!cuadra && (!cuadra.proteina || !cuadra.hidratos);
 
     // Las alergias del alta y su estado ACTUAL: una está «puesta» si lo que bloquea sigue
     // en las listas de evitar. Quitarla avisa y no bloquea (doc 19-08).
@@ -458,11 +445,13 @@ const PreferencesSetup = ({
                 {/* Header */}
                 <div className="p-6 border-b flex-shrink-0">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-full bg-brand-orange/10 flex items-center justify-center">
-                            <Settings className="w-5 h-5 text-brand-orange" />
+                        <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+                            <Settings className="w-5 h-5 text-brand" />
                         </div>
+                        {/* «Preferencias de alimentos», no «Editar preferencias» (doc 23-08,
+                            P17): la pantalla dice de qué van las preferencias. */}
                         <h1 className="text-xl font-bold text-foreground flex-1">
-                            {isEditMode ? 'Editar preferencias' : 'Configura tus preferencias'}
+                            {isEditMode ? 'Preferencias de alimentos' : 'Configura tus preferencias'}
                         </h1>
                         {isEditMode && onCancel && (
                             <button onClick={handleCancel} aria-label="Cerrar preferencias"
@@ -488,7 +477,7 @@ const PreferencesSetup = ({
                             data-testid="tab-evitar"
                             className={`flex-1 py-2 px-2 rounded-lg text-[13px] font-medium transition-all flex items-center justify-center gap-1 ${
                                 activeTab === 'avoid'
-                                    ? 'bg-red-500 text-white'
+                                    ? 'bg-brand text-white'
                                     : 'bg-muted text-muted-foreground hover:bg-muted'
                             }`}
                         >
@@ -496,7 +485,7 @@ const PreferencesSetup = ({
                             Alimentos a evitar
                             {(avoidedCats.size > 0 || avoidedKeywords.length > 0) && (
                                 <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
-                                    activeTab === 'avoid' ? 'bg-white/30' : 'bg-red-100 text-red-600'
+                                    activeTab === 'avoid' ? 'bg-white/30' : 'bg-brand/10 text-brand'
                                 }`}>
                                     {avoidedCats.size + avoidedKeywords.length}
                                 </span>
@@ -507,7 +496,7 @@ const PreferencesSetup = ({
                             data-testid="tab-preferidos"
                             className={`flex-1 py-2 px-2 rounded-lg text-[13px] font-medium transition-all ${
                                 activeTab === 'like'
-                                    ? 'bg-brand-orange text-white'
+                                    ? 'bg-brand text-white'
                                     : 'bg-muted text-muted-foreground hover:bg-muted'
                             }`}
                         >
@@ -540,7 +529,7 @@ const PreferencesSetup = ({
                                                 </p>
                                                 {marcables.length > 1 && (
                                                     <span className="text-xs whitespace-nowrap">
-                                                        <button type="button" className="font-semibold text-brand-orange hover:underline"
+                                                        <button type="button" className="font-semibold text-brand hover:underline"
                                                             onClick={() => setSelected(prev => { const s = new Set(prev); marcables.forEach(c => s.add(c.id)); return s; })}>
                                                             Todas
                                                         </button>
@@ -560,7 +549,7 @@ const PreferencesSetup = ({
                                                         checked={selected.has(cat.id)}
                                                         onToggle={toggleCategory}
                                                         locked={OBLIGATORY_PREFERENCES.includes(cat.id)}
-                                                        colorClass="bg-brand-orange/10 border-brand-orange"
+                                                        colorClass="bg-brand/10 border-brand"
                                                     />
                                                 ))}
                                             </div>
@@ -595,10 +584,10 @@ const PreferencesSetup = ({
                                                     onClick={() => toggleAlergia(a)}
                                                     data-testid={`alergia-${a.clave}`}
                                                     className={`flex items-center gap-3 p-3 rounded-lg border ${bloquea ? 'cursor-pointer' : 'cursor-default'} ${
-                                                        puesta && bloquea ? 'bg-red-500/10 border-red-400' : 'bg-muted border-transparent'
+                                                        puesta && bloquea ? 'bg-brand/10 border-brand' : 'bg-muted border-transparent'
                                                     }`}>
                                                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
-                                                        puesta && bloquea ? 'bg-red-500 border-red-500' : 'border-border'
+                                                        puesta && bloquea ? 'bg-brand border-brand' : 'border-border'
                                                     }`}>
                                                         {puesta && bloquea && <Check className="w-3 h-3 text-white" />}
                                                     </div>
@@ -628,11 +617,11 @@ const PreferencesSetup = ({
                                         onChange={e => setKeywordInput(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && addKeyword()}
                                         placeholder='Ej: "cerdo", "trigo", "pan"...'
-                                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/40"
                                     />
                                     <button
                                         onClick={addKeyword}
-                                        className="bg-red-500 text-white rounded-lg px-3 py-2 hover:bg-red-600 transition-colors"
+                                        className="bg-brand text-white rounded-lg px-3 py-2 hover:bg-brand-dark transition-colors"
                                     >
                                         <Plus className="w-4 h-4" />
                                     </button>
@@ -644,10 +633,10 @@ const PreferencesSetup = ({
                                         {avoidedKeywords.filter(kw => !palabrasDeAlergia.has(kw)).map(kw => (
                                             <span
                                                 key={kw}
-                                                className="flex items-center gap-1 bg-red-50 border border-red-200 text-red-700 text-xs px-2 py-1 rounded-full"
+                                                className="flex items-center gap-1 bg-brand/10 border border-brand/40 text-brand text-xs px-2 py-1 rounded-full"
                                             >
                                                 {kw}
-                                                <button onClick={() => removeKeyword(kw)} className="hover:text-red-900">
+                                                <button onClick={() => removeKeyword(kw)} className="hover:text-brand-dark">
                                                     <X className="w-3 h-3" />
                                                 </button>
                                             </span>
@@ -664,15 +653,15 @@ const PreferencesSetup = ({
                                 <button
                                     type="button"
                                     onClick={() => setAvoidedCats(avoidedCats.size === PREFERENCE_CATEGORIES.length ? new Set() : new Set(PREFERENCE_CATEGORIES.map(c => c.id)))}
-                                    className="text-xs font-semibold text-red-500 hover:underline whitespace-nowrap"
+                                    className="text-xs font-semibold text-brand hover:underline whitespace-nowrap"
                                     data-testid="select-all-avoid"
                                 >
                                     {avoidedCats.size === PREFERENCE_CATEGORIES.length ? 'Quitar todos' : 'Seleccionar todos'}
                                 </button>
                             </div>
-                            {/* `bg-red-500/10` y no `bg-red-50`: en modo oscuro el rojo clarito
-                                con la letra blanca encima dejaba la categoría marcada SIN TEXTO
-                                -- se veía la casilla y nada más. Visto al probar el fallo 34. */}
+                            {/* Con opacidad (`/10`) y no un tinte fijo (`bg-red-50` en su día):
+                                en modo oscuro el tinte clarito con la letra blanca encima dejaba
+                                la categoría marcada SIN TEXTO. Visto al probar el fallo 34. */}
                             <div className="space-y-1">
                                 {PREFERENCE_CATEGORIES.filter(cat => !catsDeAlergia.has(cat.id)).map(cat => (
                                     <CategoryCheckbox
@@ -680,68 +669,27 @@ const PreferencesSetup = ({
                                         cat={cat}
                                         checked={avoidedCats.has(cat.id)}
                                         onToggle={toggleAvoidedCat}
-                                        colorClass="bg-red-500/10 border-red-400"
+                                        colorClass="bg-brand/10 border-brand"
                                     />
                                 ))}
                             </div>
                         </>
                     )}
 
-                    {/* «CÓMO QUIERES TU DÍA» (doc 19-08): debajo de las dos pestañas, los
-                        mismos tres selectores de la calculadora guardados como valor por
-                        defecto. Cada día se pueden cambiar; esto es solo con qué arranca. */}
-                    {isEditMode && dia && (
-                        <div className="mt-6 pt-4 border-t border-border" data-testid="como-quieres-tu-dia">
-                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Cómo quieres tu día</p>
-                            <p className="text-muted-foreground text-sm mb-3">Esto es lo que te sale por defecto. Cada día lo puedes cambiar.</p>
-                            <div className="space-y-3">
-                                <label className="block text-xs font-semibold text-muted-foreground uppercase">
-                                    ¿Cuántas comidas?
-                                    <select value={String(dia.num_comidas)} data-testid="dia-num-comidas"
-                                        onChange={e => setDia(d => ({ ...d, num_comidas: Number(e.target.value) }))}
-                                        className="mt-1 w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground font-normal normal-case">
-                                        <option value="4">4 comidas</option>
-                                        <option value="3">3 comidas</option>
-                                        <option value="1">Comida única</option>
-                                    </select>
-                                </label>
-                                <label className="block text-xs font-semibold text-muted-foreground uppercase">
-                                    ¿Cuándo entrenas?
-                                    <select value={String(dia.momento_entreno)} data-testid="dia-momento-entreno"
-                                        onChange={e => setDia(d => ({ ...d, momento_entreno: Number(e.target.value) }))}
-                                        className="mt-1 w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground font-normal normal-case">
-                                        <option value="0">En ayunas</option>
-                                        <option value="1">Después de Comida 1</option>
-                                        <option value="2">Después de Comida 2</option>
-                                        <option value="3">Después de Comida 3</option>
-                                    </select>
-                                </label>
-                                <label className="block text-xs font-semibold text-muted-foreground uppercase">
-                                    ¿Perientreno?
-                                    <select value={dia.opcion_peri} data-testid="dia-opcion-peri"
-                                        onChange={e => setDia(d => ({ ...d, opcion_peri: e.target.value }))}
-                                        className="mt-1 w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground font-normal normal-case">
-                                        <option value="intra_post">Intra + Post</option>
-                                        <option value="solo_post">Solo Post</option>
-                                        <option value="solo_intra">Solo Intra</option>
-                                        <option value="sin_peri">Sin perientreno</option>
-                                    </select>
-                                </label>
-                                <Button onClick={guardarDia} disabled={guardandoDia} data-testid="guardar-dia"
-                                    className="w-full h-10 rounded-full bg-brand-orange hover:bg-orange-600 text-white font-bold disabled:opacity-50">
-                                    {guardandoDia ? 'Guardando...' : 'Guardar'}
-                                </Button>
-                            </div>
-                        </div>
-                    )}
+                    {/* AQUÍ NO VA NADA MÁS (doc 23-08, P16): los tres selectores de «Cómo
+                        quieres tu día» que vivían debajo de las categorías se fueron con su
+                        Guardar propio. Esas preguntas pasan al cuestionario, y el día suelto
+                        ya se cambia en la configuración del día de Nutrición. */}
                 </div>
 
                 {/* Footer */}
                 <div className="p-4 border-t flex-shrink-0 bg-muted">
-                    {/* «CON LO QUE HAS MARCADO PODEMOS CUADRARTE» (doc 19-08): la respuesta
-                        del motor, en vivo, sin decirle qué marcar. La grasa no se comprueba
-                        porque las de buena calidad se ofrecen siempre. */}
-                    {activeTab === 'like' && cuadra && (
+                    {/* LA FRANJA DE LOS 20 g (doc 23-08, P20): donde antes ponía «No estás
+                        evitando nada» va la respuesta en vivo del motor: si con lo marcado
+                        se cuadran 20 g de proteína y 20 g de hidratos. Se pinta en las dos
+                        pestañas porque el Guardar es uno y se apaga si no llega: el porqué
+                        tiene que estar al lado del botón apagado. */}
+                    {cuadra && (
                         <div className="mb-3" data-testid="cuadra-en-vivo">
                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">
                                 Con lo que has marcado podemos cuadrarte
@@ -754,11 +702,11 @@ const PreferencesSetup = ({
                                     {cuadra.hidratos ? '✓' : '✗'} 20 g de hidratos
                                 </span>
                             </div>
-                            {(!cuadra.proteina || !cuadra.hidratos) && (
+                            {noCuadra && (
                                 <p className="text-xs text-red-500 mt-1">
                                     Con lo que has marcado no podemos cuadrarte{' '}
                                     {[!cuadra.proteina && '20 g de proteína', !cuadra.hidratos && '20 g de hidratos']
-                                        .filter(Boolean).join(' ni ')}.
+                                        .filter(Boolean).join(' ni ')}. Marca alguna categoría más en "Mis alimentos preferidos" para poder guardar.
                                 </p>
                             )}
                         </div>
@@ -768,30 +716,17 @@ const PreferencesSetup = ({
                             Selecciona al menos 3 categorías ({selected.size}/3)
                         </p>
                     )}
-                    {/* «1 categorías + 1 palabras clave bloqueadas» (Jesús, 15-08, fallo 42).
-                        Cada parte con su singular, y las que estén a cero no se nombran. */}
-                    {activeTab === 'avoid' && (
-                        <p className="text-sm mb-3 text-muted-foreground">
-                            {avoidedCats.size + avoidedKeywords.length === 0
-                                ? 'No estás evitando nada'
-                                : (() => {
-                                    const partes = [];
-                                    if (avoidedCats.size) partes.push(avoidedCats.size === 1 ? '1 categoría' : `${avoidedCats.size} categorías`);
-                                    if (avoidedKeywords.length) partes.push(avoidedKeywords.length === 1 ? '1 palabra clave' : `${avoidedKeywords.length} palabras clave`);
-                                    return `Estás evitando ${partes.join(' y ')}`;
-                                })()
-                            }
-                        </p>
-                    )}
+                    {/* UN solo Guardar, «Guardar» a secas y en el naranja de la casa (doc
+                        23-08, P18, P19 y P22): fuera el contador, que además contaba las
+                        categorías de la otra pestaña. Apagado si lo excluido no deja
+                        cuadrar los 20 g (P20). */}
                     <Button
                         onClick={handleSave}
-                        disabled={selected.size < 3 || saving}
-                        className="w-full h-12 rounded-full bg-brand-orange hover:bg-orange-600 text-white font-bold disabled:opacity-50"
+                        disabled={selected.size < 3 || saving || noCuadra}
+                        className="w-full h-12 rounded-full bg-brand hover:bg-brand-dark text-white font-bold disabled:opacity-50"
                         data-testid="save-preferences-btn"
                     >
-                        {/* «Guardar · 26 categorías marcadas» (doc 19-08). */}
-                        {saving ? 'Guardando...'
-                            : `Guardar · ${selected.size} ${selected.size === 1 ? 'categoría marcada' : 'categorías marcadas'}`}
+                        {saving ? 'Guardando...' : 'Guardar'}
                     </Button>
                 </div>
             </div>
