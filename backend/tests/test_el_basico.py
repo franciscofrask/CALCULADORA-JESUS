@@ -126,27 +126,40 @@ class TestElOrdenYLasPantallasDelDocumento:
         for trozo, que_es in (("'contacto'", "los cinco datos de contacto"),
                               ("'ocupacion'", "la profesión con el sedentarismo"),
                               ("'peso_hito'", "los pesos con su año"),
-                              ("proteinas_habituales", "las proteínas habituales"),
+                              ("'exclusiones'", "lo que no quiere ver en el plato (doc 23-08)"),
                               ("como_me_conociste", "cómo me has conocido")):
             assert trozo in pagina, f"falta la pantalla del básico: {que_es}"
 
     def test_el_basico_va_en_el_orden_del_documento(self):
+        """El orden del doc del 23-08 («El alta · textos definitivos»), que sustituye al
+        del 18-08: fuera «el peso más bajo», entrenador y dietas fusionadas, y las
+        exclusiones en el sitio de las proteínas."""
         pagina = fuente("pages/QuestionnairePage.jsx")
         i = pagina.find("const EL_BASICO")
         assert i > 0, "el básico ya no se compone en un solo sitio"
         bloque = pagina[i:pagina.find("];", i)]
-        # Los tres hitos de peso se definen arriba, en `PESO_HITOS`, porque los usan los dos
+        # Los hitos de peso se definen arriba, en `PESO_HITOS`, porque los usan los dos
         # cuestionarios: el básico se los pregunta a todo el mundo y el completo solo al que
         # entró antes de que el básico existiera.
         orden = [bloque.find(x) for x in ("'contacto'", "q('goal')", "q('weight')",
                                           "PESO_HITOS", "'ocupacion'",
-                                          "q('training_experience')", "q('biotype')",
-                                          "q('dietas_previas')", "proteinas_habituales",
+                                          "q('training_experience')",
+                                          "PREGUNTA_DEL_ENTRENADOR_ANTERIOR",
+                                          "q('biotype')", "'exclusiones'",
                                           "como_me_conociste", "q('motivo_apuntarse')")]
         assert all(x > 0 for x in orden), f"falta alguna pantalla en el básico: {orden}"
         assert orden == sorted(orden), (
             "el básico no va en el orden del documento: primero quién es, luego el objetivo, "
             "luego sus números, luego su historia y al final por qué está aquí")
+        # Y lo que el doc del 23-08 QUITA no puede volver a colarse:
+        assert "q('dietas_previas')" not in bloque, (
+            "«¿Has hecho dietas antes?» volvió al básico: se fusionó con la del entrenador "
+            "(punto 13 del doc del 23-08)")
+        assert "peso_minimo" not in bloque, (
+            "«el peso más bajo» volvió al básico y el punto 4 del doc del 23-08 la quita entera")
+        assert "proteinas_habituales" not in bloque, (
+            "las proteínas volvieron al básico: en su lugar van las exclusiones "
+            "(punto 14 del doc del 23-08)")
 
     def test_el_deporte_se_queda_y_las_cuatro_de_la_dieta_se_van(self):
         """Punto 26 del doc del 19-08, que revierte la decisión del 18-08: «¿Practicas

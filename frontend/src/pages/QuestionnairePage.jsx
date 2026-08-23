@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CAP } from '../lib/planAccess';
-import { plural } from '../lib/labels';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import { verComo } from '../lib/modoRevision';
 import { MEDIDAS, VIDEO_MEDIDAS } from '../lib/medidas';
@@ -13,7 +12,7 @@ import { ArrowRight, ArrowLeft, Loader2, Check, ClipboardList, ImagePlus } from 
 import Logo12EN12 from '../components/Logo12EN12';
 import BrandArrow from '../components/BrandArrow';
 import DesgloseChips from '../components/DesgloseChips';
-import PreferencesSetup from '../components/nutrition/PreferencesSetup';
+import PreferencesSetup, { CAJONES, PREFERENCE_CATEGORIES, EJEMPLOS } from '../components/nutrition/PreferencesSetup';
 import TresFotos from '../components/reports/TresFotos';
 
 // Cuestionario inicial en DOS NIVELES (spec 18-07-2026):
@@ -23,13 +22,13 @@ import TresFotos from '../components/reports/TresFotos';
 // Estilo paso a paso (una pregunta por pantalla).
 
 const BIOTIPOS = [
-    { value: 'ectomorfo', label: 'Ectomorfo (el delgado)', img: '/biotipos/ectomorfo.jpg', desc: 'Complexión delgada (hombros estrechos, huesos largos y finos, articulaciones pequeñas), pero aspecto un poco "blando" (no gordo), sin tono muscular. Metabolismo muy rápido, quema calorías con facilidad y le cuesta ganar peso. No suele tener apetito, le cuesta comer. Acumula poca grasa, sobre todo en abdomen y parte baja de la espalda.' },
-    { value: 'ecto-meso', label: 'Ecto-meso (el "fibrado")', img: '/biotipos/ecto-meso.jpg', desc: 'Delgado pero "fibroso" (como el anterior, pero con tono). Suele ser nervioso y le gusta el deporte, normalmente cardio, que se le da mejor. Si entrena fuerza hace descansos cortos, no puede estar parado. Puede acumular algo de grasa en el abdomen, pero no suele ser problema por ser más activo.' },
-    { value: 'ecto-endo', label: 'Ecto-endo (el "gordi-flaco")', img: '/biotipos/ecto-endo.jpg', desc: 'Delgado pero con "tripita", no se cuida mucho la dieta (el típico "fofisano"). Se ve claramente que es una persona delgada pero con más grasa. No la acumula concentrada en un solo sitio, sino dispersa por varias áreas (abdomen, caderas, espalda baja) en cantidades pequeñas.' },
-    { value: 'mesomorfo', label: 'Mesomorfo (el fuerte)', img: '/biotipos/mesomorfo.jpg', desc: 'El típico que está fuerte de serie, con buena genética para desarrollar músculo en cuanto entrena. Estructura ósea ancha, ideal para la fuerza, con clavículas amplias y caderas estrechas. Come bastante y no coge grasa con facilidad. Si acumula, en abdomen y algo en piernas.' },
-    { value: 'meso-endo', label: 'Meso-endo (el "gordi-fuerte")', img: '/biotipos/meso-endo.jpg', desc: 'Gana músculo con facilidad pero también grasa. Le gusta bastante comer; para no taparse tiene que cuidarse todo el año, incluso en volumen. Como no necesita comer mucho para ponerse fuerte y le gusta comer, lo normal es verle "tapado". Grasa en abdomen, caderas y espalda baja.' },
-    { value: 'endo-meso', label: 'Endo-meso (el grande)', img: '/biotipos/endo-meso.jpg', desc: 'Como el meso-endo pero con más tendencia a ganar grasa. Se le ve "grande", tiene músculo pero niveles muy altos de grasa. Le gusta comer y para definir tiene que comer poco, cosa que le cuesta mucho. Grasa sobre todo en abdomen, caderas, espalda baja y muslos.' },
-    { value: 'endomorfo', label: 'Endomorfo (el gordo)', img: '/biotipos/endomorfo.jpg', desc: 'Tendencia clara a engordar y niveles altos de grasa casi toda la vida. Suele llevar vida muy sedentaria y malos hábitos. El abdomen es la zona más problemática (barriga prominente, grasa visceral). También acumula en muslos, caderas, brazos y espalda.' },
+    { value: 'ectomorfo', label: 'Ectomorfo (el delgado)', img: '/biotipos/ectomorfo.webp', desc: 'Complexión delgada (hombros estrechos, huesos largos y finos, articulaciones pequeñas), pero aspecto un poco "blando" (no gordo), sin tono muscular. Metabolismo muy rápido, quema calorías con facilidad y le cuesta ganar peso. No suele tener apetito, le cuesta comer. Acumula poca grasa, sobre todo en abdomen y parte baja de la espalda.' },
+    { value: 'ecto-meso', label: 'Ecto-meso (el "fibrado")', img: '/biotipos/ecto-meso.webp', desc: 'Delgado pero "fibroso" (como el anterior, pero con tono). Suele ser nervioso y le gusta el deporte, normalmente cardio, que se le da mejor. Si entrena fuerza hace descansos cortos, no puede estar parado. Puede acumular algo de grasa en el abdomen, pero no suele ser problema por ser más activo.' },
+    { value: 'ecto-endo', label: 'Ecto-endo (el "gordi-flaco")', img: '/biotipos/ecto-endo.webp', desc: 'Delgado pero con "tripita", no se cuida mucho la dieta (el típico "fofisano"). Se ve claramente que es una persona delgada pero con más grasa. No la acumula concentrada en un solo sitio, sino dispersa por varias áreas (abdomen, caderas, espalda baja) en cantidades pequeñas.' },
+    { value: 'mesomorfo', label: 'Mesomorfo (el fuerte)', img: '/biotipos/mesomorfo.webp', desc: 'El típico que está fuerte de serie, con buena genética para desarrollar músculo en cuanto entrena. Estructura ósea ancha, ideal para la fuerza, con clavículas amplias y caderas estrechas. Come bastante y no coge grasa con facilidad. Si acumula, en abdomen y algo en piernas.' },
+    { value: 'meso-endo', label: 'Meso-endo (el "gordi-fuerte")', img: '/biotipos/meso-endo.webp', desc: 'Gana músculo con facilidad pero también grasa. Le gusta bastante comer; para no taparse tiene que cuidarse todo el año, incluso en volumen. Como no necesita comer mucho para ponerse fuerte y le gusta comer, lo normal es verle "tapado". Grasa en abdomen, caderas y espalda baja.' },
+    { value: 'endo-meso', label: 'Endo-meso (el grande)', img: '/biotipos/endo-meso.webp', desc: 'Como el meso-endo pero con más tendencia a ganar grasa. Se le ve "grande", tiene músculo pero niveles muy altos de grasa. Le gusta comer y para definir tiene que comer poco, cosa que le cuesta mucho. Grasa sobre todo en abdomen, caderas, espalda baja y muslos.' },
+    { value: 'endomorfo', label: 'Endomorfo (el gordo)', img: '/biotipos/endomorfo.webp', desc: 'Tendencia clara a engordar y niveles altos de grasa casi toda la vida. Suele llevar vida muy sedentaria y malos hábitos. El abdomen es la zona más problemática (barriga prominente, grasa visceral). También acumula en muslos, caderas, brazos y espalda.' },
 ];
 
 import BodyFatSlider, { BF_PERCENTAGES, BF_DEFAULT } from '../components/SelectorGrasa';
@@ -141,7 +140,9 @@ const STEPS_AJUSTE = [
     },
     {
         type: 'choice', key: 'deporte_extra', title: '¿Practicas otro deporte con intensidad?',
-        desc: 'Fútbol, running, ciclismo, artes marciales... cualquier deporte con regularidad.',
+        // El subtítulo del doc del 23-08 (punto 11): lo que importa no es la lista de
+        // deportes, es si compite o entrena en serio y piensa seguir.
+        desc: 'Me refiero a si compites en algo, o entrenas con intensidad algún deporte y tienes intención de continuar con ello.',
         options: [
             { value: true, label: 'Sí' },
             { value: false, label: 'No' },
@@ -167,29 +168,38 @@ const STEPS_AJUSTE = [
     },
     {
         // Pantalla 7, nueva. No mueve macros: alimenta el perfil.
+        // «Casi nada» es del doc del 23-08 (punto 6): cuarta opción, tampoco mueve macros.
         type: 'choice', key: 'apetito', title: '¿Eres de buen comer?',
         options: [
             { value: 'mucho', label: 'Mucho' },
             { value: 'normal', label: 'Lo normal' },
             { value: 'poco', label: 'Poco' },
+            { value: 'casi_nada', label: 'Casi nada' },
         ],
     },
     {
+        // LAS CUATRO DEL DOC DEL 23-08 (punto 7). Los valores viejos se conservan
+        // (enseguida/normal/casi_no); el cuarto es `nada` y en el motor cobra el mismo
+        // +20 % de hidratos que `casi_no` (macro_engine.RESPUESTAS_QUE_SUBEN): quien dice
+        // que le cuesta mucho coger peso no puede subir menos que quien dice «casi no».
         type: 'choice', key: 'facilidad_engordar', title: 'Cuando te pasas comiendo, ¿engordas?',
-        desc: 'Piensa en vacaciones, Navidades o épocas en las que comiste de más.',
+        desc: 'Piensa en vacaciones, Navidades o épocas en las que sueles comer de más.',
         options: [
-            { value: 'enseguida', label: 'Enseguida' },
+            { value: 'enseguida', label: 'Sí, enseguida, a nada que me paso' },
             { value: 'normal', label: 'Lo normal' },
             { value: 'casi_no', label: 'Casi no' },
+            { value: 'nada', label: 'No, nada, me cuesta mucho coger peso' },
         ],
     },
     {
         // No mueve macros: alimenta el biotipo declarado.
-        type: 'choice', key: 'cuesta_definir', title: '¿Te cuesta definir?',
+        // «¿Te cuesta perder peso?» (doc 23-08, punto 8): la palabra «definir» es de
+        // gimnasio y no todo el mundo la tiene. La clave y los valores se conservan.
+        type: 'choice', key: 'cuesta_definir', title: '¿Te cuesta perder peso?',
         options: [
-            { value: 'mucho', label: 'Mucho' },
+            { value: 'mucho', label: 'Sí, mucho' },
             { value: 'normal', label: 'Lo normal' },
-            { value: 'poco', label: 'Nada' },
+            { value: 'poco', label: 'Qué va, todo lo contrario' },
         ],
     },
     {
@@ -340,9 +350,13 @@ const delAjuste = (clave) => {
     return paso;
 };
 
-// LOS TRES HITOS DE PESO, cada uno con su año (pantallas 9, 10 y 11 del básico). Se definen
-// aquí arriba porque los usan los dos cuestionarios: el básico se los pregunta a todo el
-// mundo, y el completo solo al que entró antes de que el básico existiera.
+// LOS HITOS DE PESO, cada uno con su año. Se definen aquí arriba porque los usan los dos
+// cuestionarios: el básico se los pregunta a todo el mundo, y el completo solo al que
+// entró antes de que el básico existiera.
+//
+// «EL PESO MÁS BAJO» SE QUITÓ ENTERO (doc del 23-08, punto 4): eran tres hitos y quedan
+// dos. El campo `peso_minimo` sigue existiendo en el modelo y en las fichas que lo
+// tienen contestado; solo deja de preguntarse.
 const PESO_HITOS = [
     {
         // Obligatoria (regla 2 del doc del 23-08): el peso y su año. La nota sigue siendo
@@ -353,16 +367,12 @@ const PESO_HITOS = [
         nota: 'Cuéntame lo que quieras de esa época',
     },
     {
-        type: 'peso_hito', key: 'peso_mejor_momento', conFoto: true,
+        // Con su salida «Si no, pásala» (doc 23-08, punto 3): el que nunca ha estado en
+        // forma no tiene nada que contestar aquí y se le da la puerta con esas palabras.
+        type: 'peso_hito', key: 'peso_mejor_momento', conFoto: true, pasala: true,
         title: '¿Has estado muy en forma alguna vez?',
         desc: 'Si es que sí, dime cuándo y tu peso en aquel momento.',
         nota: 'Cuéntame lo que quieras',
-    },
-    {
-        type: 'peso_hito', key: 'peso_minimo',
-        title: '¿Cuál es el peso más bajo al que has llegado siendo adulto, y cuándo?',
-        desc: 'No hablo de tu mejor forma, sino de lo más abajo que has estado, aunque no te vieras bien.',
-        nota: 'Cuéntame lo que quieras de esa época',
     },
 ];
 
@@ -541,7 +551,12 @@ const STEPS_NIVEL1 = [
         type: 'text', textarea: true, key: 'motivo_apuntarse', required: true,
         title: 'Dime el motivo principal de querer trabajar conmigo, qué esperas y por qué te decides a empezar ahora y no antes.',
     },
-    { type: 'text', key: 'dietas_previas', title: '¿Has hecho dietas antes? ¿Qué tal te fue?', desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...', textarea: true, required: true },
+    // Desde la fusión del 23-08 (punto 13), al cliente nuevo esto se lo pregunta el básico
+    // dentro de «¿Has tenido entrenador o has hecho dietas antes?»: aquí solo le sale a
+    // quien no contestó ninguna de las dos (los de Calma). La condición del básico
+    // (YA_ESTAN_EN_EL_BASICO) le añade encima el «solo si dietas_previas está vacía».
+    { type: 'text', key: 'dietas_previas', title: '¿Has hecho dietas antes? ¿Qué tal te fue?', desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...', textarea: true, required: true,
+      cond: a => a.entrenador_anterior === undefined || a.entrenador_anterior === null || a.entrenador_anterior === '' },
     // ── Pantallas 19, 20 y 21 · cómo entrena hoy ────────────────────────────────
     // Comidas al día, días de entreno y cuándo entrena YA no se preguntan: van por defecto
     // y se cambian en Preferencias (bloque 5 del doc del 18-08).
@@ -701,19 +716,20 @@ const porTipo = (tipo) => {
     return paso;
 };
 
-// ¿HA TENIDO ENTRENADOR ANTES? Las dos pantallas, con los textos literales del punto 42.
-//
-// Estuvo en el cuestionario largo como un texto libre («quién, cuánto tiempo y por qué lo
-// dejaste») y se cayó con el reparto del 18-08. Jesús la quiere de vuelta, y en el básico:
-// saber si alguien ya le ha pagado a otro y cómo acabó es lo que dice con qué llega, y eso
-// no se lo puede preguntar solo al que contrata plan personalizado.
+// ENTRENADOR Y DIETAS, FUSIONADAS EN UNA (doc del 23-08, punto 13). Antes eran la pareja
+// del punto 42 («¿Has tenido entrenador o has seguido un plan de nutrición antes?» + su
+// «¿qué tal te fue?») y, once pantallas después, OTRA VEZ «¿Has hecho dietas antes? ¿Qué
+// tal te fue?». El mismo «qué tal te fue» dos veces. Ahora es una sola pregunta y un solo
+// relato; las claves se conservan (`entrenador_anterior` + `entrenador_anterior_que_tal`)
+// y `dietas_previas` deja de preguntarse en el básico (en el completo solo les sale a los
+// que no contestaron ni esta ni aquella: los migrados de Calma).
 //
 // El «qué tal te fue» solo sale si dice que sí: al que nunca ha tenido no hay nada que
 // contarle.
 const PREGUNTA_DEL_ENTRENADOR_ANTERIOR = [
     {
         type: 'choice', key: 'entrenador_anterior',
-        title: '¿Has tenido entrenador o has seguido un plan de nutrición antes?',
+        title: '¿Has tenido entrenador o has hecho dietas antes?',
         options: [
             { value: 'si', label: 'Sí' },
             { value: 'no', label: 'No' },
@@ -721,6 +737,7 @@ const PREGUNTA_DEL_ENTRENADOR_ANTERIOR = [
     },
     {
         type: 'text', key: 'entrenador_anterior_que_tal', title: '¿Qué tal te fue?',
+        desc: 'Cuáles, cuánto duraste, qué pasó con tu peso...',
         cond: a => a.entrenador_anterior === 'si',
         textarea: true, required: true,
     },
@@ -768,8 +785,9 @@ const EL_BASICO = [
     // son los mismos que usa el backend (routes/workout_logs.DIAS_SEMANA).
     {
         type: 'multiselect', key: 'training_weekdays',
-        title: '¿Qué días de la semana entrenas?',
-        desc: 'Los de una semana normal tuya. Si alguna semana cambia, no pasa nada: esto nos dice dónde colocar cada entreno.',
+        // Los textos del doc del 23-08 (punto 12): «tienes previsto» y la semana «tipo».
+        title: '¿Qué días de la semana tienes previsto entrenar?',
+        desc: 'Es para confeccionar tu semana «tipo» (después lo podrás cambiar si quieres).',
         options: [
             { value: 'lunes', label: 'Lunes' },
             { value: 'martes', label: 'Martes' },
@@ -789,8 +807,8 @@ const EL_BASICO = [
     // 19 · el día tipo, con el lector. Las cuatro de la dieta ya no van con él: se
     // preguntan en el cuestionario largo (punto 26 del doc del 19-08).
     porTipo('dieta'),
-    // 20 · las dietas de antes (estaba en el cuestionario largo)
-    q('dietas_previas'),
+    // «¿Has hecho dietas antes?» YA NO VA AQUÍ (doc 23-08, punto 13): se fusionó con la
+    // del entrenador de más arriba y su relato cae en `entrenador_anterior_que_tal`.
     // 21 · alergias e intolerancias, y el detalle de las dos que lo llevan
     {
         type: 'multiselect', key: 'alergias',
@@ -812,24 +830,15 @@ const EL_BASICO = [
         cond: a => (a.alergias || []).includes('otra'),
         required: true,
     },
-    // 22 · las proteínas que come habitualmente. Con esto y las intolerancias se le monta
-    // el primer menú, que es lo que hace que no entre a una app vacía.
+    // 22 · LO QUE NO QUIERE VER EN EL PLATO (doc del 23-08, punto 14). Sustituye a «¿Qué
+    // proteínas comes habitualmente?»: para el menú de arranque lo único imprescindible es
+    // no meterle lo que ha dicho que no quiere. Es la única de preferencias que hace falta
+    // aquí; las de «me gusta» siguen en su pantalla de Preferencias. La clave de las
+    // proteínas se queda en el modelo con lo ya contestado, solo deja de preguntarse.
     {
-        type: 'multiselect', key: 'proteinas_habituales',
-        title: '¿Qué proteínas comes habitualmente?',
-        desc: 'Marca al menos tres.',
-        options: [
-            { value: 'aves', label: 'Aves' },
-            { value: 'ternera', label: 'Ternera o buey' },
-            { value: 'cerdo', label: 'Cerdo' },
-            { value: 'pescado', label: 'Pescados y mariscos' },
-            { value: 'embutido', label: 'Embutido' },
-            { value: 'huevos', label: 'Huevos y derivados' },
-            { value: 'polvo', label: 'Proteínas en polvo y barritas' },
-            { value: 'vegetal', label: 'Proteína vegetal' },
-            { value: 'legumbres', label: 'Legumbres' },
-            { value: 'lacteos', label: 'Lácteos' },
-        ],
+        type: 'exclusiones',
+        title: '¿Existe algún alimento o grupo de alimentos que no te guste y que no quieras introducir en ningún caso?',
+        desc: 'Puedes marcar una categoría entera (lácteos, casquería, pescado...) o buscar un alimento concreto por su nombre. Si no hay nada, sigue sin marcar.',
     },
     { type: 'titulo', title: 'Para terminar.', desc: 'Dos preguntas más y calculamos tus macros.' },
     // 23 · cómo le conoció
@@ -963,6 +972,86 @@ const MiniInput = ({ k, label, type = 'text', unit, placeholder, answers, set })
     </div>
 );
 
+// LO QUE NO QUIERE VER EN EL PLATO (doc 23-08, punto 14). Las mismas 37 categorías y el
+// mismo buscador validado contra el catálogo que la pantalla de Preferencias, pero solo
+// la mitad de «evitar»: aquí no se le pregunta qué le gusta, solo qué no quiere. Va a
+// nivel de módulo por lo mismo que MiniInput (definido dentro, cada render lo remonta y
+// el buscador pierde el foco al teclear).
+const ExclusionesDelAlta = ({ answers, set, api }) => {
+    const [buscando, setBuscando] = useState('');
+    const evitadas = answers.avoided_categories || [];
+    const palabras = answers.avoided_keywords || [];
+    // Las grasas de buena calidad no se pueden vetar: el método las necesita (misma regla
+    // que en Preferencias).
+    const vetable = (id) => id !== 'grasas_buenas';
+    const alternar = (id) => {
+        if (!vetable(id)) { toast.info('Las grasas de buena calidad no se pueden evitar: el método las necesita.'); return; }
+        set('avoided_categories', evitadas.includes(id) ? evitadas.filter(x => x !== id) : [...evitadas, id]);
+    };
+    const anadirPalabra = async () => {
+        const kw = buscando.trim().toLowerCase();
+        if (!kw) return;
+        if (palabras.includes(kw)) { toast.error(`«${kw}» ya está en la lista`); return; }
+        set('avoided_keywords', [...palabras, kw]);
+        setBuscando('');
+        try {
+            const res = await api.get(`/calculator/search?q=${encodeURIComponent(kw)}&limit=1`);
+            if (!(res.data?.alimentos || []).length) {
+                toast.warning(`«${kw}» no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.`);
+            }
+        } catch (e) { /* la palabra ya está guardada; un error de red no aporta nada aquí */ }
+    };
+    return (
+        <div className="space-y-5">
+            <div className="space-y-4 max-h-[46vh] overflow-y-auto pr-1">
+                {CAJONES.map(cajon => (
+                    <div key={cajon.id}>
+                        <p className="text-[11px] uppercase tracking-wider text-foreground/40 font-bold mb-2">{cajon.nombre}</p>
+                        <div className="flex flex-wrap gap-2">
+                            {cajon.cats.map(id => {
+                                const cat = PREFERENCE_CATEGORIES.find(c => c.id === id);
+                                if (!cat) return null;
+                                const fuera = evitadas.includes(id);
+                                return (
+                                    <button key={id} type="button" onClick={() => alternar(id)}
+                                        title={EJEMPLOS[id] || ''} data-testid={`excluir-${id}`}
+                                        className={`px-3 py-1.5 rounded-lg border-2 text-xs font-semibold transition-all ${
+                                            fuera ? 'border-red-500/70 bg-red-500/10 text-red-400 line-through'
+                                                  : 'border-[#222222] text-foreground/80 hover:border-white/30'}`}>
+                                        {cat.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div>
+                <p className="text-sm text-foreground/60 mb-2">O un alimento concreto, por su nombre:</p>
+                <div className="flex gap-2">
+                    <Input value={buscando} onChange={e => setBuscando(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); anadirPalabra(); } }}
+                        placeholder="Por ejemplo: atún" data-testid="exclusiones-buscador"
+                        className="bg-card border-[#222222]" />
+                    <Button type="button" variant="outline" onClick={anadirPalabra}
+                        className="border-[#333] text-foreground flex-shrink-0">Añadir</Button>
+                </div>
+                {palabras.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                        {palabras.map(kw => (
+                            <span key={kw} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/40 text-red-400 text-xs font-semibold">
+                                {kw}
+                                <button type="button" onClick={() => set('avoided_keywords', palabras.filter(k => k !== kw))}
+                                    className="hover:text-red-200" aria-label={`Quitar ${kw}`}>×</button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const MiniChoice = ({ k, options, answers, set }) => (
     <div className="flex flex-wrap gap-2">
         {options.map(o => (
@@ -1077,7 +1166,6 @@ const QuestionnairePage = () => {
     // P10: lo que hemos entendido de su dieta, pendiente de que lo confirme.
     const [lecturaDieta, setLecturaDieta] = useState(null);
     const [leyendoDieta, setLeyendoDieta] = useState(false);
-    const [misDias, setMisDias] = useState(null);   // null = sin pedir todavia
     // LA VENTANA DEL CUESTIONARIO LARGO (el reloj del 19-08): abre el viernes a las 10:00
     // y cierra el lunes a las 18:00, hora de España. La pregunta el que lleva entrenador y
     // tiene el largo pendiente; al resto ni se consulta. null = sin contestar todavía (no
@@ -1558,20 +1646,18 @@ const QuestionnairePage = () => {
     // del recorrido para que cada uno retome el suyo.
     const guardarProgreso = useCallback((respuestas, paso) => {
         if (revision) return;   // en modo revisión no se escribe nada
+        // Las fotos NO viajan en el borrador: son base64 de megas y esto se guarda a cada
+        // avance. Van una sola vez, en el envío final. Quien salga a mitad pierde solo la
+        // foto (se le vuelve a pedir), no las respuestas.
+        const { foto_grasa, foto_mejor_momento, dieta_imagen, ...ligeras } = respuestas;
         api.put('/clients/ajuste-progreso',
-                { respuestas, paso, flujo: modoAjuste ? 'ajuste' : 'alta' }).catch(() => {});
+                { respuestas: ligeras, paso, flujo: modoAjuste ? 'ajuste' : 'alta' }).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, modoAjuste, revision]);
 
     // ── P10: leer la dieta que trae el cliente ────────────────────────────────
-    const cargarMisDias = useCallback(async () => {
-        if (misDias !== null) return;
-        try {
-            const r = await api.get('/clients/mis-dias');
-            setMisDias(r.data?.dias || []);
-        } catch (e) { setMisDias([]); }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, misDias]);
+    // (La puerta «Un día mío» se quitó el 23-08: en el alta nadie tiene días creados,
+    // así que `mis-dias` ya no se consulta desde aquí.)
 
     // El ALTA no se puede repetir (ni por el enlace). El cuestionario de AJUSTE sí: si cambia de
     // trabajo o empieza a hacer otro deporte, lo vuelve a pasar y sus macros se recalculan.
@@ -1704,15 +1790,12 @@ const QuestionnairePage = () => {
 
     const leerMiDieta = async () => {
         const modo = answers.dieta_modo || 'texto';
-        const cuerpo = modo === 'menu' ? { fecha_menu: answers.dieta_fecha_menu }
-            : modo === 'foto' ? { imagen: answers.dieta_imagen }
+        const cuerpo = modo === 'foto' ? { imagen: answers.dieta_imagen }
             : { texto: answers.dieta_texto };
-        const vacio = modo === 'menu' ? !answers.dieta_fecha_menu
-            : modo === 'foto' ? !answers.dieta_imagen
+        const vacio = modo === 'foto' ? !answers.dieta_imagen
             : !(answers.dieta_texto || '').trim();
         if (vacio) {
-            toast.error(modo === 'menu' ? 'Elige uno de tus días'
-                : modo === 'foto' ? 'Sube la foto de tu dieta'
+            toast.error(modo === 'foto' ? 'Sube la foto de tu dieta'
                 : 'Cuéntanos qué comes en un día');
             return;
         }
@@ -1889,6 +1972,12 @@ const QuestionnairePage = () => {
         lactosa: answers.lactosa || null,
         gluten: answers.gluten || null,
         alergia_otra: answers.alergia_otra || null,
+        // La foto del carrusel de grasa (doc 23-08, punto 1) y lo que no quiere ver en el
+        // plato (punto 14). El backend guarda la foto aparte y funde las exclusiones con
+        // las que salen de sus intolerancias.
+        foto_grasa: answers.foto_grasa || null,
+        avoided_categories: answers.avoided_categories || null,
+        avoided_keywords: answers.avoided_keywords || null,
         dietas_previas: answers.dietas_previas || null,
         tiempo_intentandolo: answers.tiempo_intentandolo || null,
         motivo_apuntarse: answers.motivo_apuntarse || null,
@@ -2640,33 +2729,51 @@ const QuestionnairePage = () => {
                     </p>
                 )}
                 <div className="mb-4">
-                    <MiniInput {...mini} k={kNota} label={step.nota} placeholder="Opcional." />
+                    <MiniInput {...mini} k={kNota} label={`${step.nota} (opcional)`} placeholder="" />
                 </div>
                 {step.conFoto && (
                     <div className="mb-6">
+                        {/* EL BOTÓN EN ESPAÑOL (doc 23-08, punto 3): el input de fichero
+                            crudo pintaba el «Choose File · No file chosen» del navegador. */}
                         <p className="text-sm text-foreground/60 mb-2">
                             Sube la foto de tu mejor forma <span className="text-foreground/40">(opcional)</span>
                         </p>
-                        <input type="file" accept="image/*" data-testid="foto-mejor-forma"
-                            onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (!f) return;
-                                const reader = new FileReader();
-                                reader.onload = (ev) => set('foto_mejor_momento', ev.target.result);
-                                reader.readAsDataURL(f);
+                        <button type="button" data-testid="foto-mejor-forma"
+                            onClick={() => {
+                                const input = document.createElement('input');
+                                input.type = 'file';
+                                input.accept = 'image/*';
+                                input.onchange = (ev) => {
+                                    const f = ev.target.files?.[0];
+                                    if (!f) return;
+                                    if (f.size > 8 * 1024 * 1024) { toast.error('La foto pesa demasiado (máximo 8 MB)'); return; }
+                                    const reader = new FileReader();
+                                    reader.onload = (e) => set('foto_mejor_momento', e.target.result);
+                                    reader.readAsDataURL(f);
+                                };
+                                input.click();
                             }}
-                            className="text-sm text-foreground/70" />
-                        {answers.foto_mejor_momento && (
-                            <p className="text-xs text-brand mt-2">Foto lista.</p>
-                        )}
+                            className="w-full rounded-xl border-2 border-dashed border-[#333] py-6 text-center hover:border-brand transition-colors">
+                            <ImagePlus className="w-6 h-6 text-foreground/40 mx-auto mb-1.5" />
+                            <span className="text-foreground/60 text-sm">
+                                {answers.foto_mejor_momento ? 'Foto lista. Toca para cambiarla' : 'Elegir la foto'}
+                            </span>
+                        </button>
                     </div>
                 )}
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                     <BackBtn />
                     <Button onClick={goNext} disabled={!hitoListo} data-testid="peso-hito-ok"
                         className="bg-brand hover:bg-brand/90 text-white font-bold px-8 disabled:opacity-40">
                         OK <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
+                    {/* La salida del que no (doc 23-08, punto 3): pasa de largo sin rellenar. */}
+                    {step.pasala && (
+                        <Button variant="ghost" onClick={goNext} data-testid="peso-hito-pasala"
+                            className="text-foreground/50">
+                            Si no, pásala
+                        </Button>
+                    )}
                 </div>
             </div>
         );
@@ -2979,10 +3086,12 @@ const QuestionnairePage = () => {
 
                 {!lecturaDieta ? (
                     <div className="space-y-4 mb-6">
-                        {/* Las tres puertas */}
-                        <div className="grid grid-cols-3 gap-2">
-                            {[['texto', 'Escribirla'], ['menu', 'Un día mío'], ['foto', 'Una foto']].map(([modo, etiqueta]) => (
-                                <button key={modo} onClick={() => { set('dieta_modo', modo); if (modo === 'menu') cargarMisDias(); }}
+                        {/* DOS PUERTAS, NO TRES (doc del 23-08, punto 10): «Un día mío» se
+                            quita. Era elegir un día ya creado en la calculadora, y quien
+                            está en el alta no tiene ninguno. */}
+                        <div className="grid grid-cols-2 gap-2">
+                            {[['texto', 'Escribirla'], ['foto', 'Una foto']].map(([modo, etiqueta]) => (
+                                <button key={modo} onClick={() => set('dieta_modo', modo)}
                                     className={`px-3 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
                                         (answers.dieta_modo || 'texto') === modo
                                             ? 'border-brand bg-brand/10 text-foreground'
@@ -2996,26 +3105,6 @@ const QuestionnairePage = () => {
                             <textarea value={answers.dieta_texto ?? ''} onChange={e => set('dieta_texto', e.target.value)}
                                 rows={5} placeholder="Un día tipo, con cantidades. Por ejemplo: desayuno 80 g de avena y 30 g de proteína; comida 200 g de pollo con 100 g de arroz; cena merluza con ensalada."
                                 className="w-full rounded-xl bg-card border-2 border-[#222222] p-3 text-foreground text-sm resize-none focus:outline-none focus:border-brand" />
-                        )}
-
-                        {answers.dieta_modo === 'menu' && (
-                            <div className="space-y-2 max-h-64 overflow-y-auto">
-                                {misDias === null && <p className="text-foreground/50 text-sm">Buscando tus días...</p>}
-                                {misDias?.length === 0 && (
-                                    <p className="text-foreground/50 text-sm">
-                                        Todavía no has creado ningún día en la calculadora. Escríbela o sube una foto.
-                                    </p>
-                                )}
-                                {misDias?.map(d => (
-                                    <button key={d.fecha} onClick={() => set('dieta_fecha_menu', d.fecha)}
-                                        className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
-                                            answers.dieta_fecha_menu === d.fecha
-                                                ? 'border-brand bg-brand/10' : 'border-[#222222] hover:border-white/30'}`}>
-                                        <span className="text-foreground text-sm font-semibold">{d.fecha}</span>
-                                        <span className="text-foreground/50 text-xs ml-2">{plural(d.alimentos, 'alimento')}</span>
-                                    </button>
-                                ))}
-                            </div>
                         )}
 
                         {answers.dieta_modo === 'foto' && (
@@ -3212,10 +3301,40 @@ const QuestionnairePage = () => {
                 </div>
             </div>
         );
+    } else if (step.type === 'exclusiones') {
+        body = (
+            <div>
+                <Title />
+                <ExclusionesDelAlta answers={answers} set={set} api={api} />
+                <div className="flex gap-3 mt-6">
+                    <BackBtn />
+                    <Button onClick={goNext} data-testid="exclusiones-ok"
+                        className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold px-8">
+                        OK <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                </div>
+            </div>
+        );
     } else if (step.type === 'multiselect') {
-        const selected = answers[step.key] || [];
+        // NO REVIENTA CON FICHAS ANTIGUAS (doc 23-08, punto 15; la causa real del «botón
+        // de confirmar que a veces no responde»): `alergias` puede llegar como STRING de
+        // los cuestionarios viejos, y `selected.filter` sobre un string tiraba un
+        // TypeError que dejaba la pantalla muerta. Se normaliza: del texto se rescatan
+        // las opciones que nombre, y a partir de ahí ya es una lista normal.
+        const crudo = answers[step.key];
+        const selected = Array.isArray(crudo) ? crudo
+            : (typeof crudo === 'string' && crudo)
+                ? step.options.map(o => o.value).filter(v => crudo.toLowerCase().includes(String(v).toLowerCase()))
+                : [];
+        // «No, ninguna» ES EXCLUYENTE (mismo punto): marcarla desmarca el resto, y marcar
+        // cualquier otra la desmarca a ella. Antes se podía tener «ninguna» + «lactosa» a
+        // la vez, que no significa nada.
+        const excluyente = step.key === 'alergias' ? 'ninguna' : null;
         const toggle = (v) => {
-            const next = selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v];
+            let next;
+            if (selected.includes(v)) next = selected.filter(x => x !== v);
+            else if (excluyente && v === excluyente) next = [v];
+            else next = [...selected.filter(x => x !== excluyente), v];
             set(step.key, next);
         };
         body = (
@@ -3233,6 +3352,13 @@ const QuestionnairePage = () => {
                         );
                     })}
                 </div>
+                {/* El botón apagado tiene que decir por qué: sin esto se percibía como
+                    «no responde» (doc 23-08, punto 15). */}
+                {!selected.length && (
+                    <p className="text-sm text-foreground/50 mt-4" data-testid="multiselect-pista">
+                        Marca al menos una opción para seguir.
+                    </p>
+                )}
                 <div className="flex gap-3 mt-6">
                     <BackBtn />
                     <Button onClick={goNext} disabled={!selected.length}
@@ -3306,15 +3432,47 @@ const QuestionnairePage = () => {
             </div>
         );
     } else if (step.type === 'bf') {
+        // LOS DOS HUECOS DEBAJO DEL CARRUSEL (doc del 23-08, punto 1): arriba la foto que
+        // sube él, debajo la foto tipo del porcentaje en el que se ha quedado, para verse
+        // al lado del modelo. En mujer solo el suyo: las fotos de modelo de mujer no
+        // existen todavía (duda 1 del plan, pendiente de Jesús).
+        const esMujerBf = String(answers.sex || '').toLowerCase().startsWith('muj');
+        const valorBf = answers.body_fat;
         body = (
             <div>
                 <Title />
                 <BodyFatSlider value={answers.body_fat} onChange={(v) => set('body_fat', v)}
-                    sexo={answers.sex} />
+                    sexo={answers.sex}
+                    photo={answers.foto_grasa || null}
+                    onPhoto={(f) => set('foto_grasa', f)} />
                 {/* LA COLETILLA CAMBIA SEGÚN SU PLAN (doc del 18-08, pantalla 8). A quien
                     lleva entrenador se le quita el peso de encima -- se lo van a revisar con
                     sus fotos -- y a quien no, se le dice desde el primer día que esto lo
                     repite él cada doce semanas. */}
+                {/* Su foto y la del modelo, una encima de la otra (doc 23-08, punto 1). */}
+                {(answers.foto_grasa || !esMujerBf) && (
+                    <div className="mt-5 grid grid-cols-2 gap-3 max-w-sm" data-testid="bf-comparativa">
+                        <div className="rounded-xl border-2 border-[#222222] overflow-hidden">
+                            {answers.foto_grasa ? (
+                                <img src={answers.foto_grasa} alt="Tu foto"
+                                    className="w-full aspect-[3/4] object-cover" />
+                            ) : (
+                                <div className="w-full aspect-[3/4] flex flex-col items-center justify-center bg-card">
+                                    <ImagePlus className="w-6 h-6 text-foreground/30" />
+                                    <span className="text-foreground/40 text-xs mt-1.5 px-2 text-center">Tu foto, arriba en el carrusel</span>
+                                </div>
+                            )}
+                            <p className="text-[11px] uppercase tracking-wider text-foreground/50 font-bold text-center py-1.5">La tuya</p>
+                        </div>
+                        {!esMujerBf && (
+                            <div className="rounded-xl border-2 border-[#222222] overflow-hidden">
+                                <img src={`/bodyfat/frente/${valorBf ?? 20}.webp`} alt={`Modelo ${valorBf ?? 20}%`}
+                                    className="w-full aspect-[3/4] object-cover" />
+                                <p className="text-[11px] uppercase tracking-wider text-foreground/50 font-bold text-center py-1.5">El modelo del {valorBf ?? 20}%</p>
+                            </div>
+                        )}
+                    </div>
+                )}
                 <p className="text-foreground/50 text-xs mt-3">
                     {tieneCoach
                         ? 'Esto te lo damos nosotros, no te comas mucho la cabeza, es solo para arrancar. Tu entrenador lo revisará con tus fotos.'

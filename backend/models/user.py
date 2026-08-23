@@ -1233,6 +1233,11 @@ class ClientProfile(BaseModel):
     # veía ni el cuestionario largo sabía que estaban contestados (y los repetía).
     entrenador_anterior: Optional[str] = None
     entrenador_anterior_que_tal: Optional[str] = None
+    # Las fotos del alta (doc del 23-08): el binario vive en client_photos (R2 si hay),
+    # aquí solo el id. `foto_mejor_momento` de arriba queda para el base64 de las fichas
+    # de antes de esa fecha.
+    foto_grasa_id: Optional[str] = None
+    foto_mejor_momento_id: Optional[str] = None
     # Punto de partida (paso 3 del doc): fotos y medidas del dia 1, que son la unica forma de
     # comparar dentro de un mes.
     punto_de_partida_hecho: Optional[bool] = None
@@ -1376,8 +1381,8 @@ class AjustesMacros(BaseModel):
     # macros: le dicen al entrenador que hace, cuando y si puede cuadrarlo con el descanso.
     deporte_cual: Optional[str] = None
     deporte_en_descanso: Optional[Union[bool, str]] = None   # True | False | "ya"
-    facilidad_engordar: Optional[str] = None    # enseguida | normal | casi_no
-    apetito: Optional[str] = None               # mucho | normal | poco (pantalla 7, no mueve macros)
+    facilidad_engordar: Optional[str] = None    # enseguida | normal | casi_no | nada (doc 23-08)
+    apetito: Optional[str] = None               # mucho | normal | poco | casi_nada (no mueve macros)
     cuesta_definir: Optional[str] = None        # mucho | normal | poco (se guarda, no modifica)
     # Se pregunta en el test de entrada desde el doc de textos (pantalla 3): antes vivia en
     # el cuestionario largo, que solo ven los planes con entrenador.
@@ -1455,6 +1460,16 @@ class QuestionnaireSubmit(BaseModel):
     peso_mejor_momento_ano: Optional[int] = None
     peso_mejor_momento_nota: Optional[str] = None
     foto_mejor_momento: Optional[str] = None
+    # La foto que sube en el carrusel del % de grasa (doc del 23-08, punto 1). Llega en
+    # base64 y NO se queda en el perfil: el guardado la manda a client_photos (R2 si hay
+    # credenciales) y en la ficha queda solo su id. `foto_mejor_momento` sigue el mismo
+    # camino desde esa fecha; el campo de arriba queda para las fichas viejas que ya lo
+    # traían en base64.
+    foto_grasa: Optional[str] = None
+    # Lo que NO quiere ver en el plato (doc del 23-08, punto 14): categorías enteras del
+    # catálogo y palabras sueltas. Se funden con los vetos que salen de sus intolerancias.
+    avoided_categories: Optional[List[str]] = None
+    avoided_keywords: Optional[List[str]] = None
     peso_minimo: Optional[float] = None
     peso_minimo_ano: Optional[int] = None
     peso_minimo_nota: Optional[str] = None

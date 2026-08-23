@@ -307,8 +307,12 @@ async def listar_fotos_de(user: dict) -> list:
     client_id = await _client_id_de(user)
     r2 = _cliente_r2()
 
+    # Las fotos del ALTA (uso: alta_grasa / mejor_forma, doc del 23-08) no son de
+    # progreso: no entran en esta lista ni en las comparativas del cliente. Se sirven
+    # igual por id (abrir_foto no filtra por uso, solo por dueño).
     cursor = db.client_photos.find(
-        _filtro_del_dueno(user, client_id), {"_id": 0, "data": 0}).sort("taken_at", -1)
+        {**_filtro_del_dueno(user, client_id), "uso": {"$exists": False}},
+        {"_id": 0, "data": 0}).sort("taken_at", -1)
     docs = await cursor.to_list(length=200)
 
     fotos = []

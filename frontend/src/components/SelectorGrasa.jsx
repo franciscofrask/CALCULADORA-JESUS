@@ -36,13 +36,18 @@ export const grasaPorDefecto = (sexo) => (esMujer(sexo) ? BF_DEFAULT_MUJER : BF_
 // Slider de % de grasa: carrusel horizontal de imágenes de referencia con la
 // foto del cliente fija en el centro. Se desliza hasta situar la foto entre dos
 // porcentajes; el valor es el de la referencia que queda centrada.
-const BodyFatSlider = ({ value, onChange, sexo }) => {
+const BodyFatSlider = ({ value, onChange, sexo, photo: fotoDeFuera, onPhoto }) => {
     // La escala y el valor de partida son los de su sexo (doc del 18-08).
     const ESCALA = escalaDeGrasa(sexo);
     const POR_DEFECTO = grasaPorDefecto(sexo);
     const conFotos = !esMujer(sexo);   // las de mujer no existen todavía
     const scrollRef = useRef(null);
-    const [photo, setPhoto] = useState(null);
+    // LA FOTO PUEDE VIVIR FUERA (doc del 23-08, punto 1): el cuestionario la guarda con
+    // las respuestas para poder subirla al terminar; hasta entonces se perdía en este
+    // estado local. Sin `onPhoto` (otros usos del carrusel) se comporta como siempre.
+    const [fotoLocal, setFotoLocal] = useState(null);
+    const photo = onPhoto ? fotoDeFuera : fotoLocal;
+    const setPhoto = onPhoto || setFotoLocal;
     const [arrastrando, setArrastrando] = useState(false);
 
     const handleScroll = useCallback(() => {
@@ -158,6 +163,9 @@ const BodyFatSlider = ({ value, onChange, sexo }) => {
         input.onchange = (ev) => {
             const file = ev.target.files?.[0];
             if (!file) return;
+            // El mismo tope que las demás fotos de la app: al terminar el alta esta se
+            // guarda, y un original de cámara sin tope es un cuerpo de 20 MB en el envío.
+            if (file.size > 8 * 1024 * 1024) return;
             const reader = new FileReader();
             reader.onload = (e) => setPhoto(e.target.result);
             reader.readAsDataURL(file);

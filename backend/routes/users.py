@@ -4,9 +4,12 @@ Rutas de usuarios: perfiles, preferencias y macros.
 from fastapi import APIRouter, Body, HTTPException, Depends
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
+import base64
 import logging
 import re
 import uuid
+
+from bson import Binary
 
 logger = logging.getLogger(__name__)
 
@@ -398,6 +401,59 @@ def _age_from_birthdate(birthdate: Optional[str]) -> Optional[int]:
     today = datetime.now(timezone.utc).date()
     return today.year - b.year - ((today.month, today.day) < (b.month, b.day))
 
+# Las fotos que llegan con el ALTA en base64 (la del carrusel de grasa y la de su mejor
+# forma, doc del 23-08). NO se quedan en el perfil: van a client_photos como cualquier
+# otra foto -- a R2 si hay credenciales, con blob si no -- y en la ficha queda solo el id.
+# Antes `foto_mejor_momento` se guardaba en base64 DENTRO del documento del perfil, que
+# es la forma de que una ficha pese megas.
+_USOS_FOTO_ALTA = {"grasa": "alta_grasa", "mejor_forma": "mejor_forma"}
+
+
+async def _guardar_foto_del_alta(user: dict, profile: dict, data_url: str, uso: str) -> Optional[str]:
+    """Guarda una foto del alta (dataURL base64) en client_photos y devuelve su id.
+    None si el dataURL no se puede leer: el alta sigue adelante, una foto ilegible no
+    puede tirar el cuestionario entero."""
+    try:
+        m = re.match(r"data:(image/[\w.+-]+);base64,(.+)$", data_url or "", re.DOTALL)
+        if not m:
+            return None
+        content_type, crudo = m.group(1).lower(), m.group(2)
+        contenido = base64.b64decode(crudo)
+        if not contenido or len(contenido) > 8 * 1024 * 1024:
+            return None
+        from core import fotos as fotos_core
+        now_iso = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "id": str(uuid.uuid4()),
+            "client_id": profile.get("id"),
+            "user_id": user["id"],
+            "filename": f"{uso}.jpg",
+            "content_type": content_type,
+            "size": len(contenido),
+            "taken_at": now_iso,
+            "uploaded_at": now_iso,
+            "pose": None,
+            "inicial": False,
+            # La marca que las separa de las fotos de progreso: estas son del alta y las
+            # listas del cliente las dejan fuera (core/fotos.listar_fotos_de).
+            "uso": _USOS_FOTO_ALTA.get(uso, uso),
+        }
+        clave_r2 = await fotos_core.subir_foto_nueva(
+            user_id=user["id"], client_id=profile.get("id"), photo_id=doc["id"],
+            contenido=contenido, content_type=content_type)
+        if clave_r2:
+            doc["en_r2"] = True
+            doc["r2_key"] = clave_r2
+            doc["en_r2_at"] = now_iso
+        else:
+            doc["data"] = Binary(contenido)
+        await db.client_photos.insert_one(doc)
+        return doc["id"]
+    except Exception as e:
+        logging.getLogger(__name__).warning("foto del alta (%s) no guardada: %s", uso, e)
+        return None
+
+
 @router.post("/clients/questionnaire")
 async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_current_user)):
     """Cuestionario inicial (Nivel 0). Guarda las respuestas en el perfil, marca
@@ -473,13 +529,24 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     for campo in ("profesion", "como_me_conociste", "proteinas_habituales",
                   "peso_maximo", "peso_maximo_ano", "peso_maximo_nota",
                   "peso_mejor_momento", "peso_mejor_momento_ano", "peso_mejor_momento_nota",
-                  "foto_mejor_momento", "peso_minimo", "peso_minimo_ano", "peso_minimo_nota",
+                  "peso_minimo", "peso_minimo_ano", "peso_minimo_nota",
                   "alergias", "lactosa", "gluten", "alergia_otra",
                   "dietas_previas", "tiempo_intentandolo", "motivo_apuntarse",
                   "entrenador_anterior", "entrenador_anterior_que_tal"):
         valor = getattr(data, campo, None)
         if valor not in (None, "", []):
             update[campo] = valor
+
+    # LAS FOTOS DEL ALTA, FUERA DEL PERFIL (doc del 23-08). `foto_mejor_momento` salió del
+    # bucle de arriba: llega igual en base64, pero ya no se incrusta en el documento de la
+    # ficha; las dos van a client_photos (R2 si hay) y aquí queda solo su id.
+    for campo_b64, uso, campo_id in (("foto_grasa", "grasa", "foto_grasa_id"),
+                                     ("foto_mejor_momento", "mejor_forma", "foto_mejor_momento_id")):
+        crudo = getattr(data, campo_b64, None)
+        if crudo:
+            foto_id = await _guardar_foto_del_alta(user, profile, crudo, uso)
+            if foto_id:
+                update[campo_id] = foto_id
 
     # EL CORREO QUE ESCRIBE EN EL ALTA (bloque 6 del doc del 18-08). Se guarda aparte y NO
     # se toca el de acceso: con el de acceso entra, cruzan los cobros de Stripe y se enlaza
@@ -500,9 +567,19 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
     # primer día no sea un menú cualquiera. No se pisa lo que ya tuviera puesto: quien
     # llegue aquí con preferencias hechas (las eligió en Nutrición antes de contratar) se
     # queda con las suyas.
-    for clave, valor in _preferencias_del_basico(data).items():
-        if not profile.get(clave):
-            update[clave] = valor
+    prefs_derivadas = _preferencias_del_basico(data)
+    if prefs_derivadas.get("food_preferences") and not profile.get("food_preferences"):
+        update["food_preferences"] = prefs_derivadas["food_preferences"]
+    # LOS VETOS SE FUNDEN, NO SE PISAN (doc del 23-08, punto 14): lo que marca en la
+    # pantalla de exclusiones + lo que sale de sus intolerancias + lo que ya tuviera.
+    # Un veto es una resta: unir nunca le quita nada a nadie, y quitarle un veto que ya
+    # tenía sí sería peligroso.
+    for clave, explicito in (("avoided_categories", data.avoided_categories),
+                             ("avoided_keywords", data.avoided_keywords)):
+        union = list(dict.fromkeys(
+            (profile.get(clave) or []) + (prefs_derivadas.get(clave) or []) + (explicito or [])))
+        if union and union != (profile.get(clave) or []):
+            update[clave] = union
 
     if ajustes:
         update["ajustes_macros"] = ajustes
@@ -914,7 +991,10 @@ def _preferencias_del_basico(data) -> Dict[str, Any]:
 
     evitar, palabras = [], []
     alergias = data.alergias or []
-    if "lactosa" in alergias and (data.lactosa or "") == "total":
+    # `total` es el valor de hoy; `nada` es el del cuestionario viejo («no tolero nada»).
+    # Solo se comparaba con `total`, así que a los migrados con `nada` el veto de lácteos
+    # no se les aplicaba nunca (doc del 23-08, punto 15).
+    if "lactosa" in alergias and (data.lactosa or "") in ("total", "nada"):
         evitar.append("lacteos")
     if "gluten" in alergias and (data.gluten or "") == "celiaquia":
         evitar += ["panes", "pasta", "bolleria", "cereales"]

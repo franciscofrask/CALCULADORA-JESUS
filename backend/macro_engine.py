@@ -54,7 +54,9 @@ MOD_NO_ENGORDA = 0.20                    # entreno y descanso; requiere estar po
 BF_MAX_NO_ENGORDA = {"hombre": 20.0, "mujer": 20.0}
 # Documento del 07-08 (misma decisión): el +20% lo cobra SOLO "casi no lo noto" (con
 # grasa <= 20%). Sustituye al doc del 29-07, que incluía también "engordo lo normal".
-RESPUESTAS_QUE_SUBEN = ("casi_no",)
+# `nada` es la cuarta opción del doc del 23-08 («No, nada, me cuesta mucho coger peso»):
+# quien la elige no puede subir menos que quien dice «casi no», así que cobra lo mismo.
+RESPUESTAS_QUE_SUBEN = ("casi_no", "nada")
 TOPE_SUBIDA_ENTRENO = 0.30
 TOPE_SUBIDA_DESCANSO = 0.40
 
