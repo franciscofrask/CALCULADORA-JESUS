@@ -226,7 +226,8 @@ function AppRoutes() {
                     rutina: CAP.RUTINA ya lleva dentro el interruptor `t3_entreno`. */}
                 <Route path="entreno" element={<CapabilityRoute cap="rutina"><EntrenoPage /></CapabilityRoute>} />
                 <Route path="nutrition" element={<NutritionPage />} />
-                {/* Mi semana (rediseño 21-08). Sin entrada en el menú todavía: se llega por URL. */}
+                {/* Mi semana (rediseño 21-08). Puertas: barra de abajo del móvil y menú
+                    lateral del escritorio, las dos detrás de t1_inicio_nuevo. */}
                 <Route path="semana" element={<MiSemanaPage />} />
                 <Route path="reports" element={<CapabilityRoute cap="reportes"><ReportsPage /></CapabilityRoute>} />
                 <Route path="messages" element={<MessagesPage />} />

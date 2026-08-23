@@ -19,7 +19,8 @@ import {
     LogOut, Bell, ChevronRight, CreditCard, Target, Bot,
     Flame, Activity, Scale, Search, SlidersHorizontal, Pill,
     ClipboardCheck, Menu, X, PanelLeftClose, PanelLeftOpen,
-    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone, Clock, TrendingUp, Moon
+    CheckCircle2, Circle, Sparkles, LayoutDashboard, AlertTriangle, Phone, Clock, TrendingUp, Moon,
+    CalendarRange
 } from 'lucide-react';
 import Logo12EN12 from '../components/Logo12EN12';
 import { verComo } from '../lib/modoRevision';
@@ -1537,7 +1538,16 @@ const ClientLayout = () => {
         .filter(i => (!i.cap || can(i.cap)) && i.path !== '/dashboard/checkins')
         .map(i => i.path === '/dashboard/reports'
             ? { ...i, icon: TrendingUp, label: 'Seguimiento' }
-            : i);
+            : i)
+        // «MI SEMANA» TAMBIÉN EN EL ORDENADOR: la página nació el 21-08 con su única
+        // puerta en la barra de abajo del móvil, y en escritorio solo se llegaba por
+        // URL. Entra en el menú lateral entre Inicio y Rutina -- el orden de la barra
+        // del móvil -- y detrás del MISMO interruptor que ella (t1_inicio_nuevo), para
+        // que el lunes se encienda todo junto. En el móvil no duplica nada: la hoja de
+        // «Más» descarta las rutas que ya están en la barra.
+        .flatMap(i => (i.path === '/dashboard' && pantalla('t1_inicio_nuevo'))
+            ? [i, { path: '/dashboard/semana', icon: CalendarRange, label: 'Mi semana' }]
+            : [i]);
     // La barra de abajo no se toca: ahí ya pone «Macros» a secas, que vale para los dos casos y
     // es lo que cabe en un móvil.
     const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
