@@ -584,7 +584,9 @@ const InicioNuevo = () => {
     if (faltaElAjuste || faltaElNivel1) {
         pendientes.push({
             id: 'perfil', icono: User, titulo: 'Completar perfil',
-            detalle: 'Para terminar de ajustar tus macros',
+            // Corto: en 390 px el subtítulo se cortaba en «Para terminar de ajustar t...»
+            // (recorrido móvil del 23-08). La línea es de una sola fila a propósito.
+            detalle: 'Para tener tus macros buenos',
             path: faltaElAjuste ? '/questionnaire?ajustar=1' : '/questionnaire',
         });
     }

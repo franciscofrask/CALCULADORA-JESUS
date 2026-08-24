@@ -11,7 +11,6 @@ import {
     Camera, Trash2, Loader2, ChevronLeft,
 } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
-import { num1 } from '../lib/numeros';
 import TresFotos from '../components/reports/TresFotos';
 
 const ORANGE = '#FF671F';
@@ -203,11 +202,6 @@ const NUMERAL = { 1: 'una', 2: 'dos', 3: 'tres', 4: 'cuatro' };
 
 // Suma de `macros_efectivos` de una comida guardada, como la lista del Inicio: cuando el
 // campo falta en filas antiguas esa comida suma 0, y aquí el número es informativo.
-const macrosDeComida = (comida) => (comida?.alimentos || []).reduce((acc, a) => {
-    const m = a.macros_efectivos || {};
-    return { P: acc.P + (m.P || 0), H: acc.H + (m.H || 0), G: acc.G + (m.G || 0) };
-}, { P: 0, H: 0, G: 0 });
-
 // Las comidas PRINCIPALES del día (C1..Cn): las que se marcan. Intra y Post, fuera.
 const comidasPrincipales = (dia) => (dia?.exists
     ? ['C1', 'C2', 'C3', 'C4'].slice(0, Math.max(1, Math.min(4, dia.num_comidas || 4)))
@@ -243,12 +237,6 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
     const claves = comidasPrincipales(dia);
     const algoMontado = claves.some(k => (comidas[k]?.alimentos || []).length > 0);
     const corta = claves.length > 0 && algoMontado && claves.every(k => comidas[k]?.marcada === true);
-    // LAS QUE FALTAN = las del día menos las ya marcadas O ya registradas (P77, doc
-    // 23-08). Antes se contaba toda comida sin marcar aunque tuviera sus alimentos
-    // registrados en Nutrición, y salía «te quedan cuatro» cuando faltaban dos.
-    const sinMarcar = algoMontado
-        ? claves.filter(k => comidas[k]?.marcada !== true && (comidas[k]?.alimentos || []).length === 0)
-        : [];
     // Las cinco cosas de la versión corta son cuatro para quien no tiene protocolo de
     // suplementos: la cuenta de la cabecera dice las que van a salir de verdad.
     const cosas = hoy?.suplementos ? 'cinco' : 'cuatro';
@@ -306,37 +294,11 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                 </div>
             )}
 
-            {/* La versión LARGA abre, si las hay, con las comidas que se le quedaron sin
-                marcar. Solo informativo: se registran en Nutrición, no aquí. */}
-            {!corta && sinMarcar.length > 0 && (
-                <div data-testid="cierre-sin-marcar">
-                    <span className="text-sm text-foreground/70 mb-2 block">
-                        {sinMarcar.length === 1
-                            ? 'Te queda una comida sin registrar.'
-                            : `Te quedan ${NUMERAL[sinMarcar.length]} comidas sin registrar.`}
-                    </span>
-                    <ul className="space-y-1">
-                        {sinMarcar.map(k => {
-                            const m = macrosDeComida(comidas[k]);
-                            const tieneAlimentos = (comidas[k]?.alimentos || []).length > 0;
-                            return (
-                                <li key={k} data-testid={`cierre-sin-marcar-${k}`}
-                                    className="text-sm text-foreground/60 flex items-baseline justify-between gap-3">
-                                    <span className="font-semibold text-foreground/80">Comida {k.slice(1)}</span>
-                                    <span className="font-data">
-                                        {tieneAlimentos ? `${num1(m.P)}P · ${num1(m.H)}H · ${num1(m.G)}G` : 'Sin hacer'}
-                                    </span>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                    <button type="button" onClick={() => navigate('/dashboard/nutrition')}
-                        data-testid="cierre-ir-a-nutricion"
-                        className="text-xs text-brand hover:underline underline-offset-4 font-semibold mt-2">
-                        Regístralas en Nutrición
-                    </button>
-                </div>
-            )}
+            {/* Aquí vivía la lista informativa de comidas sin registrar («Te quedan
+                cuatro comidas...»). FUERA (P77 del doc 23-08, decidido por Francisco el
+                23-08): preguntaba dos veces lo mismo que el bloque de la comida pendiente
+                de abajo, que es el del doc original (T4 del 16-08) y el único que guarda
+                algo (el «La hice» viaja al cierre y al coach). */}
 
             {/* 1 · El entreno que no marcó. «Sí, pero no lo puse» le lleva a registrarlo,
                 que es donde de verdad se arregla; no se apaña con un sí a secas aquí.

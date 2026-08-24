@@ -164,14 +164,19 @@ const LineaDieta = ({ dia }) => {
         <div className="flex items-center gap-2 text-sm" data-testid={`dieta-${dia.fecha}`}>
             <Utensils className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             {dia.estado === 'montada' && (
-                <span className="font-data text-foreground truncate">
-                    <span className="text-orange-400 font-semibold">{Math.round(m.P || 0)}</span>
-                    <span className="text-muted-foreground"> · </span>
-                    <span className="text-blue-400 font-semibold">{Math.round(m.H || 0)}</span>
-                    <span className="text-muted-foreground"> · </span>
-                    <span className="text-yellow-400 font-semibold">{Math.round(m.G || 0)}</span>
-                    <span className="text-muted-foreground"> · </span>
-                    <span className="text-emerald-400 font-semibold">creada</span>
+                /* «creada» delante y sin `truncate` en ella: a 390 px la línea se cortaba
+                   justo ahí y el día se quedaba en «99 · 82 · 32 · ...» (recorrido móvil
+                   del 23-08). Los números sí pueden encogerse; la palabra no. */
+                <span className="font-data text-foreground flex items-baseline gap-1 min-w-0">
+                    <span className="text-emerald-400 font-semibold flex-shrink-0">Creada</span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="truncate">
+                        <span className="text-orange-400 font-semibold">{Math.round(m.P || 0)}</span>
+                        <span className="text-muted-foreground"> · </span>
+                        <span className="text-blue-400 font-semibold">{Math.round(m.H || 0)}</span>
+                        <span className="text-muted-foreground"> · </span>
+                        <span className="text-yellow-400 font-semibold">{Math.round(m.G || 0)}</span>
+                    </span>
                 </span>
             )}
             {dia.estado === 'empezada' && (

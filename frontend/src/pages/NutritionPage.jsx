@@ -2201,8 +2201,10 @@ const NutritionPage = () => {
         C2: { name: 'Comida 2', shortName: 'C2', emoji: '☀️' },
         C3: { name: numComidas === 3 ? 'Comida 3' : 'Comida 3', shortName: 'C3', emoji: numComidas === 3 ? '🌙' : '🌤️' },
         C4: { name: 'Comida 4', shortName: 'C4', emoji: '🌙' },
-        Intra: { name: 'Intra-entreno', shortName: 'Intra', emoji: '⚡' },
-        Post: { name: 'Post-entreno', shortName: 'Post', emoji: '💪' }
+        // Sin el «-entreno»: en 390 px salía «INTRA-ENT...» cortado (recorrido móvil
+        // del 23-08) y el icono del rayo ya dice de qué va.
+        Intra: { name: 'Intra', shortName: 'Intra', emoji: '⚡' },
+        Post: { name: 'Post', shortName: 'Post', emoji: '💪' }
     };
 
     // ── El día vacío (doc 21-08, tarea 6.1) ──────────────────────────────────

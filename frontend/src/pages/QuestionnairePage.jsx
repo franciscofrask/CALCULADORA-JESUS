@@ -1612,14 +1612,22 @@ const QuestionnairePage = () => {
     // pasa nada visible, no contesta la siguiente. Se calcula sin aplicar nada: lo definitivo
     // se guarda al terminar el cuestionario.
     const recalcularEnVivo = useCallback(async (respuestas) => {
-        if (!modoAjuste || !profile?.weight || !profile?.goal) return;
+        // Con lo que haya contestado EN EL PROPIO CUESTIONARIO por delante de la ficha:
+        // al retomar un borrador, el peso y el % graso que acaba de escribir todavía no
+        // están en el perfil, y la barra no llegaba a montarse nunca (hallazgo del P29,
+        // recorrido del 23-08). Sin peso u objetivo no hay cálculo posible y se calla.
+        const r = respuestas || {};
+        const peso = r.weight ?? profile?.weight;
+        const objetivo = r.goal ?? profile?.goal;
+        const grasa = r.body_fat ?? profile?.body_fat;
+        if (!modoAjuste || !peso || !objetivo) return;
         setCalculandoVivo(true);
         try {
             const res = await api.post('/calculator/targets', {
-                peso: profile.weight,
-                sexo: profile.sex || 'hombre',
-                porcentaje_graso: profile.body_fat,
-                objetivo: profile.goal,
+                peso,
+                sexo: r.sex || profile?.sex || 'hombre',
+                porcentaje_graso: grasa,
+                objetivo,
                 ajustes: ajustesDe(respuestas),
             });
             // El valor anterior se guarda desde dentro del setState: asi es el real y no uno
