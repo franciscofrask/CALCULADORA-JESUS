@@ -8,6 +8,7 @@ from starlette.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+import os
 
 from core.config import CORS_ORIGINS
 from core.database import create_indexes, close_connection
@@ -71,13 +72,32 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down JG12 API...")
     await close_connection()
 
+# LA DOCUMENTACION DE LA API VA CERRADA salvo que se pida a proposito con API_DOCS=1.
+#
+# FastAPI publica /docs, /redoc y /openapi.json sin ninguna llave, y ahi dentro esta el mapa
+# completo de la casa: las 226 rutas, que parametros acepta cada una y la forma exacta de
+# cada modelo. Eso no es un manual, es un indice para el que busca por donde entrar. Medido
+# en produccion el 24-08: 134 peticiones a /docs en una hora desde una sola IP de fuera,
+# mas que cualquier endpoint de verdad de la app.
+#
+# Por defecto CERRADO, que es lo que hace que produccion quede tapada sin tener que acordarse
+# de nada: alli esa variable no existe. En el .env de desarrollo va API_DOCS=1 y se sigue
+# trabajando igual. Nada de la app las llama, ni el frontend ni los tests ni los guiones de
+# _guia: se comprobo antes de cerrarlas.
+DOCS_ABIERTAS = os.environ.get("API_DOCS", "").strip() in ("1", "true", "True", "si", "sí")
+
 # Create FastAPI app
 app = FastAPI(
     title="JG12 - Plataforma de Entrenamiento Personal",
     description="API para la plataforma de entrenamiento personal JG12 con calculadora CALMA",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if DOCS_ABIERTAS else None,
+    redoc_url="/redoc" if DOCS_ABIERTAS else None,
+    openapi_url="/openapi.json" if DOCS_ABIERTAS else None,
 )
+logger.info("Documentacion de la API: %s",
+            "ABIERTA en /docs (API_DOCS=1)" if DOCS_ABIERTAS else "cerrada")
 
 # CORS middleware
 #
