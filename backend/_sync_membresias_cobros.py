@@ -100,8 +100,9 @@ from datetime import datetime, timezone
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_prod"
+from _destino_sync import destino, no_entra, rotulo, solo_correos   # --dev escribe en desarrollo
+PROD, BASE_PROD = destino()
+SOLO = solo_correos()   # --solo fichero.txt limita la pasada
 
 ESCRIBIR = "--escribir" in sys.argv
 SOLO_CICLOS = "--solo-ciclos" in sys.argv
@@ -178,6 +179,8 @@ async def parte_ciclos(db, hoy):
 
     usuarios = {}
     async for u in db.users.find({}, {"id": 1, "email": 1, "name": 1, "plan": 1}):
+        if no_entra(u.get("email"), SOLO):
+            continue
         usuarios[email_norm(u.get("email"))] = u
 
     # `client_profiles.user_id` es `users.id` (el uuid), NO el `client_id` de Calma.
@@ -555,6 +558,8 @@ async def parte_cobros(db, cliente_mongo, ahora):
 
     usuarios = {}
     async for u in db.users.find({}, {"id": 1, "email": 1, "name": 1}):
+        if no_entra(u.get("email"), SOLO):
+            continue
         usuarios[email_norm(u.get("email"))] = u
     print(f"\ncuentas en la app: {len(usuarios)}")
 

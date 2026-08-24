@@ -56,8 +56,9 @@ from collections import Counter, defaultdict
 sys.stdout.reconfigure(encoding="utf-8")
 from pymongo import MongoClient
 
-PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_prod"
+from _destino_sync import destino, no_entra, rotulo, solo_correos   # --dev escribe en desarrollo
+PROD, BASE_PROD = destino()
+SOLO = solo_correos()   # --solo fichero.txt limita la pasada
 BASE_CALMA = "forms"
 COL_CALMA = "reportesMensualesCALMA"
 
@@ -234,6 +235,8 @@ def cargar_padron(prod):
     """
     users = {}
     for u in prod.users.find({}, {"_id": 0, "id": 1, "email": 1}):
+        if no_entra(u.get("email"), SOLO):
+            continue
         if u.get("email"):
             users[u["email"].lower().strip()] = u["id"]
 

@@ -59,7 +59,9 @@ BUCKET = "jesusgallegopt.appspot.com"
 JPEG_Q = 92                      # el mismo que uso _descargar_fotos_activos.py
 PREFIJO = "archivosFormularios/"
 
-MONGO_URI = os.environ.get("PROD_MONGO_URI", "mongodb://127.0.0.1:27018")
+from _destino_sync import destino, rotulo   # --dev escribe en desarrollo
+MONGO_URI, BASE_DESTINO = destino()
+MONGO_URI = os.environ.get("PROD_MONGO_URI", MONGO_URI)
 MONGO_DB = os.environ.get("PROD_MONGO_DB", "jg12_prod")
 
 SSH_KEY = os.path.expanduser("~/.ssh/id_ed25519_jg12")

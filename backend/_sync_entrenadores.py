@@ -124,7 +124,7 @@ def entrenador_del_nombre(nombre_plan: str):
 
 async def main():
     db = AsyncIOMotorClient(PROD, serverSelectionTimeoutMS=20000)[BASE]
-    print(f"{'ENSAYO (no escribe)' if not ESCRIBIR else 'ESCRIBIENDO EN PRODUCCION'}\n")
+    print(f"{'ENSAYO (no escribe)' if not ESCRIBIR else 'ESCRIBIENDO EN ' + rotulo()}\n")
 
     # Los entrenadores de la app, por email.
     ids = {}

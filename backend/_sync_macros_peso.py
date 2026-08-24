@@ -66,8 +66,9 @@ BACKEND = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BACKEND)
 sys.stdout.reconfigure(encoding="utf-8")
 
-PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_prod"
+from _destino_sync import destino, no_entra, rotulo, solo_correos   # --dev escribe en desarrollo
+PROD, BASE_PROD = destino()
+SOLO = solo_correos()   # --solo fichero.txt limita la pasada
 
 ESCRIBIR = "--escribir" in sys.argv
 SOLO_VIVOS = "--vivos" in sys.argv
@@ -152,6 +153,29 @@ def bloques(dec):
 # ---------------------------------------------------------------------------------------
 # Series de peso y % graso
 # ---------------------------------------------------------------------------------------
+SALTO = 0.40   # un pesaje que se aparta mas de esto del anterior no se cree
+
+
+def salto_imposible(anterior, nuevo):
+    """True si el pesaje nuevo rompe con la propia historia del cliente.
+
+    `sanea_peso` solo mira el rango -- 44,5 kg es un peso perfectamente posible --, y con
+    eso no basta. Juan Carlos Rute (jctrippi) tiene veintitrés pesajes entre 86 y 94 kg de
+    2022 a 2023 y luego uno suelto de enero de 2026 con 44,5: la mitad. Es el mismo tecleo
+    de siempre (un 8 por un 4, un 9 por un 4), y sin este filtro se le habria escrito como
+    peso actual, que es de donde salen su grafica y sus macros.
+
+    La regla es relativa, no de rango: un cambio de mas del 40% respecto al ultimo pesaje
+    que si nos creemos. Perder o ganar mas del 40% ENTRE DOS PESAJES SEGUIDOS no pasa de
+    verdad; cuando pasa de verdad, pasa poco a poco y los pesajes intermedios lo cuentan.
+    Y si alguna vez es cierto, el punto no se pierde: sale en el informe para que lo mire
+    una persona, que es lo que hacemos con las estaturas imposibles.
+    """
+    if anterior is None or not anterior:
+        return False
+    return abs(nuevo - anterior) / float(anterior) > SALTO
+
+
 def punto_grasa(v):
     """Un % graso creible, o None. El rango es el de `core/series_cliente.GRASA`."""
     try:
@@ -222,6 +246,8 @@ async def main(mig):
 
     gente = []
     async for u in db.users.find({"deleted_at": None}, {"_id": 0, "id": 1, "email": 1}):
+        if no_entra(u.get("email"), SOLO):
+            continue
         email = (u.get("email") or "").strip().lower()
         perfil = perfil_por_user.get(u.get("id"))
         if email and perfil and perfil.get("id"):
@@ -298,11 +324,11 @@ async def main(mig):
          "macros_nuevos": 0, "macros_futuros": 0,
          "pesos_calma": 0, "pesos_ya": 0, "pesos_nuevos": 0, "pesos_malos": 0,
          "grasa_calma": 0, "grasa_ya": 0, "grasa_nuevos": 0, "grasa_malos": 0,
-         "puntos_app": 0, "sin_fecha": 0,
+         "puntos_app": 0, "sin_fecha": 0, "pesos_increibles": 0,
          "peso_corregido": 0, "peso_no_tocado": 0, "grasa_no_tocada": 0}
     clientes = {"macros": set(), "pesos": set(), "grasa": set()}
     filas_nuevas, cambios_perfil, muestra_peso, muestra_macros = [], [], [], []
-    aviso_peso, muestra_rotas = [], []
+    aviso_peso, muestra_rotas, increibles = [], [], []
 
     for p in gente:
         u, cid, perfil = docs[p["email"]], p["cid"], p["perfil"]
@@ -389,6 +415,12 @@ async def main(mig):
                 continue
             if f in serie_peso:
                 n["pesos_ya"] += 1
+                continue
+            # Contra el pesaje anterior del propio cliente, no contra un rango.
+            previos = [x["valor"] for c, x in sorted(serie_peso.items()) if c < f]
+            if salto_imposible(previos[-1] if previos else None, v):
+                n["pesos_increibles"] += 1
+                increibles.append((p["email"], f, previos[-1], v))
                 continue
             serie_peso[f] = {"fecha": f, "valor": v, "origen": "calma"}
             nuevos_calma_peso += 1
@@ -486,6 +518,11 @@ async def main(mig):
         print(f"\n{n['peso_no_tocado']} fichas con un peso sin fecha conocida: se les monta la serie "
               f"pero NO se les toca el peso actual")
         print("\n".join(aviso_peso[:8]))
+    if increibles:
+        print(f"\n{n['pesos_increibles']} pesajes de Calma QUE NO SE CREEN (se apartan mas del "
+              f"{int(SALTO * 100)}% del anterior del propio cliente). No se escriben; miralos:")
+        for correo, fecha, antes, ahora in increibles[:12]:
+            print(f"   {correo[:34]:36s} {fecha}  {antes} kg  ->  {ahora} kg")
 
     if DETALLE:
         print("\nPor cliente (solo los que tienen algo que traer):")

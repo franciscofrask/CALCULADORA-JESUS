@@ -50,8 +50,9 @@ from pymongo import MongoClient
 from pymongo.errors import BulkWriteError
 
 # Produccion, por el tunel SSH. Ojo: el 27018, no el 27017 (el 27017 es el Mongo local).
-PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_prod"
+from _destino_sync import destino, no_entra, rotulo, solo_correos   # --dev escribe en desarrollo
+PROD, BASE_PROD = destino()
+SOLO = solo_correos()   # --solo fichero.txt limita la pasada
 CLAVE = os.path.join(AQUI, "serviceAccountKey.json")
 
 # Lo insertado se deja anotado en disco. Los documentos salen con el MISMO formato que los
@@ -207,6 +208,10 @@ def main():
     ap = argparse.ArgumentParser(description="Sincroniza las dietas de Calma que faltan en produccion.")
     ap.add_argument("--escribir", action="store_true", help="escribe de verdad (por defecto solo cuenta)")
     ap.add_argument("--email", help="limitar a un cliente")
+    # Las lee `_destino_sync` de sys.argv; aqui solo se declaran para que argparse no las
+    # rechace (este es el unico sincronizador con argparse).
+    ap.add_argument("--dev", action="store_true", help="escribir en desarrollo, no en produccion")
+    ap.add_argument("--solo", help="fichero con los correos a los que limitar la pasada")
     args = ap.parse_args()
     escribir = args.escribir
 
@@ -216,7 +221,7 @@ def main():
     fs = firestore.client()
 
     print("=" * 78)
-    print("SINCRONIZAR DIETAS DE CALMA  ->  " + ("ESCRIBIENDO EN PRODUCCION" if escribir
+    print("SINCRONIZAR DIETAS DE CALMA  ->  " + ("ESCRIBIENDO EN " + rotulo() if escribir
                                                  else "ENSAYO (no se toca nada)"))
     print("=" * 78)
 
@@ -234,6 +239,8 @@ def main():
     # el del usuario. `db.diets.user_id` y `db.diet_favorites.user_id` van con `users.id`.
     users = {}
     for u in db.users.find({"deleted_at": None}, {"_id": 0, "id": 1, "email": 1}):
+        if no_entra(u.get("email"), SOLO):
+            continue
         if u.get("email"):
             users[u["email"].lower().strip()] = u["id"]
     emails_calma = set()

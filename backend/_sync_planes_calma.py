@@ -64,8 +64,10 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from motor.motor_asyncio import AsyncIOMotorClient
 
-PROD = "mongodb://127.0.0.1:27018"
-BASE = "jg12_prod"
+from _destino_sync import destino, no_entra, rotulo, solo_correos   # --dev escribe en desarrollo
+PROD, BASE_PROD = destino()
+SOLO = solo_correos()   # --solo fichero.txt limita la pasada
+BASE = BASE_PROD
 ESCRIBIR = "--escribir" in sys.argv
 HOY = datetime.now(timezone.utc)
 
@@ -150,10 +152,12 @@ def membresia_vigente(doc: dict):
 
 async def main():
     db = AsyncIOMotorClient(PROD, serverSelectionTimeoutMS=20000)[BASE]
-    print(f"{'ENSAYO (no escribe)' if not ESCRIBIR else 'ESCRIBIENDO EN PRODUCCION'}\n")
+    print(f"{'ENSAYO (no escribe)' if not ESCRIBIR else 'ESCRIBIENDO EN ' + rotulo()}\n")
 
     usuarios = {}
     async for u in db.users.find({}, {"_id": 0, "id": 1, "email": 1, "name": 1, "plan": 1}):
+        if no_entra(u.get("email"), SOLO):
+            continue
         if u.get("email"):
             usuarios[u["email"].lower()] = u
 

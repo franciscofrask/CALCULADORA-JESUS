@@ -44,8 +44,10 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-PROD = "mongodb://127.0.0.1:27018"
-BASE = "jg12_prod"
+from _destino_sync import destino, no_entra, rotulo, solo_correos   # --dev escribe en desarrollo
+PROD, BASE_PROD = destino()
+SOLO = solo_correos()   # --solo fichero.txt limita la pasada
+BASE = BASE_PROD
 ESCRIBIR = "--escribir" in sys.argv
 
 
@@ -110,6 +112,8 @@ async def main():
 
     users = {}
     async for u in db.users.find({"deleted_at": None}, {"_id": 0, "id": 1, "email": 1, "phone": 1}):
+        if no_entra(u.get("email"), SOLO):
+            continue
         if u.get("email"):
             users[u["email"].lower()] = u
 

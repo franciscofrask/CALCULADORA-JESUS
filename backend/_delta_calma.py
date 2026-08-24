@@ -25,8 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-PROD = "mongodb://127.0.0.1:27018"
-BASE_PROD = "jg12_prod"
+from _destino_sync import destino, rotulo   # --dev escribe en desarrollo
+PROD, BASE_PROD = destino()
 CLAVE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "serviceAccountKey.json")
 
 SOLO_VIVOS = "--todos" not in sys.argv
