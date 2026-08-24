@@ -63,17 +63,28 @@ NUTRITION_PAGE = RAIZ / "frontend" / "src" / "pages" / "NutritionPage.jsx"
 # salida (JSON); las cuatro decisiones -- nada puesto, pasado, cuadrado, titular -- y la
 # cuenta del numero grande son las lineas del componente, copiadas en tiempo de ejecucion.
 _PLANTILLA_JS = r"""
+import { seExcede, textoExceso, fmtGramos } from './exceso.mjs';
 const casos = %(casos)s;
-const salida = casos.map((macros) => {
+const salida = casos.map((caso) => {
+  const macros = Array.isArray(caso) ? caso : caso.macros;
+  // Lo que la cabecera sabe y no sale de los macros: que comidas hay y como estan. Por
+  // defecto ninguna montada, asi el titular se juega solo con los macros. Un caso puede
+  // pasar `comidasMal` para probar el freno del «Dia cuadrado» (doc 57, F3: con una
+  // comida descuadrada el dia no se da por bueno aunque los totales salgan).
+  const mealOrder = Array.isArray(caso)
+    ? [] : Array.from({ length: caso.comidasMal || 0 }, (_, i) => "c" + i);
+  const getMealStatus = () => 'descuadrada';
 %(bloque)s
   const numeros = {};
   for (const m of macros) {
-    const val = m.val, tgt = m.tgt;
+    // La cabecera distingue el dia SIN perientreno (`val`/`tgt`, con lo que decide si te
+    // has pasado) del dia ENTERO (`valDia`/`tgtDia`, que es el numero grande).
+    const key = m.key, val = m.val, tgt = m.tgt, valDia = m.valDia, tgtDia = m.tgtDia;
 %(over)s
 %(grande)s
     numeros[m.key] = grande;
   }
-  return { titular, nadaPuesto, pasado, cuadrado, numeros };
+  return { titular, nadaPuesto, pasado, cuadrado, numeros, excesoDia };
 });
 // A ASCII: el titular lleva tilde ("Dia cuadrado") y la consola de Windows no siempre la
 // deja pasar entera. Con las escapadas \uXXXX el JSON viaja igual en cualquier consola.
@@ -82,6 +93,21 @@ console.log(JSON.stringify(salida).replace(/./gu, (c) => {
   return n > 126 ? "\\u" + n.toString(16).padStart(4, "0") : c;
 }));
 """
+
+
+def _llevar_modulo(destino, nombre):
+    """Copia un modulo de `frontend/src/lib` al lado del harness, para node.
+
+    El bloque del titular llama a `seExcede` y a `textoExceso`, que viven en
+    `lib/exceso.js` (el criterio de «pasarse», en un solo sitio desde el 13-08). Un doble
+    escrito aqui no probaria nada: si manana cambia el margen, el test seguiria en verde
+    con la regla vieja. Asi que se lleva el fichero DE VERDAD; lo unico que se toca es la
+    extension de los imports relativos, que webpack se la inventa y node la exige.
+    """
+    fuente = RAIZ / "frontend" / "src" / "lib" / f"{nombre}.js"
+    texto = fuente.read_text(encoding="utf-8")
+    texto = re.sub(r"(from\s+['\"]\./)([\w/-]+)(['\"])", r"\1\2.mjs\3", texto)
+    (destino / f"{nombre}.mjs").write_text(texto, encoding="utf-8")
 
 
 def _trozo(texto, desde, hasta, que):
@@ -117,7 +143,10 @@ def titular_de():
             "grande": "    " + grande,
         }
         with tempfile.TemporaryDirectory() as tmp:
-            fichero = pathlib.Path(tmp) / "titular.mjs"
+            carpeta = pathlib.Path(tmp)
+            for modulo in ("numeros", "exceso"):
+                _llevar_modulo(carpeta, modulo)
+            fichero = carpeta / "titular.mjs"
             fichero.write_text(js, encoding="utf-8")
             salida = subprocess.run(["node", str(fichero)], capture_output=True, text=True)
         assert salida.returncode == 0, f"node fallo: {salida.stderr}"
@@ -126,8 +155,16 @@ def titular_de():
     return _evaluar
 
 
-def macro(key, val, tgt):
-    return {"key": key, "val": val, "tgt": tgt}
+def macro(key, val, tgt, val_dia=None, tgt_dia=None):
+    """Un macro tal como lo recibe la cabecera.
+
+    `val`/`tgt` son el dia SIN el perientreno (con eso decide si te has pasado) y
+    `valDia`/`tgtDia` el dia ENTERO, que es de donde sale el numero grande. En estos
+    casos no hay peri, asi que por defecto son lo mismo; se pueden separar para probarlo.
+    """
+    return {"key": key, "val": val, "tgt": tgt,
+            "valDia": val if val_dia is None else val_dia,
+            "tgtDia": tgt if tgt_dia is None else tgt_dia}
 
 
 # Objetivo de las comidas del cliente demo (dia de entreno, sin contar el perientreno,
@@ -149,7 +186,9 @@ def test_11_el_dia_a_cero_dice_lo_que_hay_que_comer(titular_de):
 def test_12_con_una_comida_montada_resta_lo_comido(titular_de):
     """Caso 12 [CRITICO]: el titular pasa a "te queda por comer" y el numero es lo que falta."""
     r = titular_de(_con_comido(47, 51, 12))[0]
-    assert r["titular"] == "Te queda por comer"
+    # «hoy» al final desde el punto 6 del doc del 23-08: es lo que queda del DIA entero,
+    # no de esa comida, y sin la palabra no quedaba claro.
+    assert r["titular"] == "Te queda por comer hoy"
     assert r["numeros"] == {"P": 143, "H": 84, "G": 48}, "tiene que restar lo comido, no sumarlo"
 
 
@@ -178,20 +217,25 @@ def test_13_nunca_sale_un_numero_negativo(titular_de):
 
 
 def test_13_dice_por_cuanto_se_ha_pasado(titular_de):
-    """Caso 13, la otra mitad: "dice 'te has pasado' Y POR CUANTO". FALLA A PROPOSITO.
+    """Caso 13, la otra mitad: "dice 'te has pasado' Y POR CUANTO". YA ESTA.
 
-    Hoy la cabecera no lo dice: cuando te pasas, el numero grande es lo COMIDO (200) y
-    debajo, en pequeno, "de 190". Los dos numeros estan, pero el exceso -- 10 g -- no
-    aparece en ninguna parte: lo tiene que restar el cliente de cabeza, que es justo lo
-    que el rediseno queria quitar del "120 / 190".
+    Estuvo en rojo a proposito una temporada: el numero grande era lo COMIDO (200) y
+    debajo, en pequeno, "de 190", asi que el exceso lo tenia que restar el cliente de
+    cabeza. De las dos salidas que se plantearon -- cambiar el numero grande o poner una
+    linea debajo -- se hizo la segunda: al lado del titular va el texto de `lib/exceso`,
+    que dice el macro y los gramos.
 
-    Se deja en rojo porque es lo que Jesus pide y no esta hecho, no porque el codigo este
-    roto. Para cerrarlo hay que decidir con el si el numero grande pasa a ser el exceso
-    ("te has pasado 10 g de proteina") o si se anade una linea debajo.
+    Y dice solo los que cuentan. Con 200 de 190 de proteina, 175 de 135 de hidratos y 62
+    de 60 de grasa, la frase habla SOLO de los hidratos: la proteina porque pasarse de
+    proteina no es un fallo (Jesus, 13-08), y la grasa porque 2 g caben en el margen de 4
+    de Calma. Que la frase no se llene de avisos por dos gramos es parte de lo pedido.
     """
     r = titular_de(_con_comido(200, 175, 62))[0]
-    assert r["numeros"]["P"] == 10, \
-        "no se dice por cuanto te has pasado: el numero grande es lo comido, no el exceso"
+    assert r["titular"] == "Te has pasado"
+    assert r["excesoDia"] == "40 g de hidratos", \
+        f"la cabecera no dice por cuanto te has pasado (dice {r['excesoDia']!r})"
+    assert "proteína" not in r["excesoDia"], \
+        "pasarse de proteina no es un fallo y no se canta (Jesus, 13-08)"
 
 
 def test_14_el_dia_cuadrado_lo_dice(titular_de):
